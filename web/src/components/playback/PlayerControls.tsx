@@ -90,12 +90,15 @@ export default function PlayerControls({
             variant="video"
             currentTime={currentTime}
             duration={duration}
+            displayedDuration={displayedDuration}
             onSeek={onSeek}
           />
         </div>
 
         <div className="flex items-center justify-between">
-          <div className="flex min-w-25 items-center gap-2">
+          {/* One readout per width: below `sm` the bar shows the times and
+              this row would overflow with them, so it hides them here. */}
+          <div className="hidden min-w-25 items-center gap-2 sm:flex">
             <span className="text-sm text-muted-foreground tabular-nums">
               {formatTimecode(currentTime, {
                 forceHours: displayedDuration >= 3600,
@@ -158,7 +161,9 @@ export default function PlayerControls({
           </div>
 
           <div className="flex min-w-25 items-center justify-end gap-2">
-            <span className="rounded-sm bg-muted/80 px-2 py-1 text-xs text-muted-foreground">
+            {/* Decorative at phone widths, where it wrapped onto the seek
+                button; Playback Settings still exposes the mode there. */}
+            <span className="hidden rounded-sm bg-muted/80 px-2 py-1 text-xs text-muted-foreground sm:inline">
               <span className="sr-only">Current playback mode: </span>
               {modeLabel}
             </span>

@@ -908,10 +908,19 @@ require the full playback test pass.
   + `PlayerControls.tsx`): one page for movies and TV episodes, addressed by a
   `PlaybackMediaRef` (`{ kind, id }`); the route supplies the header (film or
   TV icon, title — "Show · S1 E3 · Episode" for TV — artwork, not-found copy,
-  where Back falls back to). It renders **in-shell** as a windowed player
+  where Back falls back to, and the `posterUrl` — the movie backdrop or the
+  episode still — the `<video poster>` shows in the frame until the first
+  frame paints, so the page never opens on a black box). It renders
+  **in-shell** as a windowed player
   (header bar: media icon + title + Back; controls footer below the video —
   progress group, time readouts in `tabular-nums`, rewind / play-pause /
   fast-forward cluster, quality chip, chapter menu, volume, fullscreen).
+  **One time readout per width**: from `sm` up it sits in the transport row
+  and the progress bar's own labels are hidden; below `sm` the row cannot hold
+  it beside seven controls, so the bar shows the labels and the row hides its
+  pair and the decorative quality chip (Playback Settings still names the
+  mode). Both readouts take `displayedDuration` — the catalog length while
+  an HLS element has not yet reported one — so the two never disagree.
   In immersive/fullscreen mode (`isImmersiveViewport` /
   `chromeFullscreenMode`) the container goes `fixed inset-0 z-50`, chrome
   becomes absolute overlay panels (`MOTION_PLAYER_CHROME_PANEL_CLASS`,
@@ -989,7 +998,10 @@ require the full playback test pass.
   no link to the trailer's movie.
 - **Trailer player** (`routes/_auth/trailer.tsx`, YouTube behind
   `useYouTubePlayer`): one `DialogFullscreenContent` whose view swaps in place
-  — loading, load error, no trailer, the player, a playback error. Each view
+  — loading, load error, no trailer, the player, a playback error. Every view
+  wears the same `TrailerHeader` (film icon, title, "Close trailer"), so the
+  way out never moves between states; only the player view's header holds the
+  `DialogTitle`, the others name the dialog from their own heading. Each view
   focuses its primary control ("Close trailer (Escape)" — "Close trailer" on
   touch, §1.7 — or "Try Again" on an error) when it first appears, not only when the dialog opens: Radix's open
   auto-focus runs once, and a swap that unmounts the focused control would

@@ -45,6 +45,8 @@ type VideoPlayerProps = {
    */
   carriedPlayRef?: RefObject<boolean>;
   title: string;
+  /** Artwork shown in the frame until the first video frame paints. */
+  posterUrl?: string | null;
   isFullscreen?: boolean;
   onError: (message: string) => void;
   onPlay?: () => void;
@@ -205,6 +207,7 @@ export default function VideoPlayer({
   isHlsSource,
   carriedPlayRef,
   title,
+  posterUrl,
   isFullscreen = false,
   onError,
   onPlay,
@@ -837,6 +840,7 @@ export default function VideoPlayer({
         <video
           ref={videoRef}
           className={`size-full bg-black object-contain ${isFullscreen ? "rounded-none" : "rounded-lg"}`}
+          poster={posterUrl || undefined}
           playsInline
           aria-label={`Video player for ${title}`}
           onPlay={onPlay}

@@ -187,6 +187,20 @@ function renderPlayer(
   return { ...result, video };
 }
 
+describe("VideoPlayer poster", () => {
+  it("shows the artwork in the frame until the first frame paints", () => {
+    const { video } = renderPlayer({ posterUrl: "/api/tmdb/images/w1280/backdrop.jpg" });
+
+    expect(video).toHaveAttribute("poster", "/api/tmdb/images/w1280/backdrop.jpg");
+  });
+
+  it("sets no poster when there is no artwork", () => {
+    const { video } = renderPlayer({ posterUrl: "" });
+
+    expect(video).not.toHaveAttribute("poster");
+  });
+});
+
 describe("VideoPlayer subtitle track", () => {
   it("injects a showing track element for the active subtitle", () => {
     const { video } = renderPlayer({

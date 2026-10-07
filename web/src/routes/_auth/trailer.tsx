@@ -1,4 +1,4 @@
-import { useRef, useEffect, useEffectEvent, useState } from "react";
+import { useRef, useEffect, useEffectEvent, useState, type RefObject } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -319,6 +319,8 @@ function TrailerPage() {
     }
   };
 
+  const closeLabel = withShortcut("Close trailer", "Escape");
+
   const focusPrimaryControl = () => {
     const focusTarget = closeButtonRef.current ?? containerRef.current;
     focusTarget?.focus({ preventScroll: true });
@@ -357,47 +359,56 @@ function TrailerPage() {
           ref={containerRef}
           className={cn(
             MOTION_MEDIA_OVERLAY_ENTER_CLASS,
-            "flex items-center justify-center bg-linear-to-b from-card via-background to-card",
+            "flex flex-col bg-linear-to-b from-card via-background to-card",
           )}
           onOpenAutoFocus={handleDialogOpenAutoFocus}
           onEscapeKeyDown={handleDialogEscapeKeyDown}
         >
-          <div className="max-w-md px-4 text-center">
-            <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-destructive/10">
-              <AlertCircle className="size-10 text-destructive" aria-hidden="true" />
-            </div>
-            <DialogTitle className="mb-2 text-xl font-semibold text-foreground">
-              Unable to Play Trailer
-            </DialogTitle>
-            <DialogDescription className="mb-6 text-muted-foreground">
-              {error}
-            </DialogDescription>
-            <div className="flex flex-wrap items-center justify-center gap-3">
-              <button
-                type="button"
-                ref={closeButtonRef}
-                onClick={retry}
-                className={cn(
-                  MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  FOCUS_VISIBLE_RING_CLASS,
-                  "inline-flex items-center rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90",
-                )}
-              >
-                <RotateCcw className="mr-2 size-4" aria-hidden="true" />
-                Try Again
-              </button>
-              <button
-                type="button"
-                onClick={handleClose}
-                className={cn(
-                  MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  FOCUS_VISIBLE_RING_CLASS,
-                  "inline-flex items-center rounded-full border border-border px-6 py-3 font-semibold text-foreground hover:bg-muted",
-                )}
-              >
-                <ArrowLeft className="mr-2 size-4" aria-hidden="true" />
-                Go Back
-              </button>
+          <TrailerHeader
+            title={title}
+            titleIsDialogTitle={false}
+            subtitle="Trailer"
+            closeLabel={closeLabel}
+            onClose={handleClose}
+          />
+          <div className="flex flex-1 items-center justify-center p-4">
+            <div className="max-w-md px-4 text-center">
+              <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-destructive/10">
+                <AlertCircle className="size-10 text-destructive" aria-hidden="true" />
+              </div>
+              <DialogTitle className="mb-2 text-xl font-semibold text-foreground">
+                Unable to Play Trailer
+              </DialogTitle>
+              <DialogDescription className="mb-6 text-muted-foreground">
+                {error}
+              </DialogDescription>
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                <button
+                  type="button"
+                  ref={closeButtonRef}
+                  onClick={retry}
+                  className={cn(
+                    MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                    FOCUS_VISIBLE_RING_CLASS,
+                    "inline-flex items-center rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90",
+                  )}
+                >
+                  <RotateCcw className="mr-2 size-4" aria-hidden="true" />
+                  Try Again
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className={cn(
+                    MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                    FOCUS_VISIBLE_RING_CLASS,
+                    "inline-flex items-center rounded-full border border-border px-6 py-3 font-semibold text-foreground hover:bg-muted",
+                  )}
+                >
+                  <ArrowLeft className="mr-2 size-4" aria-hidden="true" />
+                  Go Back
+                </button>
+              </div>
             </div>
           </div>
         </DialogFullscreenContent>
@@ -412,22 +423,31 @@ function TrailerPage() {
           ref={containerRef}
           className={cn(
             MOTION_MEDIA_OVERLAY_ENTER_CLASS,
-            "flex items-center justify-center bg-linear-to-b from-card via-background to-card",
+            "flex flex-col bg-linear-to-b from-card via-background to-card",
           )}
           onOpenAutoFocus={handleDialogOpenAutoFocus}
           onEscapeKeyDown={handleDialogEscapeKeyDown}
         >
-          <DialogTitle className="sr-only">Loading trailer</DialogTitle>
-          <DialogDescription className="sr-only">
-            Please wait while the trailer loads.
-          </DialogDescription>
+          <TrailerHeader
+            title={title}
+            titleIsDialogTitle={false}
+            subtitle="Trailer"
+            closeLabel={closeLabel}
+            onClose={handleClose}
+          />
+          <div className="flex flex-1 items-center justify-center p-4">
+            <DialogTitle className="sr-only">Loading trailer</DialogTitle>
+            <DialogDescription className="sr-only">
+              Please wait while the trailer loads.
+            </DialogDescription>
 
-          <div className="text-center">
-            <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-primary/10">
-              <Spinner className="size-10 text-primary" />
+            <div className="text-center">
+              <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-primary/10">
+                <Spinner className="size-10 text-primary" />
+              </div>
+              <p className="text-lg font-medium text-foreground">Loading trailer...</p>
+              <p className="mt-2 text-sm text-muted-foreground">Please wait</p>
             </div>
-            <p className="text-lg font-medium text-foreground">Loading trailer...</p>
-            <p className="mt-2 text-sm text-muted-foreground">Please wait</p>
           </div>
         </DialogFullscreenContent>
       </Dialog>
@@ -441,47 +461,56 @@ function TrailerPage() {
           ref={containerRef}
           className={cn(
             MOTION_MEDIA_OVERLAY_ENTER_CLASS,
-            "flex items-center justify-center bg-linear-to-b from-card via-background to-card",
+            "flex flex-col bg-linear-to-b from-card via-background to-card",
           )}
           onOpenAutoFocus={handleDialogOpenAutoFocus}
           onEscapeKeyDown={handleDialogEscapeKeyDown}
         >
-          <div className="max-w-md px-4 text-center">
-            <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-destructive/10">
-              <AlertCircle className="size-10 text-destructive" aria-hidden="true" />
-            </div>
-            <DialogTitle className="mb-2 text-xl font-semibold text-foreground">
-              Unable to Load Trailer
-            </DialogTitle>
-            <DialogDescription className="mb-6 text-muted-foreground">
-              {data?.message || "Something went wrong while loading the trailer."}
-            </DialogDescription>
-            <div className="flex flex-wrap items-center justify-center gap-3">
-              <button
-                type="button"
-                ref={closeButtonRef}
-                onClick={() => void refetchMovie()}
-                className={cn(
-                  MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  FOCUS_VISIBLE_RING_CLASS,
-                  "inline-flex items-center rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90",
-                )}
-              >
-                <RotateCcw className="mr-2 size-4" aria-hidden="true" />
-                Try Again
-              </button>
-              <button
-                type="button"
-                onClick={handleClose}
-                className={cn(
-                  MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  FOCUS_VISIBLE_RING_CLASS,
-                  "inline-flex items-center rounded-full border border-border px-6 py-3 font-semibold text-foreground hover:bg-muted",
-                )}
-              >
-                <ArrowLeft className="mr-2 size-4" aria-hidden="true" />
-                Go Back
-              </button>
+          <TrailerHeader
+            title={title}
+            titleIsDialogTitle={false}
+            subtitle="Trailer"
+            closeLabel={closeLabel}
+            onClose={handleClose}
+          />
+          <div className="flex flex-1 items-center justify-center p-4">
+            <div className="max-w-md px-4 text-center">
+              <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-destructive/10">
+                <AlertCircle className="size-10 text-destructive" aria-hidden="true" />
+              </div>
+              <DialogTitle className="mb-2 text-xl font-semibold text-foreground">
+                Unable to Load Trailer
+              </DialogTitle>
+              <DialogDescription className="mb-6 text-muted-foreground">
+                {data?.message || "Something went wrong while loading the trailer."}
+              </DialogDescription>
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                <button
+                  type="button"
+                  ref={closeButtonRef}
+                  onClick={() => void refetchMovie()}
+                  className={cn(
+                    MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                    FOCUS_VISIBLE_RING_CLASS,
+                    "inline-flex items-center rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90",
+                  )}
+                >
+                  <RotateCcw className="mr-2 size-4" aria-hidden="true" />
+                  Try Again
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className={cn(
+                    MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                    FOCUS_VISIBLE_RING_CLASS,
+                    "inline-flex items-center rounded-full border border-border px-6 py-3 font-semibold text-foreground hover:bg-muted",
+                  )}
+                >
+                  <ArrowLeft className="mr-2 size-4" aria-hidden="true" />
+                  Go Back
+                </button>
+              </div>
             </div>
           </div>
         </DialogFullscreenContent>
@@ -496,34 +525,43 @@ function TrailerPage() {
           ref={containerRef}
           className={cn(
             MOTION_MEDIA_OVERLAY_ENTER_CLASS,
-            "flex items-center justify-center bg-linear-to-b from-card via-background to-card",
+            "flex flex-col bg-linear-to-b from-card via-background to-card",
           )}
           onOpenAutoFocus={handleDialogOpenAutoFocus}
           onEscapeKeyDown={handleDialogEscapeKeyDown}
         >
-          <div className="max-w-md px-4 text-center">
-            <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-muted">
-              <Film className="size-10 text-muted-foreground" aria-hidden="true" />
+          <TrailerHeader
+            title={title}
+            titleIsDialogTitle={false}
+            subtitle="Trailer"
+            closeLabel={closeLabel}
+            onClose={handleClose}
+          />
+          <div className="flex flex-1 items-center justify-center p-4">
+            <div className="max-w-md px-4 text-center">
+              <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-muted">
+                <Film className="size-10 text-muted-foreground" aria-hidden="true" />
+              </div>
+              <DialogTitle className="mb-2 text-xl font-semibold text-foreground">
+                No Trailer Available
+              </DialogTitle>
+              <DialogDescription className="mb-6 text-muted-foreground">
+                This movie doesn't have a trailer yet.
+              </DialogDescription>
+              <button
+                type="button"
+                ref={closeButtonRef}
+                onClick={handleClose}
+                className={cn(
+                  MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                  FOCUS_VISIBLE_RING_CLASS,
+                  "rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90",
+                )}
+              >
+                <ArrowLeft className="mr-2 size-4" aria-hidden="true" />
+                Go Back
+              </button>
             </div>
-            <DialogTitle className="mb-2 text-xl font-semibold text-foreground">
-              No Trailer Available
-            </DialogTitle>
-            <DialogDescription className="mb-6 text-muted-foreground">
-              This movie doesn't have a trailer yet.
-            </DialogDescription>
-            <button
-              type="button"
-              ref={closeButtonRef}
-              onClick={handleClose}
-              className={cn(
-                MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                FOCUS_VISIBLE_RING_CLASS,
-                "rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90",
-              )}
-            >
-              <ArrowLeft className="mr-2 size-4" aria-hidden="true" />
-              Go Back
-            </button>
           </div>
         </DialogFullscreenContent>
       </Dialog>
@@ -557,34 +595,14 @@ function TrailerPage() {
         </DialogDescription>
       )}
 
-      <header
-        className={cn(
-          MOTION_PLAYER_CHROME_PANEL_CLASS,
-          "flex items-center justify-between border-b border-border/50 bg-card/95 px-4 py-3 backdrop-blur-lg",
-        )}
-      >
-        <div className="flex items-center gap-3">
-          <Film className="size-5 text-primary" aria-hidden="true" />
-          <div>
-            <DialogTitle className="truncate text-base font-semibold text-foreground">
-              {title}
-            </DialogTitle>
-            <p className="text-xs text-muted-foreground">Now Playing</p>
-          </div>
-        </div>
-        <button
-          type="button"
-          ref={closeButtonRef}
-          onClick={handleClose}
-          className={cn(
-            PLAYER_ICON_BUTTON_CLASS,
-            "size-10 hover:bg-muted",
-          )}
-          aria-label={withShortcut("Close trailer", "Escape")}
-        >
-          <X className="size-5" aria-hidden="true" />
-        </button>
-      </header>
+      <TrailerHeader
+        title={title}
+        titleIsDialogTitle
+        subtitle="Now Playing"
+        closeLabel={closeLabel}
+        closeRef={closeButtonRef}
+        onClose={handleClose}
+      />
 
       <div className="relative flex flex-1 items-center justify-center p-4">
         <div className="aspect-video w-full max-w-6xl">
@@ -739,5 +757,62 @@ function TrailerPage() {
       </footer>
       </DialogFullscreenContent>
     </Dialog>
+  );
+}
+
+
+type TrailerHeaderProps = {
+  title: string;
+  /** The player view names the dialog from the header; other views name it
+   *  from their own heading and show the title as plain text here. */
+  titleIsDialogTitle: boolean;
+  subtitle: string;
+  closeLabel: string;
+  closeRef?: RefObject<HTMLButtonElement | null>;
+  onClose: () => void;
+};
+
+// Every trailer view wears the same header, so the way out never moves
+// between loading, an error, a missing trailer and the player itself.
+function TrailerHeader({
+  title,
+  titleIsDialogTitle,
+  subtitle,
+  closeLabel,
+  closeRef,
+  onClose,
+}: TrailerHeaderProps) {
+  return (
+    <header
+      className={cn(
+        MOTION_PLAYER_CHROME_PANEL_CLASS,
+        "flex items-center justify-between border-b border-border/50 bg-card/95 px-4 py-3 backdrop-blur-lg",
+      )}
+    >
+      <div className="flex min-w-0 items-center gap-3">
+        <Film className="size-5 shrink-0 text-primary" aria-hidden="true" />
+        <div className="min-w-0">
+          {titleIsDialogTitle ? (
+            <DialogTitle className="truncate text-base font-semibold text-foreground">
+              {title}
+            </DialogTitle>
+          ) : (
+            <p className="truncate text-base font-semibold text-foreground">
+              {title}
+            </p>
+          )}
+          <p className="text-xs text-muted-foreground">{subtitle}</p>
+        </div>
+      </div>
+      <button
+        type="button"
+        ref={closeRef}
+        onClick={onClose}
+        className={cn(PLAYER_ICON_BUTTON_CLASS, "size-10 shrink-0 hover:bg-muted")}
+        aria-label={closeLabel}
+      >
+        <X className="size-5" aria-hidden="true" />
+      </button>
+    </header>
   );
 }

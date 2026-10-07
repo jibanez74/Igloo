@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { Film } from "lucide-react";
 import VideoPlaybackPage from "@/components/playback/VideoPlaybackPage";
-import { TMDB_POSTER_SIZE } from "@/lib/constants";
+import { TMDB_BACKDROP_SIZE, TMDB_POSTER_SIZE } from "@/lib/constants";
 import { movieMediaRef } from "@/lib/media-ref";
 import { unwrapFloatOrUndefined, unwrapString } from "@/lib/nullable";
 import { loadPlayRoute } from "@/lib/play-route-loader";
@@ -94,6 +94,12 @@ function PlayMoviePage() {
       artworkUrl={
         movie
           ? buildTmdbImageUrl(unwrapString(movie.poster_path), TMDB_POSTER_SIZE)
+          : null
+      }
+      posterUrl={
+        movie
+          ? buildTmdbImageUrl(unwrapString(movie.backdrop_path), TMDB_BACKDROP_SIZE) ||
+            buildTmdbImageUrl(unwrapString(movie.poster_path), TMDB_POSTER_SIZE)
           : null
       }
       headerIcon={Film}

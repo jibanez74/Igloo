@@ -248,6 +248,24 @@ describe("ProgressBar", () => {
     );
   });
 
+  it("labels the readout with the displayed duration while seek geometry keeps the element's", () => {
+    render(
+      <ProgressBar
+        currentTime={0}
+        duration={0}
+        displayedDuration={2329}
+        onSeek={vi.fn()}
+        variant="video"
+      />,
+    );
+
+    expect(screen.getByText("38:49")).toBeInTheDocument();
+    // Nothing to seek through yet: the slider stays inert until the element
+    // reports a duration of its own.
+    expect(screen.getByRole("slider")).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByText("38:49").parentElement).toHaveClass("sm:hidden");
+  });
+
   it("drops a pending scrub value when resetKey changes", () => {
     const onSeek = vi.fn();
 
