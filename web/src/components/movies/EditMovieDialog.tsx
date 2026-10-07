@@ -6,6 +6,9 @@ import {
   updateMovieMetadata,
 } from "@/lib/api";
 import {
+  DIALOG_SCROLL_BODY_CLASS,
+  DIALOG_SCROLL_CONTENT_CLASS,
+  DIALOG_SCROLL_HEADER_CLASS,
   FOCUS_VISIBLE_RING_CLASS,
   LIBRARY_MOVIE_DETAILS_KEY,
   MOTION_MICRO_CONTROL_CLASS,
@@ -28,6 +31,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -219,19 +223,25 @@ export default function EditMovieDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-h-[85vh] overflow-y-auto border-border bg-card sm:max-w-2xl"
+        className={cn(
+          DIALOG_SCROLL_CONTENT_CLASS,
+          "border-border bg-card sm:max-w-2xl",
+        )}
         onCloseAutoFocus={(event) => {
           if (!restoreFocusRef) return;
           event.preventDefault();
           focusDialogRestoreTarget(restoreFocusRef.current);
         }}
       >
-        <DialogTitle className="text-foreground">Edit Movie</DialogTitle>
-        <DialogDescription className="text-muted-foreground">
-          Identify with TMDB to replace all metadata, or manually edit
-          individual fields.
-        </DialogDescription>
+        <DialogHeader className={DIALOG_SCROLL_HEADER_CLASS}>
+          <DialogTitle className="text-foreground">Edit Movie</DialogTitle>
+          <DialogDescription className="text-muted-foreground">
+            Identify with TMDB to replace all metadata, or manually edit
+            individual fields.
+          </DialogDescription>
+        </DialogHeader>
 
+        <div className={DIALOG_SCROLL_BODY_CLASS}>
         <Tabs defaultValue="tmdb">
           <TabsList className="w-full">
             <TabsTrigger value="tmdb" className="flex-1">
@@ -250,6 +260,7 @@ export default function EditMovieDialog({
             <ManualTab movieId={movieId} movie={movie} onOpenChange={onOpenChange} />
           </TabsContent>
         </Tabs>
+        </div>
       </DialogContent>
     </Dialog>
   );

@@ -674,6 +674,19 @@ export const DETAIL_RAIL_HEADING_CLASS = `mb-4 rounded-sm text-xl font-semibold 
 export const SKIP_LINK_CLASS = `rounded-sm px-2 py-1 text-primary underline ${FOCUS_VISIBLE_RING_CLASS}`;
 
 /**
+ * A dialog whose body may outgrow the viewport (Technical Details, Edit
+ * Movie): the content box is a capped flex column, the header stays put and
+ * only the body scrolls, so the close button never rides the scrollbar track
+ * or scrolls out of reach. Pair the two on DialogContent and its body.
+ */
+export const DIALOG_SCROLL_CONTENT_CLASS =
+  "flex max-h-[calc(100svh-2rem)] flex-col gap-0 p-0";
+export const DIALOG_SCROLL_HEADER_CLASS =
+  "shrink-0 border-b border-border px-6 py-4 pr-12";
+export const DIALOG_SCROLL_BODY_CLASS =
+  "min-h-0 flex-1 overflow-y-auto px-6 py-4";
+
+/**
  * Circular icon button in the audio player chrome (design-system §1.7, §2.3).
  * Call sites add the size (`size-10`, `size-14`, …) and hover surface
  * (`hover:bg-accent/50` in the expanded dialog, `hover:bg-accent` in the mini

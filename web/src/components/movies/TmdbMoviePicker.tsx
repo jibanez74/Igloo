@@ -1,4 +1,4 @@
-import { useId, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useId, useState, type FocusEvent, type KeyboardEvent, type ReactNode } from "react";
 import { Film, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +30,16 @@ type TmdbMoviePickerProps = {
     body: TmdbSearchMoviesRequest,
   ) => Promise<ApiResponseType<{ results: TmdbSearchResultType[] }>>;
   showTmdbIdInput?: boolean;
+};
+
+// A prefilled title (Edit Movie) is focused with the caret at its end, which
+// scrolls a long title so its start is hidden. Select it from the end back to
+// the start instead: the field shows the beginning, and typing replaces it.
+const selectTitleFromStart = (event: FocusEvent<HTMLInputElement>) => {
+  const input = event.currentTarget;
+  if (input.value.length > 0) {
+    input.setSelectionRange(0, input.value.length, "backward");
+  }
 };
 
 export default function TmdbMoviePicker({
@@ -142,6 +152,7 @@ export default function TmdbMoviePicker({
             className="mt-1 border-border bg-muted text-foreground"
             autoComplete="off"
             autoFocus
+            onFocus={selectTitleFromStart}
           />
         </div>
         <div>

@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { buttonVariants } from "@/components/ui/button";
-import { FOCUS_VISIBLE_RING_CLASS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 export type CrewDisclosureCredit = {
@@ -15,9 +14,9 @@ type CrewDisclosureProps = {
 };
 
 /**
- * "Show all crew" toggle under a key-crew summary. The expanded list is a
- * scroll container with no focusable content, so it is itself focusable and
- * carries the shared ring, or keyboard users could never scroll it.
+ * "Show all crew" toggle under a key-crew summary. The expanded list grows
+ * the page rather than scrolling inside it (the window is the one scroller,
+ * design-system §3.1), laid out in columns so a long crew stays short.
  */
 export default function CrewDisclosure({ credits }: CrewDisclosureProps) {
   const [expanded, setExpanded] = useState(false);
@@ -39,18 +38,13 @@ export default function CrewDisclosure({ credits }: CrewDisclosureProps) {
         {expanded ? "Show less" : "Show all crew"}
       </button>
       {expanded && (
-        /* The list is the scroll container, focusable like the cast rail;
-           role kept because Tailwind's list-none strips list semantics in
+        /* role kept because Tailwind's list-none strips list semantics in
            Safari. */
         <ul
           id="crew-full-list"
           role="list"
-          tabIndex={0}
           aria-label={`Full crew list, ${credits.length} credits`}
-          className={cn(
-            "mt-3 max-h-96 list-none space-y-3 overflow-y-auto rounded-lg border border-primary/15 bg-card/40 px-3 py-2 sm:px-4",
-            FOCUS_VISIBLE_RING_CLASS,
-          )}
+          className="mt-3 grid list-none gap-x-6 gap-y-3 rounded-lg border border-primary/15 bg-card/40 p-3 sm:grid-cols-2 sm:px-4 lg:grid-cols-3"
         >
           {credits.map(credit => (
             <li key={credit.key}>

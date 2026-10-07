@@ -221,6 +221,13 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
 `aria-invalid` styling, a property-scoped 150ms transition with
 `motion-reduce:transition-none`, and stamps `data-variant`/`data-size`.
 
+- **A disabled primary button is grey, not dim glacier.** The primary-fill
+  variants (`default`, `accent`, `accent-pill`) swap to `bg-muted
+  text-muted-foreground` at full opacity when `disabled`, with no shadow, so
+  a "Send Request" that cannot be sent yet never reads as a second live
+  action beside the real one. Outline, ghost and destructive keep the base
+  half-opacity. Guarded by `test/ui/button.test.tsx`.
+
 - **`accent-pill` and the `sm`/`lg` sizes don't compose.** cva emits
   base → variant → size → `className`, and `cn` is `twMerge`, so the last
   conflicting class wins: `sm` and `lg` re-declare `rounded-md` and silently
@@ -253,6 +260,14 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
   AlertDialog has one default size; dropdown items are non-inset; Select uses
   its default trigger size and item-aligned content; Separator is horizontal
   and decorative. Add a branch only when a production surface requires it.
+- **A dialog that can outgrow the viewport scrolls its body, not itself.**
+  Technical Details and Edit Movie compose `DIALOG_SCROLL_CONTENT_CLASS` on
+  `DialogContent` (a flex column capped at `100svh - 2rem`, no padding of its
+  own), `DIALOG_SCROLL_HEADER_CLASS` on the `DialogHeader`, and
+  `DIALOG_SCROLL_BODY_CLASS` on the one element that scrolls. The close
+  button is positioned against the non-scrolling box, so it never rides the
+  scrollbar track or scrolls out of reach, and a title the dialog focuses on
+  open carries `outline-hidden` with no ring (§1.7).
 - **When to add a variant vs. a constant**: a new *look* for an existing
   primitive (e.g. another Button treatment) → add a cva variant next to its
   siblings. A *cross-component* treatment (card chrome, motion, focus) → an
@@ -716,6 +731,18 @@ Movie, show and in-theaters detail pages are built from shared parts —
 media type supplying only its own metadata chips, key-crew summary, and about
 rows.
 Adding a media type means supplying those three, not building a fourth page.
+
+`DetailTitleHeading` keeps a text-node space between the title and the
+parenthesised year, since the two are flex items and would otherwise be read
+as one word. `CrewDisclosure` expands the full crew in place as a one-, two-
+or three-column grid — the window is the page's only scroller (§3.1), so no
+section opens a nested scroll area.
+
+The movie hero's `actionsSlot` (`MovieDetailsHeroActions`) is a 2×2 grid
+below `sm` — Play, Watch, Like, and the More menu with a visible "More" label
+beside its icon — and a wrapping row from `sm` up. An action row that relies
+on `flex-wrap` with content that cannot shrink drops its last control onto
+a lonely row at 390 px; a grid never does.
 
 The album and musician pages keep their own hero anatomy — a square cover or
 a round thumb beside the title, over a decorative 21:9 band, rather than
