@@ -617,7 +617,7 @@ horizontal `WatchRoomCard`. All of them wear `CARD_SURFACE_CLASS`.
       … onError → centered muted lucide icon (usePosterFallback)
       {playLink && <div class={CARD_OVERLAY_REVEAL_CLASS} … bg-black/30 />}
       {badge}                                      ← optional corner chip
-      <div class="… bg-linear-to-t from-black/90 to-transparent" />
+      <div class="h-[55%] bg-linear-to-t from-black/95 via-black/70 via-40% to-transparent" />
       {progress && <WatchProgressBar … />}
     </div>
     <div class="absolute inset-x-0 bottom-0 p-3"> ← sibling of the wash
@@ -632,7 +632,10 @@ horizontal `WatchRoomCard`. All of them wear `CARD_SURFACE_CLASS`.
 The contract:
 
 - Titles clamp at 2 lines, with an optional muted second line under them — a
-  year, or an episode's `S1 E4 · Name`.
+  year, or an episode's `S1 E4 · Name`. The scrim they sit on starts near the
+  middle of the card and is near-opaque through its lower 40 %, so a two-line
+  title never lands on the poster's own lettering; `PosterCardSkeleton` shares
+  the same class so the two cannot drift.
 - **The wash and the play control travel together.** In `PosterCard` that is
   one `playLink` prop: a card with nothing single to play (`ShowCard`,
   `InTheatersCard`, `MusicianCard`) omits it and renders neither, rather than
@@ -1072,6 +1075,24 @@ require the full playback test pass.
   (`border-destructive/*` + destructive text + outline destructive actions).
   A card's own loading and error states are `SettingsLoadingCard` and
   `SettingsErrorCard` (§3.4), so the card keeps its place in the page.
+- **The Save bar (`SettingsSaveBar`) is opaque, always there, and sticky only
+  while dirty.** It renders at the end of every server-saved form on a solid
+  `bg-card` (floating surfaces are opaque, like the mini player and dialogs —
+  a translucent bar let the form read through it), so a keyboard user can
+  always find it; it lifts into a sticky bar at `stickyClassName` (`bottom-4`,
+  or `MINI_PLAYER_CLEARANCE_BOTTOM_CLASS` above the mini player) only while
+  the form differs from what is saved, and its Reset and Save are disabled
+  when there is nothing to do, with the status line reading "No unsaved
+  changes" — unless a success or error message is standing ("Library paths
+  saved."), which wins. Below `sm` it is one row: the status, an icon-only
+  Reset keeping its accessible name, and Save. The Playback page's one bar
+  belongs to the admin "Server" card and renders `embedded` in that card's
+  `CardFooter`, so it cannot be mistaken for saving the device and account
+  cards above it, which save as they change.
+- **The Settings tab strip** is two columns on a phone (the fifth tab
+  spanning both), five equal tabs filling the content width from `@lg`, and
+  the library pages' fit-to-content card only from `@2xl`; a narrow 2+2+1
+  card beside empty space at tablet width read as orphaned.
 - **Card section titles are real headings**: render `CardTitle` with `asChild`
   wrapping an `<h2>` (login's is the page `<h1>`) so card-sectioned pages are
   navigable by heading.
@@ -1098,7 +1119,8 @@ require the full playback test pass.
   such a card also renders a visible `text-destructive` notice for as long as
   it lasts. Do not mix the models inside one card — split by ownership,
   as Settings → Playback does (two "this device" cards, one account card,
-  one admin-only "Server" card with the only Save bar).
+  one admin-only "Server" card with the only Save bar, hosted in that card's
+  footer).
 - **Account-scoped settings also apply instantly, through the API.** A
   setting that belongs to the account rather than to one browser or to the
   server ("Trailers before movies", `TrailerPreferencesCard`) saves every
