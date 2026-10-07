@@ -13,6 +13,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthRouteRouteImport } from './routes/_auth/route'
 import { Route as AuthIndexRouteImport } from './routes/_auth/index'
 import { Route as AuthTrailerRouteImport } from './routes/_auth/trailer'
+import { Route as AuthSplatRouteImport } from './routes/_auth/$'
 import { Route as AuthSettingsRouteRouteImport } from './routes/_auth/settings/route'
 import { Route as AuthTvShowsIndexRouteImport } from './routes/_auth/tv-shows/index'
 import { Route as AuthSettingsIndexRouteImport } from './routes/_auth/settings/index'
@@ -52,6 +53,11 @@ const AuthIndexRoute = AuthIndexRouteImport.update({
 const AuthTrailerRoute = AuthTrailerRouteImport.update({
   id: '/trailer',
   path: '/trailer',
+  getParentRoute: () => AuthRouteRoute,
+} as any)
+const AuthSplatRoute = AuthSplatRouteImport.update({
+  id: '/$',
+  path: '/$',
   getParentRoute: () => AuthRouteRoute,
 } as any)
 const AuthSettingsRouteRoute = AuthSettingsRouteRouteImport.update({
@@ -165,6 +171,7 @@ export interface FileRoutesByFullPath {
   '/': typeof AuthIndexRoute
   '/login': typeof LoginRoute
   '/settings': typeof AuthSettingsRouteRouteWithChildren
+  '/$': typeof AuthSplatRoute
   '/trailer': typeof AuthTrailerRoute
   '/settings/account': typeof AuthSettingsAccountRoute
   '/settings/libraries': typeof AuthSettingsLibrariesRoute
@@ -189,6 +196,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
+  '/$': typeof AuthSplatRoute
   '/trailer': typeof AuthTrailerRoute
   '/': typeof AuthIndexRoute
   '/settings/account': typeof AuthSettingsAccountRoute
@@ -217,6 +225,7 @@ export interface FileRoutesById {
   '/_auth': typeof AuthRouteRouteWithChildren
   '/login': typeof LoginRoute
   '/_auth/settings': typeof AuthSettingsRouteRouteWithChildren
+  '/_auth/$': typeof AuthSplatRoute
   '/_auth/trailer': typeof AuthTrailerRoute
   '/_auth/': typeof AuthIndexRoute
   '/_auth/settings/account': typeof AuthSettingsAccountRoute
@@ -246,6 +255,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/settings'
+    | '/$'
     | '/trailer'
     | '/settings/account'
     | '/settings/libraries'
@@ -270,6 +280,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
+    | '/$'
     | '/trailer'
     | '/'
     | '/settings/account'
@@ -297,6 +308,7 @@ export interface FileRouteTypes {
     | '/_auth'
     | '/login'
     | '/_auth/settings'
+    | '/_auth/$'
     | '/_auth/trailer'
     | '/_auth/'
     | '/_auth/settings/account'
@@ -354,6 +366,13 @@ declare module '@tanstack/react-router' {
       path: '/trailer'
       fullPath: '/trailer'
       preLoaderRoute: typeof AuthTrailerRouteImport
+      parentRoute: typeof AuthRouteRoute
+    }
+    '/_auth/$': {
+      id: '/_auth/$'
+      path: '/$'
+      fullPath: '/$'
+      preLoaderRoute: typeof AuthSplatRouteImport
       parentRoute: typeof AuthRouteRoute
     }
     '/_auth/settings': {
@@ -527,6 +546,7 @@ const AuthSettingsRouteRouteWithChildren =
 
 interface AuthRouteRouteChildren {
   AuthSettingsRouteRoute: typeof AuthSettingsRouteRouteWithChildren
+  AuthSplatRoute: typeof AuthSplatRoute
   AuthTrailerRoute: typeof AuthTrailerRoute
   AuthIndexRoute: typeof AuthIndexRoute
   AuthWatchRoomsIdRoute: typeof AuthWatchRoomsIdRoute
@@ -548,6 +568,7 @@ interface AuthRouteRouteChildren {
 
 const AuthRouteRouteChildren: AuthRouteRouteChildren = {
   AuthSettingsRouteRoute: AuthSettingsRouteRouteWithChildren,
+  AuthSplatRoute: AuthSplatRoute,
   AuthTrailerRoute: AuthTrailerRoute,
   AuthIndexRoute: AuthIndexRoute,
   AuthWatchRoomsIdRoute: AuthWatchRoomsIdRoute,

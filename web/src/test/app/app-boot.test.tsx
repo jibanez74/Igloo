@@ -33,8 +33,7 @@ describe("App boot loading", () => {
     document.body.innerHTML = "";
   });
 
-  it("marks the document ready and removes the initial splash after the fade window", () => {
-    document.body.innerHTML = `
+  const SPLASH_MARKUP = `
       <div
         id="initial-splash"
         role="status"
@@ -49,16 +48,25 @@ describe("App boot loading", () => {
       <div id="test-root"></div>
     `;
 
+  const renderBoot = () =>
     render(<AppBoot queryClient={new QueryClient()} />, {
       container: document.getElementById("test-root")!,
     });
+
+  it("marks the document ready, hides the splash from assistive tech, and removes it after the fade window", () => {
+    document.body.innerHTML = SPLASH_MARKUP;
+
+    renderBoot();
 
     expect(document.documentElement).toHaveAttribute(
       "data-app-ready",
       "true",
     );
     expect(document.documentElement).toHaveClass("dark");
-    expect(document.getElementById("initial-splash")).toBeInTheDocument();
+    expect(document.getElementById("initial-splash")).toHaveAttribute(
+      "aria-hidden",
+      "true",
+    );
 
     act(() => {
       vi.advanceTimersByTime(SPLASH_REMOVE_DELAY_MS - 1);
@@ -68,6 +76,39 @@ describe("App boot loading", () => {
 
     act(() => {
       vi.advanceTimersByTime(1);
+    });
+
+    expect(document.getElementById("initial-splash")).not.toBeInTheDocument();
+  });
+
+  it("removes the splash as soon as its fade ends", () => {
+    document.body.innerHTML = SPLASH_MARKUP;
+
+    renderBoot();
+
+    act(() => {
+      document
+        .getElementById("initial-splash")
+        ?.dispatchEvent(new Event("transitionend"));
+    });
+
+    expect(document.getElementById("initial-splash")).not.toBeInTheDocument();
+  });
+
+  // The removal used to live in an effect cleanup, so a remount inside the
+  // fade window cancelled it and the fixed splash kept swallowing every click.
+  it("still removes the splash when the boot component remounts before the fade ends", () => {
+    document.body.innerHTML = SPLASH_MARKUP;
+
+    renderBoot().unmount();
+    const remountRoot = document.createElement("div");
+    document.body.append(remountRoot);
+    render(<AppBoot queryClient={new QueryClient()} />, {
+      container: remountRoot,
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(SPLASH_REMOVE_DELAY_MS);
     });
 
     expect(document.getElementById("initial-splash")).not.toBeInTheDocument();

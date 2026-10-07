@@ -38,9 +38,12 @@ const BACK_DESTINATIONS = {
 export type BackDestination = keyof typeof BACK_DESTINATIONS;
 
 export default function MediaNotFound({
+  title = "Error",
   message,
   back,
 }: {
+  /** The alert's heading; "Not found" when the resource is simply missing. */
+  title?: string;
   message: string;
   back: BackDestination;
 }) {
@@ -50,7 +53,7 @@ export default function MediaNotFound({
     <div>
       <Alert className="border-destructive/20 bg-destructive/10 text-destructive">
         <AlertCircle className="size-4" aria-hidden="true" />
-        <AlertTitle>Error</AlertTitle>
+        <AlertTitle>{title}</AlertTitle>
         <AlertDescription>{message}</AlertDescription>
       </Alert>
       <Link

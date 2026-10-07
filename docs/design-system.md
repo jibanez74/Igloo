@@ -495,7 +495,10 @@ rendered from it by `scripts/generate-theme.ts` between
    the canvas gradients (a glacier radial tint over a vertical wash), and the
    splash message colors. The hand-written zone keeps layout, the body font
    stack, the `@font-face`, and the `#initial-splash` structure (fades out
-   when `AppBoot` sets `data-app-ready="true"`).
+   when `dismissBootSplash` in `lib/boot-splash.ts` sets
+   `data-app-ready="true"`; the same call hides the splash from assistive
+   tech and removes it on `transitionend` with an uncancellable watchdog, so
+   a remount during the fade can never leave it blocking input).
 3. `index.html` — the `<meta name="theme-color">` and the inline anti-flash
    IIFE that reads `localStorage["igloo-theme"]` and applies the `dark` class
    before first paint (defaults dark, including on storage errors).
@@ -562,6 +565,11 @@ collapse, while the mobile trigger controls the sheet.
   `overflow-x-clip`, not `overflow-x-hidden`/`auto`: those create a scroll
   container, and sticky children inside pages then stop sticking to the
   window.
+
+**Unknown URLs** land on the shell's catch-all route (`routes/_auth/$.tsx`):
+a "Page not found" heading over `MediaNotFound` (title "Not found", "Back to
+Home"), titled through `head` like every page, so a mistyped address keeps
+the sidebar, the header and a way back instead of the router's bare text.
 
 **The home page** is the shell's canonical composition: a hero heading, then
 six sections in order — `WatchRooms`, `ContinueWatching`, `LatestMovies`,
@@ -982,7 +990,8 @@ require the full playback test pass.
 - **NotificationBell** (header): ghost icon button with a glacier unread
   badge pill ("99+" cap; count also in the `aria-label`), opening a `w-80
   bg-card` popover — header row with "Mark all read", `max-h-96` scroll body
-  with spinner / "You're all caught up." / `divide-y` list states. Unread
+  with spinner / a compact `LibraryEmptyState` ("You're all caught up." under
+  a faded `BellOff`) / `divide-y` list states. Unread
   rows tint `bg-muted/40` with a glacier dot; rows show type label, message,
   relative time, per-row dismiss. Unread count polls every 30s; the list
   query is `enabled` only while open.

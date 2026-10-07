@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, X } from "lucide-react";
+import { Bell, BellOff, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -8,6 +8,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
+import LibraryEmptyState from "@/components/shared/LibraryEmptyState";
 import {
   deleteNotification,
   markAllNotificationsRead,
@@ -236,9 +237,11 @@ export default function NotificationBell() {
               <Spinner aria-label="Loading notifications" />
             </div>
           ) : showEmptyState ? (
-            <p className="px-4 py-10 text-center text-sm text-muted-foreground">
-              You&apos;re all caught up.
-            </p>
+            <LibraryEmptyState
+              icon={BellOff}
+              message="You're all caught up."
+              className="px-4 py-6 text-sm"
+            />
           ) : notifications.length > 0 ? (
             <ul className="divide-y divide-border">
               {notifications.map((notification) => {
