@@ -188,7 +188,22 @@ describe("settings route tab transitions", () => {
     const savePanel =
       screen.getByText("General settings").parentElement?.parentElement;
     expect(savePanel).toHaveClass(...MOTION_SETTINGS_SURFACE_CLASS.split(" "));
-    expect(savePanel).toHaveClass("bottom-4");
+    // Opaque and in flow while clean; the floating, translucent bar used to
+    // let the form read through it (design-system §3.7).
+    expect(savePanel).toHaveClass("bg-card");
+    expect(savePanel).not.toHaveClass("sticky", "backdrop-blur-md");
+    expect(savePanel).toHaveTextContent("No unsaved changes");
+    expect(screen.getByRole("button", { name: "Reset" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Save Settings" })).toBeDisabled();
+
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Static directory"), "x");
+    expect(savePanel).toHaveClass("sticky", "bottom-4");
+    expect(savePanel).toHaveTextContent(
+      "Saved settings are used by the backend on future requests.",
+    );
+    expect(screen.getByRole("button", { name: "Reset" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Save Settings" })).toBeEnabled();
 
     const switchControl = screen.getByRole("switch", { name: "Library watcher" });
     expect(switchControl).toHaveClass(
@@ -208,7 +223,10 @@ describe("settings route tab transitions", () => {
 
     const savePanel =
       (await screen.findByText("General settings")).parentElement?.parentElement;
-    expect(savePanel).toHaveClass("bottom-28", "sm:bottom-24");
+    // The offset only matters once the bar sticks, which it does while dirty.
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Static directory"), "x");
+    expect(savePanel).toHaveClass("sticky", "bottom-28", "sm:bottom-24");
     expect(savePanel).not.toHaveClass("bottom-4");
   });
 });
@@ -271,6 +289,8 @@ describe("settings form query updates", () => {
     expect(screen.getByLabelText("Static directory")).toHaveValue(
       "/srv/igloo/static",
     );
+    expect(screen.getByRole("button", { name: "Reset" })).toBeDisabled();
+    expect(screen.getByText("No unsaved changes")).toBeInTheDocument();
   });
 
   it("updates a clean libraries settings form when query data changes", async () => {

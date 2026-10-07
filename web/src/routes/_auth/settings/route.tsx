@@ -102,18 +102,22 @@ function SettingsLayout() {
     });
   };
 
+  // Five tabs: two columns on a phone (the odd one spanning both), then from
+  // `@lg` five equal tabs filling the content width, and only from `@2xl` the
+  // library pages' fit-to-content card. A 2+2+1 card beside empty space at
+  // tablet width read as orphaned.
   const isCompactLayout = visibleTabs.length <= 2;
   const tabsListClassName = isCompactLayout
     ? cn(LIBRARY_TABS_LIST_CLASS, "grid-cols-2")
     : cn(
         LIBRARY_TABS_LIST_CLASS,
-        "grid-cols-2 @lg:grid-cols-3 @2xl:grid-cols-5",
+        "grid-cols-2 sm:w-full @lg:grid-cols-5 @2xl:w-fit",
       );
   const tabsTriggerClassName = isCompactLayout
     ? LIBRARY_TAB_TRIGGER_CLASS
     : cn(
         LIBRARY_TAB_TRIGGER_CLASS,
-        "last:col-span-2 @2xl:last:col-span-1",
+        "last:col-span-2 @lg:last:col-span-1",
       );
 
   return (

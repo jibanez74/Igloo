@@ -93,4 +93,16 @@ describe("server playback form effective device notice", () => {
       "NVIDIA NVENC is not available on this server (h264_nvenc runtime probe failed), so transcodes run on the CPU. Transcodes are capped at 1080p.",
     );
   });
+  // The device and account cards above save as they change; the one Save bar
+  // on the page belongs to the Server card and sits inside it to say so.
+  it("hosts the save bar inside the Server card", async () => {
+    await renderPlaybackSettings(nvidiaSettings());
+
+    const saveButton = await screen.findByRole("button", { name: "Save Settings" });
+    const card = saveButton.closest('[data-slot="card"]');
+    expect(card).not.toBeNull();
+    expect(card).toHaveTextContent("Server");
+    expect(saveButton.closest('[data-slot="card-footer"]')).not.toBeNull();
+    expect(saveButton).toBeDisabled();
+  });
 });

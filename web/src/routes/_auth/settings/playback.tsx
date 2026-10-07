@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useId, useState, useTransition } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { Apple, CircuitBoard, Cpu, MonitorCog, Server } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -219,31 +219,45 @@ type PlaybackSettingsQueryData = {
 };
 
 /** The server-wide half of the page: admin-only, and the only part that saves. */
+function formFromSettings(
+  settings: PlaybackSettingsType,
+): UpdatePlaybackSettingsRequest {
+  return {
+    server_upload_mbps: settings.server_upload_mbps,
+    hardware_acceleration_device: settings.hardware_acceleration_device,
+  };
+}
+
+function formMatchesSettings(
+  form: UpdatePlaybackSettingsRequest,
+  settings: PlaybackSettingsType,
+) {
+  const saved = formFromSettings(settings);
+  return (
+    form.server_upload_mbps === saved.server_upload_mbps &&
+    form.hardware_acceleration_device === saved.hardware_acceleration_device
+  );
+}
+
 function ServerPlaybackForm({ settings }: ServerPlaybackFormProps) {
   const queryClient = useQueryClient();
   const serverUploadMbpsId = useId();
   const hardwareDeviceId = useId();
   const statusId = useId();
 
-  const [form, setForm] = useState<UpdatePlaybackSettingsRequest>(() => ({
-    server_upload_mbps: settings.server_upload_mbps,
-    hardware_acceleration_device: settings.hardware_acceleration_device,
-  }));
+  const [form, setForm] = useState<UpdatePlaybackSettingsRequest>(() =>
+    formFromSettings(settings),
+  );
   const [syncedSettings, setSyncedSettings] = useState(settings);
   const [validationMessage, setValidationMessage] = useState("");
   const [, startTransition] = useTransition();
+  const isDirty = !formMatchesSettings(form, syncedSettings);
 
   if (settings !== syncedSettings) {
-    const formIsClean =
-      form.server_upload_mbps === syncedSettings.server_upload_mbps &&
-      form.hardware_acceleration_device ===
-        syncedSettings.hardware_acceleration_device;
+    const formIsClean = !isDirty;
     setSyncedSettings(settings);
     if (formIsClean) {
-      setForm({
-        server_upload_mbps: settings.server_upload_mbps,
-        hardware_acceleration_device: settings.hardware_acceleration_device,
-      });
+      setForm(formFromSettings(settings));
       setValidationMessage("");
     }
   }
@@ -292,10 +306,7 @@ function ServerPlaybackForm({ settings }: ServerPlaybackFormProps) {
   };
 
   const resetForm = () => {
-    setForm({
-      server_upload_mbps: syncedSettings.server_upload_mbps,
-      hardware_acceleration_device: syncedSettings.hardware_acceleration_device,
-    });
+    setForm(formFromSettings(syncedSettings));
     setValidationMessage("");
   };
 
@@ -401,20 +412,24 @@ function ServerPlaybackForm({ settings }: ServerPlaybackFormProps) {
             </div>
           </PlaybackSection>
         </CardContent>
+        {/* Inside the card, so the one Save bar on this page is visibly the
+            Server card's: the device and account cards above save as they
+            change (design-system §3.7). */}
+        <CardFooter className="block p-0">
+          <SettingsSaveBar
+            title="Server playback settings"
+            isDirty={isDirty}
+            statusId={statusId}
+            statusMessage={
+              validationMessage || "Applies to every device streaming from this server."
+            }
+            statusTone={validationMessage ? "error" : "neutral"}
+            onReset={resetForm}
+            isPending={updateMutation.isPending}
+            embedded
+          />
+        </CardFooter>
       </Card>
-
-      <SettingsSaveBar
-        title="Server playback settings"
-        statusId={statusId}
-        statusMessage={
-          validationMessage || "Applies to every device streaming from this server."
-        }
-        statusTone={validationMessage ? "error" : "neutral"}
-        onReset={resetForm}
-        resetDisabled={updateMutation.isPending}
-        isPending={updateMutation.isPending}
-        className={cn("bg-card/70", MOTION_SETTINGS_SURFACE_CLASS)}
-      />
     </form>
   );
 }

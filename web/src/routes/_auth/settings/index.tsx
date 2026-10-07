@@ -172,8 +172,10 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   const [validationField, setValidationField] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
+  const isDirty = !formsMatchSettings(form, syncedSettings);
+
   if (settings !== syncedSettings) {
-    const formIsClean = formsMatchSettings(form, syncedSettings);
+    const formIsClean = !isDirty;
     setSyncedSettings(settings);
     if (formIsClean) {
       setForm(formFromSettings(settings));
@@ -526,19 +528,18 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
 
       <SettingsSaveBar
         title="General settings"
+        isDirty={isDirty}
         statusMessage={
           validationMessage ||
           "Saved settings are used by the backend on future requests."
         }
         statusTone={validationMessage ? "error" : "neutral"}
         onReset={resetForm}
-        resetDisabled={updateMutation.isPending}
         isPending={updateMutation.isPending}
-        className={cn(
-          "sticky z-10 bg-card/95 backdrop-blur-md supports-backdrop-filter:bg-card/85",
-          isMiniPlayerVisible ? MINI_PLAYER_CLEARANCE_BOTTOM_CLASS : "bottom-4",
-          MOTION_SETTINGS_SURFACE_CLASS,
-        )}
+        stickyClassName={
+          isMiniPlayerVisible ? MINI_PLAYER_CLEARANCE_BOTTOM_CLASS : "bottom-4"
+        }
+        className={MOTION_SETTINGS_SURFACE_CLASS}
       />
     </form>
   );
