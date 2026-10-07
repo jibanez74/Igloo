@@ -39,6 +39,8 @@ const selectTitleFromStart = (event: FocusEvent<HTMLInputElement>) => {
   const input = event.currentTarget;
   if (input.value.length > 0) {
     input.setSelectionRange(0, input.value.length, "backward");
+    // The browser has already scrolled to the caret's old spot at the end.
+    input.scrollLeft = 0;
   }
 };
 

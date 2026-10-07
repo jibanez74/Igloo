@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 
 // Shared by the card and its skeleton so the two never drift apart.
 const POSTER_SCRIM_CLASS =
-  "absolute inset-x-0 bottom-0 h-[55%] bg-linear-to-t from-black/95 via-black/70 via-40% to-transparent";
+  "absolute inset-x-0 bottom-0 h-[60%] bg-linear-to-t from-black via-black/90 via-50% to-transparent";
 export type PosterCardWatchProgress = {
   progressSec: number;
   durationSec: number;

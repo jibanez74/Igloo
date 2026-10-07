@@ -711,7 +711,7 @@ export const PLAYER_TRANSPORT_INERT_CLASS =
  */
 export const SCROLL_RAIL_BLEED_CLASS = "group/rail relative -mx-4 sm:-mx-6 lg:-mx-8";
 export const SCROLL_RAIL_SCROLLER_CLASS =
-  "flex scrollbar-thin scrollbar-thumb-primary/50 overflow-x-auto px-4 sm:px-6 lg:px-8";
+  "flex scrollbar-thin scrollbar-thumb-primary/50 overflow-x-auto scroll-px-4 px-4 sm:scroll-px-6 sm:px-6 lg:scroll-px-8 lg:px-8";
 /** One edge of a rail: the fade while that side overflows, and the arrow slot. */
 export const SCROLL_RAIL_EDGE_CLASS =
   "pointer-events-none absolute top-0 z-10 flex w-12 items-center from-background to-transparent sm:w-14";
@@ -719,7 +719,7 @@ export const SCROLL_RAIL_EDGE_CLASS =
  * A rail arrow shows on hover and on focus-within (hover/focus parity, §1.7);
  * the exhausted side stays rendered and focusable but inert.
  */
-export const SCROLL_RAIL_ARROW_CLASS = `${MOTION_MICRO_OPACITY_CLASS} pointer-events-auto rounded-full opacity-0 shadow-md group-focus-within/rail:opacity-100 group-hover/rail:opacity-100 ${PLAYER_TRANSPORT_INERT_CLASS}`;
+export const SCROLL_RAIL_ARROW_CLASS = `${MOTION_MICRO_OPACITY_CLASS} pointer-events-auto rounded-full opacity-0 shadow-md group-focus-within/rail:opacity-100 group-hover/rail:opacity-100 aria-disabled:cursor-not-allowed aria-disabled:group-focus-within/rail:opacity-30 aria-disabled:group-hover/rail:opacity-30`;
 
 /**
  * Layout-only shell for the full-width library/settings tab bars (movies /

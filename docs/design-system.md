@@ -617,7 +617,7 @@ horizontal `WatchRoomCard`. All of them wear `CARD_SURFACE_CLASS`.
       … onError → centered muted lucide icon (usePosterFallback)
       {playLink && <div class={CARD_OVERLAY_REVEAL_CLASS} … bg-black/30 />}
       {badge}                                      ← optional corner chip
-      <div class="h-[55%] bg-linear-to-t from-black/95 via-black/70 via-40% to-transparent" />
+      <div class="h-[60%] bg-linear-to-t from-black via-black/90 via-50% to-transparent" />
       {progress && <WatchProgressBar … />}
     </div>
     <div class="absolute inset-x-0 bottom-0 p-3"> ← sibling of the wash
@@ -633,7 +633,7 @@ The contract:
 
 - Titles clamp at 2 lines, with an optional muted second line under them — a
   year, or an episode's `S1 E4 · Name`. The scrim they sit on starts near the
-  middle of the card and is near-opaque through its lower 40 %, so a two-line
+  middle of the card and is near-opaque through its lower half, so a two-line
   title never lands on the poster's own lettering; `PosterCardSkeleton` shares
   the same class so the two cannot drift.
 - **The wash and the play control travel together.** In `PosterCard` that is
@@ -1090,9 +1090,10 @@ require the full playback test pass.
   `CardFooter`, so it cannot be mistaken for saving the device and account
   cards above it, which save as they change.
 - **The Settings tab strip** is two columns on a phone (the fifth tab
-  spanning both), five equal tabs filling the content width from `@lg`, and
-  the library pages' fit-to-content card only from `@2xl`; a narrow 2+2+1
-  card beside empty space at tablet width read as orphaned.
+  spanning both), five equal tabs filling the content width from `@md` (on
+  the tighter `px-1.5` until the card fits to content), and the library pages'
+  fit-to-content card only from `@2xl`; a narrow 2+2+1 card beside empty
+  space at tablet width read as orphaned.
 - **Card section titles are real headings**: render `CardTitle` with `asChild`
   wrapping an `<h2>` (login's is the page `<h1>`) so card-sectioned pages are
   navigable by heading.

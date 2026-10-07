@@ -96,7 +96,7 @@ export default function SettingsSaveBar({
           id={statusId}
           className={cn(
             MOTION_MICRO_COLORS_CLASS,
-            "truncate text-sm sm:mt-1 sm:whitespace-normal",
+            "truncate text-xs sm:mt-1 sm:text-sm sm:whitespace-normal",
             TONE_CLASS[statusTone],
           )}
           aria-live="polite"
