@@ -367,7 +367,6 @@ function TrailerPage() {
           <TrailerHeader
             title={title}
             titleIsDialogTitle={false}
-            subtitle="Trailer"
             closeLabel={closeLabel}
             onClose={handleClose}
           />
@@ -431,7 +430,6 @@ function TrailerPage() {
           <TrailerHeader
             title={title}
             titleIsDialogTitle={false}
-            subtitle="Trailer"
             closeLabel={closeLabel}
             onClose={handleClose}
           />
@@ -469,7 +467,6 @@ function TrailerPage() {
           <TrailerHeader
             title={title}
             titleIsDialogTitle={false}
-            subtitle="Trailer"
             closeLabel={closeLabel}
             onClose={handleClose}
           />
@@ -533,7 +530,6 @@ function TrailerPage() {
           <TrailerHeader
             title={title}
             titleIsDialogTitle={false}
-            subtitle="Trailer"
             closeLabel={closeLabel}
             onClose={handleClose}
           />
@@ -766,7 +762,9 @@ type TrailerHeaderProps = {
   /** The player view names the dialog from the header; other views name it
    *  from their own heading and show the title as plain text here. */
   titleIsDialogTitle: boolean;
-  subtitle: string;
+  /** "Now Playing" under the player; the other views have no second line,
+   *  since without a movie the title is already just "Trailer". */
+  subtitle?: string;
   closeLabel: string;
   closeRef?: RefObject<HTMLButtonElement | null>;
   onClose: () => void;
@@ -801,7 +799,9 @@ function TrailerHeader({
               {title}
             </p>
           )}
-          <p className="text-xs text-muted-foreground">{subtitle}</p>
+          {subtitle && (
+            <p className="text-xs text-muted-foreground">{subtitle}</p>
+          )}
         </div>
       </div>
       <button
