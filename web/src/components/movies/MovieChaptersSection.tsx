@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import ScrollRail from "@/components/shared/ScrollRail";
 import { chapterLabel, formatTimecode } from "@/lib/format";
 import {
   DETAIL_RAIL_HEADING_CLASS,
@@ -32,14 +33,11 @@ export default function MovieChaptersSection({
       >
         Chapters
       </h2>
-      <p className="sr-only">
-        Chapters scroll horizontally. Use Tab to move between chapter links. On
-        touch devices, swipe or scroll the list to see all chapters.
-      </p>
-      <ul
-        className="-mx-4 flex snap-x snap-mandatory scrollbar-thin scrollbar-thumb-primary/50 list-none gap-3 overflow-x-auto overscroll-x-contain px-4 pb-4 sm:-mx-6 sm:gap-4 sm:px-6 lg:-mx-8 lg:gap-4 lg:px-8"
-        aria-label={`Chapters, ${chapters.length} total`}
-      >
+      <ScrollRail label="chapters" asChild>
+        <ul
+          className="snap-x snap-mandatory list-none gap-3 overscroll-x-contain pb-4 sm:gap-4"
+          aria-label={`Chapters, ${chapters.length} total`}
+        >
         {chapters.map((chapter, index) => (
           <li
             key={chapter.id}
@@ -69,7 +67,8 @@ export default function MovieChaptersSection({
             </Link>
           </li>
         ))}
-      </ul>
+        </ul>
+      </ScrollRail>
     </section>
   );
 }

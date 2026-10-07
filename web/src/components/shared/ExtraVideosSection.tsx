@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import ScrollRail from "@/components/shared/ScrollRail";
 import { Film, Play } from "lucide-react";
 import { usePosterFallback } from "@/hooks/usePosterFallback";
 import {
@@ -113,14 +114,11 @@ export default function ExtraVideosSection({
       >
         Extra Videos
       </h2>
-      <p className="sr-only">
-        Extra videos scroll horizontally. Use Tab to move between video links.
-        On touch devices, swipe or scroll the list to see all clips.
-      </p>
-      <ul
-        className="-mx-4 flex snap-x snap-mandatory scrollbar-thin scrollbar-thumb-primary/50 list-none gap-3 overflow-x-auto overscroll-x-contain px-4 pb-4 sm:-mx-6 sm:gap-4 sm:px-6 lg:-mx-8 lg:gap-4 lg:px-8"
-        aria-label={`Extra videos, ${videos.length} clips`}
-      >
+      <ScrollRail label="extra videos" asChild>
+        <ul
+          className="snap-x snap-mandatory list-none gap-3 overscroll-x-contain pb-4 sm:gap-4"
+          aria-label={`Extra videos, ${videos.length} clips`}
+        >
         {videos.map(video => (
           <li
             key={video.id}
@@ -129,7 +127,8 @@ export default function ExtraVideosSection({
             <ExtraVideoCard video={video} returnTo={returnTo} />
           </li>
         ))}
-      </ul>
+        </ul>
+      </ScrollRail>
     </section>
   );
 }

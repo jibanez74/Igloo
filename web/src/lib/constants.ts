@@ -704,6 +704,24 @@ export const PLAYER_TRANSPORT_INERT_CLASS =
   "aria-disabled:cursor-not-allowed aria-disabled:opacity-30";
 
 /**
+ * Horizontal rails (design-system §3.2): the wrapper owns the bleed to the
+ * shell's content padding at each breakpoint, and the scroller restores it as
+ * padding, so `ScrollRail`'s edge fades and arrows sit at the viewport edge.
+ * Shared by the cast, chapters and extras rails and the seasons tab strip.
+ */
+export const SCROLL_RAIL_BLEED_CLASS = "group/rail relative -mx-4 sm:-mx-6 lg:-mx-8";
+export const SCROLL_RAIL_SCROLLER_CLASS =
+  "flex scrollbar-thin scrollbar-thumb-primary/50 overflow-x-auto px-4 sm:px-6 lg:px-8";
+/** One edge of a rail: the fade while that side overflows, and the arrow slot. */
+export const SCROLL_RAIL_EDGE_CLASS =
+  "pointer-events-none absolute top-0 z-10 flex w-12 items-center from-background to-transparent sm:w-14";
+/**
+ * A rail arrow shows on hover and on focus-within (hover/focus parity, §1.7);
+ * the exhausted side stays rendered and focusable but inert.
+ */
+export const SCROLL_RAIL_ARROW_CLASS = `${MOTION_MICRO_OPACITY_CLASS} pointer-events-auto rounded-full opacity-0 shadow-md group-focus-within/rail:opacity-100 group-hover/rail:opacity-100 ${PLAYER_TRANSPORT_INERT_CLASS}`;
+
+/**
  * Layout-only shell for the full-width library/settings tab bars (movies /
  * music / search / settings). The shared *look* (glacier primary-fill active
  * pill, bordered `bg-muted/50` container) lives in the base `ui/tabs.tsx`;

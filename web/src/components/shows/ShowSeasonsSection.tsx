@@ -1,4 +1,5 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import ScrollRail from "@/components/shared/ScrollRail";
 import ShowSeasonEpisodeList, {
   EpisodeRowsPlaceholder,
 } from "@/components/shows/ShowSeasonEpisodeList";
@@ -16,12 +17,6 @@ type ShowSeasonsSectionProps = {
   selectedSeason: number;
   onSelectSeason: (seasonNumber: number) => void;
 };
-
-// The tab strip scrolls on the same viewport bleed as the cast and extras
-// rails (design-system §3.2) rather than wrapping: a long-running show can
-// carry twenty seasons, and a wrapped bar would push the list off screen.
-const SEASON_STRIP_CLASS =
-  "-mx-4 overflow-x-auto px-4 pb-1 scrollbar-thin scrollbar-thumb-primary/50 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8";
 
 export default function ShowSeasonsSection({
   showId,
@@ -47,7 +42,12 @@ export default function ShowSeasonsSection({
         value={String(selectedSeason)}
         onValueChange={value => onSelectSeason(Number(value))}
       >
-        <div className={SEASON_STRIP_CLASS}>
+        {/* The tab strip scrolls on the same rail as cast and extras
+            (design-system §3.2) rather than wrapping: a long-running show can
+            carry twenty seasons, and a wrapped bar would push the list off
+            screen. The TabsList stays the rail's direct child so the Radix
+            tab/panel wiring is untouched. */}
+        <ScrollRail label="seasons" className="pb-1" edgeInsetClassName="bottom-1">
           <TabsList className="h-auto w-max justify-start" aria-label="Seasons">
             {seasons.map(season => (
               <TabsTrigger
@@ -59,7 +59,7 @@ export default function ShowSeasonsSection({
               </TabsTrigger>
             ))}
           </TabsList>
-        </div>
+        </ScrollRail>
 
         <TabsContent value={String(selectedSeason)}>
           <ShowSeasonEpisodeList

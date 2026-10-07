@@ -24,6 +24,10 @@ import {
   PLAYER_PRIMARY_BUTTON_CLASS,
   PLAYER_TRANSPORT_INERT_CLASS,
   PLAYLIST_TRACKS_KEY,
+  SCROLL_RAIL_ARROW_CLASS,
+  SCROLL_RAIL_BLEED_CLASS,
+  SCROLL_RAIL_EDGE_CLASS,
+  SCROLL_RAIL_SCROLLER_CLASS,
   PLAYLIST_TRACKS_PAGE_SIZE,
   SEARCH_MOVIES_KEY,
   SEARCH_PER_PAGE,
@@ -76,6 +80,19 @@ describe("constants contracts", () => {
     );
     expect(AUDIO_VOLUME_STEP).toBe(0.1);
     expect(AUDIO_VOLUME_STEP).toBe(MOVIE_VOLUME_STEP);
+  });
+
+  it("keeps rails on the shell bleed with hover/focus-parity arrows (design-system §3.2)", () => {
+    expect(SCROLL_RAIL_BLEED_CLASS).toContain("-mx-4 sm:-mx-6 lg:-mx-8");
+    expect(SCROLL_RAIL_BLEED_CLASS).toContain("group/rail");
+    expect(SCROLL_RAIL_SCROLLER_CLASS).toContain("overflow-x-auto");
+    expect(SCROLL_RAIL_SCROLLER_CLASS).toContain("px-4 sm:px-6 lg:px-8");
+    expect(SCROLL_RAIL_EDGE_CLASS).toContain("pointer-events-none");
+    expect(SCROLL_RAIL_ARROW_CLASS).toContain("group-hover/rail:opacity-100");
+    expect(SCROLL_RAIL_ARROW_CLASS).toContain("group-focus-within/rail:opacity-100");
+    expect(SCROLL_RAIL_ARROW_CLASS).toContain("motion-reduce:transition-none");
+    // The exhausted arrow stays focusable: aria-disabled, never disabled.
+    expect(SCROLL_RAIL_ARROW_CLASS).toContain(PLAYER_TRANSPORT_INERT_CLASS);
   });
 
   it("keeps the scrolling-dialog recipe capped with a fixed header and a scrolling body", () => {

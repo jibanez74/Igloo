@@ -672,10 +672,22 @@ track's minimum width instead of stretching one poster across the whole content
 column; pinned by `constants-contracts.test.ts`.
 
 True horizontal rails (cast, chapters, extras, the seasons tab strip) are
-`-mx-4 flex overflow-x-auto px-4` with thin glacier scrollbars, bleeding to the
-viewport edge at each breakpoint. The cast and extras rails are the shared
-`CastSection` and `ExtraVideosSection`, used by both the movie and show detail
-pages.
+the shared `ScrollRail` (`components/shared/ScrollRail.tsx`): a wrapper on
+`SCROLL_RAIL_BLEED_CLASS` that bleeds to the viewport edge at each
+breakpoint, around a scroller on `SCROLL_RAIL_SCROLLER_CLASS` (thin glacier
+scrollbar, the padding restored). It says when there is more: a
+`from-background` fade on each edge that still overflows, and outline
+prev/next arrows ("Scroll cast left") that appear on hover and on
+focus-within (§1.7) and page by 80 % of the visible width, smoothly unless
+motion is reduced. Both arrows stay rendered while either side overflows,
+the exhausted one `aria-disabled` and inert rather than removed, so a
+keyboard user who pages to the end keeps focus. A touch-first device gets the
+fades and no arrows — swiping is the affordance there. `asChild` makes a
+`<ul>` the scroller so it keeps its list role, label and (for the cast rail)
+its `tabIndex` and ring; the seasons strip wraps the Radix `TabsList` as a
+direct child so its tab/panel wiring is untouched. The cast and extras rails
+are the shared `CastSection` and `ExtraVideosSection`, used by both the
+movie and show detail pages.
 
 #### Library pages
 
