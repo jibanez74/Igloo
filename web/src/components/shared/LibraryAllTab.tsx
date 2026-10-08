@@ -121,7 +121,10 @@ export default function LibraryAllTab<
 
   const items = data?.error === false ? getItems(data.data) : [];
   const totalPages = data?.error === false ? data.data.total_pages : 0;
-  const hasMultiplePages = totalPages > 1;
+  // A failed refetch keeps the last good `data` beside `isError`, so its page
+  // count no longer describes anything on screen once the error replaces the
+  // grid.
+  const hasMultiplePages = !isError && totalPages > 1;
   const hasSort = sort !== undefined;
 
   // The API does not clamp the page, so an out-of-range page (a hand-edited URL,
@@ -150,8 +153,8 @@ export default function LibraryAllTab<
   // that appeared only once the data landed moved the grid down under it
   // (design-system §3.4) — which is why the row is reserved while loading
   // rather than mirrored in the skeleton. A tab with no sort toggle and no
-  // start slot drops the row once it knows it has a single page (or nothing),
-  // instead of holding an empty band above the grid.
+  // start slot drops the row once it knows it has a single page, nothing, or
+  // an error, instead of holding an empty band above the grid.
   const showToolbar =
     hasSort || toolbarStartSlot != null || hasMultiplePages || isLoading;
   const toolbar = showToolbar && (

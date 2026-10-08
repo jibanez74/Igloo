@@ -299,4 +299,34 @@ describe("LibraryAllTab without sort", () => {
       container.querySelector('[data-slot="library-tab-toolbar"]'),
     ).toBeNull();
   });
+
+  // A failed refetch keeps the last good data beside the error, so its page
+  // count must not hold the row open over the alert.
+  it("drops the toolbar row when a refetch fails over a paginated page", async () => {
+    let calls = 0;
+    const { container, queryClient } = renderUnsortedTab(async () => {
+      calls += 1;
+      if (calls > 1) throw new Error("offline");
+      return {
+        error: false,
+        data: {
+          items: [{ id: 1, name: "Frost Harbor" }],
+          total: 72,
+          page: 1,
+          per_page: 3,
+          total_pages: 3,
+        },
+      };
+    });
+
+    await screen.findByText("Page 1 of 3");
+
+    await act(() => queryClient.refetchQueries());
+    await screen.findByRole("alert");
+
+    expect(
+      container.querySelector('[data-slot="library-tab-toolbar"]'),
+    ).toBeNull();
+    expect(screen.queryByText("Page 1 of 3")).not.toBeInTheDocument();
+  });
 });
