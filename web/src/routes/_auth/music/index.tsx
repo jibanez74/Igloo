@@ -73,7 +73,7 @@ import LibraryPagination from "@/components/shared/LibraryPagination";
 import LibraryStats from "@/components/shared/LibraryStats";
 import TrackItem from "@/components/music/TrackItem";
 import PlaylistCard from "@/components/music/PlaylistCard";
-import EmptyState from "@/components/shared/EmptyState";
+import LibraryEmptyState from "@/components/shared/LibraryEmptyState";
 import { Button } from "@/components/ui/button";
 import PlaylistFormDialog from "@/components/music/PlaylistFormDialog";
 import RequestAlbumDialog from "@/components/music/RequestAlbumDialog";
@@ -453,10 +453,9 @@ function TracksTabContent() {
 
   if (allTracks.length === 0) {
     return (
-      <div className="py-12 text-center text-muted-foreground">
+      <div>
         <LiveAnnouncer message={getAnnouncement()} />
-        <Music className="mx-auto mb-4 size-10 opacity-50" aria-hidden="true" />
-        <p>No tracks found in your library.</p>
+        <LibraryEmptyState icon={Music} message="No tracks found in your library." />
       </div>
     );
   }
@@ -839,7 +838,10 @@ function PlaylistsTabContent({ playlistsView, likedTracksPage }: PlaylistsTabCon
 
       {/* Playlists grid or empty state */}
       {playlists.length === 0 ? (
-        <EmptyPlaylistsState onCreateClick={handleCreateOpen} />
+        <LibraryEmptyState
+          icon={ListMusic}
+          message="No playlists yet. Use New playlist to group tracks."
+        />
       ) : (
         <div className={MUSIC_CARD_GRID_CLASS}>
           {playlists.map((playlist) => (
@@ -936,11 +938,9 @@ function LikedTracksInPlaylistsTab({ likedTracksPage, onExit }: LikedTracksInPla
 
       {/* Track list or empty state */}
       {tracks.length === 0 ? (
-        <EmptyState
-          bordered
+        <LibraryEmptyState
           icon={Heart}
-          title="No liked tracks yet"
-          description="Tap the heart icon on any track to add it here."
+          message="No liked tracks yet. Tap the heart on any track to add it here."
         />
       ) : (
         <div className={TRACK_LIST_CONTAINER_CLASS}>
@@ -997,30 +997,5 @@ function PlaylistsTabSkeleton() {
         ))}
       </div>
     </div>
-  );
-}
-
-type EmptyPlaylistsStateProps = {
-  onCreateClick: () => void;
-};
-
-function EmptyPlaylistsState({ onCreateClick }: EmptyPlaylistsStateProps) {
-  return (
-    <EmptyState
-      icon={ListMusic}
-      title="No playlists yet"
-      description="Create your first playlist to start organizing your favorite tracks."
-      action={
-        <Button
-          variant="accent-pill"
-          size="lg"
-          onClick={onCreateClick}
-          className="font-semibold shadow-lg shadow-primary/20"
-        >
-          <Plus className="size-4" aria-hidden="true" />
-          Create your first playlist
-        </Button>
-      }
-    />
   );
 }

@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   ALBUMS_PER_PAGE,
   CONTENT_FADE_TRANSITION_MS,
+  LIKED_TRACKS_PER_PAGE,
   MOTION_SECTION_ENTER_CLASS,
   MOTION_SECTION_ENTER_DELAYED_CLASS,
   MUSICIANS_PER_PAGE,
@@ -76,6 +77,9 @@ function playlist(
 type MockMusicFetchOptions = {
   spotifyAvailable?: boolean;
   emptyMusicians?: boolean;
+  emptyTracks?: boolean;
+  emptyPlaylists?: boolean;
+  emptyLikedTracks?: boolean;
   failFirstTracksRequest?: boolean;
 };
 
@@ -178,13 +182,33 @@ function mockMusicFetch(options: MockMusicFetchOptions = {}) {
         });
       }
 
+      const tracks = options.emptyTracks
+        ? []
+        : [track(1, "Alabaster"), track(2, "Borrowed Light")];
       return jsonResponse({
         error: false,
         data: {
-          tracks: [track(1, "Alabaster"), track(2, "Borrowed Light")],
-          total: 2,
+          tracks,
+          total: tracks.length,
           offset: 0,
           limit: TRACKS_INFINITE_PAGE_SIZE,
+          has_more: false,
+        },
+      });
+    }
+
+    if (
+      url === `/api/music/tracks/liked?page=1&per_page=${LIKED_TRACKS_PER_PAGE}`
+    ) {
+      const tracks = options.emptyLikedTracks ? [] : [track(2, "Borrowed Light")];
+      return jsonResponse({
+        error: false,
+        data: {
+          tracks,
+          total: tracks.length,
+          page: 1,
+          per_page: LIKED_TRACKS_PER_PAGE,
+          total_pages: tracks.length === 0 ? 0 : 1,
           has_more: false,
         },
       });
@@ -200,6 +224,10 @@ function mockMusicFetch(options: MockMusicFetchOptions = {}) {
     }
 
     if (url === "/api/music/playlists") {
+      if (options.emptyPlaylists) {
+        return jsonResponse({ error: false, data: { playlists: [] } });
+      }
+
       return jsonResponse({
         error: false,
         data: {
@@ -453,5 +481,64 @@ describe("music route playlists tab", () => {
     expect(
       screen.getByRole("button", { name: "Create new playlist" }),
     ).toHaveTextContent("New playlist");
+  });
+
+  it("renders the minimal empty state with the toolbar as the only call to action", async () => {
+    await renderMusicRoute("/music/?tab=playlists", { emptyPlaylists: true });
+
+    expect(
+      await screen.findByText("No playlists yet. Use New playlist to group tracks."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("0 playlists")).toBeInTheDocument();
+
+    // One "New playlist" action: the toolbar button, not a second CTA in the
+    // empty state (design-system §3.4).
+    expect(screen.getAllByRole("button", { name: /playlist/i })).toHaveLength(1);
+    expect(
+      screen.queryByRole("button", { name: /create your first playlist/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "No playlists yet" }),
+    ).not.toBeInTheDocument();
+
+    await waitFor(() => {
+      const statusRegions = screen.getAllByRole("status");
+      expect(
+        statusRegions.some(region => region.textContent === "No playlists yet"),
+      ).toBe(true);
+    });
+  });
+
+  it("renders the minimal empty state for liked tracks", async () => {
+    await renderMusicRoute("/music/?tab=playlists&playlistsView=liked", {
+      emptyLikedTracks: true,
+    });
+
+    expect(
+      await screen.findByText(
+        "No liked tracks yet. Tap the heart on any track to add it here.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "No liked tracks yet" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Back to playlists" })).toBeInTheDocument();
+  });
+});
+
+describe("music route tracks tab empty state", () => {
+  it("renders and announces the empty tracks state", async () => {
+    await renderMusicRoute("/music/?tab=tracks", { emptyTracks: true });
+
+    expect(
+      await screen.findByText("No tracks found in your library."),
+    ).toBeInTheDocument();
+
+    await waitFor(() => {
+      const statusRegions = screen.getAllByRole("status");
+      expect(
+        statusRegions.some(region => region.textContent === "No tracks found"),
+      ).toBe(true);
+    });
   });
 });
