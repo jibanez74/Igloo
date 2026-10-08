@@ -145,6 +145,36 @@ describe("movie playlist route", () => {
     ).toBe(false);
   });
 
+  // A private playlist the viewer was not shared answers 403 "access denied";
+  // the reader gets a sentence and a way back, never the server's constant.
+  it("words a private playlist as no access, with a way back", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = requestURL(input);
+        if (url === "/api/auth/user") {
+          return jsonResponse(authUser());
+        }
+        if (url === "/api/movies/playlists/11") {
+          return jsonResponse({ error: true, message: "access denied" }, 403);
+        }
+        return jsonResponse({ error: false, data: {} });
+      }),
+    );
+
+    await renderRoute("/movies/playlist/11");
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("No access");
+    expect(alert).toHaveTextContent("You don't have access to this playlist.");
+    expect(screen.queryByText(/access denied/)).not.toBeInTheDocument();
+    expect(
+      within(alert.parentElement as HTMLElement)
+        .getByRole("link", { name: "Back to movie playlists" })
+        .getAttribute("href"),
+    ).toContain("tab=playlists");
+  });
+
   it("starts a fresh page and sort when moving from one playlist to another", async () => {
     const fetchMock = mockPlaylistsFetch({
       11: { name: "Weekend Picks", movies: [movie(1, "Arrival", 2016)] },

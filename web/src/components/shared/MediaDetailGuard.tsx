@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import MediaNotFound, {
   type BackDestination,
 } from "@/components/shared/MediaNotFound";
-import { apiErrorMessage } from "@/lib/is-api-failure";
 import { capitalize } from "@/lib/format";
 
 type MediaDetailGuardProps<TPayload> = {
@@ -27,10 +26,13 @@ type MediaDetailGuardProps<TPayload> = {
  * failed, a request still in flight, and a response that came back empty.
  *
  * Three of the four are dead ends, so each renders `MediaNotFound` with a way
- * out (design-system §3.4) rather than a bare heading. A 404 gets its own
- * sentence instead of the client's "404 - The resource…" string, since a
- * missing subject is the one failure the reader can do nothing about. Children
- * take the payload as an argument so it stays narrowed past the guard.
+ * out (design-system §3.4) rather than a bare heading. The UI owns every
+ * sentence here: a 404 reads as the subject being missing, a 403 as the
+ * reader not being allowed to see it, and anything else as a load that went
+ * wrong, so neither the client's canned "404 - The resource…" string nor a
+ * lowercase server constant ("access denied") ever reaches the reader.
+ * Children take the payload as an argument so it stays narrowed past the
+ * guard.
  */
 export default function MediaDetailGuard<TPayload>({
   id,
@@ -57,13 +59,20 @@ export default function MediaDetailGuard<TPayload>({
     );
   }
 
+  if (data?.error && data.status === 403) {
+    return (
+      <MediaNotFound
+        title="No access"
+        message={`You don't have access to this ${noun}.`}
+        back={back}
+      />
+    );
+  }
+
   if (isError || data?.error) {
     return (
       <MediaNotFound
-        message={apiErrorMessage(
-          data,
-          `Failed to load ${noun} details. Please try again later.`,
-        )}
+        message={`Something went wrong while loading this ${noun}. Please try again later.`}
         back={back}
       />
     );

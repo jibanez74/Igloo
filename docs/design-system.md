@@ -892,7 +892,8 @@ is unknown or empty.
     failed request, one still in flight, an empty response — are
     `MediaDetailGuard`, which every `$id` route wraps its content in. Three of
     the four are dead ends, so each renders `MediaNotFound` (title "Not found"
-    for a 404 or an empty response, "Error" otherwise); its destination is
+    for a 404 or an empty response, "No access" for a 403, "Error"
+    otherwise); its destination is
     a named key (`music`, `moviePlaylists`, …) carrying both the route and the
     words on the link, so the two can never disagree and a destination may
     carry search params.
@@ -903,11 +904,16 @@ is unknown or empty.
   - **The UI owns the words for failures it can name.** `apiRequest` stamps the
     HTTP `status` on every failure envelope it returns, and a surface maps the
     statuses it understands to a sentence — a 404 on a detail page reads "We
-    couldn't find that movie.", a 400/401 on login "The email or password is
-    incorrect.", a 403/404 on a watch room "This room no longer exists or you
-    were not invited." — keeping the server's message only as the fallback for
-    anything else (`apiErrorMessage`). Never show the client's canned
-    "404 - The resource…" string or a lowercase server constant as the copy.
+    couldn't find that movie.", a 403 "You don't have access to this
+    playlist.", a 400/401 on login "The email or password is incorrect.", a
+    403/404 on a watch room "This room no longer exists or you were not
+    invited." A page about one subject (`MediaDetailGuard`, the trailer
+    dialog) then uses a fixed sentence of its own for everything else
+    ("Something went wrong while loading this movie. Please try again later.")
+    and shows no server text at all; list and section loads may still keep
+    the server's message as the fallback (`apiErrorMessage`). Never show the
+    client's canned "404 - The resource…" or "500 - A network error…" strings
+    or a lowercase server constant as the copy.
 
   Because the erroring subtree often unmounts its own live region, error
   surfaces carry `role="alert"` and announce themselves — never repeat one

@@ -60,9 +60,9 @@ function MoviePlaylistPage() {
   const playlistId = parseRouteId(id);
 
   // A malformed id never reaches the API: the query options disable
-  // themselves for the zero sentinel, and the guard goes straight to
-  // not-found rather than sitting on a skeleton.
-  const { data, isLoading, isError } = useQuery(
+  // themselves for the zero sentinel, and the guard rejects the link before
+  // it looks at the query state.
+  const { data, isPending, isError } = useQuery(
     moviePlaylistDetailsQueryOpts(playlistId ?? 0),
   );
 
@@ -71,7 +71,7 @@ function MoviePlaylistPage() {
       id={playlistId}
       noun="playlist"
       back="moviePlaylists"
-      isPending={isLoading}
+      isPending={isPending}
       isError={isError}
       data={data}
       payload={data?.error === false ? data.data : null}
