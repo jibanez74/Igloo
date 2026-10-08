@@ -39,6 +39,8 @@ import {
   DETAIL_TRACK_LIST_CONTAINER_CLASS,
   FOCUS_VISIBLE_RING_CLASS,
   LIBRARY_POSTER_GRID_CLASS,
+  MUSIC_DETAIL_HERO_ROW_CLASS,
+  MUSIC_DETAIL_SHELL_CLASS,
   SPOTIFY_BRAND_ICON_CLASS,
   SPOTIFY_BRAND_TEXT_CLASS,
 } from "@/lib/constants";
@@ -232,7 +234,7 @@ function MusicianDetailsContent({
         <MusicDetailBackdrop imageUrl={thumbUrl} fallbackIcon={User} />
       </div>
 
-      <div className="relative z-10 -mt-20 sm:-mt-24 md:-mt-28 lg:-mt-32">
+      <div className={MUSIC_DETAIL_SHELL_CLASS}>
         <div
           className={cn(
             DETAIL_PAGE_CONTENT_ENTER_CLASS,
@@ -240,7 +242,7 @@ function MusicianDetailsContent({
           )}
         >
           {/* Header section */}
-          <header className="mb-10 flex flex-col gap-6 sm:gap-8 lg:flex-row lg:items-start lg:gap-10">
+          <header className={MUSIC_DETAIL_HERO_ROW_CLASS}>
             {/* Musician thumbnail */}
             <figure className="mx-auto shrink-0 lg:mx-0">
               <div className="aspect-square w-48 overflow-hidden rounded-full border border-primary/20 shadow-2xl shadow-primary/10 md:w-56 lg:w-64">

@@ -485,7 +485,9 @@ explaining what it owns. The styling families:
   and `PLAYER_PRIMARY_BUTTON_CLASS` all compose `FOCUS_VISIBLE_RING_CLASS`
   rather than restating it.
 - **Page chrome** — `DETAIL_HERO_*` (hero shell, content, and the three
-  literal over-media scrims), `LIBRARY_TABS_LIST_CLASS` /
+  literal over-media scrims), `MUSIC_DETAIL_*` (the music detail pages' shell
+  over the backdrop band, hero row and Play/Shuffle actions row, shared with
+  `MusicDetailSkeleton`, §3.2), `LIBRARY_TABS_LIST_CLASS` /
   `LIBRARY_TAB_TRIGGER_CLASS`, `LIBRARY_POSTER_GRID_CLASS` (the fixed-column
   library grid) and `LIBRARY_MENU_ITEM_CLASS` (items in a library page's More
   menu), `HOME_POSTER_GRID_CLASS` / `HOME_ALBUM_GRID_CLASS` (§3.2), `MINI_PLAYER_CLEARANCE_*` (the shell's
@@ -778,7 +780,8 @@ The album and musician pages keep their own hero anatomy — a square cover or
 a round thumb beside the title, over a decorative 21:9 band, rather than
 `DetailHero`'s poster — and share the music-specific parts in
 `components/music/`: `MusicDetailBackdrop` (the aria-hidden band, on
-`usePosterFallback`), `MusicDetailSkeleton`
+`usePosterFallback`; its image, its fallback and the exported
+`MusicDetailBackdropSkeleton` share one band height), `MusicDetailSkeleton`
 (`variant="album" | "musician" | "playlist"`: the album and musician variants
 are one hero geometry with the art shape and hero rows switched; the playlist
 variant mirrors the playlist page instead, which has no backdrop band and no

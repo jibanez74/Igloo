@@ -51,6 +51,7 @@ import {
   DETAIL_PAGE_CONTENT_ENTER_CLASS,
   DETAIL_RAIL_HEADING_CLASS,
   FOCUS_VISIBLE_RING_CLASS,
+  MUSIC_DETAIL_HERO_ROW_CLASS,
   MUSIC_PLAYLISTS_TAB_SEARCH,
   PLAYLIST_TRACKS_KEY,
   PLAYLISTS_KEY,
@@ -353,7 +354,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
       />
 
       {/* Header section */}
-      <header className="mb-8 flex flex-col gap-6 sm:mb-10 sm:gap-8 lg:flex-row">
+      <header className={MUSIC_DETAIL_HERO_ROW_CLASS}>
         {/* Playlist cover */}
         <figure className="mx-auto shrink-0 lg:mx-0">
           <div className="aspect-square w-40 overflow-hidden rounded-xl border border-primary/20 bg-muted shadow-2xl shadow-primary/10 sm:w-48 lg:w-56 xl:w-64">

@@ -65,6 +65,8 @@ import {
   SPOTIFY_BRAND_TEXT_CLASS,
   MOTION_MICRO_COLORS_CLASS,
   DETAIL_TRACK_LIST_CONTAINER_CLASS,
+  MUSIC_DETAIL_HERO_ROW_CLASS,
+  MUSIC_DETAIL_SHELL_CLASS,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
@@ -309,14 +311,14 @@ function AlbumDetailsContent({
         <MusicDetailBackdrop imageUrl={coverUrl ?? ""} fallbackIcon={Disc3} />
       </div>
 
-      <div className="relative z-10 -mt-20 sm:-mt-24 md:-mt-28 lg:-mt-32">
+      <div className={MUSIC_DETAIL_SHELL_CLASS}>
         <div
           className={cn(
             DETAIL_PAGE_CONTENT_ENTER_CLASS,
             "delay-75 motion-reduce:delay-0",
           )}
         >
-          <div className="flex min-w-0 flex-col gap-6 sm:gap-8 lg:flex-row lg:items-start lg:gap-10">
+          <div className={MUSIC_DETAIL_HERO_ROW_CLASS}>
             <AlbumDetailsCoverBlock
               coverUrl={coverUrl}
               albumTitle={album.title}

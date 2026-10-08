@@ -1,6 +1,9 @@
+import { MusicDetailBackdropSkeleton } from "@/components/music/MusicDetailBackdrop";
 import {
   LIBRARY_POSTER_GRID_CLASS,
   MOTION_LOADING_STATE_CLASS,
+  MUSIC_DETAIL_HERO_ROW_CLASS,
+  MUSIC_DETAIL_SHELL_CLASS,
 } from "@/lib/constants";
 
 type MusicDetailSkeletonProps = {
@@ -42,16 +45,10 @@ export default function MusicDetailSkeleton({
 function HeroSkeleton({ isMusician }: { isMusician: boolean }) {
   return (
     <>
-      <div className="relative -mx-4 sm:-mx-6 lg:-mx-8" aria-hidden="true">
-        <div className="h-44 w-full bg-muted sm:h-52 md:aspect-21/9 md:h-auto md:max-h-[min(42vh,22rem)] md:min-h-48" />
-        <div className="absolute inset-0 bg-linear-to-t from-background via-background/60 to-transparent" />
-      </div>
+      <MusicDetailBackdropSkeleton />
 
-      <div
-        className="relative z-10 -mt-20 sm:-mt-24 md:-mt-28 lg:-mt-32"
-        aria-hidden="true"
-      >
-        <div className="flex min-w-0 flex-col gap-6 sm:gap-8 lg:flex-row lg:items-start lg:gap-10">
+      <div className={MUSIC_DETAIL_SHELL_CLASS} aria-hidden="true">
+        <div className={MUSIC_DETAIL_HERO_ROW_CLASS}>
           {isMusician ? (
             <div className="mx-auto shrink-0 lg:mx-0">
               <div className="aspect-square w-48 rounded-full bg-muted md:w-56 lg:w-64" />
@@ -102,29 +99,33 @@ function HeroSkeleton({ isMusician }: { isMusician: boolean }) {
           </div>
         </div>
 
-        {isMusician && (
-          <div className="mt-10">
-            <div className="mb-4 h-7 w-40 rounded-sm bg-muted" />
-            <div className={LIBRARY_POSTER_GRID_CLASS}>
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="overflow-hidden rounded-xl border border-border bg-card"
-                >
-                  <div className="aspect-square bg-muted" />
-                  <div className="space-y-2 p-3">
-                    <div className="h-4 w-3/4 rounded-sm bg-accent" />
-                    <div className="h-3 w-1/2 rounded-sm bg-accent" />
+        {/* The pages' lower stage: the hero row's mb-10 opens it, and its
+            sections are spaced like the real space-y wrapper. */}
+        <div className="space-y-8 sm:space-y-10">
+          {isMusician && (
+            <div>
+              <div className="mb-4 h-7 w-40 rounded-sm bg-muted" />
+              <div className={LIBRARY_POSTER_GRID_CLASS}>
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="overflow-hidden rounded-xl border border-border bg-card"
+                  >
+                    <div className="aspect-square bg-muted" />
+                    <div className="space-y-2 p-3">
+                      <div className="h-4 w-3/4 rounded-sm bg-accent" />
+                      <div className="h-3 w-1/2 rounded-sm bg-accent" />
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        <div className="mt-10">
-          {isMusician && <div className="mb-4 h-7 w-32 rounded-sm bg-muted" />}
-          <TrackRowsSkeleton />
+          <div>
+            {isMusician && <div className="mb-4 h-7 w-32 rounded-sm bg-muted" />}
+            <TrackRowsSkeleton />
+          </div>
         </div>
       </div>
     </>
@@ -136,7 +137,7 @@ function HeroSkeleton({ isMusician }: { isMusician: boolean }) {
 function PlaylistSkeleton() {
   return (
     <div aria-hidden="true">
-      <div className="mb-8 flex flex-col gap-6 sm:mb-10 sm:gap-8 lg:flex-row">
+      <div className={MUSIC_DETAIL_HERO_ROW_CLASS}>
         <div className="mx-auto shrink-0 lg:mx-0">
           <div className="aspect-square w-40 rounded-xl bg-muted sm:w-48 lg:w-56 xl:w-64" />
         </div>
