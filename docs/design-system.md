@@ -232,8 +232,9 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
   base → variant → size → `className`, and `cn` is `twMerge`, so the last
   conflicting class wins: `sm` and `lg` re-declare `rounded-md` and silently
   square off the pill (`default`, `icon` and `icon-sm` declare no radius and
-  leave it alone). Pass no `size` with `accent-pill` (what every call site
-  does), or re-assert `rounded-full` in `className`. Watch for this whenever
+  leave it alone). Pass no `size` with `accent-pill`, or re-assert
+  `rounded-full` in `className` (the album, musician and playlist Play
+  buttons use `size="lg"` and do this). Watch for this whenever
   two sibling buttons are meant to match — one picking up a `size` is enough
   to break the pair.
 - **Tabs share one look** (`web/src/components/ui/tabs.tsx`): a bordered

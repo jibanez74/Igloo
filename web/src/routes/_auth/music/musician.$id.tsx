@@ -366,7 +366,7 @@ function MusicianDetailsContent({
                     variant="accent-pill"
                     size="lg"
                     onClick={() => startMusicianQueue(false)}
-                    className="w-full font-semibold shadow-lg shadow-primary/20 sm:w-auto"
+                    className="w-full rounded-full font-semibold shadow-lg shadow-primary/20 sm:w-auto"
                     aria-label={`Play all ${pluralize(tracks.length, "track")} by ${musician.name}`}
                   >
                     <Play className="size-4 fill-current" aria-hidden="true" />

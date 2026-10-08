@@ -435,7 +435,7 @@ function AlbumDetailsContent({
                       variant="accent-pill"
                       size="lg"
                       onClick={() => startAlbumQueue(false)}
-                      className="w-full font-semibold shadow-lg shadow-primary/20 sm:w-auto"
+                      className="w-full rounded-full font-semibold shadow-lg shadow-primary/20 sm:w-auto"
                     >
                       <Play
                         className="size-4 fill-current"
