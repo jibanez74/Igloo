@@ -895,8 +895,10 @@ is unknown or empty.
   - A query inside a page → `LoadErrorAlert` (`role="alert"`,
     `border-destructive/25 bg-destructive/10 text-destructive`, "Try again" →
     `refetch()`).
-  - A home section's query → `SectionErrorAlert`, the same destructive tint as
-    a shadcn `Alert`, rendered for you by `HomeMediaSection`.
+  - A section that failed as a whole → `SectionErrorAlert`, the same
+    destructive tint as a shadcn `Alert` with an optional title ("Error" by
+    default): a home section's query (rendered for you by
+    `HomeMediaSection`), the watch-room list.
   - A Settings card → `SettingsErrorCard` (and `SettingsLoadingCard` for its
     pending state), so the card keeps its place in the page.
   - The four ways a detail page fails to show its subject — an invalid id, a
@@ -908,7 +910,7 @@ is unknown or empty.
     a named key (`music`, `moviePlaylists`, …) carrying both the route and the
     words on the link, so the two can never disagree and a destination may
     carry search params.
-  - A missing resource → `MediaNotFound`: a destructive `Alert` plus a
+  - A missing resource → `MediaNotFound`: a `SectionErrorAlert` plus a
     **required** "Back to Movies/TV Shows/Music/Home" outline link, so the
     page never dead-ends.
   - A mutation → **toast** via `toast-helpers.ts`, never inline.
