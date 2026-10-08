@@ -921,10 +921,13 @@ is unknown or empty.
     invited." A page about one subject (`MediaDetailGuard`, the trailer
     dialog) then uses a fixed sentence of its own for everything else
     ("Something went wrong while loading this movie. Please try again later.")
-    and shows no server text at all; list and section loads may still keep
-    the server's message as the fallback (`apiErrorMessage`). Never show the
-    client's canned "404 - The resource…" or "500 - A network error…" strings
-    or a lowercase server constant as the copy.
+    and shows no server text at all. List and section loads go through
+    `apiErrorMessage`, which keeps the server's message only for a 4xx other
+    than 404 and otherwise uses the surface's own sentence, so a 404 (whose
+    body `apiRequest` replaces with a canned string) or a 5xx (internal error
+    text) never reaches the screen. Never show the client's canned "404 - The
+    resource…" or "500 - A network error…" strings or a lowercase server
+    constant as the copy.
 
   Because the erroring subtree often unmounts its own live region, error
   surfaces carry `role="alert"` and announce themselves — never repeat one

@@ -45,4 +45,30 @@ describe("apiErrorMessage", () => {
       "Fallback.",
     );
   });
+
+  it("keeps the server's message for a client error", () => {
+    expect(
+      apiErrorMessage({ error: true, message: "Playlist is full.", status: 409 }, "Fallback."),
+    ).toBe("Playlist is full.");
+  });
+
+  // apiRequest answers every 404 with its canned "404 - …" envelope.
+  it("falls back for a not-found", () => {
+    expect(
+      apiErrorMessage(
+        { error: true, message: "404 - The resource you requested was not found.", status: 404 },
+        "Fallback.",
+      ),
+    ).toBe("Fallback.");
+  });
+
+  // A 5xx message is the server's internal error text, not copy for a person.
+  it("falls back for a server error", () => {
+    expect(
+      apiErrorMessage(
+        { error: true, message: "failed to add movies to playlist", status: 500 },
+        "Couldn’t load playlists.",
+      ),
+    ).toBe("Couldn’t load playlists.");
+  });
 });

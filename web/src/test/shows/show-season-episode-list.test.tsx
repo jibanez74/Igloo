@@ -358,9 +358,10 @@ describe("ShowSeasonEpisodeList", () => {
       <ShowSeasonEpisodeList showId={SHOW_ID} seasonNumber={1} />,
     );
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "server exploded",
-    );
+    // A 5xx message is internal server text, so the list words it itself.
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Failed to load episodes. Please try again.");
+    expect(alert).not.toHaveTextContent("server exploded");
 
     await user.click(screen.getByRole("button", { name: "Try again" }));
 
