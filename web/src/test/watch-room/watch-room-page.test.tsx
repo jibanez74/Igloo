@@ -1010,9 +1010,9 @@ describe("WatchRoomPageContent", () => {
     expect(joinWatchRoomMock).not.toHaveBeenCalled();
   });
 
-  it("keeps the server's message for any other room failure", async () => {
+  it("keeps the server's message for any other client error", async () => {
     useQueryMock.mockImplementation(() => ({
-      data: { error: true, message: "The room is being rebuilt.", status: 500 },
+      data: { error: true, message: "The room is being rebuilt.", status: 409 },
       isPending: false,
       isError: false,
     }));
@@ -1020,6 +1020,21 @@ describe("WatchRoomPageContent", () => {
     renderWithQueryClient(<WatchRoomPageContent roomId={7} />);
 
     expect(screen.getByText("The room is being rebuilt.")).toBeInTheDocument();
+  });
+
+  it("words a server error itself instead of showing the server's text", async () => {
+    useQueryMock.mockImplementation(() => ({
+      data: { error: true, message: "failed to get watch room", status: 500 },
+      isPending: false,
+      isError: false,
+    }));
+
+    renderWithQueryClient(<WatchRoomPageContent roomId={7} />);
+
+    expect(
+      screen.getByText("This watch room could not be loaded or you do not have access to it."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("failed to get watch room")).not.toBeInTheDocument();
   });
 
   it("shows a controlled error when joining the room throws", async () => {

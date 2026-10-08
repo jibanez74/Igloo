@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   DndContext,
   closestCenter,
@@ -8,6 +8,7 @@ import {
   useSensor,
   useSensors,
   DragOverlay,
+  defaultScreenReaderInstructions,
 } from "@dnd-kit/core";
 import type { DragEndEvent, DragStartEvent, UniqueIdentifier } from "@dnd-kit/core";
 import {
@@ -21,6 +22,7 @@ import SortableTrackItem from "./SortableTrackItem";
 import TrackItem from "./TrackItem";
 import { trackRowProps } from "@/lib/track-row-props";
 import { useTrackPlaybackMatcher } from "@/hooks/useTrackPlaybackMatcher";
+import { useShortcutHints } from "@/hooks/useShortcutHints";
 import type { PlaylistTrackType } from "@/types";
 
 type DraggableTrackListProps = {
@@ -39,7 +41,14 @@ export default function DraggableTrackList({
   onRemoveTrack,
 }: DraggableTrackListProps) {
   const matchTrackPlayback = useTrackPlaybackMatcher();
+  const { showShortcutHints } = useShortcutHints();
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
+  // dnd-kit hands announcements only the active item, so the drag-start
+  // handler records whether the keyboard started the drag.
+  const keyboardDragRef = useRef(false);
+  // A drag starts over its own slot. Until it first leaves, that self-over is
+  // not news; after that, returning to it is.
+  const hasLeftOriginRef = useRef(false);
 
   // Configure sensors with activation constraints
   const sensors = useSensors(
@@ -60,6 +69,8 @@ export default function DraggableTrackList({
   );
 
   const handleDragStart = (event: DragStartEvent) => {
+    keyboardDragRef.current = event.activatorEvent instanceof KeyboardEvent;
+    hasLeftOriginRef.current = false;
     setActiveId(event.active.id);
   };
 
@@ -90,15 +101,33 @@ export default function DraggableTrackList({
   // Create sortable IDs from track IDs
   const sortableIds = tracks.map((t) => t.id);
 
+  // The handle's described-by text. A touch-first device has no space bar,
+  // so it gets the hold-and-drag gesture instead of dnd-kit's key map.
+  const screenReaderInstructions = showShortcutHints
+    ? defaultScreenReaderInstructions
+    : { draggable: "Touch and hold a track, then drag it to a new position." };
+
   // Custom announcements for screen readers
   const announcements = {
-    onDragStart({ active }: DragStartEvent) {
+    onDragStart({ active }: Pick<DragStartEvent, "active">) {
       const track = tracks.find((t) => t.id === active.id);
-      return `Picked up ${track?.title || "track"}. Press space to drop, or escape to cancel.`;
+      const pickedUp = `Picked up ${track?.title || "track"}.`;
+      // Only a keyboard drag is dropped with space; a pointer or touch drag
+      // drops on release.
+      return keyboardDragRef.current
+        ? `${pickedUp} Press space to drop, or escape to cancel.`
+        : pickedUp;
     },
     onDragOver({ active, over }: { active: { id: UniqueIdentifier }; over: { id: UniqueIdentifier } | null }) {
       if (!over) return;
       const activeTrack = tracks.find((t) => t.id === active.id);
+      if (over.id === active.id) {
+        // Announcing the starting self-over would replace the pick-up message
+        // in the live region before it is read.
+        if (!hasLeftOriginRef.current) return;
+        return `${activeTrack?.title || "Track"} is back in its original position`;
+      }
+      hasLeftOriginRef.current = true;
       const overTrack = tracks.find((t) => t.id === over.id);
       if (activeTrack && overTrack) {
         return `${activeTrack.title} is over ${overTrack.title}`;
@@ -106,10 +135,13 @@ export default function DraggableTrackList({
     },
     onDragEnd({ active, over }: DragEndEvent) {
       const activeTrack = tracks.find((t) => t.id === active.id);
-      if (over) {
-        const overTrack = tracks.find((t) => t.id === over.id);
-        if (activeTrack && overTrack && active.id !== over.id) {
-          return `${activeTrack.title} was moved after ${overTrack.title}`;
+      if (over && active.id !== over.id) {
+        const oldIndex = tracks.findIndex((t) => t.id === active.id);
+        const newIndex = tracks.findIndex((t) => t.id === over.id);
+        if (activeTrack && newIndex !== -1) {
+          // A track moved up lands before the one it was dropped on.
+          const side = newIndex > oldIndex ? "after" : "before";
+          return `${activeTrack.title} was moved ${side} ${tracks[newIndex].title}`;
         }
       }
       return `${activeTrack?.title || "Track"} was dropped`;
@@ -131,6 +163,7 @@ export default function DraggableTrackList({
         modifiers={[restrictToVerticalAxis]}
         accessibility={{
           announcements,
+          screenReaderInstructions,
         }}
       >
         <SortableContext

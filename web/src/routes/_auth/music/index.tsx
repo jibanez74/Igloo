@@ -752,7 +752,7 @@ function PlaylistsTabContent({ playlistsView, likedTracksPage }: PlaylistsTabCon
   const navigate = Route.useNavigate();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const createPlaylistRestoreRef = useRef<HTMLButtonElement | null>(null);
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     ...playlistsQueryOpts(),
     enabled: playlistsView !== "liked",
   });
@@ -794,16 +794,25 @@ function PlaylistsTabContent({ playlistsView, likedTracksPage }: PlaylistsTabCon
     );
   }
 
+  if (isLoading) {
+    return <PlaylistsTabSkeleton />;
+  }
+
+  if (isError || isApiFailure(data)) {
+    return (
+      <MoviesLoadError
+        message={apiErrorMessage(data, "Couldn’t load playlists. Check your connection and try again.")}
+        onRetry={() => void refetch()}
+      />
+    );
+  }
+
   // Generate announcement for screen readers.
-  // Reached only after the isLoading early-return above, so no loading case here.
+  // Declared after the loading and error returns, so it only describes loaded data.
   const getAnnouncement = () => {
     if (playlists.length === 0) return "No playlists yet";
     return `${pluralize(playlists.length, "playlist")} loaded`;
   };
-
-  if (isLoading) {
-    return <PlaylistsTabSkeleton />;
-  }
 
   return (
     <div>
@@ -871,7 +880,7 @@ function LikedTracksInPlaylistsTab({ likedTracksPage, onExit }: LikedTracksInPla
   const audioPlayer = useAudioPlayerActions();
   const matchTrackPlayback = useTrackPlaybackMatcher();
 
-  const { data, isLoading } = useQuery(likedTracksQueryOpts(likedTracksPage));
+  const { data, isLoading, isError, refetch } = useQuery(likedTracksQueryOpts(likedTracksPage));
 
   const tracks = data?.error === false ? data.data.tracks : [];
   const total = data?.error === false ? data.data.total : 0;
@@ -906,9 +915,11 @@ function LikedTracksInPlaylistsTab({ likedTracksPage, onExit }: LikedTracksInPla
     return <TracksListSkeleton />;
   }
 
+  const loadFailed = isError || isApiFailure(data);
+
   return (
     <div>
-      <LiveAnnouncer message={getAnnouncement()} />
+      {!loadFailed && <LiveAnnouncer message={getAnnouncement()} />}
 
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
@@ -932,13 +943,20 @@ function LikedTracksInPlaylistsTab({ likedTracksPage, onExit }: LikedTracksInPla
             Liked Tracks
           </h2>
         </div>
-        <span className="text-sm text-muted-foreground">
-          {pluralize(total, "track")}
-        </span>
+        {!loadFailed && (
+          <span className="text-sm text-muted-foreground">
+            {pluralize(total, "track")}
+          </span>
+        )}
       </div>
 
-      {/* Track list or empty state */}
-      {tracks.length === 0 ? (
+      {/* Error, empty state or track list. The header stays so Back still works. */}
+      {loadFailed ? (
+        <MoviesLoadError
+          message={apiErrorMessage(data, "Couldn’t load liked tracks. Check your connection and try again.")}
+          onRetry={() => void refetch()}
+        />
+      ) : tracks.length === 0 ? (
         <LibraryEmptyState
           icon={Heart}
           message="No liked tracks yet. Tap the heart on any track to add it here."
@@ -959,7 +977,7 @@ function LikedTracksInPlaylistsTab({ likedTracksPage, onExit }: LikedTracksInPla
       )}
 
       {/* Pagination */}
-      {totalPages > 1 && (
+      {!loadFailed && totalPages > 1 && (
         <div className="mt-6">
           <LibraryPagination
             currentPage={likedTracksPage}

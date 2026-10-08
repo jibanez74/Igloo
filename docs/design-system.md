@@ -228,14 +228,16 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
   action beside the real one. Outline, ghost and destructive keep the base
   half-opacity. Guarded by `test/ui/button.test.tsx`.
 
-- **`accent-pill` and the `sm`/`lg` sizes don't compose.** cva emits
+- **`accent-pill` stays a pill at every size.** cva emits
   base → variant → size → `className`, and `cn` is `twMerge`, so the last
-  conflicting class wins: `sm` and `lg` re-declare `rounded-md` and silently
-  square off the pill (`default`, `icon` and `icon-sm` declare no radius and
-  leave it alone). Pass no `size` with `accent-pill` (what every call site
-  does), or re-assert `rounded-full` in `className`. Watch for this whenever
-  two sibling buttons are meant to match — one picking up a `size` is enough
-  to break the pair.
+  conflicting class wins: `sm` and `lg` re-declare `rounded-md`. A
+  `compoundVariants` entry re-applies `rounded-full` to `accent-pill` at
+  those sizes, so call sites never re-assert it (guarded by
+  `test/ui/button.test.tsx`). Other variants still square off at `sm`/`lg`:
+  an `outline` button meant to pair with a pill (the album, musician and
+  playlist Shuffle buttons) passes `rounded-full` in `className`. Watch for
+  this whenever two sibling buttons are meant to match — one picking up a
+  `size` is enough to break the pair.
 - **Tabs share one look** (`web/src/components/ui/tabs.tsx`): a bordered
   `bg-muted/50` list; the active trigger is a glacier primary-fill pill
   (`data-[state=active]:bg-primary … shadow-primary/20`). Library pages layer
@@ -375,7 +377,12 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
   `usePrefersCoarsePointer`) gets neither, because a screen reader there would
   read out keys nobody can press; the shortcuts themselves stay bound for an
   attached keyboard. Never hard-code the suffix. Gate on the pointer, not on
-  `useIsMobile`: a narrow desktop window still has a keyboard.
+  `useIsMobile`: a narrow desktop window still has a keyboard. The playlist
+  reorder list (`DraggableTrackList`) follows the same rule: its handles are
+  described by dnd-kit's key map only when `showShortcutHints` is true (a
+  touch-first device gets the hold-and-drag gesture instead), and its
+  pick-up announcement names space and escape only when the drag was started
+  from the keyboard.
 - **Every route titles the page through its `head`, never in JSX.** The
   document title is the first thing a screen reader announces after a
   navigation, and it names the browser tab and history entry. Routes declare
@@ -914,10 +921,13 @@ is unknown or empty.
     invited." A page about one subject (`MediaDetailGuard`, the trailer
     dialog) then uses a fixed sentence of its own for everything else
     ("Something went wrong while loading this movie. Please try again later.")
-    and shows no server text at all; list and section loads may still keep
-    the server's message as the fallback (`apiErrorMessage`). Never show the
-    client's canned "404 - The resource…" or "500 - A network error…" strings
-    or a lowercase server constant as the copy.
+    and shows no server text at all. List and section loads go through
+    `apiErrorMessage`, which keeps the server's message only for a 4xx other
+    than 404 and otherwise uses the surface's own sentence, so a 404 (whose
+    body `apiRequest` replaces with a canned string) or a 5xx (internal error
+    text) never reaches the screen. Never show the client's canned "404 - The
+    resource…" or "500 - A network error…" strings or a lowercase server
+    constant as the copy.
 
   Because the erroring subtree often unmounts its own live region, error
   surfaces carry `role="alert"` and announce themselves — never repeat one
