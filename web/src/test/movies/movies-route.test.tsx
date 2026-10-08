@@ -444,6 +444,7 @@ describe("movies route focus restoration", () => {
     });
 
     expect(await screen.findByText("Moonlight")).toBeInTheDocument();
+    expect(screen.getByText("1 liked movie", { exact: true })).toBeInTheDocument();
   });
 
   it("does not override dropdown focus behavior when liked movies is opened from More options", async () => {

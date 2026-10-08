@@ -55,7 +55,7 @@ import {
   tmdbStatusQueryOpts,
 } from "@/lib/query-opts";
 import LoadErrorAlert from "@/components/shared/LoadErrorAlert";
-import { pluralize } from "@/lib/format";
+import { nounForCount, pluralize } from "@/lib/format";
 import { apiErrorMessage, isApiFailure } from "@/lib/is-api-failure";
 import { refreshMovieLibraryCache } from "@/lib/movie-library-cache";
 import { cn } from "@/lib/utils";
@@ -753,7 +753,7 @@ function LikedMoviesInPlaylistsTab({
           </button>
           {data?.error === false && (
             <span className="text-sm text-muted-foreground">
-              {total.toLocaleString()} liked
+              {total.toLocaleString()} {nounForCount(total, LIKED_MOVIE_NOUN)}
             </span>
           )}
         </>
