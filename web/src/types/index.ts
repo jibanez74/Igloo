@@ -182,8 +182,9 @@ export type {
 
 // Search types
 export type {
-  PaginatedSearchResponse,
+  PagedSearchTab,
   SearchAllResponseType,
+  SearchCategoryData,
   SearchMoviesResponseType,
   SearchShowsResponseType,
   SearchAlbumsResponseType,

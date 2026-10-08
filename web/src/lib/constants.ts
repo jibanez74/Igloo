@@ -92,11 +92,13 @@ export const LIKED_TRACKS_KEY = "liked-tracks";
 export const LIKED_TRACK_IDS_KEY = "liked-track-ids";
 
 export const SEARCH_ALL_KEY = "search-all";
-export const SEARCH_MOVIES_KEY = "search-movies";
-export const SEARCH_SHOWS_KEY = "search-shows";
-export const SEARCH_ALBUMS_KEY = "search-albums";
-export const SEARCH_MUSICIANS_KEY = "search-musicians";
-export const SEARCH_TRACKS_KEY = "search-tracks";
+export const SEARCH_CATEGORY_KEYS = {
+  movies: "search-movies",
+  shows: "search-shows",
+  albums: "search-albums",
+  musicians: "search-musicians",
+  tracks: "search-tracks",
+} as const;
 
 // Shared API validation limits. Keep form validation and user-facing limit
 // messages derived from these values so they cannot drift apart. The limits
