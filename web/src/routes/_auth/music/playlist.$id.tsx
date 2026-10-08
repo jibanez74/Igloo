@@ -8,23 +8,21 @@ import {
   showActionFailed,
 } from "@/lib/toast-helpers";
 import {
-  ListMusic,
   Music,
   Clock,
   User,
-  Play,
-  Shuffle,
   Pencil,
   Trash2,
   List,
 } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
-import { Button } from "@/components/ui/button";
 import TrackItem from "@/components/music/TrackItem";
 import PlaylistFormDialog from "@/components/music/PlaylistFormDialog";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
 import DetailSkipLinks from "@/components/shared/DetailSkipLinks";
+import MusicDetailArt from "@/components/music/MusicDetailArt";
 import MusicDetailBackNav from "@/components/music/MusicDetailBackNav";
+import PlayShuffleButtons from "@/components/music/PlayShuffleButtons";
 import MusicDetailSkeleton from "@/components/music/MusicDetailSkeleton";
 import MediaDetailGuard from "@/components/shared/MediaDetailGuard";
 
@@ -41,7 +39,6 @@ import { unwrapString } from "@/lib/nullable";
 import { deletePlaylist, removeTrackFromPlaylist, reorderPlaylistTracks } from "@/lib/api";
 import { convertToAudioTrack, dedupeById } from "@/lib/audio-utils";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
-import { usePosterFallback } from "@/hooks/usePosterFallback";
 import { useTrackPlaybackMatcher } from "@/hooks/useTrackPlaybackMatcher";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { useVirtualizedInfiniteLoader } from "@/hooks/useVirtualizedInfiniteLoader";
@@ -51,6 +48,8 @@ import {
   DETAIL_PAGE_CONTENT_ENTER_CLASS,
   DETAIL_RAIL_HEADING_CLASS,
   FOCUS_VISIBLE_RING_CLASS,
+  MUSIC_DETAIL_ACTIONS_CLASS,
+  MUSIC_DETAIL_HERO_ROW_CLASS,
   MUSIC_PLAYLISTS_TAB_SEARCH,
   PLAYLIST_TRACKS_KEY,
   PLAYLISTS_KEY,
@@ -173,9 +172,6 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
 
   const { playlist, track_count, duration, is_owner, can_edit } = data;
   const coverUrl = getMediaImageUrl(unwrapString(playlist.cover_image));
-  const { showPoster: showCover, onError: onCoverError } = usePosterFallback(
-    coverUrl ?? "",
-  );
   const description = unwrapString(playlist.description);
 
   // Infinite query for tracks
@@ -353,24 +349,12 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
       />
 
       {/* Header section */}
-      <header className="mb-8 flex flex-col gap-6 sm:mb-10 sm:gap-8 lg:flex-row">
-        {/* Playlist cover */}
-        <figure className="mx-auto shrink-0 lg:mx-0">
-          <div className="aspect-square w-40 overflow-hidden rounded-xl border border-primary/20 bg-muted shadow-2xl shadow-primary/10 sm:w-48 lg:w-56 xl:w-64">
-            {showCover ? (
-              <img
-                src={coverUrl ?? ""}
-                alt={playlist.name}
-                className="size-full object-cover"
-                onError={onCoverError}
-              />
-            ) : (
-              <div className="flex size-full items-center justify-center bg-linear-to-br from-muted via-muted to-primary/30">
-                <ListMusic className="size-16 text-primary/20" aria-hidden="true" />
-              </div>
-            )}
-          </div>
-        </figure>
+      <header className={MUSIC_DETAIL_HERO_ROW_CLASS}>
+        <MusicDetailArt
+          variant="playlist"
+          src={coverUrl ?? ""}
+          name={playlist.name}
+        />
 
         {/* Playlist info */}
         <div className="flex max-w-full min-w-0 flex-1 flex-col overflow-hidden text-center lg:text-left">
@@ -415,43 +399,18 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
             )}
           </ul>
 
-          {/* Play buttons. Deliberately never disabled: playback starts from the
-              pages already loaded, and the spinner only reports the rest
-              arriving behind it. A disabled media control is also unreachable
-              under iOS VoiceOver. `size` re-declares rounded-md, so the
-              outline Shuffle re-asserts rounded-full to match the Play pill. */}
+          {/* The spinner only reports the rest of the playlist arriving
+              behind playback that has already started. */}
           {track_count > 0 && (
-            <div className="mt-5 flex flex-col justify-center gap-2 sm:mt-6 sm:flex-row sm:gap-3 lg:justify-start">
-              <Button
-                type="button"
-                variant="accent-pill"
-                size="lg"
-                onClick={handlePlayAll}
-                className="w-full font-semibold shadow-lg shadow-primary/20 sm:w-auto"
-                aria-label={`Play all ${pluralize(track_count, "track")}`}
-              >
-                {isLoadingRest ? (
-                  <Spinner className="size-4" />
-                ) : (
-                  <Play className="size-4 fill-current" aria-hidden="true" />
-                )}
-                Play All
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="lg"
-                onClick={handleShuffle}
-                className="w-full rounded-full font-semibold sm:w-auto"
-                aria-label={`Shuffle all ${pluralize(track_count, "track")}`}
-              >
-                {isLoadingRest ? (
-                  <Spinner className="size-4" />
-                ) : (
-                  <Shuffle className="size-4" aria-hidden="true" />
-                )}
-                Shuffle
-              </Button>
+            <div className={MUSIC_DETAIL_ACTIONS_CLASS}>
+              <PlayShuffleButtons
+                playLabel="Play All"
+                playAriaLabel={`Play all ${pluralize(track_count, "track")}`}
+                shuffleAriaLabel={`Shuffle all ${pluralize(track_count, "track")}`}
+                onPlay={handlePlayAll}
+                onShuffle={handleShuffle}
+                isLoading={isLoadingRest}
+              />
             </div>
           )}
 

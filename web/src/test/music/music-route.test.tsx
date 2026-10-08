@@ -481,6 +481,40 @@ describe("music route tracks tab", () => {
     expect(trackRows[1]).toHaveAttribute("aria-posinset", "2");
     expect(trackRows[1]).toHaveAttribute("aria-setsize", "2");
   });
+
+  // A disabled media control drops out of iOS VoiceOver's focus order, so
+  // the pending buttons stay focusable and guard against a second start.
+  it.each([
+    ["Play all tracks", "startPlayAllPlayback"],
+    ["Shuffle all tracks", "startShufflePlayback"],
+  ] as const)(
+    "keeps %s focusable but inert while playback starts",
+    async (name, action) => {
+      const user = userEvent.setup();
+      let finishStart!: () => void;
+      audioPlayerActionsMock[action].mockImplementationOnce(
+        () =>
+          new Promise<void>(resolve => {
+            finishStart = resolve;
+          }),
+      );
+
+      await renderMusicRoute("/music/?tab=tracks");
+      const button = await screen.findByRole("button", { name });
+
+      await user.click(button);
+      expect(button).toHaveAttribute("aria-disabled", "true");
+      expect(button).toBeEnabled();
+
+      await user.click(button);
+      expect(audioPlayerActionsMock[action]).toHaveBeenCalledTimes(1);
+
+      finishStart();
+      await waitFor(() => {
+        expect(button).toHaveAttribute("aria-disabled", "false");
+      });
+    },
+  );
 });
 
 describe("music route playlists tab", () => {

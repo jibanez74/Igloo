@@ -4,9 +4,6 @@ import {
   User,
   Disc3,
   Music,
-  Clock,
-  Play,
-  Shuffle,
   ListOrdered,
 } from "lucide-react";
 import { musicianDetailsQueryOpts } from "@/lib/query-opts";
@@ -14,12 +11,17 @@ import { unwrapString, unwrapInt, unwrapFloat } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
 import { parseRouteId } from "@/lib/route-id";
 import { listenHead, routeHead } from "@/lib/route-head";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import MediaDetailGuard from "@/components/shared/MediaDetailGuard";
 import DetailSkipLinks from "@/components/shared/DetailSkipLinks";
 import AlbumCard from "@/components/music/AlbumCard";
+import MusicDetailArt from "@/components/music/MusicDetailArt";
 import MusicDetailBackdrop from "@/components/music/MusicDetailBackdrop";
+import MusicGenreList from "@/components/music/MusicGenreList";
+import PlayShuffleButtons from "@/components/music/PlayShuffleButtons";
+import MusicStatList, {
+  MusicDurationChip,
+  MusicStatChip,
+} from "@/components/music/MusicStatList";
 import MusicDetailBackNav from "@/components/music/MusicDetailBackNav";
 import MusicDetailSkeleton from "@/components/music/MusicDetailSkeleton";
 import {
@@ -28,7 +30,6 @@ import {
 } from "@/components/music/SpotifyPopularity";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useTrackPlaybackMatcher } from "@/hooks/useTrackPlaybackMatcher";
-import { usePosterFallback } from "@/hooks/usePosterFallback";
 import TrackItem from "@/components/music/TrackItem";
 import { formatDuration, pluralize } from "@/lib/format";
 import { convertToAudioTrack } from "@/lib/audio-utils";
@@ -39,6 +40,9 @@ import {
   DETAIL_TRACK_LIST_CONTAINER_CLASS,
   FOCUS_VISIBLE_RING_CLASS,
   LIBRARY_POSTER_GRID_CLASS,
+  MUSIC_DETAIL_ACTIONS_CLASS,
+  MUSIC_DETAIL_HERO_ROW_CLASS,
+  MUSIC_DETAIL_SHELL_CLASS,
   SPOTIFY_BRAND_ICON_CLASS,
   SPOTIFY_BRAND_TEXT_CLASS,
 } from "@/lib/constants";
@@ -139,8 +143,6 @@ function MusicianDetailsContent({
   const matchTrackPlayback = useTrackPlaybackMatcher();
 
   const thumbUrl = getMediaImageUrl(unwrapString(musician.thumb)) ?? "";
-  const { showPoster: showThumb, onError: onThumbError } =
-    usePosterFallback(thumbUrl);
   const summary = unwrapString(musician.summary);
   const spotifyPopularity = unwrapFloat(musician.spotify_popularity);
   const spotifyFollowers = unwrapInt(musician.spotify_followers);
@@ -232,7 +234,7 @@ function MusicianDetailsContent({
         <MusicDetailBackdrop imageUrl={thumbUrl} fallbackIcon={User} />
       </div>
 
-      <div className="relative z-10 -mt-20 sm:-mt-24 md:-mt-28 lg:-mt-32">
+      <div className={MUSIC_DETAIL_SHELL_CLASS}>
         <div
           className={cn(
             DETAIL_PAGE_CONTENT_ENTER_CLASS,
@@ -240,34 +242,12 @@ function MusicianDetailsContent({
           )}
         >
           {/* Header section */}
-          <header className="mb-10 flex flex-col gap-6 sm:gap-8 lg:flex-row lg:items-start lg:gap-10">
-            {/* Musician thumbnail */}
-            <figure className="mx-auto shrink-0 lg:mx-0">
-              <div className="aspect-square w-48 overflow-hidden rounded-full border border-primary/20 shadow-2xl shadow-primary/10 md:w-56 lg:w-64">
-                {showThumb ? (
-                  <img
-                    src={thumbUrl}
-                    alt={musician.name}
-                    loading="lazy"
-                    decoding="async"
-                    fetchPriority="low"
-                    className="size-full object-cover"
-                    onError={onThumbError}
-                  />
-                ) : (
-                  <div
-                    className="flex size-full items-center justify-center bg-muted"
-                    role="img"
-                    aria-label="No image available"
-                  >
-                    <User
-                      className="size-16 text-muted-foreground"
-                      aria-hidden="true"
-                    />
-                  </div>
-                )}
-              </div>
-            </figure>
+          <header className={MUSIC_DETAIL_HERO_ROW_CLASS}>
+            <MusicDetailArt
+              variant="musician"
+              src={thumbUrl}
+              name={musician.name}
+            />
 
             {/* Musician info */}
             <div className="flex min-w-0 flex-1 flex-col text-center lg:text-left">
@@ -291,98 +271,28 @@ function MusicianDetailsContent({
                 </p>
               )}
 
-              {/* Genre tags */}
-              {genres.length > 0 && (
-                <ul
-                  className="mt-4 flex list-none flex-wrap justify-center gap-2 lg:justify-start"
-                  aria-label={`Genres: ${genres.join(", ")}`}
-                >
-                  {genres.map((genre) => (
-                    <li key={genre}>
-                      <Badge
-                        variant="outline"
-                        className="border-primary/30 bg-muted/80 px-3 py-1 text-sm font-normal text-primary backdrop-blur-sm"
-                      >
-                        {genre}
-                      </Badge>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <MusicGenreList genres={genres} />
 
-              {/* Stats row */}
-              <ul
-                className="mt-4 flex list-none flex-wrap items-center justify-center gap-2 sm:gap-3 lg:justify-start"
-                aria-label="Musician statistics"
-              >
-                <li>
-                  <Badge
-                    variant="outline"
-                    className="gap-1.5 border-border/40 bg-muted/90 px-3 py-1.5 text-sm font-normal text-foreground"
-                  >
-                    <Disc3
-                      className="size-4 shrink-0 text-muted-foreground"
-                      aria-hidden="true"
-                    />
-                    <span>{pluralize(albums.length, "album")}</span>
-                  </Badge>
-                </li>
-                <li>
-                  <Badge
-                    variant="outline"
-                    className="gap-1.5 border-border/40 bg-muted/90 px-3 py-1.5 text-sm font-normal text-foreground"
-                  >
-                    <Music
-                      className="size-4 shrink-0 text-muted-foreground"
-                      aria-hidden="true"
-                    />
-                    <span>{pluralize(tracks.length, "track")}</span>
-                  </Badge>
-                </li>
-                <li>
-                  <Badge
-                    variant="outline"
-                    className="gap-1.5 border-border/40 bg-muted/90 px-3 py-1.5 text-sm font-normal text-foreground"
-                  >
-                    <Clock
-                      className="size-4 shrink-0 text-muted-foreground"
-                      aria-hidden="true"
-                    />
-                    <time
-                      dateTime={`PT${Math.round(total_duration / 1000)}S`}
-                      aria-label={`Total duration ${formatDuration(total_duration)}`}
-                    >
-                      {formatDuration(total_duration)}
-                    </time>
-                  </Badge>
-                </li>
-              </ul>
+              <MusicStatList label="Musician statistics">
+                <MusicStatChip icon={Disc3}>
+                  {pluralize(albums.length, "album")}
+                </MusicStatChip>
+                <MusicStatChip icon={Music}>
+                  {pluralize(tracks.length, "track")}
+                </MusicStatChip>
+                <MusicDurationChip ms={total_duration} />
+              </MusicStatList>
 
               {/* Play buttons */}
               {tracks.length > 0 && (
-                <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center lg:justify-start">
-                  <Button
-                    type="button"
-                    variant="accent-pill"
-                    size="lg"
-                    onClick={() => startMusicianQueue(false)}
-                    className="w-full font-semibold shadow-lg shadow-primary/20 sm:w-auto"
-                    aria-label={`Play all ${pluralize(tracks.length, "track")} by ${musician.name}`}
-                  >
-                    <Play className="size-4 fill-current" aria-hidden="true" />
-                    Play All
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="lg"
-                    onClick={() => startMusicianQueue(true)}
-                    className="w-full rounded-full font-semibold sm:w-auto"
-                    aria-label={`Shuffle play all ${pluralize(tracks.length, "track")} by ${musician.name}`}
-                  >
-                    <Shuffle className="size-4" aria-hidden="true" />
-                    Shuffle
-                  </Button>
+                <div className={MUSIC_DETAIL_ACTIONS_CLASS}>
+                  <PlayShuffleButtons
+                    playLabel="Play All"
+                    playAriaLabel={`Play all ${pluralize(tracks.length, "track")} by ${musician.name}`}
+                    shuffleAriaLabel={`Shuffle play all ${pluralize(tracks.length, "track")} by ${musician.name}`}
+                    onPlay={() => startMusicianQueue(false)}
+                    onShuffle={() => startMusicianQueue(true)}
+                  />
                 </div>
               )}
 

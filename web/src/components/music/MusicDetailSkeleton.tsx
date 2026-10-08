@@ -1,6 +1,11 @@
+import { MusicDetailArtSkeleton } from "@/components/music/MusicDetailArt";
+import { MusicDetailBackdropSkeleton } from "@/components/music/MusicDetailBackdrop";
 import {
   LIBRARY_POSTER_GRID_CLASS,
   MOTION_LOADING_STATE_CLASS,
+  MUSIC_DETAIL_ACTIONS_CLASS,
+  MUSIC_DETAIL_HERO_ROW_CLASS,
+  MUSIC_DETAIL_SHELL_CLASS,
 } from "@/lib/constants";
 
 type MusicDetailSkeletonProps = {
@@ -9,16 +14,20 @@ type MusicDetailSkeletonProps = {
    * band, or the playlist header, which has no band and no overlap.
    */
   variant: "album" | "musician" | "playlist";
+  /** The album page's admin "More options" button beside Play and Shuffle. */
+  withMenu?: boolean;
 };
 
-// Authored beside the layouts it mirrors (design-system §3.4). The album and
-// musician pages share one geometry: the backdrop band, the overlapping hero
-// with its art box and text rows, then the track rows; only the art shape,
-// the hero's placeholder rows and the musician's discography grid differ. The
-// playlist page is a plain header - square cover beside the title, two pills -
-// above its heading and rows, so it gets its own.
+// Authored beside the layouts it mirrors (design-system §3.4), from the same
+// MUSIC_DETAIL_* rows and art sizes the pages use. The album and musician
+// pages share one geometry: the backdrop band, the overlapping hero with its
+// art box and text rows, then the track rows; only the art shape, the order of
+// the pill rows and the musician's discography grid differ. The playlist page
+// is a plain header - square cover beside the title - above its heading and
+// rows, so it gets its own.
 export default function MusicDetailSkeleton({
   variant,
+  withMenu = false,
 }: MusicDetailSkeletonProps) {
   const label = `Loading ${variant} details`;
 
@@ -33,101 +42,112 @@ export default function MusicDetailSkeleton({
       {variant === "playlist" ? (
         <PlaylistSkeleton />
       ) : (
-        <HeroSkeleton isMusician={variant === "musician"} />
+        <HeroSkeleton isMusician={variant === "musician"} withMenu={withMenu} />
       )}
     </div>
   );
 }
 
-function HeroSkeleton({ isMusician }: { isMusician: boolean }) {
+function HeroSkeleton({
+  isMusician,
+  withMenu,
+}: {
+  isMusician: boolean;
+  withMenu: boolean;
+}) {
   return (
     <>
-      <div className="relative -mx-4 sm:-mx-6 lg:-mx-8" aria-hidden="true">
-        <div className="h-44 w-full bg-muted sm:h-52 md:aspect-21/9 md:h-auto md:max-h-[min(42vh,22rem)] md:min-h-48" />
-        <div className="absolute inset-0 bg-linear-to-t from-background via-background/60 to-transparent" />
-      </div>
+      <MusicDetailBackdropSkeleton />
 
-      <div
-        className="relative z-10 -mt-20 sm:-mt-24 md:-mt-28 lg:-mt-32"
-        aria-hidden="true"
-      >
-        <div className="flex min-w-0 flex-col gap-6 sm:gap-8 lg:flex-row lg:items-start lg:gap-10">
-          {isMusician ? (
-            <div className="mx-auto shrink-0 lg:mx-0">
-              <div className="aspect-square w-48 rounded-full bg-muted md:w-56 lg:w-64" />
-            </div>
-          ) : (
-            <div className="mx-auto shrink-0 lg:mx-0 lg:pt-1">
-              <div className="aspect-square w-44 rounded-xl bg-muted sm:w-52 md:w-64 lg:w-72" />
-            </div>
-          )}
+      <div className={MUSIC_DETAIL_SHELL_CLASS} aria-hidden="true">
+        <div className={MUSIC_DETAIL_HERO_ROW_CLASS}>
+          <MusicDetailArtSkeleton variant={isMusician ? "musician" : "album"} />
 
-          <div className="min-w-0 flex-1 space-y-4 text-center lg:text-left">
+          <div className="min-w-0 flex-1 text-center lg:text-left">
             <div className="mx-auto h-10 max-w-lg rounded-sm bg-muted lg:mx-0" />
-            <div className="mx-auto h-6 max-w-xs rounded-sm bg-muted lg:mx-0" />
+            <div className="mx-auto mt-3 h-6 max-w-xs rounded-sm bg-muted lg:mx-0" />
+            {/* The musician page lists genres above its stats; the album
+                page the other way round. */}
             {isMusician ? (
               <>
-                <div className="flex flex-wrap justify-center gap-2 lg:justify-start">
-                  <div className="h-7 w-20 rounded-full bg-muted" />
-                  <div className="h-7 w-24 rounded-full bg-muted" />
-                </div>
-                <div className="flex flex-wrap justify-center gap-4 lg:justify-start">
-                  <div className="h-5 w-20 rounded-sm bg-muted" />
-                  <div className="h-5 w-20 rounded-sm bg-muted" />
-                  <div className="h-5 w-16 rounded-sm bg-muted" />
-                </div>
-                <div className="flex flex-col gap-3 sm:flex-row sm:justify-center lg:justify-start">
-                  <div className="h-12 w-full rounded-full bg-muted sm:w-32" />
-                  <div className="h-12 w-full rounded-full bg-muted sm:w-28" />
-                </div>
+                <GenrePillsSkeleton />
+                <StatPillsSkeleton />
               </>
             ) : (
               <>
-                <div className="flex flex-wrap justify-center gap-2 lg:justify-start">
-                  <div className="h-8 w-28 rounded-full bg-muted" />
-                  <div className="h-8 w-24 rounded-full bg-muted" />
-                  <div className="h-8 w-24 rounded-full bg-muted" />
-                </div>
-                <div className="flex flex-wrap justify-center gap-2 lg:justify-start">
-                  <div className="h-7 w-20 rounded-full bg-muted" />
-                  <div className="h-7 w-24 rounded-full bg-muted" />
-                </div>
-                <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:flex-wrap sm:justify-center lg:justify-start">
-                  <div className="h-12 w-full rounded-full bg-muted sm:w-32" />
-                  <div className="h-12 w-full rounded-full bg-muted sm:w-24" />
-                  <div className="mx-auto size-12 rounded-full bg-muted sm:mx-0" />
-                </div>
+                <StatPillsSkeleton />
+                <GenrePillsSkeleton />
               </>
             )}
+            <ActionsSkeleton withMenu={withMenu} />
           </div>
         </div>
 
-        {isMusician && (
-          <div className="mt-10">
-            <div className="mb-4 h-7 w-40 rounded-sm bg-muted" />
-            <div className={LIBRARY_POSTER_GRID_CLASS}>
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="overflow-hidden rounded-xl border border-border bg-card"
-                >
-                  <div className="aspect-square bg-muted" />
-                  <div className="space-y-2 p-3">
-                    <div className="h-4 w-3/4 rounded-sm bg-accent" />
-                    <div className="h-3 w-1/2 rounded-sm bg-accent" />
+        {/* The pages' lower stage: the hero row's mb-10 opens it, and its
+            sections are spaced like the real space-y wrapper. */}
+        <div className="space-y-8 sm:space-y-10">
+          {isMusician && (
+            <div>
+              <div className="mb-4 h-7 w-40 rounded-sm bg-muted" />
+              <div className={LIBRARY_POSTER_GRID_CLASS}>
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="overflow-hidden rounded-xl border border-border bg-card"
+                  >
+                    <div className="aspect-square bg-muted" />
+                    <div className="space-y-2 p-3">
+                      <div className="h-4 w-3/4 rounded-sm bg-accent" />
+                      <div className="h-3 w-1/2 rounded-sm bg-accent" />
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        <div className="mt-10">
-          {isMusician && <div className="mb-4 h-7 w-32 rounded-sm bg-muted" />}
-          <TrackRowsSkeleton />
+          <div>
+            {isMusician && <div className="mb-4 h-7 w-32 rounded-sm bg-muted" />}
+            <TrackRowsSkeleton />
+          </div>
         </div>
       </div>
     </>
+  );
+}
+
+// MusicStatList's three Badge pills.
+function StatPillsSkeleton() {
+  return (
+    <div className="mt-4 flex flex-wrap justify-center gap-2 sm:gap-3 lg:justify-start">
+      <div className="h-8 w-28 rounded-full bg-muted" />
+      <div className="h-8 w-24 rounded-full bg-muted" />
+      <div className="h-8 w-24 rounded-full bg-muted" />
+    </div>
+  );
+}
+
+// MusicGenreList's pills.
+function GenrePillsSkeleton() {
+  return (
+    <div className="mt-4 flex flex-wrap justify-center gap-2 lg:justify-start">
+      <div className="h-7 w-20 rounded-full bg-muted" />
+      <div className="h-7 w-24 rounded-full bg-muted" />
+    </div>
+  );
+}
+
+// PlayShuffleButtons' two lg (h-10) buttons, full width on phones, plus the
+// album's icon-only admin menu button when the page shows one.
+function ActionsSkeleton({ withMenu }: { withMenu: boolean }) {
+  return (
+    <div className={MUSIC_DETAIL_ACTIONS_CLASS}>
+      <div className="h-10 w-full rounded-full bg-muted sm:w-32" />
+      <div className="h-10 w-full rounded-full bg-muted sm:w-28" />
+      {withMenu && (
+        <div className="h-10 w-12 self-center rounded-full bg-muted sm:self-auto" />
+      )}
+    </div>
   );
 }
 
@@ -136,10 +156,8 @@ function HeroSkeleton({ isMusician }: { isMusician: boolean }) {
 function PlaylistSkeleton() {
   return (
     <div aria-hidden="true">
-      <div className="mb-8 flex flex-col gap-6 sm:mb-10 sm:gap-8 lg:flex-row">
-        <div className="mx-auto shrink-0 lg:mx-0">
-          <div className="aspect-square w-40 rounded-xl bg-muted sm:w-48 lg:w-56 xl:w-64" />
-        </div>
+      <div className={MUSIC_DETAIL_HERO_ROW_CLASS}>
+        <MusicDetailArtSkeleton variant="playlist" />
 
         <div className="min-w-0 flex-1 text-center lg:text-left">
           <div className="mx-auto h-8 max-w-lg rounded-sm bg-muted sm:h-9 md:h-10 lg:mx-0 lg:h-12" />
@@ -147,10 +165,7 @@ function PlaylistSkeleton() {
             <div className="h-4 w-16 rounded-sm bg-muted sm:h-5 lg:h-6" />
             <div className="h-4 w-14 rounded-sm bg-muted sm:h-5 lg:h-6" />
           </div>
-          <div className="mt-5 flex flex-col justify-center gap-2 sm:mt-6 sm:flex-row sm:gap-3 lg:justify-start">
-            <div className="h-12 w-full rounded-full bg-muted sm:w-32" />
-            <div className="h-12 w-full rounded-full bg-muted sm:w-28" />
-          </div>
+          <ActionsSkeleton withMenu={false} />
         </div>
       </div>
 

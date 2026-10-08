@@ -605,6 +605,19 @@ export const DETAIL_HERO_SHELL_CLASS =
 export const DETAIL_HERO_CONTENT_CLASS =
   "relative z-10 w-full px-4 pt-40 pb-6 text-center sm:px-6 sm:pb-8 lg:max-w-4xl lg:px-8 lg:pb-12 lg:text-left";
 /**
+ * Music detail-page geometry (album, musician, playlist), shared with
+ * MusicDetailSkeleton so the skeleton matches the real layout exactly
+ * (design-system §3.2/§3.4). The shell pulls the album and musician heroes up
+ * over their MusicDetailBackdrop band; the hero row puts the art beside the
+ * text column; the actions row holds the Play/Shuffle pair.
+ */
+export const MUSIC_DETAIL_SHELL_CLASS =
+  "relative z-10 -mt-20 sm:-mt-24 md:-mt-28 lg:-mt-32";
+export const MUSIC_DETAIL_HERO_ROW_CLASS =
+  "mb-10 flex min-w-0 flex-col gap-6 sm:gap-8 lg:flex-row lg:items-start lg:gap-10";
+export const MUSIC_DETAIL_ACTIONS_CLASS =
+  "mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center lg:justify-start";
+/**
  * Extra bottom padding for heroes without an actions slot: keeps the
  * bottom-most text line clear of the DETAIL_HERO_SCRIM_FADE_CLASS gradient
  * (h-24), whose from-background stop is near-white in the light theme.

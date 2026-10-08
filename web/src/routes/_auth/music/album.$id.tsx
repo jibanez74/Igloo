@@ -6,9 +6,6 @@ import {
   Disc3,
   Calendar,
   Music,
-  Clock,
-  Play,
-  Shuffle,
   MoreHorizontal,
   Trash2,
   ListOrdered,
@@ -26,7 +23,6 @@ import { listenHead, routeHead } from "@/lib/route-head";
 import { unwrapString, unwrapInt, unwrapFloat } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -55,7 +51,13 @@ import MediaDetailGuard from "@/components/shared/MediaDetailGuard";
 import MusicDetailBackdrop from "@/components/music/MusicDetailBackdrop";
 import MusicDetailBackNav from "@/components/music/MusicDetailBackNav";
 import MusicDetailSkeleton from "@/components/music/MusicDetailSkeleton";
-import AlbumDetailsCoverBlock from "@/components/music/AlbumDetailsCoverBlock";
+import MusicDetailArt from "@/components/music/MusicDetailArt";
+import MusicGenreList from "@/components/music/MusicGenreList";
+import PlayShuffleButtons from "@/components/music/PlayShuffleButtons";
+import MusicStatList, {
+  MusicDurationChip,
+  MusicStatChip,
+} from "@/components/music/MusicStatList";
 import DetailSkipLinks from "@/components/shared/DetailSkipLinks";
 import { SpotifyPopularityMeter } from "@/components/music/SpotifyPopularity";
 import {
@@ -65,6 +67,9 @@ import {
   SPOTIFY_BRAND_TEXT_CLASS,
   MOTION_MICRO_COLORS_CLASS,
   DETAIL_TRACK_LIST_CONTAINER_CLASS,
+  MUSIC_DETAIL_ACTIONS_CLASS,
+  MUSIC_DETAIL_HERO_ROW_CLASS,
+  MUSIC_DETAIL_SHELL_CLASS,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
@@ -119,6 +124,10 @@ function AlbumDetailsPage() {
   const { data, isPending, isError } = useQuery(
     albumDetailsQueryOpts(albumId ?? 0),
   );
+  // The skeleton holds a place for the admin "More options" button only when
+  // the loaded page will show one.
+  const { data: userData } = useQuery(authUserQueryOpts());
+  const isAdmin = authUserFrom(userData)?.is_admin === true;
 
   return (
     <MediaDetailGuard
@@ -129,7 +138,7 @@ function AlbumDetailsPage() {
       isError={isError}
       data={data}
       payload={data?.data?.album ? data.data : null}
-      skeleton={<MusicDetailSkeleton variant="album" />}
+      skeleton={<MusicDetailSkeleton variant="album" withMenu={isAdmin} />}
     >
       {(loaded, id) => <AlbumDetailsContent key={id} {...loaded} />}
     </MediaDetailGuard>
@@ -309,17 +318,18 @@ function AlbumDetailsContent({
         <MusicDetailBackdrop imageUrl={coverUrl ?? ""} fallbackIcon={Disc3} />
       </div>
 
-      <div className="relative z-10 -mt-20 sm:-mt-24 md:-mt-28 lg:-mt-32">
+      <div className={MUSIC_DETAIL_SHELL_CLASS}>
         <div
           className={cn(
             DETAIL_PAGE_CONTENT_ENTER_CLASS,
             "delay-75 motion-reduce:delay-0",
           )}
         >
-          <div className="flex min-w-0 flex-col gap-6 sm:gap-8 lg:flex-row lg:items-start lg:gap-10">
-            <AlbumDetailsCoverBlock
-              coverUrl={coverUrl}
-              albumTitle={album.title}
+          <div className={MUSIC_DETAIL_HERO_ROW_CLASS}>
+            <MusicDetailArt
+              variant="album"
+              src={coverUrl ?? ""}
+              name={album.title}
             />
 
             <div className="min-w-0 flex-1 text-center lg:text-left">
@@ -354,107 +364,34 @@ function AlbumDetailsContent({
                 </p>
               )}
 
-              <ul
-                className="mt-4 flex list-none flex-wrap items-center justify-center gap-2 sm:gap-3 lg:justify-start"
-                aria-label="Album details"
-              >
+              <MusicStatList label="Album details">
                 {(releaseDate || releaseYear) && (
-                  <li>
-                    <Badge
-                      variant="outline"
-                      className="gap-1.5 border-border/40 bg-muted/90 px-3 py-1.5 text-sm font-normal text-foreground"
-                    >
-                      <Calendar
-                        className="size-4 shrink-0 text-muted-foreground"
-                        aria-hidden="true"
-                      />
-                      <time dateTime={releaseDate ?? String(releaseYear ?? "")}>
-                        {releaseDate ? formatDate(releaseDate) : releaseYear}
-                      </time>
-                    </Badge>
-                  </li>
-                )}
-                <li>
-                  <Badge
-                    variant="outline"
-                    className="gap-1.5 border-border/40 bg-muted/90 px-3 py-1.5 text-sm font-normal text-foreground"
-                  >
-                    <Music
-                      className="size-4 shrink-0 text-muted-foreground"
-                      aria-hidden="true"
-                    />
-                    <span>{pluralize(tracks.length, "track")}</span>
-                  </Badge>
-                </li>
-                <li>
-                  <Badge
-                    variant="outline"
-                    className="gap-1.5 border-border/40 bg-muted/90 px-3 py-1.5 text-sm font-normal text-foreground"
-                  >
-                    <Clock
-                      className="size-4 shrink-0 text-muted-foreground"
-                      aria-hidden="true"
-                    />
-                    <time
-                      dateTime={`PT${Math.round(total_duration / 1000)}S`}
-                      aria-label={`Total duration ${formatDuration(total_duration)}`}
-                    >
-                      {formatDuration(total_duration)}
+                  <MusicStatChip icon={Calendar}>
+                    <time dateTime={releaseDate ?? String(releaseYear ?? "")}>
+                      {releaseDate ? formatDate(releaseDate) : releaseYear}
                     </time>
-                  </Badge>
-                </li>
-              </ul>
+                  </MusicStatChip>
+                )}
+                <MusicStatChip icon={Music}>
+                  {pluralize(tracks.length, "track")}
+                </MusicStatChip>
+                <MusicDurationChip ms={total_duration} />
+              </MusicStatList>
 
-              {album_genres.length > 0 && (
-                <ul
-                  className="mt-4 flex list-none flex-wrap justify-center gap-2 lg:justify-start"
-                  aria-label={`Genres: ${album_genres.join(", ")}`}
-                >
-                  {album_genres.map(genre => (
-                    <li key={genre}>
-                      <Badge
-                        variant="outline"
-                        className="border-primary/30 bg-muted/80 px-3 py-1 text-sm font-normal text-primary backdrop-blur-sm"
-                      >
-                        {genre}
-                      </Badge>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <MusicGenreList genres={album_genres} />
 
               {spotifyPopularity != null && (
                 <SpotifyPopularityMeter score={spotifyPopularity} />
               )}
 
-              <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center lg:justify-start">
+              <div className={MUSIC_DETAIL_ACTIONS_CLASS}>
                 {tracks.length > 0 && (
-                  <>
-                    <Button
-                      type="button"
-                      variant="accent-pill"
-                      size="lg"
-                      onClick={() => startAlbumQueue(false)}
-                      className="w-full font-semibold shadow-lg shadow-primary/20 sm:w-auto"
-                    >
-                      <Play
-                        className="size-4 fill-current"
-                        aria-hidden="true"
-                      />
-                      Play Album
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="lg"
-                      onClick={() => startAlbumQueue(true)}
-                      className="w-full rounded-full font-semibold sm:w-auto"
-                      aria-label="Shuffle play album"
-                    >
-                      <Shuffle className="size-4" aria-hidden="true" />
-                      Shuffle
-                    </Button>
-                  </>
+                  <PlayShuffleButtons
+                    playLabel="Play Album"
+                    shuffleAriaLabel="Shuffle play album"
+                    onPlay={() => startAlbumQueue(false)}
+                    onShuffle={() => startAlbumQueue(true)}
+                  />
                 )}
 
                 {isAdmin && (

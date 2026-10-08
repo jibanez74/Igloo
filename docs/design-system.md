@@ -234,8 +234,9 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
   `compoundVariants` entry re-applies `rounded-full` to `accent-pill` at
   those sizes, so call sites never re-assert it (guarded by
   `test/ui/button.test.tsx`). Other variants still square off at `sm`/`lg`:
-  an `outline` button meant to pair with a pill (the album, musician and
-  playlist Shuffle buttons) passes `rounded-full` in `className`. Watch for
+  an `outline` button meant to pair with a pill (the Shuffle in
+  `PlayShuffleButtons`, the music index's "Play all" and "Liked tracks")
+  passes `rounded-full` in `className`. Watch for
   this whenever two sibling buttons are meant to match — one picking up a
   `size` is enough to break the pair.
 - **Tabs share one look** (`web/src/components/ui/tabs.tsx`): a bordered
@@ -485,7 +486,9 @@ explaining what it owns. The styling families:
   and `PLAYER_PRIMARY_BUTTON_CLASS` all compose `FOCUS_VISIBLE_RING_CLASS`
   rather than restating it.
 - **Page chrome** — `DETAIL_HERO_*` (hero shell, content, and the three
-  literal over-media scrims), `LIBRARY_TABS_LIST_CLASS` /
+  literal over-media scrims), `MUSIC_DETAIL_*` (the music detail pages' shell
+  over the backdrop band, hero row and Play/Shuffle actions row, shared with
+  `MusicDetailSkeleton`, §3.2), `LIBRARY_TABS_LIST_CLASS` /
   `LIBRARY_TAB_TRIGGER_CLASS`, `LIBRARY_POSTER_GRID_CLASS` (the fixed-column
   library grid) and `LIBRARY_MENU_ITEM_CLASS` (items in a library page's More
   menu), `HOME_POSTER_GRID_CLASS` / `HOME_ALBUM_GRID_CLASS` (§3.2), `MINI_PLAYER_CLEARANCE_*` (the shell's
@@ -778,11 +781,25 @@ The album and musician pages keep their own hero anatomy — a square cover or
 a round thumb beside the title, over a decorative 21:9 band, rather than
 `DetailHero`'s poster — and share the music-specific parts in
 `components/music/`: `MusicDetailBackdrop` (the aria-hidden band, on
-`usePosterFallback`), `MusicDetailSkeleton`
-(`variant="album" | "musician" | "playlist"`: the album and musician variants
-are one hero geometry with the art shape and hero rows switched; the playlist
-variant mirrors the playlist page instead, which has no backdrop band and no
-overlap, just a square cover beside the title over the rows), and
+`usePosterFallback`; its image, its fallback and the exported
+`MusicDetailBackdropSkeleton` share one band height), `MusicDetailArt`
+(`variant="album" | "musician" | "playlist"`: the square cover or round photo
+beside the title on all three pages, with a labelled placeholder when there is
+no artwork, and the `MusicDetailArtSkeleton` that reads the same sizes),
+`MusicStatList` (the album and musician stat pills — `MusicStatChip` per
+figure, `MusicDurationChip` speaking "Total duration …" through an `sr-only`
+span) and `MusicGenreList` (their genre pills), `PlayShuffleButtons` (the
+`lg` Play pill and outline Shuffle on all three pages, each page passing its
+own accessible names; never disabled, a spinner while a playlist's remaining
+pages load) in a `MUSIC_DETAIL_ACTIONS_CLASS` row, `MusicDetailSkeleton`
+(`variant="album" | "musician" | "playlist"`, built from the same
+`MUSIC_DETAIL_*` rows, `MusicDetailArtSkeleton` and
+`MusicDetailBackdropSkeleton` as the pages: the album and musician variants
+are one hero geometry with the art shape and the order of the pill rows
+switched, and `withMenu` holds a place for the album's admin "More options"
+button only when the page will show one; the playlist variant mirrors the
+playlist page instead, which has no backdrop band and no overlap, just a
+square cover beside the title over the rows), and
 `MusicDetailBackNav` (the `nav` "Page navigation" landmark back to the owning
 `/music` tab, also used by the playlist page). All three pages, the playlist
 included, guard through `MediaDetailGuard` (§3.4), so a malformed id, a failed
@@ -839,14 +856,18 @@ is unknown or empty.
   fetchPriority="low"`, explicit `width`/`height`, `object-cover`, inside an
   aspect-ratio `bg-muted` box. Add responsive `sizes` on dense grids
   (see `AlbumCard`). Only the login backdrop uses
-  `loading="eager"`/`fetchPriority="high"`.
+  `loading="eager"`/`fetchPriority="high"`. A detail page's own hero art —
+  `DetailHero`'s poster, `MusicDetailArt`'s cover or photo — is that page's
+  largest above-the-fold image, so it keeps the explicit `width`/`height` but
+  drops `loading="lazy"`/`fetchPriority="low"`.
 - **Fallbacks, never broken images**: `onError` swaps to a centered muted
   lucide icon (Film / Disc / User) via the `usePosterFallback` hook (tracks
   the failed URL so a changed URL retries). Verified live on covers with
   missing art.
 - **Alt policy**: decorative images (a poster inside a link that already has
   an `aria-label`, backdrops) get `alt=""`/`aria-hidden`; informative images
-  get descriptive alt (`Album cover for {title}`, `Photo of {name}`).
+  get descriptive alt (`Album cover for {title}`, `Photo of {name}`,
+  `Playlist cover for {name}`).
 
 ### 3.4 UI states — loading, empty, error
 
@@ -858,7 +879,8 @@ is unknown or empty.
   boxes) so content arrival causes no layout shift — see the shared
   `DetailSkeleton` (`withActions` mirrors whether the real hero has an actions
   row; pages append their own below-the-fold geometry as children),
-  `MusicDetailSkeleton` (§3.2), and the `LibraryAllTabSkeleton` /
+  `MusicDetailSkeleton` (§3.2; `withMenu` likewise mirrors the album's admin
+  button), and the `LibraryAllTabSkeleton` /
   `LibraryGenresTabSkeleton` that live in the same files as the grids they
   mirror. A skeleton mirrors the **grid only**; chrome whose presence depends
   on the response — a library tab's page info — belongs to the component that

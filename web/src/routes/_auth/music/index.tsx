@@ -608,11 +608,15 @@ function VirtualizedTracksList({
   );
 }
 
+// The library-wide pair stays focusable while its first batch loads: a
+// disabled media control drops out of iOS VoiceOver's focus order (§1.7), so
+// aria-disabled plus a guard stops a second start instead.
 function PlayAllButton() {
   const [isLoading, setIsLoading] = useState(false);
   const audioPlayer = useAudioPlayerActions();
 
   const handlePlayAll = async () => {
+    if (isLoading) return;
     setIsLoading(true);
 
     try {
@@ -629,8 +633,8 @@ function PlayAllButton() {
     <Button
       variant="outline"
       onClick={handlePlayAll}
-      disabled={isLoading}
-      className="min-h-10 rounded-full"
+      aria-disabled={isLoading}
+      className="min-h-10 rounded-full aria-disabled:opacity-50"
       aria-label="Play all tracks"
     >
       {isLoading ? (
@@ -648,6 +652,7 @@ function ShuffleButton() {
   const audioPlayer = useAudioPlayerActions();
 
   const handleShuffle = async () => {
+    if (isLoading) return;
     setIsLoading(true);
 
     try {
@@ -664,8 +669,8 @@ function ShuffleButton() {
     <Button
       variant="accent-pill"
       onClick={handleShuffle}
-      disabled={isLoading}
-      className="min-h-10"
+      aria-disabled={isLoading}
+      className="min-h-10 aria-disabled:opacity-50"
       aria-label="Shuffle all tracks"
     >
       {isLoading ? (
