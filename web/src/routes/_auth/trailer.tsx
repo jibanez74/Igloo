@@ -453,6 +453,13 @@ function TrailerPage() {
   }
 
   if (!trailerKey && (movieIsError || data?.error)) {
+    // The UI owns these words (design-system §3.4): the server answers a
+    // lowercase constant, which is not copy.
+    const loadErrorMessage =
+      data?.error && data.status === 404
+        ? "We couldn’t find that movie on TMDB."
+        : "Couldn’t load the trailer details from TMDB. Check your connection and try again.";
+
     return (
       <Dialog open onOpenChange={handleDialogOpenChange}>
         <DialogFullscreenContent
@@ -479,7 +486,7 @@ function TrailerPage() {
                 Unable to Load Trailer
               </DialogTitle>
               <DialogDescription className="mb-6 text-muted-foreground">
-                {data?.message || "Something went wrong while loading the trailer."}
+                {loadErrorMessage}
               </DialogDescription>
               <div className="flex flex-wrap items-center justify-center gap-3">
                 <button
