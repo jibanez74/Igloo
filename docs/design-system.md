@@ -376,7 +376,12 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
   `usePrefersCoarsePointer`) gets neither, because a screen reader there would
   read out keys nobody can press; the shortcuts themselves stay bound for an
   attached keyboard. Never hard-code the suffix. Gate on the pointer, not on
-  `useIsMobile`: a narrow desktop window still has a keyboard.
+  `useIsMobile`: a narrow desktop window still has a keyboard. The playlist
+  reorder list (`DraggableTrackList`) follows the same rule: its handles are
+  described by dnd-kit's key map only when `showShortcutHints` is true (a
+  touch-first device gets the hold-and-drag gesture instead), and its
+  pick-up announcement names space and escape only when the drag was started
+  from the keyboard.
 - **Every route titles the page through its `head`, never in JSX.** The
   document title is the first thing a screen reader announces after a
   navigation, and it names the browser tab and history entry. Routes declare
