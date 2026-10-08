@@ -6,7 +6,6 @@ import {
   Disc3,
   Calendar,
   Music,
-  Clock,
   Play,
   Shuffle,
   MoreHorizontal,
@@ -26,7 +25,6 @@ import { listenHead, routeHead } from "@/lib/route-head";
 import { unwrapString, unwrapInt, unwrapFloat } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,6 +54,11 @@ import MusicDetailBackdrop from "@/components/music/MusicDetailBackdrop";
 import MusicDetailBackNav from "@/components/music/MusicDetailBackNav";
 import MusicDetailSkeleton from "@/components/music/MusicDetailSkeleton";
 import MusicDetailArt from "@/components/music/MusicDetailArt";
+import MusicGenreList from "@/components/music/MusicGenreList";
+import MusicStatList, {
+  MusicDurationChip,
+  MusicStatChip,
+} from "@/components/music/MusicStatList";
 import DetailSkipLinks from "@/components/shared/DetailSkipLinks";
 import { SpotifyPopularityMeter } from "@/components/music/SpotifyPopularity";
 import {
@@ -357,74 +360,21 @@ function AlbumDetailsContent({
                 </p>
               )}
 
-              <ul
-                className="mt-4 flex list-none flex-wrap items-center justify-center gap-2 sm:gap-3 lg:justify-start"
-                aria-label="Album details"
-              >
+              <MusicStatList label="Album details">
                 {(releaseDate || releaseYear) && (
-                  <li>
-                    <Badge
-                      variant="outline"
-                      className="gap-1.5 border-border/40 bg-muted/90 px-3 py-1.5 text-sm font-normal text-foreground"
-                    >
-                      <Calendar
-                        className="size-4 shrink-0 text-muted-foreground"
-                        aria-hidden="true"
-                      />
-                      <time dateTime={releaseDate ?? String(releaseYear ?? "")}>
-                        {releaseDate ? formatDate(releaseDate) : releaseYear}
-                      </time>
-                    </Badge>
-                  </li>
-                )}
-                <li>
-                  <Badge
-                    variant="outline"
-                    className="gap-1.5 border-border/40 bg-muted/90 px-3 py-1.5 text-sm font-normal text-foreground"
-                  >
-                    <Music
-                      className="size-4 shrink-0 text-muted-foreground"
-                      aria-hidden="true"
-                    />
-                    <span>{pluralize(tracks.length, "track")}</span>
-                  </Badge>
-                </li>
-                <li>
-                  <Badge
-                    variant="outline"
-                    className="gap-1.5 border-border/40 bg-muted/90 px-3 py-1.5 text-sm font-normal text-foreground"
-                  >
-                    <Clock
-                      className="size-4 shrink-0 text-muted-foreground"
-                      aria-hidden="true"
-                    />
-                    <time
-                      dateTime={`PT${Math.round(total_duration / 1000)}S`}
-                      aria-label={`Total duration ${formatDuration(total_duration)}`}
-                    >
-                      {formatDuration(total_duration)}
+                  <MusicStatChip icon={Calendar}>
+                    <time dateTime={releaseDate ?? String(releaseYear ?? "")}>
+                      {releaseDate ? formatDate(releaseDate) : releaseYear}
                     </time>
-                  </Badge>
-                </li>
-              </ul>
+                  </MusicStatChip>
+                )}
+                <MusicStatChip icon={Music}>
+                  {pluralize(tracks.length, "track")}
+                </MusicStatChip>
+                <MusicDurationChip ms={total_duration} />
+              </MusicStatList>
 
-              {album_genres.length > 0 && (
-                <ul
-                  className="mt-4 flex list-none flex-wrap justify-center gap-2 lg:justify-start"
-                  aria-label={`Genres: ${album_genres.join(", ")}`}
-                >
-                  {album_genres.map(genre => (
-                    <li key={genre}>
-                      <Badge
-                        variant="outline"
-                        className="border-primary/30 bg-muted/80 px-3 py-1 text-sm font-normal text-primary backdrop-blur-sm"
-                      >
-                        {genre}
-                      </Badge>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <MusicGenreList genres={album_genres} />
 
               {spotifyPopularity != null && (
                 <SpotifyPopularityMeter score={spotifyPopularity} />

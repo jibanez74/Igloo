@@ -785,7 +785,9 @@ a round thumb beside the title, over a decorative 21:9 band, rather than
 (`variant="album" | "musician" | "playlist"`: the square cover or round photo
 beside the title on all three pages, with a labelled placeholder when there is
 no artwork, and the `MusicDetailArtSkeleton` that reads the same sizes),
-`MusicDetailSkeleton`
+`MusicStatList` (the album and musician stat pills — `MusicStatChip` per
+figure, `MusicDurationChip` speaking "Total duration …" through an `sr-only`
+span) and `MusicGenreList` (their genre pills), `MusicDetailSkeleton`
 (`variant="album" | "musician" | "playlist"`: the album and musician variants
 are one hero geometry with the art shape and hero rows switched; the playlist
 variant mirrors the playlist page instead, which has no backdrop band and no

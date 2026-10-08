@@ -4,7 +4,6 @@ import {
   User,
   Disc3,
   Music,
-  Clock,
   Play,
   Shuffle,
   ListOrdered,
@@ -15,12 +14,16 @@ import { getMediaImageUrl } from "@/lib/media-image-url";
 import { parseRouteId } from "@/lib/route-id";
 import { listenHead, routeHead } from "@/lib/route-head";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import MediaDetailGuard from "@/components/shared/MediaDetailGuard";
 import DetailSkipLinks from "@/components/shared/DetailSkipLinks";
 import AlbumCard from "@/components/music/AlbumCard";
 import MusicDetailArt from "@/components/music/MusicDetailArt";
 import MusicDetailBackdrop from "@/components/music/MusicDetailBackdrop";
+import MusicGenreList from "@/components/music/MusicGenreList";
+import MusicStatList, {
+  MusicDurationChip,
+  MusicStatChip,
+} from "@/components/music/MusicStatList";
 import MusicDetailBackNav from "@/components/music/MusicDetailBackNav";
 import MusicDetailSkeleton from "@/components/music/MusicDetailSkeleton";
 import {
@@ -269,72 +272,17 @@ function MusicianDetailsContent({
                 </p>
               )}
 
-              {/* Genre tags */}
-              {genres.length > 0 && (
-                <ul
-                  className="mt-4 flex list-none flex-wrap justify-center gap-2 lg:justify-start"
-                  aria-label={`Genres: ${genres.join(", ")}`}
-                >
-                  {genres.map((genre) => (
-                    <li key={genre}>
-                      <Badge
-                        variant="outline"
-                        className="border-primary/30 bg-muted/80 px-3 py-1 text-sm font-normal text-primary backdrop-blur-sm"
-                      >
-                        {genre}
-                      </Badge>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <MusicGenreList genres={genres} />
 
-              {/* Stats row */}
-              <ul
-                className="mt-4 flex list-none flex-wrap items-center justify-center gap-2 sm:gap-3 lg:justify-start"
-                aria-label="Musician statistics"
-              >
-                <li>
-                  <Badge
-                    variant="outline"
-                    className="gap-1.5 border-border/40 bg-muted/90 px-3 py-1.5 text-sm font-normal text-foreground"
-                  >
-                    <Disc3
-                      className="size-4 shrink-0 text-muted-foreground"
-                      aria-hidden="true"
-                    />
-                    <span>{pluralize(albums.length, "album")}</span>
-                  </Badge>
-                </li>
-                <li>
-                  <Badge
-                    variant="outline"
-                    className="gap-1.5 border-border/40 bg-muted/90 px-3 py-1.5 text-sm font-normal text-foreground"
-                  >
-                    <Music
-                      className="size-4 shrink-0 text-muted-foreground"
-                      aria-hidden="true"
-                    />
-                    <span>{pluralize(tracks.length, "track")}</span>
-                  </Badge>
-                </li>
-                <li>
-                  <Badge
-                    variant="outline"
-                    className="gap-1.5 border-border/40 bg-muted/90 px-3 py-1.5 text-sm font-normal text-foreground"
-                  >
-                    <Clock
-                      className="size-4 shrink-0 text-muted-foreground"
-                      aria-hidden="true"
-                    />
-                    <time
-                      dateTime={`PT${Math.round(total_duration / 1000)}S`}
-                      aria-label={`Total duration ${formatDuration(total_duration)}`}
-                    >
-                      {formatDuration(total_duration)}
-                    </time>
-                  </Badge>
-                </li>
-              </ul>
+              <MusicStatList label="Musician statistics">
+                <MusicStatChip icon={Disc3}>
+                  {pluralize(albums.length, "album")}
+                </MusicStatChip>
+                <MusicStatChip icon={Music}>
+                  {pluralize(tracks.length, "track")}
+                </MusicStatChip>
+                <MusicDurationChip ms={total_duration} />
+              </MusicStatList>
 
               {/* Play buttons */}
               {tracks.length > 0 && (

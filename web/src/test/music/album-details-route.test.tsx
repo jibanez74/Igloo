@@ -429,6 +429,10 @@ describe("album details content", () => {
 
     const durationTime = screen.getByText("3m 0s", { selector: "time" });
     expect(durationTime).toHaveAttribute("dateTime", "PT180S");
+    // aria-label does not reliably name a <time>, so the spoken words live in
+    // an sr-only span and the formatted value is hidden (§1.7).
+    expect(durationTime).toHaveAttribute("aria-hidden", "true");
+    expect(screen.getByText("Total duration 3m 0s")).toHaveClass("sr-only");
 
     const skipNav = screen.getByRole("navigation", {
       name: "Skip to section",
