@@ -1,7 +1,7 @@
 import { FOCUS_VISIBLE_RING_CLASS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
-export function MoviesLoadError({
+export default function LoadErrorAlert({
   message,
   onRetry,
 }: {

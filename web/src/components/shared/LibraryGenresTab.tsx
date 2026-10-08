@@ -13,7 +13,7 @@ import LibrarySortToggle, {
   type LibrarySortDirection,
 } from "@/components/shared/LibrarySortToggle";
 import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
-import { MoviesLoadError } from "@/components/shared/MoviesLoadError";
+import LoadErrorAlert from "@/components/shared/LoadErrorAlert";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import {
   FOCUS_VISIBLE_RING_CLASS,
@@ -170,7 +170,7 @@ export default function LibraryGenresTab<
 
   if (genresError || isApiFailure(genresRes)) {
     return (
-      <MoviesLoadError
+      <LoadErrorAlert
         message={apiErrorMessage(genresRes, "Couldn’t load genres. Check your connection and try again.")}
         onRetry={() => void refetchGenres()}
       />
@@ -271,7 +271,7 @@ export default function LibraryGenresTab<
           </div>
 
           {itemsError || isApiFailure(itemsRes) ? (
-            <MoviesLoadError
+            <LoadErrorAlert
               message={apiErrorMessage(itemsRes, `Couldn’t load ${noun.plural} for this genre. Check your connection and try again.`)}
               onRetry={() => void refetchItems()}
             />

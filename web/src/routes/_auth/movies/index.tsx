@@ -54,7 +54,7 @@ import {
   moviesStatsQueryOpts,
   tmdbStatusQueryOpts,
 } from "@/lib/query-opts";
-import { MoviesLoadError } from "@/components/shared/MoviesLoadError";
+import LoadErrorAlert from "@/components/shared/LoadErrorAlert";
 import { pluralize } from "@/lib/format";
 import { apiErrorMessage, isApiFailure } from "@/lib/is-api-failure";
 import { refreshMovieLibraryCache } from "@/lib/movie-library-cache";
@@ -593,7 +593,7 @@ function PlaylistsTabContent({
 
   if (isError || isApiFailure(data)) {
     return (
-      <MoviesLoadError
+      <LoadErrorAlert
         message={apiErrorMessage(data, "Couldn’t load playlists. Check your connection and try again.")}
         onRetry={() => void refetch()}
       />

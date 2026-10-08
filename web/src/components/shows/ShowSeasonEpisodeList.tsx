@@ -4,7 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { Check, Play, Tv } from "lucide-react";
 import EmptyState from "@/components/shared/EmptyState";
 import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
-import { MoviesLoadError } from "@/components/shared/MoviesLoadError";
+import LoadErrorAlert from "@/components/shared/LoadErrorAlert";
 import WatchProgressBar from "@/components/shared/WatchProgressBar";
 import EpisodeWatchedToggle from "@/components/shows/EpisodeWatchedToggle";
 import { Badge } from "@/components/ui/badge";
@@ -226,10 +226,10 @@ export default function ShowSeasonEpisodeList({
       data,
       "Failed to load episodes. Please try again.",
     );
-    // MoviesLoadError is a role="alert", so it announces itself; adding the
+    // LoadErrorAlert is a role="alert", so it announces itself; adding the
     // failure to LiveAnnouncer as well would announce it twice.
     body = (
-      <MoviesLoadError
+      <LoadErrorAlert
         message={message}
         onRetry={() => {
           refetch();

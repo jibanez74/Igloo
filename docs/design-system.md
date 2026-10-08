@@ -746,7 +746,7 @@ rather than the library. The Playlists tabs themselves stay local to their
 pages, as the Tracks tab does to the music page; a new library page composes
 the same parts. The
 search page's category tabs reuse `LIBRARY_POSTER_GRID_CLASS`,
-`MoviesLoadError` and `PosterCardSkeleton` but stay page-local: their result
+`LoadErrorAlert` and `PosterCardSkeleton` but stay page-local: their result
 count line, "No albums match 'q'" copy and non-grid tracks list are not a
 library tab.
 
@@ -892,7 +892,7 @@ is unknown or empty.
   `isError || isApiFailure(data)` (`lib/is-api-failure.ts`, reading the API
   envelope `{ error, message, data }`). Which component renders it depends on
   what failed:
-  - A query inside a page → `MoviesLoadError` (`role="alert"`,
+  - A query inside a page → `LoadErrorAlert` (`role="alert"`,
     `border-destructive/25 bg-destructive/10 text-destructive`, "Try again" →
     `refetch()`).
   - A home section's query → `SectionErrorAlert`, the same destructive tint as

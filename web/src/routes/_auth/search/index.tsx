@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { type LibraryNoun } from "@/components/shared/LibraryAllTab";
 import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
 import LibraryPagination from "@/components/shared/LibraryPagination";
-import { MoviesLoadError } from "@/components/shared/MoviesLoadError";
+import LoadErrorAlert from "@/components/shared/LoadErrorAlert";
 import { PosterCardSkeleton } from "@/components/shared/PosterCard";
 import MovieCard from "@/components/movies/MovieCard";
 import ShowCard from "@/components/shows/ShowCard";
@@ -388,7 +388,7 @@ function AllResultsTab({ q }: { q: string }) {
 
   if (isError || isApiFailure(data)) {
     return (
-      <MoviesLoadError
+      <LoadErrorAlert
         message={apiErrorMessage(data, "Couldn’t run that search. Check your connection and try again.")}
         onRetry={() => void refetch()}
       />
@@ -597,7 +597,7 @@ function CategoryResultsTab<T>({
 
   if (isError || isApiFailure(data)) {
     return (
-      <MoviesLoadError
+      <LoadErrorAlert
         message={apiErrorMessage(data, `Couldn’t load ${label}. Check your connection and try again.`)}
         onRetry={() => void refetch()}
       />
