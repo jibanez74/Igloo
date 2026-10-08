@@ -51,7 +51,8 @@ const CLEAN_STATUS = "No unsaved changes";
  * rendered at the end of its form, so it can be found; it lifts into a sticky
  * bar only while there are unsaved edits, and its buttons are disabled when
  * there is nothing to save or reset (design-system §3.7). Below `sm` it is
- * one compact row: status only, an icon-only Reset, and Save.
+ * one compact row: the status (wrapping to two lines rather than cut off),
+ * an icon-only Reset, and Save.
  */
 export default function SettingsSaveBar({
   title,
@@ -96,7 +97,7 @@ export default function SettingsSaveBar({
           id={statusId}
           className={cn(
             MOTION_MICRO_COLORS_CLASS,
-            "truncate text-xs sm:mt-1 sm:text-sm sm:whitespace-normal",
+            "line-clamp-2 text-xs sm:mt-1 sm:line-clamp-none sm:text-sm",
             TONE_CLASS[statusTone],
           )}
           aria-live="polite"
