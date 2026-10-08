@@ -293,6 +293,34 @@ describe("settings form query updates", () => {
     expect(screen.getByText("No unsaved changes")).toBeInTheDocument();
   });
 
+  it("drops a field's validation error once that field is edited, even back to its saved value", async () => {
+    const user = userEvent.setup();
+    await renderSettingsRoute("/settings");
+
+    const jellyfin = await screen.findByRole("textbox", {
+      name: "Jellyfin base URL",
+    });
+    const immich = screen.getByRole("textbox", { name: "Immich base URL" });
+    const message = "Jellyfin base URL must start with http:// or https://.";
+
+    await user.type(jellyfin, "ftp://not-valid.local");
+    await user.click(screen.getByRole("button", { name: "Save Settings" }));
+    expect(jellyfin).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getAllByText(message).length).toBeGreaterThan(0);
+
+    // An edit elsewhere leaves the flagged field's error alone.
+    await user.type(immich, "h");
+    expect(jellyfin).toHaveAttribute("aria-invalid", "true");
+    await user.clear(immich);
+
+    // Restoring the saved (empty) value leaves nothing to save or reset, so
+    // the error has to go with the edit.
+    await user.clear(jellyfin);
+    expect(jellyfin).not.toHaveAttribute("aria-invalid", "true");
+    expect(screen.queryByText(message)).toBeNull();
+    expect(screen.getByText("No unsaved changes")).toBeInTheDocument();
+  });
+
   it("updates a clean libraries settings form when query data changes", async () => {
     const { queryClient } = await renderSettingsRoute("/settings/libraries");
 

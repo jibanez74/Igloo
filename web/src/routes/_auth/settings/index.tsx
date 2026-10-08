@@ -274,8 +274,17 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
     setForm(current => ({ ...current, [field]: value }));
   };
 
+  // Editing the flagged field drops its error, including when the edit
+  // restores the saved value and leaves Reset with nothing to do.
+  const clearFieldError = (field: string) => {
+    if (validationField !== field) return;
+    setValidationField(null);
+    setValidationMessage("");
+  };
+
   const handleBaseURLChange = (field: BaseURLField, value: string) => {
     setForm(current => ({ ...current, [field]: value }));
+    clearFieldError(field);
   };
 
   const handleTextChange = (
@@ -283,6 +292,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
     value: string,
   ) => {
     setForm(current => ({ ...current, [field]: value }));
+    clearFieldError(field);
   };
 
   const handleToggleChange = (
