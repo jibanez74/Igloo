@@ -471,6 +471,7 @@ function MusicianDetailsContent({
                     <TrackItem
                       key={track.id}
                       {...trackRowProps(track)}
+                      musicianId={null}
                       subtitle={unwrapString(track.album_title) ?? "Unknown Album"}
                       variant="musician"
                       {...matchTrackPlayback(track.id)}

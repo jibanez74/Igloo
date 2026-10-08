@@ -465,7 +465,7 @@ function AlbumDetailsContent({
                         ref={moreOptionsButtonRef}
                         variant="outline"
                         size="lg"
-                        className="w-full rounded-full font-semibold sm:w-auto sm:px-4"
+                        className="self-center rounded-full font-semibold sm:self-auto sm:px-4"
                         aria-label="More options"
                       >
                         <MoreHorizontal className="size-4" aria-hidden="true" />
@@ -591,6 +591,7 @@ function AlbumDetailsContent({
                         trackIndex={track.track_index}
                         genres={trackGenreMap.get(track.id) || []}
                         variant="album"
+                        musicianId={linkedArtist?.id}
                         {...matchTrackPlayback(track.id)}
                         onPlay={() => handleToggleTrack(track)}
                       />

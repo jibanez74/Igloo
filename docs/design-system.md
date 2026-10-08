@@ -724,8 +724,10 @@ tab keeps the poster grid with `AlbumCardSkeleton`, the Musicians tab passes
 its five-column round-thumb grid with `MusicianCardSkeleton`. The tab owns one
 toolbar — page info on the right, then the sort toggle, with `toolbarStartSlot`
 for anything a page puts on the left — and renders it identically while
-loading, empty, errored and loaded, reserving its height so the grid top never
-moves (§3.4). The liked-movies view is a
+loading and loaded, reserving its height so the grid top never moves (§3.4).
+A tab with neither a sort toggle nor a start slot drops the row once it
+knows it has a single page, nothing, or an error, rather than holding an
+empty band above the grid. The liked-movies view is a
 `LibraryAllTab` whose `toolbarStartSlot` carries its "Back to playlists" link
 and count, so it inherits the tab's out-of-range page clamp and keeps that
 link reachable while loading, empty and errored. The movie playlist page is
@@ -1039,7 +1041,10 @@ require the full playback test pass.
   "Track N of M"); "Minimize player (Escape)" (no suffix on touch, §1.7)
   collapses it to the **docked
   mini bar** (`fixed inset-x-0 bottom-0 z-40 bg-background/95 backdrop-blur`)
-  with track info, transport, close, and a bottom progress strip. The bar
+  with track info, transport, close, and a bottom progress strip. Every track row carries the
+  `TrackActionsMenu` (Add to Playlist, then the links that lead somewhere
+  else: an album row offers "Go to Artist", a musician row "Go to Album"),
+  so a track can join a playlist from wherever it is listed. The bar
   persists across navigation; the current track's row in lists is
   highlighted (`text-primary` title + tinted row + pause state), and
   clicking that row **toggles play/pause in place** — it never rebuilds the

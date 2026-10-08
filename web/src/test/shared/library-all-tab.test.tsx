@@ -274,7 +274,21 @@ describe("LibraryAllTab without sort", () => {
     expect(screen.getByText("Page 1 of 3")).toBeInTheDocument();
   });
 
-  it("keeps the toolbar row on the error state", async () => {
+  // With no sort toggle, no start slot and no pages to report, the row would
+  // be an empty band above the grid, so it goes once the tab knows that.
+  it("drops the toolbar row once an unsorted tab resolves to a single page", async () => {
+    const { container } = renderUnsortedTab(async () =>
+      onePage([{ id: 1, name: "Frost Harbor" }]),
+    );
+
+    await screen.findByText("Frost Harbor");
+
+    expect(
+      container.querySelector('[data-slot="library-tab-toolbar"]'),
+    ).toBeNull();
+  });
+
+  it("drops the toolbar row on the error state", async () => {
     const { container } = renderUnsortedTab(async () => {
       throw new Error("offline");
     });
@@ -283,6 +297,6 @@ describe("LibraryAllTab without sort", () => {
 
     expect(
       container.querySelector('[data-slot="library-tab-toolbar"]'),
-    ).not.toBeNull();
+    ).toBeNull();
   });
 });

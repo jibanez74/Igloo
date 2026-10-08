@@ -74,8 +74,10 @@ export default function TrackItem({
 }: TrackItemProps) {
   const likeButton = useLikeButtonState(id, title);
 
-  // Determine if actions menu should show based on variant or explicit prop
-  const shouldShowActions = showActionsMenu ?? variant === "library";
+  // Every row offers its actions menu (Add to Playlist at least) unless the
+  // caller opts out; the album and musician pages pass only the link that
+  // leads somewhere else, so a row never links back to the page it is on.
+  const shouldShowActions = showActionsMenu ?? true;
 
   const handleLikeClick = (e: React.MouseEvent) => {
     e.stopPropagation();

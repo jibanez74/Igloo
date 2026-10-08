@@ -470,8 +470,9 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
                 aria-label="Edit playlist"
               >
                 <Pencil className="size-4" aria-hidden="true" />
-                <span>Edit</span>
-                <span className="hidden sm:inline">Details</span>
+                <span>
+                  Edit<span className="hidden sm:inline"> Details</span>
+                </span>
               </button>
               <button
                 type="button"
@@ -490,8 +491,9 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
                 ) : (
                   <Trash2 className="size-4" aria-hidden="true" />
                 )}
-                <span>Delete</span>
-                <span className="hidden sm:inline">Playlist</span>
+                <span>
+                  Delete<span className="hidden sm:inline"> Playlist</span>
+                </span>
               </button>
             </div>
           )}

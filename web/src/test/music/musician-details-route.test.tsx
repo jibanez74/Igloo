@@ -545,3 +545,31 @@ describe("musician details route motion", () => {
     expect(screen.queryByText("Alabaster")).not.toBeInTheDocument();
   });
 });
+
+// The mirror of the album page: a musician row links to the track's album,
+// never back to the artist whose page it is on.
+describe("musician details track actions", () => {
+  it("offers Add to Playlist and Go to Album on each track row, but not Go to Artist", async () => {
+    const user = userEvent.setup();
+    await renderMusicianDetailsRoute();
+
+    expect(
+      await screen.findByRole("heading", { name: "The Band" }),
+    ).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "More actions for Alabaster" }),
+    );
+
+    expect(
+      await screen.findByRole("menuitem", { name: "Add to Playlist" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Go to Album" })).toHaveAttribute(
+      "href",
+      "/music/album/7",
+    );
+    expect(
+      screen.queryByRole("menuitem", { name: "Go to Artist" }),
+    ).not.toBeInTheDocument();
+  });
+});

@@ -145,11 +145,16 @@ export default function LibraryAllTab<
     scrollWindowToTop();
   };
 
-  // One toolbar, rendered identically in every state. The skeleton cannot know
-  // `totalPages` before the query resolves, so a toolbar that appeared only once
-  // the data landed moved the grid down under it (design-system §3.4) — which is
-  // why the row is reserved here rather than mirrored in the skeleton.
-  const toolbar = (
+  // One toolbar, rendered identically in every state that can fill it. The
+  // skeleton cannot know `totalPages` before the query resolves, so a toolbar
+  // that appeared only once the data landed moved the grid down under it
+  // (design-system §3.4) — which is why the row is reserved while loading
+  // rather than mirrored in the skeleton. A tab with no sort toggle and no
+  // start slot drops the row once it knows it has a single page (or nothing),
+  // instead of holding an empty band above the grid.
+  const showToolbar =
+    hasSort || toolbarStartSlot != null || hasMultiplePages || isLoading;
+  const toolbar = showToolbar && (
     <div
       data-slot="library-tab-toolbar"
       className="mb-5 flex min-h-8 flex-wrap items-center justify-between gap-3"
@@ -230,7 +235,7 @@ type LibraryAllTabSkeletonProps = {
 
 // Authored beside the grid it mirrors (design-system §3.4): the same columns
 // and the same card boxes, one per card on a full page. The toolbar above the
-// grid belongs to the tab, which reserves it in every state.
+// grid belongs to the tab, which reserves it while loading.
 export function LibraryAllTabSkeleton({
   perPage,
   gridClassName = LIBRARY_POSTER_GRID_CLASS,
