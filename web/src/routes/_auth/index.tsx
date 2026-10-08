@@ -65,7 +65,7 @@ function HomePage() {
         </h1>
         <p className="mt-3 max-w-3xl text-sm text-muted-foreground sm:text-base">
           Explore your personal media library with recently added movies,
-          albums, shared watch rooms, and what is playing in theaters.
+          albums, and what is playing in theaters.
         </p>
       </section>
 
