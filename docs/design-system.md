@@ -724,10 +724,12 @@ tab keeps the poster grid with `AlbumCardSkeleton`, the Musicians tab passes
 its five-column round-thumb grid with `MusicianCardSkeleton`. The tab owns one
 toolbar — page info on the right, then the sort toggle, with `toolbarStartSlot`
 for anything a page puts on the left — and renders it identically while
-loading and loaded, reserving its height so the grid top never moves (§3.4).
-A tab with neither a sort toggle nor a start slot drops the row once it
-knows it has a single page, nothing, or an error, rather than holding an
-empty band above the grid. The liked-movies view is a
+loading and loaded, reserving its height while loading so the grid does not
+shift down when the data lands (§3.4). A tab with neither a sort toggle nor a
+start slot drops the row once it knows it has a single page, nothing, or an
+error — a failed refetch included, whose stale page count no longer applies —
+rather than holding an empty band above the grid; that one settle is the
+only time such a tab's grid moves. The liked-movies view is a
 `LibraryAllTab` whose `toolbarStartSlot` carries its "Back to playlists" link
 and count, so it inherits the tab's out-of-range page clamp and keeps that
 link reachable while loading, empty and errored. The movie playlist page is
