@@ -238,11 +238,12 @@ function MoviesPage() {
       {/* Stats + More dropdown */}
       <div
         className={cn(
-          "mb-5 flex flex-wrap items-center justify-between gap-3",
+          "mb-5 flex items-start justify-between gap-3",
           MOTION_SECTION_ENTER_DELAYED_CLASS,
         )}
       >
         <LibraryStats
+          className="min-w-0 flex-1"
           queryOpts={moviesStatsQueryOpts()}
           figures={[
             {

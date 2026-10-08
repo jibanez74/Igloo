@@ -153,7 +153,7 @@ describe("route loaders feed their head", () => {
   it("titles a movie trailer after the movie", async () => {
     expect(
       await headAfterLoad(TrailerRoute, [[tmdbKey, fightClub]], {
-        deps: { mediaType: "movie", mediaId: 550, videoKey: undefined },
+        deps: { mediaType: "movie", tmdbId: 550, videoKey: undefined },
       }),
     ).toEqual({ meta: [{ title: "Fight Club - Trailer - Igloo" }] });
   });
@@ -162,7 +162,7 @@ describe("route loaders feed their head", () => {
     const queryClient = createTestQueryClient();
     const loaderData = await runLoader(TrailerRoute, {
       context: { queryClient },
-      deps: { mediaType: "show", mediaId: 550, videoKey: undefined },
+      deps: { mediaType: "show", tmdbId: 550, videoKey: undefined },
     });
 
     expect(loaderData).toEqual({ movieTitle: null });
@@ -176,7 +176,7 @@ describe("route loaders feed their head", () => {
     const queryClient = createTestQueryClient();
     const loaderData = await runLoader(TrailerRoute, {
       context: { queryClient },
-      deps: { mediaType: "movie", mediaId: 550, videoKey: "abc123" },
+      deps: { mediaType: "movie", tmdbId: 550, videoKey: "abc123" },
     });
 
     expect(loaderData).toEqual({ movieTitle: null });

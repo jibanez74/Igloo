@@ -223,7 +223,7 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
                 to="/trailer"
                 search={{
                   mediaType: "movie",
-                  mediaId: movie.id,
+                  tmdbId: movie.id,
                   returnTo: trailerReturnPath,
                 }}
                 mask={{

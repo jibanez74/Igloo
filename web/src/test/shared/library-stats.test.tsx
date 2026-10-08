@@ -110,6 +110,33 @@ describe("LibraryStats", () => {
     ).toBeInTheDocument();
   });
 
+  it("takes the host row's layout classes on the region", async () => {
+    renderWithQueryClient(
+      <LibraryStats
+        className="min-w-0 flex-1"
+        queryOpts={queryOptions({
+          queryKey: ["library-stats-class"],
+          queryFn: async (): Promise<ApiResponseType<MoviesPayload>> => ({
+            error: false,
+            data: { total_movies: 3 },
+          }),
+        })}
+        figures={[
+          {
+            icon: Film,
+            label: "Movies",
+            noun: MOVIE_NOUN,
+            getValue: data => data.total_movies,
+          },
+        ]}
+      />,
+    );
+
+    expect(
+      await screen.findByRole("region", { name: "Library statistics: 3 movies" }),
+    ).toHaveClass("min-w-0", "flex-1");
+  });
+
   it("says it is loading until the counts arrive", () => {
     renderMovieStats(() => new Promise(() => {}));
 

@@ -57,7 +57,7 @@ export const Route = createFileRoute("/_auth/trailer")({
   validateSearch: trailerSearchSchema,
   loaderDeps: ({ search }) => ({
     mediaType: search.mediaType,
-    mediaId: search.mediaId,
+    tmdbId: search.tmdbId,
     videoKey: search.videoKey,
   }),
   loader: async ({ context, deps }) => {
@@ -65,15 +65,15 @@ export const Route = createFileRoute("/_auth/trailer")({
     // other case skips the movie lookup the page would not make either.
     if (
       deps.mediaType !== "movie" ||
-      !deps.mediaId ||
-      deps.mediaId <= 0 ||
+      !deps.tmdbId ||
+      deps.tmdbId <= 0 ||
       deps.videoKey
     ) {
       return { movieTitle: null };
     }
 
     const res = await context.queryClient.ensureQueryData(
-      movieDetailsQueryOpts(deps.mediaId),
+      movieDetailsQueryOpts(deps.tmdbId),
     );
 
     return {
@@ -103,7 +103,7 @@ function handleDialogEscapeKeyDown(event: KeyboardEvent) {
 }
 
 function TrailerPage() {
-  const { mediaType, mediaId, videoKey, returnTo } = Route.useSearch();
+  const { mediaType, tmdbId, videoKey, returnTo } = Route.useSearch();
   const navigate = Route.useNavigate();
   const router = useRouter();
   const { pause, suspendKeyboard, resumeKeyboard } = useAudioPlayerActions();
@@ -122,14 +122,14 @@ function TrailerPage() {
   }, [pause, suspendKeyboard, resumeKeyboard]);
 
   const shouldFetchMovie =
-    mediaType === "movie" && mediaId != null && mediaId > 0 && !videoKey;
+    mediaType === "movie" && tmdbId != null && tmdbId > 0 && !videoKey;
   const {
     data,
     isPending: moviePending,
     isError: movieIsError,
     refetch: refetchMovie,
   } = useQuery({
-    ...movieDetailsQueryOpts(mediaId ?? 0),
+    ...movieDetailsQueryOpts(tmdbId ?? 0),
     enabled: shouldFetchMovie,
   });
 
@@ -453,6 +453,13 @@ function TrailerPage() {
   }
 
   if (!trailerKey && (movieIsError || data?.error)) {
+    // The UI owns these words (design-system §3.4): the server answers a
+    // lowercase constant, which is not copy.
+    const loadErrorMessage =
+      data?.error && data.status === 404
+        ? "We couldn’t find that movie on TMDB."
+        : "Couldn’t load the trailer details from TMDB. Check your connection and try again.";
+
     return (
       <Dialog open onOpenChange={handleDialogOpenChange}>
         <DialogFullscreenContent
@@ -479,7 +486,7 @@ function TrailerPage() {
                 Unable to Load Trailer
               </DialogTitle>
               <DialogDescription className="mb-6 text-muted-foreground">
-                {data?.message || "Something went wrong while loading the trailer."}
+                {loadErrorMessage}
               </DialogDescription>
               <div className="flex flex-wrap items-center justify-center gap-3">
                 <button
