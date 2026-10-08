@@ -46,6 +46,9 @@ export default function DraggableTrackList({
   // dnd-kit hands announcements only the active item, so the drag-start
   // handler records whether the keyboard started the drag.
   const keyboardDragRef = useRef(false);
+  // A drag starts over its own slot. Until it first leaves, that self-over is
+  // not news; after that, returning to it is.
+  const hasLeftOriginRef = useRef(false);
 
   // Configure sensors with activation constraints
   const sensors = useSensors(
@@ -67,6 +70,7 @@ export default function DraggableTrackList({
 
   const handleDragStart = (event: DragStartEvent) => {
     keyboardDragRef.current = event.activatorEvent instanceof KeyboardEvent;
+    hasLeftOriginRef.current = false;
     setActiveId(event.active.id);
   };
 
@@ -115,10 +119,15 @@ export default function DraggableTrackList({
         : pickedUp;
     },
     onDragOver({ active, over }: { active: { id: UniqueIdentifier }; over: { id: UniqueIdentifier } | null }) {
-      // A drag starts over its own slot; announcing that would replace the
-      // pick-up message in the live region before it is read.
-      if (!over || over.id === active.id) return;
+      if (!over) return;
       const activeTrack = tracks.find((t) => t.id === active.id);
+      if (over.id === active.id) {
+        // Announcing the starting self-over would replace the pick-up message
+        // in the live region before it is read.
+        if (!hasLeftOriginRef.current) return;
+        return `${activeTrack?.title || "Track"} is back in its original position`;
+      }
+      hasLeftOriginRef.current = true;
       const overTrack = tracks.find((t) => t.id === over.id);
       if (activeTrack && overTrack) {
         return `${activeTrack.title} is over ${overTrack.title}`;
@@ -126,10 +135,13 @@ export default function DraggableTrackList({
     },
     onDragEnd({ active, over }: DragEndEvent) {
       const activeTrack = tracks.find((t) => t.id === active.id);
-      if (over) {
-        const overTrack = tracks.find((t) => t.id === over.id);
-        if (activeTrack && overTrack && active.id !== over.id) {
-          return `${activeTrack.title} was moved after ${overTrack.title}`;
+      if (over && active.id !== over.id) {
+        const oldIndex = tracks.findIndex((t) => t.id === active.id);
+        const newIndex = tracks.findIndex((t) => t.id === over.id);
+        if (activeTrack && newIndex !== -1) {
+          // A track moved up lands before the one it was dropped on.
+          const side = newIndex > oldIndex ? "after" : "before";
+          return `${activeTrack.title} was moved ${side} ${tracks[newIndex].title}`;
         }
       }
       return `${activeTrack?.title || "Track"} was dropped`;

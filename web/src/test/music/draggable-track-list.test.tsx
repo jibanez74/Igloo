@@ -41,10 +41,12 @@ function playlistTrack(id: number, title: string, position: number): PlaylistTra
   };
 }
 
-function renderList() {
+function renderList(
+  tracks = [playlistTrack(1, "Alabaster", 1), playlistTrack(2, "Borrowed Light", 2)],
+) {
   return renderWithQueryClient(
     <DraggableTrackList
-      tracks={[playlistTrack(1, "Alabaster", 1), playlistTrack(2, "Borrowed Light", 2)]}
+      tracks={tracks}
       canEdit
       onReorder={vi.fn()}
       onPlayTrack={vi.fn()}
@@ -73,8 +75,37 @@ function recordAnnouncements() {
 
 const observers: MutationObserver[] = [];
 
+// jsdom lays nothing out, so the keyboard sensor has no slot to move to. Stack
+// the rows 50 px apart: an element holding one drag handle is the row named in
+// it. The drag overlay holds a handle too, so it lands on the dragged row.
+const TITLES = ["Alabaster", "Borrowed Light"];
+
+function layOutRows() {
+  const original = Element.prototype.getBoundingClientRect;
+  vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (
+    this: Element,
+  ) {
+    const handles = screen
+      .queryAllByRole("button", { name: "Drag to reorder" })
+      .filter(handle => this === handle || this.contains(handle));
+    if (handles.length !== 1) return original.call(this);
+    let row: Element | null = handles[0];
+    while (row && !TITLES.some(title => row!.textContent?.includes(title))) {
+      row = row.parentElement;
+    }
+    const index = TITLES.findIndex(title => row?.textContent?.includes(title));
+    if (index === -1) return original.call(this);
+    return DOMRect.fromRect({ x: 0, y: index * 50, width: 400, height: 50 });
+  });
+}
+
+function pressKey(target: HTMLElement, code: string) {
+  fireEvent.keyDown(target, { code, key: code === "Space" ? " " : code });
+}
+
 afterEach(() => {
   prefersCoarse.value = false;
+  vi.restoreAllMocks();
   for (const observer of observers.splice(0)) observer.disconnect();
 });
 
@@ -123,6 +154,42 @@ describe("DraggableTrackList screen reader text", () => {
 
     await waitFor(() => {
       expect(announced).toContain("Picked up Alabaster.");
+    });
+  });
+
+  it("announces a keyboard drag returning to its own slot", async () => {
+    layOutRows();
+    renderList();
+    const announced = recordAnnouncements();
+
+    const [handle] = screen.getAllByRole("button", { name: "Drag to reorder" });
+    handle.focus();
+    pressKey(handle, "Space");
+    await waitFor(() => expect(announced.at(-1)).toMatch(/^Picked up Alabaster/));
+    pressKey(handle, "ArrowDown");
+    await waitFor(() => expect(announced.at(-1)).toBe("Alabaster is over Borrowed Light"));
+    pressKey(handle, "ArrowUp");
+
+    await waitFor(() => {
+      expect(announced.at(-1)).toBe("Alabaster is back in its original position");
+    });
+  });
+
+  it("says a track moved up landed before the one it was dropped on", async () => {
+    layOutRows();
+    renderList();
+    const announced = recordAnnouncements();
+
+    const handle = screen.getAllByRole("button", { name: "Drag to reorder" })[1];
+    handle.focus();
+    pressKey(handle, "Space");
+    await waitFor(() => expect(announced.at(-1)).toMatch(/^Picked up Borrowed Light/));
+    pressKey(handle, "ArrowUp");
+    await waitFor(() => expect(announced.at(-1)).toBe("Borrowed Light is over Alabaster"));
+    pressKey(handle, "Space");
+
+    await waitFor(() => {
+      expect(announced.at(-1)).toBe("Borrowed Light was moved before Alabaster");
     });
   });
 });
