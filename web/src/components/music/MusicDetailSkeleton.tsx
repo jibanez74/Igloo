@@ -1,3 +1,4 @@
+import { MusicDetailArtSkeleton } from "@/components/music/MusicDetailArt";
 import { MusicDetailBackdropSkeleton } from "@/components/music/MusicDetailBackdrop";
 import {
   LIBRARY_POSTER_GRID_CLASS,
@@ -49,15 +50,7 @@ function HeroSkeleton({ isMusician }: { isMusician: boolean }) {
 
       <div className={MUSIC_DETAIL_SHELL_CLASS} aria-hidden="true">
         <div className={MUSIC_DETAIL_HERO_ROW_CLASS}>
-          {isMusician ? (
-            <div className="mx-auto shrink-0 lg:mx-0">
-              <div className="aspect-square w-48 rounded-full bg-muted md:w-56 lg:w-64" />
-            </div>
-          ) : (
-            <div className="mx-auto shrink-0 lg:mx-0 lg:pt-1">
-              <div className="aspect-square w-44 rounded-xl bg-muted sm:w-52 md:w-64 lg:w-72" />
-            </div>
-          )}
+          <MusicDetailArtSkeleton variant={isMusician ? "musician" : "album"} />
 
           <div className="min-w-0 flex-1 space-y-4 text-center lg:text-left">
             <div className="mx-auto h-10 max-w-lg rounded-sm bg-muted lg:mx-0" />
@@ -138,9 +131,7 @@ function PlaylistSkeleton() {
   return (
     <div aria-hidden="true">
       <div className={MUSIC_DETAIL_HERO_ROW_CLASS}>
-        <div className="mx-auto shrink-0 lg:mx-0">
-          <div className="aspect-square w-40 rounded-xl bg-muted sm:w-48 lg:w-56 xl:w-64" />
-        </div>
+        <MusicDetailArtSkeleton variant="playlist" />
 
         <div className="min-w-0 flex-1 text-center lg:text-left">
           <div className="mx-auto h-8 max-w-lg rounded-sm bg-muted sm:h-9 md:h-10 lg:mx-0 lg:h-12" />

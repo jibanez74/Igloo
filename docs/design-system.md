@@ -781,7 +781,11 @@ a round thumb beside the title, over a decorative 21:9 band, rather than
 `DetailHero`'s poster — and share the music-specific parts in
 `components/music/`: `MusicDetailBackdrop` (the aria-hidden band, on
 `usePosterFallback`; its image, its fallback and the exported
-`MusicDetailBackdropSkeleton` share one band height), `MusicDetailSkeleton`
+`MusicDetailBackdropSkeleton` share one band height), `MusicDetailArt`
+(`variant="album" | "musician" | "playlist"`: the square cover or round photo
+beside the title on all three pages, with a labelled placeholder when there is
+no artwork, and the `MusicDetailArtSkeleton` that reads the same sizes),
+`MusicDetailSkeleton`
 (`variant="album" | "musician" | "playlist"`: the album and musician variants
 are one hero geometry with the art shape and hero rows switched; the playlist
 variant mirrors the playlist page instead, which has no backdrop band and no
@@ -842,14 +846,18 @@ is unknown or empty.
   fetchPriority="low"`, explicit `width`/`height`, `object-cover`, inside an
   aspect-ratio `bg-muted` box. Add responsive `sizes` on dense grids
   (see `AlbumCard`). Only the login backdrop uses
-  `loading="eager"`/`fetchPriority="high"`.
+  `loading="eager"`/`fetchPriority="high"`. A detail page's own hero art —
+  `DetailHero`'s poster, `MusicDetailArt`'s cover or photo — is that page's
+  largest above-the-fold image, so it keeps the explicit `width`/`height` but
+  drops `loading="lazy"`/`fetchPriority="low"`.
 - **Fallbacks, never broken images**: `onError` swaps to a centered muted
   lucide icon (Film / Disc / User) via the `usePosterFallback` hook (tracks
   the failed URL so a changed URL retries). Verified live on covers with
   missing art.
 - **Alt policy**: decorative images (a poster inside a link that already has
   an `aria-label`, backdrops) get `alt=""`/`aria-hidden`; informative images
-  get descriptive alt (`Album cover for {title}`, `Photo of {name}`).
+  get descriptive alt (`Album cover for {title}`, `Photo of {name}`,
+  `Playlist cover for {name}`).
 
 ### 3.4 UI states — loading, empty, error
 

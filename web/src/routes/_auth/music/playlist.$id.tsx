@@ -8,7 +8,6 @@ import {
   showActionFailed,
 } from "@/lib/toast-helpers";
 import {
-  ListMusic,
   Music,
   Clock,
   User,
@@ -24,6 +23,7 @@ import TrackItem from "@/components/music/TrackItem";
 import PlaylistFormDialog from "@/components/music/PlaylistFormDialog";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
 import DetailSkipLinks from "@/components/shared/DetailSkipLinks";
+import MusicDetailArt from "@/components/music/MusicDetailArt";
 import MusicDetailBackNav from "@/components/music/MusicDetailBackNav";
 import MusicDetailSkeleton from "@/components/music/MusicDetailSkeleton";
 import MediaDetailGuard from "@/components/shared/MediaDetailGuard";
@@ -41,7 +41,6 @@ import { unwrapString } from "@/lib/nullable";
 import { deletePlaylist, removeTrackFromPlaylist, reorderPlaylistTracks } from "@/lib/api";
 import { convertToAudioTrack, dedupeById } from "@/lib/audio-utils";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
-import { usePosterFallback } from "@/hooks/usePosterFallback";
 import { useTrackPlaybackMatcher } from "@/hooks/useTrackPlaybackMatcher";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { useVirtualizedInfiniteLoader } from "@/hooks/useVirtualizedInfiniteLoader";
@@ -174,9 +173,6 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
 
   const { playlist, track_count, duration, is_owner, can_edit } = data;
   const coverUrl = getMediaImageUrl(unwrapString(playlist.cover_image));
-  const { showPoster: showCover, onError: onCoverError } = usePosterFallback(
-    coverUrl ?? "",
-  );
   const description = unwrapString(playlist.description);
 
   // Infinite query for tracks
@@ -355,23 +351,11 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
 
       {/* Header section */}
       <header className={MUSIC_DETAIL_HERO_ROW_CLASS}>
-        {/* Playlist cover */}
-        <figure className="mx-auto shrink-0 lg:mx-0">
-          <div className="aspect-square w-40 overflow-hidden rounded-xl border border-primary/20 bg-muted shadow-2xl shadow-primary/10 sm:w-48 lg:w-56 xl:w-64">
-            {showCover ? (
-              <img
-                src={coverUrl ?? ""}
-                alt={playlist.name}
-                className="size-full object-cover"
-                onError={onCoverError}
-              />
-            ) : (
-              <div className="flex size-full items-center justify-center bg-linear-to-br from-muted via-muted to-primary/30">
-                <ListMusic className="size-16 text-primary/20" aria-hidden="true" />
-              </div>
-            )}
-          </div>
-        </figure>
+        <MusicDetailArt
+          variant="playlist"
+          src={coverUrl ?? ""}
+          name={playlist.name}
+        />
 
         {/* Playlist info */}
         <div className="flex max-w-full min-w-0 flex-1 flex-col overflow-hidden text-center lg:text-left">

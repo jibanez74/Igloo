@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import MediaDetailGuard from "@/components/shared/MediaDetailGuard";
 import DetailSkipLinks from "@/components/shared/DetailSkipLinks";
 import AlbumCard from "@/components/music/AlbumCard";
+import MusicDetailArt from "@/components/music/MusicDetailArt";
 import MusicDetailBackdrop from "@/components/music/MusicDetailBackdrop";
 import MusicDetailBackNav from "@/components/music/MusicDetailBackNav";
 import MusicDetailSkeleton from "@/components/music/MusicDetailSkeleton";
@@ -28,7 +29,6 @@ import {
 } from "@/components/music/SpotifyPopularity";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useTrackPlaybackMatcher } from "@/hooks/useTrackPlaybackMatcher";
-import { usePosterFallback } from "@/hooks/usePosterFallback";
 import TrackItem from "@/components/music/TrackItem";
 import { formatDuration, pluralize } from "@/lib/format";
 import { convertToAudioTrack } from "@/lib/audio-utils";
@@ -141,8 +141,6 @@ function MusicianDetailsContent({
   const matchTrackPlayback = useTrackPlaybackMatcher();
 
   const thumbUrl = getMediaImageUrl(unwrapString(musician.thumb)) ?? "";
-  const { showPoster: showThumb, onError: onThumbError } =
-    usePosterFallback(thumbUrl);
   const summary = unwrapString(musician.summary);
   const spotifyPopularity = unwrapFloat(musician.spotify_popularity);
   const spotifyFollowers = unwrapInt(musician.spotify_followers);
@@ -243,33 +241,11 @@ function MusicianDetailsContent({
         >
           {/* Header section */}
           <header className={MUSIC_DETAIL_HERO_ROW_CLASS}>
-            {/* Musician thumbnail */}
-            <figure className="mx-auto shrink-0 lg:mx-0">
-              <div className="aspect-square w-48 overflow-hidden rounded-full border border-primary/20 shadow-2xl shadow-primary/10 md:w-56 lg:w-64">
-                {showThumb ? (
-                  <img
-                    src={thumbUrl}
-                    alt={musician.name}
-                    loading="lazy"
-                    decoding="async"
-                    fetchPriority="low"
-                    className="size-full object-cover"
-                    onError={onThumbError}
-                  />
-                ) : (
-                  <div
-                    className="flex size-full items-center justify-center bg-muted"
-                    role="img"
-                    aria-label="No image available"
-                  >
-                    <User
-                      className="size-16 text-muted-foreground"
-                      aria-hidden="true"
-                    />
-                  </div>
-                )}
-              </div>
-            </figure>
+            <MusicDetailArt
+              variant="musician"
+              src={thumbUrl}
+              name={musician.name}
+            />
 
             {/* Musician info */}
             <div className="flex min-w-0 flex-1 flex-col text-center lg:text-left">

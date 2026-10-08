@@ -55,7 +55,7 @@ import MediaDetailGuard from "@/components/shared/MediaDetailGuard";
 import MusicDetailBackdrop from "@/components/music/MusicDetailBackdrop";
 import MusicDetailBackNav from "@/components/music/MusicDetailBackNav";
 import MusicDetailSkeleton from "@/components/music/MusicDetailSkeleton";
-import AlbumDetailsCoverBlock from "@/components/music/AlbumDetailsCoverBlock";
+import MusicDetailArt from "@/components/music/MusicDetailArt";
 import DetailSkipLinks from "@/components/shared/DetailSkipLinks";
 import { SpotifyPopularityMeter } from "@/components/music/SpotifyPopularity";
 import {
@@ -319,9 +319,10 @@ function AlbumDetailsContent({
           )}
         >
           <div className={MUSIC_DETAIL_HERO_ROW_CLASS}>
-            <AlbumDetailsCoverBlock
-              coverUrl={coverUrl}
-              albumTitle={album.title}
+            <MusicDetailArt
+              variant="album"
+              src={coverUrl ?? ""}
+              name={album.title}
             />
 
             <div className="min-w-0 flex-1 text-center lg:text-left">
