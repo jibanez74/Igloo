@@ -89,8 +89,9 @@ async function expectNewIntegrationControls(page: Page) {
   await expect(
     page.getByRole("button", { name: "Show Immich API key" }),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Reset" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Save Settings" })).toBeVisible();
+  // Both wait, disabled, until something changes.
+  await expect(page.getByRole("button", { name: "Reset" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Save Settings" })).toBeDisabled();
 }
 
 async function expectScreenReaderSupport(page: Page) {

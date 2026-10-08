@@ -17,6 +17,11 @@ type ProgressBarVariant =
 type ProgressBarProps = {
   currentTime: number;
   duration: number;
+  /**
+   * Duration for the readouts when it is known before the element reports
+   * one (the catalog length of an HLS stream). Seek geometry keeps `duration`.
+   */
+  displayedDuration?: number;
   onSeek: (newTime: number) => void;
   variant: ProgressBarVariant;
   ariaLabel?: string;
@@ -97,6 +102,7 @@ function clampToRange(value: number, min: number, max: number) {
 export default function ProgressBar({
   currentTime,
   duration,
+  displayedDuration,
   onSeek,
   variant,
   ariaLabel = "Seek through track",
@@ -225,11 +231,24 @@ export default function ProgressBar({
     </div>
   );
 
-  const showHours = safeDuration >= 3600;
-  const currentTimeLabel = formatTimecode(safeCurrentTime, {
+  const labelDuration =
+    displayedDuration != null &&
+    Number.isFinite(displayedDuration) &&
+    displayedDuration > 0
+      ? displayedDuration
+      : safeDuration;
+  // The readout follows the playhead even before the element can seek (an
+  // HLS stream labelled with its catalog length), so it never sits at 0:00
+  // while playback moves. It is not capped at the label: a stream can run
+  // past its catalog length.
+  const readoutTime = isSeekable
+    ? safeCurrentTime
+    : clampToRange(currentTime, 0, Number.POSITIVE_INFINITY);
+  const showHours = labelDuration >= 3600;
+  const currentTimeLabel = formatTimecode(readoutTime, {
     forceHours: showHours,
   });
-  const durationLabel = formatTimecode(safeDuration);
+  const durationLabel = formatTimecode(labelDuration);
 
   if (styles.timesLayout === "inline") {
     return (
@@ -258,16 +277,18 @@ export default function ProgressBar({
       {slider}
       {styles.showTimes && (
         <div
-          className={
-            variant === "mobile"
-              ? "mt-1 flex justify-between"
-              : "mt-2 flex justify-between"
-          }
+          className={cn(
+            "flex justify-between",
+            variant === "mobile" ? "mt-1" : "mt-2",
+            // The video player's transport row carries the readout from `sm`
+            // up; below it there is no room there, so the bar shows it.
+            variant === "video" && "sm:hidden",
+          )}
         >
-          <span className={styles.timeText} aria-hidden="true">
+          <span className={styles.timeText} aria-hidden={variant !== "video"}>
             {currentTimeLabel}
           </span>
-          <span className={styles.timeText} aria-hidden="true">
+          <span className={styles.timeText} aria-hidden={variant !== "video"}>
             {durationLabel}
           </span>
         </div>

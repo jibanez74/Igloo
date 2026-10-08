@@ -3,6 +3,9 @@ import {
   ALBUMS_PAGINATED_KEY,
   ALBUMS_PER_PAGE,
   AUDIO_VOLUME_STEP,
+  DIALOG_SCROLL_BODY_CLASS,
+  DIALOG_SCROLL_CONTENT_CLASS,
+  DIALOG_SCROLL_HEADER_CLASS,
   FOCUS_VISIBLE_RING_CLASS,
   HOME_ALBUM_GRID_CLASS,
   HOME_POSTER_GRID_CLASS,
@@ -21,6 +24,10 @@ import {
   PLAYER_PRIMARY_BUTTON_CLASS,
   PLAYER_TRANSPORT_INERT_CLASS,
   PLAYLIST_TRACKS_KEY,
+  SCROLL_RAIL_ARROW_CLASS,
+  SCROLL_RAIL_BLEED_CLASS,
+  SCROLL_RAIL_EDGE_CLASS,
+  SCROLL_RAIL_SCROLLER_CLASS,
   PLAYLIST_TRACKS_PAGE_SIZE,
   SEARCH_MOVIES_KEY,
   SEARCH_PER_PAGE,
@@ -73,6 +80,39 @@ describe("constants contracts", () => {
     );
     expect(AUDIO_VOLUME_STEP).toBe(0.1);
     expect(AUDIO_VOLUME_STEP).toBe(MOVIE_VOLUME_STEP);
+  });
+
+  it("keeps rails on the shell bleed with hover/focus-parity arrows (design-system §3.2)", () => {
+    expect(SCROLL_RAIL_BLEED_CLASS).toContain("-mx-4 sm:-mx-6 lg:-mx-8");
+    expect(SCROLL_RAIL_BLEED_CLASS).toContain("group/rail");
+    expect(SCROLL_RAIL_SCROLLER_CLASS).toContain("overflow-x-auto");
+    for (const cls of ["px-4", "sm:px-6", "lg:px-8"]) {
+      expect(SCROLL_RAIL_SCROLLER_CLASS.split(" ")).toContain(cls);
+    }
+    expect(SCROLL_RAIL_EDGE_CLASS).toContain("pointer-events-none");
+    expect(SCROLL_RAIL_ARROW_CLASS).toContain("group-hover/rail:opacity-100");
+    expect(SCROLL_RAIL_ARROW_CLASS).toContain("group-focus-within/rail:opacity-100");
+    expect(SCROLL_RAIL_ARROW_CLASS).toContain("motion-reduce:transition-none");
+    // The exhausted arrow stays focusable (aria-disabled, never disabled) and
+    // dims only while the rail is hovered or focused: a plain aria-disabled
+    // opacity would outrank the hidden state and show the arrow at rest.
+    expect(SCROLL_RAIL_ARROW_CLASS).not.toMatch(/(^|\s)aria-disabled:opacity-/);
+    expect(SCROLL_RAIL_ARROW_CLASS).toContain("aria-disabled:group-hover/rail:opacity-30");
+    expect(SCROLL_RAIL_ARROW_CLASS).toContain("aria-disabled:cursor-not-allowed");
+    // Snap rails align to the padded edge, or mandatory snapping scrolls the
+    // first item in by the padding and lights the start fade on load.
+    expect(SCROLL_RAIL_SCROLLER_CLASS).toContain("scroll-px-4");
+  });
+
+  it("keeps the scrolling-dialog recipe capped with a fixed header and a scrolling body", () => {
+    // The content box caps and does not scroll itself, so the absolute close
+    // button stays off the scrollbar; only the body scrolls.
+    expect(DIALOG_SCROLL_CONTENT_CLASS).toContain("max-h-[calc(100svh-2rem)]");
+    expect(DIALOG_SCROLL_CONTENT_CLASS).toContain("flex-col");
+    expect(DIALOG_SCROLL_CONTENT_CLASS).not.toContain("overflow");
+    expect(DIALOG_SCROLL_HEADER_CLASS).toContain("shrink-0");
+    expect(DIALOG_SCROLL_BODY_CLASS).toContain("overflow-y-auto");
+    expect(DIALOG_SCROLL_BODY_CLASS).toContain("min-h-0");
   });
 
   it("keeps home grids on auto-fill so sparse sections don't stretch (design-system §3.2)", () => {

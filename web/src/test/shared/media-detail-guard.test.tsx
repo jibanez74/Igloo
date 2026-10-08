@@ -60,6 +60,25 @@ describe("MediaDetailGuard", () => {
     );
   });
 
+  // apiRequest answers every 404 with "404 - The resource you requested was
+  // not found."; the reader should see a sentence about their subject instead.
+  it("words a 404 as the subject being missing, not the client's status string", () => {
+    renderGuard({
+      isError: false,
+      data: {
+        error: true,
+        message: "404 - The resource you requested was not found.",
+        status: 404,
+      },
+      payload: null,
+    });
+
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("Not found");
+    expect(alert).toHaveTextContent("We couldn't find that album.");
+    expect(alert).not.toHaveTextContent("404");
+  });
+
   it("falls back to its own wording when the failure carried no message", () => {
     renderGuard({ isError: true, data: undefined, payload: null });
 

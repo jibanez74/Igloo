@@ -91,6 +91,8 @@ type VideoPlaybackPageProps = {
   onBackFallback: () => void;
   title: string;
   artworkUrl: string | null;
+  /** Backdrop or still for the video frame before playback starts. */
+  posterUrl: string | null;
   headerIcon: ComponentType<LucideProps>;
   /** The media's own header query is still loading. */
   detailsPending: boolean;
@@ -115,6 +117,7 @@ export default function VideoPlaybackPage({
   onBackFallback,
   title,
   artworkUrl,
+  posterUrl,
   headerIcon: HeaderIcon,
   detailsPending,
   notFound,
@@ -802,6 +805,7 @@ export default function VideoPlaybackPage({
       isHlsSource={isHlsPlayback}
       carriedPlayRef={carriedPlayRef}
       title={title}
+      posterUrl={posterUrl}
       isFullscreen={chromeFullscreenMode}
       onError={(msg) => {
         if (fallbackConsumedErrorRef.current) {

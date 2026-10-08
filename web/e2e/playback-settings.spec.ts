@@ -174,14 +174,20 @@ test.describe("Playback settings", () => {
         page,
         page.getByRole("combobox", { name: "Hardware acceleration" }),
       );
+      // Nothing to save or reset yet, so both are disabled and Tab skips them.
+      await expect(page.getByRole("button", { name: "Reset" })).toBeDisabled();
+      await expect(
+        page.getByRole("button", { name: "Save Settings" }),
+      ).toBeDisabled();
+
+      await downloadInput.fill("100");
+      await serverInput.fill("5");
+      await page.getByRole("combobox", { name: "Hardware acceleration" }).focus();
       await expectTabMovesFocus(page, page.getByRole("button", { name: "Reset" }));
       await expectTabMovesFocus(
         page,
         page.getByRole("button", { name: "Save Settings" }),
       );
-
-      await downloadInput.fill("100");
-      await serverInput.fill("5");
       // The recommendation tracks the download speed immediately; the server
       // cap only counts once it is actually saved, below.
       await expect(page.getByText("Recommended: 2160p · 16 Mbps")).toBeVisible();

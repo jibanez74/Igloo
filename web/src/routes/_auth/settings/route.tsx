@@ -102,18 +102,24 @@ function SettingsLayout() {
     });
   };
 
+  // Five tabs: two columns on a phone (the odd one spanning both), then from
+  // `@md` five equal tabs filling the content width, and only from `@2xl` the
+  // library pages' fit-to-content card. A 2+2+1 card beside empty space at
+  // tablet width read as orphaned.
   const isCompactLayout = visibleTabs.length <= 2;
   const tabsListClassName = isCompactLayout
     ? cn(LIBRARY_TABS_LIST_CLASS, "grid-cols-2")
     : cn(
         LIBRARY_TABS_LIST_CLASS,
-        "grid-cols-2 @lg:grid-cols-3 @2xl:grid-cols-5",
+        "grid-cols-2 sm:w-full @md:grid-cols-5 @2xl:w-fit",
       );
   const tabsTriggerClassName = isCompactLayout
     ? LIBRARY_TAB_TRIGGER_CLASS
     : cn(
         LIBRARY_TAB_TRIGGER_CLASS,
-        "last:col-span-2 @2xl:last:col-span-1",
+        // Five labelled tabs fit a 28rem container only with the tighter
+        // padding; the library padding returns with the fit-to-content card.
+        "last:col-span-2 @md:px-1.5 @md:last:col-span-1 @2xl:px-4",
       );
 
   return (
@@ -140,8 +146,10 @@ function SettingsLayout() {
                 value={tab.id}
                 className={tabsTriggerClassName}
               >
+                {/* The trigger's own gap spaces the icon, as on the library
+                    tabs; a margin on top of it doubled the gap. */}
                 <Icon
-                  className="mr-1.5 size-4 shrink-0 max-[360px]:hidden sm:mr-2"
+                  className="size-4 shrink-0 max-[360px]:hidden"
                   aria-hidden="true"
                 />
                 {tab.label}

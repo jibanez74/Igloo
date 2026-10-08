@@ -1,7 +1,11 @@
 import { screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import TechnicalDetailsDialog from "@/components/movies/TechnicalDetailsDialog";
-import { MOVIE_TECHNICAL_DETAILS_KEY } from "@/lib/constants";
+import {
+  DIALOG_SCROLL_BODY_CLASS,
+  DIALOG_SCROLL_CONTENT_CLASS,
+  MOVIE_TECHNICAL_DETAILS_KEY,
+} from "@/lib/constants";
 import type {
   ApiResponseType,
   MovieTechnicalDetailsResponse,
@@ -57,6 +61,29 @@ describe("TechnicalDetailsDialog", () => {
     ).not.toBeInTheDocument();
     expect(screen.getByText("Exact duration (ffprobe)")).toBeInTheDocument();
     expect(screen.getByText("6960.00 s")).toBeInTheDocument();
+  });
+
+  // Focus is moved to the title by the dialog, not by the reader, so it must
+  // not ring (design-system §1.7); and the content box caps while only the
+  // body scrolls, so the close button never sits on the scrollbar track.
+  it("focuses the heading without a ring and scrolls only its body", async () => {
+    renderDialog(116);
+
+    const title = screen.getByRole("heading", { name: "Technical details" });
+    await vi.waitFor(() => expect(title).toHaveFocus());
+    expect(title).toHaveClass("outline-hidden");
+    expect(title.className).not.toMatch(/ring-/);
+
+    const content = screen.getByRole("dialog");
+    for (const cls of DIALOG_SCROLL_CONTENT_CLASS.split(" ")) {
+      expect(content).toHaveClass(cls);
+    }
+    const body = screen.getByText("Exact duration (ffprobe)").closest(
+      `.${DIALOG_SCROLL_BODY_CLASS.split(" ").join(".")}`,
+    );
+    expect(body).not.toBeNull();
+    expect(body).not.toContainElement(title);
+    expect(body).not.toContainElement(screen.getByRole("button", { name: "Close" }));
   });
 
   it("renders rounded duration when runtime is displayable", () => {

@@ -196,10 +196,10 @@ describe("login route head", () => {
 });
 
 describe("login route redirects", () => {
-  it("submits an oversized password intact and displays the credential error", async () => {
+  it("submits an oversized password intact and words the credential error itself", async () => {
     const user = userEvent.setup();
     const { fetchMock } = await renderLoginRouteTree("/login", {
-      loginResponse: { body: { error: true, message: "Invalid credentials" }, status: 401 },
+      loginResponse: { body: { error: true, message: "invalid email or password provided" }, status: 401 },
     });
     await screen.findByRole("button", { name: "Sign in" });
     const input = screen.getByLabelText("Password", { exact: true });
@@ -208,7 +208,7 @@ describe("login route redirects", () => {
     await user.type(screen.getByLabelText("Email"), "admin@example.com");
     await user.type(input, password);
     await user.click(screen.getByRole("button", { name: "Sign in" }));
-    await waitFor(() => expect(toastMocks.showError).toHaveBeenCalledWith("Login failed", "Invalid credentials"));
+    await waitFor(() => expect(toastMocks.showError).toHaveBeenCalledWith("Login failed", "The email or password is incorrect."));
     const request = fetchMock.mock.calls.find(([url]) => requestURL(url) === "/api/auth/login");
     expect(JSON.parse(request![1]!.body as string)).toEqual({ email: "admin@example.com", password });
   });

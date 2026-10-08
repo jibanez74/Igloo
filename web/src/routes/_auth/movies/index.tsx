@@ -21,6 +21,7 @@ import CreateMoviePlaylistDialog from "@/components/movies/CreateMoviePlaylistDi
 import MovieCard from "@/components/movies/MovieCard";
 import MoviePlaylistCard from "@/components/movies/MoviePlaylistCard";
 import LibraryAllTab from "@/components/shared/LibraryAllTab";
+import LibraryEmptyState from "@/components/shared/LibraryEmptyState";
 import LibraryGenresTab from "@/components/shared/LibraryGenresTab";
 import LibraryMoreMenu, {
   RequestMediaMenuItem,
@@ -645,7 +646,10 @@ function PlaylistsTabContent({
       </div>
 
       {playlists.length === 0 ? (
-        <EmptyMoviePlaylistsState onCreate={handleCreateOpen} />
+        <LibraryEmptyState
+          icon={ListVideo}
+          message="No movie playlists yet. Use New playlist to group films."
+        />
       ) : (
         <div className={MUSIC_CARD_GRID_CLASS}>
           {playlists.map(p => (
@@ -782,38 +786,3 @@ function PlaylistsTabSkeleton() {
   );
 }
 
-type EmptyMoviePlaylistsStateProps = {
-  onCreate: (event: MouseEvent<HTMLButtonElement>) => void;
-};
-
-function EmptyMoviePlaylistsState({ onCreate }: EmptyMoviePlaylistsStateProps) {
-  return (
-    <div className="flex flex-col items-center justify-center py-12 text-center sm:py-16">
-      <div className="mb-5 flex size-20 items-center justify-center rounded-full bg-linear-to-br from-muted via-muted to-primary/30 shadow-lg shadow-primary/5 sm:size-24">
-        <ListVideo
-          className="size-8 text-primary/40 sm:size-10"
-          aria-hidden="true"
-        />
-      </div>
-      <h3 className="mb-2 text-xl font-semibold text-foreground">
-        No movie playlists yet
-      </h3>
-      <p className="mb-5 max-w-sm text-muted-foreground sm:mb-6">
-        Create a playlist to group films. Music playlists stay on the Music
-        page.
-      </p>
-      <button
-        type="button"
-        onClick={onCreate}
-        className={cn(
-          "inline-flex min-h-11 items-center gap-2 rounded-full bg-primary px-5 py-2.5 font-semibold text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 sm:px-6 sm:py-3",
-          MOTION_MICRO_CONTROL_CLASS,
-          FOCUS_VISIBLE_RING_CLASS,
-        )}
-      >
-        <Plus className="size-4" aria-hidden="true" />
-        Create your first playlist
-      </button>
-    </div>
-  );
-}

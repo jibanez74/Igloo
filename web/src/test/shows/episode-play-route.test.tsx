@@ -225,6 +225,11 @@ describe("episode play route", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "Frost Harbor · S1 E3 · The Thaw" }),
     ).toBeInTheDocument();
+    // The episode still fills the frame until playback paints its first frame.
+    expect(document.querySelector("video")).toHaveAttribute(
+      "poster",
+      "/api/tmdb/images/w500/still.jpg",
+    );
     expect(router.state.location.pathname).toBe(
       `/tv-shows/${SHOW_ID}/episodes/${EPISODE_ID}/play`,
     );

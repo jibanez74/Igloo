@@ -184,7 +184,9 @@ export default function MovieDetailsHeroActions({
   });
 
   return (
-    <div className="mt-6 flex flex-wrap items-center justify-center gap-2 sm:gap-3 lg:justify-start">
+    // Below `sm` the four actions are a 2x2 grid, so none of them can wrap
+    // onto a lonely third row or clip at the edge (design-system §3.2).
+    <div className="mt-6 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-center sm:gap-3 lg:justify-start">
       <Link
         ref={playButtonRef}
         to="/movies/$id/play"
@@ -192,7 +194,7 @@ export default function MovieDetailsHeroActions({
         search={playbackSettingsToPlaySearch(playbackSettings)}
         className={cn(
           buttonVariants({ variant: "accent", size: "lg" }),
-          "min-h-11 flex-1 touch-manipulation sm:flex-none",
+          "min-h-11 touch-manipulation",
         )}
       >
         <Play className="size-4 fill-current" aria-hidden="true" />
@@ -208,7 +210,7 @@ export default function MovieDetailsHeroActions({
         disabled={watchedMutation.isPending || watchProgressLoading}
         className={cn(
           buttonVariants({ variant: "outline", size: "lg" }),
-          "min-h-11 flex-1 touch-manipulation px-3 font-semibold sm:flex-none sm:px-6",
+          "min-h-11 touch-manipulation px-3 font-semibold sm:px-6",
         )}
         aria-label={isWatched ? "Mark movie as unwatched" : "Mark movie as watched"}
         aria-pressed={isWatched}
@@ -225,11 +227,7 @@ export default function MovieDetailsHeroActions({
           <Spinner className="size-4 text-success!" aria-hidden="true" />
         )}
       </button>
-      <MovieLikeButton
-        movieId={movieId}
-        variant="hero"
-        className="flex-1 sm:flex-none"
-      />
+      <MovieLikeButton movieId={movieId} variant="hero" />
       <DropdownMenu>
         <DropdownMenuTrigger
           ref={moreOptionsButtonRef}
@@ -243,6 +241,7 @@ export default function MovieDetailsHeroActions({
           onPointerEnter={preloadMoreOptionsDialogs}
         >
           <MoreVertical className="size-4" aria-hidden="true" />
+          <span className="sm:hidden">More</span>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
           <DropdownMenuItem

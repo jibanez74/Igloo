@@ -15,6 +15,10 @@ import {
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
+
+// Shared by the card and its skeleton so the two never drift apart.
+const POSTER_SCRIM_CLASS =
+  "absolute inset-x-0 bottom-0 h-[60%] bg-linear-to-t from-black via-black/90 via-50% to-transparent";
 export type PosterCardWatchProgress = {
   progressSec: number;
   durationSec: number;
@@ -129,8 +133,10 @@ export default function PosterCard({
               />
             )}
             {badge}
-            {/* Gradient overlay for text readability */}
-            <div className="absolute inset-x-0 bottom-0 h-28 bg-linear-to-t from-black/90 via-black/50 to-transparent" />
+            {/* Scrim for the title block: starts near the middle of the card
+                and is near-opaque behind the text, so a two-line title never
+                lands on the poster's own lettering (design-system §3.2). */}
+            <div className={POSTER_SCRIM_CLASS} />
             {/* Watch progress bar - percent is announced via the link label */}
             {hasProgress && (
               <WatchProgressBar
@@ -187,7 +193,7 @@ export function PosterCardSkeleton() {
       )}
     >
       <div className="relative aspect-2/3 bg-muted">
-        <div className="absolute inset-x-0 bottom-0 h-28 bg-linear-to-t from-black/90 via-black/50 to-transparent" />
+        <div className={POSTER_SCRIM_CLASS} />
         <div className="absolute inset-x-0 bottom-0 p-3">
           <div className="h-4 w-3/4 rounded-sm bg-white/25" />
           <div className="mt-2 h-3 w-1/2 rounded-sm bg-white/20" />

@@ -26,6 +26,9 @@ export default function DetailTitleHeading({
       )}
     >
       <span className="min-w-0">{title}</span>
+      {/* Flex drops the space visually; it keeps "Gladiator (2000)" from being
+          read as one word. */}
+      {year != null && " "}
       {year != null && (
         <span className="shrink-0 font-normal text-white/80 sm:text-3xl lg:text-4xl xl:text-5xl">
           (<time dateTime={dateTime ?? undefined}>{year}</time>)

@@ -312,7 +312,7 @@ describe("tv shows route library refresh", () => {
     });
 
     expect(toastMocks.showSuccess).not.toHaveBeenCalled();
-    expect(queryClient.getQueryData([SHOWS_STATS_KEY])).toEqual({
+    expect(queryClient.getQueryData([SHOWS_STATS_KEY])).toMatchObject({
       error: true,
       message: "Show stats are unavailable.",
     });

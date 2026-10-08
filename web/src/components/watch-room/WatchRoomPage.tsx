@@ -263,12 +263,20 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
   }
 
   if (isError || (data && data.error) || !room) {
+    // A room the server refuses (403 "access denied") or cannot find (404)
+    // reads the same to the viewer: it is gone or was never theirs.
+    const unreachable =
+      data?.error && (data.status === 403 || data.status === 404);
     return (
       <WatchRoomUnavailable
-        message={apiErrorMessage(
-          data,
-          "This watch room could not be loaded or you do not have access to it.",
-        )}
+        message={
+          unreachable
+            ? "This room no longer exists or you were not invited."
+            : apiErrorMessage(
+                data,
+                "This watch room could not be loaded or you do not have access to it.",
+              )
+        }
         onBackHome={() => navigate({ to: "/" })}
       />
     );

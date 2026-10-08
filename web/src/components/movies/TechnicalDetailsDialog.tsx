@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { movieTechnicalDetailsQueryOpts } from "@/lib/query-opts";
 import { unwrapString, unwrapInt, unwrapFloat } from "@/lib/nullable";
 import { formatBitRate, formatRuntimeMinutes } from "@/lib/format";
-import { FOCUS_VISIBLE_RING_CLASS } from "@/lib/constants";
+import { DIALOG_SCROLL_BODY_CLASS, DIALOG_SCROLL_CONTENT_CLASS, DIALOG_SCROLL_HEADER_CLASS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type {
   VideoStreamType,
@@ -243,7 +243,10 @@ export default function TechnicalDetailsDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-h-[85vh] overflow-y-auto border-border bg-card sm:max-w-2xl"
+        className={cn(
+          DIALOG_SCROLL_CONTENT_CLASS,
+          "border-border bg-card sm:max-w-2xl",
+        )}
         onOpenAutoFocus={handleOpenAutoFocus}
         onCloseAutoFocus={
           restoreFocusRef
@@ -254,12 +257,14 @@ export default function TechnicalDetailsDialog({
             : undefined
         }
       >
-        <DialogHeader>
+        <DialogHeader className={DIALOG_SCROLL_HEADER_CLASS}>
+          {/* Focus lands here programmatically on open, so no ring: the
+              reader did not navigate to it (design-system §1.7). */}
           <DialogTitle
             ref={titleRef}
             id="technical-details-dialog-title"
             tabIndex={-1}
-            className={cn("text-foreground outline-hidden", FOCUS_VISIBLE_RING_CLASS)}
+            className="text-foreground outline-hidden"
           >
             Technical details
           </DialogTitle>
@@ -269,6 +274,8 @@ export default function TechnicalDetailsDialog({
             the container format. Use headings to move between sections.
           </DialogDescription>
         </DialogHeader>
+
+        <div className={DIALOG_SCROLL_BODY_CLASS}>
 
         {isPending && (
           <div className="flex justify-center py-8" role="status" aria-live="polite">
@@ -405,6 +412,7 @@ export default function TechnicalDetailsDialog({
               )}
           </div>
         )}
+        </div>
       </DialogContent>
     </Dialog>
   );

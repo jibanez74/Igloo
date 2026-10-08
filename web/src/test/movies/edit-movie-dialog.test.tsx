@@ -343,6 +343,14 @@ describe("EditMovieDialog", () => {
     await waitFor(() => {
       expect(titleInput).toHaveFocus();
     });
+    // The prefilled title is selected from its end back to its start, so the
+    // field shows the beginning of a long title instead of its tail.
+    expect(titleInput).toHaveProperty("selectionStart", 0);
+    expect(titleInput).toHaveProperty(
+      "selectionEnd",
+      (titleInput as HTMLInputElement).value.length,
+    );
+    expect(titleInput).toHaveProperty("selectionDirection", "backward");
     expect(applyButton).toBeDisabled();
 
     await user.click(screen.getByRole("button", { name: "Search TMDB" }));

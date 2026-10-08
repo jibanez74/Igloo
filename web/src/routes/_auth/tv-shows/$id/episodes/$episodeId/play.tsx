@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { Tv } from "lucide-react";
 import VideoPlaybackPage from "@/components/playback/VideoPlaybackPage";
-import { TMDB_POSTER_SIZE } from "@/lib/constants";
+import { TMDB_BACKDROP_SIZE, TMDB_POSTER_SIZE, TMDB_STILL_SIZE } from "@/lib/constants";
 import { episodeUpNextPresentation } from "@/lib/episode-playback";
 import { episodeTitle } from "@/lib/format";
 import { episodeMediaRef } from "@/lib/media-ref";
@@ -152,6 +152,18 @@ function PlayEpisodePage() {
           ? buildTmdbImageUrl(
               unwrapString(payload.show.poster_path),
               TMDB_POSTER_SIZE,
+            )
+          : null
+      }
+      posterUrl={
+        payload
+          ? buildTmdbImageUrl(
+              unwrapString(payload.episode.still_path),
+              TMDB_STILL_SIZE,
+            ) ||
+            buildTmdbImageUrl(
+              unwrapString(payload.show.backdrop_path),
+              TMDB_BACKDROP_SIZE,
             )
           : null
       }

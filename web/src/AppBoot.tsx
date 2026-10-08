@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/sonner";
-import { SPLASH_REMOVE_DELAY_MS } from "@/lib/constants";
+import { dismissBootSplash } from "@/lib/boot-splash";
 import { applyTheme, getStoredTheme } from "@/lib/theme";
 import App from "./App";
 import { AudioPlayerProvider } from "./context/AudioPlayerContext";
@@ -11,24 +11,11 @@ type AppBootProps = {
 };
 
 export default function AppBoot({ queryClient }: AppBootProps) {
+  // No cleanup on purpose: the splash must go once React has painted, and a
+  // StrictMode or HMR remount in the fade window must not cancel that.
   useEffect(() => {
-    const root = document.documentElement;
-    const splash = document.getElementById("initial-splash");
-
     applyTheme(getStoredTheme());
-    root.setAttribute("data-app-ready", "true");
-
-    if (!splash) {
-      return;
-    }
-
-    const removeSplash = window.setTimeout(() => {
-      splash.remove();
-    }, SPLASH_REMOVE_DELAY_MS);
-
-    return () => {
-      window.clearTimeout(removeSplash);
-    };
+    dismissBootSplash();
   }, []);
 
   return (

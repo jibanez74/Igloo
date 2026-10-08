@@ -988,6 +988,40 @@ describe("WatchRoomPageContent", () => {
     expect(navigateMock).toHaveBeenCalledWith({ to: "/", replace: true });
   });
 
+  // The server answers a room the viewer may not see with a lowercase
+  // "access denied" and a 403; a missing one is the client's 404 string.
+  it.each([
+    [403, "access denied"],
+    [404, "404 - The resource you requested was not found."],
+  ])("words a %i on the room query as gone or not invited", async (status, message) => {
+    useQueryMock.mockImplementation(() => ({
+      data: { error: true, message, status },
+      isPending: false,
+      isError: false,
+    }));
+
+    renderWithQueryClient(<WatchRoomPageContent roomId={7} />);
+
+    expect(screen.getByText("Watch room unavailable")).toBeInTheDocument();
+    expect(
+      screen.getByText("This room no longer exists or you were not invited."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(message)).not.toBeInTheDocument();
+    expect(joinWatchRoomMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps the server's message for any other room failure", async () => {
+    useQueryMock.mockImplementation(() => ({
+      data: { error: true, message: "The room is being rebuilt.", status: 500 },
+      isPending: false,
+      isError: false,
+    }));
+
+    renderWithQueryClient(<WatchRoomPageContent roomId={7} />);
+
+    expect(screen.getByText("The room is being rebuilt.")).toBeInTheDocument();
+  });
+
   it("shows a controlled error when joining the room throws", async () => {
     useQueryMock.mockImplementation(() => ({
       data: {

@@ -26,6 +26,12 @@ import { apiErrorMessage, isApiFailure } from "@/lib/is-api-failure";
 import { scrollWindowToTop } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
+
+// One chip geometry whether or not a genre is selected: the grid used to swap
+// from tall cards to compact chips on selection and re-flow every chip.
+const GENRE_CHIP_GRID_CLASS =
+  "mb-5 grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7";
+const GENRE_CHIP_HEIGHT_CLASS = "min-h-14";
 /** One genre chip: the page maps its API row (movie_count, show_count, …) onto `count`. */
 export type LibraryGenre = {
   genre_id: number;
@@ -182,14 +188,7 @@ export default function LibraryGenresTab<
 
   return (
     <div>
-      <ul
-        className={
-          hasSelectedGenre
-            ? "mb-5 grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7"
-            : "mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
-        }
-        aria-label={genresListLabel}
-      >
+      <ul className={GENRE_CHIP_GRID_CLASS} aria-label={genresListLabel}>
         {genres.map(g => {
           const selected = genreId === g.genre_id;
           return (
@@ -208,10 +207,10 @@ export default function LibraryGenresTab<
                 }}
                 onClick={() => onSelectGenre(g.genre_id)}
                 className={cn(
-                  "flex w-full min-w-0 flex-col justify-between rounded-lg border text-left",
+                  "flex w-full min-w-0 flex-col justify-between rounded-lg border p-2 text-left",
+                  GENRE_CHIP_HEIGHT_CLASS,
                   MOTION_MICRO_CONTROL_CLASS,
                   FOCUS_VISIBLE_RING_CLASS,
-                  hasSelectedGenre ? "min-h-14 p-2" : "min-h-20 p-3",
                   selected
                     ? "border-primary bg-primary text-primary-foreground shadow-lg shadow-primary/15"
                     : "border-border bg-muted/70 text-foreground hover:border-primary/40 hover:bg-muted",
@@ -222,9 +221,10 @@ export default function LibraryGenresTab<
                   {g.genre_tag}
                 </span>
                 <span
-                  className={`${hasSelectedGenre ? "mt-1" : "mt-3"} text-xs ${
-                    selected ? "text-primary-foreground/70" : "text-muted-foreground"
-                  }`}
+                  className={cn(
+                    "mt-1 text-xs",
+                    selected ? "text-primary-foreground/70" : "text-muted-foreground",
+                  )}
                 >
                   {g.count} {nounForCount(g.count, noun)}
                 </span>
@@ -304,16 +304,17 @@ export default function LibraryGenresTab<
   );
 }
 
-// Mirrors the unselected genre-chip grid above: ten chip-sized boxes.
+// Mirrors the genre-chip grid above: ten chip-sized boxes.
 export function LibraryGenresTabSkeleton() {
   return (
     <div>
-      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+      <div className={GENRE_CHIP_GRID_CLASS} aria-hidden="true">
         {Array.from({ length: 10 }).map((_, i) => (
           <div
             key={i}
             className={cn(
-              "min-h-20 rounded-lg border border-border bg-card",
+              "rounded-lg border border-border bg-card",
+              GENRE_CHIP_HEIGHT_CLASS,
               MOTION_LOADING_STATE_CLASS,
             )}
           />

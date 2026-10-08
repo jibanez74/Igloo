@@ -258,6 +258,8 @@ describe("movie play route trailer pre-roll", () => {
     await screen.findByRole("region", { name: "Video player for Signal Fire" });
     const video = await movieVideo();
     expect(prerollRegion()).toBeNull();
+    // The backdrop fills the frame instead of a black box until play starts.
+    expect(video).toHaveAttribute("poster", "/api/tmdb/images/w1280/backdrop.jpg");
     expect(
       requestsTo(fetchMock, `/api/movies/${MOVIE_ID}/preroll`),
     ).toHaveLength(1);

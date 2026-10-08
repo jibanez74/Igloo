@@ -33,7 +33,9 @@ import { triggerMusicScan, triggerMovieScan, triggerShowScan, updateLibrarySetti
 import { invalidateMovieLibraryQueries } from "@/lib/movie-library-cache";
 import { invalidateMusicLibraryQueries } from "@/lib/music-library-cache";
 import { invalidateShowLibraryQueries } from "@/lib/show-library-cache";
+import { useIsMiniPlayerVisible } from "@/hooks/useIsMiniPlayerVisible";
 import {
+  MINI_PLAYER_CLEARANCE_BOTTOM_CLASS,
   MOVIE_SCAN_STATUS_KEY,
   MUSIC_SCAN_STATUS_KEY,
   SHOW_SCAN_STATUS_KEY,
@@ -240,6 +242,7 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
     useState<LibraryPathField | null>(null);
   const [activeScan, setActiveScan] = useState<ImplementedScan | null>(null);
   const formStatusId = useId();
+  const isMiniPlayerVisible = useIsMiniPlayerVisible();
   const hasChanges = formHasChanges(form, syncedSettings);
 
   if (settings !== syncedSettings) {
@@ -434,16 +437,17 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
 
       <SettingsSaveBar
         title="Library path settings"
+        isDirty={hasChanges}
         statusId={formStatusId}
         statusMessage={feedback.message}
         statusTone={feedback.tone}
         onReset={handleReset}
         resetLabel="Reset library paths"
-        resetDisabled={!hasChanges || updateMutation.isPending}
         saveLabel="Save library paths"
-        saveDisabled={!hasChanges || updateMutation.isPending}
         isPending={updateMutation.isPending}
-        className="bg-card/70"
+        stickyClassName={
+          isMiniPlayerVisible ? MINI_PLAYER_CLEARANCE_BOTTOM_CLASS : "bottom-4"
+        }
       />
     </form>
   );

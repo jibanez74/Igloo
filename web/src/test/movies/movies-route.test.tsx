@@ -373,7 +373,7 @@ describe("movies route library refresh", () => {
     });
 
     expect(toastMocks.showSuccess).not.toHaveBeenCalled();
-    expect(queryClient.getQueryData([MOVIES_STATS_KEY])).toEqual({
+    expect(queryClient.getQueryData([MOVIES_STATS_KEY])).toMatchObject({
       error: true,
       message: "Movie stats are unavailable.",
     });

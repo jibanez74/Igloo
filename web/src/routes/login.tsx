@@ -77,9 +77,14 @@ function LoginPage() {
       const res = await login(email, password);
 
       if (res.error) {
+        // The server answers rejected credentials with its own lowercase
+        // string; the toast owns the wording.
+        const rejected = res.status === 400 || res.status === 401;
         showError(
           "Login failed",
-          res.message || "An error occurred during login"
+          rejected
+            ? "The email or password is incorrect."
+            : res.message || "An error occurred during login",
         );
         setIsSubmitting(false);
         return;

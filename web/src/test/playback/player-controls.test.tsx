@@ -163,4 +163,43 @@ describe("PlayerControls", () => {
     expect(screen.getAllByText("0:00:12").length).toBeGreaterThan(0);
     expect(screen.getAllByText("2:05:00").length).toBeGreaterThan(0);
   });
+
+  // At phone widths the transport row cannot hold the readout, the mode pill
+  // and seven buttons: the pill wrapped onto the seek button and the readout
+  // truncated. One readout per width instead, and no pill below `sm`.
+  it("shows one time readout per width and hides the mode pill on phones", () => {
+    render(
+      <PlayerControls
+        chromeFullscreenMode={false}
+        controlsVisible
+        isFullscreen={false}
+        isImmersiveViewport={false}
+        currentTime={12}
+        duration={0}
+        displayedDuration={2329}
+        playing={false}
+        modeLabel="Original file — English audio"
+        chapters={[]}
+        videoRef={createRef<HTMLVideoElement>()}
+        onSeek={vi.fn()}
+        onSeekBackward={vi.fn()}
+        onSeekForward={vi.fn()}
+        onTogglePlay={vi.fn()}
+        onToggleFullscreen={vi.fn()}
+        onSelectChapter={vi.fn()}
+      />,
+    );
+
+    const pill = screen.getByText("Original file — English audio");
+    expect(pill).toHaveClass("hidden", "sm:inline");
+
+    // Both readouts take the catalog duration, even before the element has
+    // reported one (an HLS stream starts at 0:00 otherwise).
+    const durations = screen.getAllByText("38:49");
+    expect(durations).toHaveLength(2);
+    const rowReadout = durations.find(node => node.closest(".sm\\:flex"));
+    const barReadout = durations.find(node => node.closest(".sm\\:hidden"));
+    expect(rowReadout?.closest(".sm\\:flex")).toHaveClass("hidden");
+    expect(barReadout).toBeDefined();
+  });
 });

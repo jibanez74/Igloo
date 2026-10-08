@@ -1,4 +1,5 @@
 import { User } from "lucide-react";
+import ScrollRail from "@/components/shared/ScrollRail";
 import {
   DETAIL_RAIL_HEADING_CLASS,
   FOCUS_VISIBLE_RING_CLASS,
@@ -49,22 +50,21 @@ export default function CastSection({
         Cast
       </h2>
 
-      <p className="sr-only">
-        Showing {displayedCast.length} of {cast.length} cast members. Scroll
-        horizontally to see more.
-      </p>
+      {displayedCast.length < cast.length && (
+        <p className="sr-only">
+          Showing {displayedCast.length} of {cast.length} cast members.
+        </p>
+      )}
 
       {/* Focusable so keyboard users can scroll the horizontal strip; role
           kept because Tailwind's list-none strips list semantics in Safari. */}
-      <ul
-        tabIndex={0}
-        className={cn(
-          "-mx-4 flex scrollbar-thin scrollbar-thumb-primary/50 list-none gap-3 overflow-x-auto px-4 pb-4 sm:-mx-6 sm:gap-4 sm:px-6 lg:-mx-8 lg:px-8",
-          FOCUS_VISIBLE_RING_CLASS,
-        )}
-        role="list"
-        aria-label={`Cast members, ${displayedCast.length} shown`}
-      >
+      <ScrollRail label="cast" asChild>
+        <ul
+          tabIndex={0}
+          className={cn("list-none gap-3 pb-4 sm:gap-4", FOCUS_VISIBLE_RING_CLASS)}
+          role="list"
+          aria-label={`Cast members, ${displayedCast.length} shown`}
+        >
         {displayedCast.map(actor => {
           const episodeLabel =
             actor.episodeCount != null && actor.episodeCount > 0
@@ -132,7 +132,8 @@ export default function CastSection({
             </li>
           );
         })}
-      </ul>
+        </ul>
+      </ScrollRail>
     </section>
   );
 }

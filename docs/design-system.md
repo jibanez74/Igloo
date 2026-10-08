@@ -221,6 +221,13 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
 `aria-invalid` styling, a property-scoped 150ms transition with
 `motion-reduce:transition-none`, and stamps `data-variant`/`data-size`.
 
+- **A disabled primary button is grey, not dim glacier.** The primary-fill
+  variants (`default`, `accent`, `accent-pill`) swap to `bg-muted
+  text-muted-foreground` at full opacity when `disabled`, with no shadow, so
+  a "Send Request" that cannot be sent yet never reads as a second live
+  action beside the real one. Outline, ghost and destructive keep the base
+  half-opacity. Guarded by `test/ui/button.test.tsx`.
+
 - **`accent-pill` and the `sm`/`lg` sizes don't compose.** cva emits
   base → variant → size → `className`, and `cn` is `twMerge`, so the last
   conflicting class wins: `sm` and `lg` re-declare `rounded-md` and silently
@@ -253,6 +260,14 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
   AlertDialog has one default size; dropdown items are non-inset; Select uses
   its default trigger size and item-aligned content; Separator is horizontal
   and decorative. Add a branch only when a production surface requires it.
+- **A dialog that can outgrow the viewport scrolls its body, not itself.**
+  Technical Details and Edit Movie compose `DIALOG_SCROLL_CONTENT_CLASS` on
+  `DialogContent` (a flex column capped at `100svh - 2rem`, no padding of its
+  own), `DIALOG_SCROLL_HEADER_CLASS` on the `DialogHeader`, and
+  `DIALOG_SCROLL_BODY_CLASS` on the one element that scrolls. The close
+  button is positioned against the non-scrolling box, so it never rides the
+  scrollbar track or scrolls out of reach, and a title the dialog focuses on
+  open carries `outline-hidden` with no ring (§1.7).
 - **When to add a variant vs. a constant**: a new *look* for an existing
   primitive (e.g. another Button treatment) → add a cva variant next to its
   siblings. A *cross-component* treatment (card chrome, motion, focus) → an
@@ -301,11 +316,12 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
   use `aria-disabled` + guards if needed.
 - **Announcements**: `LiveAnnouncer` (double-buffered dual `role="status"`
   regions so repeated messages re-announce) for async state changes; a section
-  announces its empty state. A *loaded* summary is not announced — it is
-  visible under the heading and tied to the section through
-  `aria-describedby`, so it is there on demand rather than interrupting a
-  reader four times as a page's rows resolve. Errors announce themselves
-  through `role="alert"` (§3.4).
+  announces its empty state. A *loaded* summary is not announced — it is an
+  `sr-only` paragraph tied to the section through `aria-describedby`, so it
+  is there on demand rather than interrupting a reader four times as a page's
+  rows resolve, and it stays out of sight because the count pill, the error
+  alert and the empty state already carry the same words where the eye lands.
+  Errors announce themselves through `role="alert"` (§3.4).
 - **Skip links**: a global "Skip to page content" in `AppShell` targeting
   `#main`, plus per-page section skip navs on long pages. Every detail page —
   movie, show, in-theaters, album, musician — uses the one shared
@@ -495,7 +511,10 @@ rendered from it by `scripts/generate-theme.ts` between
    the canvas gradients (a glacier radial tint over a vertical wash), and the
    splash message colors. The hand-written zone keeps layout, the body font
    stack, the `@font-face`, and the `#initial-splash` structure (fades out
-   when `AppBoot` sets `data-app-ready="true"`).
+   when `dismissBootSplash` in `lib/boot-splash.ts` sets
+   `data-app-ready="true"`; the same call hides the splash from assistive
+   tech and removes it on `transitionend` with an uncancellable watchdog, so
+   a remount during the fade can never leave it blocking input).
 3. `index.html` — the `<meta name="theme-color">` and the inline anti-flash
    IIFE that reads `localStorage["igloo-theme"]` and applies the `dark` class
    before first paint (defaults dark, including on storage errors).
@@ -563,11 +582,16 @@ collapse, while the mobile trigger controls the sheet.
   container, and sticky children inside pages then stop sticking to the
   window.
 
+**Unknown URLs** land on the shell's catch-all route (`routes/_auth/$.tsx`):
+a "Page not found" heading over `MediaNotFound` (title "Not found", "Back to
+Home"), titled through `head` like every page, so a mistyped address keeps
+the sidebar, the header and a way back instead of the router's bare text.
+
 **The home page** is the shell's canonical composition: a hero heading, then
 six sections in order — `WatchRooms`, `ContinueWatching`, `LatestMovies`,
 `LatestShows`, `LatestAlbums`, `MoviesInTheaters`. All but `WatchRooms` render
-through the shared `HomeMediaSection` (heading + count pill + announced summary
-+ pending/error/empty/grid states), and the route loader `ensureQueryData`s
+through the shared `HomeMediaSection` (heading + count pill + `sr-only`
+described-by summary + pending/error/empty/grid states), and the route loader `ensureQueryData`s
 every one of their queries, so the page arrives complete rather than popping in
 section by section. A new home row is a `HomeMediaSection` with one of the
 `HOME_*_GRID_CLASS` grids (§3.2) and its query added to the loader.
@@ -593,7 +617,7 @@ horizontal `WatchRoomCard`. All of them wear `CARD_SURFACE_CLASS`.
       … onError → centered muted lucide icon (usePosterFallback)
       {playLink && <div class={CARD_OVERLAY_REVEAL_CLASS} … bg-black/30 />}
       {badge}                                      ← optional corner chip
-      <div class="… bg-linear-to-t from-black/90 to-transparent" />
+      <div class="h-[60%] bg-linear-to-t from-black via-black/90 via-50% to-transparent" />
       {progress && <WatchProgressBar … />}
     </div>
     <div class="absolute inset-x-0 bottom-0 p-3"> ← sibling of the wash
@@ -608,7 +632,10 @@ horizontal `WatchRoomCard`. All of them wear `CARD_SURFACE_CLASS`.
 The contract:
 
 - Titles clamp at 2 lines, with an optional muted second line under them — a
-  year, or an episode's `S1 E4 · Name`.
+  year, or an episode's `S1 E4 · Name`. The scrim they sit on starts near the
+  middle of the card and is near-opaque through its lower half, so a two-line
+  title never lands on the poster's own lettering; `PosterCardSkeleton` shares
+  the same class so the two cannot drift.
 - **The wash and the play control travel together.** In `PosterCard` that is
   one `playLink` prop: a card with nothing single to play (`ShowCard`,
   `InTheatersCard`, `MusicianCard`) omits it and renders neither, rather than
@@ -648,10 +675,22 @@ track's minimum width instead of stretching one poster across the whole content
 column; pinned by `constants-contracts.test.ts`.
 
 True horizontal rails (cast, chapters, extras, the seasons tab strip) are
-`-mx-4 flex overflow-x-auto px-4` with thin glacier scrollbars, bleeding to the
-viewport edge at each breakpoint. The cast and extras rails are the shared
-`CastSection` and `ExtraVideosSection`, used by both the movie and show detail
-pages.
+the shared `ScrollRail` (`components/shared/ScrollRail.tsx`): a wrapper on
+`SCROLL_RAIL_BLEED_CLASS` that bleeds to the viewport edge at each
+breakpoint, around a scroller on `SCROLL_RAIL_SCROLLER_CLASS` (thin glacier
+scrollbar, the padding restored). It says when there is more: a
+`from-background` fade on each edge that still overflows, and outline
+prev/next arrows ("Scroll cast left") that appear on hover and on
+focus-within (§1.7) and page by 80 % of the visible width, smoothly unless
+motion is reduced. Both arrows stay rendered while either side overflows,
+the exhausted one `aria-disabled` and inert rather than removed, so a
+keyboard user who pages to the end keeps focus. A touch-first device gets the
+fades and no arrows — swiping is the affordance there. `asChild` makes a
+`<ul>` the scroller so it keeps its list role, label and (for the cast rail)
+its `tabIndex` and ring; the seasons strip wraps the Radix `TabsList` as a
+direct child so its tab/panel wiring is untouched. The cast and extras rails
+are the shared `CastSection` and `ExtraVideosSection`, used by both the
+movie and show detail pages.
 
 #### Library pages
 
@@ -707,6 +746,18 @@ Movie, show and in-theaters detail pages are built from shared parts —
 media type supplying only its own metadata chips, key-crew summary, and about
 rows.
 Adding a media type means supplying those three, not building a fourth page.
+
+`DetailTitleHeading` keeps a text-node space between the title and the
+parenthesised year, since the two are flex items and would otherwise be read
+as one word. `CrewDisclosure` expands the full crew in place as a one-, two-
+or three-column grid — the window is the page's only scroller (§3.1), so no
+section opens a nested scroll area.
+
+The movie hero's `actionsSlot` (`MovieDetailsHeroActions`) is a 2×2 grid
+below `sm` — Play, Watch, Like, and the More menu with a visible "More" label
+beside its icon — and a wrapping row from `sm` up. An action row that relies
+on `flex-wrap` with content that cannot shrink drops its last control onto
+a lonely row at 390 px; a grid never does.
 
 The album and musician pages keep their own hero anatomy — a square cover or
 a round thumb beside the title, over a decorative 21:9 band, rather than
@@ -812,13 +863,18 @@ is unknown or empty.
   add a block that collapses a frame later. It returns `null` while pending
   and when empty. This applies only to loader-awaited sections — a query that
   can genuinely still be in flight gets a skeleton.
-- **Empty, two variants.** Minimal: centered `text-muted-foreground` with a
-  large faded lucide icon and one sentence (search no-results, empty tabs).
-  Rich CTA: the shared `EmptyState.tsx` — gradient icon orb
+- **Empty, two variants, chosen by what is empty.** Minimal:
+  `LibraryEmptyState` — centered `text-muted-foreground` with a large faded
+  lucide icon and one sentence — for a *tab or filter* that has nothing in it
+  (search no-results, a genre, the Liked and Playlists tabs, the notifications
+  panel). Rich: the shared `EmptyState.tsx` — gradient icon orb
   (`size-20 rounded-full bg-linear-to-br from-muted via-muted to-primary/30`),
-  title, description, optional pill CTA, optional `bordered` wrapper. Empty
-  states announce via `LiveAnnouncer` (`LibraryAllTab` says
-  `No {plural} found` beside its `LibraryEmptyState`).
+  title, description, optional pill CTA, optional `bordered` wrapper — for a
+  *whole library* that is empty (the home sections, a show with no episodes).
+  Adjacent tabs on one page therefore share one style, and an action gets one
+  call to action: a tab whose toolbar already offers "New playlist" does not
+  repeat it inside its empty state. Empty states announce via `LiveAnnouncer`
+  (`LibraryAllTab` says `No {plural} found` beside its `LibraryEmptyState`).
 - **Error, by shape.** Detection is uniform:
   `isError || isApiFailure(data)` (`lib/is-api-failure.ts`, reading the API
   envelope `{ error, message, data }`). Which component renders it depends on
@@ -833,7 +889,8 @@ is unknown or empty.
   - The four ways a detail page fails to show its subject — an invalid id, a
     failed request, one still in flight, an empty response — are
     `MediaDetailGuard`, which every `$id` route wraps its content in. Three of
-    the four are dead ends, so each renders `MediaNotFound`; its destination is
+    the four are dead ends, so each renders `MediaNotFound` (title "Not found"
+    for a 404 or an empty response, "Error" otherwise); its destination is
     a named key (`music`, `moviePlaylists`, …) carrying both the route and the
     words on the link, so the two can never disagree and a destination may
     carry search params.
@@ -841,6 +898,14 @@ is unknown or empty.
     **required** "Back to Movies/TV Shows/Music/Home" outline link, so the
     page never dead-ends.
   - A mutation → **toast** via `toast-helpers.ts`, never inline.
+  - **The UI owns the words for failures it can name.** `apiRequest` stamps the
+    HTTP `status` on every failure envelope it returns, and a surface maps the
+    statuses it understands to a sentence — a 404 on a detail page reads "We
+    couldn't find that movie.", a 400/401 on login "The email or password is
+    incorrect.", a 403/404 on a watch room "This room no longer exists or you
+    were not invited." — keeping the server's message only as the fallback for
+    anything else (`apiErrorMessage`). Never show the client's canned
+    "404 - The resource…" string or a lowercase server constant as the copy.
 
   Because the erroring subtree often unmounts its own live region, error
   surfaces carry `role="alert"` and announce themselves — never repeat one
@@ -858,10 +923,19 @@ require the full playback test pass.
   + `PlayerControls.tsx`): one page for movies and TV episodes, addressed by a
   `PlaybackMediaRef` (`{ kind, id }`); the route supplies the header (film or
   TV icon, title — "Show · S1 E3 · Episode" for TV — artwork, not-found copy,
-  where Back falls back to). It renders **in-shell** as a windowed player
+  where Back falls back to, and the `posterUrl` — the movie backdrop or the
+  episode still — the `<video poster>` shows in the frame until the first
+  frame paints, so the page never opens on a black box). It renders
+  **in-shell** as a windowed player
   (header bar: media icon + title + Back; controls footer below the video —
   progress group, time readouts in `tabular-nums`, rewind / play-pause /
   fast-forward cluster, quality chip, chapter menu, volume, fullscreen).
+  **One time readout per width**: from `sm` up it sits in the transport row
+  and the progress bar's own labels are hidden; below `sm` the row cannot hold
+  it beside seven controls, so the bar shows the labels and the row hides its
+  pair and the decorative quality chip (Playback Settings still names the
+  mode). Both readouts take `displayedDuration` — the catalog length while
+  an HLS element has not yet reported one — so the two never disagree.
   In immersive/fullscreen mode (`isImmersiveViewport` /
   `chromeFullscreenMode`) the container goes `fixed inset-0 z-50`, chrome
   becomes absolute overlay panels (`MOTION_PLAYER_CHROME_PANEL_CLASS`,
@@ -939,7 +1013,10 @@ require the full playback test pass.
   no link to the trailer's movie.
 - **Trailer player** (`routes/_auth/trailer.tsx`, YouTube behind
   `useYouTubePlayer`): one `DialogFullscreenContent` whose view swaps in place
-  — loading, load error, no trailer, the player, a playback error. Each view
+  — loading, load error, no trailer, the player, a playback error. Every view
+  wears the same `TrailerHeader` (film icon, title, "Close trailer"), so the
+  way out never moves between states; only the player view's header holds the
+  `DialogTitle`, the others name the dialog from their own heading. Each view
   focuses its primary control ("Close trailer (Escape)" — "Close trailer" on
   touch, §1.7 — or "Try Again" on an error) when it first appears, not only when the dialog opens: Radix's open
   auto-focus runs once, and a swap that unmounts the focused control would
@@ -982,7 +1059,8 @@ require the full playback test pass.
 - **NotificationBell** (header): ghost icon button with a glacier unread
   badge pill ("99+" cap; count also in the `aria-label`), opening a `w-80
   bg-card` popover — header row with "Mark all read", `max-h-96` scroll body
-  with spinner / "You're all caught up." / `divide-y` list states. Unread
+  with spinner / a compact `LibraryEmptyState` ("You're all caught up." under
+  a faded `BellOff`) / `divide-y` list states. Unread
   rows tint `bg-muted/40` with a glacier dot; rows show type label, message,
   relative time, per-row dismiss. Unread count polls every 30s; the list
   query is `enabled` only while open.
@@ -997,6 +1075,25 @@ require the full playback test pass.
   (`border-destructive/*` + destructive text + outline destructive actions).
   A card's own loading and error states are `SettingsLoadingCard` and
   `SettingsErrorCard` (§3.4), so the card keeps its place in the page.
+- **The Save bar (`SettingsSaveBar`) is opaque, always there, and sticky only
+  while dirty.** It renders at the end of every server-saved form on a solid
+  `bg-card` (floating surfaces are opaque, like the mini player and dialogs —
+  a translucent bar let the form read through it), so a keyboard user can
+  always find it; it lifts into a sticky bar at `stickyClassName` (`bottom-4`,
+  or `MINI_PLAYER_CLEARANCE_BOTTOM_CLASS` above the mini player) only while
+  the form differs from what is saved, and its Reset and Save are disabled
+  when there is nothing to do, with the status line reading "No unsaved
+  changes" — unless a success or error message is standing ("Library paths
+  saved."), which wins. Below `sm` it is one row: the status, an icon-only
+  Reset keeping its accessible name, and Save. The Playback page's one bar
+  belongs to the admin "Server" card and renders `embedded` in that card's
+  `CardFooter`, so it cannot be mistaken for saving the device and account
+  cards above it, which save as they change.
+- **The Settings tab strip** is two columns on a phone (the fifth tab
+  spanning both), five equal tabs filling the content width from `@md` (on
+  the tighter `px-1.5` until the card fits to content), and the library pages'
+  fit-to-content card only from `@2xl`; a narrow 2+2+1 card beside empty
+  space at tablet width read as orphaned.
 - **Card section titles are real headings**: render `CardTitle` with `asChild`
   wrapping an `<h2>` (login's is the page `<h1>`) so card-sectioned pages are
   navigable by heading.
@@ -1023,7 +1120,8 @@ require the full playback test pass.
   such a card also renders a visible `text-destructive` notice for as long as
   it lasts. Do not mix the models inside one card — split by ownership,
   as Settings → Playback does (two "this device" cards, one account card,
-  one admin-only "Server" card with the only Save bar).
+  one admin-only "Server" card with the only Save bar, hosted in that card's
+  footer).
 - **Account-scoped settings also apply instantly, through the API.** A
   setting that belongs to the account rather than to one browser or to the
   server ("Trailers before movies", `TrailerPreferencesCard`) saves every

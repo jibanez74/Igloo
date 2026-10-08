@@ -75,10 +75,11 @@ export default function HomeMediaSection<T>({
           >
             {title}
           </h2>
-          <p
-            id={sectionSummaryId}
-            className="mt-1 text-sm text-muted-foreground"
-          >
+          {/* The section's aria-describedby text. It stays out of sight: the
+              count pill, the error alert and the empty state already say the
+              same thing where the eye lands, and the page read it four times
+              over. */}
+          <p id={sectionSummaryId} className="sr-only">
             {sectionSummary}
           </p>
         </div>
@@ -113,6 +114,7 @@ export default function HomeMediaSection<T>({
           icon={EmptyIcon}
           title={emptyTitle}
           description={emptyDescription}
+          className="py-8 sm:py-10"
         />
       )}
     </section>
