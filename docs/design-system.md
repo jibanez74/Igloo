@@ -699,7 +699,9 @@ so the page-level pieces are shared components in `components/shared/`, each a
 `Library*`: `LibraryStats` (the labelled count region beside the header; it
 takes `figures`, one or several, and joins them into a single
 `Library statistics: 42 movies` / `…: 3 albums, 40 tracks, 2 musicians`
-name), `LibraryMoreMenu` with `RefreshLibraryMenuItem` and
+name; the row it shares with the More menu does not wrap — the region is
+`min-w-0 flex-1`, so at phone widths its figures wrap onto a second line
+while "More options" stays at the right end of the first), `LibraryMoreMenu` with `RefreshLibraryMenuItem` and
 `RequestMediaMenuItem` (the "More options" dropdown; every library has at
 least Refresh Library, which refetches the page's cached queries and toasts —
 Movies adds Request Movie and Music adds Request Album / Request Track beside

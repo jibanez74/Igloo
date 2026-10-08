@@ -7,6 +7,7 @@ import {
 import { MoviesLoadError } from "@/components/shared/MoviesLoadError";
 import { nounForCount } from "@/lib/format";
 import { apiErrorMessage, isApiFailure } from "@/lib/is-api-failure";
+import { cn } from "@/lib/utils";
 
 /** One count in the stats line: its icon, visible label and how to read it. */
 export type LibraryStatsFigure<TData> = {
@@ -24,6 +25,8 @@ type LibraryStatsProps<
 > = {
   queryOpts: LibraryQueryOptions<TData, TKey>;
   figures: LibraryStatsFigure<TData>[];
+  /** Layout hooks for the host row, e.g. `min-w-0 flex-1` beside the More menu. */
+  className?: string;
 };
 
 // The count line beside a library page's header. The whole figure is one
@@ -33,15 +36,17 @@ type LibraryStatsProps<
 export default function LibraryStats<
   TData extends Record<string, unknown>,
   TKey extends QueryKey,
->({ queryOpts, figures }: LibraryStatsProps<TData, TKey>) {
+>({ queryOpts, figures, className }: LibraryStatsProps<TData, TKey>) {
   const { data, isError, isLoading, refetch } = useQuery(queryOpts);
 
   if (isError || isApiFailure(data)) {
     return (
-      <MoviesLoadError
-        message={apiErrorMessage(data, "Couldn’t load library statistics. Check your connection and try again.")}
-        onRetry={() => void refetch()}
-      />
+      <div className={className}>
+        <MoviesLoadError
+          message={apiErrorMessage(data, "Couldn’t load library statistics. Check your connection and try again.")}
+          onRetry={() => void refetch()}
+        />
+      </div>
     );
   }
 
@@ -56,7 +61,10 @@ export default function LibraryStats<
         .join(", ")}`;
 
   return (
-    <section className="flex flex-wrap gap-x-6 gap-y-3" aria-label={regionLabel}>
+    <section
+      className={cn("flex flex-wrap gap-x-6 gap-y-3", className)}
+      aria-label={regionLabel}
+    >
       {figures.map(({ icon: Icon, label }, i) => (
         <div key={label} className="flex items-center gap-2">
           <Icon className="size-4 text-primary" aria-hidden="true" />
