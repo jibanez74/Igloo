@@ -418,8 +418,8 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
           {/* Play buttons. Deliberately never disabled: playback starts from the
               pages already loaded, and the spinner only reports the rest
               arriving behind it. A disabled media control is also unreachable
-              under iOS VoiceOver. `size` re-declares rounded-md, so both
-              buttons re-assert rounded-full to stay a matching pair. */}
+              under iOS VoiceOver. `size` re-declares rounded-md, so the
+              outline Shuffle re-asserts rounded-full to match the Play pill. */}
           {track_count > 0 && (
             <div className="mt-5 flex flex-col justify-center gap-2 sm:mt-6 sm:flex-row sm:gap-3 lg:justify-start">
               <Button
@@ -427,7 +427,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
                 variant="accent-pill"
                 size="lg"
                 onClick={handlePlayAll}
-                className="w-full rounded-full font-semibold shadow-lg shadow-primary/20 sm:w-auto"
+                className="w-full font-semibold shadow-lg shadow-primary/20 sm:w-auto"
                 aria-label={`Play all ${pluralize(track_count, "track")}`}
               >
                 {isLoadingRest ? (

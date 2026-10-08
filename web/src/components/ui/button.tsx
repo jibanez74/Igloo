@@ -30,6 +30,11 @@ const buttonVariants = cva(
         "icon-sm": "size-8",
       },
     },
+    // `sm` and `lg` re-declare rounded-md after the variant; compound classes
+    // come last, so the pill keeps its shape at every size.
+    compoundVariants: [
+      { variant: "accent-pill", size: ["sm", "lg"], className: "rounded-full" },
+    ],
     defaultVariants: {
       variant: "default",
       size: "default",

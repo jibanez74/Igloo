@@ -45,3 +45,18 @@ describe("Button disabled styling", () => {
     }
   });
 });
+
+// `sm` and `lg` re-declare rounded-md after the variant; the pill must survive.
+describe("Button accent-pill radius", () => {
+  it.each(["default", "sm", "lg"] as const)("stays rounded-full at size %s", size => {
+    render(
+      <Button variant="accent-pill" size={size}>
+        Play
+      </Button>,
+    );
+
+    const button = screen.getByRole("button", { name: "Play" });
+    expect(button).toHaveClass("rounded-full");
+    expect(button).not.toHaveClass("rounded-md");
+  });
+});

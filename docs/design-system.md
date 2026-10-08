@@ -228,15 +228,16 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
   action beside the real one. Outline, ghost and destructive keep the base
   half-opacity. Guarded by `test/ui/button.test.tsx`.
 
-- **`accent-pill` and the `sm`/`lg` sizes don't compose.** cva emits
+- **`accent-pill` stays a pill at every size.** cva emits
   base → variant → size → `className`, and `cn` is `twMerge`, so the last
-  conflicting class wins: `sm` and `lg` re-declare `rounded-md` and silently
-  square off the pill (`default`, `icon` and `icon-sm` declare no radius and
-  leave it alone). Pass no `size` with `accent-pill`, or re-assert
-  `rounded-full` in `className` (the album, musician and playlist Play
-  buttons use `size="lg"` and do this). Watch for this whenever
-  two sibling buttons are meant to match — one picking up a `size` is enough
-  to break the pair.
+  conflicting class wins: `sm` and `lg` re-declare `rounded-md`. A
+  `compoundVariants` entry re-applies `rounded-full` to `accent-pill` at
+  those sizes, so call sites never re-assert it (guarded by
+  `test/ui/button.test.tsx`). Other variants still square off at `sm`/`lg`:
+  an `outline` button meant to pair with a pill (the album, musician and
+  playlist Shuffle buttons) passes `rounded-full` in `className`. Watch for
+  this whenever two sibling buttons are meant to match — one picking up a
+  `size` is enough to break the pair.
 - **Tabs share one look** (`web/src/components/ui/tabs.tsx`): a bordered
   `bg-muted/50` list; the active trigger is a glacier primary-fill pill
   (`data-[state=active]:bg-primary … shadow-primary/20`). Library pages layer
