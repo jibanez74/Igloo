@@ -611,9 +611,11 @@ Every 2:3 poster card is `components/shared/PosterCard.tsx`, implemented once.
 `MovieCard`, `ShowCard`, `InTheatersCard` and `ContinueWatchingEpisodeCard`
 pass it their links, labels, badge and watch progress rather than repeating the
 markup; a new poster card belongs there too. Reach for a fresh `<article>` only
-when the anatomy genuinely differs — square covers (`AlbumCard`,
-`PlaylistCard`, `MoviePlaylistCard`), circular thumbs (`MusicianCard`), or the
-horizontal `WatchRoomCard`. All of them wear `CARD_SURFACE_CLASS`.
+when the anatomy genuinely differs — square covers (`AlbumCard`, and the
+shared `PlaylistCard`, which serves music and movie playlists alike and takes
+its link and placeholder icon from the playlist's `content_type`), circular
+thumbs (`MusicianCard`), or the horizontal `WatchRoomCard`. All of them wear
+`CARD_SURFACE_CLASS`.
 
 ```
 <article class={cn(CARD_SURFACE_CLASS, CARD_FOCUS_WITHIN_RING_CLASS)}>

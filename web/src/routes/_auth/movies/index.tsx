@@ -19,7 +19,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import CreateMoviePlaylistDialog from "@/components/movies/CreateMoviePlaylistDialog";
 import MovieCard from "@/components/movies/MovieCard";
-import MoviePlaylistCard from "@/components/movies/MoviePlaylistCard";
 import LibraryAllTab from "@/components/shared/LibraryAllTab";
 import LibraryEmptyState from "@/components/shared/LibraryEmptyState";
 import LibraryGenresTab from "@/components/shared/LibraryGenresTab";
@@ -28,6 +27,7 @@ import LibraryMoreMenu, {
   RefreshLibraryMenuItem,
 } from "@/components/shared/LibraryMoreMenu";
 import LibraryStats from "@/components/shared/LibraryStats";
+import PlaylistCard from "@/components/shared/PlaylistCard";
 import { useContentFadeTransition } from "@/hooks/useContentFadeTransition";
 import {
   CONTENT_FADE_ENTER_CLASS,
@@ -654,7 +654,7 @@ function PlaylistsTabContent({
       ) : (
         <div className={MUSIC_CARD_GRID_CLASS}>
           {playlists.map(p => (
-            <MoviePlaylistCard key={p.id} playlist={p} />
+            <PlaylistCard key={p.id} playlist={p} />
           ))}
         </div>
       )}

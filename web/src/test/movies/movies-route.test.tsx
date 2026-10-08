@@ -9,6 +9,7 @@ import {
   MOVIES_PER_PAGE,
   MOVIES_STATS_KEY,
 } from "@/lib/constants";
+import type { MoviePlaylistSummaryType } from "@/types";
 import { countFetchRequests, jsonResponse, requestURL } from "../helpers/api";
 import { runContentFadeTransitionTimeout } from "../helpers/content-fade-transition";
 import {
@@ -45,7 +46,11 @@ function movie(id: number, title: string, year: number) {
   };
 }
 
-function playlist(id: number, name: string, movieCount: number) {
+function playlist(
+  id: number,
+  name: string,
+  movieCount: number,
+): MoviePlaylistSummaryType {
   return {
     id,
     user_id: 1,
@@ -53,10 +58,11 @@ function playlist(id: number, name: string, movieCount: number) {
     description: nullableString(),
     cover_image: nullableString(),
     is_public: false,
+    movie_id: nullableInt64(),
+    content_type: "movie",
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
     movie_count: movieCount,
-    total_duration: 0,
     is_owner: true,
     can_edit: true,
   };

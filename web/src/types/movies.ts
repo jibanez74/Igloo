@@ -35,25 +35,11 @@ export type MovieGenreWithCountType = {
 };
 
 /** Full playlist row for content_type = movie (API `playlist` object). */
-export type MoviePlaylistRowType = {
-  id: number;
-  user_id: number;
-  name: string;
-  description: NullableString;
-  cover_image: NullableString;
-  is_public: boolean;
-  movie_id: NullableInt64;
-  content_type: string;
-  created_at: string;
-  updated_at: string;
-};
+export type MoviePlaylistRowType = components["schemas"]["MoviePlaylist"];
 
 /** GET /api/movies/playlists */
-export type MoviePlaylistSummaryType = MoviePlaylistRowType & {
-  movie_count: number;
-  is_owner: boolean;
-  can_edit: boolean;
-};
+export type MoviePlaylistSummaryType =
+  components["schemas"]["MoviePlaylistSummary"];
 
 export type MoviePlaylistsListResponseType = {
   playlists: MoviePlaylistSummaryType[];

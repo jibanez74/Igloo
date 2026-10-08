@@ -71,8 +71,8 @@ import LibraryMoreMenu, {
 } from "@/components/shared/LibraryMoreMenu";
 import LibraryPagination from "@/components/shared/LibraryPagination";
 import LibraryStats from "@/components/shared/LibraryStats";
+import PlaylistCard from "@/components/shared/PlaylistCard";
 import TrackItem from "@/components/music/TrackItem";
-import PlaylistCard from "@/components/music/PlaylistCard";
 import LibraryEmptyState from "@/components/shared/LibraryEmptyState";
 import { Button } from "@/components/ui/button";
 import PlaylistFormDialog from "@/components/music/PlaylistFormDialog";
