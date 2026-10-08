@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, isInaccessible, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import ProgressBar from "@/components/playback/ProgressBar";
 import {
@@ -114,7 +114,27 @@ describe("ProgressBar", () => {
       "group-focus-within:opacity-100",
       ...MOTION_PROGRESS_THUMB_REVEAL_CLASS.split(" "),
     );
+    expect(screen.queryByText("0:30")).not.toBeInTheDocument();
+    expect(screen.queryByText("2:00")).not.toBeInTheDocument();
   });
+
+  it.each(["expanded", "minimized", "mobile"] as const)(
+    "keeps the %s time labels hidden from assistive technology",
+    variant => {
+      render(
+        <ProgressBar
+          currentTime={12}
+          duration={2329}
+          onSeek={vi.fn()}
+          variant={variant}
+        />,
+      );
+
+      for (const time of ["0:12", "38:49"]) {
+        expect(isInaccessible(screen.getByText(time))).toBe(true);
+      }
+    },
+  );
 
   it.each(["expanded", "minimized", "video", "trailer"] as const)(
     "uses a semantic thumb and the whole-group focus ring on the %s variant",
@@ -266,7 +286,7 @@ describe("ProgressBar", () => {
     expect(screen.getByText("38:49").parentElement).toHaveClass("sm:hidden");
   });
 
-  it("keeps the readout on the playhead while the element cannot seek yet", () => {
+  it("exposes the video time labels while the element cannot seek yet", () => {
     render(
       <ProgressBar
         currentTime={12}
@@ -277,7 +297,11 @@ describe("ProgressBar", () => {
       />,
     );
 
-    expect(screen.getByText("0:12")).toBeInTheDocument();
+    for (const time of ["0:12", "38:49"]) {
+      const label = screen.getByText(time);
+      expect(isInaccessible(label)).toBe(false);
+      expect(label.parentElement).toHaveClass("sm:hidden");
+    }
     expect(screen.getByRole("slider")).toHaveAttribute("aria-disabled", "true");
     expect(screen.getByRole("slider")).toHaveAttribute(
       "aria-valuetext",

@@ -285,10 +285,10 @@ export default function ProgressBar({
             variant === "video" && "sm:hidden",
           )}
         >
-          <span className={styles.timeText} aria-hidden="true">
+          <span className={styles.timeText} aria-hidden={variant !== "video"}>
             {currentTimeLabel}
           </span>
-          <span className={styles.timeText} aria-hidden="true">
+          <span className={styles.timeText} aria-hidden={variant !== "video"}>
             {durationLabel}
           </span>
         </div>
