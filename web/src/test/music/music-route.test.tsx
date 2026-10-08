@@ -81,12 +81,16 @@ type MockMusicFetchOptions = {
   emptyPlaylists?: boolean;
   emptyLikedTracks?: boolean;
   failFirstTracksRequest?: boolean;
+  failFirstPlaylistsRequest?: boolean;
+  failFirstLikedTracksRequest?: boolean;
 };
 
 function mockMusicFetch(options: MockMusicFetchOptions = {}) {
   const spotifyAvailable = options.spotifyAvailable ?? true;
   const emptyMusicians = options.emptyMusicians ?? false;
   let tracksRequestCount = 0;
+  let playlistsRequestCount = 0;
+  let likedTracksRequestCount = 0;
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
     const url = requestURL(input);
 
@@ -200,6 +204,15 @@ function mockMusicFetch(options: MockMusicFetchOptions = {}) {
     if (
       url === `/api/music/tracks/liked?page=1&per_page=${LIKED_TRACKS_PER_PAGE}`
     ) {
+      likedTracksRequestCount += 1;
+
+      if (options.failFirstLikedTracksRequest && likedTracksRequestCount === 1) {
+        return jsonResponse({
+          error: true,
+          message: "Liked tracks are temporarily unavailable.",
+        });
+      }
+
       const tracks = options.emptyLikedTracks ? [] : [track(2, "Borrowed Light")];
       return jsonResponse({
         error: false,
@@ -224,6 +237,15 @@ function mockMusicFetch(options: MockMusicFetchOptions = {}) {
     }
 
     if (url === "/api/music/playlists") {
+      playlistsRequestCount += 1;
+
+      if (options.failFirstPlaylistsRequest && playlistsRequestCount === 1) {
+        return jsonResponse({
+          error: true,
+          message: "Playlists are temporarily unavailable.",
+        });
+      }
+
       if (options.emptyPlaylists) {
         return jsonResponse({ error: false, data: { playlists: [] } });
       }
@@ -523,6 +545,54 @@ describe("music route playlists tab", () => {
       screen.queryByRole("heading", { name: "No liked tracks yet" }),
     ).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Back to playlists" })).toBeInTheDocument();
+  });
+
+  it("shows a playlists failure instead of the empty state and recovers on retry", async () => {
+    const user = userEvent.setup();
+
+    await renderMusicRoute("/music/?tab=playlists", {
+      failFirstPlaylistsRequest: true,
+    });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Playlists are temporarily unavailable.",
+    );
+    expect(
+      screen.queryByText("No playlists yet. Use New playlist to group tracks."),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(
+      await screen.findByRole("link", { name: "Morning Rotation, 3 tracks, 9m 0s" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("shows a liked tracks failure under the header and recovers on retry", async () => {
+    const user = userEvent.setup();
+
+    await renderMusicRoute("/music/?tab=playlists&playlistsView=liked", {
+      failFirstLikedTracksRequest: true,
+    });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Liked tracks are temporarily unavailable.",
+    );
+    expect(
+      screen.queryByText(
+        "No liked tracks yet. Tap the heart on any track to add it here.",
+      ),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("0 tracks")).not.toBeInTheDocument();
+    // The header stays, so the user can still leave the failed view.
+    expect(screen.getByRole("button", { name: "Back to playlists" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(await screen.findByText("Borrowed Light")).toBeInTheDocument();
+    expect(screen.getByText("1 track")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });
 
