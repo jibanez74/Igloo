@@ -1,11 +1,11 @@
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
-import { useQuery, type UseQueryOptions } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Search, Film, Tv, Disc3, User, Music } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { type LibraryNoun } from "@/components/shared/LibraryAllTab";
 import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
 import LibraryPagination from "@/components/shared/LibraryPagination";
-import { MoviesLoadError } from "@/components/shared/MoviesLoadError";
+import LoadErrorAlert from "@/components/shared/LoadErrorAlert";
 import { PosterCardSkeleton } from "@/components/shared/PosterCard";
 import MovieCard from "@/components/movies/MovieCard";
 import ShowCard from "@/components/shows/ShowCard";
@@ -18,12 +18,8 @@ import { useTrackPlaybackMatcher } from "@/hooks/useTrackPlaybackMatcher";
 import { trackRowProps } from "@/lib/track-row-props";
 import { apiErrorMessage, isApiFailure } from "@/lib/is-api-failure";
 import {
-  searchAlbumsQueryOpts,
   searchAllQueryOpts,
-  searchMoviesQueryOpts,
-  searchMusiciansQueryOpts,
-  searchShowsQueryOpts,
-  searchTracksQueryOpts,
+  searchCategoryQueryOpts,
 } from "@/lib/query-opts";
 import {
   CONTENT_FADE_ENTER_CLASS,
@@ -43,20 +39,14 @@ import {
 import { cn } from "@/lib/utils";
 import { scrollWindowToTop } from "@/lib/motion";
 import type {
-  ApiResponseType,
-  MoviesLibraryListItemType,
-  PaginatedSearchResponse,
+  PagedSearchTab,
+  SearchCategoryData,
   SearchTab,
-  ShowLibraryItemType,
-  SimpleAlbumType,
-  SimpleMusicianType,
   TrackListItemType,
 } from "@/types";
 import { searchSearchSchema, type SearchParams } from "@/lib/route-search";
 import { nounForCount, pluralize } from "@/lib/format";
 import { routeHead } from "@/lib/route-head";
-
-type PagedSearchTab = Exclude<SearchTab, "all">;
 
 // The tab value doubles as the visible category word, so each one carries both
 // forms - a single result reads "1 show", not "1 shows".
@@ -109,26 +99,9 @@ export const Route = createFileRoute("/_auth/search/")({
       return;
     }
 
-    const result =
-      tab === "movies"
-        ? await queryClient.ensureQueryData(
-            searchMoviesQueryOpts(trimmed, page, SEARCH_PER_PAGE),
-          )
-        : tab === "shows"
-          ? await queryClient.ensureQueryData(
-              searchShowsQueryOpts(trimmed, page, SEARCH_PER_PAGE),
-            )
-          : tab === "albums"
-            ? await queryClient.ensureQueryData(
-                searchAlbumsQueryOpts(trimmed, page, SEARCH_PER_PAGE),
-              )
-            : tab === "musicians"
-              ? await queryClient.ensureQueryData(
-                  searchMusiciansQueryOpts(trimmed, page, SEARCH_PER_PAGE),
-                )
-              : await queryClient.ensureQueryData(
-                  searchTracksQueryOpts(trimmed, page, SEARCH_PER_PAGE),
-                );
+    const result = await queryClient.ensureQueryData(
+      searchCategoryQueryOpts(tab, trimmed, page, SEARCH_PER_PAGE),
+    );
 
     if (result.error === false) {
       redirectToLastSearchPage({
@@ -202,11 +175,10 @@ function SearchPage() {
   if (tab === "movies") {
     topLevelTabContent = (
       <CategoryResultsTab
-        label="movies"
+        kind="movies"
         q={trimmed}
         page={page}
-        queryOpts={searchMoviesQueryOpts(trimmed, page, SEARCH_PER_PAGE)}
-        renderGrid={(items: MoviesLibraryListItemType[]) => (
+        renderGrid={(items) => (
           <div className={LIBRARY_POSTER_GRID_CLASS}>
             {items.map((movie) => (
               <MovieCard key={movie.id} movie={movie} />
@@ -220,11 +192,10 @@ function SearchPage() {
   if (tab === "shows") {
     topLevelTabContent = (
       <CategoryResultsTab
-        label="shows"
+        kind="shows"
         q={trimmed}
         page={page}
-        queryOpts={searchShowsQueryOpts(trimmed, page, SEARCH_PER_PAGE)}
-        renderGrid={(items: ShowLibraryItemType[]) => (
+        renderGrid={(items) => (
           <div className={LIBRARY_POSTER_GRID_CLASS}>
             {items.map((show) => (
               <ShowCard key={show.id} show={show} />
@@ -238,11 +209,10 @@ function SearchPage() {
   if (tab === "albums") {
     topLevelTabContent = (
       <CategoryResultsTab
-        label="albums"
+        kind="albums"
         q={trimmed}
         page={page}
-        queryOpts={searchAlbumsQueryOpts(trimmed, page, SEARCH_PER_PAGE)}
-        renderGrid={(items: SimpleAlbumType[]) => (
+        renderGrid={(items) => (
           <div className={LIBRARY_POSTER_GRID_CLASS}>
             {items.map((album) => (
               <AlbumCard key={album.id} album={album} />
@@ -256,11 +226,10 @@ function SearchPage() {
   if (tab === "musicians") {
     topLevelTabContent = (
       <CategoryResultsTab
-        label="musicians"
+        kind="musicians"
         q={trimmed}
         page={page}
-        queryOpts={searchMusiciansQueryOpts(trimmed, page, SEARCH_PER_PAGE)}
-        renderGrid={(items: SimpleMusicianType[]) => (
+        renderGrid={(items) => (
           <div className={LIBRARY_POSTER_GRID_CLASS}>
             {items.map((musician) => (
               <MusicianCard key={musician.id} musician={musician} />
@@ -274,11 +243,10 @@ function SearchPage() {
   if (tab === "tracks") {
     topLevelTabContent = (
       <CategoryResultsTab
-        label="tracks"
+        kind="tracks"
         q={trimmed}
         page={page}
-        queryOpts={searchTracksQueryOpts(trimmed, page, SEARCH_PER_PAGE)}
-        renderGrid={(items: TrackListItemType[]) => (
+        renderGrid={(items) => (
           <TracksResultsList tracks={items} />
         )}
       />
@@ -388,7 +356,7 @@ function AllResultsTab({ q }: { q: string }) {
 
   if (isError || isApiFailure(data)) {
     return (
-      <MoviesLoadError
+      <LoadErrorAlert
         message={apiErrorMessage(data, "Couldn’t run that search. Check your connection and try again.")}
         onRetry={() => void refetch()}
       />
@@ -556,31 +524,26 @@ function AllSection({
 
 // ---------------------------------------------------------------------------
 // Category tabs — one generic component handling loading / error / empty /
-// pagination; only the query options and the grid renderer differ per category
+// pagination; only the grid renderer differs per category
 // ---------------------------------------------------------------------------
 
-type CategoryResultsTabProps<T> = {
-  label: PagedSearchTab;
+type CategoryResultsTabProps<K extends PagedSearchTab> = {
+  kind: K;
   q: string;
   page: number;
-  queryOpts: UseQueryOptions<
-    ApiResponseType<PaginatedSearchResponse<T>>,
-    Error,
-    ApiResponseType<PaginatedSearchResponse<T>>,
-    (string | number)[]
-  >;
-  renderGrid: (items: T[]) => React.ReactNode;
+  renderGrid: (items: SearchCategoryData[K]["results"]) => React.ReactNode;
 };
 
-function CategoryResultsTab<T>({
-  label,
+function CategoryResultsTab<K extends PagedSearchTab>({
+  kind,
   q,
   page,
-  queryOpts,
   renderGrid,
-}: CategoryResultsTabProps<T>) {
+}: CategoryResultsTabProps<K>) {
   const navigate = Route.useNavigate();
-  const { data, isLoading, isError, refetch } = useQuery(queryOpts);
+  const { data, isLoading, isError, refetch } = useQuery(
+    searchCategoryQueryOpts(kind, q, page, SEARCH_PER_PAGE),
+  );
 
   const handlePageChange = (newPage: number) => {
     navigate({
@@ -597,8 +560,8 @@ function CategoryResultsTab<T>({
 
   if (isError || isApiFailure(data)) {
     return (
-      <MoviesLoadError
-        message={apiErrorMessage(data, `Couldn’t load ${label}. Check your connection and try again.`)}
+      <LoadErrorAlert
+        message={apiErrorMessage(data, `Couldn’t load ${kind}. Check your connection and try again.`)}
         onRetry={() => void refetch()}
       />
     );
@@ -613,24 +576,24 @@ function CategoryResultsTab<T>({
     return (
       <>
         <LiveAnnouncer
-          message={`No ${label} match ${q}`}
-          announcementKey={`${q}-${label}-empty`}
+          message={`No ${kind} match ${q}`}
+          announcementKey={`${q}-${kind}-empty`}
         />
         <p className="py-12 text-center text-muted-foreground">
-          No {label} match &lsquo;{q}&rsquo;.
+          No {kind} match &lsquo;{q}&rsquo;.
         </p>
       </>
     );
   }
 
-  const noun = SEARCH_TAB_NOUNS[label];
+  const noun = SEARCH_TAB_NOUNS[kind];
   const announcement = `Showing ${results.length} ${nounForCount(results.length, noun)}, page ${currentPage} of ${totalPages}, ${total.toLocaleString()} total`;
 
   return (
     <div>
       <LiveAnnouncer
         message={announcement}
-        announcementKey={`${q}-${label}-${currentPage}`}
+        announcementKey={`${q}-${kind}-${currentPage}`}
       />
 
       <div className="mb-5 flex flex-wrap items-center justify-between gap-2">

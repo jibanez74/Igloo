@@ -3,6 +3,7 @@ import type {
   ApiResponseType,
   AuthUser,
   MovieTechnicalDetailsResponse,
+  PagedSearchTab,
   PlaybackMediaRef,
   PlaybackSettingsResponseType,
   PlaybackSettingsType,
@@ -66,11 +67,7 @@ import {
   getWatchRoomInviteUsers,
   getWatchRooms,
   searchAll,
-  searchAlbums,
-  searchMovies,
-  searchMusicians,
-  searchShows,
-  searchTracks,
+  searchCategory,
   getTrailerPreferences,
   getMoviePreroll,
 } from "@/lib/api";
@@ -137,11 +134,7 @@ import {
   WATCH_ROOM_INVITE_USERS_KEY,
   WATCH_ROOMS_KEY,
   SEARCH_ALL_KEY,
-  SEARCH_MOVIES_KEY,
-  SEARCH_SHOWS_KEY,
-  SEARCH_ALBUMS_KEY,
-  SEARCH_MUSICIANS_KEY,
-  SEARCH_TRACKS_KEY,
+  SEARCH_CATEGORY_KEYS,
   SEARCH_PER_PAGE,
   MUSICIANS_PER_PAGE,
   TRAILER_PREFERENCES_KEY,
@@ -827,75 +820,16 @@ export function searchAllQueryOpts(q: string) {
   });
 }
 
-export function searchMoviesQueryOpts(
+export function searchCategoryQueryOpts<K extends PagedSearchTab>(
+  kind: K,
   q: string,
   page: number,
   perPage: number = SEARCH_PER_PAGE,
 ) {
   const trimmed = q.trim();
   return queryOptions({
-    queryKey: [SEARCH_MOVIES_KEY, trimmed, page, perPage],
-    queryFn: () => searchMovies(trimmed, page, perPage),
-    enabled: trimmed.length > 0,
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
-  });
-}
-
-export function searchShowsQueryOpts(
-  q: string,
-  page: number,
-  perPage: number = SEARCH_PER_PAGE,
-) {
-  const trimmed = q.trim();
-  return queryOptions({
-    queryKey: [SEARCH_SHOWS_KEY, trimmed, page, perPage],
-    queryFn: () => searchShows(trimmed, page, perPage),
-    enabled: trimmed.length > 0,
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
-  });
-}
-
-export function searchAlbumsQueryOpts(
-  q: string,
-  page: number,
-  perPage: number = SEARCH_PER_PAGE,
-) {
-  const trimmed = q.trim();
-  return queryOptions({
-    queryKey: [SEARCH_ALBUMS_KEY, trimmed, page, perPage],
-    queryFn: () => searchAlbums(trimmed, page, perPage),
-    enabled: trimmed.length > 0,
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
-  });
-}
-
-export function searchMusiciansQueryOpts(
-  q: string,
-  page: number,
-  perPage: number = SEARCH_PER_PAGE,
-) {
-  const trimmed = q.trim();
-  return queryOptions({
-    queryKey: [SEARCH_MUSICIANS_KEY, trimmed, page, perPage],
-    queryFn: () => searchMusicians(trimmed, page, perPage),
-    enabled: trimmed.length > 0,
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
-  });
-}
-
-export function searchTracksQueryOpts(
-  q: string,
-  page: number,
-  perPage: number = SEARCH_PER_PAGE,
-) {
-  const trimmed = q.trim();
-  return queryOptions({
-    queryKey: [SEARCH_TRACKS_KEY, trimmed, page, perPage],
-    queryFn: () => searchTracks(trimmed, page, perPage),
+    queryKey: [SEARCH_CATEGORY_KEYS[kind], trimmed, page, perPage],
+    queryFn: () => searchCategory(kind, trimmed, page, perPage),
     enabled: trimmed.length > 0,
     staleTime: STALE_LIST,
     gcTime: GC_DEFAULT,

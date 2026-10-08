@@ -230,7 +230,7 @@ test("playlists tab opens liked movies subview with URL-backed pagination", asyn
   await expect(page).toHaveURL(/tab=playlists/);
   await expect(page).toHaveURL(/view=liked/);
   await expect(page.getByRole("button", { name: "Back to playlists" })).toBeVisible();
-  await expect(page.getByText("25 liked")).toBeVisible();
+  await expect(page.getByText("25 liked movies", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Signal Fire 2024", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Play Signal Fire 2024" })).toHaveAttribute("href", "/movies/101/play");
   await expect(page.getByRole("navigation", { name: "pagination" })).toBeVisible();

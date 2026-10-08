@@ -64,6 +64,8 @@ function playlist(
     description: nullableString(),
     cover_image: nullableString(),
     is_public: false,
+    movie_id: nullableInt64(),
+    content_type: "track",
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
     track_count: 0,

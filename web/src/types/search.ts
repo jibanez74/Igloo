@@ -12,17 +12,6 @@ export type SearchAlbumsResponseType = Schema["AlbumSearchData"];
 export type SearchMusiciansResponseType = Schema["MusicianSearchData"];
 export type SearchTracksResponseType = Schema["TrackSearchData"];
 
-// The shape the five paginated payloads share, for components that render any
-// category generically (see routes/_auth/search/index.tsx).
-export type PaginatedSearchResponse<T> = {
-  query: string;
-  results: T[];
-  total: number;
-  page: number;
-  per_page: number;
-  total_pages: number;
-};
-
 export type SearchTab =
   | "all"
   | "movies"
@@ -30,3 +19,15 @@ export type SearchTab =
   | "albums"
   | "musicians"
   | "tracks";
+
+/** A category tab: each one pages through `/api/search/{tab}`. */
+export type PagedSearchTab = Exclude<SearchTab, "all">;
+
+/** Each category's `data` payload, keyed by its tab (and path segment). */
+export type SearchCategoryData = {
+  movies: SearchMoviesResponseType;
+  shows: SearchShowsResponseType;
+  albums: SearchAlbumsResponseType;
+  musicians: SearchMusiciansResponseType;
+  tracks: SearchTracksResponseType;
+};

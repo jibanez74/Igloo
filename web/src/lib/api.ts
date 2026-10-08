@@ -67,12 +67,9 @@ import type {
   WatchRoomInviteUsersResponseType,
   WatchRoomResponseType,
   WatchRoomType,
+  PagedSearchTab,
   SearchAllResponseType,
-  SearchMoviesResponseType,
-  SearchShowsResponseType,
-  SearchAlbumsResponseType,
-  SearchMusiciansResponseType,
-  SearchTracksResponseType,
+  SearchCategoryData,
   SpotifyAlbumSearchRequest,
   SpotifyAlbumSearchResultType,
   SpotifyTrackSearchRequest,
@@ -864,65 +861,14 @@ export const searchAll = (q: string) =>
     withQuery("/api/search", { q }),
   );
 
-export const searchMovies = (
+export const searchCategory = <K extends PagedSearchTab>(
+  kind: K,
   q: string,
   page: number,
   perPage: number = SEARCH_PER_PAGE,
 ) =>
-  apiRequest<SearchMoviesResponseType>(
-    withQuery("/api/search/movies", {
-      q,
-      page,
-      per_page: perPage,
-    }),
-  );
-
-export const searchShows = (
-  q: string,
-  page: number,
-  perPage: number = SEARCH_PER_PAGE,
-) =>
-  apiRequest<SearchShowsResponseType>(
-    withQuery("/api/search/shows", {
-      q,
-      page,
-      per_page: perPage,
-    }),
-  );
-
-export const searchAlbums = (
-  q: string,
-  page: number,
-  perPage: number = SEARCH_PER_PAGE,
-) =>
-  apiRequest<SearchAlbumsResponseType>(
-    withQuery("/api/search/albums", {
-      q,
-      page,
-      per_page: perPage,
-    }),
-  );
-
-export const searchMusicians = (
-  q: string,
-  page: number,
-  perPage: number = SEARCH_PER_PAGE,
-) =>
-  apiRequest<SearchMusiciansResponseType>(
-    withQuery("/api/search/musicians", {
-      q,
-      page,
-      per_page: perPage,
-    }),
-  );
-
-export const searchTracks = (
-  q: string,
-  page: number,
-  perPage: number = SEARCH_PER_PAGE,
-) =>
-  apiRequest<SearchTracksResponseType>(
-    withQuery("/api/search/tracks", {
+  apiRequest<SearchCategoryData[K]>(
+    withQuery(`/api/search/${kind}`, {
       q,
       page,
       per_page: perPage,

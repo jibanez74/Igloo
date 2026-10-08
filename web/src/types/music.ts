@@ -213,20 +213,7 @@ export type MusicianDetailsResponseType = {
 // PLAYLIST TYPES
 
 // Playlist summary for list views
-export type PlaylistSummaryType = {
-  id: number;
-  user_id: number;
-  name: string;
-  description: NullableString;
-  cover_image: NullableString;
-  is_public: boolean;
-  created_at: string;
-  updated_at: string;
-  track_count: number;
-  total_duration: number;
-  is_owner: boolean;
-  can_edit: boolean;
-};
+export type PlaylistSummaryType = components["schemas"]["PlaylistSummary"];
 
 // Playlist list response
 export type PlaylistsListResponseType = {

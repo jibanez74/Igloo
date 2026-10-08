@@ -11,7 +11,7 @@ import LibrarySortToggle, {
   type LibrarySortDirection,
 } from "@/components/shared/LibrarySortToggle";
 import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
-import { MoviesLoadError } from "@/components/shared/MoviesLoadError";
+import LoadErrorAlert from "@/components/shared/LoadErrorAlert";
 import { PosterCardSkeleton } from "@/components/shared/PosterCard";
 import { LIBRARY_POSTER_GRID_CLASS } from "@/lib/constants";
 import { nounForCount } from "@/lib/format";
@@ -189,7 +189,7 @@ export default function LibraryAllTab<
 
     if (isError || isApiFailure(data)) {
       return (
-        <MoviesLoadError
+        <LoadErrorAlert
           message={apiErrorMessage(data, `Couldn’t load ${noun.plural}. Check your connection and try again.`)}
           onRetry={() => void refetch()}
         />

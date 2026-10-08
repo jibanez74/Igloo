@@ -611,9 +611,11 @@ Every 2:3 poster card is `components/shared/PosterCard.tsx`, implemented once.
 `MovieCard`, `ShowCard`, `InTheatersCard` and `ContinueWatchingEpisodeCard`
 pass it their links, labels, badge and watch progress rather than repeating the
 markup; a new poster card belongs there too. Reach for a fresh `<article>` only
-when the anatomy genuinely differs — square covers (`AlbumCard`,
-`PlaylistCard`, `MoviePlaylistCard`), circular thumbs (`MusicianCard`), or the
-horizontal `WatchRoomCard`. All of them wear `CARD_SURFACE_CLASS`.
+when the anatomy genuinely differs — square covers (`AlbumCard`, and the
+shared `PlaylistCard`, which serves music and movie playlists alike and takes
+its link and placeholder icon from the playlist's `content_type`), circular
+thumbs (`MusicianCard`), or the horizontal `WatchRoomCard`. All of them wear
+`CARD_SURFACE_CLASS`.
 
 ```
 <article class={cn(CARD_SURFACE_CLASS, CARD_FOCUS_WITHIN_RING_CLASS)}>
@@ -746,7 +748,7 @@ rather than the library. The Playlists tabs themselves stay local to their
 pages, as the Tracks tab does to the music page; a new library page composes
 the same parts. The
 search page's category tabs reuse `LIBRARY_POSTER_GRID_CLASS`,
-`MoviesLoadError` and `PosterCardSkeleton` but stay page-local: their result
+`LoadErrorAlert` and `PosterCardSkeleton` but stay page-local: their result
 count line, "No albums match 'q'" copy and non-grid tracks list are not a
 library tab.
 
@@ -892,11 +894,13 @@ is unknown or empty.
   `isError || isApiFailure(data)` (`lib/is-api-failure.ts`, reading the API
   envelope `{ error, message, data }`). Which component renders it depends on
   what failed:
-  - A query inside a page → `MoviesLoadError` (`role="alert"`,
+  - A query inside a page → `LoadErrorAlert` (`role="alert"`,
     `border-destructive/25 bg-destructive/10 text-destructive`, "Try again" →
     `refetch()`).
-  - A home section's query → `SectionErrorAlert`, the same destructive tint as
-    a shadcn `Alert`, rendered for you by `HomeMediaSection`.
+  - A section that failed as a whole → `SectionErrorAlert`, the same
+    destructive tint as a shadcn `Alert` with an optional title ("Error" by
+    default): a home section's query (rendered for you by
+    `HomeMediaSection`), the watch-room list.
   - A Settings card → `SettingsErrorCard` (and `SettingsLoadingCard` for its
     pending state), so the card keeps its place in the page.
   - The four ways a detail page fails to show its subject — an invalid id, a
@@ -908,7 +912,7 @@ is unknown or empty.
     a named key (`music`, `moviePlaylists`, …) carrying both the route and the
     words on the link, so the two can never disagree and a destination may
     carry search params.
-  - A missing resource → `MediaNotFound`: a destructive `Alert` plus a
+  - A missing resource → `MediaNotFound`: a `SectionErrorAlert` plus a
     **required** "Back to Movies/TV Shows/Music/Home" outline link, so the
     page never dead-ends.
   - A mutation → **toast** via `toast-helpers.ts`, never inline.

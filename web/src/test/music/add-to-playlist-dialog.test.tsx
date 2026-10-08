@@ -51,6 +51,8 @@ function playlists(): ApiResponseType<PlaylistsListResponseType> {
       description: { String: "", Valid: false },
       cover_image: { String: "", Valid: false },
       is_public: false,
+      movie_id: { Int64: 0, Valid: false },
+      content_type: "track" as const,
       created_at: "2026-01-01T00:00:00Z",
       updated_at: "2026-01-01T00:00:00Z",
       track_count: index,

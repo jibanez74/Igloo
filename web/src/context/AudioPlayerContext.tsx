@@ -441,6 +441,31 @@ export function AudioPlayerProvider({
     return queueId;
   };
 
+  // The mixed-list entry points (a library list, shuffle, play-all) seed the
+  // queue's albumInfo from the opening track's own album rather than a
+  // "Shuffle All"-style placeholder: setTrack resolves each track's details
+  // from rawTracks only from the next track onward, so a literal here would
+  // show a bogus album for exactly one track.
+  const startQueueFromRaw = (
+    rawTracks: PlayableTrackData[],
+    startIndex: number,
+    mode?: "shuffle" | "playAll",
+  ) => {
+    const tracks = rawTracks.map(convertToAudioTrack);
+    const { cover, musician, albumTitle } = extractTrackMetadata(
+      rawTracks[startIndex],
+    );
+
+    return startQueue({
+      currentTrack: tracks[startIndex],
+      tracks,
+      albumInfo: { cover, title: albumTitle, musician },
+      rawTracks,
+      isShuffleMode: mode === "shuffle",
+      isPlayAllMode: mode === "playAll",
+    });
+  };
+
   const playTrack: AudioPlayerActions["playTrack"] = (track, playlist, albumInfo) => {
     // Track rows are labeled "Pause X"/"Play X" for the current track, so a
     // repeat click toggles playback instead of rebuilding the queue and
@@ -466,20 +491,12 @@ export function AudioPlayerProvider({
 
     const uniqueRawTracks = dedupeById(rawTracks);
 
-    const startRawTrack = uniqueRawTracks.find(
+    const startIndex = uniqueRawTracks.findIndex(
       track => track.id === startTrackId,
     );
-    if (!startRawTrack) return;
+    if (startIndex === -1) return;
 
-    const tracks = uniqueRawTracks.map(convertToAudioTrack);
-    const { cover, musician, albumTitle } = extractTrackMetadata(startRawTrack);
-
-    startQueue({
-      currentTrack: tracks[uniqueRawTracks.indexOf(startRawTrack)],
-      tracks,
-      albumInfo: { cover, title: albumTitle, musician },
-      rawTracks: uniqueRawTracks,
-    });
+    startQueueFromRaw(uniqueRawTracks, startIndex);
   };
 
   const playQueue: AudioPlayerActions["playQueue"] = (
@@ -582,22 +599,9 @@ export function AudioPlayerProvider({
         return;
       }
 
-      // The append effect above already dedupes subsequent batches; this one
-      // covers repeats within the first batch.
-      const rawTracks = dedupeById(response.data.tracks);
-      const tracks = rawTracks.map(convertToAudioTrack);
-      // The first track's own album, not a "Shuffle All" placeholder: setTrack
-      // resolves the real title from track 2 onward, so a literal here would
-      // show a bogus album for exactly one track.
-      const { cover, musician, albumTitle } = extractTrackMetadata(rawTracks[0]);
-
-      startQueue({
-        currentTrack: tracks[0],
-        tracks,
-        albumInfo: { cover, title: albumTitle, musician },
-        rawTracks,
-        isShuffleMode: true,
-      });
+      // fetchShuffleBatch drops already-queued ids from every later batch;
+      // this covers repeats within the first one.
+      startQueueFromRaw(dedupeById(response.data.tracks), 0, "shuffle");
     };
 
   const startPlayAllPlayback: AudioPlayerActions["startPlayAllPlayback"] =
@@ -613,16 +617,7 @@ export function AudioPlayerProvider({
       }
 
       const rawTracks = response.data.tracks;
-      const tracks = rawTracks.map(convertToAudioTrack);
-      const { cover, musician, albumTitle } = extractTrackMetadata(rawTracks[0]);
-
-      startQueue({
-        currentTrack: tracks[0],
-        tracks,
-        albumInfo: { cover, title: albumTitle, musician },
-        rawTracks,
-        isPlayAllMode: true,
-      });
+      startQueueFromRaw(rawTracks, 0, "playAll");
 
       // After startQueue: clearMetadataRefs inside it zeroes these counters.
       playAllOffsetRef.current = rawTracks.length;

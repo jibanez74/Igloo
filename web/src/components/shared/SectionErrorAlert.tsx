@@ -1,12 +1,22 @@
 import { AlertCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
-/** Shared destructive alert for home-section load failures (design-system §3.4). */
-export default function SectionErrorAlert({ message }: { message: string }) {
+/**
+ * Shared destructive alert for a section that failed to load as a whole: a
+ * home section, the watch-room list, and the dead ends `MediaNotFound` renders
+ * (design-system §3.4).
+ */
+export default function SectionErrorAlert({
+  title = "Error",
+  message,
+}: {
+  title?: string;
+  message: string;
+}) {
   return (
     <Alert className="border-destructive/25 bg-destructive/10 text-destructive">
       <AlertCircle className="size-4" aria-hidden="true" />
-      <AlertTitle>Error</AlertTitle>
+      <AlertTitle>{title}</AlertTitle>
       <AlertDescription>{message}</AlertDescription>
     </Alert>
   );

@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
-import { AlertCircle, ArrowLeft } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ArrowLeft } from "lucide-react";
+import SectionErrorAlert from "@/components/shared/SectionErrorAlert";
 import { buttonVariants } from "@/components/ui/button";
 import {
   MOVIES_PLAYLISTS_TAB_SEARCH,
@@ -51,11 +51,7 @@ export default function MediaNotFound({
 
   return (
     <div>
-      <Alert className="border-destructive/20 bg-destructive/10 text-destructive">
-        <AlertCircle className="size-4" aria-hidden="true" />
-        <AlertTitle>{title}</AlertTitle>
-        <AlertDescription>{message}</AlertDescription>
-      </Alert>
+      <SectionErrorAlert title={title} message={message} />
       <Link
         {...linkProps}
         className={cn(buttonVariants({ variant: "outline" }), "mt-4")}

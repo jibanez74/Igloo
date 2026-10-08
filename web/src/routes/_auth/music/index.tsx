@@ -23,7 +23,7 @@ import { useWindowScrollMargin } from "@/hooks/useWindowScrollMargin";
 import { showActionFailed } from "@/lib/toast-helpers";
 import { refreshMusicLibraryCache } from "@/lib/music-library-cache";
 import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
-import { MoviesLoadError } from "@/components/shared/MoviesLoadError";
+import LoadErrorAlert from "@/components/shared/LoadErrorAlert";
 import { apiErrorMessage, isApiFailure } from "@/lib/is-api-failure";
 import { pluralize } from "@/lib/format";
 import { trackRowProps } from "@/lib/track-row-props";
@@ -71,8 +71,8 @@ import LibraryMoreMenu, {
 } from "@/components/shared/LibraryMoreMenu";
 import LibraryPagination from "@/components/shared/LibraryPagination";
 import LibraryStats from "@/components/shared/LibraryStats";
+import PlaylistCard from "@/components/shared/PlaylistCard";
 import TrackItem from "@/components/music/TrackItem";
-import PlaylistCard from "@/components/music/PlaylistCard";
 import LibraryEmptyState from "@/components/shared/LibraryEmptyState";
 import { Button } from "@/components/ui/button";
 import PlaylistFormDialog from "@/components/music/PlaylistFormDialog";
@@ -442,7 +442,7 @@ function TracksTabContent() {
 
   if (isError || firstPageFailed) {
     return (
-      <MoviesLoadError
+      <LoadErrorAlert
         message={apiErrorMessage(
           firstPage,
           "Couldn’t load tracks. Check your connection and try again.",
@@ -800,7 +800,7 @@ function PlaylistsTabContent({ playlistsView, likedTracksPage }: PlaylistsTabCon
 
   if (isError || isApiFailure(data)) {
     return (
-      <MoviesLoadError
+      <LoadErrorAlert
         message={apiErrorMessage(data, "Couldn’t load playlists. Check your connection and try again.")}
         onRetry={() => void refetch()}
       />
@@ -952,7 +952,7 @@ function LikedTracksInPlaylistsTab({ likedTracksPage, onExit }: LikedTracksInPla
 
       {/* Error, empty state or track list. The header stays so Back still works. */}
       {loadFailed ? (
-        <MoviesLoadError
+        <LoadErrorAlert
           message={apiErrorMessage(data, "Couldn’t load liked tracks. Check your connection and try again.")}
           onRetry={() => void refetch()}
         />

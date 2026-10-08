@@ -29,7 +29,7 @@ import {
   SCROLL_RAIL_EDGE_CLASS,
   SCROLL_RAIL_SCROLLER_CLASS,
   PLAYLIST_TRACKS_PAGE_SIZE,
-  SEARCH_MOVIES_KEY,
+  SEARCH_CATEGORY_KEYS,
   SEARCH_PER_PAGE,
   SHOWS_BY_GENRE_KEY,
   SHOWS_LIBRARY_KEY,
@@ -49,7 +49,7 @@ import {
   moviesLibraryQueryOpts,
   musiciansPaginatedQueryOpts,
   playlistTracksInfiniteQueryOpts,
-  searchMoviesQueryOpts,
+  searchCategoryQueryOpts,
   showsByGenreQueryOpts,
   showsLibraryQueryOpts,
   tracksInfiniteQueryOpts,
@@ -196,8 +196,8 @@ describe("constants contracts", () => {
       1,
       MUSICIANS_PER_PAGE,
     ]);
-    expect(searchMoviesQueryOpts(" Casino ", 2).queryKey).toEqual([
-      SEARCH_MOVIES_KEY,
+    expect(searchCategoryQueryOpts("movies", " Casino ", 2).queryKey).toEqual([
+      SEARCH_CATEGORY_KEYS.movies,
       "Casino",
       2,
       SEARCH_PER_PAGE,

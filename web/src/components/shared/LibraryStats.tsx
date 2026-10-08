@@ -4,7 +4,7 @@ import {
   type LibraryNoun,
   type LibraryQueryOptions,
 } from "@/components/shared/LibraryAllTab";
-import { MoviesLoadError } from "@/components/shared/MoviesLoadError";
+import LoadErrorAlert from "@/components/shared/LoadErrorAlert";
 import { nounForCount } from "@/lib/format";
 import { apiErrorMessage, isApiFailure } from "@/lib/is-api-failure";
 import { cn } from "@/lib/utils";
@@ -42,7 +42,7 @@ export default function LibraryStats<
   if (isError || isApiFailure(data)) {
     return (
       <div className={className}>
-        <MoviesLoadError
+        <LoadErrorAlert
           message={apiErrorMessage(data, "Couldn’t load library statistics. Check your connection and try again.")}
           onRetry={() => void refetch()}
         />
