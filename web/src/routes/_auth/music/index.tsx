@@ -794,13 +794,6 @@ function PlaylistsTabContent({ playlistsView, likedTracksPage }: PlaylistsTabCon
     );
   }
 
-  // Generate announcement for screen readers.
-  // Reached only after the isLoading early-return above, so no loading case here.
-  const getAnnouncement = () => {
-    if (playlists.length === 0) return "No playlists yet";
-    return `${pluralize(playlists.length, "playlist")} loaded`;
-  };
-
   if (isLoading) {
     return <PlaylistsTabSkeleton />;
   }
@@ -813,6 +806,13 @@ function PlaylistsTabContent({ playlistsView, likedTracksPage }: PlaylistsTabCon
       />
     );
   }
+
+  // Generate announcement for screen readers.
+  // Declared after the loading and error returns, so it only describes loaded data.
+  const getAnnouncement = () => {
+    if (playlists.length === 0) return "No playlists yet";
+    return `${pluralize(playlists.length, "playlist")} loaded`;
+  };
 
   return (
     <div>
