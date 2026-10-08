@@ -124,6 +124,10 @@ function AlbumDetailsPage() {
   const { data, isPending, isError } = useQuery(
     albumDetailsQueryOpts(albumId ?? 0),
   );
+  // The skeleton holds a place for the admin "More options" button only when
+  // the loaded page will show one.
+  const { data: userData } = useQuery(authUserQueryOpts());
+  const isAdmin = authUserFrom(userData)?.is_admin === true;
 
   return (
     <MediaDetailGuard
@@ -134,7 +138,7 @@ function AlbumDetailsPage() {
       isError={isError}
       data={data}
       payload={data?.data?.album ? data.data : null}
-      skeleton={<MusicDetailSkeleton variant="album" />}
+      skeleton={<MusicDetailSkeleton variant="album" withMenu={isAdmin} />}
     >
       {(loaded, id) => <AlbumDetailsContent key={id} {...loaded} />}
     </MediaDetailGuard>

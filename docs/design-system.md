@@ -792,10 +792,14 @@ span) and `MusicGenreList` (their genre pills), `PlayShuffleButtons` (the
 `lg` Play pill and outline Shuffle on all three pages, each page passing its
 own accessible names; never disabled, a spinner while a playlist's remaining
 pages load) in a `MUSIC_DETAIL_ACTIONS_CLASS` row, `MusicDetailSkeleton`
-(`variant="album" | "musician" | "playlist"`: the album and musician variants
-are one hero geometry with the art shape and hero rows switched; the playlist
-variant mirrors the playlist page instead, which has no backdrop band and no
-overlap, just a square cover beside the title over the rows), and
+(`variant="album" | "musician" | "playlist"`, built from the same
+`MUSIC_DETAIL_*` rows, `MusicDetailArtSkeleton` and
+`MusicDetailBackdropSkeleton` as the pages: the album and musician variants
+are one hero geometry with the art shape and the order of the pill rows
+switched, and `withMenu` holds a place for the album's admin "More options"
+button only when the page will show one; the playlist variant mirrors the
+playlist page instead, which has no backdrop band and no overlap, just a
+square cover beside the title over the rows), and
 `MusicDetailBackNav` (the `nav` "Page navigation" landmark back to the owning
 `/music` tab, also used by the playlist page). All three pages, the playlist
 included, guard through `MediaDetailGuard` (§3.4), so a malformed id, a failed
@@ -875,7 +879,8 @@ is unknown or empty.
   boxes) so content arrival causes no layout shift — see the shared
   `DetailSkeleton` (`withActions` mirrors whether the real hero has an actions
   row; pages append their own below-the-fold geometry as children),
-  `MusicDetailSkeleton` (§3.2), and the `LibraryAllTabSkeleton` /
+  `MusicDetailSkeleton` (§3.2; `withMenu` likewise mirrors the album's admin
+  button), and the `LibraryAllTabSkeleton` /
   `LibraryGenresTabSkeleton` that live in the same files as the grids they
   mirror. A skeleton mirrors the **grid only**; chrome whose presence depends
   on the response — a library tab's page info — belongs to the component that

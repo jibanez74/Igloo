@@ -22,8 +22,20 @@ describe("MusicDetailSkeleton", () => {
     expect(container.querySelector(".rounded-xl.w-44")).not.toBeNull();
     expect(container.querySelector(".rounded-full.w-48")).toBeNull();
     expect(container.querySelectorAll(".grid")).toHaveLength(0);
-    // Play, Shuffle and the round admin menu button.
-    expect(container.querySelectorAll(".h-12, .size-12")).toHaveLength(3);
+    // Play and Shuffle are size="lg" buttons: h-10, not the h-12 the
+    // skeleton used to draw.
+    expect(container.querySelectorAll(".rounded-full.h-10")).toHaveLength(2);
+    expect(container.querySelectorAll(".h-12, .size-12")).toHaveLength(0);
+  });
+
+  it("holds a place for the admin menu button only when the page shows one", () => {
+    const { container } = render(
+      <MusicDetailSkeleton variant="album" withMenu />,
+    );
+
+    // Play, Shuffle and the icon-only "More options" button.
+    expect(container.querySelectorAll(".rounded-full.h-10")).toHaveLength(3);
+    expect(container.querySelector(".rounded-full.h-10.w-12")).not.toBeNull();
   });
 
   it("mirrors the playlist header: a square cover with no backdrop band and no overlap", () => {
@@ -36,7 +48,7 @@ describe("MusicDetailSkeleton", () => {
     expect(container.querySelector(".aspect-21\\/9")).toBeNull();
     expect(container.querySelector(".-mt-20")).toBeNull();
     // Play and Shuffle only: the playlist page has no round menu button.
-    expect(container.querySelectorAll(".h-12, .size-12")).toHaveLength(2);
+    expect(container.querySelectorAll(".rounded-full.h-10")).toHaveLength(2);
     expect(container.querySelectorAll(".h-14")).toHaveLength(8);
   });
 
@@ -46,7 +58,9 @@ describe("MusicDetailSkeleton", () => {
     expect(container.querySelector(".rounded-full.w-48")).not.toBeNull();
     expect(container.querySelector(".rounded-xl.w-44")).toBeNull();
     expect(container.querySelectorAll(".grid > div")).toHaveLength(6);
-    expect(container.querySelectorAll(".h-12")).toHaveLength(2);
+    expect(container.querySelectorAll(".rounded-full.h-10")).toHaveLength(2);
+    // The stats are Badge pills like the album's, not lines of text.
+    expect(container.querySelectorAll(".rounded-full.h-8")).toHaveLength(3);
   });
 
   it("hides its visuals under the status label", () => {

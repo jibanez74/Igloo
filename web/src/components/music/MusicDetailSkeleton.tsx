@@ -3,6 +3,7 @@ import { MusicDetailBackdropSkeleton } from "@/components/music/MusicDetailBackd
 import {
   LIBRARY_POSTER_GRID_CLASS,
   MOTION_LOADING_STATE_CLASS,
+  MUSIC_DETAIL_ACTIONS_CLASS,
   MUSIC_DETAIL_HERO_ROW_CLASS,
   MUSIC_DETAIL_SHELL_CLASS,
 } from "@/lib/constants";
@@ -13,16 +14,20 @@ type MusicDetailSkeletonProps = {
    * band, or the playlist header, which has no band and no overlap.
    */
   variant: "album" | "musician" | "playlist";
+  /** The album page's admin "More options" button beside Play and Shuffle. */
+  withMenu?: boolean;
 };
 
-// Authored beside the layouts it mirrors (design-system §3.4). The album and
-// musician pages share one geometry: the backdrop band, the overlapping hero
-// with its art box and text rows, then the track rows; only the art shape,
-// the hero's placeholder rows and the musician's discography grid differ. The
-// playlist page is a plain header - square cover beside the title, two pills -
-// above its heading and rows, so it gets its own.
+// Authored beside the layouts it mirrors (design-system §3.4), from the same
+// MUSIC_DETAIL_* rows and art sizes the pages use. The album and musician
+// pages share one geometry: the backdrop band, the overlapping hero with its
+// art box and text rows, then the track rows; only the art shape, the order of
+// the pill rows and the musician's discography grid differ. The playlist page
+// is a plain header - square cover beside the title - above its heading and
+// rows, so it gets its own.
 export default function MusicDetailSkeleton({
   variant,
+  withMenu = false,
 }: MusicDetailSkeletonProps) {
   const label = `Loading ${variant} details`;
 
@@ -37,13 +42,19 @@ export default function MusicDetailSkeleton({
       {variant === "playlist" ? (
         <PlaylistSkeleton />
       ) : (
-        <HeroSkeleton isMusician={variant === "musician"} />
+        <HeroSkeleton isMusician={variant === "musician"} withMenu={withMenu} />
       )}
     </div>
   );
 }
 
-function HeroSkeleton({ isMusician }: { isMusician: boolean }) {
+function HeroSkeleton({
+  isMusician,
+  withMenu,
+}: {
+  isMusician: boolean;
+  withMenu: boolean;
+}) {
   return (
     <>
       <MusicDetailBackdropSkeleton />
@@ -52,43 +63,23 @@ function HeroSkeleton({ isMusician }: { isMusician: boolean }) {
         <div className={MUSIC_DETAIL_HERO_ROW_CLASS}>
           <MusicDetailArtSkeleton variant={isMusician ? "musician" : "album"} />
 
-          <div className="min-w-0 flex-1 space-y-4 text-center lg:text-left">
+          <div className="min-w-0 flex-1 text-center lg:text-left">
             <div className="mx-auto h-10 max-w-lg rounded-sm bg-muted lg:mx-0" />
-            <div className="mx-auto h-6 max-w-xs rounded-sm bg-muted lg:mx-0" />
+            <div className="mx-auto mt-3 h-6 max-w-xs rounded-sm bg-muted lg:mx-0" />
+            {/* The musician page lists genres above its stats; the album
+                page the other way round. */}
             {isMusician ? (
               <>
-                <div className="flex flex-wrap justify-center gap-2 lg:justify-start">
-                  <div className="h-7 w-20 rounded-full bg-muted" />
-                  <div className="h-7 w-24 rounded-full bg-muted" />
-                </div>
-                <div className="flex flex-wrap justify-center gap-4 lg:justify-start">
-                  <div className="h-5 w-20 rounded-sm bg-muted" />
-                  <div className="h-5 w-20 rounded-sm bg-muted" />
-                  <div className="h-5 w-16 rounded-sm bg-muted" />
-                </div>
-                <div className="flex flex-col gap-3 sm:flex-row sm:justify-center lg:justify-start">
-                  <div className="h-12 w-full rounded-full bg-muted sm:w-32" />
-                  <div className="h-12 w-full rounded-full bg-muted sm:w-28" />
-                </div>
+                <GenrePillsSkeleton />
+                <StatPillsSkeleton />
               </>
             ) : (
               <>
-                <div className="flex flex-wrap justify-center gap-2 lg:justify-start">
-                  <div className="h-8 w-28 rounded-full bg-muted" />
-                  <div className="h-8 w-24 rounded-full bg-muted" />
-                  <div className="h-8 w-24 rounded-full bg-muted" />
-                </div>
-                <div className="flex flex-wrap justify-center gap-2 lg:justify-start">
-                  <div className="h-7 w-20 rounded-full bg-muted" />
-                  <div className="h-7 w-24 rounded-full bg-muted" />
-                </div>
-                <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:flex-wrap sm:justify-center lg:justify-start">
-                  <div className="h-12 w-full rounded-full bg-muted sm:w-32" />
-                  <div className="h-12 w-full rounded-full bg-muted sm:w-24" />
-                  <div className="mx-auto size-12 rounded-full bg-muted sm:mx-0" />
-                </div>
+                <StatPillsSkeleton />
+                <GenrePillsSkeleton />
               </>
             )}
+            <ActionsSkeleton withMenu={withMenu} />
           </div>
         </div>
 
@@ -125,6 +116,41 @@ function HeroSkeleton({ isMusician }: { isMusician: boolean }) {
   );
 }
 
+// MusicStatList's three Badge pills.
+function StatPillsSkeleton() {
+  return (
+    <div className="mt-4 flex flex-wrap justify-center gap-2 sm:gap-3 lg:justify-start">
+      <div className="h-8 w-28 rounded-full bg-muted" />
+      <div className="h-8 w-24 rounded-full bg-muted" />
+      <div className="h-8 w-24 rounded-full bg-muted" />
+    </div>
+  );
+}
+
+// MusicGenreList's pills.
+function GenrePillsSkeleton() {
+  return (
+    <div className="mt-4 flex flex-wrap justify-center gap-2 lg:justify-start">
+      <div className="h-7 w-20 rounded-full bg-muted" />
+      <div className="h-7 w-24 rounded-full bg-muted" />
+    </div>
+  );
+}
+
+// PlayShuffleButtons' two lg (h-10) buttons, full width on phones, plus the
+// album's icon-only admin menu button when the page shows one.
+function ActionsSkeleton({ withMenu }: { withMenu: boolean }) {
+  return (
+    <div className={MUSIC_DETAIL_ACTIONS_CLASS}>
+      <div className="h-10 w-full rounded-full bg-muted sm:w-32" />
+      <div className="h-10 w-full rounded-full bg-muted sm:w-28" />
+      {withMenu && (
+        <div className="h-10 w-12 self-center rounded-full bg-muted sm:self-auto" />
+      )}
+    </div>
+  );
+}
+
 // The playlist header: cover, name, the two-figure stats row and the Play /
 // Shuffle pair, then the "Tracks" rail heading over the rows.
 function PlaylistSkeleton() {
@@ -139,10 +165,7 @@ function PlaylistSkeleton() {
             <div className="h-4 w-16 rounded-sm bg-muted sm:h-5 lg:h-6" />
             <div className="h-4 w-14 rounded-sm bg-muted sm:h-5 lg:h-6" />
           </div>
-          <div className="mt-5 flex flex-col justify-center gap-2 sm:mt-6 sm:flex-row sm:gap-3 lg:justify-start">
-            <div className="h-12 w-full rounded-full bg-muted sm:w-32" />
-            <div className="h-12 w-full rounded-full bg-muted sm:w-28" />
-          </div>
+          <ActionsSkeleton withMenu={false} />
         </div>
       </div>
 
