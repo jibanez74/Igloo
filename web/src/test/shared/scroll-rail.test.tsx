@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ScrollRail from "@/components/shared/ScrollRail";
@@ -131,6 +131,30 @@ describe("ScrollRail", () => {
     });
 
     expect(edge("end")).toHaveAttribute("data-overflow", "true");
+  });
+
+  it("re-measures when items are added after mount", async () => {
+    const rail = (items: string[]) => (
+      <ScrollRail label="cast" asChild>
+        <ul role="list" aria-label="Cast members">
+          {items.map(item => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      </ScrollRail>
+    );
+    const { rerender } = render(rail(["One", "Two"]));
+    const list = screen.getByRole("list", { name: "Cast members" });
+    setMetrics(list, { scrollWidth: 400, clientWidth: 400, scrollLeft: 0 });
+    expect(edge("end")).toBeNull();
+
+    // No scroll and no window resize: only the new item can trigger this.
+    Object.defineProperty(list, "scrollWidth", { configurable: true, value: 900 });
+    rerender(rail(["One", "Two", "Three"]));
+
+    await waitFor(() => {
+      expect(edge("end")).toHaveAttribute("data-overflow", "true");
+    });
   });
 
   it("keeps the fades but drops the arrows on a touch-first device", () => {

@@ -44,8 +44,9 @@ const EDGE_TOLERANCE_PX = 1;
 
 /**
  * Which sides of a horizontal scroller still have content past the edge.
- * Re-measured on scroll, on any resize of the scroller or its items, and on
- * window resize, so an item that loads in later reveals its edge too.
+ * Re-measured on scroll, on any resize of the scroller or its items, when
+ * items are added or removed, and on window resize, so an item that loads in
+ * later reveals its edge too.
  */
 function useScrollEdges(ref: RefObject<HTMLElement | null>): ScrollEdges {
   const [edges, setEdges] = useState<ScrollEdges>({ start: false, end: false });
@@ -65,16 +66,31 @@ function useScrollEdges(ref: RefObject<HTMLElement | null>): ScrollEdges {
 
     measure();
 
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
+    const resizeObserver = new ResizeObserver(measure);
+    resizeObserver.observe(el);
     for (const child of el.children) {
-      observer.observe(child);
+      resizeObserver.observe(child);
     }
+    // Appending an item grows scrollWidth without resizing the scroller or
+    // any item already observed, so the child list is watched on its own.
+    const childListObserver = new MutationObserver(mutations => {
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          if (node instanceof Element) resizeObserver.observe(node);
+        }
+        for (const node of mutation.removedNodes) {
+          if (node instanceof Element) resizeObserver.unobserve(node);
+        }
+      }
+      measure();
+    });
+    childListObserver.observe(el, { childList: true });
     el.addEventListener("scroll", measure, { passive: true });
     window.addEventListener("resize", measure);
 
     return () => {
-      observer.disconnect();
+      resizeObserver.disconnect();
+      childListObserver.disconnect();
       el.removeEventListener("scroll", measure);
       window.removeEventListener("resize", measure);
     };
