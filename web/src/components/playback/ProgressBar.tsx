@@ -239,10 +239,11 @@ export default function ProgressBar({
       : safeDuration;
   // The readout follows the playhead even before the element can seek (an
   // HLS stream labelled with its catalog length), so it never sits at 0:00
-  // while playback moves.
+  // while playback moves. It is not capped at the label: a stream can run
+  // past its catalog length.
   const readoutTime = isSeekable
     ? safeCurrentTime
-    : clampToRange(currentTime, 0, labelDuration);
+    : clampToRange(currentTime, 0, Number.POSITIVE_INFINITY);
   const showHours = labelDuration >= 3600;
   const currentTimeLabel = formatTimecode(readoutTime, {
     forceHours: showHours,

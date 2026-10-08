@@ -285,6 +285,21 @@ describe("ProgressBar", () => {
     );
   });
 
+  it("keeps the unseekable readout advancing past the catalog duration", () => {
+    render(
+      <ProgressBar
+        currentTime={2340}
+        duration={0}
+        displayedDuration={2329}
+        onSeek={vi.fn()}
+        variant="video"
+      />,
+    );
+
+    expect(screen.getByText("39:00")).toBeInTheDocument();
+    expect(screen.getByText("38:49")).toBeInTheDocument();
+  });
+
   it("drops a pending scrub value when resetKey changes", () => {
     const onSeek = vi.fn();
 
