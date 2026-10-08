@@ -1011,7 +1011,7 @@ func TestGenerateMusicianSummaryOmitsFiguresSpotifyDidNotSend(t *testing.T) {
 	if got, want := generateMusicianSummary(artist(45, 0)), "Test Artist has a dedicated following."; got != want {
 		t.Fatalf("summary without followers = %q, want %q", got, want)
 	}
-	if got, want := generateMusicianSummary(artist(0, 2_500)), "Test Artist is an independent artist with 2.5K followers on Spotify."; got != want {
+	if got, want := generateMusicianSummary(artist(0, 2_500)), "Test Artist has 2.5K followers on Spotify."; got != want {
 		t.Fatalf("summary without popularity = %q, want %q", got, want)
 	}
 }
