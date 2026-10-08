@@ -104,10 +104,15 @@ test("audio player like button toggles the current track's liked state", async (
     page.getByRole("main").getByRole("button", { name: "Remove Northern Drift from liked" }),
   ).toBeVisible();
 
-  // The extra button must not push the mini bar past a narrow viewport.
+  // On a phone the mini bar gives the like button up so the title keeps room
+  // to read; the liked state stays visible on the track row, and the bar
+  // must not push past the viewport.
   await page.setViewportSize(VIEWPORTS.phone);
   await expect(
     miniBar.getByRole("button", { name: "Remove Northern Drift from liked" }),
+  ).toBeHidden();
+  await expect(
+    page.getByRole("main").getByRole("button", { name: "Remove Northern Drift from liked" }),
   ).toBeVisible();
   await expectNoOverflowingElements(page);
 
