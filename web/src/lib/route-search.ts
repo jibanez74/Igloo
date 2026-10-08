@@ -12,7 +12,7 @@ export const loginSearchSchema = z.object({
 
 export const trailerSearchSchema = z.object({
   mediaType: z.optional(z.enum(["movie", "tv"])),
-  mediaId: z.optional(z.coerce.number().check(z.int(), z.positive())),
+  tmdbId: z.optional(z.coerce.number().check(z.int(), z.positive())),
   videoKey: z.optional(z.string()),
   returnTo: z.optional(
     z.pipe(
