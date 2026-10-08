@@ -311,6 +311,13 @@ func (app *Application) GetMovieByTmdbID(w http.ResponseWriter, r *http.Request)
 	movie := &tmdb.TmdbMovie{TmdbID: id}
 	err = app.Tmdb.GetTmdbMovieByID(r.Context(), movie)
 	if err != nil {
+		// An id TMDB does not know is the reader's mistake, not an outage: answer
+		// 404 so the client words it as a missing movie rather than a failure.
+		var status *tmdb.StatusError
+		if errors.As(err, &status) && status.StatusCode == http.StatusNotFound {
+			helpers.ErrorJSON(w, errors.New("movie not found on tmdb"), http.StatusNotFound)
+			return
+		}
 		app.Logger.Error("failed to get movie from tmdb", "error", err, "tmdb_id", id)
 		helpers.ErrorJSON(w, errors.New("failed to fetch movie from tmdb"))
 		return

@@ -89,7 +89,16 @@ func musicSpotifyReasonSplitsCompound(reason string) bool {
 	return reason == spotifyapi.MatchReasonNoResults || reason == spotifyapi.MatchReasonScoreBelowThreshold
 }
 
+// generateMusicianSummary words the Spotify popularity and follower figures as
+// a sentence. Spotify omits both for some artists, in which case there is
+// nothing to say: a sentence built from zeros ("is an independent artist with
+// 0 followers") would read as a claim about the artist rather than a gap.
 func generateMusicianSummary(artist *spotifylib.FullArtist) string {
+	followers := artist.Followers.Count
+	if artist.Popularity == 0 && followers == 0 {
+		return ""
+	}
+
 	var parts []string
 
 	parts = append(parts, artist.Name)
@@ -114,8 +123,8 @@ func generateMusicianSummary(artist *spotifylib.FullArtist) string {
 		parts = append(parts, "is an independent artist")
 	}
 
-	followers := artist.Followers.Count
 	switch {
+	case followers == 0:
 	case followers >= 10_000_000:
 		parts = append(parts, fmt.Sprintf("with over %dM followers on Spotify", followers/1_000_000))
 	case followers >= 1_000_000:
