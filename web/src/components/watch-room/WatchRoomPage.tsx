@@ -339,6 +339,7 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
         >
           <WatchRoomPlayerPanel
             room={room}
+            posterUrl={posterUrl}
             streamUrl={streamUrl}
             subtitleTrack={subtitleTrack}
             waitingForCapacity={waitingForCapacity}
@@ -535,6 +536,7 @@ function WatchRoomHeader({
 
 type WatchRoomPlayerPanelProps = {
   room: WatchRoomDetailType;
+  posterUrl: string | null;
   streamUrl: string;
   subtitleTrack: {
     url: string;
@@ -567,6 +569,7 @@ type WatchRoomPlayerPanelProps = {
 
 function WatchRoomPlayerPanel({
   room,
+  posterUrl,
   streamUrl,
   subtitleTrack,
   videoRef,
@@ -605,6 +608,7 @@ function WatchRoomPlayerPanel({
           src={streamUrl}
           isHlsSource={room.playback_mode !== "direct"}
           title={room.movie_title}
+          posterUrl={posterUrl}
           isFullscreen={playerFullscreenMode}
           onError={onError}
           onPlay={() => onPlayingChange(true)}

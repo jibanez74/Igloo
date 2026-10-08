@@ -50,7 +50,7 @@ func (s *stubTmdbClient) GetTmdbMovieByID(_ context.Context, movie *tmdb.TmdbMov
 	}
 	details, ok := s.detailMovies[movie.TmdbID]
 	if !ok {
-		return errors.New("tmdb details unavailable")
+		return &tmdb.StatusError{StatusCode: http.StatusNotFound, Message: "unable to get movie from tmdb"}
 	}
 	*movie = details
 	return nil
@@ -333,6 +333,14 @@ func TestGetMovieByTmdbID_HTTP(t *testing.T) {
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("invalid id status = %d, want 400", w.Code)
 	}
+
+	w = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/tmdb/movies/604", nil)
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("unknown id status = %d, want 404; body = %s", w.Code, w.Body.String())
+	}
+	assertOpenAPIExchange(t, "getMovieByTmdbID", req, w)
 }
 
 func TestGetTmdbStatus_HTTP(t *testing.T) {

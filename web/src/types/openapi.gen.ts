@@ -665,7 +665,7 @@ export interface paths {
         };
         /**
          * Get TMDB movie details by TMDB ID
-         * @description Any TMDB lookup failure, including an unknown TMDB ID, returns 500.
+         * @description An unknown TMDB ID returns 404; any other TMDB lookup failure returns 500.
          */
         get: operations["getMovieByTmdbID"];
         put?: never;
@@ -7046,6 +7046,7 @@ export interface operations {
             200: components["responses"]["TmdbMovieResponse"];
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
             500: components["responses"]["InternalServerError"];
             503: components["responses"]["TmdbNotConfigured"];
         };

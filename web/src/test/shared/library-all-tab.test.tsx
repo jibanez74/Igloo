@@ -274,7 +274,21 @@ describe("LibraryAllTab without sort", () => {
     expect(screen.getByText("Page 1 of 3")).toBeInTheDocument();
   });
 
-  it("keeps the toolbar row on the error state", async () => {
+  // With no sort toggle, no start slot and no pages to report, the row would
+  // be an empty band above the grid, so it goes once the tab knows that.
+  it("drops the toolbar row once an unsorted tab resolves to a single page", async () => {
+    const { container } = renderUnsortedTab(async () =>
+      onePage([{ id: 1, name: "Frost Harbor" }]),
+    );
+
+    await screen.findByText("Frost Harbor");
+
+    expect(
+      container.querySelector('[data-slot="library-tab-toolbar"]'),
+    ).toBeNull();
+  });
+
+  it("drops the toolbar row on the error state", async () => {
     const { container } = renderUnsortedTab(async () => {
       throw new Error("offline");
     });
@@ -283,6 +297,36 @@ describe("LibraryAllTab without sort", () => {
 
     expect(
       container.querySelector('[data-slot="library-tab-toolbar"]'),
-    ).not.toBeNull();
+    ).toBeNull();
+  });
+
+  // A failed refetch keeps the last good data beside the error, so its page
+  // count must not hold the row open over the alert.
+  it("drops the toolbar row when a refetch fails over a paginated page", async () => {
+    let calls = 0;
+    const { container, queryClient } = renderUnsortedTab(async () => {
+      calls += 1;
+      if (calls > 1) throw new Error("offline");
+      return {
+        error: false,
+        data: {
+          items: [{ id: 1, name: "Frost Harbor" }],
+          total: 72,
+          page: 1,
+          per_page: 3,
+          total_pages: 3,
+        },
+      };
+    });
+
+    await screen.findByText("Page 1 of 3");
+
+    await act(() => queryClient.refetchQueries());
+    await screen.findByRole("alert");
+
+    expect(
+      container.querySelector('[data-slot="library-tab-toolbar"]'),
+    ).toBeNull();
+    expect(screen.queryByText("Page 1 of 3")).not.toBeInTheDocument();
   });
 });

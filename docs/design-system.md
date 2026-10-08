@@ -724,8 +724,12 @@ tab keeps the poster grid with `AlbumCardSkeleton`, the Musicians tab passes
 its five-column round-thumb grid with `MusicianCardSkeleton`. The tab owns one
 toolbar — page info on the right, then the sort toggle, with `toolbarStartSlot`
 for anything a page puts on the left — and renders it identically while
-loading, empty, errored and loaded, reserving its height so the grid top never
-moves (§3.4). The liked-movies view is a
+loading and loaded, reserving its height while loading so the grid does not
+shift down when the data lands (§3.4). A tab with neither a sort toggle nor a
+start slot drops the row once it knows it has a single page, nothing, or an
+error — a failed refetch included, whose stale page count no longer applies —
+rather than holding an empty band above the grid; that one settle is the
+only time such a tab's grid moves. The liked-movies view is a
 `LibraryAllTab` whose `toolbarStartSlot` carries its "Back to playlists" link
 and count, so it inherits the tab's out-of-range page clamp and keeps that
 link reachable while loading, empty and errored. The movie playlist page is
@@ -892,7 +896,8 @@ is unknown or empty.
     failed request, one still in flight, an empty response — are
     `MediaDetailGuard`, which every `$id` route wraps its content in. Three of
     the four are dead ends, so each renders `MediaNotFound` (title "Not found"
-    for a 404 or an empty response, "Error" otherwise); its destination is
+    for a 404 or an empty response, "No access" for a 403, "Error"
+    otherwise); its destination is
     a named key (`music`, `moviePlaylists`, …) carrying both the route and the
     words on the link, so the two can never disagree and a destination may
     carry search params.
@@ -903,11 +908,16 @@ is unknown or empty.
   - **The UI owns the words for failures it can name.** `apiRequest` stamps the
     HTTP `status` on every failure envelope it returns, and a surface maps the
     statuses it understands to a sentence — a 404 on a detail page reads "We
-    couldn't find that movie.", a 400/401 on login "The email or password is
-    incorrect.", a 403/404 on a watch room "This room no longer exists or you
-    were not invited." — keeping the server's message only as the fallback for
-    anything else (`apiErrorMessage`). Never show the client's canned
-    "404 - The resource…" string or a lowercase server constant as the copy.
+    couldn't find that movie.", a 403 "You don't have access to this
+    playlist.", a 400/401 on login "The email or password is incorrect.", a
+    403/404 on a watch room "This room no longer exists or you were not
+    invited." A page about one subject (`MediaDetailGuard`, the trailer
+    dialog) then uses a fixed sentence of its own for everything else
+    ("Something went wrong while loading this movie. Please try again later.")
+    and shows no server text at all; list and section loads may still keep
+    the server's message as the fallback (`apiErrorMessage`). Never show the
+    client's canned "404 - The resource…" or "500 - A network error…" strings
+    or a lowercase server constant as the copy.
 
   Because the erroring subtree often unmounts its own live region, error
   surfaces carry `role="alert"` and announce themselves — never repeat one
@@ -1033,7 +1043,12 @@ require the full playback test pass.
   "Track N of M"); "Minimize player (Escape)" (no suffix on touch, §1.7)
   collapses it to the **docked
   mini bar** (`fixed inset-x-0 bottom-0 z-40 bg-background/95 backdrop-blur`)
-  with track info, transport, close, and a bottom progress strip. The bar
+  with track info, transport, close, and a bottom progress strip; below `sm`
+  the like and close buttons give way so the title keeps room to read (both
+  stay reachable from the fullscreen view). Every track row carries the
+  `TrackActionsMenu` (Add to Playlist, then the links that lead somewhere
+  else: an album row offers "Go to Artist", a musician row "Go to Album"),
+  so a track can join a playlist from wherever it is listed. The bar
   persists across navigation; the current track's row in lists is
   highlighted (`text-primary` title + tinted row + pause state), and
   clicking that row **toggles play/pause in place** — it never rebuilds the

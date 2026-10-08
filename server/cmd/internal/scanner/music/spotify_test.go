@@ -995,3 +995,23 @@ func seedLocalMusicianAndAlbum(t *testing.T, app *Scanner) (database.Musician, d
 	}
 	return musician, album
 }
+
+func TestGenerateMusicianSummaryOmitsFiguresSpotifyDidNotSend(t *testing.T) {
+	artist := func(popularity spotifylib.Numeric, followers spotifylib.Numeric) *spotifylib.FullArtist {
+		return &spotifylib.FullArtist{
+			SimpleArtist: spotifylib.SimpleArtist{Name: "Test Artist"},
+			Popularity:   popularity,
+			Followers:    spotifylib.Followers{Count: followers},
+		}
+	}
+
+	if got := generateMusicianSummary(artist(0, 0)); got != "" {
+		t.Fatalf("summary with no figures = %q, want empty", got)
+	}
+	if got, want := generateMusicianSummary(artist(45, 0)), "Test Artist has a dedicated following."; got != want {
+		t.Fatalf("summary without followers = %q, want %q", got, want)
+	}
+	if got, want := generateMusicianSummary(artist(0, 2_500)), "Test Artist has 2.5K followers on Spotify."; got != want {
+		t.Fatalf("summary without popularity = %q, want %q", got, want)
+	}
+}

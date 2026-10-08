@@ -56,7 +56,9 @@ export default function MiniPlayerBar({
       )}
     >
       <div className="mx-auto max-w-7xl px-4 py-3">
-        <div className="flex items-center gap-4">
+        {/* Below `sm` the like and close buttons give way so the title keeps
+            room to read; both stay reachable from the fullscreen view. */}
+        <div className="flex items-center gap-3 sm:gap-4">
           <button
             ref={expandButtonRef}
             type="button"
@@ -93,11 +95,13 @@ export default function MiniPlayerBar({
             </div>
           </button>
 
-          <PlayerLikeButton
-            trackId={track.id}
-            trackTitle={track.title}
-            variant="minimized"
-          />
+          <div className="hidden sm:block">
+            <PlayerLikeButton
+              trackId={track.id}
+              trackTitle={track.title}
+              variant="minimized"
+            />
+          </div>
 
           <PlayerTransportControls variant="minimized" {...transport} />
 
@@ -129,7 +133,10 @@ export default function MiniPlayerBar({
             <button
               type="button"
               onClick={onClose}
-              className={cn(PLAYER_ICON_BUTTON_CLASS, "size-8 hover:bg-accent")}
+              className={cn(
+                PLAYER_ICON_BUTTON_CLASS,
+                "hidden size-8 hover:bg-accent sm:flex",
+              )}
               aria-label="Stop playback and close player"
             >
               <X className="size-4" aria-hidden="true" />

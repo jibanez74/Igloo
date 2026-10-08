@@ -48,16 +48,39 @@ describe("MediaDetailGuard", () => {
     );
   });
 
-  it("prefers the server's message when the request failed", () => {
+  it("words a 403 as the reader lacking access, not the server's constant", () => {
     renderGuard({
-      isError: true,
-      data: { error: true, message: "The library is rescanning." },
+      isError: false,
+      data: { error: true, message: "access denied", status: 403 },
       payload: null,
     });
 
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      "The library is rescanning.",
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("No access");
+    expect(alert).toHaveTextContent("You don't have access to this album.");
+    expect(alert).not.toHaveTextContent("access denied");
+  });
+
+  // Whatever the server (or the client's network envelope) said, the reader
+  // gets the guard's own sentence: a lowercase constant and the canned
+  // "500 - A network error…" string are not copy.
+  it.each([
+    [500, "500 - A network error occurred while processing your request."],
+    [503, "The library is rescanning."],
+    [401, "not authorized"],
+  ])("shows its own sentence for a %i failure", (status, message) => {
+    renderGuard({
+      isError: true,
+      data: { error: true, message, status },
+      payload: null,
+    });
+
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("Error");
+    expect(alert).toHaveTextContent(
+      "Something went wrong while loading this album. Please try again later.",
     );
+    expect(alert).not.toHaveTextContent(message);
   });
 
   // apiRequest answers every 404 with "404 - The resource you requested was
@@ -79,11 +102,11 @@ describe("MediaDetailGuard", () => {
     expect(alert).not.toHaveTextContent("404");
   });
 
-  it("falls back to its own wording when the failure carried no message", () => {
+  it("uses the same wording when the failure carried no envelope at all", () => {
     renderGuard({ isError: true, data: undefined, payload: null });
 
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "Failed to load album details. Please try again later.",
+      "Something went wrong while loading this album. Please try again later.",
     );
   });
 
@@ -105,6 +128,8 @@ describe("MediaDetailGuard", () => {
     for (const props of [
       { id: null },
       { isError: true, payload: null },
+      { data: { error: true, status: 403 }, payload: null },
+      { data: { error: true, status: 404 }, payload: null },
       { payload: null },
     ]) {
       const { unmount } = renderGuard(props);

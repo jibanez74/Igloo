@@ -89,7 +89,17 @@ func musicSpotifyReasonSplitsCompound(reason string) bool {
 	return reason == spotifyapi.MatchReasonNoResults || reason == spotifyapi.MatchReasonScoreBelowThreshold
 }
 
+// generateMusicianSummary words the Spotify popularity and follower figures as
+// a sentence. Spotify omits both for some artists, in which case there is
+// nothing to say: a sentence built from zeros ("is an independent artist with
+// 0 followers") would read as a claim about the artist rather than a gap. The
+// same holds for either figure alone, so a missing one contributes no phrase.
 func generateMusicianSummary(artist *spotifylib.FullArtist) string {
+	followers := artist.Followers.Count
+	if artist.Popularity == 0 && followers == 0 {
+		return ""
+	}
+
 	var parts []string
 
 	parts = append(parts, artist.Name)
@@ -100,8 +110,14 @@ func generateMusicianSummary(artist *spotifylib.FullArtist) string {
 		parts = append(parts, fmt.Sprintf("known for %s", genreStr))
 	}
 
+	// The follower figure hangs off the popularity phrase ("is a popular artist
+	// with ..."); without one it carries the sentence itself.
+	followersVerb := "with"
+
 	pop := artist.Popularity
 	switch {
+	case pop == 0:
+		followersVerb = "has"
 	case pop >= 80:
 		parts = append(parts, "is a globally recognized artist")
 	case pop >= 60:
@@ -114,18 +130,18 @@ func generateMusicianSummary(artist *spotifylib.FullArtist) string {
 		parts = append(parts, "is an independent artist")
 	}
 
-	followers := artist.Followers.Count
 	switch {
+	case followers == 0:
 	case followers >= 10_000_000:
-		parts = append(parts, fmt.Sprintf("with over %dM followers on Spotify", followers/1_000_000))
+		parts = append(parts, fmt.Sprintf("%s over %dM followers on Spotify", followersVerb, followers/1_000_000))
 	case followers >= 1_000_000:
-		parts = append(parts, fmt.Sprintf("with %.1fM followers on Spotify", float64(followers)/1_000_000))
+		parts = append(parts, fmt.Sprintf("%s %.1fM followers on Spotify", followersVerb, float64(followers)/1_000_000))
 	case followers >= 100_000:
-		parts = append(parts, fmt.Sprintf("with %dK followers on Spotify", followers/1_000))
+		parts = append(parts, fmt.Sprintf("%s %dK followers on Spotify", followersVerb, followers/1_000))
 	case followers >= 1_000:
-		parts = append(parts, fmt.Sprintf("with %.1fK followers on Spotify", float64(followers)/1_000))
+		parts = append(parts, fmt.Sprintf("%s %.1fK followers on Spotify", followersVerb, float64(followers)/1_000))
 	default:
-		parts = append(parts, fmt.Sprintf("with %d followers on Spotify", followers))
+		parts = append(parts, fmt.Sprintf("%s %d followers on Spotify", followersVerb, followers))
 	}
 
 	return strings.Join(parts, " ") + "."

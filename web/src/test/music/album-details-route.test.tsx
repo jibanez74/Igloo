@@ -512,3 +512,32 @@ describe("album details deletion", () => {
     expect(cancelButton).toBeEnabled();
   });
 });
+
+// A track can join a playlist from wherever it is listed, and the row's links
+// only lead away from the page: an album row offers the artist, never the
+// album it already sits on.
+describe("album details track actions", () => {
+  it("offers Add to Playlist and Go to Artist on each track row, but not Go to Album", async () => {
+    const user = userEvent.setup();
+    await renderAlbumDetailsRoute("/music/album/42");
+
+    expect(
+      await screen.findByRole("heading", { name: /Blue Record/i }),
+    ).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "More actions for Alabaster" }),
+    );
+
+    expect(
+      await screen.findByRole("menuitem", { name: "Add to Playlist" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Go to Artist" })).toHaveAttribute(
+      "href",
+      "/music/musician/142",
+    );
+    expect(
+      screen.queryByRole("menuitem", { name: "Go to Album" }),
+    ).not.toBeInTheDocument();
+  });
+});
