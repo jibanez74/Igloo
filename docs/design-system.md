@@ -1041,7 +1041,9 @@ require the full playback test pass.
   "Track N of M"); "Minimize player (Escape)" (no suffix on touch, §1.7)
   collapses it to the **docked
   mini bar** (`fixed inset-x-0 bottom-0 z-40 bg-background/95 backdrop-blur`)
-  with track info, transport, close, and a bottom progress strip. Every track row carries the
+  with track info, transport, close, and a bottom progress strip; below `sm`
+  the like and close buttons give way so the title keeps room to read (both
+  stay reachable from the fullscreen view). Every track row carries the
   `TrackActionsMenu` (Add to Playlist, then the links that lead somewhere
   else: an album row offers "Go to Artist", a musician row "Go to Album"),
   so a track can join a playlist from wherever it is listed. The bar
