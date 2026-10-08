@@ -234,8 +234,9 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
   `compoundVariants` entry re-applies `rounded-full` to `accent-pill` at
   those sizes, so call sites never re-assert it (guarded by
   `test/ui/button.test.tsx`). Other variants still square off at `sm`/`lg`:
-  an `outline` button meant to pair with a pill (the album, musician and
-  playlist Shuffle buttons) passes `rounded-full` in `className`. Watch for
+  an `outline` button meant to pair with a pill (the Shuffle in
+  `PlayShuffleButtons`, the music index's "Play all" and "Liked tracks")
+  passes `rounded-full` in `className`. Watch for
   this whenever two sibling buttons are meant to match — one picking up a
   `size` is enough to break the pair.
 - **Tabs share one look** (`web/src/components/ui/tabs.tsx`): a bordered
@@ -787,7 +788,10 @@ beside the title on all three pages, with a labelled placeholder when there is
 no artwork, and the `MusicDetailArtSkeleton` that reads the same sizes),
 `MusicStatList` (the album and musician stat pills — `MusicStatChip` per
 figure, `MusicDurationChip` speaking "Total duration …" through an `sr-only`
-span) and `MusicGenreList` (their genre pills), `MusicDetailSkeleton`
+span) and `MusicGenreList` (their genre pills), `PlayShuffleButtons` (the
+`lg` Play pill and outline Shuffle on all three pages, each page passing its
+own accessible names; never disabled, a spinner while a playlist's remaining
+pages load) in a `MUSIC_DETAIL_ACTIONS_CLASS` row, `MusicDetailSkeleton`
 (`variant="album" | "musician" | "playlist"`: the album and musician variants
 are one hero geometry with the art shape and hero rows switched; the playlist
 variant mirrors the playlist page instead, which has no backdrop band and no

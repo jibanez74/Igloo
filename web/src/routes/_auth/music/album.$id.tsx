@@ -6,8 +6,6 @@ import {
   Disc3,
   Calendar,
   Music,
-  Play,
-  Shuffle,
   MoreHorizontal,
   Trash2,
   ListOrdered,
@@ -55,6 +53,7 @@ import MusicDetailBackNav from "@/components/music/MusicDetailBackNav";
 import MusicDetailSkeleton from "@/components/music/MusicDetailSkeleton";
 import MusicDetailArt from "@/components/music/MusicDetailArt";
 import MusicGenreList from "@/components/music/MusicGenreList";
+import PlayShuffleButtons from "@/components/music/PlayShuffleButtons";
 import MusicStatList, {
   MusicDurationChip,
   MusicStatChip,
@@ -68,6 +67,7 @@ import {
   SPOTIFY_BRAND_TEXT_CLASS,
   MOTION_MICRO_COLORS_CLASS,
   DETAIL_TRACK_LIST_CONTAINER_CLASS,
+  MUSIC_DETAIL_ACTIONS_CLASS,
   MUSIC_DETAIL_HERO_ROW_CLASS,
   MUSIC_DETAIL_SHELL_CLASS,
 } from "@/lib/constants";
@@ -380,34 +380,14 @@ function AlbumDetailsContent({
                 <SpotifyPopularityMeter score={spotifyPopularity} />
               )}
 
-              <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center lg:justify-start">
+              <div className={MUSIC_DETAIL_ACTIONS_CLASS}>
                 {tracks.length > 0 && (
-                  <>
-                    <Button
-                      type="button"
-                      variant="accent-pill"
-                      size="lg"
-                      onClick={() => startAlbumQueue(false)}
-                      className="w-full font-semibold shadow-lg shadow-primary/20 sm:w-auto"
-                    >
-                      <Play
-                        className="size-4 fill-current"
-                        aria-hidden="true"
-                      />
-                      Play Album
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="lg"
-                      onClick={() => startAlbumQueue(true)}
-                      className="w-full rounded-full font-semibold sm:w-auto"
-                      aria-label="Shuffle play album"
-                    >
-                      <Shuffle className="size-4" aria-hidden="true" />
-                      Shuffle
-                    </Button>
-                  </>
+                  <PlayShuffleButtons
+                    playLabel="Play Album"
+                    shuffleAriaLabel="Shuffle play album"
+                    onPlay={() => startAlbumQueue(false)}
+                    onShuffle={() => startAlbumQueue(true)}
+                  />
                 )}
 
                 {isAdmin && (

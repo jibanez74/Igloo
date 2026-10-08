@@ -4,8 +4,6 @@ import {
   User,
   Disc3,
   Music,
-  Play,
-  Shuffle,
   ListOrdered,
 } from "lucide-react";
 import { musicianDetailsQueryOpts } from "@/lib/query-opts";
@@ -13,13 +11,13 @@ import { unwrapString, unwrapInt, unwrapFloat } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
 import { parseRouteId } from "@/lib/route-id";
 import { listenHead, routeHead } from "@/lib/route-head";
-import { Button } from "@/components/ui/button";
 import MediaDetailGuard from "@/components/shared/MediaDetailGuard";
 import DetailSkipLinks from "@/components/shared/DetailSkipLinks";
 import AlbumCard from "@/components/music/AlbumCard";
 import MusicDetailArt from "@/components/music/MusicDetailArt";
 import MusicDetailBackdrop from "@/components/music/MusicDetailBackdrop";
 import MusicGenreList from "@/components/music/MusicGenreList";
+import PlayShuffleButtons from "@/components/music/PlayShuffleButtons";
 import MusicStatList, {
   MusicDurationChip,
   MusicStatChip,
@@ -42,6 +40,7 @@ import {
   DETAIL_TRACK_LIST_CONTAINER_CLASS,
   FOCUS_VISIBLE_RING_CLASS,
   LIBRARY_POSTER_GRID_CLASS,
+  MUSIC_DETAIL_ACTIONS_CLASS,
   MUSIC_DETAIL_HERO_ROW_CLASS,
   MUSIC_DETAIL_SHELL_CLASS,
   SPOTIFY_BRAND_ICON_CLASS,
@@ -286,29 +285,14 @@ function MusicianDetailsContent({
 
               {/* Play buttons */}
               {tracks.length > 0 && (
-                <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center lg:justify-start">
-                  <Button
-                    type="button"
-                    variant="accent-pill"
-                    size="lg"
-                    onClick={() => startMusicianQueue(false)}
-                    className="w-full font-semibold shadow-lg shadow-primary/20 sm:w-auto"
-                    aria-label={`Play all ${pluralize(tracks.length, "track")} by ${musician.name}`}
-                  >
-                    <Play className="size-4 fill-current" aria-hidden="true" />
-                    Play All
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="lg"
-                    onClick={() => startMusicianQueue(true)}
-                    className="w-full rounded-full font-semibold sm:w-auto"
-                    aria-label={`Shuffle play all ${pluralize(tracks.length, "track")} by ${musician.name}`}
-                  >
-                    <Shuffle className="size-4" aria-hidden="true" />
-                    Shuffle
-                  </Button>
+                <div className={MUSIC_DETAIL_ACTIONS_CLASS}>
+                  <PlayShuffleButtons
+                    playLabel="Play All"
+                    playAriaLabel={`Play all ${pluralize(tracks.length, "track")} by ${musician.name}`}
+                    shuffleAriaLabel={`Shuffle play all ${pluralize(tracks.length, "track")} by ${musician.name}`}
+                    onPlay={() => startMusicianQueue(false)}
+                    onShuffle={() => startMusicianQueue(true)}
+                  />
                 </div>
               )}
 

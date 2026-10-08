@@ -11,20 +11,18 @@ import {
   Music,
   Clock,
   User,
-  Play,
-  Shuffle,
   Pencil,
   Trash2,
   List,
 } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
-import { Button } from "@/components/ui/button";
 import TrackItem from "@/components/music/TrackItem";
 import PlaylistFormDialog from "@/components/music/PlaylistFormDialog";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
 import DetailSkipLinks from "@/components/shared/DetailSkipLinks";
 import MusicDetailArt from "@/components/music/MusicDetailArt";
 import MusicDetailBackNav from "@/components/music/MusicDetailBackNav";
+import PlayShuffleButtons from "@/components/music/PlayShuffleButtons";
 import MusicDetailSkeleton from "@/components/music/MusicDetailSkeleton";
 import MediaDetailGuard from "@/components/shared/MediaDetailGuard";
 
@@ -50,6 +48,7 @@ import {
   DETAIL_PAGE_CONTENT_ENTER_CLASS,
   DETAIL_RAIL_HEADING_CLASS,
   FOCUS_VISIBLE_RING_CLASS,
+  MUSIC_DETAIL_ACTIONS_CLASS,
   MUSIC_DETAIL_HERO_ROW_CLASS,
   MUSIC_PLAYLISTS_TAB_SEARCH,
   PLAYLIST_TRACKS_KEY,
@@ -400,43 +399,18 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
             )}
           </ul>
 
-          {/* Play buttons. Deliberately never disabled: playback starts from the
-              pages already loaded, and the spinner only reports the rest
-              arriving behind it. A disabled media control is also unreachable
-              under iOS VoiceOver. `size` re-declares rounded-md, so the
-              outline Shuffle re-asserts rounded-full to match the Play pill. */}
+          {/* The spinner only reports the rest of the playlist arriving
+              behind playback that has already started. */}
           {track_count > 0 && (
-            <div className="mt-5 flex flex-col justify-center gap-2 sm:mt-6 sm:flex-row sm:gap-3 lg:justify-start">
-              <Button
-                type="button"
-                variant="accent-pill"
-                size="lg"
-                onClick={handlePlayAll}
-                className="w-full font-semibold shadow-lg shadow-primary/20 sm:w-auto"
-                aria-label={`Play all ${pluralize(track_count, "track")}`}
-              >
-                {isLoadingRest ? (
-                  <Spinner className="size-4" />
-                ) : (
-                  <Play className="size-4 fill-current" aria-hidden="true" />
-                )}
-                Play All
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="lg"
-                onClick={handleShuffle}
-                className="w-full rounded-full font-semibold sm:w-auto"
-                aria-label={`Shuffle all ${pluralize(track_count, "track")}`}
-              >
-                {isLoadingRest ? (
-                  <Spinner className="size-4" />
-                ) : (
-                  <Shuffle className="size-4" aria-hidden="true" />
-                )}
-                Shuffle
-              </Button>
+            <div className={MUSIC_DETAIL_ACTIONS_CLASS}>
+              <PlayShuffleButtons
+                playLabel="Play All"
+                playAriaLabel={`Play all ${pluralize(track_count, "track")}`}
+                shuffleAriaLabel={`Shuffle all ${pluralize(track_count, "track")}`}
+                onPlay={handlePlayAll}
+                onShuffle={handleShuffle}
+                isLoading={isLoadingRest}
+              />
             </div>
           )}
 
