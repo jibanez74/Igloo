@@ -123,8 +123,15 @@ export const Route = createFileRoute("/_auth/music/playlist/$id")({
     };
   },
   head: ({ loaderData }) => playlistHead(loaderData?.playlist),
+  pendingComponent: PlaylistDetailsSkeleton,
   component: PlaylistPage,
 });
+
+// One skeleton serves the router's pending view, while the loader waits, and
+// the guard's, so the two cannot drift apart (design-system §3.4).
+function PlaylistDetailsSkeleton() {
+  return <MusicDetailSkeleton variant="playlist" />;
+}
 
 function PlaylistPage() {
   const { id } = Route.useParams();
@@ -146,7 +153,7 @@ function PlaylistPage() {
       isError={isError}
       data={data}
       payload={data?.error === false ? data.data : null}
-      skeleton={<MusicDetailSkeleton variant="playlist" />}
+      skeleton={<PlaylistDetailsSkeleton />}
     >
       {(loaded, id) => <PlaylistContent key={id} playlistId={id} data={loaded} />}
     </MediaDetailGuard>

@@ -226,6 +226,14 @@ describe("LibraryAllTab without sort", () => {
     expect(container.querySelector(".h-8.w-16")).toBeNull();
   });
 
+  it("announces the load as one status over hidden placeholders", () => {
+    renderUnsortedTab(() => new Promise(() => {}));
+
+    const status = screen.getByRole("status", { name: `Loading ${NOUN.plural}` });
+    expect(status).toHaveTextContent(`Loading ${NOUN.plural}...`);
+    expect(screen.getAllByTestId("round-card")[0].closest("[aria-hidden='true']")).not.toBeNull();
+  });
+
   it("renders the grid without a sort toggle or page header once loaded", async () => {
     const { container } = renderUnsortedTab(async () =>
       onePage([{ id: 1, name: "Frost Harbor" }]),

@@ -13,6 +13,7 @@ import {
 import { showDetailsSearchSchema } from "@/lib/route-search";
 import { parseRouteId } from "@/lib/route-id";
 import { showHead, type MediaHeadData } from "@/lib/route-head";
+import { loadOnEntry } from "@/lib/route-loads";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { prepareYouTubeExtrasForDisplay } from "@/lib/format";
 import {
@@ -42,7 +43,7 @@ import type { ShowDetailsDataType } from "@/types";
 export const Route = createFileRoute("/_auth/tv-shows/$id/")({
   validateSearch: showDetailsSearchSchema,
   loaderDeps: ({ search: { season } }) => ({ season }),
-  loader: async ({ context, params, deps: { season } }) => {
+  loader: async ({ context, cause, params, deps: { season } }) => {
     const showId = parseRouteId(params.id);
     if (showId == null) return { show: null };
 
@@ -83,13 +84,18 @@ export const Route = createFileRoute("/_auth/tv-shows/$id/")({
       });
     }
 
-    await context.queryClient.ensureQueryData(
-      showSeasonEpisodesQueryOpts(showId, selected),
-    );
+    // A season switch keeps the page and lets the episode list show its own
+    // loading state; entering the page waits so the hero's Play arrives with it.
+    await loadOnEntry(cause, [
+      context.queryClient.ensureQueryData(
+        showSeasonEpisodesQueryOpts(showId, selected),
+      ),
+    ]);
 
     return { show };
   },
   head: ({ loaderData }) => showHead(loaderData?.show),
+  pendingComponent: ShowDetailsSkeleton,
   component: ShowDetailsPage,
 });
 
@@ -105,6 +111,16 @@ function showCastToCastSection(
     profilePath: unwrapString(c.artist_profile),
     episodeCount: c.episode_count,
   }));
+}
+
+// One skeleton serves the router's pending view, while the loader waits, and
+// the guard's, so the two cannot drift apart (design-system §3.4).
+function ShowDetailsSkeleton() {
+  return (
+    <DetailSkeleton label="Loading show details" withActions>
+      <ShowSeasonsSectionPlaceholder />
+    </DetailSkeleton>
+  );
 }
 
 function ShowDetailsPage() {
@@ -130,11 +146,7 @@ function ShowDetailsPage() {
       isError={isError}
       data={data}
       payload={show && payload ? payload : null}
-      skeleton={
-        <DetailSkeleton label="Loading show details" withActions>
-          <ShowSeasonsSectionPlaceholder />
-        </DetailSkeleton>
-      }
+      skeleton={<ShowDetailsSkeleton />}
     >
       {(loaded, id) => <ShowDetailsContent key={id} showId={id} payload={loaded} />}
     </MediaDetailGuard>

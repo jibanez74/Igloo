@@ -13,6 +13,7 @@ import LibrarySortToggle, {
   type LibrarySortDirection,
 } from "@/components/shared/LibrarySortToggle";
 import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
+import SkeletonStatus from "@/components/shared/SkeletonStatus";
 import LoadErrorAlert from "@/components/shared/LoadErrorAlert";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import {
@@ -276,7 +277,9 @@ export default function LibraryGenresTab<
               onRetry={() => void refetchItems()}
             />
           ) : itemsLoading ? (
-            <LibraryAllTabSkeleton perPage={perPage} />
+            <SkeletonStatus label={`Loading ${noun.plural}`}>
+              <LibraryAllTabSkeleton perPage={perPage} />
+            </SkeletonStatus>
           ) : items.length === 0 ? (
             <LibraryEmptyState
               icon={emptyIcon}
@@ -307,8 +310,8 @@ export default function LibraryGenresTab<
 // Mirrors the genre-chip grid above: ten chip-sized boxes.
 export function LibraryGenresTabSkeleton() {
   return (
-    <div>
-      <div className={GENRE_CHIP_GRID_CLASS} aria-hidden="true">
+    <SkeletonStatus label="Loading genres">
+      <div className={GENRE_CHIP_GRID_CLASS}>
         {Array.from({ length: 10 }).map((_, i) => (
           <div
             key={i}
@@ -320,6 +323,6 @@ export function LibraryGenresTabSkeleton() {
           />
         ))}
       </div>
-    </div>
+    </SkeletonStatus>
   );
 }

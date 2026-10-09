@@ -3,6 +3,7 @@ import { useMovieScanStatus, useMusicScanStatus, useShowScanStatus } from "@/hoo
 import { redirect, Outlet, createFileRoute, useLocation } from "@tanstack/react-router";
 import { authUserQueryOpts } from "@/lib/query-opts";
 import AppShell from "@/components/app/AppShell";
+import AppLoadingScreen from "@/components/app/AppLoadingScreen";
 
 export const Route = createFileRoute("/_auth")({
   beforeLoad: async ({ context, location }) => {
@@ -17,6 +18,9 @@ export const Route = createFileRoute("/_auth")({
       });
     }
   },
+  // Boot waits here, before the shell exists, so this one route keeps the
+  // full-screen splash; the routes inside the shell pend in its content area.
+  pendingComponent: AppLoadingScreen,
   component: AuthLayout,
 });
 

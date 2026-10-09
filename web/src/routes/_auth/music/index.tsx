@@ -84,6 +84,8 @@ import {
   type MusicSearchParams,
 } from "@/lib/route-search";
 import { routeHead } from "@/lib/route-head";
+import { loadOnEntry } from "@/lib/route-loads";
+import SkeletonStatus from "@/components/shared/SkeletonStatus";
 
 const MUSIC_HEAD = routeHead(
   "Music Library",
@@ -97,10 +99,10 @@ export const Route = createFileRoute("/_auth/music/")({
     albumsPage,
     musiciansPage,
   }),
-  loader: async ({ context, deps: { albumsPage, musiciansPage } }) => {
+  loader: async ({ context, cause, deps: { albumsPage, musiciansPage } }) => {
     const { queryClient } = context;
 
-    await Promise.all([
+    await loadOnEntry(cause, [
       queryClient.ensureQueryData(musicStatsQueryOpts()),
       queryClient.ensureQueryData(
         albumsPaginatedQueryOpts(albumsPage, ALBUMS_PER_PAGE)
@@ -400,11 +402,13 @@ function TrackRowSkeleton() {
 
 function TracksListSkeleton() {
   return (
-    <div className={TRACK_LIST_CONTAINER_CLASS}>
-      {Array.from({ length: 8 }).map((_, i) => (
-        <TrackRowSkeleton key={i} />
-      ))}
-    </div>
+    <SkeletonStatus label="Loading tracks">
+      <div className={TRACK_LIST_CONTAINER_CLASS}>
+        {Array.from({ length: 8 }).map((_, i) => (
+          <TrackRowSkeleton key={i} />
+        ))}
+      </div>
+    </SkeletonStatus>
   );
 }
 
@@ -994,10 +998,12 @@ function LikedTracksInPlaylistsTab({
 
 function PlaylistsGridSkeleton() {
   return (
-    <div className={MUSIC_CARD_GRID_CLASS}>
-      {Array.from({ length: 10 }).map((_, i) => (
-        <PlaylistCardSkeleton key={i} />
-      ))}
-    </div>
+    <SkeletonStatus label="Loading playlists">
+      <div className={MUSIC_CARD_GRID_CLASS}>
+        {Array.from({ length: 10 }).map((_, i) => (
+          <PlaylistCardSkeleton key={i} />
+        ))}
+      </div>
+    </SkeletonStatus>
   );
 }

@@ -52,6 +52,7 @@ export const Route = createFileRoute("/_auth/movies/playlist/$id")({
       ? routeHead(name, `Movie playlist: ${name}`)
       : MOVIE_PLAYLIST_FALLBACK_HEAD;
   },
+  pendingComponent: MoviePlaylistSkeleton,
   component: MoviePlaylistPage,
 });
 
@@ -157,6 +158,7 @@ function MoviePlaylistsBackLink() {
 // Authored beside the layout it mirrors (design-system §3.4): the header's
 // icon, title and count, the toolbar strip LibraryAllTab reserves in every
 // state, then the poster grid. The back link is real: it works while loading.
+// It is both the router's pending view and the guard's skeleton.
 function MoviePlaylistSkeleton() {
   return (
     <div className="min-w-0">

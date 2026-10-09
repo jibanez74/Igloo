@@ -47,6 +47,8 @@ import type {
 import { searchSearchSchema, type SearchParams } from "@/lib/route-search";
 import { nounForCount, pluralize } from "@/lib/format";
 import { routeHead } from "@/lib/route-head";
+import { loadOnEntry } from "@/lib/route-loads";
+import SkeletonStatus from "@/components/shared/SkeletonStatus";
 
 // The tab value doubles as the visible category word, so each one carries both
 // forms - a single result reads "1 show", not "1 shows".
@@ -89,19 +91,29 @@ const SEARCH_HEAD = routeHead("Search");
 export const Route = createFileRoute("/_auth/search/")({
   validateSearch: searchSearchSchema,
   loaderDeps: ({ search: { q, tab, page } }) => ({ q, tab, page }),
-  loader: async ({ context, deps: { q, tab, page } }) => {
+  loader: async ({ context, cause, deps: { q, tab, page } }) => {
     const trimmed = q.trim();
     if (!trimmed) return;
 
     const { queryClient } = context;
     if (tab === "all") {
-      await queryClient.ensureQueryData(searchAllQueryOpts(trimmed));
+      await loadOnEntry(cause, [
+        queryClient.ensureQueryData(searchAllQueryOpts(trimmed)),
+      ]);
       return;
     }
 
-    const result = await queryClient.ensureQueryData(
+    const results = queryClient.ensureQueryData(
       searchCategoryQueryOpts(tab, trimmed, page, SEARCH_PER_PAGE),
     );
+    // A new query, tab or page from the header and the pager is always in
+    // range, so only an entered URL needs the last-page clamp below.
+    if (cause === "stay") {
+      await loadOnEntry(cause, [results]);
+      return;
+    }
+
+    const result = await results;
 
     if (result.error === false) {
       redirectToLastSearchPage({
@@ -681,30 +693,32 @@ function EmptyResults({ q }: { q: string }) {
 
 function CategorySkeleton() {
   return (
-    <div>
+    <SkeletonStatus label="Loading search results">
       <div className={cn("mb-5 h-4 w-32 rounded-sm bg-muted", MOTION_LOADING_STATE_CLASS)} />
       <div className={LIBRARY_POSTER_GRID_CLASS}>
         {Array.from({ length: SEARCH_PER_PAGE }).map((_, i) => (
           <PosterCardSkeleton key={i} />
         ))}
       </div>
-    </div>
+    </SkeletonStatus>
   );
 }
 
 function AllResultsSkeleton() {
   return (
-    <div className="space-y-10">
-      {Array.from({ length: 3 }).map((_, s) => (
-        <div key={s}>
-          <div className={cn("mb-4 h-6 w-40 rounded-sm bg-muted", MOTION_LOADING_STATE_CLASS)} />
-          <div className={LIBRARY_POSTER_GRID_CLASS}>
-            {Array.from({ length: 6 }).map((_, i) => (
-              <PosterCardSkeleton key={i} />
-            ))}
+    <SkeletonStatus label="Loading search results">
+      <div className="space-y-10">
+        {Array.from({ length: 3 }).map((_, s) => (
+          <div key={s}>
+            <div className={cn("mb-4 h-6 w-40 rounded-sm bg-muted", MOTION_LOADING_STATE_CLASS)} />
+            <div className={LIBRARY_POSTER_GRID_CLASS}>
+              {Array.from({ length: 6 }).map((_, i) => (
+                <PosterCardSkeleton key={i} />
+              ))}
+            </div>
           </div>
-        </div>
-      ))}
-    </div>
+        ))}
+      </div>
+    </SkeletonStatus>
   );
 }

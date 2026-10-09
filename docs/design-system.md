@@ -397,7 +397,8 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
     - *Data-driven* values: the loader returns only the few fields the head needs,
       and `head: ({ loaderData }) => …` builds the strings. It must fall back to a
       generic title when `loaderData` is missing, because a head that throws is
-      only logged.
+      only logged. Because the loader awaits that query, the route also sets its
+      skeleton as `pendingComponent` (§3.4).
     - *After an edit* that renames what the title shows (a movie identify or
       edit, a playlist rename): await the details refetch, then
       `router.invalidate()` that route, since heads only rerun on a router load.
@@ -879,9 +880,21 @@ is unknown or empty.
 ### 3.4 UI states — loading, empty, error
 
 - **Loading, two tiers.** Route navigations suspend in loaders
-  (`ensureQueryData` + `defaultPreload: "intent"`) with one app-wide pending
-  screen — `defaultPendingComponent: AppLoadingScreen` in `src/App.tsx`
-  (`role="status"`). Within a page, each query renders a **skeleton that
+  (`ensureQueryData` + `defaultPreload: "intent"`). Once a loader outlasts
+  the router's `pendingMs`, the pending view renders **inside the shell's
+  content area**, so the sidebar and header stay put. A detail route shows
+  its own skeleton: it lifts the skeleton it hands `MediaDetailGuard` into
+  one route-local component and also sets it as `pendingComponent`. Every
+  other route gets `defaultPendingComponent: RoutePending` (`src/App.tsx`,
+  a `role="status"` spinner and "Loading..."). Only boot, which waits in the
+  `_auth` layout before the shell exists, shows the full-screen
+  `AppLoadingScreen` ("Starting Igloo..."); that layout sets it as its own
+  `pendingComponent`. An **in-page navigation never waits in the loader**:
+  a tab, page, sort, genre, search or season change re-runs the same route's
+  loader with `cause: "stay"`. `loadOnEntry` (`src/lib/route-loads.ts`) then
+  only starts the queries, so the URL change commits at once and the page's
+  own skeleton covers the wait. Entering or preloading the route still awaits
+  them, so a fresh page arrives complete. Within a page, each query renders a **skeleton that
   matches the real layout's grid geometry exactly** (same columns, same aspect
   boxes) so content arrival causes no layout shift — see the shared
   `DetailSkeleton` (`withActions` mirrors whether the real hero has an actions
@@ -900,7 +913,10 @@ is unknown or empty.
   `MOTION_LOADING_STATE_CLASS`, always beside the layout it must mirror — a
   skeleton moves with its layout, never on its own. `ui/spinner.tsx` (`role="status"`) uses
   `MOTION_SPINNER_STATE_CLASS`. Skeleton layouts hide their visuals with
-  `aria-hidden` under a single `role="status"` + `sr-only` label.
+  `aria-hidden` under a single `role="status"` + `sr-only` label. A skeleton
+  that does not carry that wrapper itself (a tab grid, the search results)
+  goes inside `SkeletonStatus` (`components/shared/SkeletonStatus.tsx`),
+  which takes the spoken label ("Loading playlists").
 - **A section whose query the loader awaits renders nothing instead of a
   skeleton.** `ContinueWatching` is the case: the home loader has already
   resolved the query by the time the section mounts, so a skeleton would only
