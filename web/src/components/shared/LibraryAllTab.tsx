@@ -15,6 +15,7 @@ import LoadErrorAlert from "@/components/shared/LoadErrorAlert";
 import { PosterCardSkeleton } from "@/components/shared/PosterCard";
 import { LIBRARY_POSTER_GRID_CLASS } from "@/lib/constants";
 import { nounForCount } from "@/lib/format";
+import SkeletonStatus from "@/components/shared/SkeletonStatus";
 import { apiErrorMessage, isApiFailure } from "@/lib/is-api-failure";
 import { scrollWindowToTop } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -179,11 +180,13 @@ export default function LibraryAllTab<
   const renderBody = () => {
     if (isLoading) {
       return (
-        <LibraryAllTabSkeleton
-          perPage={perPage}
-          gridClassName={gridClassName}
-          skeletonCard={skeletonCard}
-        />
+        <SkeletonStatus label={`Loading ${noun.plural}`}>
+          <LibraryAllTabSkeleton
+            perPage={perPage}
+            gridClassName={gridClassName}
+            skeletonCard={skeletonCard}
+          />
+        </SkeletonStatus>
       );
     }
 

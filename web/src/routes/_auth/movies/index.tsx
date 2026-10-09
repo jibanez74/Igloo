@@ -64,6 +64,7 @@ import {
 } from "@/lib/route-search";
 import { routeHead } from "@/lib/route-head";
 import { loadOnEntry } from "@/lib/route-loads";
+import SkeletonStatus from "@/components/shared/SkeletonStatus";
 
 const MOVIES_HEAD = routeHead(
   "Movies",
@@ -612,11 +613,13 @@ function PlaylistsTabContent({
 
   if (isLoading) {
     body = (
-      <div className={MUSIC_CARD_GRID_CLASS}>
-        {Array.from({ length: 10 }).map((_, i) => (
-          <PlaylistCardSkeleton key={i} />
-        ))}
-      </div>
+      <SkeletonStatus label="Loading playlists">
+        <div className={MUSIC_CARD_GRID_CLASS}>
+          {Array.from({ length: 10 }).map((_, i) => (
+            <PlaylistCardSkeleton key={i} />
+          ))}
+        </div>
+      </SkeletonStatus>
     );
   } else if (loadFailed) {
     body = (

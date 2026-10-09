@@ -85,6 +85,7 @@ import {
 } from "@/lib/route-search";
 import { routeHead } from "@/lib/route-head";
 import { loadOnEntry } from "@/lib/route-loads";
+import SkeletonStatus from "@/components/shared/SkeletonStatus";
 
 const MUSIC_HEAD = routeHead(
   "Music Library",
@@ -401,11 +402,13 @@ function TrackRowSkeleton() {
 
 function TracksListSkeleton() {
   return (
-    <div className={TRACK_LIST_CONTAINER_CLASS}>
-      {Array.from({ length: 8 }).map((_, i) => (
-        <TrackRowSkeleton key={i} />
-      ))}
-    </div>
+    <SkeletonStatus label="Loading tracks">
+      <div className={TRACK_LIST_CONTAINER_CLASS}>
+        {Array.from({ length: 8 }).map((_, i) => (
+          <TrackRowSkeleton key={i} />
+        ))}
+      </div>
+    </SkeletonStatus>
   );
 }
 
@@ -995,10 +998,12 @@ function LikedTracksInPlaylistsTab({
 
 function PlaylistsGridSkeleton() {
   return (
-    <div className={MUSIC_CARD_GRID_CLASS}>
-      {Array.from({ length: 10 }).map((_, i) => (
-        <PlaylistCardSkeleton key={i} />
-      ))}
-    </div>
+    <SkeletonStatus label="Loading playlists">
+      <div className={MUSIC_CARD_GRID_CLASS}>
+        {Array.from({ length: 10 }).map((_, i) => (
+          <PlaylistCardSkeleton key={i} />
+        ))}
+      </div>
+    </SkeletonStatus>
   );
 }
