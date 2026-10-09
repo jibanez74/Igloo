@@ -50,7 +50,7 @@ describe("PlaylistFormDialog", () => {
     ).toHaveAccessibleName("Description (optional)");
   });
 
-  it("refetches the playlist and reloads its route after a rename", async () => {
+  it("keeps the cover, refetches the playlist and reloads its route after a rename", async () => {
     const user = userEvent.setup();
     const queryClient = createTestQueryClient();
     const refreshOrder = recordRefreshOrder(queryClient, routerMocks.invalidate);
@@ -69,6 +69,7 @@ describe("PlaylistFormDialog", () => {
           id: 7,
           name: "Road Trip",
           description: { String: "", Valid: false },
+          cover_image: { String: "/covers/road-trip.jpg", Valid: true },
           is_public: false,
         }}
       />,
@@ -86,6 +87,7 @@ describe("PlaylistFormDialog", () => {
     expect(apiMocks.updatePlaylist).toHaveBeenCalledWith(7, {
       name: "Night Drive",
       description: undefined,
+      cover_image: "/covers/road-trip.jpg",
       is_public: false,
     });
     expect(onOpenChange).toHaveBeenCalledWith(false);

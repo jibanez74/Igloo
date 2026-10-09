@@ -25,7 +25,7 @@ import {
   PLAYLIST_DETAILS_KEY,
   PLAYLISTS_KEY,
 } from "@/lib/constants";
-import { unwrapString } from "@/lib/nullable";
+import { unwrapString, unwrapStringOrUndefined } from "@/lib/nullable";
 import { playlistFieldsError } from "@/lib/form-validation";
 import { cn } from "@/lib/utils";
 import type { NullableString } from "@/types";
@@ -39,6 +39,7 @@ type PlaylistData = {
   id: number;
   name: string;
   description: NullableString;
+  cover_image: NullableString;
   is_public: boolean;
 };
 
@@ -159,9 +160,12 @@ function PlaylistForm({
   const updateMutation = useMutation({
     mutationFn: () => {
       if (!playlist) throw new Error("Playlist is required for edit mode");
+      // PUT replaces every field, so the dialog resends the cover it does not
+      // edit; leaving it out would clear it.
       return updatePlaylist(playlist.id, {
         name: name.trim(),
         description: description.trim() || undefined,
+        cover_image: unwrapStringOrUndefined(playlist.cover_image),
         is_public: playlist.is_public,
       });
     },
