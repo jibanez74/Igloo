@@ -1,24 +1,17 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMutation } from "@tanstack/react-query";
-import {
-  showDeleted,
-  showRemoved,
-  showActionFailed,
-} from "@/lib/toast-helpers";
+import { showRemoved, showActionFailed } from "@/lib/toast-helpers";
 import {
   Music,
   Clock,
   User,
-  Pencil,
-  Trash2,
   List,
 } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import TrackItem from "@/components/music/TrackItem";
-import PlaylistFormDialog from "@/components/music/PlaylistFormDialog";
-import ConfirmDialog from "@/components/shared/ConfirmDialog";
+import PlaylistOwnerActions from "@/components/shared/PlaylistOwnerActions";
 import DetailSkipLinks from "@/components/shared/DetailSkipLinks";
 import MusicDetailArt from "@/components/music/MusicDetailArt";
 import MusicDetailBackNav from "@/components/music/MusicDetailBackNav";
@@ -36,7 +29,7 @@ import {
 import { trackRowProps } from "@/lib/track-row-props";
 import { getMediaImageUrl } from "@/lib/media-image-url";
 import { unwrapString } from "@/lib/nullable";
-import { deletePlaylist, removeTrackFromPlaylist, reorderPlaylistTracks } from "@/lib/api";
+import { removeTrackFromPlaylist, reorderPlaylistTracks } from "@/lib/api";
 import { convertToAudioTrack, dedupeById } from "@/lib/audio-utils";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useTrackPlaybackMatcher } from "@/hooks/useTrackPlaybackMatcher";
@@ -50,11 +43,9 @@ import {
   FOCUS_VISIBLE_RING_CLASS,
   MUSIC_DETAIL_ACTIONS_CLASS,
   MUSIC_DETAIL_HERO_ROW_CLASS,
-  MUSIC_PLAYLISTS_TAB_SEARCH,
   PLAYLIST_TRACKS_KEY,
   PLAYLISTS_KEY,
   VIRTUAL_LIST_TRACK_HEIGHT,
-  MOTION_MICRO_COLORS_CLASS,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { parseRouteId } from "@/lib/route-id";
@@ -166,16 +157,11 @@ type PlaylistContentProps = {
 };
 
 function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
-  const navigate = Route.useNavigate();
   const queryClient = useQueryClient();
   const audioPlayer = useAudioPlayerActions();
-  const [showEditDialog, setShowEditDialog] = useState(false);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   // The rest of the playlist downloading behind playback that has already
   // started — a progress hint on the buttons, not a block on using them.
   const [isLoadingRest, setIsLoadingRest] = useState(false);
-  const editButtonRef = useRef<HTMLButtonElement | null>(null);
-  const deleteButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const { playlist, track_count, duration, is_owner, can_edit } = data;
   const coverUrl = getMediaImageUrl(unwrapString(playlist.cover_image));
@@ -195,23 +181,6 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
     tracksData?.pages.flatMap((page) =>
       page.error === false ? (page.data?.tracks ?? []) : []
     ) ?? [];
-
-  // Delete playlist mutation
-  const deleteMutation = useMutation({
-    mutationFn: () => deletePlaylist(playlistId),
-    onSuccess: (result) => {
-      if (result.error) {
-        showActionFailed("delete playlist", result.message);
-        return;
-      }
-      queryClient.invalidateQueries({ queryKey: [PLAYLISTS_KEY] });
-      showDeleted("Playlist");
-      navigate({ to: "/music", search: MUSIC_PLAYLISTS_TAB_SEARCH });
-    },
-    onError: () => {
-      showActionFailed("delete playlist");
-    },
-  });
 
   // Remove track mutation
   const removeTrackMutation = useMutation({
@@ -332,10 +301,6 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
     void startPlaylistQueue(true);
   };
 
-  const handleDeletePlaylist = () => {
-    setShowDeleteDialog(true);
-  };
-
   return (
     <article
       className={cn(
@@ -421,47 +386,12 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
             </div>
           )}
 
-          {/* Edit and Delete buttons for owner */}
           {is_owner && (
-            <div className="mt-4 flex flex-wrap justify-center gap-3 sm:gap-4 lg:justify-start">
-              <button
-                type="button"
-                ref={editButtonRef}
-                onClick={() => setShowEditDialog(true)}
-                className={cn(
-                  MOTION_MICRO_COLORS_CLASS,
-                  FOCUS_VISIBLE_RING_CLASS,
-                  "inline-flex items-center gap-1.5 rounded-sm text-xs text-muted-foreground hover:text-primary focus-visible:text-primary sm:gap-2 sm:text-sm",
-                )}
-                aria-label="Edit playlist"
-              >
-                <Pencil className="size-4" aria-hidden="true" />
-                <span>
-                  Edit<span className="hidden sm:inline"> Details</span>
-                </span>
-              </button>
-              <button
-                type="button"
-                ref={deleteButtonRef}
-                onClick={handleDeletePlaylist}
-                disabled={deleteMutation.isPending}
-                className={cn(
-                  MOTION_MICRO_COLORS_CLASS,
-                  FOCUS_VISIBLE_RING_CLASS,
-                  "inline-flex items-center gap-1.5 rounded-sm text-xs text-muted-foreground hover:text-destructive focus-visible:text-destructive disabled:opacity-50 sm:gap-2 sm:text-sm",
-                )}
-                aria-label="Delete playlist"
-              >
-                {deleteMutation.isPending ? (
-                  <Spinner className="size-4" />
-                ) : (
-                  <Trash2 className="size-4" aria-hidden="true" />
-                )}
-                <span>
-                  Delete<span className="hidden sm:inline"> Playlist</span>
-                </span>
-              </button>
-            </div>
+            <PlaylistOwnerActions
+              kind="music"
+              playlist={playlist}
+              className="mt-4 justify-center lg:justify-start"
+            />
           )}
         </div>
       </header>
@@ -511,33 +441,6 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
         className="mt-8"
       />
 
-      {/* Edit Playlist Dialog */}
-      {is_owner && (
-        <PlaylistFormDialog
-          mode="edit"
-          open={showEditDialog}
-          onOpenChange={setShowEditDialog}
-          playlist={playlist}
-          restoreFocusRef={editButtonRef}
-        />
-      )}
-
-      {/* Delete Playlist Confirmation Dialog */}
-      <ConfirmDialog
-        open={showDeleteDialog}
-        onOpenChange={setShowDeleteDialog}
-        title="Delete playlist"
-        description={
-          <>
-            Are you sure you want to delete &ldquo;{playlist.name}&rdquo;? This
-            action cannot be undone.
-          </>
-        }
-        confirmLabel="Delete"
-        pending={deleteMutation.isPending}
-        restoreFocusRef={deleteButtonRef}
-        onConfirm={() => deleteMutation.mutate()}
-      />
     </article>
   );
 }

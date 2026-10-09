@@ -75,7 +75,7 @@ import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import TrackItem from "@/components/music/TrackItem";
 import LibraryEmptyState from "@/components/shared/LibraryEmptyState";
 import { Button } from "@/components/ui/button";
-import PlaylistFormDialog from "@/components/music/PlaylistFormDialog";
+import PlaylistFormDialog from "@/components/shared/PlaylistFormDialog";
 import RequestAlbumDialog from "@/components/music/RequestAlbumDialog";
 import RequestTrackDialog from "@/components/music/RequestTrackDialog";
 import type { TrackListItemType, VirtualItem } from "@/types";
@@ -882,6 +882,7 @@ function PlaylistsTabContent({ playlistsView, likedTracksPage }: PlaylistsTabCon
       {body}
 
       <PlaylistFormDialog
+        kind="music"
         mode="create"
         open={showCreateDialog}
         onOpenChange={setShowCreateDialog}

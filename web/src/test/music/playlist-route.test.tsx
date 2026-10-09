@@ -1,4 +1,5 @@
 import { screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { components } from "@/types/openapi.gen";
 import { jsonResponse, requestURL } from "../helpers/api";
@@ -39,11 +40,15 @@ function roadTrip(
 }
 
 function mockPlaylistFetch(mock: MockPlaylist) {
-  const fetchMock = vi.fn((input: RequestInfo | URL) => {
+  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = requestURL(input);
 
     if (url === "/api/auth/user") {
       return jsonResponse(authUser());
+    }
+
+    if (url === "/api/music/playlists/21" && init?.method === "DELETE") {
+      return jsonResponse({ error: false, message: "Playlist deleted successfully" });
     }
 
     if (url === "/api/music/playlists/21") {
@@ -113,6 +118,31 @@ describe("music playlist route", () => {
     expect(screen.queryByText("Owner")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Edit playlist" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Delete playlist" })).not.toBeInTheDocument();
+  });
+
+  it("deletes the playlist after confirming and returns to the playlists tab", async () => {
+    const fetchMock = mockPlaylistFetch(roadTrip());
+    const user = userEvent.setup();
+
+    const { router } = await renderRoute("/music/playlist/21");
+
+    await user.click(await screen.findByRole("button", { name: "Delete playlist" }));
+
+    const confirm = await screen.findByRole("alertdialog", { name: "Delete playlist" });
+    expect(confirm).toHaveTextContent("Are you sure you want to delete “Road Trip”?");
+    await user.click(within(confirm).getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe("/music");
+    });
+    expect(router.state.location.search).toMatchObject({ tab: "playlists" });
+    expect(
+      fetchMock.mock.calls.some(
+        ([input, init]) =>
+          requestURL(input as RequestInfo | URL) === "/api/music/playlists/21" &&
+          (init as RequestInit | undefined)?.method === "DELETE",
+      ),
+    ).toBe(true);
   });
 
   it("shows the empty copy and no Play pair for a playlist without tracks", async () => {

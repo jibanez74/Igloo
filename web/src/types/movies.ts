@@ -54,12 +54,12 @@ export type MoviePlaylistDetailResponseType = {
   collaborators: PlaylistCollaboratorType[] | null;
 };
 
-export type CreateMoviePlaylistRequest = {
-  name: string;
-  description?: string;
-  is_public?: boolean;
-  movie_id?: number;
-};
+export type CreateMoviePlaylistRequest =
+  components["schemas"]["CreateMoviePlaylistRequest"];
+
+/** PUT /api/movies/playlists/:id replaces every field it names. */
+export type UpdateMoviePlaylistRequest =
+  components["schemas"]["UpdateMoviePlaylistRequest"];
 
 export type MovieDetailsType = components["schemas"]["TmdbMovie"];
 export type CrewMemberType = NonNullable<

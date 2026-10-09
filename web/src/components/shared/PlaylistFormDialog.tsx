@@ -19,12 +19,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
-import { createPlaylist, updatePlaylist } from "@/lib/api";
-import {
-  FOCUS_VISIBLE_RING_CLASS,
-  PLAYLIST_DETAILS_KEY,
-  PLAYLISTS_KEY,
-} from "@/lib/constants";
+import { FOCUS_VISIBLE_RING_CLASS } from "@/lib/constants";
+import { PLAYLIST_KINDS, type PlaylistKind } from "@/lib/playlist-kinds";
 import { unwrapString, unwrapStringOrUndefined } from "@/lib/nullable";
 import { playlistFieldsError } from "@/lib/form-validation";
 import { cn } from "@/lib/utils";
@@ -54,6 +50,7 @@ type EditModeProps = {
 };
 
 type PlaylistFormDialogProps = {
+  kind: PlaylistKind;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   restoreFocusRef?: RefObject<HTMLElement | null>;
@@ -66,7 +63,6 @@ type PlaylistFormDialogProps = {
 const DIALOG_CONFIG = {
   create: {
     title: "Create New Playlist",
-    description: "Create a new playlist to organize your favorite tracks.",
     submitText: "Create Playlist",
     pendingText: "Creating...",
     successMessage: "Playlist created",
@@ -74,7 +70,6 @@ const DIALOG_CONFIG = {
   },
   edit: {
     title: "Edit Playlist",
-    description: "Update the playlist details.",
     submitText: "Save Changes",
     pendingText: "Saving...",
     successMessage: "Playlist updated",
@@ -87,7 +82,7 @@ const DIALOG_CONFIG = {
 // ============================================================================
 
 export default function PlaylistFormDialog(props: PlaylistFormDialogProps) {
-  const { open, onOpenChange, mode, restoreFocusRef } = props;
+  const { kind, open, onOpenChange, mode, restoreFocusRef } = props;
 
   // For edit mode, we use a key to force remount when playlist changes
   const formKey = mode === "edit" ? props.playlist.id : "create";
@@ -97,6 +92,7 @@ export default function PlaylistFormDialog(props: PlaylistFormDialogProps) {
       {open && (
         <PlaylistForm
           key={formKey}
+          kind={kind}
           mode={mode}
           playlist={mode === "edit" ? props.playlist : undefined}
           onOpenChange={onOpenChange}
@@ -112,6 +108,7 @@ export default function PlaylistFormDialog(props: PlaylistFormDialogProps) {
 // ============================================================================
 
 type PlaylistFormProps = {
+  kind: PlaylistKind;
   mode: "create" | "edit";
   playlist?: PlaylistData;
   onOpenChange: (open: boolean) => void;
@@ -119,12 +116,14 @@ type PlaylistFormProps = {
 };
 
 function PlaylistForm({
+  kind,
   mode,
   playlist,
   onOpenChange,
   restoreFocusRef,
 }: PlaylistFormProps) {
   const config = DIALOG_CONFIG[mode];
+  const api = PLAYLIST_KINDS[kind];
   const queryClient = useQueryClient();
   const router = useRouter();
 
@@ -137,7 +136,7 @@ function PlaylistForm({
   // Create mutation
   const createMutation = useMutation({
     mutationFn: () =>
-      createPlaylist({
+      api.create({
         name: name.trim(),
         description: description.trim() || undefined,
         is_public: false,
@@ -147,7 +146,7 @@ function PlaylistForm({
         showActionFailed("create playlist", data.message);
         return;
       }
-      queryClient.invalidateQueries({ queryKey: [PLAYLISTS_KEY] });
+      queryClient.invalidateQueries({ queryKey: [api.listKey] });
       showCreated("Playlist", `"${name}" has been created successfully.`);
       handleClose();
     },
@@ -162,7 +161,7 @@ function PlaylistForm({
       if (!playlist) throw new Error("Playlist is required for edit mode");
       // PUT replaces every field, so the dialog resends the cover it does not
       // edit; leaving it out would clear it.
-      return updatePlaylist(playlist.id, {
+      return api.update(playlist.id, {
         name: name.trim(),
         description: description.trim() || undefined,
         cover_image: unwrapStringOrUndefined(playlist.cover_image),
@@ -174,7 +173,7 @@ function PlaylistForm({
         showActionFailed("update playlist", data.message);
         return;
       }
-      queryClient.invalidateQueries({ queryKey: [PLAYLISTS_KEY] });
+      queryClient.invalidateQueries({ queryKey: [api.listKey] });
       showUpdated("Playlist");
       onOpenChange(false);
       if (playlist) {
@@ -182,10 +181,10 @@ function PlaylistForm({
         // for the details refetch, then reload that route so the tab title
         // follows a rename.
         await queryClient.invalidateQueries({
-          queryKey: [PLAYLIST_DETAILS_KEY, playlist.id],
+          queryKey: [api.detailsKey, playlist.id],
         });
         await router.invalidate({
-          filter: match => match.routeId === "/_auth/music/playlist/$id",
+          filter: match => match.routeId === api.routeId,
         });
       }
     },
@@ -234,7 +233,9 @@ function PlaylistForm({
       <DialogHeader>
         <DialogTitle className="text-foreground">{config.title}</DialogTitle>
         <DialogDescription className="text-muted-foreground">
-          {config.description}
+          {mode === "create"
+            ? api.createDescription
+            : "Update the playlist details."}
         </DialogDescription>
       </DialogHeader>
 
@@ -254,6 +255,7 @@ function PlaylistForm({
             placeholder="My Playlist"
             className="border-border bg-muted text-foreground placeholder:text-muted-foreground"
             disabled={mutation.isPending}
+            autoComplete="off"
             autoFocus
           />
         </div>

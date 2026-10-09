@@ -19,11 +19,13 @@ type MockPlaylist = {
   name: string;
   description?: string;
   movies: ReturnType<typeof movie>[];
+  is_owner?: boolean;
 };
 
 function mockPlaylistsFetch(playlists: Record<number, MockPlaylist>) {
-  const fetchMock = vi.fn((input: RequestInfo | URL) => {
+  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = requestURL(input);
+    const method = init?.method ?? "GET";
 
     if (url === "/api/auth/user") {
       return jsonResponse(authUser());
@@ -31,6 +33,10 @@ function mockPlaylistsFetch(playlists: Record<number, MockPlaylist>) {
 
     const detail = url.match(/^\/api\/movies\/playlists\/(\d+)$/);
     const playlist = detail ? playlists[Number(detail[1])] : undefined;
+    if (detail && playlist && method === "DELETE") {
+      delete playlists[Number(detail[1])];
+      return jsonResponse({ error: false, message: "Playlist deleted successfully" });
+    }
     if (detail && playlist) {
       return jsonResponse({
         error: false,
@@ -46,8 +52,8 @@ function mockPlaylistsFetch(playlists: Record<number, MockPlaylist>) {
             updated_at: "2026-01-01T00:00:00Z",
           },
           movie_count: playlist.movies.length,
-          is_owner: true,
-          can_edit: true,
+          is_owner: playlist.is_owner ?? true,
+          can_edit: playlist.is_owner ?? true,
           collaborators: null,
         },
       });
@@ -72,6 +78,13 @@ function mockPlaylistsFetch(playlists: Record<number, MockPlaylist>) {
       });
     }
 
+    if (url === "/api/movies/playlists") {
+      return jsonResponse({
+        error: false,
+        data: { playlists: [] },
+      });
+    }
+
     return jsonResponse({ error: false, data: {} });
   });
 
@@ -80,9 +93,17 @@ function mockPlaylistsFetch(playlists: Record<number, MockPlaylist>) {
   return fetchMock;
 }
 
-function mockPlaylistFetch(movies: ReturnType<typeof movie>[]) {
+function mockPlaylistFetch(
+  movies: ReturnType<typeof movie>[],
+  fields: Omit<MockPlaylist, "name" | "movies"> = {},
+) {
   return mockPlaylistsFetch({
-    11: { name: "Weekend Picks", description: "Two for Saturday.", movies },
+    11: {
+      name: "Weekend Picks",
+      description: "Two for Saturday.",
+      movies,
+      ...fields,
+    },
   });
 }
 
@@ -101,6 +122,9 @@ describe("movie playlist route", () => {
     const backLink = screen.getByRole("link", { name: "Movie playlists" });
     expect(backLink.getAttribute("href")).toContain("tab=playlists");
 
+    expect(screen.getByRole("button", { name: "Edit playlist" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete playlist" })).toBeInTheDocument();
+
     expect(screen.getByText("Playlist movies")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /Sort/ }),
@@ -113,6 +137,44 @@ describe("movie playlist route", () => {
         description: "Movie playlist: Weekend Picks",
       });
     });
+  });
+
+  it("hides Edit and Delete from a viewer who does not own the playlist", async () => {
+    mockPlaylistFetch([movie(1, "Arrival", 2016)], { is_owner: false });
+
+    await renderRoute("/movies/playlist/11");
+
+    expect(
+      await screen.findByRole("heading", { name: "Weekend Picks" }),
+    ).toBeInTheDocument();
+    expect(await screen.findByText("Arrival")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Edit playlist" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Delete playlist" })).not.toBeInTheDocument();
+  });
+
+  it("deletes the playlist after confirming and returns to the playlists tab", async () => {
+    const fetchMock = mockPlaylistFetch([movie(1, "Arrival", 2016)]);
+    const user = userEvent.setup();
+
+    const { router } = await renderRoute("/movies/playlist/11");
+
+    await user.click(await screen.findByRole("button", { name: "Delete playlist" }));
+
+    const confirm = await screen.findByRole("alertdialog", { name: "Delete playlist" });
+    expect(confirm).toHaveTextContent("Are you sure you want to delete “Weekend Picks”?");
+    await user.click(within(confirm).getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe("/movies");
+    });
+    expect(router.state.location.search).toMatchObject({ tab: "playlists" });
+    expect(
+      fetchMock.mock.calls.some(
+        ([input, init]) =>
+          requestURL(input as RequestInfo | URL) === "/api/movies/playlists/11" &&
+          (init as RequestInit | undefined)?.method === "DELETE",
+      ),
+    ).toBe(true);
   });
 
   it("scopes the empty copy to the playlist, not the library", async () => {
