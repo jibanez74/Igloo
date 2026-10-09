@@ -34,6 +34,7 @@ import {
   type ShowsSearchParams,
 } from "@/lib/route-search";
 import { routeHead } from "@/lib/route-head";
+import { loadOnEntry } from "@/lib/route-loads";
 
 const TV_SHOWS_HEAD = routeHead(
   "TV Shows",
@@ -52,6 +53,7 @@ export const Route = createFileRoute("/_auth/tv-shows/")({
   }),
   loader: async ({
     context,
+    cause,
     deps: { allPage, sort, tab, genreId, genresPage },
   }) => {
     const { queryClient } = context;
@@ -71,7 +73,7 @@ export const Route = createFileRoute("/_auth/tv-shows/")({
         );
       }
     }
-    await Promise.all(promises);
+    await loadOnEntry(cause, promises);
   },
   component: TvShowsPage,
 });

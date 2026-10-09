@@ -63,6 +63,7 @@ import {
   type MoviesSearchParams,
 } from "@/lib/route-search";
 import { routeHead } from "@/lib/route-head";
+import { loadOnEntry } from "@/lib/route-loads";
 
 const MOVIES_HEAD = routeHead(
   "Movies",
@@ -85,6 +86,7 @@ export const Route = createFileRoute("/_auth/movies/")({
   }),
   loader: async ({
     context,
+    cause,
     deps: { allPage, sort, tab, genreId, genresPage, view, playlistsPage },
   }) => {
     const { queryClient } = context;
@@ -114,7 +116,7 @@ export const Route = createFileRoute("/_auth/movies/")({
         );
       }
     }
-    await Promise.all(promises);
+    await loadOnEntry(cause, promises);
   },
   component: MoviesPage,
 });

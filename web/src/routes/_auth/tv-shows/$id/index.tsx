@@ -13,6 +13,7 @@ import {
 import { showDetailsSearchSchema } from "@/lib/route-search";
 import { parseRouteId } from "@/lib/route-id";
 import { showHead, type MediaHeadData } from "@/lib/route-head";
+import { loadOnEntry } from "@/lib/route-loads";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { prepareYouTubeExtrasForDisplay } from "@/lib/format";
 import {
@@ -42,7 +43,7 @@ import type { ShowDetailsDataType } from "@/types";
 export const Route = createFileRoute("/_auth/tv-shows/$id/")({
   validateSearch: showDetailsSearchSchema,
   loaderDeps: ({ search: { season } }) => ({ season }),
-  loader: async ({ context, params, deps: { season } }) => {
+  loader: async ({ context, cause, params, deps: { season } }) => {
     const showId = parseRouteId(params.id);
     if (showId == null) return { show: null };
 
@@ -83,9 +84,13 @@ export const Route = createFileRoute("/_auth/tv-shows/$id/")({
       });
     }
 
-    await context.queryClient.ensureQueryData(
-      showSeasonEpisodesQueryOpts(showId, selected),
-    );
+    // A season switch keeps the page and lets the episode list show its own
+    // loading state; entering the page waits so the hero's Play arrives with it.
+    await loadOnEntry(cause, [
+      context.queryClient.ensureQueryData(
+        showSeasonEpisodesQueryOpts(showId, selected),
+      ),
+    ]);
 
     return { show };
   },

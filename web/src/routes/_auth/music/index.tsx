@@ -84,6 +84,7 @@ import {
   type MusicSearchParams,
 } from "@/lib/route-search";
 import { routeHead } from "@/lib/route-head";
+import { loadOnEntry } from "@/lib/route-loads";
 
 const MUSIC_HEAD = routeHead(
   "Music Library",
@@ -97,10 +98,10 @@ export const Route = createFileRoute("/_auth/music/")({
     albumsPage,
     musiciansPage,
   }),
-  loader: async ({ context, deps: { albumsPage, musiciansPage } }) => {
+  loader: async ({ context, cause, deps: { albumsPage, musiciansPage } }) => {
     const { queryClient } = context;
 
-    await Promise.all([
+    await loadOnEntry(cause, [
       queryClient.ensureQueryData(musicStatsQueryOpts()),
       queryClient.ensureQueryData(
         albumsPaginatedQueryOpts(albumsPage, ALBUMS_PER_PAGE)
