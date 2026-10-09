@@ -1,5 +1,6 @@
 import { MusicDetailArtSkeleton } from "@/components/music/MusicDetailArt";
 import { MusicDetailBackdropSkeleton } from "@/components/music/MusicDetailBackdrop";
+import SkeletonStatus from "@/components/shared/SkeletonStatus";
 import {
   LIBRARY_POSTER_GRID_CLASS,
   MOTION_LOADING_STATE_CLASS,
@@ -32,19 +33,13 @@ export default function MusicDetailSkeleton({
   const label = `Loading ${variant} details`;
 
   return (
-    <div
-      className={MOTION_LOADING_STATE_CLASS}
-      role="status"
-      aria-label={label}
-    >
-      <span className="sr-only">{label}...</span>
-
+    <SkeletonStatus label={label} className={MOTION_LOADING_STATE_CLASS}>
       {variant === "playlist" ? (
         <PlaylistSkeleton />
       ) : (
         <HeroSkeleton isMusician={variant === "musician"} withMenu={withMenu} />
       )}
-    </div>
+    </SkeletonStatus>
   );
 }
 
@@ -59,7 +54,7 @@ function HeroSkeleton({
     <>
       <MusicDetailBackdropSkeleton />
 
-      <div className={MUSIC_DETAIL_SHELL_CLASS} aria-hidden="true">
+      <div className={MUSIC_DETAIL_SHELL_CLASS}>
         <div className={MUSIC_DETAIL_HERO_ROW_CLASS}>
           <MusicDetailArtSkeleton variant={isMusician ? "musician" : "album"} />
 
@@ -155,7 +150,7 @@ function ActionsSkeleton({ withMenu }: { withMenu: boolean }) {
 // Shuffle pair, then the "Tracks" rail heading over the rows.
 function PlaylistSkeleton() {
   return (
-    <div aria-hidden="true">
+    <>
       <div className={MUSIC_DETAIL_HERO_ROW_CLASS}>
         <MusicDetailArtSkeleton variant="playlist" />
 
@@ -171,7 +166,7 @@ function PlaylistSkeleton() {
 
       <div className="mb-4 h-7 w-24 rounded-sm bg-muted sm:h-8" />
       <TrackRowsSkeleton />
-    </div>
+    </>
   );
 }
 

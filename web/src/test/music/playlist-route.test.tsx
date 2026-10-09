@@ -6,21 +6,8 @@ import { authUser, nullableString } from "../helpers/fixtures";
 import { playlist, playlistDetail, playlistTrack } from "../helpers/music";
 import { readDocumentHead, renderRoute } from "../helpers/render-route";
 
-vi.mock("@/hooks/useAudioPlayerActions", () => ({
-  useAudioPlayerActions: () => ({
-    playQueue: vi.fn(),
-    playTrack: vi.fn(),
-    shuffleQueue: vi.fn(),
-    togglePlay: vi.fn(),
-  }),
-}));
-
-vi.mock("@/hooks/useAudioPlayerNowPlaying", () => ({
-  useAudioPlayerNowPlaying: () => ({
-    currentTrackId: null,
-    isPlaying: false,
-  }),
-}));
+vi.mock("@/hooks/useAudioPlayerActions", () => import("../helpers/audio-player"));
+vi.mock("@/hooks/useAudioPlayerNowPlaying", () => import("../helpers/audio-player"));
 
 type Schema = components["schemas"];
 

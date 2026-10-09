@@ -26,18 +26,14 @@ type LiveAnnouncerProps = {
    * - "assertive": Interrupt current speech (use for critical updates only)
    */
   politeness?: "polite" | "assertive";
-  /**
-   * Delay in milliseconds before making the announcement.
-   * Useful to batch rapid updates or wait for animations.
-   */
-  delay?: number;
 };
+
+const ANNOUNCE_DELAY_MS = 100;
 
 export default function LiveAnnouncer({
   message,
   announcementKey,
   politeness = "polite",
-  delay = 100,
 }: LiveAnnouncerProps) {
   // Use two alternating slots to ensure consecutive identical messages are announced
   const [announcement, setAnnouncement] = useState({ text: "", slot: 0 });
@@ -57,10 +53,10 @@ export default function LiveAnnouncer({
         text: message,
         slot: prev.slot === 0 ? 1 : 0,
       }));
-    }, delay);
+    }, ANNOUNCE_DELAY_MS);
 
     return () => clearTimeoutRef(timeoutRef);
-  }, [message, announcementKey, delay]);
+  }, [message, announcementKey]);
 
   // Render two live regions, alternating between them
   // This ensures screen readers always announce even if the text is the same

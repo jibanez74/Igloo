@@ -4,13 +4,7 @@ import { jsonResponse, requestURL } from "../helpers/api";
 import { authUser } from "../helpers/fixtures";
 import { renderRoute } from "../helpers/render-route";
 
-vi.mock("@/hooks/useAudioPlayerActions", () => ({
-  useAudioPlayerActions: () => ({
-    pause: vi.fn(),
-    suspendKeyboard: vi.fn(),
-    resumeKeyboard: vi.fn(),
-  }),
-}));
+vi.mock("@/hooks/useAudioPlayerActions", () => import("../helpers/audio-player"));
 
 function mockTrailerFetch(movieResponse: () => Promise<Response>) {
   vi.stubGlobal(

@@ -84,6 +84,19 @@ describe("ShowDetailsHeroActions", () => {
     ).toHaveAttribute("href", playPath(70101));
   });
 
+  it("holds the button's place, hidden, while the season loads", () => {
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+
+    const { container } = renderWithQueryClient(
+      <ShowDetailsHeroActions showId={SHOW_ID} selectedSeason={1} />,
+    );
+
+    const row = container.firstElementChild;
+    expect(row).toHaveAttribute("aria-hidden", "true");
+    expect(row?.querySelector(".h-11")).not.toBeNull();
+    expect(screen.queryByRole("link")).toBeNull();
+  });
+
   it("renders nothing for a season with no episodes", async () => {
     const fetchMock = stubSeason([]);
 
@@ -91,8 +104,8 @@ describe("ShowDetailsHeroActions", () => {
       <ShowDetailsHeroActions showId={SHOW_ID} selectedSeason={1} />,
     );
 
-    // Nothing renders while the season is unknown either, so wait for the
-    // query to settle before reading the empty state as the answer.
+    // The pending placeholder renders first, so wait for the query to settle
+    // before reading the empty state as the answer.
     await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
     await waitFor(() =>
       expect(queryClient.isFetching()).toBe(0),

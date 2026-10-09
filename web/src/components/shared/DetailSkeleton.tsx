@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import SkeletonStatus from "@/components/shared/SkeletonStatus";
 import {
   DETAIL_HERO_CONTENT_CLASS,
   DETAIL_HERO_CONTENT_NO_ACTIONS_CLASS,
@@ -27,14 +28,8 @@ export default function DetailSkeleton({
   children,
 }: DetailSkeletonProps) {
   return (
-    <div
-      className={MOTION_LOADING_STATE_CLASS}
-      role="status"
-      aria-label={label}
-    >
-      <span className="sr-only">{label}...</span>
-
-      <div className={DETAIL_HERO_SHELL_CLASS} aria-hidden="true">
+    <SkeletonStatus label={label} className={MOTION_LOADING_STATE_CLASS}>
+      <div className={DETAIL_HERO_SHELL_CLASS}>
         <div className="absolute inset-0 bg-muted" />
         <div className={DETAIL_HERO_SCRIM_FADE_CLASS} />
 
@@ -63,13 +58,13 @@ export default function DetailSkeleton({
         </div>
       </div>
 
-      <div className="mt-6 space-y-2 text-left" aria-hidden="true">
+      <div className="mt-6 space-y-2 text-left">
         <div className="h-4 w-full rounded-sm bg-muted" />
         <div className="h-4 w-full rounded-sm bg-muted" />
         <div className="h-4 w-3/4 rounded-sm bg-muted" />
       </div>
 
       {children}
-    </div>
+    </SkeletonStatus>
   );
 }

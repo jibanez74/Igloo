@@ -16,26 +16,10 @@ import { restoreMatchMedia, setReducedMotionPreference } from "../helpers/dom";
 import { authUser, nullableInt64, nullableString } from "../helpers/fixtures";
 import { playlistSummary, trackListItem } from "../helpers/music";
 import { renderRoute } from "../helpers/render-route";
+import { audioPlayerActionsMock } from "../helpers/audio-player";
 
-const { audioPlayerActionsMock } = vi.hoisted(() => ({
-  audioPlayerActionsMock: {
-    playQueue: vi.fn(),
-    playTrack: vi.fn(),
-    startPlayAllPlayback: vi.fn(),
-    startShufflePlayback: vi.fn(),
-  },
-}));
-
-vi.mock("@/hooks/useAudioPlayerActions", () => ({
-  useAudioPlayerActions: () => audioPlayerActionsMock,
-}));
-
-vi.mock("@/hooks/useAudioPlayerNowPlaying", () => ({
-  useAudioPlayerNowPlaying: () => ({
-    currentTrackId: null,
-    isPlaying: false,
-  }),
-}));
+vi.mock("@/hooks/useAudioPlayerActions", () => import("../helpers/audio-player"));
+vi.mock("@/hooks/useAudioPlayerNowPlaying", () => import("../helpers/audio-player"));
 
 function track(id: number, title: string) {
   return trackListItem({
