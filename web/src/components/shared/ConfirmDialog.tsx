@@ -1,4 +1,4 @@
-import type { ComponentProps, ReactNode, RefObject } from "react";
+import type { ReactNode, RefObject } from "react";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -11,9 +11,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
-import { cn } from "@/lib/utils";
-
-type ButtonVariant = ComponentProps<typeof Button>["variant"];
 
 type ConfirmDialogProps = {
   open: boolean;
@@ -22,13 +19,9 @@ type ConfirmDialogProps = {
   description?: ReactNode;
   children?: ReactNode;
   confirmLabel: string;
-  cancelLabel?: string;
   pending?: boolean;
-  confirmDisabled?: boolean;
-  variant?: ButtonVariant;
   restoreFocusRef?: RefObject<HTMLElement | null>;
   onConfirm: () => void;
-  className?: string;
 };
 
 export default function ConfirmDialog({
@@ -38,13 +31,9 @@ export default function ConfirmDialog({
   description,
   children,
   confirmLabel,
-  cancelLabel = "Cancel",
   pending = false,
-  confirmDisabled = false,
-  variant = "destructive",
   restoreFocusRef,
   onConfirm,
-  className,
 }: ConfirmDialogProps) {
   const handleOpenChange = (next: boolean) => {
     if (pending && !next) return;
@@ -54,7 +43,7 @@ export default function ConfirmDialog({
   return (
     <AlertDialog open={open} onOpenChange={handleOpenChange}>
       <AlertDialogContent
-        className={cn("border-border bg-card", className)}
+        className="border-border bg-card"
         onCloseAutoFocus={
           restoreFocusRef
             ? event => {
@@ -65,9 +54,7 @@ export default function ConfirmDialog({
         }
       >
         <AlertDialogHeader>
-          <AlertDialogTitle
-            className={variant === "destructive" ? "text-destructive" : "text-foreground"}
-          >
+          <AlertDialogTitle className="text-destructive">
             {title}
           </AlertDialogTitle>
           {description ? (
@@ -84,13 +71,13 @@ export default function ConfirmDialog({
             disabled={pending}
             className="border-border bg-muted text-muted-foreground hover:bg-accent hover:text-foreground"
           >
-            {cancelLabel}
+            Cancel
           </AlertDialogCancel>
           <Button
             type="button"
-            variant={variant}
+            variant="destructive"
             onClick={onConfirm}
-            disabled={pending || confirmDisabled}
+            disabled={pending}
           >
             {pending ? <Spinner className="size-4" aria-hidden="true" /> : null}
             {pending ? `${confirmLabel}...` : confirmLabel}

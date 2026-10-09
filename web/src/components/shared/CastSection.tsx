@@ -27,18 +27,16 @@ export type CastSectionItem = {
 
 type CastSectionProps = {
   cast: CastSectionItem[];
-  maxDisplay?: number;
 };
 
-export default function CastSection({
-  cast,
-  maxDisplay = 10,
-}: CastSectionProps) {
+const CAST_DISPLAY_LIMIT = 10;
+
+export default function CastSection({ cast }: CastSectionProps) {
   if (!cast || cast.length === 0) {
     return null;
   }
 
-  const displayedCast = cast.slice(0, maxDisplay);
+  const displayedCast = cast.slice(0, CAST_DISPLAY_LIMIT);
 
   return (
     <section className="mt-8 sm:mt-10" aria-labelledby="cast-heading">
