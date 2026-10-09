@@ -161,6 +161,33 @@ test("a slow detail load shows the page's skeleton inside the app shell", async 
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
+test("a slow auth re-check on navigation keeps the shell and the current page", async ({ page }) => {
+  const browserIssues = trackBrowserIssues(page);
+  const unexpectedApiRequests = await mockAlbumDetailsApi(page);
+
+  await page.setViewportSize(VIEWPORTS.desktop);
+  await page.goto(`/music/album/${GLACIER_SESSIONS_ID}`);
+  await expect(page.getByRole("heading", { level: 1, name: "Glacier Sessions" })).toBeVisible();
+
+  // _auth's beforeLoad re-checks the session on every navigation. Its
+  // pendingComponent is the boot splash, which must stay a boot-only view: a
+  // retained _auth match keeps rendering while the check is in flight.
+  const authCheck = await gateRoute(page, "**/api/auth/user");
+  await page.getByRole("link", { name: "Aurora Pines" }).first().click();
+  await expect.poll(authCheck.requested).toBe(true);
+
+  // Held well past the router's 1 s pendingMs.
+  await page.waitForTimeout(2_000);
+  await expect(page.getByText("Starting Igloo...")).toHaveCount(0);
+  await expect(page.getByRole("search")).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Glacier Sessions" })).toBeVisible();
+
+  authCheck.release();
+  await expect(page.getByRole("heading", { level: 1, name: "Aurora Pines" })).toBeVisible();
+
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
+});
+
 test("album details holds its layout at every breakpoint", async ({ page }) => {
   const browserIssues = trackBrowserIssues(page);
   const unexpectedApiRequests = await mockAlbumDetailsApi(page);
