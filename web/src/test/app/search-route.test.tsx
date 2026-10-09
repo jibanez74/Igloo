@@ -12,23 +12,8 @@ import { jsonResponse } from "../helpers/api";
 import { readDocumentHead, renderRoute } from "../helpers/render-route";
 import { restoreMatchMedia, setReducedMotionPreference } from "../helpers/dom";
 
-const { audioPlayerActionsMock } = vi.hoisted(() => ({
-  audioPlayerActionsMock: {
-    playQueue: vi.fn(),
-    playTrack: vi.fn(),
-  },
-}));
-
-vi.mock("@/hooks/useAudioPlayerActions", () => ({
-  useAudioPlayerActions: () => audioPlayerActionsMock,
-}));
-
-vi.mock("@/hooks/useAudioPlayerNowPlaying", () => ({
-  useAudioPlayerNowPlaying: () => ({
-    currentTrackId: null,
-    isPlaying: false,
-  }),
-}));
+vi.mock("@/hooks/useAudioPlayerActions", () => import("../helpers/audio-player"));
+vi.mock("@/hooks/useAudioPlayerNowPlaying", () => import("../helpers/audio-player"));
 
 function mockSearchFetch() {
   const fetchMock = vi.fn((input: RequestInfo | URL) => {

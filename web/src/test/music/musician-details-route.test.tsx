@@ -11,28 +11,14 @@ import {
   getHeroMotionWrapper,
   getLowerMotionWrapper,
 } from "../helpers/motion";
+import {
+  audioPlayerActionsMock,
+  audioPlayerNowPlayingMock,
+  resetNowPlayingMock,
+} from "../helpers/audio-player";
 
-const { audioPlayerActionsMock, audioPlayerNowPlayingMock } = vi.hoisted(() => ({
-  audioPlayerActionsMock: {
-    playQueue: vi.fn(),
-    playTrack: vi.fn(),
-    playTrackFromList: vi.fn(),
-    shuffleQueue: vi.fn(),
-    togglePlay: vi.fn(),
-  },
-  audioPlayerNowPlayingMock: {
-    currentTrackId: null as number | null,
-    isPlaying: false,
-  },
-}));
-
-vi.mock("@/hooks/useAudioPlayerActions", () => ({
-  useAudioPlayerActions: () => audioPlayerActionsMock,
-}));
-
-vi.mock("@/hooks/useAudioPlayerNowPlaying", () => ({
-  useAudioPlayerNowPlaying: () => audioPlayerNowPlayingMock,
-}));
+vi.mock("@/hooks/useAudioPlayerActions", () => import("../helpers/audio-player"));
+vi.mock("@/hooks/useAudioPlayerNowPlaying", () => import("../helpers/audio-player"));
 
 function musicianTrack(
   id: number,
@@ -222,8 +208,7 @@ async function renderMusicianDetailsRoute(initialEntry = "/music/musician/20") {
 }
 
 afterEach(() => {
-  audioPlayerNowPlayingMock.currentTrackId = null;
-  audioPlayerNowPlayingMock.isPlaying = false;
+  resetNowPlayingMock();
 });
 
 describe("musician details guards", () => {
@@ -459,7 +444,7 @@ describe("musician details route accessibility", () => {
       await screen.findByRole("button", { name: /^Play all/ }),
     );
 
-    const rawTracks = audioPlayerActionsMock.playQueue.mock.calls[0][2];
+    const rawTracks = audioPlayerActionsMock.playQueue.mock.calls[0][2] ?? [];
     expect(rawTracks).toHaveLength(2);
     expect(rawTracks[0].album_title).toEqual(nullableString("Blue Record"));
     expect(rawTracks[1].album_title).toEqual(nullableString("Dark Record"));

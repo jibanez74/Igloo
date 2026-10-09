@@ -12,29 +12,12 @@ import {
   getLowerMotionWrapper,
 } from "../helpers/motion";
 
-const { audioPlayerActionsMock } = vi.hoisted(() => ({
-  audioPlayerActionsMock: {
-    playQueue: vi.fn(),
-    playTrack: vi.fn(),
-    shuffleQueue: vi.fn(),
-    togglePlay: vi.fn(),
-  },
-}));
+vi.mock("@/hooks/useAudioPlayerActions", () => import("../helpers/audio-player"));
+vi.mock("@/hooks/useAudioPlayerNowPlaying", () => import("../helpers/audio-player"));
 
 const toastMocks = vi.hoisted(() => ({
   showActionFailed: vi.fn(),
   showDeleted: vi.fn(),
-}));
-
-vi.mock("@/hooks/useAudioPlayerActions", () => ({
-  useAudioPlayerActions: () => audioPlayerActionsMock,
-}));
-
-vi.mock("@/hooks/useAudioPlayerNowPlaying", () => ({
-  useAudioPlayerNowPlaying: () => ({
-    currentTrackId: null,
-    isPlaying: false,
-  }),
 }));
 
 vi.mock("@/lib/toast-helpers", () => ({
