@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import PlaylistCard from "@/components/shared/PlaylistCard";
 import type { MoviePlaylistSummaryType, PlaylistSummaryType } from "@/types";
 import { nullableInt64, nullableString } from "@/test/helpers/fixtures";
+import { playlistSummary } from "@/test/helpers/music";
 import { renderWithQueryClient } from "@/test/helpers/render";
 
 vi.mock("@tanstack/react-router", async () =>
@@ -24,15 +25,13 @@ const playlistRow = {
 function musicPlaylist(
   fields: Partial<PlaylistSummaryType> = {},
 ): PlaylistSummaryType {
-  return {
-    ...playlistRow,
+  return playlistSummary({
     id: 7,
     name: "Late Shift",
-    content_type: "track",
     track_count: 1,
     total_duration: 214_000,
     ...fields,
-  };
+  });
 }
 
 function moviePlaylist(

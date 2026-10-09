@@ -24,6 +24,7 @@ import {
   nullableString,
 } from "./e2e-api";
 import { mockApi } from "./e2e-mock-api";
+import { simpleAlbum, simpleMusician, trackListItem } from "./fixtures/music";
 
 const movieResult = {
   id: 7,
@@ -41,34 +42,29 @@ const showResult = {
   certification: nullableString("TV-MA"),
 } satisfies SearchAllResponseType["shows"]["results"][number];
 
-const albumResult = {
+const albumResult = simpleAlbum({
   id: 12,
   title: "Casino Original Soundtrack",
-  cover: nullableString(),
   musician: nullableString("Various Artists"),
   year: nullableInt64(1995),
-} satisfies SearchAllResponseType["albums"]["results"][number];
+}) satisfies SearchAllResponseType["albums"]["results"][number];
 
-const musicianResult = {
+const musicianResult = simpleMusician({
   id: 22,
   name: "Casino House Band",
-  thumb: nullableString(),
   album_count: 2,
   track_count: 18,
-} satisfies SearchAllResponseType["musicians"]["results"][number];
+}) satisfies SearchAllResponseType["musicians"]["results"][number];
 
-const trackResult = {
+const trackResult = trackListItem({
   id: 33,
   title: "Casino Theme",
   duration: 181,
-  codec: "flac",
-  bit_rate: 900000,
   album_id: nullableInt64(12),
   album_title: nullableString("Casino Original Soundtrack"),
-  album_cover: nullableString(),
   musician_id: nullableInt64(22),
   musician_name: nullableString("Casino House Band"),
-} satisfies SearchAllResponseType["tracks"]["results"][number];
+}) satisfies SearchAllResponseType["tracks"]["results"][number];
 
 const allResults = apiResponse<SearchAllResponseType>({
   query: "Casino",
