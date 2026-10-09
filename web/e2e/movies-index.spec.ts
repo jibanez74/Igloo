@@ -13,6 +13,7 @@ import type {
 import {
   apiResponse,
   fulfillJSON,
+  gateRoute,
   nullableInt64,
   nullableString,
   pagedList,
@@ -215,6 +216,30 @@ test("playlists tab lists playlists and creates a playlist from the toolbar dial
   await expect(dialog).toBeHidden();
   await expect(createPlaylistButton).toBeFocused();
   await expect(page.getByRole("link", { name: "Roadshow Queue, 0 movies" })).toBeVisible();
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
+});
+
+test("switching to the playlists tab commits at once and shows its skeleton", async ({ page }) => {
+  const browserIssues = trackBrowserIssues(page);
+  const { unexpectedApiRequests } = await mockMoviesApi(page);
+
+  await page.setViewportSize(VIEWPORTS.desktop);
+  await page.goto("/movies");
+
+  const playlistsTab = page.getByRole("tab", { name: "Playlists" });
+  await expect(playlistsTab).toBeVisible();
+
+  const playlistsList = await gateRoute(page, /\/api\/movies\/playlists$/);
+  await playlistsTab.click();
+
+  // The loader only starts an in-page tab's query, so the tab is selected
+  // while the playlists load and the grid's skeleton covers the wait.
+  await expect(playlistsTab).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("status", { name: "Loading playlists" })).toBeVisible();
+
+  playlistsList.release();
+  await expect(page.getByText("2 playlists")).toBeVisible();
+
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 

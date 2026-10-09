@@ -4,7 +4,7 @@ import {
   trackBrowserIssues,
 } from "./e2e-browser-issues";
 import { BREAKPOINTS, VIEWPORTS, expectNoOverflowingElements } from "./e2e-layout";
-import { apiResponse, fulfillJSON } from "./e2e-api";
+import { apiResponse, fulfillJSON, gateRoute } from "./e2e-api";
 import { mockApi } from "./e2e-mock-api";
 import {
   AURORA_PINES_ID,
@@ -131,6 +131,31 @@ test("artist links navigate to the musician details page", async ({ page }) => {
   // The hero name is the first of the artist links; the rest share its target.
   await page.getByRole("link", { name: "Aurora Pines" }).first().click();
   await expect(page).toHaveURL(`/music/musician/${AURORA_PINES_ID}`);
+  await expect(page.getByRole("heading", { level: 1, name: "Aurora Pines" })).toBeVisible();
+
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
+});
+
+test("a slow detail load shows the page's skeleton inside the app shell", async ({ page }) => {
+  const browserIssues = trackBrowserIssues(page);
+  const unexpectedApiRequests = await mockAlbumDetailsApi(page);
+
+  await page.setViewportSize(VIEWPORTS.desktop);
+  await page.goto(`/music/album/${GLACIER_SESSIONS_ID}`);
+  await expect(page.getByRole("heading", { level: 1, name: "Glacier Sessions" })).toBeVisible();
+
+  const musician = await gateRoute(page, `**/api/music/musicians/${AURORA_PINES_ID}`);
+  await page.getByRole("link", { name: "Aurora Pines" }).first().click();
+
+  // Past the router's pendingMs the musician route renders its own skeleton
+  // in the content area; the header and sidebar stay, and the boot splash
+  // never stands in for a navigation.
+  await expect(page.getByRole("status", { name: "Loading musician details" })).toBeVisible();
+  await expect(page.getByRole("search")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Music" })).toBeVisible();
+  await expect(page.getByText("Starting Igloo...")).toHaveCount(0);
+
+  musician.release();
   await expect(page.getByRole("heading", { level: 1, name: "Aurora Pines" })).toBeVisible();
 
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);

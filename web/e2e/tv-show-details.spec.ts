@@ -9,7 +9,7 @@ import {
   trackBrowserIssues,
 } from "./e2e-browser-issues";
 import { expectPageHasNoHorizontalScroll, tabTo, VIEWPORTS } from "./e2e-layout";
-import { apiResponse, fulfillJSON } from "./e2e-api";
+import { apiResponse, fulfillJSON, gateRoute } from "./e2e-api";
 import { mockApi } from "./e2e-mock-api";
 
 // The page's content, seasons and URL state are unit-tested
@@ -104,6 +104,42 @@ test("season tabs are reachable and operable from the keyboard", async ({
     "aria-controls",
     (await panel.getAttribute("id")) ?? "",
   );
+
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
+});
+
+test("a season switch keeps the page while that season's episodes load", async ({
+  page,
+}) => {
+  const browserIssues = trackBrowserIssues(page);
+  const unexpectedApiRequests = await mockShowDetailsApi(page);
+
+  await page.goto(`/tv-shows/${SHOW_ID}`);
+  await expect(
+    page.getByRole("list", { name: /Season 1 episodes/ }),
+  ).toBeVisible();
+
+  const season2Episodes = await gateRoute(
+    page,
+    new RegExp(`/api/shows/${SHOW_ID}/seasons/2/episodes$`),
+  );
+  await page.getByRole("tab", { name: "Season 2" }).click();
+
+  // The loader does not hold the switch: the tab and URL move at once and the
+  // episode list shows its own loading state under the unchanged hero.
+  await expect(page.getByRole("tab", { name: "Season 2" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(page.getByRole("status", { name: "Loading episodes" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { level: 1, name: /Frost Harbor/ }),
+  ).toBeVisible();
+
+  season2Episodes.release();
+  await expect(
+    page.getByRole("list", { name: /Season 2 episodes, 1 in this library/ }),
+  ).toBeVisible();
 
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
