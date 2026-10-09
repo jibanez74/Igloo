@@ -37,13 +37,14 @@ function moviePlaylist(
   movieCount: number,
   isOwner: boolean,
   description: string,
+  coverImage = "",
 ): MoviePlaylistSummaryType {
   return {
     id,
     user_id: isOwner ? 1 : 2,
     name,
     description: nullableString(description),
-    cover_image: nullableString(),
+    cover_image: nullableString(coverImage),
     is_public: false,
     movie_id: nullableInt64(),
     content_type: "movie",
@@ -75,7 +76,14 @@ const moviePages = [
 const moviesById = new Map(moviePages.flat().map(movie => [movie.id, movie]));
 
 const initialPlaylists = [
-  moviePlaylist(501, "Friday Feature", 7, true, "Movies queued for the end of the week"),
+  moviePlaylist(
+    501,
+    "Friday Feature",
+    7,
+    true,
+    "Movies queued for the end of the week",
+    "/api/static/playlists/friday-feature.jpg",
+  ),
   moviePlaylist(502, "Guest Picks", 3, false, "Shared picks from another account"),
 ];
 
@@ -129,11 +137,14 @@ async function mockMoviesApi(page: Page) {
         const body = route.request().postDataJSON() as UpdateMoviePlaylistRequest;
         updatedPlaylistRequests.push(body);
 
+        // A full replace, like the server: a field the request leaves out is cleared.
         const index = playlists.findIndex(candidate => candidate.id === Number(ownedMatch[1]));
         playlists[index] = {
           ...playlists[index],
           name: body.name,
           description: nullableString(body.description ?? ""),
+          cover_image: nullableString(body.cover_image ?? ""),
+          is_public: body.is_public ?? false,
         };
         await fulfillJSON(route, apiResponse({ playlist: moviePlaylistRow(playlists[index]) }));
         return true;
@@ -290,6 +301,7 @@ test("renaming a movie playlist from its page retitles the tab", async ({ page }
     {
       name: "Friday Night Feature",
       description: "Movies queued for the end of the week",
+      cover_image: "/api/static/playlists/friday-feature.jpg",
       is_public: false,
     },
   ]);
