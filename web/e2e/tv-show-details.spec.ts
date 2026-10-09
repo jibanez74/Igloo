@@ -114,16 +114,25 @@ test("a season switch keeps the page while that season's episodes load", async (
   const browserIssues = trackBrowserIssues(page);
   const unexpectedApiRequests = await mockShowDetailsApi(page);
 
+  // The page's entrance slide would move the tab strip on its own; without it
+  // positions are final as soon as they render.
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto(`/tv-shows/${SHOW_ID}`);
   await expect(
     page.getByRole("list", { name: /Season 1 episodes/ }),
   ).toBeVisible();
 
+  // The hero's Play button reads the selected season, so its row must hold
+  // its height while the new season loads: the tab strip below must not move.
+  const season2Tab = page.getByRole("tab", { name: "Season 2" });
+  const tabTop = async () => (await season2Tab.boundingBox())?.y ?? Number.NaN;
+  const settledTop = await tabTop();
+
   const season2Episodes = await gateRoute(
     page,
     new RegExp(`/api/shows/${SHOW_ID}/seasons/2/episodes$`),
   );
-  await page.getByRole("tab", { name: "Season 2" }).click();
+  await season2Tab.click();
 
   // The loader does not hold the switch: the tab and URL move at once and the
   // episode list shows its own loading state under the unchanged hero.
@@ -135,11 +144,15 @@ test("a season switch keeps the page while that season's episodes load", async (
   await expect(
     page.getByRole("heading", { level: 1, name: /Frost Harbor/ }),
   ).toBeVisible();
+  expect(await tabTop()).toBeCloseTo(settledTop, 0);
 
   season2Episodes.release();
   await expect(
     page.getByRole("list", { name: /Season 2 episodes, 1 in this library/ }),
   ).toBeVisible();
+  // Episode rows carry their own Play links; the hero's comes first.
+  await expect(page.getByRole("link", { name: /^(Play|Resume) S2/ }).first()).toBeVisible();
+  expect(await tabTop()).toBeCloseTo(settledTop, 0);
 
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
