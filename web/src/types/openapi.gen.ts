@@ -3496,13 +3496,14 @@ export interface components {
                 playlist: components["schemas"]["MoviePlaylist"];
             };
         };
+        BulkAddData: {
+            /** Format: int64 */
+            added: number;
+            /** Format: int64 */
+            skipped: number;
+        };
         BulkAddEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                /** Format: int64 */
-                added: number;
-                /** Format: int64 */
-                skipped: number;
-            };
+            data: components["schemas"]["BulkAddData"];
         };
         TmdbMovie: {
             id: number;
@@ -3692,20 +3693,23 @@ export interface components {
                 available: boolean;
             };
         };
+        SpotifyStatusData: {
+            available: boolean;
+        };
         SpotifyStatusEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                available: boolean;
-            };
+            data: components["schemas"]["SpotifyStatusData"];
+        };
+        SpotifyAlbumSearchResultsData: {
+            results: components["schemas"]["SpotifyAlbumSearchResult"][];
         };
         SpotifyAlbumSearchResultsEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                results: components["schemas"]["SpotifyAlbumSearchResult"][];
-            };
+            data: components["schemas"]["SpotifyAlbumSearchResultsData"];
+        };
+        SpotifyTrackSearchResultsData: {
+            results: components["schemas"]["SpotifyTrackSearchResult"][];
         };
         SpotifyTrackSearchResultsEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                results: components["schemas"]["SpotifyTrackSearchResult"][];
-            };
+            data: components["schemas"]["SpotifyTrackSearchResultsData"];
         };
         TmdbTheaterMoviesEnvelope: components["schemas"]["JsonSuccess"] & {
             data: {
@@ -3920,23 +3924,25 @@ export interface components {
             /** Format: int64 */
             total_musicians: number;
         };
+        LatestAlbumsData: {
+            albums: components["schemas"]["SimpleAlbum"][];
+        };
         LatestAlbumsEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                albums: components["schemas"]["SimpleAlbum"][];
-            };
+            data: components["schemas"]["LatestAlbumsData"];
+        };
+        AlbumsData: {
+            albums: components["schemas"]["SimpleAlbum"][];
+            /** Format: int64 */
+            total: number;
+            /** Format: int64 */
+            page: number;
+            /** Format: int64 */
+            per_page: number;
+            /** Format: int64 */
+            total_pages: number;
         };
         AlbumsEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                albums: components["schemas"]["SimpleAlbum"][];
-                /** Format: int64 */
-                total: number;
-                /** Format: int64 */
-                page: number;
-                /** Format: int64 */
-                per_page: number;
-                /** Format: int64 */
-                total_pages: number;
-            };
+            data: components["schemas"]["AlbumsData"];
         };
         AlbumArtist: {
             /** Format: int64 */
@@ -3950,28 +3956,30 @@ export interface components {
             track_id: number;
             tag: string;
         };
+        AlbumDetailsData: {
+            album: components["schemas"]["Album"];
+            tracks: components["schemas"]["AlbumTrack"][];
+            artists: components["schemas"]["AlbumArtist"][];
+            track_genres: components["schemas"]["AlbumTrackGenre"][];
+            album_genres: string[];
+            total_duration: number;
+        };
         AlbumDetailsEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                album: components["schemas"]["Album"];
-                tracks: components["schemas"]["AlbumTrack"][];
-                artists: components["schemas"]["AlbumArtist"][];
-                track_genres: components["schemas"]["AlbumTrackGenre"][];
-                album_genres: string[];
-                total_duration: number;
-            };
+            data: components["schemas"]["AlbumDetailsData"];
+        };
+        MusiciansData: {
+            musicians: components["schemas"]["SimpleMusician"][];
+            /** Format: int64 */
+            total: number;
+            /** Format: int64 */
+            page: number;
+            /** Format: int64 */
+            per_page: number;
+            /** Format: int64 */
+            total_pages: number;
         };
         MusiciansEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                musicians: components["schemas"]["SimpleMusician"][];
-                /** Format: int64 */
-                total: number;
-                /** Format: int64 */
-                page: number;
-                /** Format: int64 */
-                per_page: number;
-                /** Format: int64 */
-                total_pages: number;
-            };
+            data: components["schemas"]["MusiciansData"];
         };
         Musician: {
             /** Format: int64 */
@@ -4013,62 +4021,68 @@ export interface components {
             album_title: components["schemas"]["SqlNullString"];
             album_cover: components["schemas"]["SqlNullString"];
         };
+        MusicianDetailsData: {
+            musician: components["schemas"]["Musician"];
+            albums: components["schemas"]["MusicianAlbum"][];
+            tracks: components["schemas"]["MusicianTrack"][];
+            genres: string[];
+            total_duration: number;
+        };
         MusicianDetailsEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                musician: components["schemas"]["Musician"];
-                albums: components["schemas"]["MusicianAlbum"][];
-                tracks: components["schemas"]["MusicianTrack"][];
-                genres: string[];
-                total_duration: number;
-            };
+            data: components["schemas"]["MusicianDetailsData"];
+        };
+        TracksData: {
+            tracks: components["schemas"]["TrackListItem"][];
+            /** Format: int64 */
+            total: number;
+            /** Format: int64 */
+            offset: number;
+            /** Format: int64 */
+            limit: number;
+            has_more: boolean;
         };
         TracksEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                tracks: components["schemas"]["TrackListItem"][];
-                /** Format: int64 */
-                total: number;
-                /** Format: int64 */
-                offset: number;
-                /** Format: int64 */
-                limit: number;
-                has_more: boolean;
-            };
+            data: components["schemas"]["TracksData"];
+        };
+        ShuffleTracksData: {
+            tracks: components["schemas"]["TrackListItem"][];
         };
         ShuffleTracksEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                tracks: components["schemas"]["TrackListItem"][];
-            };
+            data: components["schemas"]["ShuffleTracksData"];
         };
         TrackDetailsEnvelope: components["schemas"]["JsonSuccess"] & {
             data: {
                 track: components["schemas"]["Track"];
             };
         };
+        TrackLikeToggleData: {
+            /** Format: int64 */
+            track_id: number;
+            is_liked: boolean;
+        };
         TrackLikeToggleEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                /** Format: int64 */
-                track_id: number;
-                is_liked: boolean;
-            };
+            data: components["schemas"]["TrackLikeToggleData"];
+        };
+        LikedTracksData: {
+            tracks: components["schemas"]["TrackListItem"][];
+            /** Format: int64 */
+            total: number;
+            /** Format: int64 */
+            page: number;
+            /** Format: int64 */
+            per_page: number;
+            /** Format: int64 */
+            total_pages: number;
+            has_more: boolean;
         };
         LikedTracksEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                tracks: components["schemas"]["TrackListItem"][];
-                /** Format: int64 */
-                total: number;
-                /** Format: int64 */
-                page: number;
-                /** Format: int64 */
-                per_page: number;
-                /** Format: int64 */
-                total_pages: number;
-                has_more: boolean;
-            };
+            data: components["schemas"]["LikedTracksData"];
+        };
+        LikedTrackIDsData: {
+            liked_track_ids: number[];
         };
         LikedTrackIDsEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                liked_track_ids: number[];
-            };
+            data: components["schemas"]["LikedTrackIDsData"];
         };
         MusicStatsEnvelope: components["schemas"]["JsonSuccess"] & {
             data: components["schemas"]["MusicStats"];
@@ -4184,37 +4198,41 @@ export interface components {
              */
             can_edit: boolean;
         };
+        MusicPlaylistsData: {
+            playlists: components["schemas"]["PlaylistSummary"][];
+        };
         MusicPlaylistsEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                playlists: components["schemas"]["PlaylistSummary"][];
-            };
+            data: components["schemas"]["MusicPlaylistsData"];
+        };
+        MusicPlaylistDetailData: {
+            playlist: components["schemas"]["Playlist"];
+            /** Format: int64 */
+            track_count: number;
+            /** @description Sum of track durations in milliseconds. */
+            duration: number;
+            is_owner: boolean;
+            can_edit: boolean;
+            collaborators: components["schemas"]["PlaylistCollaborator"][] | null;
         };
         MusicPlaylistDetailEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                playlist: components["schemas"]["Playlist"];
-                /** Format: int64 */
-                track_count: number;
-                /** @description Sum of track durations in milliseconds. */
-                duration: number;
-                is_owner: boolean;
-                can_edit: boolean;
-                collaborators: components["schemas"]["PlaylistCollaborator"][] | null;
-            };
+            data: components["schemas"]["MusicPlaylistDetailData"];
+        };
+        MusicPlaylistMutationData: {
+            playlist: components["schemas"]["Playlist"];
         };
         MusicPlaylistMutationEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                playlist: components["schemas"]["Playlist"];
-            };
+            data: components["schemas"]["MusicPlaylistMutationData"];
+        };
+        PlaylistTracksData: {
+            tracks: components["schemas"]["PlaylistTrack"][];
+            /** Format: int64 */
+            total: number;
+            has_more: boolean;
+            /** Format: int64 */
+            next_offset: number;
         };
         PlaylistTracksEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                tracks: components["schemas"]["PlaylistTrack"][];
-                /** Format: int64 */
-                total: number;
-                has_more: boolean;
-                /** Format: int64 */
-                next_offset: number;
-            };
+            data: components["schemas"]["PlaylistTracksData"];
         };
         PlaylistCollaboratorsEnvelope: components["schemas"]["JsonSuccess"] & {
             data: {
@@ -4237,10 +4255,11 @@ export interface components {
             /** @description Whether the track played to the end. Stored in the play history only; defaults to false. */
             completed?: boolean;
         };
+        RecordedPlayData: {
+            recorded: boolean;
+        };
         RecordedPlayEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                recorded: boolean;
-            };
+            data: components["schemas"]["RecordedPlayData"];
         };
         UserListeningStatsEnvelope: components["schemas"]["JsonSuccess"] & {
             data: {

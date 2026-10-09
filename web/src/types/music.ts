@@ -3,160 +3,72 @@
 
 import type { components } from "./openapi.gen";
 
-import type {
-  NullableFloat64,
-  NullableInt64,
-  NullableString,
-} from "./nullable";
-
-export type { NullableFloat64, NullableInt64, NullableString } from "./nullable";
+type Schema = components["schemas"];
 
 export type TrackItemVariant = "album" | "musician" | "library" | "playlist";
 
 // Simplified album type for list views and cards
-export type SimpleAlbumType = components["schemas"]["SimpleAlbum"];
-
-// Full album details including Spotify metadata
-export type AlbumType = {
-  id: number;
-  title: string;
-  sort_title: string;
-  musician: NullableString;
-  spotify_id: NullableString;
-  spotify_popularity: NullableFloat64;
-  release_date: NullableString;
-  year: NullableInt64;
-  total_tracks: NullableInt64;
-  cover: NullableString;
-  created_at: string;
-  updated_at: string;
-};
+export type SimpleAlbumType = Schema["SimpleAlbum"];
 
 // Album tracks also supply the global audio player queue.
-export type TrackType = components["schemas"]["AlbumTrack"];
+export type TrackType = Schema["AlbumTrack"];
 
-// Artist/musician information
-export type ArtistType = {
-  id: number;
-  name: string;
-  thumb: NullableString;
-  spotify_id: NullableString;
-};
+export type ArtistType = Schema["AlbumArtist"];
 
 // Association between a track and a genre
-export type TrackGenreType = {
-  track_id: number;
-  tag: string;
-};
+export type TrackGenreType = Schema["AlbumTrackGenre"];
 
-// Complete album details response from the API
-export type AlbumDetailsResponseType = {
-  album: AlbumType;
-  tracks: TrackType[];
-  artists: ArtistType[];
-  track_genres: TrackGenreType[];
-  album_genres: string[];
-  total_duration: number;
-};
+export type AlbumDetailsResponseType = Schema["AlbumDetailsData"];
 
 // Track item for paginated track lists (denormalized with album/artist info)
-export type TrackListItemType = components["schemas"]["TrackListItem"];
+export type TrackListItemType = Schema["TrackListItem"];
 
-// Paginated response for track listings
-export type TracksListResponseType = {
-  tracks: TrackListItemType[];
-  total: number;
-  offset: number;
-  limit: number;
-  has_more: boolean;
-};
+export type TracksListResponseType = Schema["TracksData"];
 
-// Page-based paginated response for liked tracks
-export type LikedTracksResponseType = {
-  tracks: TrackListItemType[];
-  total: number;
-  page: number;
-  per_page: number;
-  total_pages: number;
-  has_more: boolean;
-};
+export type LikedTracksResponseType = Schema["LikedTracksData"];
 
-// Music library statistics for the dashboard
-export type MusicStatsType = {
-  total_albums: number;
-  total_tracks: number;
-  total_musicians: number;
-};
+export type MusicStatsType = Schema["MusicStats"];
 
-// Response from the shuffle tracks endpoint
-export type ShuffleTracksResponseType = {
-  tracks: TrackListItemType[];
-};
+export type ShuffleTracksResponseType = Schema["ShuffleTracksData"];
 
-// Paginated response for album listings
-export type AlbumsListResponseType = {
-  albums: SimpleAlbumType[];
-  total: number;
-  page: number;
-  per_page: number;
-  total_pages: number;
-};
+export type AlbumsListResponseType = Schema["AlbumsData"];
 
-export type SpotifyStatusType = {
-  available: boolean;
-};
+export type LatestAlbumsResponseType = Schema["LatestAlbumsData"];
 
-export type SpotifyAlbumSearchRequest = {
-  title: string;
-};
+export type TrackLikeToggleResponseType = Schema["TrackLikeToggleData"];
 
-export type SpotifyAlbumSearchResultType = {
-  spotify_id: string;
-  title: string;
-  artist_names: string[];
-  release_date: string;
-  album_type: string;
-  total_tracks: number;
-  cover_url: string;
-  spotify_url: string;
-  already_in_library: boolean;
-  library_album_id?: number;
-};
+export type LikedTrackIdsResponseType = Schema["LikedTrackIDsData"];
 
-export type SpotifyTrackSearchRequest = {
-  title: string;
-};
+export type RecordedPlayResponseType = Schema["RecordedPlayData"];
 
-export type SpotifyTrackSearchResultType = {
-  spotify_id: string;
-  title: string;
-  artist_names: string[];
-  album_name: string;
-  release_date: string;
-  duration_ms: number;
-  cover_url: string;
-  spotify_url: string;
-};
+export type SpotifyStatusType = Schema["SpotifyStatusData"];
+
+export type SpotifyAlbumSearchRequest = Schema["SpotifySearchAlbumsRequest"];
+
+export type SpotifyAlbumSearchResultType = Schema["SpotifyAlbumSearchResult"];
+
+export type SpotifyAlbumSearchResponseType =
+  Schema["SpotifyAlbumSearchResultsData"];
+
+export type SpotifyTrackSearchRequest = Schema["SpotifySearchTracksRequest"];
+
+export type SpotifyTrackSearchResultType = Schema["SpotifyTrackSearchResult"];
+
+export type SpotifyTrackSearchResponseType =
+  Schema["SpotifyTrackSearchResultsData"];
 
 // Simplified musician type for list views and cards
-export type SimpleMusicianType = components["schemas"]["SimpleMusician"];
+export type SimpleMusicianType = Schema["SimpleMusician"];
 
-// Paginated response for musician listings
-export type MusiciansListResponseType = {
-  musicians: SimpleMusicianType[];
-  total: number;
-  page: number;
-  per_page: number;
-  total_pages: number;
-};
+export type MusiciansListResponseType = Schema["MusiciansData"];
 
-// Virtual list item types for virtualized track lists
-export type VirtualItemLetter = {
+// Virtual list rows for the virtualized track list
+type VirtualItemLetter = {
   type: "letter";
   letter: string;
 };
 
-export type VirtualItemTrack = {
+type VirtualItemTrack = {
   type: "track";
   track: TrackListItemType;
   trackIndex: number;
@@ -164,126 +76,36 @@ export type VirtualItemTrack = {
 
 export type VirtualItem = VirtualItemLetter | VirtualItemTrack;
 
-// Full musician details including Spotify metadata
-export type MusicianType = {
-  id: number;
-  name: string;
-  sort_name: string;
-  summary: NullableString;
-  spotify_popularity: NullableFloat64;
-  spotify_followers: NullableInt64;
-  spotify_id: NullableString;
-  thumb: NullableString;
-  created_at: string;
-  updated_at: string;
-};
-
 // Album with track count for musician details page
-export type MusicianAlbumType = {
-  id: number;
-  title: string;
-  cover: NullableString;
-  year: NullableInt64;
-  release_date: NullableString;
-  spotify_popularity: NullableFloat64;
-  track_count: number;
-};
+export type MusicianAlbumType = Schema["MusicianAlbum"];
 
 // Track for musician details (includes album info, sorted alphabetically)
-export type MusicianTrackType = {
-  id: number;
-  title: string;
-  duration: number;
-  codec: string;
-  bit_rate: number;
-  album_id: NullableInt64;
-  album_title: NullableString;
-  album_cover: NullableString;
-};
+export type MusicianTrackType = Schema["MusicianTrack"];
 
-// Complete musician details response from the API
-export type MusicianDetailsResponseType = {
-  musician: MusicianType;
-  albums: MusicianAlbumType[];
-  tracks: MusicianTrackType[];
-  genres: string[];
-  total_duration: number;
-};
+export type MusicianDetailsResponseType = Schema["MusicianDetailsData"];
 
 // PLAYLIST TYPES
 
 // Playlist summary for list views
-export type PlaylistSummaryType = components["schemas"]["PlaylistSummary"];
+export type PlaylistSummaryType = Schema["PlaylistSummary"];
 
-// Playlist list response
-export type PlaylistsListResponseType = {
-  playlists: PlaylistSummaryType[];
-};
+export type PlaylistsListResponseType = Schema["MusicPlaylistsData"];
 
 // Track in a playlist (includes position and added_at)
-export type PlaylistTrackType = {
-  playlist_track_id: number;
-  position: number;
-  added_at: string;
-  added_by: NullableInt64;
-  id: number;
-  title: string;
-  duration: number;
-  codec: string;
-  bit_rate: number;
-  album_id: NullableInt64;
-  musician_id: NullableInt64;
-  album_title: NullableString;
-  album_cover: NullableString;
-  musician_name: NullableString;
-};
+export type PlaylistTrackType = Schema["PlaylistTrack"];
 
-// Playlist tracks response (paginated)
-export type PlaylistTracksResponseType = {
-  tracks: PlaylistTrackType[];
-  total: number;
-  has_more: boolean;
-  next_offset: number;
-};
+export type PlaylistTracksResponseType = Schema["PlaylistTracksData"];
 
-// Collaborator info
-export type PlaylistCollaboratorType = {
-  id: number;
-  playlist_id: number;
-  user_id: number;
-  can_edit: boolean;
-  created_at: string;
-  updated_at: string;
-  username: string;
-  email: string;
-};
+export type PlaylistCollaboratorType = Schema["PlaylistCollaborator"];
 
-// Playlist base type (from database)
-export type PlaylistType = {
-  id: number;
-  user_id: number;
-  name: string;
-  description: NullableString;
-  cover_image: NullableString;
-  is_public: boolean;
-  created_at: string;
-  updated_at: string;
-};
+export type PlaylistDetailResponseType = Schema["MusicPlaylistDetailData"];
 
-// Playlist detail response
-export type PlaylistDetailResponseType = {
-  playlist: PlaylistType;
-  track_count: number;
-  duration: number;
-  is_owner: boolean;
-  can_edit: boolean;
-  collaborators: PlaylistCollaboratorType[] | null;
-};
+// Create and update answer with the bare playlist row, without the summary's
+// track count or duration.
+export type PlaylistMutationResponseType = Schema["MusicPlaylistMutationData"];
 
-export type CreatePlaylistRequest = {
-  name: string;
-  description?: string;
-  is_public?: boolean;
-};
+export type BulkAddResponseType = Schema["BulkAddData"];
 
-export type UpdatePlaylistRequest = CreatePlaylistRequest;
+export type CreatePlaylistRequest = Schema["CreatePlaylistRequest"];
+
+export type UpdatePlaylistRequest = Schema["UpdatePlaylistRequest"];

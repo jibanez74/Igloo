@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import AddToPlaylistDialog from "@/components/music/AddToPlaylistDialog";
 import { PLAYLISTS_KEY } from "@/lib/constants";
 import type { ApiResponseType, PlaylistsListResponseType } from "@/types";
+import { playlistSummary } from "../helpers/music";
 import { createTestQueryClient, renderWithQueryClient } from "../helpers/render";
 
 const getPlaylistsMock = vi.fn();
@@ -44,22 +45,13 @@ function success<T extends Record<string, unknown>>(
 
 function playlists(): ApiResponseType<PlaylistsListResponseType> {
   return success({
-    playlists: Array.from({ length: 6 }, (_, index) => ({
-      id: index + 1,
-      user_id: 1,
-      name: `Playlist ${index + 1}`,
-      description: { String: "", Valid: false },
-      cover_image: { String: "", Valid: false },
-      is_public: false,
-      movie_id: { Int64: 0, Valid: false },
-      content_type: "track" as const,
-      created_at: "2026-01-01T00:00:00Z",
-      updated_at: "2026-01-01T00:00:00Z",
-      track_count: index,
-      total_duration: 0,
-      is_owner: true,
-      can_edit: true,
-    })),
+    playlists: Array.from({ length: 6 }, (_, index) =>
+      playlistSummary({
+        id: index + 1,
+        name: `Playlist ${index + 1}`,
+        track_count: index,
+      }),
+    ),
   });
 }
 

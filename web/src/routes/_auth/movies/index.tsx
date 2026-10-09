@@ -2,7 +2,6 @@ import {
   useEffect,
   useRef,
   useState,
-  type MouseEvent,
   type MutableRefObject,
   type RefObject,
 } from "react";
@@ -13,7 +12,6 @@ import {
   Grid3X3,
   Heart,
   ListVideo,
-  Plus,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
@@ -27,7 +25,8 @@ import LibraryMoreMenu, {
   RefreshLibraryMenuItem,
 } from "@/components/shared/LibraryMoreMenu";
 import LibraryStats from "@/components/shared/LibraryStats";
-import PlaylistCard from "@/components/shared/PlaylistCard";
+import PlaylistCard, { PlaylistCardSkeleton } from "@/components/shared/PlaylistCard";
+import PlaylistsTabToolbar from "@/components/shared/PlaylistsTabToolbar";
 import { useContentFadeTransition } from "@/hooks/useContentFadeTransition";
 import {
   CONTENT_FADE_ENTER_CLASS,
@@ -37,8 +36,6 @@ import {
   LIBRARY_MENU_ITEM_CLASS,
   LIBRARY_TAB_TRIGGER_CLASS,
   LIBRARY_TABS_LIST_CLASS,
-  MOTION_LOADING_STATE_CLASS,
-  MOTION_MICRO_CONTROL_CLASS,
   MOTION_SECTION_ENTER_CLASS,
   MOTION_SECTION_ENTER_DELAYED_CLASS,
   MOVIES_PER_PAGE,
@@ -55,7 +52,7 @@ import {
   tmdbStatusQueryOpts,
 } from "@/lib/query-opts";
 import LoadErrorAlert from "@/components/shared/LoadErrorAlert";
-import { nounForCount, pluralize } from "@/lib/format";
+import { nounForCount } from "@/lib/format";
 import { apiErrorMessage, isApiFailure } from "@/lib/is-api-failure";
 import { refreshMovieLibraryCache } from "@/lib/movie-library-cache";
 import { cn } from "@/lib/utils";
@@ -549,8 +546,10 @@ function PlaylistsTabContent({
   });
   const playlists = data?.error === false ? data.data.playlists : [];
 
+  // The toolbar renders while the list loads, so the Liked button can take
+  // focus back as soon as this view mounts.
   useEffect(() => {
-    if (view === "liked" || isLoading) return;
+    if (view === "liked") return;
     if (focusIntentRef.current !== "return-to-playlists") return;
 
     focusIntentRef.current = null;
@@ -558,10 +557,24 @@ function PlaylistsTabContent({
       likedMoviesButtonRef.current,
       playlistsTabTriggerRef.current,
     );
-  }, [focusIntentRef, isLoading, playlistsTabTriggerRef, view]);
+  }, [focusIntentRef, playlistsTabTriggerRef, view]);
 
-  const handleCreateOpen = (event: MouseEvent<HTMLButtonElement>) => {
-    createPlaylistRestoreRef.current = event.currentTarget;
+  const loadFailed = isError || isApiFailure(data);
+
+  const handleShowLiked = () => {
+    primeEnterLikedFocus();
+    navigate({
+      to: "/movies",
+      search: (prev: MoviesSearchParams) => ({
+        ...prev,
+        view: "liked",
+        playlistsPage: 1,
+      }),
+      replace: true,
+    });
+  };
+
+  const handleCreateOpen = () => {
     setShowCreate(true);
   };
 
@@ -587,77 +600,51 @@ function PlaylistsTabContent({
     );
   }
 
-  if (isLoading) {
-    return <PlaylistsTabSkeleton />;
-  }
+  let body = (
+    <div className={MUSIC_CARD_GRID_CLASS}>
+      {playlists.map(p => (
+        <PlaylistCard key={p.id} playlist={p} />
+      ))}
+    </div>
+  );
 
-  if (isError || isApiFailure(data)) {
-    return (
+  if (isLoading) {
+    body = (
+      <div className={MUSIC_CARD_GRID_CLASS}>
+        {Array.from({ length: 10 }).map((_, i) => (
+          <PlaylistCardSkeleton key={i} />
+        ))}
+      </div>
+    );
+  } else if (loadFailed) {
+    body = (
       <LoadErrorAlert
         message={apiErrorMessage(data, "Couldn’t load playlists. Check your connection and try again.")}
         onRetry={() => void refetch()}
+      />
+    );
+  } else if (playlists.length === 0) {
+    body = (
+      <LibraryEmptyState
+        icon={ListVideo}
+        message="No movie playlists yet. Use New playlist to group films."
       />
     );
   }
 
   return (
     <div>
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <span className="text-sm text-muted-foreground">
-          {pluralize(playlists.length, "playlist")}
-        </span>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            ref={likedMoviesButtonRef}
-            onClick={() => {
-              primeEnterLikedFocus();
-              navigate({
-                to: "/movies",
-                search: (prev: MoviesSearchParams) => ({
-                  ...prev,
-                  view: "liked",
-                  playlistsPage: 1,
-                }),
-                replace: true,
-              });
-            }}
-            className={cn(
-              "inline-flex min-h-10 items-center gap-2 rounded-full border border-border px-3 py-2 text-sm font-medium text-muted-foreground hover:border-primary/50 hover:text-foreground sm:px-4",
-              MOTION_MICRO_CONTROL_CLASS,
-              FOCUS_VISIBLE_RING_CLASS,
-            )}
-          >
-            <Heart className="size-4 shrink-0" aria-hidden="true" />
-            Liked movies
-          </button>
-          <button
-            type="button"
-            onClick={handleCreateOpen}
-            className={cn(
-              "inline-flex min-h-10 items-center gap-2 rounded-full bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 sm:px-4",
-              MOTION_MICRO_CONTROL_CLASS,
-              FOCUS_VISIBLE_RING_CLASS,
-            )}
-          >
-            <Plus className="size-4 shrink-0" aria-hidden="true" />
-            New playlist
-          </button>
-        </div>
-      </div>
+      <PlaylistsTabToolbar
+        count={isLoading || loadFailed ? undefined : playlists.length}
+        isLoading={isLoading}
+        likedLabel="Liked movies"
+        onShowLiked={handleShowLiked}
+        onCreate={handleCreateOpen}
+        likedButtonRef={likedMoviesButtonRef}
+        createButtonRef={createPlaylistRestoreRef}
+      />
 
-      {playlists.length === 0 ? (
-        <LibraryEmptyState
-          icon={ListVideo}
-          message="No movie playlists yet. Use New playlist to group films."
-        />
-      ) : (
-        <div className={MUSIC_CARD_GRID_CLASS}>
-          {playlists.map(p => (
-            <PlaylistCard key={p.id} playlist={p} />
-          ))}
-        </div>
-      )}
+      {body}
 
       <CreateMoviePlaylistDialog
         open={showCreate}
@@ -759,31 +746,6 @@ function LikedMoviesInPlaylistsTab({
         </>
       }
     />
-  );
-}
-
-function PlaylistsTabSkeleton() {
-  return (
-    <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div className={cn("h-4 w-24 rounded-sm bg-muted", MOTION_LOADING_STATE_CLASS)} />
-        <div className={cn("h-10 w-40 rounded-full bg-muted", MOTION_LOADING_STATE_CLASS)} />
-      </div>
-      <div className={MUSIC_CARD_GRID_CLASS}>
-        {Array.from({ length: 10 }).map((_, i) => (
-          <div
-            key={i}
-            className={cn(
-              "rounded-xl border border-border bg-card p-4",
-              MOTION_LOADING_STATE_CLASS,
-            )}
-          >
-            <div className="mx-auto mb-3 aspect-square w-full rounded-lg bg-muted" />
-            <div className="mx-auto h-4 w-3/4 rounded-sm bg-muted" />
-          </div>
-        ))}
-      </div>
-    </div>
   );
 }
 

@@ -2,8 +2,7 @@ import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import DraggableTrackList from "@/components/music/DraggableTrackList";
 import { renderWithQueryClient } from "@/test/helpers/render";
-import { nullableInt64, nullableString } from "@/test/helpers/fixtures";
-import type { PlaylistTrackType } from "@/types";
+import { playlistTrack } from "@/test/helpers/music";
 
 const prefersCoarse = vi.hoisted(() => ({ value: false }));
 vi.mock("@/hooks/use-coarse-pointer", () => ({
@@ -22,27 +21,8 @@ vi.mock("@/lib/api", async importOriginal => ({
   }),
 }));
 
-function playlistTrack(id: number, title: string, position: number): PlaylistTrackType {
-  return {
-    playlist_track_id: 100 + id,
-    position,
-    added_at: "2026-01-01T00:00:00Z",
-    added_by: nullableInt64(),
-    id,
-    title,
-    duration: 180,
-    codec: "flac",
-    bit_rate: 900000,
-    album_id: nullableInt64(),
-    musician_id: nullableInt64(),
-    album_title: nullableString(),
-    album_cover: nullableString(),
-    musician_name: nullableString(),
-  };
-}
-
 function renderList(
-  tracks = [playlistTrack(1, "Alabaster", 1), playlistTrack(2, "Borrowed Light", 2)],
+  tracks = [playlistTrack({ id: 1, title: "Alabaster", position: 1 }), playlistTrack({ id: 2, title: "Borrowed Light", position: 2 })],
 ) {
   return renderWithQueryClient(
     <DraggableTrackList

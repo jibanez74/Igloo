@@ -108,7 +108,6 @@ function musicianDetailsResponse({
         cover: nullableString(""),
         year: nullableInt64(2026),
         release_date: nullableString("2026-01-01"),
-        spotify_popularity: nullableFloat64(70),
         track_count: tracks.length,
       },
     ],

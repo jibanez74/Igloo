@@ -12018,6 +12018,24 @@
           }
         ]
       },
+      "BulkAddData": {
+        "type": "object",
+        "required": [
+          "added",
+          "skipped"
+        ],
+        "properties": {
+          "added": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "skipped": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
       "BulkAddEnvelope": {
         "allOf": [
           {
@@ -12030,22 +12048,7 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "added",
-                  "skipped"
-                ],
-                "properties": {
-                  "added": {
-                    "type": "integer",
-                    "format": "int64"
-                  },
-                  "skipped": {
-                    "type": "integer",
-                    "format": "int64"
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/BulkAddData"
               }
             }
           }
@@ -12848,6 +12851,18 @@
           }
         ]
       },
+      "SpotifyStatusData": {
+        "type": "object",
+        "required": [
+          "available"
+        ],
+        "properties": {
+          "available": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
       "SpotifyStatusEnvelope": {
         "allOf": [
           {
@@ -12860,20 +12875,26 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "available"
-                ],
-                "properties": {
-                  "available": {
-                    "type": "boolean"
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/SpotifyStatusData"
               }
             }
           }
         ]
+      },
+      "SpotifyAlbumSearchResultsData": {
+        "type": "object",
+        "required": [
+          "results"
+        ],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SpotifyAlbumSearchResult"
+            }
+          }
+        },
+        "additionalProperties": false
       },
       "SpotifyAlbumSearchResultsEnvelope": {
         "allOf": [
@@ -12887,23 +12908,26 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "results"
-                ],
-                "properties": {
-                  "results": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/SpotifyAlbumSearchResult"
-                    }
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/SpotifyAlbumSearchResultsData"
               }
             }
           }
         ]
+      },
+      "SpotifyTrackSearchResultsData": {
+        "type": "object",
+        "required": [
+          "results"
+        ],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SpotifyTrackSearchResult"
+            }
+          }
+        },
+        "additionalProperties": false
       },
       "SpotifyTrackSearchResultsEnvelope": {
         "allOf": [
@@ -12917,19 +12941,7 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "results"
-                ],
-                "properties": {
-                  "results": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/SpotifyTrackSearchResult"
-                    }
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/SpotifyTrackSearchResultsData"
               }
             }
           }
@@ -13723,6 +13735,21 @@
         },
         "additionalProperties": false
       },
+      "LatestAlbumsData": {
+        "type": "object",
+        "required": [
+          "albums"
+        ],
+        "properties": {
+          "albums": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SimpleAlbum"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
       "LatestAlbumsEnvelope": {
         "allOf": [
           {
@@ -13735,23 +13762,46 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "albums"
-                ],
-                "properties": {
-                  "albums": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/SimpleAlbum"
-                    }
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/LatestAlbumsData"
               }
             }
           }
         ]
+      },
+      "AlbumsData": {
+        "type": "object",
+        "required": [
+          "albums",
+          "total",
+          "page",
+          "per_page",
+          "total_pages"
+        ],
+        "properties": {
+          "albums": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SimpleAlbum"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "page": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "per_page": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total_pages": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
       },
       "AlbumsEnvelope": {
         "allOf": [
@@ -13765,39 +13815,7 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "albums",
-                  "total",
-                  "page",
-                  "per_page",
-                  "total_pages"
-                ],
-                "properties": {
-                  "albums": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/SimpleAlbum"
-                    }
-                  },
-                  "total": {
-                    "type": "integer",
-                    "format": "int64"
-                  },
-                  "page": {
-                    "type": "integer",
-                    "format": "int64"
-                  },
-                  "per_page": {
-                    "type": "integer",
-                    "format": "int64"
-                  },
-                  "total_pages": {
-                    "type": "integer",
-                    "format": "int64"
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/AlbumsData"
               }
             }
           }
@@ -13842,6 +13860,50 @@
         },
         "additionalProperties": false
       },
+      "AlbumDetailsData": {
+        "type": "object",
+        "required": [
+          "album",
+          "tracks",
+          "artists",
+          "track_genres",
+          "album_genres",
+          "total_duration"
+        ],
+        "properties": {
+          "album": {
+            "$ref": "#/components/schemas/Album"
+          },
+          "tracks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AlbumTrack"
+            }
+          },
+          "artists": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AlbumArtist"
+            }
+          },
+          "track_genres": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AlbumTrackGenre"
+            }
+          },
+          "album_genres": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "total_duration": {
+            "type": "number"
+          }
+        },
+        "additionalProperties": false
+      },
       "AlbumDetailsEnvelope": {
         "allOf": [
           {
@@ -13854,52 +13916,46 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "album",
-                  "tracks",
-                  "artists",
-                  "track_genres",
-                  "album_genres",
-                  "total_duration"
-                ],
-                "properties": {
-                  "album": {
-                    "$ref": "#/components/schemas/Album"
-                  },
-                  "tracks": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/AlbumTrack"
-                    }
-                  },
-                  "artists": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/AlbumArtist"
-                    }
-                  },
-                  "track_genres": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/AlbumTrackGenre"
-                    }
-                  },
-                  "album_genres": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  "total_duration": {
-                    "type": "number"
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/AlbumDetailsData"
               }
             }
           }
         ]
+      },
+      "MusiciansData": {
+        "type": "object",
+        "required": [
+          "musicians",
+          "total",
+          "page",
+          "per_page",
+          "total_pages"
+        ],
+        "properties": {
+          "musicians": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SimpleMusician"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "page": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "per_page": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total_pages": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
       },
       "MusiciansEnvelope": {
         "allOf": [
@@ -13913,39 +13969,7 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "musicians",
-                  "total",
-                  "page",
-                  "per_page",
-                  "total_pages"
-                ],
-                "properties": {
-                  "musicians": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/SimpleMusician"
-                    }
-                  },
-                  "total": {
-                    "type": "integer",
-                    "format": "int64"
-                  },
-                  "page": {
-                    "type": "integer",
-                    "format": "int64"
-                  },
-                  "per_page": {
-                    "type": "integer",
-                    "format": "int64"
-                  },
-                  "total_pages": {
-                    "type": "integer",
-                    "format": "int64"
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/MusiciansData"
               }
             }
           }
@@ -14079,6 +14103,43 @@
         },
         "additionalProperties": false
       },
+      "MusicianDetailsData": {
+        "type": "object",
+        "required": [
+          "musician",
+          "albums",
+          "tracks",
+          "genres",
+          "total_duration"
+        ],
+        "properties": {
+          "musician": {
+            "$ref": "#/components/schemas/Musician"
+          },
+          "albums": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MusicianAlbum"
+            }
+          },
+          "tracks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MusicianTrack"
+            }
+          },
+          "genres": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "total_duration": {
+            "type": "number"
+          }
+        },
+        "additionalProperties": false
+      },
       "MusicianDetailsEnvelope": {
         "allOf": [
           {
@@ -14091,45 +14152,45 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "musician",
-                  "albums",
-                  "tracks",
-                  "genres",
-                  "total_duration"
-                ],
-                "properties": {
-                  "musician": {
-                    "$ref": "#/components/schemas/Musician"
-                  },
-                  "albums": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/MusicianAlbum"
-                    }
-                  },
-                  "tracks": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/MusicianTrack"
-                    }
-                  },
-                  "genres": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  "total_duration": {
-                    "type": "number"
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/MusicianDetailsData"
               }
             }
           }
         ]
+      },
+      "TracksData": {
+        "type": "object",
+        "required": [
+          "tracks",
+          "total",
+          "offset",
+          "limit",
+          "has_more"
+        ],
+        "properties": {
+          "tracks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TrackListItem"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "offset": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "limit": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "has_more": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
       },
       "TracksEnvelope": {
         "allOf": [
@@ -14143,42 +14204,26 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "tracks",
-                  "total",
-                  "offset",
-                  "limit",
-                  "has_more"
-                ],
-                "properties": {
-                  "tracks": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/TrackListItem"
-                    }
-                  },
-                  "total": {
-                    "type": "integer",
-                    "format": "int64"
-                  },
-                  "offset": {
-                    "type": "integer",
-                    "format": "int64"
-                  },
-                  "limit": {
-                    "type": "integer",
-                    "format": "int64"
-                  },
-                  "has_more": {
-                    "type": "boolean"
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/TracksData"
               }
             }
           }
         ]
+      },
+      "ShuffleTracksData": {
+        "type": "object",
+        "required": [
+          "tracks"
+        ],
+        "properties": {
+          "tracks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TrackListItem"
+            }
+          }
+        },
+        "additionalProperties": false
       },
       "ShuffleTracksEnvelope": {
         "allOf": [
@@ -14192,19 +14237,7 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "tracks"
-                ],
-                "properties": {
-                  "tracks": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/TrackListItem"
-                    }
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/ShuffleTracksData"
               }
             }
           }
@@ -14237,6 +14270,23 @@
           }
         ]
       },
+      "TrackLikeToggleData": {
+        "type": "object",
+        "required": [
+          "track_id",
+          "is_liked"
+        ],
+        "properties": {
+          "track_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "is_liked": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
       "TrackLikeToggleEnvelope": {
         "allOf": [
           {
@@ -14249,25 +14299,50 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "track_id",
-                  "is_liked"
-                ],
-                "properties": {
-                  "track_id": {
-                    "type": "integer",
-                    "format": "int64"
-                  },
-                  "is_liked": {
-                    "type": "boolean"
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/TrackLikeToggleData"
               }
             }
           }
         ]
+      },
+      "LikedTracksData": {
+        "type": "object",
+        "required": [
+          "tracks",
+          "total",
+          "page",
+          "per_page",
+          "total_pages",
+          "has_more"
+        ],
+        "properties": {
+          "tracks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TrackListItem"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "page": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "per_page": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total_pages": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "has_more": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
       },
       "LikedTracksEnvelope": {
         "allOf": [
@@ -14281,47 +14356,27 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "tracks",
-                  "total",
-                  "page",
-                  "per_page",
-                  "total_pages",
-                  "has_more"
-                ],
-                "properties": {
-                  "tracks": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/TrackListItem"
-                    }
-                  },
-                  "total": {
-                    "type": "integer",
-                    "format": "int64"
-                  },
-                  "page": {
-                    "type": "integer",
-                    "format": "int64"
-                  },
-                  "per_page": {
-                    "type": "integer",
-                    "format": "int64"
-                  },
-                  "total_pages": {
-                    "type": "integer",
-                    "format": "int64"
-                  },
-                  "has_more": {
-                    "type": "boolean"
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/LikedTracksData"
               }
             }
           }
         ]
+      },
+      "LikedTrackIDsData": {
+        "type": "object",
+        "required": [
+          "liked_track_ids"
+        ],
+        "properties": {
+          "liked_track_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        },
+        "additionalProperties": false
       },
       "LikedTrackIDsEnvelope": {
         "allOf": [
@@ -14335,20 +14390,7 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "liked_track_ids"
-                ],
-                "properties": {
-                  "liked_track_ids": {
-                    "type": "array",
-                    "items": {
-                      "type": "integer",
-                      "format": "int64"
-                    }
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/LikedTrackIDsData"
               }
             }
           }
@@ -14729,6 +14771,21 @@
         },
         "additionalProperties": false
       },
+      "MusicPlaylistsData": {
+        "type": "object",
+        "required": [
+          "playlists"
+        ],
+        "properties": {
+          "playlists": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlaylistSummary"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
       "MusicPlaylistsEnvelope": {
         "allOf": [
           {
@@ -14741,23 +14798,51 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "playlists"
-                ],
-                "properties": {
-                  "playlists": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/PlaylistSummary"
-                    }
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/MusicPlaylistsData"
               }
             }
           }
         ]
+      },
+      "MusicPlaylistDetailData": {
+        "type": "object",
+        "required": [
+          "playlist",
+          "track_count",
+          "duration",
+          "is_owner",
+          "can_edit",
+          "collaborators"
+        ],
+        "properties": {
+          "playlist": {
+            "$ref": "#/components/schemas/Playlist"
+          },
+          "track_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "duration": {
+            "type": "number",
+            "description": "Sum of track durations in milliseconds."
+          },
+          "is_owner": {
+            "type": "boolean"
+          },
+          "can_edit": {
+            "type": "boolean"
+          },
+          "collaborators": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/PlaylistCollaborator"
+            }
+          }
+        },
+        "additionalProperties": false
       },
       "MusicPlaylistDetailEnvelope": {
         "allOf": [
@@ -14771,48 +14856,23 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "playlist",
-                  "track_count",
-                  "duration",
-                  "is_owner",
-                  "can_edit",
-                  "collaborators"
-                ],
-                "properties": {
-                  "playlist": {
-                    "$ref": "#/components/schemas/Playlist"
-                  },
-                  "track_count": {
-                    "type": "integer",
-                    "format": "int64"
-                  },
-                  "duration": {
-                    "type": "number",
-                    "description": "Sum of track durations in milliseconds."
-                  },
-                  "is_owner": {
-                    "type": "boolean"
-                  },
-                  "can_edit": {
-                    "type": "boolean"
-                  },
-                  "collaborators": {
-                    "type": [
-                      "array",
-                      "null"
-                    ],
-                    "items": {
-                      "$ref": "#/components/schemas/PlaylistCollaborator"
-                    }
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/MusicPlaylistDetailData"
               }
             }
           }
         ]
+      },
+      "MusicPlaylistMutationData": {
+        "type": "object",
+        "required": [
+          "playlist"
+        ],
+        "properties": {
+          "playlist": {
+            "$ref": "#/components/schemas/Playlist"
+          }
+        },
+        "additionalProperties": false
       },
       "MusicPlaylistMutationEnvelope": {
         "allOf": [
@@ -14826,20 +14886,40 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "playlist"
-                ],
-                "properties": {
-                  "playlist": {
-                    "$ref": "#/components/schemas/Playlist"
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/MusicPlaylistMutationData"
               }
             }
           }
         ]
+      },
+      "PlaylistTracksData": {
+        "type": "object",
+        "required": [
+          "tracks",
+          "total",
+          "has_more",
+          "next_offset"
+        ],
+        "properties": {
+          "tracks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlaylistTrack"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "has_more": {
+            "type": "boolean"
+          },
+          "next_offset": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
       },
       "PlaylistTracksEnvelope": {
         "allOf": [
@@ -14853,33 +14933,7 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "tracks",
-                  "total",
-                  "has_more",
-                  "next_offset"
-                ],
-                "properties": {
-                  "tracks": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/PlaylistTrack"
-                    }
-                  },
-                  "total": {
-                    "type": "integer",
-                    "format": "int64"
-                  },
-                  "has_more": {
-                    "type": "boolean"
-                  },
-                  "next_offset": {
-                    "type": "integer",
-                    "format": "int64"
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/PlaylistTracksData"
               }
             }
           }
@@ -14966,6 +15020,18 @@
         },
         "additionalProperties": false
       },
+      "RecordedPlayData": {
+        "type": "object",
+        "required": [
+          "recorded"
+        ],
+        "properties": {
+          "recorded": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
       "RecordedPlayEnvelope": {
         "allOf": [
           {
@@ -14978,16 +15044,7 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "recorded"
-                ],
-                "properties": {
-                  "recorded": {
-                    "type": "boolean"
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/RecordedPlayData"
               }
             }
           }

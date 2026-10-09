@@ -741,15 +741,22 @@ shift down when the data lands (§3.4). A tab with neither a sort toggle nor a
 start slot drops the row once it knows it has a single page, nothing, or an
 error — a failed refetch included, whose stale page count no longer applies —
 rather than holding an empty band above the grid; that one settle is the
-only time such a tab's grid moves. The liked-movies view is a
-`LibraryAllTab` whose `toolbarStartSlot` carries its "Back to playlists" link
-and count, so it inherits the tab's out-of-range page clamp and keeps that
-link reachable while loading, empty and errored. The movie playlist page is
+only time such a tab's grid moves. The liked-movies and liked-tracks views
+are each a `LibraryAllTab` whose `toolbarStartSlot` carries the "Back to
+playlists" control and count, so they inherit the tab's out-of-range page
+clamp and keep that control reachable while loading, empty and errored. The
+liked-tracks view passes `TRACK_LIST_CONTAINER_CLASS` as its grid and a
+`TrackRowSkeleton` (the Tracks tab's placeholder row) as its skeleton card. The movie playlist page is
 the same shape: its header above a `LibraryAllTab` whose `toolbarStartSlot`
 names the list and whose `emptyMessage` scopes the empty copy to the playlist
 rather than the library. The Playlists tabs themselves stay local to their
-pages, as the Tracks tab does to the music page; a new library page composes
-the same parts. The
+pages, as the Tracks tab does to the music page, but share their parts: one
+`PlaylistsTabToolbar` (count on the left; the liked view and "New playlist"
+pills on the right) that renders while loading and on error too, with the
+count left out until the list lands, and a `PlaylistCardSkeleton` authored
+beside `PlaylistCard`. Leaving the liked view returns focus to its toolbar
+button, and entering it focuses "Back to playlists". A new library page
+composes the same parts. The
 search page's category tabs reuse `LIBRARY_POSTER_GRID_CLASS`,
 `LoadErrorAlert` and `PosterCardSkeleton` but stay page-local: their result
 count line, "No albums match 'q'" copy and non-grid tracks list are not a

@@ -10,11 +10,11 @@ import {
   MUSICIANS_PER_PAGE,
   TRACKS_INFINITE_PAGE_SIZE,
 } from "@/lib/constants";
-import type { PlaylistSummaryType } from "@/types";
 import { jsonResponse, requestURL } from "../helpers/api";
 import { runContentFadeTransitionTimeout } from "../helpers/content-fade-transition";
 import { restoreMatchMedia, setReducedMotionPreference } from "../helpers/dom";
 import { authUser, nullableInt64, nullableString } from "../helpers/fixtures";
+import { playlistSummary, trackListItem } from "../helpers/music";
 import { renderRoute } from "../helpers/render-route";
 
 const { audioPlayerActionsMock } = vi.hoisted(() => ({
@@ -38,42 +38,14 @@ vi.mock("@/hooks/useAudioPlayerNowPlaying", () => ({
 }));
 
 function track(id: number, title: string) {
-  return {
+  return trackListItem({
     id,
     title,
-    duration: 180,
-    codec: "flac",
-    bit_rate: 900000,
     album_id: nullableInt64(10),
     album_title: nullableString("Blue Record"),
-    album_cover: nullableString(),
     musician_id: nullableInt64(20),
     musician_name: nullableString("The Band"),
-  };
-}
-
-function playlist(
-  id: number,
-  name: string,
-  fields: Partial<PlaylistSummaryType> = {},
-): PlaylistSummaryType {
-  return {
-    id,
-    user_id: 1,
-    name,
-    description: nullableString(),
-    cover_image: nullableString(),
-    is_public: false,
-    movie_id: nullableInt64(),
-    content_type: "track",
-    created_at: "2026-01-01T00:00:00Z",
-    updated_at: "2026-01-01T00:00:00Z",
-    track_count: 0,
-    total_duration: 0,
-    is_owner: true,
-    can_edit: true,
-    ...fields,
-  };
+  });
 }
 
 type MockMusicFetchOptions = {
@@ -256,8 +228,8 @@ function mockMusicFetch(options: MockMusicFetchOptions = {}) {
         error: false,
         data: {
           playlists: [
-            playlist(30, "Morning Rotation", { track_count: 3, total_duration: 540_000 }),
-            playlist(31, "Shared Discoveries", {
+            playlistSummary({ id: 30, name: "Morning Rotation", track_count: 3, total_duration: 540_000 }),
+            playlistSummary({ id: 31, name: "Shared Discoveries",
               user_id: 2,
               track_count: 2,
               total_duration: 420_000,
@@ -541,6 +513,21 @@ describe("music route playlists tab", () => {
     ).toHaveTextContent("New playlist");
   });
 
+  it("moves focus to Back on entering liked tracks and back to Liked on leaving", async () => {
+    const user = userEvent.setup();
+    await renderMusicRoute("/music/?tab=playlists");
+
+    await user.click(
+      await screen.findByRole("button", { name: "View liked tracks" }),
+    );
+    const back = await screen.findByRole("button", { name: "Back to playlists" });
+    await waitFor(() => expect(back).toHaveFocus());
+
+    await user.click(back);
+    const liked = await screen.findByRole("button", { name: "View liked tracks" });
+    await waitFor(() => expect(liked).toHaveFocus());
+  });
+
   it("renders the minimal empty state with the toolbar as the only call to action", async () => {
     await renderMusicRoute("/music/?tab=playlists", { emptyPlaylists: true });
 
@@ -596,6 +583,10 @@ describe("music route playlists tab", () => {
     expect(
       screen.queryByText("No playlists yet. Use New playlist to group tracks."),
     ).not.toBeInTheDocument();
+    // The toolbar stays usable without a list; only the count waits for one.
+    expect(screen.getByRole("button", { name: "View liked tracks" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create new playlist" })).toBeInTheDocument();
+    expect(screen.queryByText(/\d+ playlists?$/)).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Try again" }));
 

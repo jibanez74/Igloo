@@ -1,11 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
-import type { components } from "../src/types/openapi.gen";
 import { PLAYLIST_TRACKS_PAGE_SIZE } from "../src/lib/constants";
 import { assertMockSuiteClean, trackBrowserIssues } from "./e2e-browser-issues";
 import { apiResponse, fulfillJSON, gateRoute, nullableInt64, nullableString } from "./e2e-api";
 import { mockApi } from "./e2e-mock-api";
-
-type Schema = components["schemas"];
+import { playlist, playlistDetail, playlistTrack } from "./fixtures/music";
 
 const PLAYLIST_ID = 55;
 // Deliberately more than one page: the header buttons used to queue only the
@@ -18,50 +16,34 @@ const PAGE_OFFSETS = Array.from(
   (_, index) => index * PLAYLIST_TRACKS_PAGE_SIZE,
 );
 
-function playlistTrack(position: number): Schema["PlaylistTrack"] {
-  const id = 1000 + position;
-
-  return {
-    playlist_track_id: 9000 + position,
-    position,
-    added_at: "2026-01-01T00:00:00Z",
-    added_by: nullableInt64(1),
-    id,
+function longHaulTrack(position: number) {
+  return playlistTrack({
+    id: 1000 + position,
     title: `Track ${position}`,
+    position,
+    playlist_track_id: 9000 + position,
+    added_by: nullableInt64(1),
     duration: 200_000,
-    codec: "flac",
-    bit_rate: 900_000,
     album_id: nullableInt64(300 + (position % 3)),
     musician_id: nullableInt64(400 + (position % 3)),
     album_title: nullableString(`Album ${position % 3}`),
-    album_cover: nullableString(),
     musician_name: nullableString(`Artist ${position % 3}`),
-  };
+  });
 }
 
 const allPlaylistTracks = Array.from({ length: TOTAL_TRACKS }, (_, index) =>
-  playlistTrack(index + 1),
+  longHaulTrack(index + 1),
 );
 
-const playlistDetails = {
-  playlist: {
+const playlistDetails = playlistDetail({
+  playlist: playlist({
     id: PLAYLIST_ID,
-    user_id: 1,
     name: "Long Haul",
     description: nullableString("A playlist that spans several pages."),
-    cover_image: nullableString(),
-    is_public: false,
-    movie_id: nullableInt64(),
-    content_type: "track",
-    created_at: "2026-01-01T00:00:00Z",
-    updated_at: "2026-01-01T00:00:00Z",
-  } satisfies Schema["Playlist"],
+  }),
   track_count: TOTAL_TRACKS,
   duration: TOTAL_TRACKS * 200_000,
-  is_owner: true,
-  can_edit: true,
-  collaborators: null,
-};
+});
 
 type MockOptions = {
   // Serve an error envelope for this offset, as a mid-drain network blip does.

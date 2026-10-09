@@ -1,91 +1,27 @@
 import type { components } from "../../src/types/openapi.gen";
 import { nullableFloat64, nullableInt64, nullableString } from "../e2e-api";
 
-// Contract-typed music fixtures shared by the music specs. Builders take the
-// fields a spec cares about and fill the rest with neutral defaults.
+// Contract-typed music fixtures shared by the music specs: the builders come
+// from the unit-test helpers, and the Glacier Sessions / Aurora Pines scenario
+// below is built from them.
+
+export {
+  playlist,
+  playlistDetail,
+  playlistSummary,
+  playlistTrack,
+  simpleAlbum,
+  simpleMusician,
+  trackListItem,
+} from "../../src/test/helpers/music";
 
 type Schema = components["schemas"];
 
-type AlbumDetails = {
-  album: Schema["Album"];
-  tracks: Schema["AlbumTrack"][];
-  artists: Schema["AlbumArtist"][];
-  track_genres: Schema["AlbumTrackGenre"][];
-  album_genres: string[];
-  total_duration: number;
-};
+type AlbumDetails = Schema["AlbumDetailsData"];
 
-export type MusicianDetails = {
-  musician: Schema["Musician"];
-  albums: Schema["MusicianAlbum"][];
-  tracks: Schema["MusicianTrack"][];
-  genres: string[];
-  total_duration: number;
-};
+export type MusicianDetails = Schema["MusicianDetailsData"];
 
 const TIMESTAMP = "2026-01-01T00:00:00Z";
-
-export function trackListItem(
-  fields: Pick<Schema["TrackListItem"], "id" | "title"> &
-    Partial<Schema["TrackListItem"]>,
-): Schema["TrackListItem"] {
-  return {
-    duration: 180,
-    codec: "flac",
-    bit_rate: 900000,
-    album_id: nullableInt64(),
-    album_title: nullableString(),
-    album_cover: nullableString(),
-    musician_id: nullableInt64(),
-    musician_name: nullableString(),
-    ...fields,
-  };
-}
-
-export function simpleAlbum(
-  fields: Pick<Schema["SimpleAlbum"], "id" | "title"> &
-    Partial<Schema["SimpleAlbum"]>,
-): Schema["SimpleAlbum"] {
-  return {
-    cover: nullableString(),
-    musician: nullableString(),
-    year: nullableInt64(2026),
-    ...fields,
-  };
-}
-
-export function simpleMusician(
-  fields: Pick<Schema["SimpleMusician"], "id" | "name"> &
-    Partial<Schema["SimpleMusician"]>,
-): Schema["SimpleMusician"] {
-  return {
-    thumb: nullableString(),
-    album_count: 1,
-    track_count: 1,
-    ...fields,
-  };
-}
-
-export function playlistSummary(
-  fields: Pick<Schema["PlaylistSummary"], "id" | "name"> &
-    Partial<Schema["PlaylistSummary"]>,
-): Schema["PlaylistSummary"] {
-  return {
-    user_id: 1,
-    description: nullableString(),
-    cover_image: nullableString(),
-    is_public: false,
-    movie_id: nullableInt64(),
-    content_type: "track",
-    created_at: TIMESTAMP,
-    updated_at: TIMESTAMP,
-    track_count: 0,
-    total_duration: 0,
-    is_owner: true,
-    can_edit: true,
-    ...fields,
-  };
-}
 
 // "Glacier Sessions" by "Aurora Pines": the album and musician pages link to
 // each other, so both specs serve both.
