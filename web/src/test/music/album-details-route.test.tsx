@@ -90,7 +90,6 @@ function albumDetailsResponse(
         id: id + 100,
         name: artistName,
         thumb: nullableString(""),
-        spotify_id: nullableString(`artist-${id}`),
       },
     ],
     track_genres: [

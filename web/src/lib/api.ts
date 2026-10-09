@@ -47,12 +47,16 @@ import type {
   MusiciansListResponseType,
   PlaylistDetailResponseType,
   PlaylistsListResponseType,
-  PlaylistSummaryType,
+  PlaylistMutationResponseType,
   PlaylistTracksResponseType,
   LikedTracksResponseType,
   ShuffleTracksResponseType,
   SettingsType,
-  SimpleAlbumType,
+  LatestAlbumsResponseType,
+  LikedTrackIdsResponseType,
+  RecordedPlayResponseType,
+  TrackLikeToggleResponseType,
+  BulkAddResponseType,
   TheaterMovieType,
   TmdbStatusType,
   TmdbSearchMoviesRequest,
@@ -71,9 +75,9 @@ import type {
   SearchAllResponseType,
   SearchCategoryData,
   SpotifyAlbumSearchRequest,
-  SpotifyAlbumSearchResultType,
+  SpotifyAlbumSearchResponseType,
   SpotifyTrackSearchRequest,
-  SpotifyTrackSearchResultType,
+  SpotifyTrackSearchResponseType,
   SpotifyStatusType,
   TrailerPreferencesData,
   UpdateTrailerPreferencesRequest,
@@ -334,7 +338,7 @@ export const deleteNotification = (id: number) =>
 // ============================================================================
 
 export const getLatestAlbums = () =>
-  apiRequest<{ albums: SimpleAlbumType[] }>("/api/music/albums/latest");
+  apiRequest<LatestAlbumsResponseType>("/api/music/albums/latest");
 
 export const getLatestMovies = () =>
   apiRequest<{ movies: LatestMovieType[] }>("/api/movies/latest");
@@ -413,7 +417,7 @@ export const searchTmdbMovies = (body: TmdbSearchMoviesRequest) =>
   });
 
 export const searchSpotifyAlbums = (body: SpotifyAlbumSearchRequest) =>
-  apiRequest<{ results: SpotifyAlbumSearchResultType[] }>(
+  apiRequest<SpotifyAlbumSearchResponseType>(
     "/api/spotify/albums/search",
     {
       method: "POST",
@@ -422,7 +426,7 @@ export const searchSpotifyAlbums = (body: SpotifyAlbumSearchRequest) =>
   );
 
 export const searchSpotifyTracks = (body: SpotifyTrackSearchRequest) =>
-  apiRequest<{ results: SpotifyTrackSearchResultType[] }>(
+  apiRequest<SpotifyTrackSearchResponseType>(
     "/api/spotify/tracks/search",
     {
       method: "POST",
@@ -608,7 +612,7 @@ export const getShuffleTracks = (
   );
 
 export const toggleLikeTrack = (trackId: number) =>
-  apiRequest<{ track_id: number; is_liked: boolean }>(
+  apiRequest<TrackLikeToggleResponseType>(
     `/api/music/tracks/${trackId}/like`,
     { method: "POST" },
   );
@@ -625,7 +629,7 @@ export const getLikedTracks = (
   );
 
 export const getLikedTrackIds = () =>
-  apiRequest<{ liked_track_ids: number[] }>("/api/music/tracks/liked-ids");
+  apiRequest<LikedTrackIdsResponseType>("/api/music/tracks/liked-ids");
 
 export const getMusiciansPaginated = (
   page: number,
@@ -649,7 +653,7 @@ export const recordPlayEvent = (
   durationPlayed: number,
   completed: boolean,
 ) =>
-  apiRequest<{ recorded: boolean }>("/api/music/user-stats/play", {
+  apiRequest<RecordedPlayResponseType>("/api/music/user-stats/play", {
     method: "POST",
     body: {
       track_id: trackId,
@@ -674,7 +678,7 @@ export const getPlaylistTracks = (id: number, limit: number, offset: number) =>
   );
 
 export const createPlaylist = (data: CreatePlaylistRequest) =>
-  apiRequest<{ playlist: PlaylistSummaryType }>("/api/music/playlists", {
+  apiRequest<PlaylistMutationResponseType>("/api/music/playlists", {
     method: "POST",
     body: data,
   });
@@ -683,7 +687,7 @@ export const updatePlaylist = (
   id: number,
   data: UpdatePlaylistRequest,
 ) =>
-  apiRequest<{ playlist: PlaylistSummaryType }>(`/api/music/playlists/${id}`, {
+  apiRequest<PlaylistMutationResponseType>(`/api/music/playlists/${id}`, {
     method: "PUT",
     body: data,
   });
@@ -694,7 +698,7 @@ export const deletePlaylist = (id: number) =>
   });
 
 export const addTracksToPlaylist = (playlistId: number, trackIds: number[]) =>
-  apiRequest<{ added: number; skipped: number }>(
+  apiRequest<BulkAddResponseType>(
     `/api/music/playlists/${playlistId}/tracks`,
     {
       method: "POST",

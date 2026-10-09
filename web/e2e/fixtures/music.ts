@@ -6,22 +6,9 @@ import { nullableFloat64, nullableInt64, nullableString } from "../e2e-api";
 
 type Schema = components["schemas"];
 
-type AlbumDetails = {
-  album: Schema["Album"];
-  tracks: Schema["AlbumTrack"][];
-  artists: Schema["AlbumArtist"][];
-  track_genres: Schema["AlbumTrackGenre"][];
-  album_genres: string[];
-  total_duration: number;
-};
+type AlbumDetails = Schema["AlbumDetailsData"];
 
-export type MusicianDetails = {
-  musician: Schema["Musician"];
-  albums: Schema["MusicianAlbum"][];
-  tracks: Schema["MusicianTrack"][];
-  genres: string[];
-  total_duration: number;
-};
+export type MusicianDetails = Schema["MusicianDetailsData"];
 
 const TIMESTAMP = "2026-01-01T00:00:00Z";
 
