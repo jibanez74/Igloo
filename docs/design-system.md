@@ -741,10 +741,12 @@ shift down when the data lands (§3.4). A tab with neither a sort toggle nor a
 start slot drops the row once it knows it has a single page, nothing, or an
 error — a failed refetch included, whose stale page count no longer applies —
 rather than holding an empty band above the grid; that one settle is the
-only time such a tab's grid moves. The liked-movies view is a
-`LibraryAllTab` whose `toolbarStartSlot` carries its "Back to playlists" link
-and count, so it inherits the tab's out-of-range page clamp and keeps that
-link reachable while loading, empty and errored. The movie playlist page is
+only time such a tab's grid moves. The liked-movies and liked-tracks views
+are each a `LibraryAllTab` whose `toolbarStartSlot` carries the "Back to
+playlists" control and count, so they inherit the tab's out-of-range page
+clamp and keep that control reachable while loading, empty and errored. The
+liked-tracks view passes `TRACK_LIST_CONTAINER_CLASS` as its grid and a
+`TrackRowSkeleton` (the Tracks tab's placeholder row) as its skeleton card. The movie playlist page is
 the same shape: its header above a `LibraryAllTab` whose `toolbarStartSlot`
 names the list and whose `emptyMessage` scopes the empty copy to the playlist
 rather than the library. The Playlists tabs themselves stay local to their

@@ -45,6 +45,7 @@ import {
   FOCUS_VISIBLE_RING_CLASS,
   LIBRARY_TAB_TRIGGER_CLASS,
   LIBRARY_TABS_LIST_CLASS,
+  LIKED_TRACKS_PER_PAGE,
   MOTION_LOADING_STATE_CLASS,
   MOTION_MICRO_CONTROL_CLASS,
   MOTION_SECTION_ENTER_CLASS,
@@ -57,7 +58,6 @@ import {
   LIBRARY_NOUNS,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import { scrollWindowToTop } from "@/lib/motion";
 
 import AlbumCard, { AlbumCardSkeleton } from "@/components/music/AlbumCard";
 import MusicianCard, {
@@ -68,7 +68,6 @@ import LibraryMoreMenu, {
   RequestMediaMenuItem,
   RefreshLibraryMenuItem,
 } from "@/components/shared/LibraryMoreMenu";
-import LibraryPagination from "@/components/shared/LibraryPagination";
 import LibraryStats from "@/components/shared/LibraryStats";
 import PlaylistCard, { PlaylistCardSkeleton } from "@/components/shared/PlaylistCard";
 import PlaylistsTabToolbar from "@/components/shared/PlaylistsTabToolbar";
@@ -376,27 +375,34 @@ function AlbumsTabContent({ currentPage }: { currentPage: number }) {
 
 // Skeleton loader that matches the library track-list layout to prevent CLS.
 // Shared by the Tracks tab and the Liked Tracks view.
+// One placeholder row, the height of a real track row; the Tracks tab stacks
+// eight, the liked view one per row on a full page.
+function TrackRowSkeleton() {
+  return (
+    <div
+      className="flex items-center gap-3 p-3 sm:gap-4 sm:px-4"
+      style={{ height: `${VIRTUAL_LIST_TRACK_HEIGHT}px` }}
+    >
+      <div
+        className={cn(
+          "size-9 shrink-0 rounded-full bg-muted",
+          MOTION_LOADING_STATE_CLASS,
+        )}
+      />
+      <div className="min-w-0 flex-1">
+        <div className={cn("h-4 w-1/2 rounded-sm bg-muted", MOTION_LOADING_STATE_CLASS)} />
+        <div className={cn("mt-2 h-3 w-1/3 rounded-sm bg-muted", MOTION_LOADING_STATE_CLASS)} />
+      </div>
+      <div className={cn("h-3 w-10 shrink-0 rounded-sm bg-muted", MOTION_LOADING_STATE_CLASS)} />
+    </div>
+  );
+}
+
 function TracksListSkeleton() {
   return (
     <div className={TRACK_LIST_CONTAINER_CLASS}>
       {Array.from({ length: 8 }).map((_, i) => (
-        <div
-          key={i}
-          className="flex items-center gap-3 p-3 sm:gap-4 sm:px-4"
-          style={{ height: `${VIRTUAL_LIST_TRACK_HEIGHT}px` }}
-        >
-          <div
-            className={cn(
-              "size-9 shrink-0 rounded-full bg-muted",
-              MOTION_LOADING_STATE_CLASS,
-            )}
-          />
-          <div className="min-w-0 flex-1">
-            <div className={cn("h-4 w-1/2 rounded-sm bg-muted", MOTION_LOADING_STATE_CLASS)} />
-            <div className={cn("mt-2 h-3 w-1/3 rounded-sm bg-muted", MOTION_LOADING_STATE_CLASS)} />
-          </div>
-          <div className={cn("h-3 w-10 shrink-0 rounded-sm bg-muted", MOTION_LOADING_STATE_CLASS)} />
-        </div>
+        <TrackRowSkeleton key={i} />
       ))}
     </div>
   );
@@ -887,6 +893,8 @@ type LikedTracksInPlaylistsTabProps = {
   focusIntentRef: RefObject<PlaylistsFocusIntent | null>;
 };
 
+const LIKED_TRACK_NOUN = { singular: "liked track", plural: "liked tracks" };
+
 function LikedTracksInPlaylistsTab({
   likedTracksPage,
   onExit,
@@ -897,27 +905,21 @@ function LikedTracksInPlaylistsTab({
   const audioPlayer = useAudioPlayerActions();
   const matchTrackPlayback = useTrackPlaybackMatcher();
 
-  const { data, isLoading, isError, refetch } = useQuery(likedTracksQueryOpts(likedTracksPage));
+  // The same key LibraryAllTab runs below, so TanStack serves both from one
+  // request; the page reads it for the count and the play queue.
+  const { data } = useQuery(likedTracksQueryOpts(likedTracksPage));
 
+  const tracks = data?.error === false ? data.data.tracks : [];
+  const total = data?.error === false ? data.data.total : 0;
+
+  // The header renders while the list loads, so Back can take focus at once.
   useEffect(() => {
-    if (isLoading || focusIntentRef.current !== "enter-liked-from-toolbar") {
-      return;
-    }
+    if (focusIntentRef.current !== "enter-liked-from-toolbar") return;
     if (!backToPlaylistsButtonRef.current) return;
 
     focusIntentRef.current = null;
     focusDialogRestoreTarget(backToPlaylistsButtonRef.current);
-  }, [focusIntentRef, isLoading]);
-
-  const tracks = data?.error === false ? data.data.tracks : [];
-  const total = data?.error === false ? data.data.total : 0;
-  const totalPages = data?.error === false ? data.data.total_pages : 0;
-
-  // Reached only after the isLoading early-return below, so no loading case here.
-  const getAnnouncement = () => {
-    if (tracks.length === 0) return "No liked tracks";
-    return `${pluralize(total, "liked track")}, page ${likedTracksPage} of ${totalPages}`;
-  };
+  }, [focusIntentRef]);
 
   const handlePageChange = (newPage: number) => {
     navigate({
@@ -928,7 +930,6 @@ function LikedTracksInPlaylistsTab({
       }),
       replace: true,
     });
-    scrollWindowToTop();
   };
 
   // playTrackFromList, as the library tab does: a click on the current row
@@ -938,19 +939,29 @@ function LikedTracksInPlaylistsTab({
     audioPlayer.playTrackFromList(tracks, track.id);
   };
 
-  if (isLoading) {
-    return <TracksListSkeleton />;
-  }
-
-  const loadFailed = isError || isApiFailure(data);
-
   return (
-    <div>
-      {!loadFailed && <LiveAnnouncer message={getAnnouncement()} />}
-
-      {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
-        <div className="flex items-center gap-3">
+    <LibraryAllTab
+      queryOpts={likedTracksQueryOpts(likedTracksPage)}
+      getItems={data => data.tracks}
+      renderCard={track => (
+        <TrackItem
+          {...trackRowProps(track)}
+          variant="library"
+          {...matchTrackPlayback(track.id)}
+          onPlay={() => handlePlayTrack(track)}
+          showActionsMenu
+        />
+      )}
+      currentPage={likedTracksPage}
+      perPage={LIKED_TRACKS_PER_PAGE}
+      noun={LIKED_TRACK_NOUN}
+      emptyIcon={Heart}
+      emptyMessage="No liked tracks yet. Tap the heart on any track to add it here."
+      onPageChange={handlePageChange}
+      gridClassName={TRACK_LIST_CONTAINER_CLASS}
+      skeletonCard={<TrackRowSkeleton />}
+      toolbarStartSlot={
+        <>
           <button
             ref={backToPlaylistsButtonRef}
             type="button"
@@ -970,51 +981,14 @@ function LikedTracksInPlaylistsTab({
             <Heart className="size-4 fill-current text-destructive" aria-hidden="true" />
             Liked Tracks
           </h2>
-        </div>
-        {!loadFailed && (
-          <span className="text-sm text-muted-foreground">
-            {pluralize(total, "track")}
-          </span>
-        )}
-      </div>
-
-      {/* Error, empty state or track list. The header stays so Back still works. */}
-      {loadFailed ? (
-        <LoadErrorAlert
-          message={apiErrorMessage(data, "Couldn’t load liked tracks. Check your connection and try again.")}
-          onRetry={() => void refetch()}
-        />
-      ) : tracks.length === 0 ? (
-        <LibraryEmptyState
-          icon={Heart}
-          message="No liked tracks yet. Tap the heart on any track to add it here."
-        />
-      ) : (
-        <div className={TRACK_LIST_CONTAINER_CLASS}>
-          {tracks.map((track) => (
-            <TrackItem
-              key={track.id}
-              {...trackRowProps(track)}
-              variant="library"
-              {...matchTrackPlayback(track.id)}
-              onPlay={() => handlePlayTrack(track)}
-              showActionsMenu
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Pagination */}
-      {!loadFailed && totalPages > 1 && (
-        <div className="mt-6">
-          <LibraryPagination
-            currentPage={likedTracksPage}
-            totalPages={totalPages}
-            onPageChange={handlePageChange}
-          />
-        </div>
-      )}
-    </div>
+          {data?.error === false && (
+            <span className="text-sm text-muted-foreground">
+              {pluralize(total, "track")}
+            </span>
+          )}
+        </>
+      }
+    />
   );
 }
 
