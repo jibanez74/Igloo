@@ -404,7 +404,7 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
   );
 }
 
-function WatchRoomLoading() {
+export function WatchRoomLoading() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-card px-4">
       <div className="text-center">

@@ -90,6 +90,7 @@ export const Route = createFileRoute("/_auth/tv-shows/$id/")({
     return { show };
   },
   head: ({ loaderData }) => showHead(loaderData?.show),
+  pendingComponent: ShowDetailsSkeleton,
   component: ShowDetailsPage,
 });
 
@@ -105,6 +106,16 @@ function showCastToCastSection(
     profilePath: unwrapString(c.artist_profile),
     episodeCount: c.episode_count,
   }));
+}
+
+// One skeleton serves the router's pending view, while the loader waits, and
+// the guard's, so the two cannot drift apart (design-system §3.4).
+function ShowDetailsSkeleton() {
+  return (
+    <DetailSkeleton label="Loading show details" withActions>
+      <ShowSeasonsSectionPlaceholder />
+    </DetailSkeleton>
+  );
 }
 
 function ShowDetailsPage() {
@@ -130,11 +141,7 @@ function ShowDetailsPage() {
       isError={isError}
       data={data}
       payload={show && payload ? payload : null}
-      skeleton={
-        <DetailSkeleton label="Loading show details" withActions>
-          <ShowSeasonsSectionPlaceholder />
-        </DetailSkeleton>
-      }
+      skeleton={<ShowDetailsSkeleton />}
     >
       {(loaded, id) => <ShowDetailsContent key={id} showId={id} payload={loaded} />}
     </MediaDetailGuard>

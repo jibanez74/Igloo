@@ -111,8 +111,20 @@ export const Route = createFileRoute("/_auth/music/album/$id")({
     };
   },
   head: ({ loaderData }) => albumHead(loaderData?.album),
+  pendingComponent: AlbumDetailsSkeleton,
   component: AlbumDetailsPage,
 });
+
+// One skeleton serves the router's pending view, while the loader waits, and
+// the guard's, so the two cannot drift apart (design-system §3.4).
+function AlbumDetailsSkeleton() {
+  // It holds a place for the admin "More options" button only when the loaded
+  // page will show one; _auth's beforeLoad has already cached the user.
+  const { data } = useQuery(authUserQueryOpts());
+  const isAdmin = authUserFrom(data)?.is_admin === true;
+
+  return <MusicDetailSkeleton variant="album" withMenu={isAdmin} />;
+}
 
 function AlbumDetailsPage() {
   const { id } = Route.useParams();
@@ -124,10 +136,6 @@ function AlbumDetailsPage() {
   const { data, isPending, isError } = useQuery(
     albumDetailsQueryOpts(albumId ?? 0),
   );
-  // The skeleton holds a place for the admin "More options" button only when
-  // the loaded page will show one.
-  const { data: userData } = useQuery(authUserQueryOpts());
-  const isAdmin = authUserFrom(userData)?.is_admin === true;
 
   return (
     <MediaDetailGuard
@@ -138,7 +146,7 @@ function AlbumDetailsPage() {
       isError={isError}
       data={data}
       payload={data?.data?.album ? data.data : null}
-      skeleton={<MusicDetailSkeleton variant="album" withMenu={isAdmin} />}
+      skeleton={<AlbumDetailsSkeleton />}
     >
       {(loaded, id) => <AlbumDetailsContent key={id} {...loaded} />}
     </MediaDetailGuard>

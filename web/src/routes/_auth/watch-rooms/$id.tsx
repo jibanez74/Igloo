@@ -3,6 +3,7 @@ import { watchRoomQueryOpts } from "@/lib/query-opts";
 import { parseRouteId } from "@/lib/route-id";
 import { routeHead } from "@/lib/route-head";
 import {
+  WatchRoomLoading,
   WatchRoomPage,
   WatchRoomUnavailable,
 } from "@/components/watch-room/WatchRoomPage";
@@ -39,6 +40,7 @@ export const Route = createFileRoute("/_auth/watch-rooms/$id")({
         )
       : WATCH_ROOM_FALLBACK_HEAD;
   },
+  pendingComponent: WatchRoomLoading,
   component: WatchRoomRoute,
 });
 

@@ -97,6 +97,7 @@ export const Route = createFileRoute("/_auth/movies/$id/")({
     return { movie: headData };
   },
   head: ({ loaderData }) => movieHead(loaderData?.movie),
+  pendingComponent: MovieDetailsSkeleton,
   component: MovieDetailsPage,
 });
 
@@ -109,6 +110,12 @@ function libraryCastToCastSection(
     character: c.character,
     profilePath: unwrapString(c.artist_profile),
   }));
+}
+
+// One skeleton serves the router's pending view, while the loader waits, and
+// the guard's, so the two cannot drift apart (design-system §3.4).
+function MovieDetailsSkeleton() {
+  return <DetailSkeleton label="Loading movie details" withActions />;
 }
 
 function MovieDetailsPage() {
@@ -134,7 +141,7 @@ function MovieDetailsPage() {
       isError={isError}
       data={data}
       payload={movie && payload ? payload : null}
-      skeleton={<DetailSkeleton label="Loading movie details" withActions />}
+      skeleton={<MovieDetailsSkeleton />}
     >
       {(loaded, id) => (
         <LibraryMovieDetailsContent key={id} movieId={id} payload={loaded} />
