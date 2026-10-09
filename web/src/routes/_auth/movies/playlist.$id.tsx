@@ -7,6 +7,7 @@ import LibraryAllTab, {
   LibraryAllTabSkeleton,
 } from "@/components/shared/LibraryAllTab";
 import MediaDetailGuard from "@/components/shared/MediaDetailGuard";
+import PlaylistOwnerActions from "@/components/shared/PlaylistOwnerActions";
 import SkeletonStatus from "@/components/shared/SkeletonStatus";
 import {
   moviePlaylistDetailsQueryOpts,
@@ -93,7 +94,7 @@ function MoviePlaylistContent({ playlistId, data }: MoviePlaylistContentProps) {
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<"asc" | "desc">("asc");
 
-  const { playlist, movie_count } = data;
+  const { playlist, movie_count, is_owner } = data;
   const desc = unwrapString(playlist.description);
 
   return (
@@ -113,6 +114,13 @@ function MoviePlaylistContent({ playlistId, data }: MoviePlaylistContentProps) {
             <p className="mt-2 text-sm text-muted-foreground">
               {pluralize(movie_count, "movie")}
             </p>
+            {is_owner && (
+              <PlaylistOwnerActions
+                kind="movie"
+                playlist={playlist}
+                className="mt-4"
+              />
+            )}
           </div>
         </div>
       </header>

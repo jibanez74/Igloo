@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
-import CreateMoviePlaylistDialog from "@/components/movies/CreateMoviePlaylistDialog";
+import PlaylistFormDialog from "@/components/shared/PlaylistFormDialog";
 import MovieCard from "@/components/movies/MovieCard";
 import LibraryAllTab from "@/components/shared/LibraryAllTab";
 import LibraryEmptyState from "@/components/shared/LibraryEmptyState";
@@ -651,7 +651,9 @@ function PlaylistsTabContent({
 
       {body}
 
-      <CreateMoviePlaylistDialog
+      <PlaylistFormDialog
+        kind="movie"
+        mode="create"
         open={showCreate}
         onOpenChange={setShowCreate}
         restoreFocusRef={createPlaylistRestoreRef}

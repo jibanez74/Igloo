@@ -68,6 +68,7 @@ import type {
   UpdateLibrarySettingsResponseType,
   UpdatePlaybackSettingsRequest,
   UpdatePlaylistRequest,
+  UpdateMoviePlaylistRequest,
   WatchRoomInviteUsersResponseType,
   WatchRoomResponseType,
   WatchRoomType,
@@ -745,6 +746,20 @@ export const createMoviePlaylist = (data: CreateMoviePlaylistRequest) =>
   apiRequest<{ playlist: MoviePlaylistRowType }>("/api/movies/playlists", {
     method: "POST",
     body: data,
+  });
+
+export const updateMoviePlaylist = (
+  id: number,
+  data: UpdateMoviePlaylistRequest,
+) =>
+  apiRequest<{ playlist: MoviePlaylistRowType }>(
+    `/api/movies/playlists/${id}`,
+    { method: "PUT", body: data },
+  );
+
+export const deleteMoviePlaylist = (id: number) =>
+  apiRequest<Record<string, never>>(`/api/movies/playlists/${id}`, {
+    method: "DELETE",
   });
 
 // ============================================================================

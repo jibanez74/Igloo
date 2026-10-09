@@ -8,7 +8,9 @@ import { MOVIES_PER_PAGE } from "../src/lib/constants";
 import type {
   CreateMoviePlaylistRequest,
   MoviePlaylistDetailResponseType,
+  MoviePlaylistRowType,
   MoviePlaylistSummaryType,
+  UpdateMoviePlaylistRequest,
 } from "../src/types";
 import {
   apiResponse,
@@ -35,13 +37,14 @@ function moviePlaylist(
   movieCount: number,
   isOwner: boolean,
   description: string,
+  coverImage = "",
 ): MoviePlaylistSummaryType {
   return {
     id,
     user_id: isOwner ? 1 : 2,
     name,
     description: nullableString(description),
-    cover_image: nullableString(),
+    cover_image: nullableString(coverImage),
     is_public: false,
     movie_id: nullableInt64(),
     content_type: "movie",
@@ -73,9 +76,32 @@ const moviePages = [
 const moviesById = new Map(moviePages.flat().map(movie => [movie.id, movie]));
 
 const initialPlaylists = [
-  moviePlaylist(501, "Friday Feature", 7, true, "Movies queued for the end of the week"),
+  moviePlaylist(
+    501,
+    "Friday Feature",
+    7,
+    true,
+    "Movies queued for the end of the week",
+    "/api/static/playlists/friday-feature.jpg",
+  ),
   moviePlaylist(502, "Guest Picks", 3, false, "Shared picks from another account"),
 ];
+
+/** The playlist row the detail and mutation envelopes carry: the summary without its counts. */
+function moviePlaylistRow(playlist: MoviePlaylistSummaryType): MoviePlaylistRowType {
+  return {
+    id: playlist.id,
+    user_id: playlist.user_id,
+    name: playlist.name,
+    description: playlist.description,
+    cover_image: playlist.cover_image,
+    is_public: playlist.is_public,
+    movie_id: playlist.movie_id,
+    content_type: playlist.content_type,
+    created_at: playlist.created_at,
+    updated_at: playlist.updated_at,
+  };
+}
 
 function playlistNotFound(playlistId: number) {
   return { error: true, message: `Movie playlist ${playlistId} not found` };
@@ -84,6 +110,8 @@ function playlistNotFound(playlistId: number) {
 async function mockMoviesApi(page: Page) {
   const playlists = [...initialPlaylists];
   const createdPlaylistRequests: CreateMoviePlaylistRequest[] = [];
+  const updatedPlaylistRequests: UpdateMoviePlaylistRequest[] = [];
+  const deletedPlaylistIds: number[] = [];
 
   const { unexpectedApiRequests } = await mockApi(page, {
     user: { is_admin: true },
@@ -101,6 +129,32 @@ async function mockMoviesApi(page: Page) {
         );
         playlists.push(playlist);
         await fulfillJSON(route, apiResponse({ playlist }));
+        return true;
+      }
+
+      const ownedMatch = url.pathname.match(/^\/api\/movies\/playlists\/(\d+)$/);
+      if (ownedMatch && method === "PUT") {
+        const body = route.request().postDataJSON() as UpdateMoviePlaylistRequest;
+        updatedPlaylistRequests.push(body);
+
+        // A full replace, like the server: a field the request leaves out is cleared.
+        const index = playlists.findIndex(candidate => candidate.id === Number(ownedMatch[1]));
+        playlists[index] = {
+          ...playlists[index],
+          name: body.name,
+          description: nullableString(body.description ?? ""),
+          cover_image: nullableString(body.cover_image ?? ""),
+          is_public: body.is_public ?? false,
+        };
+        await fulfillJSON(route, apiResponse({ playlist: moviePlaylistRow(playlists[index]) }));
+        return true;
+      }
+
+      if (ownedMatch && method === "DELETE") {
+        const playlistId = Number(ownedMatch[1]);
+        deletedPlaylistIds.push(playlistId);
+        playlists.splice(playlists.findIndex(candidate => candidate.id === playlistId), 1);
+        await fulfillJSON(route, { error: false, message: "Playlist deleted successfully" });
         return true;
       }
 
@@ -157,12 +211,11 @@ async function mockMoviesApi(page: Page) {
           return true;
         }
 
-        const { movie_count, is_owner, can_edit, ...playlistRow } = playlist;
         await fulfillJSON(route, apiResponse({
-          playlist: playlistRow,
-          movie_count,
-          is_owner,
-          can_edit,
+          playlist: moviePlaylistRow(playlist),
+          movie_count: playlist.movie_count,
+          is_owner: playlist.is_owner,
+          can_edit: playlist.can_edit,
           collaborators: null,
         } satisfies MoviePlaylistDetailResponseType));
         return true;
@@ -172,7 +225,12 @@ async function mockMoviesApi(page: Page) {
     },
   });
 
-  return { createdPlaylistRequests, unexpectedApiRequests };
+  return {
+    createdPlaylistRequests,
+    updatedPlaylistRequests,
+    deletedPlaylistIds,
+    unexpectedApiRequests,
+  };
 }
 
 test("playlists tab lists playlists and creates a playlist from the toolbar dialog", async ({ page }) => {
@@ -199,12 +257,12 @@ test("playlists tab lists playlists and creates a playlist from the toolbar dial
 
   await createPlaylistButton.click();
 
-  const dialog = page.getByRole("dialog", { name: "New movie playlist" });
+  const dialog = page.getByRole("dialog", { name: "Create New Playlist" });
   await expect(dialog).toBeVisible();
 
   await dialog.getByLabel("Name").fill("Roadshow Queue");
   await dialog.getByLabel("Description (optional)").fill("Titles waiting for a group watch");
-  await dialog.getByRole("button", { name: "Create" }).click();
+  await dialog.getByRole("button", { name: "Create Playlist" }).click();
 
   await expect.poll(() => createdPlaylistRequests).toEqual([
     {
@@ -216,6 +274,79 @@ test("playlists tab lists playlists and creates a playlist from the toolbar dial
   await expect(dialog).toBeHidden();
   await expect(createPlaylistButton).toBeFocused();
   await expect(page.getByRole("link", { name: "Roadshow Queue, 0 movies" })).toBeVisible();
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
+});
+
+test("renaming a movie playlist from its page retitles the tab", async ({ page }) => {
+  const browserIssues = trackBrowserIssues(page);
+  const { updatedPlaylistRequests, unexpectedApiRequests } = await mockMoviesApi(page);
+
+  await page.goto("/movies/playlist/501");
+
+  await expect(page.getByRole("heading", { level: 1, name: "Friday Feature" })).toBeVisible();
+  await expect(page).toHaveTitle("Friday Feature - Igloo");
+
+  const editButton = page.getByRole("button", { name: "Edit playlist" });
+  await editButton.click();
+  const dialog = page.getByRole("dialog", { name: "Edit Playlist" });
+  await expect(dialog.getByRole("textbox", { name: /^Name/ })).toHaveValue("Friday Feature");
+  await expect(dialog.getByLabel("Description (optional)")).toHaveValue(
+    "Movies queued for the end of the week",
+  );
+  await dialog.getByRole("textbox", { name: /^Name/ }).fill("Friday Night Feature");
+  await dialog.getByRole("button", { name: "Save Changes" }).click();
+
+  // PUT replaces every field, so the page must resend what it did not edit.
+  await expect.poll(() => updatedPlaylistRequests).toEqual([
+    {
+      name: "Friday Night Feature",
+      description: "Movies queued for the end of the week",
+      cover_image: "/api/static/playlists/friday-feature.jpg",
+      is_public: false,
+    },
+  ]);
+  await expect(dialog).toBeHidden();
+  await expect(editButton).toBeFocused();
+  await expect(page.getByRole("heading", { level: 1, name: "Friday Night Feature" })).toBeVisible();
+  // The head only reruns on a router load: the dialog refetches the details
+  // and then reloads the route, or the tab keeps the old name.
+  await expect(page).toHaveTitle("Friday Night Feature - Igloo");
+
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
+});
+
+test("deleting a movie playlist from its page returns to the playlists tab", async ({ page }) => {
+  const browserIssues = trackBrowserIssues(page);
+  const { deletedPlaylistIds, unexpectedApiRequests } = await mockMoviesApi(page);
+
+  await page.goto("/movies/playlist/501");
+
+  await page.getByRole("button", { name: "Delete playlist" }).click();
+  const confirm = page.getByRole("alertdialog", { name: "Delete playlist" });
+  await expect(confirm).toContainText("Are you sure you want to delete “Friday Feature”?");
+  await confirm.getByRole("button", { name: "Delete" }).click();
+
+  await expect.poll(() => deletedPlaylistIds).toEqual([501]);
+  await expect(page).toHaveURL(/\/movies\?.*tab=playlists/);
+  await expect(page.getByRole("tab", { name: "Playlists" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByText("Playlist deleted")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Guest Picks, 3 movies" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Friday Feature, 7 movies" })).toHaveCount(0);
+  await expect(page.getByText("1 playlist", { exact: true })).toBeVisible();
+
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
+});
+
+test("a viewer who does not own a movie playlist sees no Edit or Delete", async ({ page }) => {
+  const browserIssues = trackBrowserIssues(page);
+  const { unexpectedApiRequests } = await mockMoviesApi(page);
+
+  await page.goto("/movies/playlist/502");
+
+  await expect(page.getByRole("heading", { level: 1, name: "Guest Picks" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Edit playlist" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Delete playlist" })).toHaveCount(0);
+
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
