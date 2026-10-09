@@ -541,6 +541,21 @@ describe("music route playlists tab", () => {
     ).toHaveTextContent("New playlist");
   });
 
+  it("moves focus to Back on entering liked tracks and back to Liked on leaving", async () => {
+    const user = userEvent.setup();
+    await renderMusicRoute("/music/?tab=playlists");
+
+    await user.click(
+      await screen.findByRole("button", { name: "View liked tracks" }),
+    );
+    const back = await screen.findByRole("button", { name: "Back to playlists" });
+    await waitFor(() => expect(back).toHaveFocus());
+
+    await user.click(back);
+    const liked = await screen.findByRole("button", { name: "View liked tracks" });
+    await waitFor(() => expect(liked).toHaveFocus());
+  });
+
   it("renders the minimal empty state with the toolbar as the only call to action", async () => {
     await renderMusicRoute("/music/?tab=playlists", { emptyPlaylists: true });
 
@@ -596,6 +611,10 @@ describe("music route playlists tab", () => {
     expect(
       screen.queryByText("No playlists yet. Use New playlist to group tracks."),
     ).not.toBeInTheDocument();
+    // The toolbar stays usable without a list; only the count waits for one.
+    expect(screen.getByRole("button", { name: "View liked tracks" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create new playlist" })).toBeInTheDocument();
+    expect(screen.queryByText(/\d+ playlists?$/)).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Try again" }));
 

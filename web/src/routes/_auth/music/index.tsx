@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState, type RefObject } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import {
@@ -9,7 +9,6 @@ import {
   ListMusic,
   Music,
   Play,
-  Plus,
   Shuffle,
   User,
   Users,
@@ -71,7 +70,9 @@ import LibraryMoreMenu, {
 } from "@/components/shared/LibraryMoreMenu";
 import LibraryPagination from "@/components/shared/LibraryPagination";
 import LibraryStats from "@/components/shared/LibraryStats";
-import PlaylistCard from "@/components/shared/PlaylistCard";
+import PlaylistCard, { PlaylistCardSkeleton } from "@/components/shared/PlaylistCard";
+import PlaylistsTabToolbar from "@/components/shared/PlaylistsTabToolbar";
+import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import TrackItem from "@/components/music/TrackItem";
 import LibraryEmptyState from "@/components/shared/LibraryEmptyState";
 import { Button } from "@/components/ui/button";
@@ -752,19 +753,36 @@ type PlaylistsTabContentProps = {
   likedTracksPage: number;
 };
 
+type PlaylistsFocusIntent = "enter-liked-from-toolbar" | "return-to-playlists";
+
 // Playlists tab content
 function PlaylistsTabContent({ playlistsView, likedTracksPage }: PlaylistsTabContentProps) {
   const navigate = Route.useNavigate();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const createPlaylistRestoreRef = useRef<HTMLButtonElement | null>(null);
+  const likedTracksButtonRef = useRef<HTMLButtonElement | null>(null);
+  // Switching views swaps the whole tab body, so the button that was pressed
+  // is gone; this says which control should take focus once the other view
+  // has rendered.
+  const focusIntentRef = useRef<PlaylistsFocusIntent | null>(null);
   const { data, isLoading, isError, refetch } = useQuery({
     ...playlistsQueryOpts(),
     enabled: playlistsView !== "liked",
   });
 
   const playlists = data?.error === false ? data.data.playlists : [];
+  const loadFailed = isError || isApiFailure(data);
 
-  const handleShowLiked = () =>
+  useEffect(() => {
+    if (playlistsView === "liked") return;
+    if (focusIntentRef.current !== "return-to-playlists") return;
+
+    focusIntentRef.current = null;
+    focusDialogRestoreTarget(likedTracksButtonRef.current);
+  }, [playlistsView]);
+
+  const handleShowLiked = () => {
+    focusIntentRef.current = "enter-liked-from-toolbar";
     navigate({
       to: "/music",
       search: (prev: MusicSearchParams) => ({
@@ -774,8 +792,10 @@ function PlaylistsTabContent({ playlistsView, likedTracksPage }: PlaylistsTabCon
       }),
       replace: true,
     });
+  };
 
-  const handleExitLiked = () =>
+  const handleExitLiked = () => {
+    focusIntentRef.current = "return-to-playlists";
     navigate({
       to: "/music",
       search: (prev: MusicSearchParams) => ({
@@ -785,6 +805,7 @@ function PlaylistsTabContent({ playlistsView, likedTracksPage }: PlaylistsTabCon
       }),
       replace: true,
     });
+  };
 
   const handleCreateOpen = () => {
     setShowCreateDialog(true);
@@ -795,75 +816,60 @@ function PlaylistsTabContent({ playlistsView, likedTracksPage }: PlaylistsTabCon
       <LikedTracksInPlaylistsTab
         likedTracksPage={likedTracksPage}
         onExit={handleExitLiked}
-      />
-    );
-  }
-
-  if (isLoading) {
-    return <PlaylistsTabSkeleton />;
-  }
-
-  if (isError || isApiFailure(data)) {
-    return (
-      <LoadErrorAlert
-        message={apiErrorMessage(data, "Couldn’t load playlists. Check your connection and try again.")}
-        onRetry={() => void refetch()}
+        focusIntentRef={focusIntentRef}
       />
     );
   }
 
   // Generate announcement for screen readers.
-  // Declared after the loading and error returns, so it only describes loaded data.
   const getAnnouncement = () => {
     if (playlists.length === 0) return "No playlists yet";
     return `${pluralize(playlists.length, "playlist")} loaded`;
   };
 
+  let body = (
+    <div className={MUSIC_CARD_GRID_CLASS}>
+      {playlists.map((playlist) => (
+        <PlaylistCard key={playlist.id} playlist={playlist} />
+      ))}
+    </div>
+  );
+
+  if (isLoading) {
+    body = <PlaylistsGridSkeleton />;
+  } else if (loadFailed) {
+    body = (
+      <LoadErrorAlert
+        message={apiErrorMessage(data, "Couldn’t load playlists. Check your connection and try again.")}
+        onRetry={() => void refetch()}
+      />
+    );
+  } else if (playlists.length === 0) {
+    body = (
+      <LibraryEmptyState
+        icon={ListMusic}
+        message="No playlists yet. Use New playlist to group tracks."
+      />
+    );
+  }
+
   return (
     <div>
-      {/* Announce content changes to screen readers */}
-      <LiveAnnouncer message={getAnnouncement()} />
-      {/* Header with count and create button */}
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <span className="text-sm text-muted-foreground">
-          {pluralize(playlists.length, "playlist")}
-        </span>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            onClick={handleShowLiked}
-            className="min-h-10 rounded-full"
-            aria-label="View liked tracks"
-          >
-            <Heart className="size-4 shrink-0" aria-hidden="true" />
-            Liked tracks
-          </Button>
-          <Button
-            ref={createPlaylistRestoreRef}
-            variant="accent-pill"
-            onClick={handleCreateOpen}
-            className="min-h-10"
-            aria-label="Create new playlist"
-          >
-            <Plus className="size-4 shrink-0" aria-hidden="true" />
-            New playlist
-          </Button>
-        </div>
-      </div>
+      {/* Announce content changes to screen readers, once there is a list to describe */}
+      {!isLoading && !loadFailed && <LiveAnnouncer message={getAnnouncement()} />}
+      <PlaylistsTabToolbar
+        count={isLoading || loadFailed ? undefined : playlists.length}
+        isLoading={isLoading}
+        likedLabel="Liked tracks"
+        likedAriaLabel="View liked tracks"
+        createAriaLabel="Create new playlist"
+        onShowLiked={handleShowLiked}
+        onCreate={handleCreateOpen}
+        likedButtonRef={likedTracksButtonRef}
+        createButtonRef={createPlaylistRestoreRef}
+      />
 
-      {/* Playlists grid or empty state */}
-      {playlists.length === 0 ? (
-        <LibraryEmptyState
-          icon={ListMusic}
-          message="No playlists yet. Use New playlist to group tracks."
-        />
-      ) : (
-        <div className={MUSIC_CARD_GRID_CLASS}>
-          {playlists.map((playlist) => (
-            <PlaylistCard key={playlist.id} playlist={playlist} />
-          ))}
-        </div>
-      )}
+      {body}
 
       <PlaylistFormDialog
         mode="create"
@@ -878,14 +884,30 @@ function PlaylistsTabContent({ playlistsView, likedTracksPage }: PlaylistsTabCon
 type LikedTracksInPlaylistsTabProps = {
   likedTracksPage: number;
   onExit: () => void;
+  focusIntentRef: RefObject<PlaylistsFocusIntent | null>;
 };
 
-function LikedTracksInPlaylistsTab({ likedTracksPage, onExit }: LikedTracksInPlaylistsTabProps) {
+function LikedTracksInPlaylistsTab({
+  likedTracksPage,
+  onExit,
+  focusIntentRef,
+}: LikedTracksInPlaylistsTabProps) {
   const navigate = Route.useNavigate();
+  const backToPlaylistsButtonRef = useRef<HTMLButtonElement | null>(null);
   const audioPlayer = useAudioPlayerActions();
   const matchTrackPlayback = useTrackPlaybackMatcher();
 
   const { data, isLoading, isError, refetch } = useQuery(likedTracksQueryOpts(likedTracksPage));
+
+  useEffect(() => {
+    if (isLoading || focusIntentRef.current !== "enter-liked-from-toolbar") {
+      return;
+    }
+    if (!backToPlaylistsButtonRef.current) return;
+
+    focusIntentRef.current = null;
+    focusDialogRestoreTarget(backToPlaylistsButtonRef.current);
+  }, [focusIntentRef, isLoading]);
 
   const tracks = data?.error === false ? data.data.tracks : [];
   const total = data?.error === false ? data.data.total : 0;
@@ -930,6 +952,7 @@ function LikedTracksInPlaylistsTab({ likedTracksPage, onExit }: LikedTracksInPla
       <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button
+            ref={backToPlaylistsButtonRef}
             type="button"
             onClick={onExit}
             className={cn(
@@ -995,31 +1018,12 @@ function LikedTracksInPlaylistsTab({ likedTracksPage, onExit }: LikedTracksInPla
   );
 }
 
-function PlaylistsTabSkeleton() {
+function PlaylistsGridSkeleton() {
   return (
-    <div>
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className={cn("h-4 w-24 rounded-sm bg-muted", MOTION_LOADING_STATE_CLASS)} />
-        <div className="flex flex-wrap gap-2">
-          <div className={cn("h-10 w-32 rounded-full bg-muted", MOTION_LOADING_STATE_CLASS)} />
-          <div className={cn("h-10 w-32 rounded-full bg-muted", MOTION_LOADING_STATE_CLASS)} />
-        </div>
-      </div>
-      <div className={MUSIC_CARD_GRID_CLASS}>
-        {Array.from({ length: 10 }).map((_, i) => (
-          <div
-            key={i}
-            className={cn(
-              "rounded-xl border border-border bg-card p-4",
-              MOTION_LOADING_STATE_CLASS,
-            )}
-          >
-            <div className="mx-auto mb-3 aspect-square w-full rounded-lg bg-muted" />
-            <div className="mx-auto h-4 w-3/4 rounded-sm bg-muted" />
-            <div className="mx-auto mt-2 h-3 w-1/2 rounded-sm bg-muted" />
-          </div>
-        ))}
-      </div>
+    <div className={MUSIC_CARD_GRID_CLASS}>
+      {Array.from({ length: 10 }).map((_, i) => (
+        <PlaylistCardSkeleton key={i} />
+      ))}
     </div>
   );
 }

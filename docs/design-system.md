@@ -748,8 +748,13 @@ link reachable while loading, empty and errored. The movie playlist page is
 the same shape: its header above a `LibraryAllTab` whose `toolbarStartSlot`
 names the list and whose `emptyMessage` scopes the empty copy to the playlist
 rather than the library. The Playlists tabs themselves stay local to their
-pages, as the Tracks tab does to the music page; a new library page composes
-the same parts. The
+pages, as the Tracks tab does to the music page, but share their parts: one
+`PlaylistsTabToolbar` (count on the left; the liked view and "New playlist"
+pills on the right) that renders while loading and on error too, with the
+count left out until the list lands, and a `PlaylistCardSkeleton` authored
+beside `PlaylistCard`. Leaving the liked view returns focus to its toolbar
+button, and entering it focuses "Back to playlists". A new library page
+composes the same parts. The
 search page's category tabs reuse `LIBRARY_POSTER_GRID_CLASS`,
 `LoadErrorAlert` and `PosterCardSkeleton` but stay page-local: their result
 count line, "No albums match 'q'" copy and non-grid tracks list are not a

@@ -5,6 +5,7 @@ import {
   CARD_MEDIA_HOVER_CLASS,
   CARD_SURFACE_CLASS,
   FOCUS_VISIBLE_RING_CLASS,
+  MOTION_LOADING_STATE_CLASS,
 } from "@/lib/constants";
 import { formatDuration, pluralize } from "@/lib/format";
 import { getMediaImageUrl } from "@/lib/media-image-url";
@@ -82,5 +83,26 @@ export default function PlaylistCard({ playlist }: PlaylistCardProps) {
         </div>
       </Link>
     </article>
+  );
+}
+
+// Authored beside the card it mirrors (design-system §3.4): the same padded
+// square cover, then bars sized to the name and details lines.
+export function PlaylistCardSkeleton() {
+  return (
+    <div
+      className={cn(
+        "rounded-xl border border-border bg-card p-4",
+        MOTION_LOADING_STATE_CLASS,
+      )}
+    >
+      <div className="mb-3 aspect-square w-full rounded-lg bg-muted" />
+      <div className="flex h-5 items-center justify-center">
+        <div className="h-4 w-3/4 rounded-sm bg-muted" />
+      </div>
+      <div className="mt-0.5 flex h-4 items-center justify-center">
+        <div className="h-3 w-1/2 rounded-sm bg-muted" />
+      </div>
+    </div>
   );
 }
