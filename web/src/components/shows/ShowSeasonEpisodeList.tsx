@@ -5,6 +5,7 @@ import { Check, Play, Tv } from "lucide-react";
 import EmptyState from "@/components/shared/EmptyState";
 import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
 import LoadErrorAlert from "@/components/shared/LoadErrorAlert";
+import SkeletonStatus from "@/components/shared/SkeletonStatus";
 import WatchProgressBar from "@/components/shared/WatchProgressBar";
 import EpisodeWatchedToggle from "@/components/shows/EpisodeWatchedToggle";
 import { Badge } from "@/components/ui/badge";
@@ -212,14 +213,9 @@ export default function ShowSeasonEpisodeList({
   let announcement = "";
   if (isPending) {
     body = (
-      <div
-        className={MOTION_LOADING_STATE_CLASS}
-        role="status"
-        aria-label="Loading episodes"
-      >
-        <span className="sr-only">Loading episodes...</span>
+      <SkeletonStatus label="Loading episodes" className={MOTION_LOADING_STATE_CLASS}>
         <EpisodeRowsPlaceholder />
-      </div>
+      </SkeletonStatus>
     );
   } else if (isError || data.error) {
     const message = apiErrorMessage(

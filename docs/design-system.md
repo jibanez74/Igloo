@@ -913,10 +913,11 @@ is unknown or empty.
   `MOTION_LOADING_STATE_CLASS`, always beside the layout it must mirror — a
   skeleton moves with its layout, never on its own. `ui/spinner.tsx` (`role="status"`) uses
   `MOTION_SPINNER_STATE_CLASS`. Skeleton layouts hide their visuals with
-  `aria-hidden` under a single `role="status"` + `sr-only` label. A skeleton
-  that does not carry that wrapper itself (a tab grid, the search results)
-  goes inside `SkeletonStatus` (`components/shared/SkeletonStatus.tsx`),
-  which takes the spoken label ("Loading playlists").
+  `aria-hidden` under a single `role="status"` + `sr-only` label: every
+  skeleton renders through `SkeletonStatus`
+  (`components/shared/SkeletonStatus.tsx`), which takes the spoken label
+  ("Loading playlists") and, for a skeleton that pulses as one block, the
+  `MOTION_LOADING_STATE_CLASS` as its `className`.
 - **A section whose query the loader awaits renders nothing instead of a
   skeleton.** `ContinueWatching` is the case: the home loader has already
   resolved the query by the time the section mounts, so a skeleton would only

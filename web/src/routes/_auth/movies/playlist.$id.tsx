@@ -7,6 +7,7 @@ import LibraryAllTab, {
   LibraryAllTabSkeleton,
 } from "@/components/shared/LibraryAllTab";
 import MediaDetailGuard from "@/components/shared/MediaDetailGuard";
+import SkeletonStatus from "@/components/shared/SkeletonStatus";
 import {
   moviePlaylistDetailsQueryOpts,
   moviePlaylistMoviesQueryOpts,
@@ -163,24 +164,17 @@ function MoviePlaylistSkeleton() {
   return (
     <div className="min-w-0">
       <MoviePlaylistsBackLink />
-      <div
-        className={MOTION_LOADING_STATE_CLASS}
-        role="status"
-        aria-label="Loading playlist"
-      >
-        <span className="sr-only">Loading playlist...</span>
-        <div className="mb-8 flex items-start gap-3" aria-hidden="true">
+      <SkeletonStatus label="Loading playlist" className={MOTION_LOADING_STATE_CLASS}>
+        <div className="mb-8 flex items-start gap-3">
           <div className="mt-1 size-8 shrink-0 rounded-sm bg-muted" />
           <div className="min-w-0 flex-1 space-y-2">
             <div className="h-8 max-w-sm rounded-sm bg-muted md:h-9" />
             <div className="h-5 w-24 rounded-sm bg-muted" />
           </div>
         </div>
-        <div className="mb-5 min-h-8" aria-hidden="true" />
-        <div aria-hidden="true">
-          <LibraryAllTabSkeleton perPage={MOVIES_PER_PAGE} />
-        </div>
-      </div>
+        <div className="mb-5 min-h-8" />
+        <LibraryAllTabSkeleton perPage={MOVIES_PER_PAGE} />
+      </SkeletonStatus>
     </div>
   );
 }
