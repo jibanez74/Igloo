@@ -642,6 +642,7 @@ thumbs (`MusicianCard`), or the horizontal `WatchRoomCard`. All of them wear
     </div>
   </Link>
   {playLink && <Link … rounded-full bg-primary Play …>}
+  {actions && <div class="absolute top-2 right-2 z-10 …">{actions}</div>}  ← card's own menu
 </article>
 ```
 
@@ -663,6 +664,18 @@ The contract:
   in the home Continue Watching row therefore reads "Resume …", whatever its
   kind.
 - Every hover reveal also fires on `group-focus-within` (§1.7).
+- **The `actions` corner is for a control of the card's own**, a menu over
+  the movie it shows, and it is the only interactive thing a card may carry
+  besides its two links. It renders beside the poster link, never inside it
+  (a button in an anchor is invalid and would navigate), reveals with the
+  card's hover and focus-within like the play control, stays while its menu
+  is open (`has-[[data-state=open]]`), and is always shown where nothing
+  hovers (`pointer-coarse:`). Its trigger is an icon button on a dark round
+  fill so it reads over any poster, named "More actions for <title>". The
+  movie playlist page is the one user so far: `PlaylistMovieMenu` (Remove
+  from Playlist) through `MovieCard`'s `actions` prop, only when the detail
+  response says `can_edit`. Library grids carry no card menu; a movie joins
+  playlists from its own page.
 - Progress is always `WatchProgressBar`, and the percent comes from
   `watchProgressPercent` in `lib/format.ts` — the one definition shared by the
   bar and the `"N% watched"` in the card's link label, so the bar itself stays
@@ -767,7 +780,17 @@ with, keyed by playlist kind (`lib/playlist-kinds.ts` holds each library's
 client calls, query keys, route id and Playlists-tab search). Edit resends
 the cover and visibility it does not show, because PUT replaces every
 field; Delete confirms through `ConfirmDialog`, then returns to that
-library's Playlists tab. A new library page composes the same parts. The
+library's Playlists tab. Items join a playlist of either kind through the
+shared `AddToPlaylistDialog` (`components/shared`), keyed the same way: the
+viewer's editable playlists of that kind with their counts, multi-selected,
+one request per playlist. The server reports a duplicate as skipped rather
+than failing, so the dialog only learns "already in" from the counts
+afterwards; a refused request (an error envelope) is told apart from a
+skip and toasts through `showActionFailed`, with the dialog left open.
+Leaving a playlist asks nothing (it is reversible) and toasts
+`showRemoved`: a track from its row menu, a movie from its card menu, both
+only when the detail response says `can_edit`. A new library page composes
+the same parts. The
 search page's category tabs reuse `LIBRARY_POSTER_GRID_CLASS`,
 `LoadErrorAlert` and `PosterCardSkeleton` but stay page-local: their result
 count line, "No albums match 'q'" copy and non-grid tracks list are not a
@@ -791,7 +814,10 @@ section opens a nested scroll area.
 
 The movie hero's `actionsSlot` (`MovieDetailsHeroActions`) is a 2×2 grid
 below `sm` — Play, Watch, Like, and the More menu with a visible "More" label
-beside its icon — and a wrapping row from `sm` up. An action row that relies
+beside its icon — and a wrapping row from `sm` up. The More menu lists
+Playback Settings, Watch Together, Add to Playlist, Edit (admins),
+Technical Details, then Delete (admins) after a separator; every dialog it
+opens is lazy and returns focus to the trigger. An action row that relies
 on `flex-wrap` with content that cannot shrink drops its last control onto
 a lonely row at 390 px; a grid never does.
 
@@ -1117,7 +1143,8 @@ require the full playback test pass.
   with track info, transport, close, and a bottom progress strip; below `sm`
   the like and close buttons give way so the title keeps room to read (both
   stay reachable from the fullscreen view). Every track row carries the
-  `TrackActionsMenu` (Add to Playlist, then the links that lead somewhere
+  `TrackActionsMenu` (Add to Playlist, which opens the shared
+  `AddToPlaylistDialog` of §3.2, then the links that lead somewhere
   else: an album row offers "Go to Artist", a musician row "Go to Album"),
   so a track can join a playlist from wherever it is listed. The bar
   persists across navigation; the current track's row in lists is

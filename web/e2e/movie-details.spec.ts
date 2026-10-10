@@ -5,6 +5,7 @@ import {
 } from "./e2e-browser-issues";
 import { MOVIES_PER_PAGE } from "../src/lib/constants";
 import type {
+  AddMoviesToPlaylistRequest,
   LibraryMovieDetailsResponse,
   MovieTechnicalDetailsResponse,
   WatchProgressType,
@@ -21,7 +22,7 @@ import { VIEWPORTS } from "./e2e-layout";
 import { mockApi } from "./e2e-mock-api";
 import { expectHref, playButton } from "./media-e2e-helpers";
 import { mockYouTubePlayer } from "./mock-youtube-player";
-import { libraryMovie } from "./fixtures/movies";
+import { libraryMovie, moviePlaylist } from "./fixtures/movies";
 
 // The details page's sections are unit-tested (src/test/movies/
 // movie-details-route.test.tsx); this covers what needs a browser: keyboard
@@ -195,6 +196,7 @@ async function mockMovieDetailsApi(
 ) {
   // Per test: a metadata edit changes it, and the refetch must see the edit.
   const details = structuredClone(movieDetailsPayload);
+  const playlistAddRequests: { playlistId: number; body: AddMoviesToPlaylistRequest }[] = [];
 
   const { unexpectedApiRequests } = await mockApi(page, {
     // Only admins get the Edit action on the details page.
@@ -207,6 +209,14 @@ async function mockMovieDetailsApi(
         return true;
       }
 
+      const playlistAdd = url.pathname.match(/^\/api\/movies\/playlists\/(\d+)\/movies$/);
+      if (playlistAdd && method === "POST") {
+        const body = route.request().postDataJSON() as AddMoviesToPlaylistRequest;
+        playlistAddRequests.push({ playlistId: Number(playlistAdd[1]), body });
+        await fulfillJSON(route, apiResponse({ added: body.movie_ids.length, skipped: 0 }));
+        return true;
+      }
+
       if (method !== "GET") {
         return false;
       }
@@ -214,6 +224,12 @@ async function mockMovieDetailsApi(
       const bodies: Record<string, unknown> = {
         "/api/movies/stats": { total_movies: 1 },
         "/api/tmdb/status": { available: false },
+        "/api/movies/playlists": {
+          playlists: [
+            moviePlaylist(501, "Friday Feature", 7, true, "Movies queued for the end of the week"),
+            moviePlaylist(502, "Guest Picks", 3, false, "Shared picks from another account"),
+          ],
+        },
         "/api/movies/library": pagedList(url, "movies", [signalFire], {
           total: 1,
           perPage: MOVIES_PER_PAGE,
@@ -243,7 +259,7 @@ async function mockMovieDetailsApi(
     },
   });
 
-  return unexpectedApiRequests;
+  return { unexpectedApiRequests, playlistAddRequests };
 }
 
 async function openPlaybackSettings(page: Page) {
@@ -264,7 +280,7 @@ test("opens a movie from the index by keyboard and defaults its play links to di
   page,
 }) => {
   const browserIssues = trackBrowserIssues(page);
-  const unexpectedApiRequests = await mockMovieDetailsApi(page);
+  const { unexpectedApiRequests } = await mockMovieDetailsApi(page);
 
   await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto(moviesAllPath);
@@ -312,7 +328,7 @@ test("playback settings dialog saves a selection that drives the play links", as
   page,
 }) => {
   const browserIssues = trackBrowserIssues(page);
-  const unexpectedApiRequests = await mockMovieDetailsApi(page);
+  const { unexpectedApiRequests } = await mockMovieDetailsApi(page);
 
   await page.goto(moviePath);
   await expect(
@@ -365,7 +381,7 @@ test("plays an extra video in the YouTube player and returns to the details page
   page,
 }) => {
   const browserIssues = trackBrowserIssues(page);
-  const unexpectedApiRequests = await mockMovieDetailsApi(page);
+  const { unexpectedApiRequests } = await mockMovieDetailsApi(page);
   await mockYouTubePlayer(page);
 
   await page.setViewportSize(VIEWPORTS.desktop);
@@ -396,9 +412,37 @@ test("plays an extra video in the YouTube player and returns to the details page
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
+test("adds the movie to a playlist from the More menu", async ({ page }) => {
+  const browserIssues = trackBrowserIssues(page);
+  const { unexpectedApiRequests, playlistAddRequests } = await mockMovieDetailsApi(page);
+
+  await page.goto(moviePath);
+  const moreOptionsButton = page.getByRole("button", { name: "More options" });
+  await moreOptionsButton.click();
+  await page.getByRole("menuitem", { name: "Add to Playlist" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Add to Playlist" });
+  await expect(dialog).toContainText('Add "Signal Fire" to one or more playlists.');
+  // Only playlists the viewer may edit are offered.
+  await expect(dialog.getByRole("button", { name: "Guest Picks 3 movies" })).toHaveCount(0);
+  const addButton = dialog.getByRole("button", { name: "Add to Playlists" });
+  await expect(addButton).toBeDisabled();
+  await dialog.getByRole("button", { name: "Friday Feature 7 movies" }).click();
+  await dialog.getByRole("button", { name: "Add to 1 Playlist" }).click();
+
+  await expect.poll(() => playlistAddRequests).toEqual([
+    { playlistId: 501, body: { movie_ids: [movieId] } },
+  ]);
+  await expect(page.getByText("Movie added to 1 playlist")).toBeVisible();
+  await expect(dialog).toBeHidden();
+  await expect(moreOptionsButton).toBeFocused();
+
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
+});
+
 test("editing the title retitles the tab", async ({ page }) => {
   const browserIssues = trackBrowserIssues(page);
-  const unexpectedApiRequests = await mockMovieDetailsApi(page, { admin: true });
+  const { unexpectedApiRequests } = await mockMovieDetailsApi(page, { admin: true });
 
   await page.goto(moviePath);
   await expect(page).toHaveTitle("Signal Fire (2024) - Igloo");
