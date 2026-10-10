@@ -163,7 +163,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
   // started — a progress hint on the buttons, not a block on using them.
   const [isLoadingRest, setIsLoadingRest] = useState(false);
 
-  const { playlist, track_count, duration, is_owner, can_edit } = data;
+  const { playlist, track_count, duration, is_owner, can_edit, owner } = data;
   const coverUrl = getMediaImageUrl(unwrapString(playlist.cover_image));
   const description = unwrapString(playlist.description);
 
@@ -363,10 +363,15 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
               <Clock className="size-4 text-muted-foreground" aria-hidden="true" />
               <span>{formatDuration(duration)}</span>
             </li>
-            {is_owner && (
+            {is_owner ? (
               <li className="flex items-center gap-1.5">
                 <User className="size-4 text-primary" aria-hidden="true" />
                 <span className="text-primary">Owner</span>
+              </li>
+            ) : (
+              <li className="flex items-center gap-1.5">
+                <User className="size-4 text-muted-foreground" aria-hidden="true" />
+                <span>By {owner.name}</span>
               </li>
             )}
           </ul>

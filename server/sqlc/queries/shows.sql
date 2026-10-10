@@ -9,6 +9,17 @@ SELECT id, name, poster_path, premiere_year FROM shows ORDER BY created_at DESC,
 -- name: GetShowsCount :one
 SELECT COUNT(*) FROM shows;
 
+-- name: GetShowsLibraryCounts :one
+-- The shows stats endpoint needs all three; one round trip instead of three.
+-- show_seasons and show_episodes only hold what the scanner found on disk
+-- (UpsertLocalShowEpisode is the sole writer, and the Prune* queries drop
+-- rows whose files are gone), so COUNT(*) is the library total. TMDB's
+-- figures live in the tmdb_*_count columns, not in rows.
+SELECT
+  (SELECT COUNT(*) FROM shows) AS shows_count,
+  (SELECT COUNT(*) FROM show_seasons) AS seasons_count,
+  (SELECT COUNT(*) FROM show_episodes) AS episodes_count;
+
 -- name: GetShowsLibraryAsc :many
 -- Paginated library A-Z (id tie-breaker so LIMIT/OFFSET is stable when names match).
 SELECT id, name, poster_path, premiere_year, certification

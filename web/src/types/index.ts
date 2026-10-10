@@ -131,7 +131,7 @@ export type {
 } from "./api";
 
 // User types
-export type { AuthUser, AdminUserType } from "./user";
+export type { AuthUser, AdminUserType, UserSummaryType } from "./user";
 
 export type {
   DeviceType,

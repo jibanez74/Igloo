@@ -32,6 +32,7 @@ const (
 	playlistNotFoundMessage      = "playlist not found"
 	invalidPlaylistIDMessage     = "invalid playlist id"
 	playlistPermissionLogMessage = "failed to check playlist permission"
+	getPlaylistOwnerLogMessage   = "failed to get playlist owner"
 
 	getPlaylistLogMessage             = "failed to get playlist"
 	fetchPlaylistMessage              = "failed to fetch playlist"
@@ -112,4 +113,22 @@ func (app *Application) mustBeMoviePlaylist(w http.ResponseWriter, playlist data
 		return false
 	}
 	return true
+}
+
+// getPlaylistOwner is the detail endpoints' owner lookup: a lean query rather
+// than a users JOIN in GetPlaylistWithAccess, which every playlist mutation
+// runs as its permission check.
+func (app *Application) getPlaylistOwner(ctx context.Context, ownerID int64) (userSummary, error) {
+	row, err := app.Queries.GetUserSummary(ctx, ownerID)
+	if err != nil {
+		return userSummary{}, err
+	}
+
+	owner := userSummary{
+		ID:     row.ID,
+		Name:   row.Name,
+		Avatar: helpers.StringPtrFromNull(row.Avatar),
+	}
+
+	return owner, nil
 }

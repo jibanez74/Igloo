@@ -333,10 +333,34 @@ func TestPlaylistAccessAndContentTypes(t *testing.T) {
 	app := setupTestApp(t)
 	fixtures := createPlaylistFixtures(t, app)
 
+	// Public playlists are the one way a stranger reaches a detail page, and the
+	// page then has to say whose it is.
+	publicTrackPlaylist, err := app.Queries.CreatePlaylist(context.Background(), database.CreatePlaylistParams{
+		UserID:   fixtures.owner.ID,
+		Name:     "Public Track Playlist",
+		IsPublic: true,
+	})
+	if err != nil {
+		t.Fatalf("create public track playlist: %v", err)
+	}
+	publicMoviePlaylist, err := app.Queries.CreateMoviePlaylist(context.Background(), database.CreateMoviePlaylistParams{
+		UserID:   fixtures.owner.ID,
+		Name:     "Public Movie Playlist",
+		IsPublic: true,
+	})
+	if err != nil {
+		t.Fatalf("create public movie playlist: %v", err)
+	}
+
 	type detailEnvelope struct {
 		Data struct {
 			IsOwner bool `json:"is_owner"`
 			CanEdit bool `json:"can_edit"`
+			Owner   struct {
+				ID     int64   `json:"id"`
+				Name   string  `json:"name"`
+				Avatar *string `json:"avatar"`
+			} `json:"owner"`
 		} `json:"data"`
 	}
 
@@ -352,6 +376,10 @@ func TestPlaylistAccessAndContentTypes(t *testing.T) {
 		{name: "editor can edit track playlist", userID: fixtures.editor.ID, path: "/api/music/playlists/" + strconv.FormatInt(fixtures.trackPlaylist.ID, 10), wantCode: http.StatusOK, wantEdit: true},
 		{name: "viewer can view track playlist", userID: fixtures.viewer.ID, path: "/api/music/playlists/" + strconv.FormatInt(fixtures.trackPlaylist.ID, 10), wantCode: http.StatusOK},
 		{name: "outsider cannot view private track playlist", userID: fixtures.outsider.ID, path: "/api/music/playlists/" + strconv.FormatInt(fixtures.trackPlaylist.ID, 10), wantCode: http.StatusForbidden},
+		{name: "outsider can view public track playlist", userID: fixtures.outsider.ID, path: "/api/music/playlists/" + strconv.FormatInt(publicTrackPlaylist.ID, 10), wantCode: http.StatusOK},
+		{name: "owner has full movie access", userID: fixtures.owner.ID, path: "/api/movies/playlists/" + strconv.FormatInt(fixtures.moviePlaylist.ID, 10), wantCode: http.StatusOK, wantOwner: true, wantEdit: true},
+		{name: "outsider cannot view private movie playlist", userID: fixtures.outsider.ID, path: "/api/movies/playlists/" + strconv.FormatInt(fixtures.moviePlaylist.ID, 10), wantCode: http.StatusForbidden},
+		{name: "outsider can view public movie playlist", userID: fixtures.outsider.ID, path: "/api/movies/playlists/" + strconv.FormatInt(publicMoviePlaylist.ID, 10), wantCode: http.StatusOK},
 		{name: "track endpoint rejects movie playlist", userID: fixtures.owner.ID, path: "/api/music/playlists/" + strconv.FormatInt(fixtures.moviePlaylist.ID, 10), wantCode: http.StatusBadRequest},
 		{name: "movie endpoint rejects track playlist", userID: fixtures.owner.ID, path: "/api/movies/playlists/" + strconv.FormatInt(fixtures.trackPlaylist.ID, 10), wantCode: http.StatusBadRequest},
 		{name: "unauthenticated request is rejected", path: "/api/music/playlists/" + strconv.FormatInt(fixtures.trackPlaylist.ID, 10), wantCode: http.StatusUnauthorized},
@@ -374,6 +402,10 @@ func TestPlaylistAccessAndContentTypes(t *testing.T) {
 			}
 			if response.Data.IsOwner != tt.wantOwner || response.Data.CanEdit != tt.wantEdit {
 				t.Fatalf("access = owner:%v edit:%v, want owner:%v edit:%v", response.Data.IsOwner, response.Data.CanEdit, tt.wantOwner, tt.wantEdit)
+			}
+			// Every detail names its owner, whoever is looking.
+			if response.Data.Owner.ID != fixtures.owner.ID || response.Data.Owner.Name != "Playlist Owner" {
+				t.Fatalf("owner = %#v, want id=%d name=%q", response.Data.Owner, fixtures.owner.ID, "Playlist Owner")
 			}
 		})
 	}
@@ -658,6 +690,52 @@ func TestPlaylistHandlers_ConformToOpenAPI(t *testing.T) {
 
 	request("deletePlaylist", http.MethodDelete, "/api/music/playlists/"+trackPlaylistID, "", http.StatusOK)
 	request("deleteMoviePlaylist", http.MethodDelete, "/api/movies/playlists/"+moviePlaylistID, "", http.StatusOK)
+
+	// A stranger's view of a public playlist is the other detail shape: no
+	// collaborators list, is_owner false, and the owner named.
+	publicTrack, err := app.Queries.CreatePlaylist(context.Background(), database.CreatePlaylistParams{
+		UserID:   owner.ID,
+		Name:     "Public Contract Playlist",
+		IsPublic: true,
+	})
+	if err != nil {
+		t.Fatalf("create public track playlist: %v", err)
+	}
+	publicMovie, err := app.Queries.CreateMoviePlaylist(context.Background(), database.CreateMoviePlaylistParams{
+		UserID:   owner.ID,
+		Name:     "Public Contract Movie Playlist",
+		IsPublic: true,
+	})
+	if err != nil {
+		t.Fatalf("create public movie playlist: %v", err)
+	}
+
+	outsiderHandler := authenticatedRouter(t, app, outsider.ID)
+	publicPaths := []struct {
+		operationID string
+		path        string
+	}{
+		{operationID: "getPlaylist", path: "/api/music/playlists/" + strconv.FormatInt(publicTrack.ID, 10)},
+		{operationID: "getMoviePlaylist", path: "/api/movies/playlists/" + strconv.FormatInt(publicMovie.ID, 10)},
+	}
+	for _, public := range publicPaths {
+		w := serveOpenAPIExchange(t, outsiderHandler, public.operationID, httptest.NewRequest(http.MethodGet, public.path, nil), http.StatusOK)
+		var detail struct {
+			Data struct {
+				IsOwner bool `json:"is_owner"`
+				Owner   struct {
+					Name string `json:"name"`
+				} `json:"owner"`
+			} `json:"data"`
+		}
+		err = json.Unmarshal(w.Body.Bytes(), &detail)
+		if err != nil {
+			t.Fatalf("decode %s: %v", public.operationID, err)
+		}
+		if detail.Data.IsOwner || detail.Data.Owner.Name != "Contract Owner" {
+			t.Fatalf("%s as outsider = owner:%v name:%q, want owner:false name:%q", public.operationID, detail.Data.IsOwner, detail.Data.Owner.Name, "Contract Owner")
+		}
+	}
 }
 
 // playlistTrackIDs returns the track ids a playlist serves, in playlist order.

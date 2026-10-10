@@ -321,7 +321,7 @@ func attachShutdownTestWatchRoomClient(app *Application, socketMarker string) er
 		return syscall.ETIMEDOUT
 	}
 
-	client := newWatchRoomClient(serverConn, 999, watchRoomMemberSummary{
+	client := newWatchRoomClient(serverConn, 999, userSummary{
 		ID: 777,
 	})
 	go client.writePump()

@@ -52,20 +52,20 @@ type watchRoomServerEvent struct {
 	Type             string                  `json:"type"`
 	RoomID           int64                   `json:"room_id"`
 	Playback         *watchRoomPlaybackState `json:"playback,omitempty"`
-	Member           *watchRoomMemberSummary `json:"member,omitempty"`
+	Member           *userSummary            `json:"member,omitempty"`
 	ConnectedUserIDs []int64                 `json:"connected_user_ids,omitempty"`
 }
 
 type watchRoomClient struct {
 	conn      *websocket.Conn
 	roomID    int64
-	user      watchRoomMemberSummary
+	user      userSummary
 	send      chan []byte
 	done      chan struct{}
 	closeOnce sync.Once
 }
 
-func newWatchRoomClient(conn *websocket.Conn, roomID int64, user watchRoomMemberSummary) *watchRoomClient {
+func newWatchRoomClient(conn *websocket.Conn, roomID int64, user userSummary) *watchRoomClient {
 	return &watchRoomClient{
 		conn:   conn,
 		roomID: roomID,
@@ -181,7 +181,7 @@ func (hub *WatchRoomHub) disconnect(client *watchRoomClient) *watchRoomServerEve
 	}
 }
 
-func (hub *WatchRoomHub) memberJoinedEvent(roomID int64, member watchRoomMemberSummary) *watchRoomServerEvent {
+func (hub *WatchRoomHub) memberJoinedEvent(roomID int64, member userSummary) *watchRoomServerEvent {
 	hub.mu.Lock()
 	defer hub.mu.Unlock()
 
@@ -576,7 +576,7 @@ func (app *Application) WatchRoomWebSocket(w http.ResponseWriter, r *http.Reques
 	if row.MemberAvatar.Valid {
 		avatar = &row.MemberAvatar.String
 	}
-	member := watchRoomMemberSummary{
+	member := userSummary{
 		ID:     userID,
 		Name:   row.MemberName,
 		Avatar: avatar,

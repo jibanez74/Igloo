@@ -14,6 +14,17 @@ FROM users
 WHERE id = ?
 LIMIT 1;
 
+-- name: GetUserSummary :one
+-- The public face of a user shown on resources other users can open (playlist
+-- owner, watch-room members): no email, password hash, admin flag or PIN.
+SELECT
+  id,
+  name,
+  avatar
+FROM users
+WHERE id = ?
+LIMIT 1;
+
 -- name: UserExists :one
 SELECT
   EXISTS (

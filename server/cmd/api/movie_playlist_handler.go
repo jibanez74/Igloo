@@ -166,6 +166,13 @@ func (app *Application) GetMoviePlaylist(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	owner, err := app.getPlaylistOwner(r.Context(), playlist.UserID)
+	if err != nil {
+		app.Logger.Error(getPlaylistOwnerLogMessage, "error", err)
+		helpers.ErrorJSON(w, errors.New(fetchPlaylistMessage))
+		return
+	}
+
 	movieCount, _ := app.Queries.CountPlaylistMovies(r.Context(), playlistID)
 
 	var collaborators []database.GetPlaylistCollaboratorsRow
@@ -180,6 +187,7 @@ func (app *Application) GetMoviePlaylist(w http.ResponseWriter, r *http.Request)
 			"movie_count":   movieCount,
 			"is_owner":      permission == PermissionOwner,
 			"can_edit":      permission >= PermissionEdit,
+			"owner":         owner,
 			"collaborators": collaborators,
 		},
 	}

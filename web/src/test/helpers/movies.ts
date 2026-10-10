@@ -3,7 +3,7 @@
 // helpers/music.ts does for track playlists.
 
 import type { components } from "@/types/openapi.gen";
-import { nullableInt64, nullableString } from "./fixtures";
+import { nullableInt64, nullableString, userSummary } from "./fixtures";
 
 type Schema = components["schemas"];
 
@@ -36,6 +36,21 @@ export function moviePlaylistSummary(
     movie_count: 0,
     is_owner: true,
     can_edit: true,
+    ...fields,
+  };
+}
+
+/** The GET /api/movies/playlists/:id payload around a playlist row. */
+export function moviePlaylistDetail(
+  fields: Pick<Schema["MoviePlaylistDetailData"], "playlist"> &
+    Partial<Schema["MoviePlaylistDetailData"]>,
+): Schema["MoviePlaylistDetailData"] {
+  return {
+    movie_count: 0,
+    is_owner: true,
+    can_edit: true,
+    owner: userSummary(),
+    collaborators: null,
     ...fields,
   };
 }

@@ -20,36 +20,30 @@ const watchRoomPlaybackModeDirect = "direct"
 // outlive the originating HTTP request (e.g. HLS warm-up after room creation).
 var background = context.Background()
 
-type watchRoomMemberSummary struct {
-	ID     int64   `json:"id"`
-	Name   string  `json:"name"`
-	Avatar *string `json:"avatar"`
-}
-
 type watchRoomListItem struct {
-	ID           int64                    `json:"id"`
-	MovieID      int64                    `json:"movie_id"`
-	MovieTitle   string                   `json:"movie_title"`
-	MoviePoster  *string                  `json:"movie_poster"`
-	Owner        watchRoomMemberSummary   `json:"owner"`
-	Members      []watchRoomMemberSummary `json:"members"`
-	PlaybackMode string                   `json:"playback_mode"`
-	IsOwner      bool                     `json:"is_owner"`
-	CreatedAt    string                   `json:"created_at"`
+	ID           int64         `json:"id"`
+	MovieID      int64         `json:"movie_id"`
+	MovieTitle   string        `json:"movie_title"`
+	MoviePoster  *string       `json:"movie_poster"`
+	Owner        userSummary   `json:"owner"`
+	Members      []userSummary `json:"members"`
+	PlaybackMode string        `json:"playback_mode"`
+	IsOwner      bool          `json:"is_owner"`
+	CreatedAt    string        `json:"created_at"`
 }
 
 type watchRoomDetail struct {
-	ID            int64                    `json:"id"`
-	MovieID       int64                    `json:"movie_id"`
-	MovieTitle    string                   `json:"movie_title"`
-	MoviePoster   *string                  `json:"movie_poster"`
-	Owner         watchRoomMemberSummary   `json:"owner"`
-	Members       []watchRoomMemberSummary `json:"members"`
-	PlaybackMode  string                   `json:"playback_mode"`
-	AudioTrack    int64                    `json:"audio_track"`
-	SubtitleTrack *int64                   `json:"subtitle_track"`
-	IsOwner       bool                     `json:"is_owner"`
-	CreatedAt     string                   `json:"created_at"`
+	ID            int64         `json:"id"`
+	MovieID       int64         `json:"movie_id"`
+	MovieTitle    string        `json:"movie_title"`
+	MoviePoster   *string       `json:"movie_poster"`
+	Owner         userSummary   `json:"owner"`
+	Members       []userSummary `json:"members"`
+	PlaybackMode  string        `json:"playback_mode"`
+	AudioTrack    int64         `json:"audio_track"`
+	SubtitleTrack *int64        `json:"subtitle_track"`
+	IsOwner       bool          `json:"is_owner"`
+	CreatedAt     string        `json:"created_at"`
 }
 
 type createWatchRoomRequest struct {
@@ -114,18 +108,18 @@ func deduplicateAndFilterUserIDs(ids []int64, ownerID int64) []int64 {
 	return result
 }
 
-func (app *Application) loadRoomMembers(ctx context.Context, roomID int64) ([]watchRoomMemberSummary, error) {
+func (app *Application) loadRoomMembers(ctx context.Context, roomID int64) ([]userSummary, error) {
 	rows, err := app.Queries.GetWatchRoomMembers(ctx, roomID)
 	if err != nil {
 		return nil, err
 	}
-	members := make([]watchRoomMemberSummary, len(rows))
+	members := make([]userSummary, len(rows))
 	for i, row := range rows {
 		var avatar *string
 		if row.Avatar.Valid {
 			avatar = &row.Avatar.String
 		}
-		members[i] = watchRoomMemberSummary{
+		members[i] = userSummary{
 			ID:     row.ID,
 			Name:   row.Name,
 			Avatar: avatar,
@@ -134,13 +128,13 @@ func (app *Application) loadRoomMembers(ctx context.Context, roomID int64) ([]wa
 	return members, nil
 }
 
-func findMemberByID(members []watchRoomMemberSummary, id int64) (watchRoomMemberSummary, bool) {
+func findMemberByID(members []userSummary, id int64) (userSummary, bool) {
 	for _, m := range members {
 		if m.ID == id {
 			return m, true
 		}
 	}
-	return watchRoomMemberSummary{}, false
+	return userSummary{}, false
 }
 
 func (app *Application) GetWatchRooms(w http.ResponseWriter, r *http.Request) {
@@ -168,13 +162,13 @@ func (app *Application) GetWatchRooms(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	membersByRoomID := make(map[int64][]watchRoomMemberSummary, len(roomIDs))
+	membersByRoomID := make(map[int64][]userSummary, len(roomIDs))
 	for _, row := range memberRows {
 		var avatar *string
 		if row.Avatar.Valid {
 			avatar = &row.Avatar.String
 		}
-		membersByRoomID[row.RoomID] = append(membersByRoomID[row.RoomID], watchRoomMemberSummary{
+		membersByRoomID[row.RoomID] = append(membersByRoomID[row.RoomID], userSummary{
 			ID:     row.ID,
 			Name:   row.Name,
 			Avatar: avatar,

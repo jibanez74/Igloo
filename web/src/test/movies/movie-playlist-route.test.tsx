@@ -3,7 +3,9 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { MOVIES_PER_PAGE } from "@/lib/constants";
 import { deferredResponse, jsonResponse, requestURL } from "../helpers/api";
-import { authUser, nullableInt64, nullableString } from "../helpers/fixtures";
+import type { UserSummaryType } from "@/types";
+import { authUser, nullableInt64, nullableString, userSummary } from "../helpers/fixtures";
+import { moviePlaylist, moviePlaylistDetail } from "../helpers/movies";
 import { readDocumentHead, renderRoute } from "../helpers/render-route";
 
 function movie(id: number, title: string, year: number) {
@@ -21,6 +23,7 @@ type MockPlaylist = {
   movies: ReturnType<typeof movie>[];
   is_owner?: boolean;
   can_edit?: boolean;
+  owner?: UserSummaryType;
 };
 
 function mockPlaylistsFetch(playlists: Record<number, MockPlaylist>) {
@@ -41,22 +44,17 @@ function mockPlaylistsFetch(playlists: Record<number, MockPlaylist>) {
     if (detail && playlist) {
       return jsonResponse({
         error: false,
-        data: {
-          playlist: {
+        data: moviePlaylistDetail({
+          playlist: moviePlaylist({
             id: Number(detail[1]),
-            user_id: 1,
             name: playlist.name,
             description: nullableString(playlist.description),
-            cover_image: nullableString(),
-            is_public: false,
-            created_at: "2026-01-01T00:00:00Z",
-            updated_at: "2026-01-01T00:00:00Z",
-          },
+          }),
           movie_count: playlist.movies.length,
           is_owner: playlist.is_owner ?? true,
           can_edit: playlist.can_edit ?? playlist.is_owner ?? true,
-          collaborators: null,
-        },
+          owner: playlist.owner ?? userSummary(),
+        }),
       });
     }
 
@@ -128,6 +126,7 @@ describe("movie playlist route", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Two for Saturday.")).toBeInTheDocument();
     expect(screen.getByText("2 movies")).toBeInTheDocument();
+    expect(screen.queryByText(/^By /)).not.toBeInTheDocument();
 
     const backLink = screen.getByRole("link", { name: "Movie playlists" });
     expect(backLink.getAttribute("href")).toContain("tab=playlists");
@@ -149,8 +148,11 @@ describe("movie playlist route", () => {
     });
   });
 
-  it("hides Edit and Delete from a viewer who does not own the playlist", async () => {
-    mockPlaylistFetch([movie(1, "Arrival", 2016)], { is_owner: false });
+  it("names the owner instead of Edit and Delete for a viewer who does not own the playlist", async () => {
+    mockPlaylistFetch([movie(1, "Arrival", 2016)], {
+      is_owner: false,
+      owner: userSummary({ id: 2, name: "Riley" }),
+    });
 
     await renderRoute("/movies/playlist/11");
 
@@ -158,6 +160,7 @@ describe("movie playlist route", () => {
       await screen.findByRole("heading", { name: "Weekend Picks" }),
     ).toBeInTheDocument();
     expect(await screen.findByText("Arrival")).toBeInTheDocument();
+    expect(screen.getByText("By Riley")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Edit playlist" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Delete playlist" })).not.toBeInTheDocument();
   });

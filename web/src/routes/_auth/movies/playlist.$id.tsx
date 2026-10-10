@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ListVideo } from "lucide-react";
+import { ArrowLeft, ListVideo, User } from "lucide-react";
 import MovieCard from "@/components/movies/MovieCard";
 import PlaylistMovieMenu from "@/components/movies/PlaylistMovieMenu";
 import LibraryAllTab, {
@@ -103,7 +103,7 @@ function MoviePlaylistContent({ playlistId, data }: MoviePlaylistContentProps) {
   const queryClient = useQueryClient();
   const headingRef = useRef<HTMLHeadingElement | null>(null);
 
-  const { playlist, movie_count, is_owner, can_edit } = data;
+  const { playlist, movie_count, is_owner, can_edit, owner } = data;
   const desc = unwrapString(playlist.description);
 
   // Removal is reversible (the movie page adds it back), so it asks nothing
@@ -164,6 +164,12 @@ function MoviePlaylistContent({ playlistId, data }: MoviePlaylistContentProps) {
             <p className="mt-2 text-sm text-muted-foreground">
               {pluralize(movie_count, "movie")}
             </p>
+            {!is_owner && (
+              <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
+                <User className="size-4" aria-hidden="true" />
+                <span>By {owner.name}</span>
+              </p>
+            )}
             {is_owner && (
               <PlaylistOwnerActions
                 kind="movie"

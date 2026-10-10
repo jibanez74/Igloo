@@ -10038,11 +10038,22 @@
       },
       "ShowsStatsData": {
         "type": "object",
+        "description": "Library totals: only shows, seasons and episodes with local files are stored, so these are what is on disk, not TMDB's counts.",
         "required": [
-          "total_shows"
+          "total_shows",
+          "total_seasons",
+          "total_episodes"
         ],
         "properties": {
           "total_shows": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total_seasons": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total_episodes": {
             "type": "integer",
             "format": "int64"
           }
@@ -11911,6 +11922,21 @@
         },
         "additionalProperties": false
       },
+      "MoviePlaylistsData": {
+        "type": "object",
+        "required": [
+          "playlists"
+        ],
+        "properties": {
+          "playlists": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MoviePlaylistSummary"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
       "MoviePlaylistsEnvelope": {
         "allOf": [
           {
@@ -11923,23 +11949,51 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "playlists"
-                ],
-                "properties": {
-                  "playlists": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/MoviePlaylistSummary"
-                    }
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/MoviePlaylistsData"
               }
             }
           }
         ]
+      },
+      "MoviePlaylistDetailData": {
+        "type": "object",
+        "required": [
+          "playlist",
+          "movie_count",
+          "is_owner",
+          "can_edit",
+          "owner",
+          "collaborators"
+        ],
+        "properties": {
+          "playlist": {
+            "$ref": "#/components/schemas/MoviePlaylist"
+          },
+          "movie_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "is_owner": {
+            "type": "boolean"
+          },
+          "can_edit": {
+            "type": "boolean"
+          },
+          "owner": {
+            "$ref": "#/components/schemas/UserSummary",
+            "description": "The playlist's owner; the viewer themself when is_owner is true."
+          },
+          "collaborators": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/PlaylistCollaborator"
+            }
+          }
+        },
+        "additionalProperties": false
       },
       "MoviePlaylistDetailEnvelope": {
         "allOf": [
@@ -11953,39 +12007,7 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "playlist",
-                  "movie_count",
-                  "is_owner",
-                  "can_edit",
-                  "collaborators"
-                ],
-                "properties": {
-                  "playlist": {
-                    "$ref": "#/components/schemas/MoviePlaylist"
-                  },
-                  "movie_count": {
-                    "type": "integer",
-                    "format": "int64"
-                  },
-                  "is_owner": {
-                    "type": "boolean"
-                  },
-                  "can_edit": {
-                    "type": "boolean"
-                  },
-                  "collaborators": {
-                    "type": [
-                      "array",
-                      "null"
-                    ],
-                    "items": {
-                      "$ref": "#/components/schemas/PlaylistCollaborator"
-                    }
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/MoviePlaylistDetailData"
               }
             }
           }
@@ -13035,8 +13057,9 @@
           }
         ]
       },
-      "WatchRoomMember": {
+      "UserSummary": {
         "type": "object",
+        "description": "The public face of a user as other users see it: no email or admin flag. Carried by watch rooms (owner, members) and playlist details (owner).",
         "required": [
           "id",
           "name",
@@ -13091,12 +13114,12 @@
             ]
           },
           "owner": {
-            "$ref": "#/components/schemas/WatchRoomMember"
+            "$ref": "#/components/schemas/UserSummary"
           },
           "members": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/WatchRoomMember"
+              "$ref": "#/components/schemas/UserSummary"
             }
           },
           "playback_mode": {
@@ -13145,12 +13168,12 @@
             ]
           },
           "owner": {
-            "$ref": "#/components/schemas/WatchRoomMember"
+            "$ref": "#/components/schemas/UserSummary"
           },
           "members": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/WatchRoomMember"
+              "$ref": "#/components/schemas/UserSummary"
             }
           },
           "playback_mode": {
@@ -13419,7 +13442,7 @@
             "$ref": "#/components/schemas/WatchRoomPlaybackState"
           },
           "member": {
-            "$ref": "#/components/schemas/WatchRoomMember"
+            "$ref": "#/components/schemas/UserSummary"
           },
           "connected_user_ids": {
             "type": "array",
@@ -14812,6 +14835,7 @@
           "duration",
           "is_owner",
           "can_edit",
+          "owner",
           "collaborators"
         ],
         "properties": {
@@ -14831,6 +14855,10 @@
           },
           "can_edit": {
             "type": "boolean"
+          },
+          "owner": {
+            "$ref": "#/components/schemas/UserSummary",
+            "description": "The playlist's owner; the viewer themself when is_owner is true."
           },
           "collaborators": {
             "type": [

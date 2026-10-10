@@ -2,7 +2,7 @@
 // payload and the server playback settings, which appear across the mocked API
 // responses.
 
-import type { AuthUser, PlaybackSettingsType } from "@/types";
+import type { AuthUser, PlaybackSettingsType, UserSummaryType } from "@/types";
 
 // null or "" is the invalid (SQL NULL) form; a test that needs a valid empty
 // string writes the literal.
@@ -38,6 +38,19 @@ export function authUserData(overrides: Partial<AuthUser> = {}): AuthUser {
     has_pin: false,
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
+    ...overrides,
+  };
+}
+
+/**
+ * A user as other users see them (a playlist owner, a room member). Defaults
+ * to the authenticated test user, so an `is_owner: true` fixture stays coherent.
+ */
+export function userSummary(overrides: Partial<UserSummaryType> = {}): UserSummaryType {
+  return {
+    id: 1,
+    name: "Test User",
+    avatar: null,
     ...overrides,
   };
 }

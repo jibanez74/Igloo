@@ -191,7 +191,7 @@ function showsKind(): LibraryKind {
       perPage: SHOWS_PER_PAGE,
     },
     bodies: {
-      "/api/shows/stats": { total_shows: TOTAL },
+      "/api/shows/stats": { total_shows: TOTAL, total_seasons: TOTAL * 2, total_episodes: TOTAL * 12 },
       "/api/shows/genres": {
         genres: [
           { genre_id: GENRE_ID, genre_tag: "Drama", show_count: TOTAL },

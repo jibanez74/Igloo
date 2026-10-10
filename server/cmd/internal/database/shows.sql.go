@@ -2304,6 +2304,31 @@ func (q *Queries) GetShowsLibraryAsc(ctx context.Context, arg GetShowsLibraryAsc
 	return items, nil
 }
 
+const getShowsLibraryCounts = `-- name: GetShowsLibraryCounts :one
+SELECT
+  (SELECT COUNT(*) FROM shows) AS shows_count,
+  (SELECT COUNT(*) FROM show_seasons) AS seasons_count,
+  (SELECT COUNT(*) FROM show_episodes) AS episodes_count
+`
+
+type GetShowsLibraryCountsRow struct {
+	ShowsCount    int64 `json:"shows_count"`
+	SeasonsCount  int64 `json:"seasons_count"`
+	EpisodesCount int64 `json:"episodes_count"`
+}
+
+// The shows stats endpoint needs all three; one round trip instead of three.
+// show_seasons and show_episodes only hold what the scanner found on disk
+// (UpsertLocalShowEpisode is the sole writer, and the Prune* queries drop
+// rows whose files are gone), so COUNT(*) is the library total. TMDB's
+// figures live in the tmdb_*_count columns, not in rows.
+func (q *Queries) GetShowsLibraryCounts(ctx context.Context) (GetShowsLibraryCountsRow, error) {
+	row := q.queryRow(ctx, q.getShowsLibraryCountsStmt, getShowsLibraryCounts)
+	var i GetShowsLibraryCountsRow
+	err := row.Scan(&i.ShowsCount, &i.SeasonsCount, &i.EpisodesCount)
+	return i, err
+}
+
 const getShowsLibraryDesc = `-- name: GetShowsLibraryDesc :many
 SELECT id, name, poster_path, premiere_year, certification
 FROM shows

@@ -511,3 +511,31 @@ func TestGetShowsByGenre_SortDescendingReversesTheAscendingOrder(t *testing.T) {
 		t.Fatalf("descending shows = %v, want %v", descending, ascending)
 	}
 }
+
+// The empty-library contract table covers the zero shape; this pins that the
+// three figures are the library's own rows (the seed stores 1 show, 3 seasons
+// and 4 episodes, against a TMDB season-2 count of 8 that must not leak in).
+func TestGetShowsStats_CountsShowsSeasonsAndEpisodes(t *testing.T) {
+	app := setupTestApp(t)
+	user := createTestUser(t, app, "Shows Stats User", "shows-stats@example.com", false)
+	seedContractShow(t, app)
+
+	handler := authenticatedRouter(t, app, user.ID)
+	response := serveOpenAPIExchange(t, handler, "getShowsStats", httptest.NewRequest(http.MethodGet, "/api/shows/stats", nil), http.StatusOK)
+
+	var body struct {
+		Data struct {
+			TotalShows    int64 `json:"total_shows"`
+			TotalSeasons  int64 `json:"total_seasons"`
+			TotalEpisodes int64 `json:"total_episodes"`
+		} `json:"data"`
+	}
+	err := json.Unmarshal(response.Body.Bytes(), &body)
+	if err != nil {
+		t.Fatalf("decode stats: %v", err)
+	}
+
+	if body.Data.TotalShows != 1 || body.Data.TotalSeasons != 3 || body.Data.TotalEpisodes != 4 {
+		t.Fatalf("stats = %+v, want shows=1 seasons=3 episodes=4", body.Data)
+	}
+}

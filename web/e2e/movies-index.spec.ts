@@ -212,6 +212,7 @@ async function mockMoviesApi(page: Page) {
           movie_count: playlist.movie_count,
           is_owner: playlist.is_owner,
           can_edit: playlist.can_edit,
+          owner: { id: playlist.user_id, name: "Playlist Owner", avatar: null },
           collaborators: null,
         } satisfies MoviePlaylistDetailResponseType));
         return true;
