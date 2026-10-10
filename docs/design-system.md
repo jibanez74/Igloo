@@ -594,8 +594,8 @@ collapse, while the mobile trigger controls the sheet.
   window.
 
 **Unknown URLs** land on the shell's catch-all route (`routes/_auth/$.tsx`):
-a "Page not found" heading over `MediaNotFound` (title "Not found", "Back to
-Home"), titled through `head` like every page, so a mistyped address keeps
+`MediaNotFound` with the heading "Page not found" and "Back to Home",
+titled through `head` like every page, so a mistyped address keeps
 the sidebar, the header and a way back instead of the router's bare text.
 
 **The home page** is the shell's canonical composition: a hero heading, then
@@ -959,15 +959,16 @@ is unknown or empty.
   - The four ways a detail page fails to show its subject — an invalid id, a
     failed request, one still in flight, an empty response — are
     `MediaDetailGuard`, which every `$id` route wraps its content in. Three of
-    the four are dead ends, so each renders `MediaNotFound` (title "Not found"
-    for a 404 or an empty response, "No access" for a 403, "Error"
-    otherwise); its destination is
+    the four are dead ends, so each renders `MediaNotFound` with a page `h1`
+    ("Movie not found" for a bad id, a 404 or an empty response, "No access"
+    for a 403, "Couldn’t load this movie" otherwise); its destination is
     a named key (`music`, `moviePlaylists`, …) carrying both the route and the
     words on the link, so the two can never disagree and a destination may
     carry search params.
-  - A missing resource → `MediaNotFound`: a `SectionErrorAlert` plus a
-    **required** "Back to Movies/TV Shows/Music/Home" outline link, so the
-    page never dead-ends.
+  - A missing resource → `MediaNotFound`: the page `h1`, an untitled
+    `SectionErrorAlert` with one sentence (the heading already names the
+    failure), and a **required** "Back to Movies/TV Shows/Music/Home"
+    outline link, so the page never dead-ends.
   - A mutation → **toast** via `toast-helpers.ts`, never inline.
   - **The UI owns the words for failures it can name.** `apiRequest` stamps the
     HTTP `status` on every failure envelope it returns, and a surface maps the

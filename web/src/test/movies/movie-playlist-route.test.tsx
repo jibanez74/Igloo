@@ -226,8 +226,10 @@ describe("movie playlist route", () => {
 
     await renderRoute("/movies/playlist/11");
 
-    const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("No access");
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "No access" }),
+    ).toBeInTheDocument();
+    const alert = screen.getByRole("alert");
     expect(alert).toHaveTextContent("You don't have access to this playlist.");
     expect(screen.queryByText(/access denied/)).not.toBeInTheDocument();
     expect(

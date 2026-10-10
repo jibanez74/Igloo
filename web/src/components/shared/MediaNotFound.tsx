@@ -37,13 +37,18 @@ const BACK_DESTINATIONS = {
 
 export type BackDestination = keyof typeof BACK_DESTINATIONS;
 
+/**
+ * A dead-end page: the page's own `h1` names what went wrong ("Movie not
+ * found", "No access"), one alert sentence says why, and a link leads back.
+ * The heading keeps the page navigable by headings and the alert carries no
+ * title of its own, so the failure is not said twice.
+ */
 export default function MediaNotFound({
-  title = "Error",
+  heading,
   message,
   back,
 }: {
-  /** The alert's heading; "Not found" when the resource is simply missing. */
-  title?: string;
+  heading: string;
   message: string;
   back: BackDestination;
 }) {
@@ -51,7 +56,10 @@ export default function MediaNotFound({
 
   return (
     <div>
-      <SectionErrorAlert title={title} message={message} />
+      <h1 className="mb-6 text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
+        {heading}
+      </h1>
+      <SectionErrorAlert title={null} message={message} />
       <Link
         {...linkProps}
         className={cn(buttonVariants({ variant: "outline" }), "mt-4")}

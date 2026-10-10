@@ -61,8 +61,10 @@ describe("in-theaters details guards", () => {
 
     await renderRoute("/movies/in-theaters/550");
 
-    const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("Movie not found.");
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Movie not found" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("We couldn't find that movie.");
     expect(screen.getByRole("link", { name: "Back to Home" })).toHaveAttribute(
       "href",
       "/",
