@@ -132,9 +132,13 @@ Rules:
   BlinkMacSystemFont, "Segoe UI", sans-serif`, declared once on `body` in
   `web/src/assets/boot.css` (with antialiasing). **Inter is self-hosted**: the
   variable font (`web/public/fonts/InterVariable.woff2`, weights 100–900) is
-  loaded by an `@font-face` in `boot.css` with `font-display: swap` and
-  preloaded in `index.html` — no CDN, no npm package. Do not declare other
-  font families in components.
+  loaded by an `@font-face` in `boot.css` with `font-display: swap` — no CDN,
+  no npm package, and deliberately no `<link rel="preload">` in `index.html`:
+  the 352 KB variable file would compete with the render-blocking CSS, and on
+  a Slow 4G profile that cost ~700 ms of first styled paint for ~170 ms of
+  earlier Inter (both a few milliseconds on a fast link), while Chromium's
+  "preloaded but not used" warning came and went with it. Do not declare
+  other font families in components.
 - **Scale**: Tailwind's default type scale as utility literals; there are no
   custom font-size tokens. In practice: `text-sm`/`text-xs` for body and
   secondary text, `text-lg`–`text-2xl` for section and card titles,
@@ -244,7 +248,12 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
   (`data-[state=active]:bg-primary … shadow-primary/20`). Library pages layer
   responsive grid sizing on top via `LIBRARY_TABS_LIST_CLASS` /
   `LIBRARY_TAB_TRIGGER_CLASS` from `constants.ts`. Tab state lives in URL
-  search params (validated in `types/route-search.ts`), never local state.
+  search params (validated in `lib/route-search.ts`), never local state. Each
+  index route also strips its defaults on navigation (`search: { middlewares:
+  [stripSearchParams(…_INDEX_DEFAULT_SEARCH)] }`, the same objects the schema
+  fills in, pinned together by `test/lib/route-search.test.ts`), so a URL
+  spells out only what differs from the default: `/movies`,
+  `/movies?tab=genres`, `/movies?tab=playlists&playlistsView=liked`.
 - **cva policy**: `button.tsx` is the only primitive that uses
   `class-variance-authority`. Everything else composes plain `cn(...)` —
   `badge.tsx` (a plain `default`/`outline` variant record) is the model. Don't
@@ -745,20 +754,27 @@ and its skeleton), `LibrarySortToggle` (the single A–Z / Z–A button) and
 differs: the card renderer, the lowercase nouns for copy and announcements, its
 prepared `queryOptions()`, the tab triggers, and navigation callbacks — the
 page keeps the typed `navigate({ to, search })`, so the shared tabs never
-learn a route. `LibraryAllTab`'s `sort`/`onSortToggle` pair is optional: an
+learn a route. Navigations spread the previous search (`prev => ({ ...prev,
+tab })`) and the route's `stripSearchParams` middleware drops whatever equals
+a default, so a tab, page or sort at its default never appears in the address
+bar; the liked view is `playlistsView=liked` on both library pages. `LibraryAllTab`'s `sort`/`onSortToggle` pair is optional: an
 API that sorts (movies, shows) passes both, one that does not (albums,
-musicians) passes neither and gets no toggle. Its `gridClassName` and
+musicians) passes neither and gets no toggle. The toggle renders while the tab
+loads (a URL-backed sort works before the page lands) and, once settled, only
+when the list has at least two items to order — an empty or single-item list
+and a failed load hide it. Its `gridClassName` and
 `skeletonCard` swap the 2:3 poster grid for another card geometry — the Albums
 tab keeps the poster grid with `AlbumCardSkeleton`, the Musicians tab passes
 its five-column round-thumb grid with `MusicianCardSkeleton`. The tab owns one
 toolbar — page info on the right, then the sort toggle, with `toolbarStartSlot`
 for anything a page puts on the left — and renders it identically while
 loading and loaded, reserving its height while loading so the grid does not
-shift down when the data lands (§3.4). A tab with neither a sort toggle nor a
-start slot drops the row once it knows it has a single page, nothing, or an
-error — a failed refetch included, whose stale page count no longer applies —
-rather than holding an empty band above the grid; that one settle is the
-only time such a tab's grid moves. The liked-movies and liked-tracks views
+shift down when the data lands (§3.4). A tab with no start slot drops the row
+once it knows it has a single page, nothing, or an error — a failed refetch
+included, whose stale page count no longer applies — rather than holding an
+empty band above the grid; the sort toggle hides in the same cases, so it
+never holds the row open by itself, and that one settle is the only time such
+a tab's grid moves. The liked-movies and liked-tracks views
 are each a `LibraryAllTab` whose `toolbarStartSlot` carries the "Back to
 playlists" control and count, so they inherit the tab's out-of-range page
 clamp and keep that control reachable while loading, empty and errored. The
@@ -990,11 +1006,14 @@ is unknown or empty.
   what failed:
   - A query inside a page → `LoadErrorAlert` (`role="alert"`,
     `border-destructive/25 bg-destructive/10 text-destructive`, "Try again" →
-    `refetch()`).
+    `refetch()`). The control is the shared `RetryButton`; every load-failure
+    surface renders that same button, never its own.
   - A section that failed as a whole → `SectionErrorAlert`, the same
     destructive tint as a shadcn `Alert` with an optional title ("Error" by
     default): a home section's query (rendered for you by
-    `HomeMediaSection`), the watch-room list.
+    `HomeMediaSection`), the watch-room list. Both hand the query's `refetch`
+    in as `onRetry`, so the alert carries the same Try again control as
+    `LoadErrorAlert`.
   - A Settings card → `SettingsErrorCard` (and `SettingsLoadingCard` for its
     pending state), so the card keeps its place in the page.
   - The four ways a detail page fails to show its subject — an invalid id, a
@@ -1002,13 +1021,16 @@ is unknown or empty.
     `MediaDetailGuard`, which every `$id` route wraps its content in. Three of
     the four are dead ends, so each renders `MediaNotFound` with a page `h1`
     ("Movie not found" for a bad id, a 404 or an empty response, "No access"
-    for a 403, "Couldn’t load this movie" otherwise); its destination is
+    for a 403, "Couldn’t load this movie" otherwise); only that last, generic
+    branch offers Try again — it is the only failure a retry can fix — and
+    each `$id` route passes its query's `refetch` as `onRetry`; its destination is
     a named key (`music`, `moviePlaylists`, …) carrying both the route and the
     words on the link, so the two can never disagree and a destination may
     carry search params.
   - A missing resource → `MediaNotFound`: the page `h1`, an untitled
     `SectionErrorAlert` with one sentence (the heading already names the
-    failure), and a **required** "Back to Movies/TV Shows/Music/Home"
+    failure), Try again inside that alert only when the caller passes
+    `onRetry`, and a **required** "Back to Movies/TV Shows/Music/Home"
     outline link, so the page never dead-ends.
   - A mutation → **toast** via `toast-helpers.ts`, never inline.
   - **The UI owns the words for failures it can name.** `apiRequest` stamps the
@@ -1019,7 +1041,7 @@ is unknown or empty.
     403/404 on a watch room "This room no longer exists or you were not
     invited." A page about one subject (`MediaDetailGuard`, the trailer
     dialog) then uses a fixed sentence of its own for everything else
-    ("Something went wrong while loading this movie. Please try again later.")
+    ("Something went wrong while loading this movie.")
     and shows no server text at all. List and section loads go through
     `apiErrorMessage`, which keeps the server's message only for a 4xx other
     than 404 and otherwise uses the surface's own sentence, so a 404 (whose
@@ -1027,6 +1049,13 @@ is unknown or empty.
     text) never reaches the screen. Never show the client's canned "404 - The
     resource…" or "500 - A network error…" strings or a lowercase server
     constant as the copy.
+  - **Failure copy names what did not load and stops.** A fallback never
+    guesses at a cause ("Check your connection…") or prescribes timing
+    ("Please try again later"): `apiRequest` cannot tell an offline reader
+    from a server that is down or a proxy that answered HTML, and the Try
+    again control beside the sentence already carries the action. Fallbacks
+    read "Couldn’t load movies.", "Couldn’t load watch rooms.", "Couldn’t run
+    that search.".
 
   Because the erroring subtree often unmounts its own live region, error
   surfaces carry `role="alert"` and announce themselves — never repeat one
@@ -1245,7 +1274,8 @@ require the full playback test pass.
   dialogs rely on the `data-slot` contract (§1.6). Destructive confirmations
   go through the shared `ConfirmDialog`, and paged lists through
   `LibraryPagination` — neither is re-implemented per page.
-- Form-level failures toast; field-level validation renders inline with
+- Form-level failures toast (login's wrong-credentials toast included);
+  field-level validation renders inline with
   `aria-invalid` (styled by the Button/Input base classes) and moves focus to
   the first invalid field. A field error is never repeated as a "Validation
   error" toast; `showValidationError` is only for a rule with no field to mark

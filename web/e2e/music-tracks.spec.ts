@@ -192,7 +192,8 @@ test("music library shell and URL-backed tabs render accessibly", async ({ page 
   await expect(page.getByRole("link", { name: `Mock Artist, 1 album, ${TOTAL_TRACKS} tracks` })).toBeVisible();
 
   await albumsTab.click();
-  await expect(page).toHaveURL(/tab=albums/);
+  // Albums is the default tab, so the route strips it from the address.
+  await expect(page).not.toHaveURL(/tab=/);
   await expect(albumsTab).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("link", { name: "Mock Album by Mock Artist" })).toBeVisible();
 

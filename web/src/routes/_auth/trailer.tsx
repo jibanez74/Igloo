@@ -458,7 +458,7 @@ function TrailerPage() {
     const loadErrorMessage =
       data?.error && data.status === 404
         ? "We couldn’t find that movie on TMDB."
-        : "Couldn’t load the trailer details from TMDB. Check your connection and try again.";
+        : "Couldn’t load the trailer details from TMDB.";
 
     return (
       <Dialog open onOpenChange={handleDialogOpenChange}>

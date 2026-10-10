@@ -1,5 +1,6 @@
 import type React from "react";
 import { screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import {
   MOTION_SECTION_ENTER_CLASS,
@@ -25,6 +26,8 @@ function authUser() {
 
 type MockHomeFetchOptions = {
   continueWatching?: unknown[];
+  /** The first latest-movies request answers 500; the retry succeeds. */
+  latestMoviesFailsFirst?: boolean;
 };
 
 const defaultContinueWatchingItems = [
@@ -55,6 +58,7 @@ const defaultContinueWatchingItems = [
 function mockHomeFetch(options: MockHomeFetchOptions = {}) {
   const continueWatching =
     options.continueWatching ?? defaultContinueWatchingItems;
+  let latestMoviesRequests = 0;
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = requestURL(input);
     const method = init?.method ?? "GET";
@@ -105,6 +109,10 @@ function mockHomeFetch(options: MockHomeFetchOptions = {}) {
     }
 
     if (url === "/api/movies/latest") {
+      latestMoviesRequests += 1;
+      if (options.latestMoviesFailsFirst && latestMoviesRequests === 1) {
+        return jsonResponse({ error: true, message: "latest exploded" }, 500);
+      }
       return jsonResponse({
         error: false,
         data: {
@@ -216,6 +224,27 @@ describe("home section summaries", () => {
     ).toBeInTheDocument();
     expect(screen.getAllByText("1 show").length).toBeGreaterThan(0);
     expect(screen.queryByText(/1 shows/)).not.toBeInTheDocument();
+  });
+});
+
+describe("home section errors", () => {
+  it("words a failed section itself and recovers through Try again", async () => {
+    const user = userEvent.setup();
+    await renderHomeRoute({ latestMoviesFailsFirst: true });
+
+    const region = await screen.findByRole("region", {
+      name: "Recently Added Movies",
+    });
+    const alert = await within(region).findByRole("alert");
+    expect(alert).toHaveTextContent("Couldn’t load movies.");
+    expect(alert).not.toHaveTextContent("exploded");
+
+    await user.click(within(region).getByRole("button", { name: "Try again" }));
+
+    expect(
+      await within(region).findByRole("link", { name: "Signal Fire 2026" }),
+    ).toBeInTheDocument();
+    expect(within(region).queryByRole("alert")).not.toBeInTheDocument();
   });
 });
 

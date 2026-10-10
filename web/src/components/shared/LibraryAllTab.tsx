@@ -127,6 +127,12 @@ export default function LibraryAllTab<
   // grid.
   const hasMultiplePages = !isError && totalPages > 1;
   const hasSort = sort !== undefined;
+  // The toggle orders a list, and a list of one or none has nothing to order;
+  // a failed load (an envelope, or a thrown refetch beside stale data) has no
+  // total to trust. It still renders while loading: a URL-backed sort works
+  // before the page lands, and appearing only afterwards would shift the row.
+  const total = data?.error === false ? data.data.total : 0;
+  const sortToggleVisible = isLoading || (!isError && total >= 2);
 
   // The API does not clamp the page, so an out-of-range page (a hand-edited URL,
   // or a scan that shrank the library underneath us) answers with no items but a
@@ -153,11 +159,15 @@ export default function LibraryAllTab<
   // skeleton cannot know `totalPages` before the query resolves, so a toolbar
   // that appeared only once the data landed moved the grid down under it
   // (design-system §3.4) — which is why the row is reserved while loading
-  // rather than mirrored in the skeleton. A tab with no sort toggle and no
-  // start slot drops the row once it knows it has a single page, nothing, or
-  // an error, instead of holding an empty band above the grid.
+  // rather than mirrored in the skeleton. A tab with no start slot drops the
+  // row once it knows it has a single page, nothing, or an error, instead of
+  // holding an empty band above the grid; the sort toggle hides in the same
+  // cases, so it never holds the row open by itself.
   const showToolbar =
-    hasSort || toolbarStartSlot != null || hasMultiplePages || isLoading;
+    (hasSort && sortToggleVisible) ||
+    toolbarStartSlot != null ||
+    hasMultiplePages ||
+    isLoading;
   const toolbar = showToolbar && (
     <div
       data-slot="library-tab-toolbar"
@@ -170,9 +180,9 @@ export default function LibraryAllTab<
             Page {currentPage} of {totalPages}
           </span>
         )}
-        {/* A URL toggle works while the page is in flight, so it renders during
-            loading too rather than as a placeholder pill. */}
-        {hasSort && <LibrarySortToggle sort={sort} onToggle={onSortToggle} />}
+        {hasSort && sortToggleVisible && (
+          <LibrarySortToggle sort={sort} onToggle={onSortToggle} />
+        )}
       </div>
     </div>
   );
@@ -193,7 +203,7 @@ export default function LibraryAllTab<
     if (isError || isApiFailure(data)) {
       return (
         <LoadErrorAlert
-          message={apiErrorMessage(data, `Couldn’t load ${noun.plural}. Check your connection and try again.`)}
+          message={apiErrorMessage(data, `Couldn’t load ${noun.plural}.`)}
           onRetry={() => void refetch()}
         />
       );

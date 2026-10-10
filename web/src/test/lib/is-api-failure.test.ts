@@ -29,8 +29,8 @@ describe("apiErrorMessage", () => {
   });
 
   it("falls back when the request never reached the server", () => {
-    expect(apiErrorMessage(undefined, "Check your connection.")).toBe(
-      "Check your connection.",
+    expect(apiErrorMessage(undefined, "Couldn’t load.")).toBe(
+      "Couldn’t load.",
     );
   });
 

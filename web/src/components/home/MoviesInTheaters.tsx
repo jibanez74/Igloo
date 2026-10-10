@@ -9,7 +9,7 @@ import type { TheaterMovieType } from "@/types";
 import { apiErrorMessage } from "@/lib/is-api-failure";
 
 export default function MoviesInTheaters() {
-  const { data, isPending } = useQuery(inTheatersQueryOpts());
+  const { data, isPending, refetch } = useQuery(inTheatersQueryOpts());
 
   let movies: TheaterMovieType[] = [];
   if (data && !data.error) {
@@ -21,7 +21,7 @@ export default function MoviesInTheaters() {
   }
 
   const errorMessage = data?.error
-    ? apiErrorMessage(data, "Failed to load movies. Please try again later.")
+    ? apiErrorMessage(data, "Couldn’t load movies in theaters.")
     : undefined;
 
   return (
@@ -31,6 +31,7 @@ export default function MoviesInTheaters() {
       items={movies}
       isPending={isPending}
       errorMessage={errorMessage}
+      onRetry={() => void refetch()}
       loadingLabel="Loading movies..."
       emptyTitle="No Movies Available"
       emptyDescription="Unable to fetch movies currently playing in theaters. Check back later."

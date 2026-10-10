@@ -195,6 +195,67 @@ describe("login route head", () => {
   });
 });
 
+describe("login inline validation", () => {
+  it("marks empty fields inline, focuses the first, and sends nothing", async () => {
+    const user = userEvent.setup();
+    const toastsBefore = toastMocks.showError.mock.calls.length;
+    const { fetchMock } = await renderLoginRouteTree("/login");
+    await screen.findByRole("button", { name: "Sign in" });
+
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+
+    const email = screen.getByLabelText("Email");
+    const password = screen.getByLabelText("Password", { exact: true });
+    expect(screen.getByText("Email is required.")).toHaveAttribute("role", "alert");
+    expect(screen.getByText("Password is required.")).toHaveAttribute("role", "alert");
+    expect(email).toHaveAttribute("aria-invalid", "true");
+    expect(email).toHaveAttribute("aria-describedby", "email-error");
+    expect(password).toHaveAttribute("aria-invalid", "true");
+    expect(password).toHaveAttribute("aria-describedby", "password-error");
+    expect(email).toHaveFocus();
+    expect(toastMocks.showError.mock.calls.length).toBe(toastsBefore);
+    expect(
+      fetchMock.mock.calls.some(([url]) => requestURL(url) === "/api/auth/login"),
+    ).toBe(false);
+  });
+
+  it("rejects a malformed email and clears the error as the reader types", async () => {
+    const user = userEvent.setup();
+    const { fetchMock } = await renderLoginRouteTree("/login");
+    await screen.findByRole("button", { name: "Sign in" });
+    const email = screen.getByLabelText("Email");
+
+    await user.type(email, "nope");
+    await user.type(screen.getByLabelText("Password", { exact: true }), "secret");
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+
+    expect(screen.getByText("Enter a valid email address.")).toBeInTheDocument();
+    expect(screen.queryByText("Password is required.")).not.toBeInTheDocument();
+    expect(email).toHaveFocus();
+
+    await user.type(email, "@example.com");
+
+    expect(screen.queryByText("Enter a valid email address.")).not.toBeInTheDocument();
+    expect(email).not.toHaveAttribute("aria-invalid");
+    expect(
+      fetchMock.mock.calls.some(([url]) => requestURL(url) === "/api/auth/login"),
+    ).toBe(false);
+  });
+
+  it("focuses the password when it is the only missing field", async () => {
+    const user = userEvent.setup();
+    await renderLoginRouteTree("/login");
+    await screen.findByRole("button", { name: "Sign in" });
+
+    await user.type(screen.getByLabelText("Email"), "admin@example.com");
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+
+    expect(screen.getByText("Password is required.")).toBeInTheDocument();
+    expect(screen.queryByText("Email is required.")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Password", { exact: true })).toHaveFocus();
+  });
+});
+
 describe("login route redirects", () => {
   it("submits an oversized password intact and words the credential error itself", async () => {
     const user = userEvent.setup();
@@ -205,6 +266,7 @@ describe("login route redirects", () => {
     const input = screen.getByLabelText("Password", { exact: true });
     const password = "a".repeat(129);
     expect(input).not.toHaveAttribute("maxlength");
+    expect(input).not.toHaveAttribute("minlength");
     await user.type(screen.getByLabelText("Email"), "admin@example.com");
     await user.type(input, password);
     await user.click(screen.getByRole("button", { name: "Sign in" }));

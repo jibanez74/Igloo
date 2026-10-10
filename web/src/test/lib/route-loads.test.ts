@@ -77,7 +77,7 @@ describe("in-page navigations do not wait for the page's queries", () => {
         tab: "playlists",
         genreId: 0,
         genresPage: 1,
-        view: "liked",
+        playlistsView: "liked",
         playlistsPage: 1,
       },
     ],

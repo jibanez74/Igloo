@@ -125,7 +125,7 @@ function MovieDetailsPage() {
   // A malformed id never reaches the API: the query options disable
   // themselves for the zero sentinel, and the page goes straight to
   // not-found rather than sitting on a skeleton.
-  const { data, isPending, isError } = useQuery(
+  const { data, isPending, isError, refetch } = useQuery(
     libraryMovieDetailsQueryOpts(movieId ?? 0),
   );
 
@@ -134,6 +134,7 @@ function MovieDetailsPage() {
 
   return (
     <MediaDetailGuard
+      onRetry={() => void refetch()}
       id={movieId}
       noun="movie"
       back="movies"

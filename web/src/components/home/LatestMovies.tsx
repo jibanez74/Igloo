@@ -7,11 +7,11 @@ import { HOME_POSTER_GRID_CLASS } from "@/lib/constants";
 import { apiErrorMessage } from "@/lib/is-api-failure";
 
 export default function LatestMovies() {
-  const { data, isPending } = useQuery(latestMoviesQueryOpts());
+  const { data, isPending, refetch } = useQuery(latestMoviesQueryOpts());
 
   const movies = data && !data.error ? (data.data?.movies ?? []) : [];
   const errorMessage = data?.error
-    ? apiErrorMessage(data, "Failed to load movies. Please try again later.")
+    ? apiErrorMessage(data, "Couldn’t load movies.")
     : undefined;
 
   return (
@@ -21,6 +21,7 @@ export default function LatestMovies() {
       items={movies}
       isPending={isPending}
       errorMessage={errorMessage}
+      onRetry={() => void refetch()}
       loadingLabel="Loading movies..."
       emptyTitle="No Movies Yet"
       emptyDescription="Your movie library is empty. Add a movies folder in settings and run a scan to get started."

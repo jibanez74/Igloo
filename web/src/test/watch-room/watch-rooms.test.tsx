@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import WatchRooms from "@/components/watch-room/WatchRooms";
 import type { WatchRoomType } from "@/types";
@@ -93,13 +93,15 @@ describe("WatchRooms", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("shows server errors without rendering room cards", () => {
+  it("shows server errors without rendering room cards and offers Try again", () => {
+    const refetch = vi.fn();
     useQueryMock.mockReturnValue({
       data: {
         error: true,
         message: "Watch rooms are unavailable.",
       },
       isPending: false,
+      refetch,
     });
 
     render(<WatchRooms />);
@@ -107,6 +109,8 @@ describe("WatchRooms", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(
       "Watch rooms are unavailable.",
     );
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(refetch).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId("live-announcer")).toHaveTextContent(
       "Watch rooms are unavailable.",
     );

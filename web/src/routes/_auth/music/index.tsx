@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState, type RefObject } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -56,6 +56,7 @@ import {
   VIRTUAL_LIST_LETTER_HEIGHT,
   VIRTUAL_LIST_TRACK_HEIGHT,
   LIBRARY_NOUNS,
+  MUSIC_INDEX_DEFAULT_SEARCH,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
@@ -95,6 +96,7 @@ const MUSIC_HEAD = routeHead(
 export const Route = createFileRoute("/_auth/music/")({
   head: () => MUSIC_HEAD,
   validateSearch: musicSearchSchema,
+  search: { middlewares: [stripSearchParams(MUSIC_INDEX_DEFAULT_SEARCH)] },
   loaderDeps: ({ search: { albumsPage, musiciansPage } }) => ({
     albumsPage,
     musiciansPage,
@@ -456,7 +458,7 @@ function TracksTabContent() {
       <LoadErrorAlert
         message={apiErrorMessage(
           firstPage,
-          "Couldn’t load tracks. Check your connection and try again.",
+          "Couldn’t load tracks.",
         )}
         onRetry={() => void refetch()}
       />
@@ -850,7 +852,7 @@ function PlaylistsTabContent({ playlistsView, likedTracksPage }: PlaylistsTabCon
   } else if (loadFailed) {
     body = (
       <LoadErrorAlert
-        message={apiErrorMessage(data, "Couldn’t load playlists. Check your connection and try again.")}
+        message={apiErrorMessage(data, "Couldn’t load playlists.")}
         onRetry={() => void refetch()}
       />
     );

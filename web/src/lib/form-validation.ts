@@ -6,6 +6,12 @@ import {
 } from "@/lib/constants";
 import { codePointLength } from "@/lib/utils";
 
+/** One `@` with something on each side and no whitespace: the sign-in and
+ * admin forms ask no more, the server does the rest. */
+export function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+$/.test(email);
+}
+
 /**
  * The first length rule a new password breaks, worded around `label`
  * ("Password", "New password"), or null when it passes. Mirrors the server: a

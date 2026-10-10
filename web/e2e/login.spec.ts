@@ -265,10 +265,27 @@ test.describe("Login screen", () => {
     await page.getByRole("button", { name: "Sign in" }).click();
 
     await expect(page).toHaveURL(appPath("/login"));
-    await expect(email).toHaveJSProperty("validity.valueMissing", true);
-    await expect(password).toHaveJSProperty("validity.valueMissing", true);
+    // Inline, app-styled validation rather than the browser's bubble (§3.7).
+    await expect(page.getByText("Email is required.")).toBeVisible();
+    await expect(page.getByText("Password is required.")).toBeVisible();
+    await expect(email).toHaveAttribute("aria-invalid", "true");
+    await expect(email).toHaveAttribute("aria-describedby", "email-error");
+    await expect(password).toHaveAttribute("aria-invalid", "true");
+    await expect(email).toBeFocused();
+
+    await email.fill("not-an-email");
+    await password.fill("x");
+    await page.getByRole("button", { name: "Sign in" }).click();
+    await expect(page.getByText("Enter a valid email address.")).toBeVisible();
+    await expect(page.getByText("Password is required.")).toHaveCount(0);
+
+    // Typing clears the field's error.
+    await email.fill("someone@example.com");
+    await expect(email).not.toHaveAttribute("aria-invalid", "true");
+    await expect(page.getByText("Enter a valid email address.")).toHaveCount(0);
+
     await expectUnauthenticated(context);
-    expect(loginRequests, "empty form should not submit").toBe(0);
+    expect(loginRequests, "an invalid form should not submit").toBe(0);
 
     tracker.assertClean();
   });

@@ -211,9 +211,12 @@ function showsKind(): LibraryKind {
   };
 }
 
+// The routes strip every default from the URL, so the canonical address of
+// the default tab is the bare path and only another tab names itself.
+const DEFAULT_TAB = "all";
+
 function tabPath(kind: LibraryKind, tab: string) {
-  const playlistsPage = kind.tabs.some(t => t.param === "playlists") ? "&playlistsPage=1" : "";
-  return `${kind.path}?tab=${tab}&allPage=1&sort=asc&genresPage=1${playlistsPage}`;
+  return tab === DEFAULT_TAB ? kind.path : `${kind.path}?tab=${tab}`;
 }
 
 async function mockLibraryApi(page: Page, kind: LibraryKind) {
@@ -261,7 +264,11 @@ async function mockLibraryApi(page: Page, kind: LibraryKind) {
 /** Waits for the page to have asked for `pathname` with `params` in its query. */
 
 async function expectTabShown(page: Page, tab: LibraryTab) {
-  await expect(page).toHaveURL(new RegExp(`tab=${tab.param}`));
+  if (tab.param === DEFAULT_TAB) {
+    await expect(page).not.toHaveURL(/tab=/);
+  } else {
+    await expect(page).toHaveURL(new RegExp(`tab=${tab.param}`));
+  }
   await expect(page.getByRole("tab", { name: tab.name })).toHaveAttribute("aria-selected", "true");
 
   const panel = page.getByRole("tabpanel", { name: tab.name });
@@ -333,7 +340,7 @@ for (const kind of [moviesKind(), showsKind()]) {
       await page.getByRole("button", { name: "Sorted A to Z, click to sort Z to A" }).click();
 
       await expect(page).toHaveURL(/sort=desc/);
-      await expect(page).toHaveURL(/allPage=1/);
+      await expect(page).not.toHaveURL(/allPage=/);
       await expectApiRequest(apiRequests, kind.api.library, { page: "1", sort: "desc" });
       await expect(
         page.getByRole("button", { name: "Sorted Z to A, click to sort A to Z" }),
@@ -378,7 +385,7 @@ for (const kind of [moviesKind(), showsKind()]) {
       await page.getByRole("button", { name: "Sorted A to Z, click to sort Z to A" }).click();
 
       await expect(page).toHaveURL(/sort=desc/);
-      await expect(page).toHaveURL(/genresPage=1/);
+      await expect(page).not.toHaveURL(/genresPage=/);
       await expect(page).toHaveURL(new RegExp(`genreId=${GENRE_ID}`));
       await expectApiRequest(apiRequests, kind.api.genreItems, { page: "1", sort: "desc" });
 

@@ -1,4 +1,5 @@
 import { screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import MediaDetailGuard from "@/components/shared/MediaDetailGuard";
 import { renderWithQueryClient } from "../helpers/render";
@@ -85,9 +86,34 @@ describe("MediaDetailGuard", () => {
     ).toBeInTheDocument();
     const alert = screen.getByRole("alert");
     expect(alert).toHaveTextContent(
-      "Something went wrong while loading this album. Please try again later.",
+      "Something went wrong while loading this album.",
     );
     expect(alert).not.toHaveTextContent(message);
+  });
+
+  // The failed request is the one branch a retry can fix, so it alone offers
+  // Try again; the dead ends keep only their way back.
+  it("offers Try again for a load that went wrong", async () => {
+    const user = userEvent.setup();
+    const onRetry = vi.fn();
+    renderGuard({ isError: true, data: undefined, payload: null, onRetry });
+
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["an invalid id", { id: null }],
+    ["a 404", { data: { error: true, status: 404 }, payload: null }],
+    ["a 403", { data: { error: true, status: 403 }, payload: null }],
+    ["an empty response", { payload: null }],
+  ])("keeps Try again away from %s", (_label, props) => {
+    renderGuard({ ...props, onRetry: vi.fn() });
+
+    expect(
+      screen.queryByRole("button", { name: "Try again" }),
+    ).not.toBeInTheDocument();
   });
 
   // apiRequest answers every 404 with "404 - The resource you requested was
@@ -115,7 +141,7 @@ describe("MediaDetailGuard", () => {
     renderGuard({ isError: true, data: undefined, payload: null });
 
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "Something went wrong while loading this album. Please try again later.",
+      "Something went wrong while loading this album.",
     );
   });
 

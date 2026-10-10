@@ -114,7 +114,7 @@ function MovieDetailsPage() {
   const { id } = Route.useParams();
   const movieId = parseRouteId(id);
 
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, refetch } = useQuery({
     ...movieDetailsQueryOpts(movieId ?? 0),
     enabled: movieId != null,
   });
@@ -124,6 +124,7 @@ function MovieDetailsPage() {
   // goes straight to not-found rather than sitting on a skeleton.
   return (
     <MediaDetailGuard
+      onRetry={() => void refetch()}
       id={movieId}
       noun="movie"
       back="home"

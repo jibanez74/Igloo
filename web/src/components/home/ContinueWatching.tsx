@@ -25,11 +25,11 @@ const renderCard = (item: ContinueWatchingItemType) => {
 };
 
 export default function ContinueWatching() {
-  const { data, isPending } = useQuery(continueWatchingQueryOpts());
+  const { data, isPending, refetch } = useQuery(continueWatchingQueryOpts());
 
   const items = data && !data.error ? (data.data?.items ?? []) : [];
   const errorMessage = data?.error
-    ? apiErrorMessage(data, "Failed to load what you are watching.")
+    ? apiErrorMessage(data, "Couldn’t load what you’re watching.")
     : undefined;
 
   // The home route loader awaits this query, so the section renders populated
@@ -43,6 +43,7 @@ export default function ContinueWatching() {
       headingId="continue-watching"
       items={items}
       errorMessage={errorMessage}
+      onRetry={() => void refetch()}
       emptyTitle="Nothing In Progress"
       emptyDescription="Movies and episodes you start watching will appear here."
       emptyIcon={Play}

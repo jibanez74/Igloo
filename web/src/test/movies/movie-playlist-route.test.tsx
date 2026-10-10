@@ -281,6 +281,9 @@ describe("movie playlist route", () => {
       await screen.findByText("No movies in this playlist yet."),
     ).toBeInTheDocument();
     expect(screen.getByText("0 movies")).toBeInTheDocument();
+    // Nothing to order, but the row stays for its "Playlist movies" slot.
+    expect(screen.getByText("Playlist movies")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Sorted/ })).not.toBeInTheDocument();
   });
 
   it("rejects a malformed playlist id without asking the API", async () => {
@@ -336,8 +339,14 @@ describe("movie playlist route", () => {
 
   it("starts a fresh page and sort when moving from one playlist to another", async () => {
     const fetchMock = mockPlaylistsFetch({
-      11: { name: "Weekend Picks", movies: [movie(1, "Arrival", 2016)] },
-      12: { name: "Late Night", movies: [movie(3, "Collateral", 2004)] },
+      11: {
+        name: "Weekend Picks",
+        movies: [movie(1, "Arrival", 2016), movie(2, "Heat", 1995)],
+      },
+      12: {
+        name: "Late Night",
+        movies: [movie(3, "Collateral", 2004), movie(4, "Thief", 1981)],
+      },
     });
     const user = userEvent.setup();
 

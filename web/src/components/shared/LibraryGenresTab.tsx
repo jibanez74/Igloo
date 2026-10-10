@@ -172,7 +172,7 @@ export default function LibraryGenresTab<
   if (genresError || isApiFailure(genresRes)) {
     return (
       <LoadErrorAlert
-        message={apiErrorMessage(genresRes, "Couldn’t load genres. Check your connection and try again.")}
+        message={apiErrorMessage(genresRes, "Couldn’t load genres.")}
         onRetry={() => void refetchGenres()}
       />
     );
@@ -273,7 +273,7 @@ export default function LibraryGenresTab<
 
           {itemsError || isApiFailure(itemsRes) ? (
             <LoadErrorAlert
-              message={apiErrorMessage(itemsRes, `Couldn’t load ${noun.plural} for this genre. Check your connection and try again.`)}
+              message={apiErrorMessage(itemsRes, `Couldn’t load ${noun.plural} for this genre.`)}
               onRetry={() => void refetchItems()}
             />
           ) : itemsLoading ? (

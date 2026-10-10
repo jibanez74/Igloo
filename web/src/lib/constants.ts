@@ -145,8 +145,11 @@ export const LIBRARY_NOUNS = {
   track: { singular: "track", plural: "tracks" },
 } as const;
 
-// Route search defaults. Reuse these when navigating so links and loaders agree
-// on the canonical starting search state for a route.
+// Route search defaults: what each index route's schema fills in when the URL
+// says nothing, and what its `stripSearchParams` middleware removes again on
+// navigation, so a URL spells out only what differs from the default. Links
+// and loaders read the same objects, and test/lib/route-search.test.ts pins
+// them to the schemas.
 export const MOVIES_INDEX_DEFAULT_SEARCH = {
   tab: "all" as const,
   allPage: 1,
@@ -156,10 +159,7 @@ export const MOVIES_INDEX_DEFAULT_SEARCH = {
 };
 
 /** Search when opening /movies on the Playlists tab (e.g. back link from a movie playlist). */
-export const MOVIES_PLAYLISTS_TAB_SEARCH = {
-  ...MOVIES_INDEX_DEFAULT_SEARCH,
-  tab: "playlists" as const,
-};
+export const MOVIES_PLAYLISTS_TAB_SEARCH = { tab: "playlists" as const };
 
 /** Search when opening /music on the Playlists tab (e.g. after deleting a playlist). */
 export const MUSIC_PLAYLISTS_TAB_SEARCH = { tab: "playlists" as const };
@@ -169,6 +169,20 @@ export const SHOWS_INDEX_DEFAULT_SEARCH = {
   allPage: 1,
   sort: "asc" as const,
   genresPage: 1,
+};
+
+export const MUSIC_INDEX_DEFAULT_SEARCH = {
+  tab: "albums" as const,
+  albumsPage: 1,
+  musiciansPage: 1,
+  playlistsView: "playlists" as const,
+  likedTracksPage: 1,
+};
+
+export const SEARCH_INDEX_DEFAULT_SEARCH = {
+  q: "",
+  tab: "all" as const,
+  page: 1,
 };
 
 // TMDB image proxy settings. API responses provide paths only; the frontend

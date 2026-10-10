@@ -30,8 +30,7 @@ import { libraryMovie, moviePlaylist } from "./fixtures/movies";
 // verdict in the play links, the playback settings dialog, and the extra
 // video player.
 
-const moviesAllPath =
-  "/movies?tab=all&allPage=1&sort=asc&genresPage=1&playlistsPage=1";
+const moviesAllPath = "/movies";
 const movieId = 711;
 const moviePath = `/movies/${movieId}`;
 const playPath = `${moviePath}/play`;
