@@ -279,7 +279,7 @@ function UsersSettings() {
                       {user.avatar && (
                         <AvatarImage src={user.avatar} alt={user.name} />
                       )}
-                      <AvatarFallback className="bg-primary/20 text-primary">
+                      <AvatarFallback className="bg-primary/10 text-primary">
                         {getInitials(user.name)}
                       </AvatarFallback>
                     </Avatar>
