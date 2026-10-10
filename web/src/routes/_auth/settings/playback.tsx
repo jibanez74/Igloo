@@ -40,7 +40,6 @@ import {
 import {
   showActionFailed,
   showSuccess,
-  showValidationError,
 } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
 import type {
@@ -315,7 +314,7 @@ function ServerPlaybackForm({ settings }: ServerPlaybackFormProps) {
     event.preventDefault();
     if (isServerUploadOutOfRange(form)) {
       setValidationMessage(SERVER_UPLOAD_VALIDATION_MESSAGE);
-      showValidationError(SERVER_UPLOAD_VALIDATION_MESSAGE);
+      (event.currentTarget.elements.namedItem("server_upload_mbps") as HTMLElement | null)?.focus();
       return;
     }
     setValidationMessage("");

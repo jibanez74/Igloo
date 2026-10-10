@@ -40,7 +40,7 @@ import {
 import { lightInputClassName } from "@/lib/input-styles";
 import { passwordRuleError } from "@/lib/form-validation";
 import { cn, codePointLength, describedBy, getInitials } from "@/lib/utils";
-import { showSuccess, showActionFailed, showValidationError } from "@/lib/toast-helpers";
+import { showSuccess, showActionFailed } from "@/lib/toast-helpers";
 import type { AdminUserType } from "@/types";
 import { useDialogFocusRestore } from "@/hooks/useDialogFocusRestore";
 import { routeHead } from "@/lib/route-head";
@@ -114,17 +114,6 @@ function validateNameEmail(
   }
 
   return errors;
-}
-
-function firstErrorMessage(errors: UserFormErrors) {
-  return (
-    errors.name ??
-    errors.email ??
-    errors.password ??
-    errors.confirmPassword ??
-    errors.form ??
-    "Check the form for errors."
-  );
 }
 
 function UsersSettings() {
@@ -487,7 +476,6 @@ function CreateUserDialog({
 
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
-      showValidationError(firstErrorMessage(nextErrors));
       if (nextErrors.name) {
         document.getElementById(nameId)?.focus();
       } else if (nextErrors.email) {
@@ -683,7 +671,6 @@ function EditUserDialog({
 
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
-      showValidationError(firstErrorMessage(nextErrors));
       if (nextErrors.name) {
         document.getElementById(nameId)?.focus();
       } else {
@@ -934,7 +921,6 @@ function ResetPasswordDialog({
 
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
-      showValidationError(firstErrorMessage(nextErrors));
       if (nextErrors.password) {
         document.getElementById(passwordId)?.focus();
       } else {

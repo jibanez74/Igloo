@@ -1194,7 +1194,10 @@ require the full playback test pass.
   go through the shared `ConfirmDialog`, and paged lists through
   `LibraryPagination` — neither is re-implemented per page.
 - Form-level failures toast; field-level validation renders inline with
-  `aria-invalid` (styled by the Button/Input base classes).
+  `aria-invalid` (styled by the Button/Input base classes) and moves focus to
+  the first invalid field. A field error is never repeated as a "Validation
+  error" toast; `showValidationError` is only for a rule with no field to mark
+  (no one invited to a room, a playlist name the dialog shows no slot for).
 - **Device-scoped settings apply instantly and carry no Save bar.** Settings
   that belong to the browser rather than the account (theme; the playback
   preferences in `lib/playback-preferences.ts`) persist to localStorage on

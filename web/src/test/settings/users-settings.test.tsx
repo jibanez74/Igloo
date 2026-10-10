@@ -227,9 +227,9 @@ describe("Users settings", () => {
       "aria-invalid",
       "true",
     );
-    expect(showValidationErrorMock).toHaveBeenCalledWith(
-      "Password must be at least 9 characters.",
-    );
+    // Field errors stay inline (design-system §3.7); no toast repeats them.
+    expect(showValidationErrorMock).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("User password")).toHaveFocus();
     expect(mutationRequests(requests, "POST")).toHaveLength(0);
   });
 

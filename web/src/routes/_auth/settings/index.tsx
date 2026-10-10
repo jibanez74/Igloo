@@ -35,7 +35,6 @@ import { generalSettingsQueryOpts } from "@/lib/query-opts";
 import {
   showActionFailed,
   showSuccess,
-  showValidationError,
 } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
 import type {
@@ -346,7 +345,9 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
     if (message) {
       setValidationMessage(message);
       setValidationField(field);
-      showValidationError(message);
+      if (field) {
+        (event.currentTarget.elements.namedItem(field) as HTMLElement | null)?.focus();
+      }
       return;
     }
 

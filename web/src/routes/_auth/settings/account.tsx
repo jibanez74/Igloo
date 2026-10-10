@@ -57,7 +57,6 @@ import {
   showSuccess,
   showError,
   showActionFailed,
-  showValidationError,
 } from "@/lib/toast-helpers";
 import { useNavigate } from "@tanstack/react-router";
 import { lightInputClassName } from "@/lib/input-styles";
@@ -150,7 +149,6 @@ function AccountSettings() {
     fieldId: string,
   ) => {
     setErrors(current => ({ ...current, [field]: message }));
-    showValidationError(message);
     document.getElementById(fieldId)?.focus();
   };
 
@@ -452,7 +450,6 @@ function AccountSettings() {
       const message =
         "Invalid file type. Allowed: JPEG, PNG, GIF, WebP.";
       setErrors(current => ({ ...current, avatarUpload: message }));
-      showValidationError(message);
       document.getElementById(avatarUploadId)?.focus();
       e.target.value = "";
       return;
@@ -461,7 +458,6 @@ function AccountSettings() {
     if (file.size > MAX_AVATAR_SIZE) {
       const message = "File too large. Maximum size is 20MB.";
       setErrors(current => ({ ...current, avatarUpload: message }));
-      showValidationError(message);
       document.getElementById(avatarUploadId)?.focus();
       e.target.value = "";
       return;
