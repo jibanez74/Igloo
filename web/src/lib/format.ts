@@ -1,3 +1,4 @@
+import { LANGUAGE_NAMES } from "@/lib/constants";
 import type { LibraryMovieCrewType } from "@/types/movies";
 
 const months = [
@@ -378,6 +379,20 @@ export function chapterLabel(
 /** The string with its first character upper-cased: "movie" -> "Movie". */
 export function capitalize(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+/**
+ * An ISO 639 code as a language name for display ("en" → "English"); an
+ * unknown code reads as itself in capitals rather than disappearing.
+ */
+export function formatLanguageName(
+  raw: string | undefined,
+): string | undefined {
+  const code = raw?.trim().toLowerCase();
+  if (!code) return undefined;
+  const two = code.slice(0, 2);
+  if (LANGUAGE_NAMES[two]) return LANGUAGE_NAMES[two];
+  return code.length <= 3 ? code.toUpperCase() : capitalize(code);
 }
 
 /** "1 episode", "3 seasons": count plus the noun, pluralized with an "s". */

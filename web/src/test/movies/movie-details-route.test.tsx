@@ -541,7 +541,7 @@ describe("movie details route content", () => {
     expect(about).not.toBeNull();
     const aboutSection = within(about as HTMLElement);
     expect(aboutSection.getByText(/^Original language/)).toBeInTheDocument();
-    expect(aboutSection.getByText("EN", { exact: true })).toBeInTheDocument();
+    expect(aboutSection.getByText("English", { exact: true })).toBeInTheDocument();
     expect(aboutSection.getByText("$95,000,000")).toBeInTheDocument();
     expect(aboutSection.getByText("$215,000,000")).toBeInTheDocument();
     expect(aboutSection.getByText("Northwind Pictures")).toBeInTheDocument();
