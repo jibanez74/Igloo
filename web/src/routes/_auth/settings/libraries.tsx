@@ -635,7 +635,7 @@ function MoviesLibraryStats({ hasLibrary }: StatsProps) {
     <div className="grid gap-4" aria-label="Movies library statistics">
       <StatItem
         label="Movies"
-        value={stats?.total_movies ?? 0}
+        value={stats ? stats.total_movies : null}
         loading={isLoading}
         loadingLabel="Loading movies count"
         icon={<Film className="size-5 text-primary" aria-hidden="true" />}
@@ -661,7 +661,7 @@ function MusicLibraryStats({ hasLibrary }: StatsProps) {
     >
       <StatItem
         label="Albums"
-        value={stats?.total_albums ?? 0}
+        value={stats ? stats.total_albums : null}
         loading={isLoading}
         loadingLabel="Loading albums count"
         icon={<Disc3 className="size-5 text-primary" aria-hidden="true" />}
@@ -669,7 +669,7 @@ function MusicLibraryStats({ hasLibrary }: StatsProps) {
       />
       <StatItem
         label="Tracks"
-        value={stats?.total_tracks ?? 0}
+        value={stats ? stats.total_tracks : null}
         loading={isLoading}
         loadingLabel="Loading tracks count"
         icon={<Music className="size-5 text-primary" aria-hidden="true" />}
@@ -677,7 +677,7 @@ function MusicLibraryStats({ hasLibrary }: StatsProps) {
       />
       <StatItem
         label="Musicians"
-        value={stats?.total_musicians ?? 0}
+        value={stats ? stats.total_musicians : null}
         loading={isLoading}
         loadingLabel="Loading musicians count"
         icon={<User className="size-5 text-primary" aria-hidden="true" />}
@@ -703,7 +703,7 @@ function ShowsLibraryStats({ hasLibrary }: StatsProps) {
     >
       <StatItem
         label="Shows"
-        value={stats?.total_shows ?? 0}
+        value={stats ? stats.total_shows : null}
         loading={isLoading}
         loadingLabel="Loading shows count"
         icon={<Tv className="size-5 text-primary" aria-hidden="true" />}
@@ -711,7 +711,7 @@ function ShowsLibraryStats({ hasLibrary }: StatsProps) {
       />
       <StatItem
         label="Seasons"
-        value={stats?.total_seasons ?? 0}
+        value={stats ? stats.total_seasons : null}
         loading={isLoading}
         loadingLabel="Loading seasons count"
         icon={<Layers className="size-5 text-primary" aria-hidden="true" />}
@@ -719,7 +719,7 @@ function ShowsLibraryStats({ hasLibrary }: StatsProps) {
       />
       <StatItem
         label="Episodes"
-        value={stats?.total_episodes ?? 0}
+        value={stats ? stats.total_episodes : null}
         loading={isLoading}
         loadingLabel="Loading episodes count"
         icon={<ListVideo className="size-5 text-primary" aria-hidden="true" />}
@@ -731,7 +731,8 @@ function ShowsLibraryStats({ hasLibrary }: StatsProps) {
 
 type StatItemProps = {
   label: string;
-  value: number;
+  /** Null when the counts request failed: unknown is not zero. */
+  value: number | null;
   loading: boolean;
   loadingLabel: string;
   icon: ReactNode;
@@ -766,7 +767,14 @@ function StatItem({
         ) : (
           <div className="min-w-0">
             <p className="text-lg font-bold text-foreground tabular-nums sm:text-2xl">
-              {value.toLocaleString()}
+              {value == null ? (
+                <>
+                  <span aria-hidden="true">—</span>
+                  <span className="sr-only">{`${label} count unavailable`}</span>
+                </>
+              ) : (
+                value.toLocaleString()
+              )}
             </p>
             <p className="text-xs text-muted-foreground sm:text-sm">{label}</p>
           </div>
