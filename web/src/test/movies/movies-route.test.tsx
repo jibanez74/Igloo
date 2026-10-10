@@ -105,7 +105,12 @@ function mockMoviesFetch(options?: {
       });
     }
 
-    if (url === `/api/movies/library?page=1&per_page=${MOVIES_PER_PAGE}&sort=asc`) {
+    // Both sort orders answer the same page: the grid hands `sort` to the API
+    // and renders what comes back, so the order itself is not under test.
+    if (
+      url === `/api/movies/library?page=1&per_page=${MOVIES_PER_PAGE}&sort=asc` ||
+      url === `/api/movies/library?page=1&per_page=${MOVIES_PER_PAGE}&sort=desc`
+    ) {
       return jsonResponse({
         error: false,
         data: {
