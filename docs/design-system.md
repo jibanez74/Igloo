@@ -774,7 +774,11 @@ count left out until the list lands, and a `PlaylistCardSkeleton` authored
 beside `PlaylistCard`. Leaving the liked view returns focus to its toolbar
 button, and entering it focuses "Back to playlists". Both playlist pages
 share their owner row too: `PlaylistOwnerActions` (Edit and Delete text
-buttons, rendered only when the detail response says `is_owner`) and the
+buttons, rendered only when the detail response says `is_owner`; when it does
+not, the header names the owner instead — "By {owner.name}" as a third item in
+the music page's statistics list and a line under the movie page's count, the
+way a watch-room card says "Hosted by" — so a public or shared playlist opened
+by link never reads as nobody's) and the
 `PlaylistFormDialog` it opens, which is the same dialog the toolbars create
 with, keyed by playlist kind (`lib/playlist-kinds.ts` holds each library's
 client calls, query keys, route id and Playlists-tab search). Edit resends
@@ -1222,6 +1226,15 @@ require the full playback test pass.
   the tighter `px-1.5` until the card fits to content), and the library pages'
   fit-to-content card only from `@2xl`; a narrow 2+2+1 card beside empty
   space at tablet width read as orphaned.
+- **Library stat tiles stay a `grid-cols-3` row at every width.** The Music
+  and TV Shows cards on Settings → Libraries render their counts as `StatItem`
+  grids ("Music library statistics", "TV shows library statistics"); below
+  `sm` a tile drops its icon box and tightens to `gap-2 p-3` with the figure at
+  `text-lg` and its label at `text-xs`, which is what three tiles need inside
+  the ~278 px a 360 px phone leaves in the card, and from `sm` the icon,
+  `gap-4 p-4` and `text-2xl` return. TV Shows counts Shows, Seasons and
+  Episodes from `GET /api/shows/stats`: library totals, distinct from the scan
+  panel's per-run "local episodes" figure.
 - **Card section titles are real headings**: render `CardTitle` with `asChild`
   wrapping an `<h2>` (login's is the page `<h1>`) so card-sectioned pages are
   navigable by heading.

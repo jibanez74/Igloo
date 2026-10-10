@@ -1022,7 +1022,11 @@ function handleShowsRoutes(
   }
 
   if (url.pathname === "/api/shows/stats" && method === "GET") {
-    sendSuccess(response, { total_shows: libraryShows.length });
+    sendSuccess(response, {
+      total_shows: libraryShows.length,
+      total_seasons: libraryShows.length * 2,
+      total_episodes: libraryShows.length * 12,
+    });
     return true;
   }
 

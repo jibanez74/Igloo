@@ -3,7 +3,6 @@ import type {
   NullableInt64,
   NullableString,
 } from "./nullable";
-import type { PlaylistCollaboratorType } from "./music";
 import type { components } from "./openapi.gen";
 
 // Movie from our library (scanned) - used for Latest Movies on home (API returns poster_path; frontend builds URL)
@@ -41,18 +40,12 @@ export type MoviePlaylistRowType = components["schemas"]["MoviePlaylist"];
 export type MoviePlaylistSummaryType =
   components["schemas"]["MoviePlaylistSummary"];
 
-export type MoviePlaylistsListResponseType = {
-  playlists: MoviePlaylistSummaryType[];
-};
+export type MoviePlaylistsListResponseType =
+  components["schemas"]["MoviePlaylistsData"];
 
 /** GET /api/movies/playlists/:id */
-export type MoviePlaylistDetailResponseType = {
-  playlist: MoviePlaylistRowType;
-  movie_count: number;
-  is_owner: boolean;
-  can_edit: boolean;
-  collaborators: PlaylistCollaboratorType[] | null;
-};
+export type MoviePlaylistDetailResponseType =
+  components["schemas"]["MoviePlaylistDetailData"];
 
 export type CreateMoviePlaylistRequest =
   components["schemas"]["CreateMoviePlaylistRequest"];

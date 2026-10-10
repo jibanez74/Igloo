@@ -3,7 +3,7 @@
 // about and fills the rest with neutral defaults.
 
 import type { components } from "@/types/openapi.gen";
-import { nullableInt64, nullableString } from "./fixtures";
+import { nullableInt64, nullableString, userSummary } from "./fixtures";
 
 type Schema = components["schemas"];
 
@@ -110,6 +110,7 @@ export function playlistDetail(
     duration: 0,
     is_owner: true,
     can_edit: true,
+    owner: userSummary(),
     collaborators: null,
     ...fields,
   };

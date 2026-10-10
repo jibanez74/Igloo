@@ -397,6 +397,12 @@ type Querier interface {
 	GetShowsCount(ctx context.Context) (int64, error)
 	// Paginated library A-Z (id tie-breaker so LIMIT/OFFSET is stable when names match).
 	GetShowsLibraryAsc(ctx context.Context, arg GetShowsLibraryAscParams) ([]GetShowsLibraryAscRow, error)
+	// The shows stats endpoint needs all three; one round trip instead of three.
+	// show_seasons and show_episodes only hold what the scanner found on disk
+	// (UpsertLocalShowEpisode is the sole writer, and the Prune* queries drop
+	// rows whose files are gone), so COUNT(*) is the library total. TMDB's
+	// figures live in the tmdb_*_count columns, not in rows.
+	GetShowsLibraryCounts(ctx context.Context) (GetShowsLibraryCountsRow, error)
 	// Paginated library Z-A (id tie-breaker so LIMIT/OFFSET is stable when names match).
 	GetShowsLibraryDesc(ctx context.Context, arg GetShowsLibraryDescParams) ([]GetShowsLibraryDescRow, error)
 	// Subtitle tracks for a movie (for technical details display).
@@ -426,6 +432,9 @@ type Querier interface {
 	GetUserPreferences(ctx context.Context, userID int64) (GetUserPreferencesRow, error)
 	// Returns the user's recently played tracks
 	GetUserRecentlyPlayed(ctx context.Context, arg GetUserRecentlyPlayedParams) ([]GetUserRecentlyPlayedRow, error)
+	// The public face of a user shown on resources other users can open (playlist
+	// owner, watch-room members): no email, password hash, admin flag or PIN.
+	GetUserSummary(ctx context.Context, id int64) (GetUserSummaryRow, error)
 	// Returns the user's most listened albums
 	GetUserTopAlbums(ctx context.Context, arg GetUserTopAlbumsParams) ([]GetUserTopAlbumsRow, error)
 	// Returns the user's most listened genres

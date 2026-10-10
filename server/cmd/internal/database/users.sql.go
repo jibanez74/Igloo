@@ -293,6 +293,31 @@ func (q *Queries) GetUserPin(ctx context.Context, id int64) (sql.NullString, err
 	return pin, err
 }
 
+const getUserSummary = `-- name: GetUserSummary :one
+SELECT
+  id,
+  name,
+  avatar
+FROM users
+WHERE id = ?
+LIMIT 1
+`
+
+type GetUserSummaryRow struct {
+	ID     int64          `json:"id"`
+	Name   string         `json:"name"`
+	Avatar sql.NullString `json:"avatar"`
+}
+
+// The public face of a user shown on resources other users can open (playlist
+// owner, watch-room members): no email, password hash, admin flag or PIN.
+func (q *Queries) GetUserSummary(ctx context.Context, id int64) (GetUserSummaryRow, error) {
+	row := q.queryRow(ctx, q.getUserSummaryStmt, getUserSummary, id)
+	var i GetUserSummaryRow
+	err := row.Scan(&i.ID, &i.Name, &i.Avatar)
+	return i, err
+}
+
 const getUsersExcluding = `-- name: GetUsersExcluding :many
 SELECT
   id,

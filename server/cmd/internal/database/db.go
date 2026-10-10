@@ -630,6 +630,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getShowsLibraryAscStmt, err = db.PrepareContext(ctx, getShowsLibraryAsc); err != nil {
 		return nil, fmt.Errorf("error preparing query GetShowsLibraryAsc: %w", err)
 	}
+	if q.getShowsLibraryCountsStmt, err = db.PrepareContext(ctx, getShowsLibraryCounts); err != nil {
+		return nil, fmt.Errorf("error preparing query GetShowsLibraryCounts: %w", err)
+	}
 	if q.getShowsLibraryDescStmt, err = db.PrepareContext(ctx, getShowsLibraryDesc); err != nil {
 		return nil, fmt.Errorf("error preparing query GetShowsLibraryDesc: %w", err)
 	}
@@ -674,6 +677,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.getUserRecentlyPlayedStmt, err = db.PrepareContext(ctx, getUserRecentlyPlayed); err != nil {
 		return nil, fmt.Errorf("error preparing query GetUserRecentlyPlayed: %w", err)
+	}
+	if q.getUserSummaryStmt, err = db.PrepareContext(ctx, getUserSummary); err != nil {
+		return nil, fmt.Errorf("error preparing query GetUserSummary: %w", err)
 	}
 	if q.getUserTopAlbumsStmt, err = db.PrepareContext(ctx, getUserTopAlbums); err != nil {
 		return nil, fmt.Errorf("error preparing query GetUserTopAlbums: %w", err)
@@ -2098,6 +2104,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getShowsLibraryAscStmt: %w", cerr)
 		}
 	}
+	if q.getShowsLibraryCountsStmt != nil {
+		if cerr := q.getShowsLibraryCountsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getShowsLibraryCountsStmt: %w", cerr)
+		}
+	}
 	if q.getShowsLibraryDescStmt != nil {
 		if cerr := q.getShowsLibraryDescStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getShowsLibraryDescStmt: %w", cerr)
@@ -2171,6 +2182,11 @@ func (q *Queries) Close() error {
 	if q.getUserRecentlyPlayedStmt != nil {
 		if cerr := q.getUserRecentlyPlayedStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getUserRecentlyPlayedStmt: %w", cerr)
+		}
+	}
+	if q.getUserSummaryStmt != nil {
+		if cerr := q.getUserSummaryStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getUserSummaryStmt: %w", cerr)
 		}
 	}
 	if q.getUserTopAlbumsStmt != nil {
@@ -3094,6 +3110,7 @@ type Queries struct {
 	getShowsByGenreDescStmt                     *sql.Stmt
 	getShowsCountStmt                           *sql.Stmt
 	getShowsLibraryAscStmt                      *sql.Stmt
+	getShowsLibraryCountsStmt                   *sql.Stmt
 	getShowsLibraryDescStmt                     *sql.Stmt
 	getSubtitlesByMovieIDStmt                   *sql.Stmt
 	getTrackStmt                                *sql.Stmt
@@ -3109,6 +3126,7 @@ type Queries struct {
 	getUserPinStmt                              *sql.Stmt
 	getUserPreferencesStmt                      *sql.Stmt
 	getUserRecentlyPlayedStmt                   *sql.Stmt
+	getUserSummaryStmt                          *sql.Stmt
 	getUserTopAlbumsStmt                        *sql.Stmt
 	getUserTopGenresStmt                        *sql.Stmt
 	getUserTopMusiciansStmt                     *sql.Stmt
@@ -3453,6 +3471,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getShowsByGenreDescStmt:                     q.getShowsByGenreDescStmt,
 		getShowsCountStmt:                           q.getShowsCountStmt,
 		getShowsLibraryAscStmt:                      q.getShowsLibraryAscStmt,
+		getShowsLibraryCountsStmt:                   q.getShowsLibraryCountsStmt,
 		getShowsLibraryDescStmt:                     q.getShowsLibraryDescStmt,
 		getSubtitlesByMovieIDStmt:                   q.getSubtitlesByMovieIDStmt,
 		getTrackStmt:                                q.getTrackStmt,
@@ -3468,6 +3487,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getUserPinStmt:                              q.getUserPinStmt,
 		getUserPreferencesStmt:                      q.getUserPreferencesStmt,
 		getUserRecentlyPlayedStmt:                   q.getUserRecentlyPlayedStmt,
+		getUserSummaryStmt:                          q.getUserSummaryStmt,
 		getUserTopAlbumsStmt:                        q.getUserTopAlbumsStmt,
 		getUserTopGenresStmt:                        q.getUserTopGenresStmt,
 		getUserTopMusiciansStmt:                     q.getUserTopMusiciansStmt,

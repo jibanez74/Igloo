@@ -230,7 +230,9 @@ type showsLibraryData struct {
 
 // showsStatsData is the JSON shape of helpers.JSONResponse.Data for GET /api/shows/stats.
 type showsStatsData struct {
-	TotalShows int64 `json:"total_shows"`
+	TotalShows    int64 `json:"total_shows"`
+	TotalSeasons  int64 `json:"total_seasons"`
+	TotalEpisodes int64 `json:"total_episodes"`
 }
 
 func showLibraryRowsFromDesc(rows []database.GetShowsLibraryDescRow) []database.GetShowsLibraryAscRow {
@@ -333,9 +335,9 @@ func (app *Application) GetShowsLibrary(w http.ResponseWriter, r *http.Request) 
 }
 
 func (app *Application) GetShowsStats(w http.ResponseWriter, r *http.Request) {
-	total, err := app.Queries.GetShowsCount(r.Context())
+	counts, err := app.Queries.GetShowsLibraryCounts(r.Context())
 	if err != nil {
-		app.Logger.Error("failed to get shows count", "error", err)
+		app.Logger.Error("failed to get shows library counts", "error", err)
 		helpers.ErrorJSON(w, errors.New("failed to fetch shows stats"))
 		return
 	}
@@ -343,7 +345,9 @@ func (app *Application) GetShowsStats(w http.ResponseWriter, r *http.Request) {
 	res := helpers.JSONResponse{
 		Error: false,
 		Data: showsStatsData{
-			TotalShows: total,
+			TotalShows:    counts.ShowsCount,
+			TotalSeasons:  counts.SeasonsCount,
+			TotalEpisodes: counts.EpisodesCount,
 		},
 	}
 

@@ -69,6 +69,13 @@ func (app *Application) GetPlaylist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	owner, err := app.getPlaylistOwner(r.Context(), playlist.UserID)
+	if err != nil {
+		app.Logger.Error(getPlaylistOwnerLogMessage, "error", err)
+		helpers.ErrorJSON(w, errors.New(fetchPlaylistMessage))
+		return
+	}
+
 	summary, _ := app.Queries.GetPlaylistTrackSummary(r.Context(), playlistId)
 
 	var collaborators []database.GetPlaylistCollaboratorsRow
@@ -84,6 +91,7 @@ func (app *Application) GetPlaylist(w http.ResponseWriter, r *http.Request) {
 			"duration":      summary.TotalDuration,
 			"is_owner":      permission == PermissionOwner,
 			"can_edit":      permission >= PermissionEdit,
+			"owner":         owner,
 			"collaborators": collaborators,
 		},
 	}

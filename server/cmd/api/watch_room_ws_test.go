@@ -20,7 +20,7 @@ type watchRoomWSTestEvent struct {
 	Type             string                  `json:"type"`
 	RoomID           int64                   `json:"room_id"`
 	Playback         *watchRoomPlaybackState `json:"playback"`
-	Member           *watchRoomMemberSummary `json:"member"`
+	Member           *userSummary            `json:"member"`
 	ConnectedUserIDs []int64                 `json:"connected_user_ids"`
 }
 
@@ -705,7 +705,7 @@ func TestWatchRoomHub_ShutdownClosesConnectionsAndClearsSessions(t *testing.T) {
 }
 
 func TestWatchRoomClient_EnqueueEvictsStalledClientWithoutBlocking(t *testing.T) {
-	client := newWatchRoomClient(nil, 1, watchRoomMemberSummary{ID: 1})
+	client := newWatchRoomClient(nil, 1, userSummary{ID: 1})
 
 	for i := 0; i < watchRoomSendBufferSize; i++ {
 		client.send <- []byte("queued")

@@ -2987,9 +2987,14 @@ export interface components {
         ShowsLibraryEnvelope: components["schemas"]["JsonSuccess"] & {
             data: components["schemas"]["ShowsLibraryData"];
         };
+        /** @description Library totals: only shows, seasons and episodes with local files are stored, so these are what is on disk, not TMDB's counts. */
         ShowsStatsData: {
             /** Format: int64 */
             total_shows: number;
+            /** Format: int64 */
+            total_seasons: number;
+            /** Format: int64 */
+            total_episodes: number;
         };
         ShowsStatsEnvelope: components["schemas"]["JsonSuccess"] & {
             data: components["schemas"]["ShowsStatsData"];
@@ -3476,20 +3481,24 @@ export interface components {
         AddMoviesRequest: {
             movie_ids: number[];
         };
+        MoviePlaylistsData: {
+            playlists: components["schemas"]["MoviePlaylistSummary"][];
+        };
         MoviePlaylistsEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                playlists: components["schemas"]["MoviePlaylistSummary"][];
-            };
+            data: components["schemas"]["MoviePlaylistsData"];
+        };
+        MoviePlaylistDetailData: {
+            playlist: components["schemas"]["MoviePlaylist"];
+            /** Format: int64 */
+            movie_count: number;
+            is_owner: boolean;
+            can_edit: boolean;
+            /** @description The playlist's owner; the viewer themself when is_owner is true. */
+            owner: components["schemas"]["UserSummary"];
+            collaborators: components["schemas"]["PlaylistCollaborator"][] | null;
         };
         MoviePlaylistDetailEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                playlist: components["schemas"]["MoviePlaylist"];
-                /** Format: int64 */
-                movie_count: number;
-                is_owner: boolean;
-                can_edit: boolean;
-                collaborators: components["schemas"]["PlaylistCollaborator"][] | null;
-            };
+            data: components["schemas"]["MoviePlaylistDetailData"];
         };
         MoviePlaylistMutationEnvelope: components["schemas"]["JsonSuccess"] & {
             data: {
@@ -3726,7 +3735,8 @@ export interface components {
                 results: components["schemas"]["TmdbSearchResult"][];
             };
         };
-        WatchRoomMember: {
+        /** @description The public face of a user as other users see it: no email or admin flag. Carried by watch rooms (owner, members) and playlist details (owner). */
+        UserSummary: {
             /** Format: int64 */
             id: number;
             name: string;
@@ -3739,8 +3749,8 @@ export interface components {
             movie_id: number;
             movie_title: string;
             movie_poster: string | null;
-            owner: components["schemas"]["WatchRoomMember"];
-            members: components["schemas"]["WatchRoomMember"][];
+            owner: components["schemas"]["UserSummary"];
+            members: components["schemas"]["UserSummary"][];
             playback_mode: components["schemas"]["PlaybackMode"];
             is_owner: boolean;
             created_at: string;
@@ -3752,8 +3762,8 @@ export interface components {
             movie_id: number;
             movie_title: string;
             movie_poster: string | null;
-            owner: components["schemas"]["WatchRoomMember"];
-            members: components["schemas"]["WatchRoomMember"][];
+            owner: components["schemas"]["UserSummary"];
+            members: components["schemas"]["UserSummary"][];
             playback_mode: components["schemas"]["PlaybackMode"];
             is_owner: boolean;
             created_at: string;
@@ -3826,7 +3836,7 @@ export interface components {
             /** Format: int64 */
             room_id: number;
             playback?: components["schemas"]["WatchRoomPlaybackState"];
-            member?: components["schemas"]["WatchRoomMember"];
+            member?: components["schemas"]["UserSummary"];
             connected_user_ids?: number[];
         };
         SimpleAlbum: {
@@ -4212,6 +4222,8 @@ export interface components {
             duration: number;
             is_owner: boolean;
             can_edit: boolean;
+            /** @description The playlist's owner; the viewer themself when is_owner is true. */
+            owner: components["schemas"]["UserSummary"];
             collaborators: components["schemas"]["PlaylistCollaborator"][] | null;
         };
         MusicPlaylistDetailEnvelope: components["schemas"]["JsonSuccess"] & {

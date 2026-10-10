@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { components } from "@/types/openapi.gen";
 import { jsonResponse, requestURL } from "../helpers/api";
-import { authUser, nullableString } from "../helpers/fixtures";
+import { authUser, nullableString, userSummary } from "../helpers/fixtures";
 import { playlist, playlistDetail, playlistTrack } from "../helpers/music";
 import { readDocumentHead, renderRoute } from "../helpers/render-route";
 
@@ -93,6 +93,7 @@ describe("music playlist route", () => {
     const stats = screen.getByRole("list", { name: "Playlist statistics" });
     expect(within(stats).getByText("2 tracks")).toBeInTheDocument();
     expect(within(stats).getByText("Owner")).toBeInTheDocument();
+    expect(within(stats).queryByText(/^By /)).not.toBeInTheDocument();
 
     expect(screen.getByRole("button", { name: "Play all 2 tracks" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Edit playlist" })).toBeInTheDocument();
@@ -106,8 +107,14 @@ describe("music playlist route", () => {
     });
   });
 
-  it("hides Edit and Delete from a viewer who does not own the playlist", async () => {
-    mockPlaylistFetch(roadTrip({ is_owner: false, can_edit: false }));
+  it("names the owner instead of Edit and Delete for a viewer who does not own the playlist", async () => {
+    mockPlaylistFetch(
+      roadTrip({
+        is_owner: false,
+        can_edit: false,
+        owner: userSummary({ id: 2, name: "Riley" }),
+      }),
+    );
 
     await renderRoute("/music/playlist/21");
 
@@ -115,6 +122,8 @@ describe("music playlist route", () => {
       await screen.findByRole("heading", { level: 1, name: "Road Trip" }),
     ).toBeInTheDocument();
     expect(await screen.findByText("Alabaster")).toBeInTheDocument();
+    const stats = screen.getByRole("list", { name: "Playlist statistics" });
+    expect(within(stats).getByText("By Riley")).toBeInTheDocument();
     expect(screen.queryByText("Owner")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Edit playlist" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Delete playlist" })).not.toBeInTheDocument();

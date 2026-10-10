@@ -9,7 +9,9 @@ import {
   Disc3,
   Film,
   FolderOpen,
+  Layers,
   Library,
+  ListVideo,
   Music,
   Scan,
   Trash2,
@@ -27,7 +29,7 @@ import SettingsCardHeader from "@/components/settings/SettingsCardHeader";
 import SettingsErrorCard from "@/components/settings/SettingsErrorCard";
 import SettingsLoadingCard from "@/components/settings/SettingsLoadingCard";
 import SettingsSaveBar from "@/components/settings/SettingsSaveBar";
-import { musicStatsQueryOpts, moviesStatsQueryOpts, movieScanStatusQueryOpts, musicScanStatusQueryOpts, showScanStatusQueryOpts, settingsQueryOpts } from "@/lib/query-opts";
+import { musicStatsQueryOpts, moviesStatsQueryOpts, movieScanStatusQueryOpts, musicScanStatusQueryOpts, showScanStatusQueryOpts, showsStatsQueryOpts, settingsQueryOpts } from "@/lib/query-opts";
 import { showActionFailed, showSuccess } from "@/lib/toast-helpers";
 import { triggerMusicScan, triggerMovieScan, triggerShowScan, updateLibrarySettings } from "@/lib/api";
 import { invalidateMovieLibraryQueries } from "@/lib/movie-library-cache";
@@ -127,6 +129,10 @@ const DEFAULT_FEEDBACK: FormFeedback = {
   message: "Saved library paths are used by scan and playback features.",
   tone: "neutral",
 };
+
+// Three tiles share one row at every width; the tile itself compacts below
+// `sm` so three fit the ~278 px a 360 px phone leaves inside the card.
+const LIBRARY_STATS_GRID_CLASS = "grid grid-cols-3 gap-2 sm:gap-4";
 
 const LIBRARY_SECTIONS: LibrarySectionConfig[] = [
   {
@@ -417,6 +423,9 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
                 {section.field === "movies_dir" && (
                   <MoviesLibraryStats hasLibrary={Boolean(syncedSettings.movies_dir)} />
                 )}
+                {section.field === "shows_dir" && (
+                  <ShowsLibraryStats hasLibrary={Boolean(syncedSettings.shows_dir)} />
+                )}
                 {section.field === "music_dir" && (
                   <MusicLibraryStats hasLibrary={Boolean(syncedSettings.music_dir)} />
                 )}
@@ -626,7 +635,7 @@ function MoviesLibraryStats({ hasLibrary }: StatsProps) {
     <div className="grid gap-4" aria-label="Movies library statistics">
       <StatItem
         label="Movies"
-        value={stats?.total_movies ?? 0}
+        value={stats ? stats.total_movies : null}
         loading={isLoading}
         loadingLabel="Loading movies count"
         icon={<Film className="size-5 text-primary" aria-hidden="true" />}
@@ -647,12 +656,12 @@ function MusicLibraryStats({ hasLibrary }: StatsProps) {
 
   return (
     <div
-      className="grid gap-4 sm:grid-cols-3"
+      className={LIBRARY_STATS_GRID_CLASS}
       aria-label="Music library statistics"
     >
       <StatItem
         label="Albums"
-        value={stats?.total_albums ?? 0}
+        value={stats ? stats.total_albums : null}
         loading={isLoading}
         loadingLabel="Loading albums count"
         icon={<Disc3 className="size-5 text-primary" aria-hidden="true" />}
@@ -660,7 +669,7 @@ function MusicLibraryStats({ hasLibrary }: StatsProps) {
       />
       <StatItem
         label="Tracks"
-        value={stats?.total_tracks ?? 0}
+        value={stats ? stats.total_tracks : null}
         loading={isLoading}
         loadingLabel="Loading tracks count"
         icon={<Music className="size-5 text-primary" aria-hidden="true" />}
@@ -668,7 +677,7 @@ function MusicLibraryStats({ hasLibrary }: StatsProps) {
       />
       <StatItem
         label="Musicians"
-        value={stats?.total_musicians ?? 0}
+        value={stats ? stats.total_musicians : null}
         loading={isLoading}
         loadingLabel="Loading musicians count"
         icon={<User className="size-5 text-primary" aria-hidden="true" />}
@@ -678,9 +687,52 @@ function MusicLibraryStats({ hasLibrary }: StatsProps) {
   );
 }
 
+function ShowsLibraryStats({ hasLibrary }: StatsProps) {
+  const { data, isLoading } = useQuery({
+    ...showsStatsQueryOpts(),
+    enabled: hasLibrary,
+  });
+  const stats = data?.error === false ? data.data : null;
+
+  if (!hasLibrary) return null;
+
+  return (
+    <div
+      className={LIBRARY_STATS_GRID_CLASS}
+      aria-label="TV shows library statistics"
+    >
+      <StatItem
+        label="Shows"
+        value={stats ? stats.total_shows : null}
+        loading={isLoading}
+        loadingLabel="Loading shows count"
+        icon={<Tv className="size-5 text-primary" aria-hidden="true" />}
+        iconBackgroundClassName="bg-primary/10"
+      />
+      <StatItem
+        label="Seasons"
+        value={stats ? stats.total_seasons : null}
+        loading={isLoading}
+        loadingLabel="Loading seasons count"
+        icon={<Layers className="size-5 text-primary" aria-hidden="true" />}
+        iconBackgroundClassName="bg-primary/10"
+      />
+      <StatItem
+        label="Episodes"
+        value={stats ? stats.total_episodes : null}
+        loading={isLoading}
+        loadingLabel="Loading episodes count"
+        icon={<ListVideo className="size-5 text-primary" aria-hidden="true" />}
+        iconBackgroundClassName="bg-primary/10"
+      />
+    </div>
+  );
+}
+
 type StatItemProps = {
   label: string;
-  value: number;
+  /** Null when the counts request failed: unknown is not zero. */
+  value: number | null;
   loading: boolean;
   loadingLabel: string;
   icon: ReactNode;
@@ -696,11 +748,11 @@ function StatItem({
   iconBackgroundClassName,
 }: StatItemProps) {
   return (
-    <div className="rounded-lg border border-border/50 bg-card/50 p-4">
+    <div className="min-w-0 rounded-lg border border-border/50 bg-card/50 p-3 sm:p-4">
       <div className="flex items-center gap-3">
         <div
           className={cn(
-            "flex size-10 shrink-0 items-center justify-center rounded-lg",
+            "hidden size-10 shrink-0 items-center justify-center rounded-lg sm:flex",
             iconBackgroundClassName,
           )}
           aria-hidden="true"
@@ -713,11 +765,18 @@ function StatItem({
             <span className="sr-only">{loadingLabel}</span>
           </div>
         ) : (
-          <div>
-            <p className="text-2xl font-bold text-foreground">
-              {value.toLocaleString()}
+          <div className="min-w-0">
+            <p className="text-lg font-bold text-foreground tabular-nums sm:text-2xl">
+              {value == null ? (
+                <>
+                  <span aria-hidden="true">—</span>
+                  <span className="sr-only">{`${label} count unavailable`}</span>
+                </>
+              ) : (
+                value.toLocaleString()
+              )}
             </p>
-            <p className="text-sm text-muted-foreground">{label}</p>
+            <p className="text-xs text-muted-foreground sm:text-sm">{label}</p>
           </div>
         )}
       </div>

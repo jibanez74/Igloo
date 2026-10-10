@@ -76,6 +76,8 @@ function mockShowsFetch(options?: { statsRefreshFailure?: boolean }) {
         error: false,
         data: {
           total_shows: 3,
+          total_seasons: 7,
+          total_episodes: 42,
         },
       });
     }
