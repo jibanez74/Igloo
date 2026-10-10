@@ -2,7 +2,7 @@ import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { MOVIES_PER_PAGE } from "@/lib/constants";
-import { jsonResponse, requestURL } from "../helpers/api";
+import { deferredResponse, jsonResponse, requestURL } from "../helpers/api";
 import { authUser, nullableInt64, nullableString } from "../helpers/fixtures";
 import { readDocumentHead, renderRoute } from "../helpers/render-route";
 
@@ -20,6 +20,7 @@ type MockPlaylist = {
   description?: string;
   movies: ReturnType<typeof movie>[];
   is_owner?: boolean;
+  can_edit?: boolean;
 };
 
 function mockPlaylistsFetch(playlists: Record<number, MockPlaylist>) {
@@ -53,10 +54,19 @@ function mockPlaylistsFetch(playlists: Record<number, MockPlaylist>) {
           },
           movie_count: playlist.movies.length,
           is_owner: playlist.is_owner ?? true,
-          can_edit: playlist.is_owner ?? true,
+          can_edit: playlist.can_edit ?? playlist.is_owner ?? true,
           collaborators: null,
         },
       });
+    }
+
+    const removal = url.match(/^\/api\/movies\/playlists\/(\d+)\/movies\/(\d+)$/);
+    const trimmed = removal ? playlists[Number(removal[1])] : undefined;
+    if (removal && trimmed && method === "DELETE") {
+      trimmed.movies = trimmed.movies.filter(
+        candidate => candidate.id !== Number(removal[2]),
+      );
+      return jsonResponse({ error: false, message: "Movie removed from playlist" });
     }
 
     const list = url.match(
@@ -175,6 +185,88 @@ describe("movie playlist route", () => {
           (init as RequestInit | undefined)?.method === "DELETE",
       ),
     ).toBe(true);
+  });
+
+  it("removes a movie from its card menu and refreshes the count", async () => {
+    const fetchMock = mockPlaylistFetch([movie(1, "Arrival", 2016), movie(2, "Heat", 1995)]);
+    const user = userEvent.setup();
+
+    await renderRoute("/movies/playlist/11");
+
+    expect(await screen.findByText("Heat")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "More actions for Heat" }));
+    await user.click(
+      await screen.findByRole("menuitem", { name: "Remove from Playlist" }),
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByText("Heat")).not.toBeInTheDocument();
+    });
+    expect(screen.getByText("Arrival")).toBeInTheDocument();
+    expect(await screen.findByText("1 movie")).toBeInTheDocument();
+    // The menu's trigger left with the card, so focus moves to the heading
+    // rather than falling to the document.
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Weekend Picks" })).toHaveFocus();
+    });
+    expect(
+      fetchMock.mock.calls.some(
+        ([input, init]) =>
+          requestURL(input as RequestInfo | URL) === "/api/movies/playlists/11/movies/2" &&
+          (init as RequestInit | undefined)?.method === "DELETE",
+      ),
+    ).toBe(true);
+  });
+
+  it("keeps focus on the heading while removal is pending and after it fails", async () => {
+    const removalRequest = deferredResponse();
+    const fetchMock = mockPlaylistFetch([movie(1, "Arrival", 2016), movie(2, "Heat", 1995)]);
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      if (
+        requestURL(input) === "/api/movies/playlists/11/movies/2" &&
+        init?.method === "DELETE"
+      ) {
+        return removalRequest.promise;
+      }
+      return fetchMock(input, init);
+    }));
+    const user = userEvent.setup();
+
+    await renderRoute("/movies/playlist/11");
+
+    const trigger = await screen.findByRole("button", { name: "More actions for Heat" });
+    const heading = screen.getByRole("heading", { name: "Weekend Picks" });
+    await user.click(trigger);
+    await user.click(
+      await screen.findByRole("menuitem", { name: "Remove from Playlist" }),
+    );
+
+    await waitFor(() => {
+      expect(trigger).toBeDisabled();
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+      expect(heading).toHaveFocus();
+    });
+    expect(screen.getByText("Heat")).toBeInTheDocument();
+
+    removalRequest.resolve(jsonResponse({ error: true, message: "Removal failed" }, 500));
+
+    await waitFor(() => {
+      expect(trigger).toBeEnabled();
+    });
+    expect(screen.getByText("Heat")).toBeInTheDocument();
+    expect(screen.getByText("2 movies")).toBeInTheDocument();
+    expect(heading).toHaveFocus();
+  });
+
+  it("gives a viewer who cannot edit the playlist no card menu", async () => {
+    mockPlaylistFetch([movie(1, "Arrival", 2016)], { is_owner: false, can_edit: false });
+
+    await renderRoute("/movies/playlist/11");
+
+    expect(await screen.findByText("Arrival")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "More actions for Arrival" }),
+    ).not.toBeInTheDocument();
   });
 
   it("scopes the empty copy to the playlist, not the library", async () => {

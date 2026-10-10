@@ -8,6 +8,7 @@ import MovieLikeButton from "@/components/movies/MovieLikeButton";
 import {
   MOVIES_LIKED_KEY,
   MOVIE_LIKE_STATUS_KEY,
+  MOVIE_PLAYLISTS_KEY,
   MOVIE_WATCH_PROGRESS_KEY,
 } from "@/lib/constants";
 import type {
@@ -15,11 +16,14 @@ import type {
   LibraryMovieDetailsMovieType,
   WatchProgressType,
 } from "@/types";
+import { moviePlaylistSummary } from "../helpers/movies";
 import { createTestQueryClient, renderWithQueryClient } from "../helpers/render";
 
 const toggleLikeMovieMock = vi.fn();
 const setMovieWatchedMock = vi.fn();
+const addMoviesToMoviePlaylistMock = vi.fn();
 const showActionFailedMock = vi.fn();
+const showAddedMock = vi.fn();
 
 vi.mock("@tanstack/react-router", async () => {
   const actual =
@@ -62,6 +66,8 @@ vi.mock("@/lib/api", async () => {
 
   return {
     ...actual,
+    addMoviesToMoviePlaylist: (...args: unknown[]) =>
+      addMoviesToMoviePlaylistMock(...args),
     setMovieWatched: (...args: unknown[]) => setMovieWatchedMock(...args),
     toggleLikeMovie: (...args: unknown[]) => toggleLikeMovieMock(...args),
   };
@@ -76,6 +82,7 @@ vi.mock("@/lib/toast-helpers", async () => {
   return {
     ...actual,
     showActionFailed: (...args: unknown[]) => showActionFailedMock(...args),
+    showAdded: (...args: unknown[]) => showAddedMock(...args),
   };
 });
 
@@ -192,6 +199,14 @@ function renderHeroActions(watched = false) {
         [MOVIE_WATCH_PROGRESS_KEY, 22],
         progress({ watched }),
       );
+      queryClient.setQueryData(
+        [MOVIE_PLAYLISTS_KEY],
+        success({
+          playlists: [
+            moviePlaylistSummary({ id: 5, name: "Friday Feature", movie_count: 3 }),
+          ],
+        }),
+      );
     },
   );
 }
@@ -199,7 +214,39 @@ function renderHeroActions(watched = false) {
 beforeEach(() => {
   toggleLikeMovieMock.mockReset();
   setMovieWatchedMock.mockReset();
+  addMoviesToMoviePlaylistMock.mockReset();
   showActionFailedMock.mockReset();
+  showAddedMock.mockReset();
+});
+
+describe("MovieDetailsHeroActions More menu", () => {
+  it("offers Add to Playlist to every viewer and adds the movie through the picker", async () => {
+    const user = userEvent.setup();
+    addMoviesToMoviePlaylistMock.mockResolvedValue(success({ added: 1, skipped: 0 }));
+    renderHeroActions();
+
+    await user.click(screen.getByRole("button", { name: "More options" }));
+    await user.click(
+      await screen.findByRole("menuitem", { name: "Add to Playlist" }),
+    );
+
+    const dialog = await screen.findByRole("dialog", { name: "Add to Playlist" });
+    expect(dialog).toHaveTextContent('Add "Arrival" to one or more playlists.');
+    await user.click(
+      await screen.findByRole("button", { name: "Friday Feature 3 movies" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Add to 1 Playlist" }));
+
+    await waitFor(() => {
+      expect(showAddedMock).toHaveBeenCalledWith("Movie", "to 1 playlist");
+    });
+    expect(addMoviesToMoviePlaylistMock).toHaveBeenCalledWith(5, [22]);
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", { name: "Add to Playlist" }),
+      ).not.toBeInTheDocument();
+    });
+  });
 });
 
 describe("MovieLikeButton", () => {

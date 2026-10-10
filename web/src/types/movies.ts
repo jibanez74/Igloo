@@ -61,6 +61,10 @@ export type CreateMoviePlaylistRequest =
 export type UpdateMoviePlaylistRequest =
   components["schemas"]["UpdateMoviePlaylistRequest"];
 
+/** POST /api/movies/playlists/:id/movies appends; duplicates count as skipped. */
+export type AddMoviesToPlaylistRequest =
+  components["schemas"]["AddMoviesRequest"];
+
 export type MovieDetailsType = components["schemas"]["TmdbMovie"];
 export type CrewMemberType = NonNullable<
   MovieDetailsType["credits"]["crew"]

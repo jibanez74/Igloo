@@ -1,5 +1,6 @@
 import type {
   LibraryMovieDetailsResponse,
+  MoviePlaylistSummaryType,
   MovieTechnicalDetailsResponse,
   MoviesLibraryListItemType,
   PlaybackSettingsType,
@@ -24,6 +25,32 @@ export function libraryMovie(
     poster_path: nullableString(posterPath),
     year: nullableInt64(year),
     certification: nullableString("PG-13"),
+  };
+}
+
+/** A movie playlist as GET /api/movies/playlists lists it; a shared one belongs to user 2. */
+export function moviePlaylist(
+  id: number,
+  name: string,
+  movieCount: number,
+  isOwner: boolean,
+  description: string,
+  coverImage = "",
+): MoviePlaylistSummaryType {
+  return {
+    id,
+    user_id: isOwner ? 1 : 2,
+    name,
+    description: nullableString(description),
+    cover_image: nullableString(coverImage),
+    is_public: false,
+    movie_id: nullableInt64(),
+    content_type: "movie",
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+    movie_count: movieCount,
+    is_owner: isOwner,
+    can_edit: isOwner,
   };
 }
 

@@ -87,6 +87,7 @@ export type {
   MoviePlaylistDetailResponseType,
   CreateMoviePlaylistRequest,
   UpdateMoviePlaylistRequest,
+  AddMoviesToPlaylistRequest,
   TmdbStatusType,
   TmdbSearchMoviesRequest,
   UpdateMovieMetadataRequest,

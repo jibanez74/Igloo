@@ -10,13 +10,13 @@ import type {
   MoviePlaylistDetailResponseType,
   MoviePlaylistRowType,
   MoviePlaylistSummaryType,
+  MoviesLibraryListItemType,
   UpdateMoviePlaylistRequest,
 } from "../src/types";
 import {
   apiResponse,
   fulfillJSON,
   gateRoute,
-  nullableInt64,
   nullableString,
   pagedList,
 } from "./e2e-api";
@@ -25,48 +25,24 @@ import {
   fillLibraryPage,
   libraryMovie,
   movieCardPreload,
+  moviePlaylist,
 } from "./fixtures/movies";
 
 // The movie-only half of the library page: playlists and the liked view. The
 // tabs, grid, genres, pagination and sort both libraries share are covered by
 // library-index.spec.ts.
 
-function moviePlaylist(
-  id: number,
-  name: string,
-  movieCount: number,
-  isOwner: boolean,
-  description: string,
-  coverImage = "",
-): MoviePlaylistSummaryType {
-  return {
-    id,
-    user_id: isOwner ? 1 : 2,
-    name,
-    description: nullableString(description),
-    cover_image: nullableString(coverImage),
-    is_public: false,
-    movie_id: nullableInt64(),
-    content_type: "movie",
-    created_at: "2026-01-01T00:00:00Z",
-    updated_at: "2026-01-01T00:00:00Z",
-    movie_count: movieCount,
-    is_owner: isOwner,
-    can_edit: isOwner,
-  };
-}
-
 const moviesPlaylistsPath =
   "/movies?tab=playlists&allPage=1&sort=asc&genresPage=1&playlistsPage=1";
+
+const signalFire = libraryMovie(101, "Signal Fire", 2024, "/signal-fire.jpg");
+const quietHarbor = libraryMovie(102, "Quiet Harbor", 2022);
 
 // The route loader also warms the All Movies tab, so the library list serves
 // the same pages as the liked view.
 const moviePages = [
   fillLibraryPage(
-    [
-      libraryMovie(101, "Signal Fire", 2024, "/signal-fire.jpg"),
-      libraryMovie(102, "Quiet Harbor", 2022),
-    ],
+    [signalFire, quietHarbor],
     { prefix: "Liked Mock", startId: 3000, perPage: MOVIES_PER_PAGE },
     libraryMovie,
   ),
@@ -109,9 +85,14 @@ function playlistNotFound(playlistId: number) {
 
 async function mockMoviesApi(page: Page) {
   const playlists = [...initialPlaylists];
+  // The owned playlist's first page; its count stays the summary's own number.
+  const playlistMovies = new Map<number, MoviesLibraryListItemType[]>([
+    [501, [signalFire, quietHarbor]],
+  ]);
   const createdPlaylistRequests: CreateMoviePlaylistRequest[] = [];
   const updatedPlaylistRequests: UpdateMoviePlaylistRequest[] = [];
   const deletedPlaylistIds: number[] = [];
+  const removedMovieRequests: { playlistId: number; movieId: number }[] = [];
 
   const { unexpectedApiRequests } = await mockApi(page, {
     user: { is_admin: true },
@@ -155,6 +136,21 @@ async function mockMoviesApi(page: Page) {
         deletedPlaylistIds.push(playlistId);
         playlists.splice(playlists.findIndex(candidate => candidate.id === playlistId), 1);
         await fulfillJSON(route, { error: false, message: "Playlist deleted successfully" });
+        return true;
+      }
+
+      const removal = url.pathname.match(/^\/api\/movies\/playlists\/(\d+)\/movies\/(\d+)$/);
+      if (removal && method === "DELETE") {
+        const playlistId = Number(removal[1]);
+        const movieId = Number(removal[2]);
+        removedMovieRequests.push({ playlistId, movieId });
+        playlistMovies.set(
+          playlistId,
+          (playlistMovies.get(playlistId) ?? []).filter(candidate => candidate.id !== movieId),
+        );
+        const index = playlists.findIndex(candidate => candidate.id === playlistId);
+        playlists[index] = { ...playlists[index], movie_count: playlists[index].movie_count - 1 };
+        await fulfillJSON(route, { error: false, message: "Movie removed from playlist" });
         return true;
       }
 
@@ -204,7 +200,7 @@ async function mockMoviesApi(page: Page) {
         }
 
         if (playlistMatch[2]) {
-          await fulfillJSON(route, apiResponse(pagedList(url, "movies", [], {
+          await fulfillJSON(route, apiResponse(pagedList(url, "movies", playlistMovies.get(playlistId) ?? [], {
             total: playlist.movie_count,
             perPage: MOVIES_PER_PAGE,
           })));
@@ -229,6 +225,7 @@ async function mockMoviesApi(page: Page) {
     createdPlaylistRequests,
     updatedPlaylistRequests,
     deletedPlaylistIds,
+    removedMovieRequests,
     unexpectedApiRequests,
   };
 }
@@ -348,6 +345,51 @@ test("a viewer who does not own a movie playlist sees no Edit or Delete", async 
   await expect(page.getByRole("button", { name: "Delete playlist" })).toHaveCount(0);
 
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);
+});
+
+test("removing a movie from a playlist page drops its card and updates the count", async ({ page }) => {
+  const browserIssues = trackBrowserIssues(page);
+  const { removedMovieRequests, unexpectedApiRequests } = await mockMoviesApi(page);
+
+  await page.setViewportSize(VIEWPORTS.desktop);
+  await page.goto("/movies/playlist/501");
+
+  await expect(page.getByText("7 movies")).toBeVisible();
+  const card = cardFor(page, "Quiet Harbor 2022");
+  const menuButton = card.getByRole("button", { name: "More actions for Quiet Harbor" });
+  // The card's menu reveals with the card, like its play control.
+  await expect(menuButton.locator("..")).toHaveCSS("opacity", "0");
+  await card.hover();
+  await expect(menuButton.locator("..")).toHaveCSS("opacity", "1");
+
+  await menuButton.click();
+  await page.getByRole("menuitem", { name: "Remove from Playlist" }).click();
+
+  await expect.poll(() => removedMovieRequests).toEqual([{ playlistId: 501, movieId: 102 }]);
+  await expect(page.getByText("Movie removed from playlist")).toBeVisible();
+  await expect(card).toHaveCount(0);
+  await expect(cardFor(page, "Signal Fire 2024")).toBeVisible();
+  await expect(page.getByText("6 movies")).toBeVisible();
+
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
+});
+
+test.describe("on a touch phone", () => {
+  test.use({ viewport: VIEWPORTS.phone, hasTouch: true, isMobile: true });
+
+  // Nothing hovers on a touch screen, so the card menu is always shown there.
+  test("the playlist card menu is shown without hover", async ({ page }) => {
+    const browserIssues = trackBrowserIssues(page);
+    const { unexpectedApiRequests } = await mockMoviesApi(page);
+
+    await page.goto("/movies/playlist/501");
+
+    const menuButton = page.getByRole("button", { name: "More actions for Signal Fire" });
+    await expect(menuButton).toBeVisible();
+    await expect(menuButton.locator("..")).toHaveCSS("opacity", "1");
+
+    assertMockSuiteClean(browserIssues, unexpectedApiRequests);
+  });
 });
 
 test("switching to the playlists tab commits at once and shows its skeleton", async ({ page }) => {

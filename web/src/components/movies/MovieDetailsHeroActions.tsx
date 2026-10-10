@@ -5,6 +5,7 @@ import {
   Play,
   MoreVertical,
   Info,
+  ListPlus,
   Radio,
   Settings2,
   Pencil,
@@ -55,12 +56,14 @@ const loadTechnicalDetailsDialog = () => import("@/components/movies/TechnicalDe
 const loadEditMovieDialog = () => import("@/components/movies/EditMovieDialog");
 const loadDeleteMovieDialog = () => import("@/components/movies/DeleteMovieDialog");
 const loadCreateWatchRoomDialog = () => import("@/components/watch-room/CreateWatchRoomDialog");
+const loadAddToPlaylistDialog = () => import("@/components/shared/AddToPlaylistDialog");
 
 const PlaybackSettingsDialog = lazy(loadPlaybackSettingsDialog);
 const TechnicalDetailsDialog = lazy(loadTechnicalDetailsDialog);
 const EditMovieDialog = lazy(loadEditMovieDialog);
 const DeleteMovieDialog = lazy(loadDeleteMovieDialog);
 const CreateWatchRoomDialog = lazy(loadCreateWatchRoomDialog);
+const AddToPlaylistDialog = lazy(loadAddToPlaylistDialog);
 
 const emptyWatchProgress = (): WatchProgressType => ({
   progress_sec: null,
@@ -90,11 +93,13 @@ export default function MovieDetailsHeroActions({
   const moreOptionsButtonRef = useRef<HTMLButtonElement | null>(null);
   const [playbackFormResetKey, setPlaybackFormResetKey] = useState(0);
   const [createWatchRoomOpen, setCreateWatchRoomOpen] = useState(false);
+  const [addToPlaylistOpen, setAddToPlaylistOpen] = useState(false);
 
   const preloadMoreOptionsDialogs = () => {
     void loadPlaybackSettingsDialog();
     void loadTechnicalDetailsDialog();
     void loadCreateWatchRoomDialog();
+    void loadAddToPlaylistDialog();
     if (user?.is_admin) {
       void loadEditMovieDialog();
       void loadDeleteMovieDialog();
@@ -254,6 +259,10 @@ export default function MovieDetailsHeroActions({
             <Radio className="size-4" aria-hidden="true" />
             Watch Together
           </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setAddToPlaylistOpen(true)}>
+            <ListPlus className="size-4" aria-hidden="true" />
+            Add to Playlist
+          </DropdownMenuItem>
           {user?.is_admin && (
             <DropdownMenuItem onSelect={() => onEditOpenChange(true)}>
               <Pencil className="size-4" aria-hidden="true" />
@@ -303,6 +312,19 @@ export default function MovieDetailsHeroActions({
             playbackSettings={playbackSettings}
             open={createWatchRoomOpen}
             onOpenChange={setCreateWatchRoomOpen}
+            restoreFocusRef={moreOptionsButtonRef}
+          />
+        </Suspense>
+      )}
+
+      {addToPlaylistOpen && (
+        <Suspense fallback={null}>
+          <AddToPlaylistDialog
+            kind="movie"
+            itemId={movieId}
+            itemTitle={movieTitle}
+            open={addToPlaylistOpen}
+            onOpenChange={setAddToPlaylistOpen}
             restoreFocusRef={moreOptionsButtonRef}
           />
         </Suspense>
