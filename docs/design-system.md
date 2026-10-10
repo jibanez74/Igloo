@@ -89,7 +89,7 @@ themes by `contrast.test.ts`.
 | `border` | `#2A3C57` | `#CBD9E8` | Borders |
 | `input` | white @ 8% | `#CBD9E8` | Input borders |
 | `ring` | `#38BDF8` | `#0EA5E9` | **The one focus color** |
-| `destructive` / `-foreground` | `#F87171` / `#08131F` | `#DC2626` / `#FFFFFF` | Danger / delete |
+| `destructive` / `-foreground` | `#F87171` / `#08131F` | `#B91C1C` / `#FFFFFF` | Danger / delete |
 | `aurora` / `-foreground` | `#F59E0B` / `#08131F` | same | Warm accent (sparing) |
 | `success` / `-foreground` | `#34D399` / `#08131F` | `#167050` / `#FFFFFF` | Success state |
 | `accent-teal` / `-foreground` | `#2DD4BF` / `#08131F` | `#0D9488` / `#08131F` | Secondary accent |

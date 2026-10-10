@@ -562,20 +562,20 @@ function AlbumDetailsContent({
             <dl className="grid grid-cols-1 gap-6 text-sm min-[480px]:grid-cols-2 lg:grid-cols-4">
               {releaseDate && (
                 <div>
-                  <dt className="font-semibold tracking-wide text-primary/70 uppercase">
+                  <dt className="font-semibold tracking-wide text-muted-foreground uppercase">
                     Release Date
                   </dt>
                   <dd className="mt-1 text-foreground">{formatDate(releaseDate)}</dd>
                 </div>
               )}
               <div>
-                <dt className="font-semibold tracking-wide text-primary/70 uppercase">
+                <dt className="font-semibold tracking-wide text-muted-foreground uppercase">
                   Total Tracks
                 </dt>
                 <dd className="mt-1 text-foreground">{tracks.length}</dd>
               </div>
               <div>
-                <dt className="font-semibold tracking-wide text-primary/70 uppercase">
+                <dt className="font-semibold tracking-wide text-muted-foreground uppercase">
                   Total Duration
                 </dt>
                 <dd className="mt-1 text-foreground">
@@ -584,7 +584,7 @@ function AlbumDetailsContent({
               </div>
               {musicianName && (
                 <div>
-                  <dt className="font-semibold tracking-wide text-primary/70 uppercase">
+                  <dt className="font-semibold tracking-wide text-muted-foreground uppercase">
                     Artist
                   </dt>
                   <dd className="mt-1 text-foreground">
@@ -608,7 +608,7 @@ function AlbumDetailsContent({
               )}
               {album_genres.length > 0 && (
                 <div>
-                  <dt className="font-semibold tracking-wide text-primary/70 uppercase">
+                  <dt className="font-semibold tracking-wide text-muted-foreground uppercase">
                     Genres
                   </dt>
                   <dd className="mt-1 text-foreground">
@@ -618,7 +618,7 @@ function AlbumDetailsContent({
               )}
               {hasMultipleDiscs && (
                 <div>
-                  <dt className="font-semibold tracking-wide text-primary/70 uppercase">
+                  <dt className="font-semibold tracking-wide text-muted-foreground uppercase">
                     Discs
                   </dt>
                   <dd className="mt-1 text-foreground">{discNumbers.length}</dd>
@@ -626,7 +626,7 @@ function AlbumDetailsContent({
               )}
               {audioQuality && (
                 <div>
-                  <dt className="font-semibold tracking-wide text-primary/70 uppercase">
+                  <dt className="font-semibold tracking-wide text-muted-foreground uppercase">
                     Audio Quality
                   </dt>
                   <dd className="mt-1 text-foreground">{audioQuality}</dd>
@@ -634,7 +634,7 @@ function AlbumDetailsContent({
               )}
               {spotifyPopularity != null && (
                 <div>
-                  <dt className="font-semibold tracking-wide text-primary/70 uppercase">
+                  <dt className="font-semibold tracking-wide text-muted-foreground uppercase">
                     Spotify popularity
                   </dt>
                   <dd className="mt-1 flex items-baseline gap-2 text-foreground">

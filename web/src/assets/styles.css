@@ -70,7 +70,7 @@
   --muted-foreground: oklch(0.446 0.037 257.3); /* cool gray #475569 */
   --accent: oklch(0.942 0.017 248); /* cool surface #E3EDF7 */
   --accent-foreground: oklch(0.187 0.034 260.2);
-  --destructive: oklch(0.577 0.215 27.3); /* danger #DC2626 */
+  --destructive: oklch(0.505 0.19 27.5); /* danger #B91C1C — 4.9:1 on its own /10 tint */
   --border: oklch(0.879 0.026 250); /* #CBD9E8 */
   --input: oklch(0.879 0.026 250); /* #CBD9E8 */
   --ring: oklch(0.685 0.148 237.32); /* glacier #0EA5E9 — one focus color */
@@ -91,7 +91,7 @@
   --aurora-foreground: oklch(0.183 0.03 251.4); /* onAurora #08131F */
   --success: oklch(0.487 0.097 163.5); /* deep glacier green #167050 — ≥4.5:1 on canvas, card, and /15 tints */
   --accent-teal: oklch(0.6002 0.1038 184.7); /* #0D9488 */
-  --destructive-foreground: oklch(1 0 0); /* #FFFFFF — 4.83:1 on destructive */
+  --destructive-foreground: oklch(1 0 0); /* #FFFFFF — 6.47:1 on destructive */
   --success-foreground: oklch(1 0 0); /* #FFFFFF — 6.06:1 on success */
   --accent-teal-foreground: oklch(0.183 0.03 251.4); /* ink #08131F — 4.99:1 on accent-teal */
 }

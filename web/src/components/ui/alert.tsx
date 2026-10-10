@@ -11,7 +11,7 @@ function Alert({
       data-slot="alert"
       role="alert"
       className={cn(
-        "relative grid w-full grid-cols-[0_1fr] items-start gap-y-0.5 rounded-lg border bg-card px-4 py-3 text-sm text-destructive has-[>svg]:grid-cols-[--spacing(4)_1fr] has-[>svg]:gap-x-3 *:data-[slot=alert-description]:text-destructive/90 [&>svg]:size-4 [&>svg]:translate-y-0.5 [&>svg]:text-current",
+        "relative grid w-full grid-cols-[0_1fr] items-start gap-y-0.5 rounded-lg border bg-card px-4 py-3 text-sm text-destructive has-[>svg]:grid-cols-[--spacing(4)_1fr] has-[>svg]:gap-x-3 *:data-[slot=alert-description]:text-destructive [&>svg]:size-4 [&>svg]:translate-y-0.5 [&>svg]:text-current",
         className
       )}
       {...props}
