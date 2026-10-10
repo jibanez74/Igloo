@@ -792,9 +792,12 @@ Leaving a playlist asks nothing (it is reversible) and toasts
 only when the detail response says `can_edit`. A removed card takes its
 menu's trigger with it, in either order: the card menu's close falls back
 to the page `h1` (through `focusDialogRestoreTarget`) when its trigger is
-already gone, and once the list has refetched the movie playlist page moves
-a focus that fell to the document onto that same `h1` (a `tabIndex=-1`
-skip-link target like the music page's). A new library page composes the
+disabled while removal is pending or already gone. If removal fails, focus
+stays on the heading after the trigger becomes enabled again. Dismissing the
+menu without removing returns focus to its enabled trigger. Once the list
+has refetched, the movie playlist page moves a focus that fell to the document
+onto that same `h1` (a `tabIndex=-1` skip-link target like the music page's).
+A new library page composes the
 same parts. The
 search page's category tabs reuse `LIBRARY_POSTER_GRID_CLASS`,
 `LoadErrorAlert` and `PosterCardSkeleton` but stay page-local: their result

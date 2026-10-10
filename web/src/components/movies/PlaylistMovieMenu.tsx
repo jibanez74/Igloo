@@ -19,8 +19,8 @@ type PlaylistMovieMenuProps = {
   /** Held while this movie's removal is in flight, so it cannot fire twice. */
   disabled?: boolean;
   /**
-   * Where focus goes when the menu closes after its trigger has left with
-   * the card, so a keyboard user is not dropped at the top of the document.
+   * Where focus goes when the menu closes with its trigger disabled or gone
+   * with the card, so a keyboard user is not dropped at the top of the document.
    */
   fallbackFocusRef?: RefObject<HTMLElement | null>;
 };
@@ -57,12 +57,16 @@ export default function PlaylistMovieMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"
-        // Removal can finish, and unmount the card, before the menu has
-        // closed; the trigger is then gone and the default return would
-        // land on the document.
+        // Removal disables the trigger while pending and can unmount the
+        // card before the menu closes. Either way, restore to the heading
+        // because the trigger cannot receive focus.
         onCloseAutoFocus={event => {
           event.preventDefault();
-          focusDialogRestoreTarget(triggerRef.current, fallbackFocusRef?.current);
+          const trigger = triggerRef.current;
+          focusDialogRestoreTarget(
+            trigger?.disabled ? null : trigger,
+            fallbackFocusRef?.current,
+          );
         }}
       >
         <DropdownMenuItem onSelect={onRemove} variant="destructive">

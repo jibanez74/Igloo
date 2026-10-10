@@ -2,7 +2,7 @@ import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { MOVIES_PER_PAGE } from "@/lib/constants";
-import { jsonResponse, requestURL } from "../helpers/api";
+import { deferredResponse, jsonResponse, requestURL } from "../helpers/api";
 import { authUser, nullableInt64, nullableString } from "../helpers/fixtures";
 import { readDocumentHead, renderRoute } from "../helpers/render-route";
 
@@ -216,6 +216,46 @@ describe("movie playlist route", () => {
           (init as RequestInit | undefined)?.method === "DELETE",
       ),
     ).toBe(true);
+  });
+
+  it("keeps focus on the heading while removal is pending and after it fails", async () => {
+    const removalRequest = deferredResponse();
+    const fetchMock = mockPlaylistFetch([movie(1, "Arrival", 2016), movie(2, "Heat", 1995)]);
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      if (
+        requestURL(input) === "/api/movies/playlists/11/movies/2" &&
+        init?.method === "DELETE"
+      ) {
+        return removalRequest.promise;
+      }
+      return fetchMock(input, init);
+    }));
+    const user = userEvent.setup();
+
+    await renderRoute("/movies/playlist/11");
+
+    const trigger = await screen.findByRole("button", { name: "More actions for Heat" });
+    const heading = screen.getByRole("heading", { name: "Weekend Picks" });
+    await user.click(trigger);
+    await user.click(
+      await screen.findByRole("menuitem", { name: "Remove from Playlist" }),
+    );
+
+    await waitFor(() => {
+      expect(trigger).toBeDisabled();
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+      expect(heading).toHaveFocus();
+    });
+    expect(screen.getByText("Heat")).toBeInTheDocument();
+
+    removalRequest.resolve(jsonResponse({ error: true, message: "Removal failed" }, 500));
+
+    await waitFor(() => {
+      expect(trigger).toBeEnabled();
+    });
+    expect(screen.getByText("Heat")).toBeInTheDocument();
+    expect(screen.getByText("2 movies")).toBeInTheDocument();
+    expect(heading).toHaveFocus();
   });
 
   it("gives a viewer who cannot edit the playlist no card menu", async () => {
