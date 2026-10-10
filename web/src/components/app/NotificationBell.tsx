@@ -143,7 +143,7 @@ export default function NotificationBell() {
     mutationFn: (id: number) => markNotificationRead(id),
     onSuccess: (res) => {
       if (res.error) {
-        showActionFailed("update notification", res.message);
+        showActionFailed("update notification", res);
         return;
       }
       invalidateNotifications();
@@ -155,7 +155,7 @@ export default function NotificationBell() {
     mutationFn: () => markAllNotificationsRead(),
     onSuccess: (res) => {
       if (res.error) {
-        showActionFailed("mark all as read", res.message);
+        showActionFailed("mark all as read", res);
         return;
       }
       invalidateNotifications();
@@ -167,7 +167,7 @@ export default function NotificationBell() {
     mutationFn: (id: number) => deleteNotification(id),
     onSuccess: (res) => {
       if (res.error) {
-        showActionFailed("dismiss notification", res.message);
+        showActionFailed("dismiss notification", res);
         return;
       }
       invalidateNotifications();

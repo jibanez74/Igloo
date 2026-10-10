@@ -6,6 +6,8 @@
  */
 
 import { toast } from "sonner";
+import { apiErrorMessage } from "@/lib/is-api-failure";
+import type { ApiFailureType } from "@/types";
 
 // ============================================================================
 // Success Toasts
@@ -66,11 +68,15 @@ export function showSuccess(message: string, description?: string) {
 // ============================================================================
 
 /**
- * Show an error toast for failed actions.
- * @example showActionFailed("create playlist", "Name already exists")
+ * Show an error toast for failed actions. Pass the failed envelope rather than
+ * its message: only a server-worded 4xx reaches the description, never a 5xx
+ * constant or the client's canned 404/network text (`apiErrorMessage`).
+ * @example showActionFailed("create playlist", res)
+ * @example showActionFailed("play album", "Something went wrong. Please try again.")
  */
-export function showActionFailed(action: string, errorMessage?: string) {
-  toast.error(`Failed to ${action}`, errorMessage ? { description: errorMessage } : undefined);
+export function showActionFailed(action: string, failure?: string | ApiFailureType) {
+  const description = typeof failure === "string" ? failure : apiErrorMessage(failure, "");
+  toast.error(`Failed to ${action}`, description ? { description } : undefined);
 }
 
 /**

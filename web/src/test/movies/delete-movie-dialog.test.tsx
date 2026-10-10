@@ -109,7 +109,7 @@ describe("DeleteMovieDialog", () => {
     await waitFor(() => {
       expect(mocks.showActionFailed).toHaveBeenCalledWith(
         "delete movie",
-        "Movie is playing.",
+        expect.objectContaining({ error: true, message: "Movie is playing." }),
       );
     });
     expect(mocks.navigate).not.toHaveBeenCalled();

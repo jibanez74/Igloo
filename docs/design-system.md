@@ -1139,7 +1139,12 @@ require the full playback test pass.
   `closeButton`, top-right; toast surfaces tokenized with `!` overrides
   (`!bg-card`/`!bg-muted`, `!border-success/50`, `!border-destructive/50`).
   Fire success/failure through `lib/toast-helpers.ts`
-  (`showActionFailed(...)` etc.), not ad-hoc `toast()` calls.
+  (`showActionFailed(...)` etc.), not ad-hoc `toast()` calls. Hand
+  `showActionFailed` the failed envelope, not its `message`: it words the
+  description through `apiErrorMessage`, so only a server-worded 4xx reaches
+  the reader and a 5xx constant or the client's canned 404/network string
+  never does. Inline error text and load-error cards make the same choice
+  with `apiErrorMessage(res, fallback)`.
 - **NotificationBell** (header): ghost icon button with a glacier unread
   badge pill ("99+" cap; count also in the `aria-label`), opening a `w-80
   bg-card` popover — header row with "Mark all read", `max-h-96` scroll body

@@ -14,6 +14,7 @@ import { parseServerTimestamp } from "@/lib/format";
 import { devicesQueryOpts } from "@/lib/query-opts";
 import { showSuccess, showActionFailed } from "@/lib/toast-helpers";
 import type { DeviceType } from "@/types";
+import { apiErrorMessage } from "@/lib/is-api-failure";
 
 function formatDeviceDate(value: string) {
   const date = parseServerTimestamp(value);
@@ -41,7 +42,7 @@ export default function DevicesCard() {
     mutationFn: (id: number) => revokeDevice(id),
     onSuccess: res => {
       if (res.error) {
-        showActionFailed("revoke device", res.message);
+        showActionFailed("revoke device", res);
         return;
       }
       showSuccess("Device revoked");
@@ -60,7 +61,7 @@ export default function DevicesCard() {
       renameDevice(id, name),
     onSuccess: res => {
       if (res.error) {
-        showActionFailed("rename device", res.message);
+        showActionFailed("rename device", res);
         return;
       }
       showSuccess("Device renamed");
@@ -100,7 +101,7 @@ export default function DevicesCard() {
           <p className="text-sm text-muted-foreground">Loading devices...</p>
         ) : data?.error ? (
           <p className="text-sm text-destructive" role="alert">
-            {data.message}
+            {apiErrorMessage(data, "Couldn’t load your devices. Please try again.")}
           </p>
         ) : devices.length === 0 ? (
           <p className="text-sm text-muted-foreground">

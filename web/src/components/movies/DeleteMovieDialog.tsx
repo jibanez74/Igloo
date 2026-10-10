@@ -40,7 +40,7 @@ export default function DeleteMovieDialog({
       const res = await deleteMovie(movieId, deleteFile);
 
       if (res.error) {
-        showActionFailed("delete movie", res.message);
+        showActionFailed("delete movie", res);
       } else {
         deleted = true;
       }

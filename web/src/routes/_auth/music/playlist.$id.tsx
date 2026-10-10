@@ -202,7 +202,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
       reorderPlaylistTracks(playlistId, trackIds),
     onSuccess: (result) => {
       if (result.error) {
-        showActionFailed("reorder tracks", result.message);
+        showActionFailed("reorder tracks", result);
         // Refetch to restore original order
         queryClient.invalidateQueries({ queryKey: [PLAYLIST_TRACKS_KEY, playlistId] });
         return;

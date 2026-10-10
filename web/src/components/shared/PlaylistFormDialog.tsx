@@ -143,7 +143,7 @@ function PlaylistForm({
       }),
     onSuccess: (data) => {
       if (data.error) {
-        showActionFailed("create playlist", data.message);
+        showActionFailed("create playlist", data);
         return;
       }
       queryClient.invalidateQueries({ queryKey: [api.listKey] });
@@ -170,7 +170,7 @@ function PlaylistForm({
     },
     onSuccess: async (data) => {
       if (data.error) {
-        showActionFailed("update playlist", data.message);
+        showActionFailed("update playlist", data);
         return;
       }
       queryClient.invalidateQueries({ queryKey: [api.listKey] });

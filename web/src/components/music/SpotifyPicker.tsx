@@ -114,7 +114,7 @@ export default function SpotifyPicker<T extends SpotifySearchResult>({
       });
 
       if (response.error || !response.data?.results) {
-        showActionFailed("search Spotify", response.message);
+        showActionFailed("search Spotify", response.error ? response : undefined);
       } else {
         setResults(response.data.results);
         if (response.data.results.length === 0) {

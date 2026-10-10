@@ -32,6 +32,7 @@ import {
 } from "@/lib/input-styles";
 import { cn } from "@/lib/utils";
 import { routeHead } from "@/lib/route-head";
+import { apiErrorMessage } from "@/lib/is-api-failure";
 
 const LOGIN_HEAD = routeHead(
   "Sign In",
@@ -84,7 +85,7 @@ function LoginPage() {
           "Login failed",
           rejected
             ? "The email or password is incorrect."
-            : res.message || "An error occurred during login",
+            : apiErrorMessage(res, "An error occurred during login"),
         );
         setIsSubmitting(false);
         return;

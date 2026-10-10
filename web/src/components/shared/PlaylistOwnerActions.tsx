@@ -51,7 +51,7 @@ export default function PlaylistOwnerActions({
     mutationFn: () => api.remove(playlist.id),
     onSuccess: (result) => {
       if (result.error) {
-        showActionFailed("delete playlist", result.message);
+        showActionFailed("delete playlist", result);
         return;
       }
       queryClient.invalidateQueries({ queryKey: [api.listKey] });

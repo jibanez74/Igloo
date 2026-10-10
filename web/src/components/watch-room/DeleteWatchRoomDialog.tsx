@@ -61,7 +61,7 @@ export default function DeleteWatchRoomDialog({
       const res = await deleteWatchRoom(roomId);
       if (res.error) {
         onDeleteError?.();
-        showActionFailed("close watch room", res.message);
+        showActionFailed("close watch room", res);
       } else {
         queryClient.setQueryData(
           [WATCH_ROOMS_KEY],

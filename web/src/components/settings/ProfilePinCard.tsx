@@ -224,7 +224,7 @@ export default function ProfilePinCard() {
         )}
         {revealed && pinData?.error && (
           <p className="text-xs text-destructive" role="alert">
-            {pinData.message || "Failed to load your PIN."}
+            {apiErrorMessage(pinData, "Failed to load your PIN.")}
           </p>
         )}
 

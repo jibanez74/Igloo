@@ -98,7 +98,7 @@ function useTrackLikeToggle(trackId: number) {
     onSuccess: (res, _variables, context) => {
       if (res.error) {
         rollback(context?.previousIsLiked);
-        showActionFailed("update like", res.message);
+        showActionFailed("update like", res);
         return;
       }
       const current =

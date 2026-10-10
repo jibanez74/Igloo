@@ -72,6 +72,7 @@ import {
   MUSIC_DETAIL_SHELL_CLASS,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { apiErrorMessage } from "@/lib/is-api-failure";
 
 type AlbumHeadData = {
   title: string;
@@ -194,7 +195,7 @@ function AlbumDetailsContent({
       if (result.error) {
         showActionFailed(
           "delete album",
-          result.message || "Unable to delete album. Please try again.",
+          apiErrorMessage(result, "Unable to delete album. Please try again."),
         );
         return;
       }

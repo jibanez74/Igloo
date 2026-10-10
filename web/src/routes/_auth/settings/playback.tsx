@@ -50,6 +50,7 @@ import type {
   UpdatePlaybackSettingsRequest,
 } from "@/types";
 import { routeHead } from "@/lib/route-head";
+import { apiErrorMessage } from "@/lib/is-api-failure";
 
 const PLAYBACK_SETTINGS_HEAD = routeHead("Playback Settings");
 
@@ -129,7 +130,7 @@ function PlaybackSettings() {
         title="Settings unavailable"
         message={
           authData?.error
-            ? authData.message || "Failed to load user information."
+            ? apiErrorMessage(authData, "Failed to load user information.")
             : "User information not available."
         }
       />
@@ -140,7 +141,7 @@ function PlaybackSettings() {
     return (
       <SettingsErrorCard
         title="Settings unavailable"
-        message={data.message || "Failed to load playback settings."}
+        message={apiErrorMessage(data, "Failed to load playback settings.")}
       />
     );
   }
@@ -266,7 +267,7 @@ function ServerPlaybackForm({ settings }: ServerPlaybackFormProps) {
     mutationFn: updatePlaybackSettings,
     onSuccess: res => {
       if (res.error) {
-        showActionFailed("save playback settings", res.message);
+        showActionFailed("save playback settings", res);
         return;
       }
       // The PUT echoes the same envelope the GET returns, so the response is

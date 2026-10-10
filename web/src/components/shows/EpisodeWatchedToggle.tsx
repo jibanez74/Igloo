@@ -77,7 +77,7 @@ export default function EpisodeWatchedToggle({
     onSuccess: (res, _nextWatched, context) => {
       if (res.error) {
         queryClient.setQueryData(seasonKey, context?.previous);
-        showActionFailed("update watched status", res.message);
+        showActionFailed("update watched status", res);
         return;
       }
 

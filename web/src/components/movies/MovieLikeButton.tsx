@@ -88,7 +88,7 @@ export default function MovieLikeButton({
             likeStatusResponse(false),
           );
         }
-        showActionFailed("update like", res.message);
+        showActionFailed("update like", res);
         return;
       }
       queryClient.setQueryData<ApiResponseType<LikeStatusPayload>>(

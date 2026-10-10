@@ -45,6 +45,7 @@ import type {
   UpdateGeneralSettingsRequest,
 } from "@/types";
 import { routeHead } from "@/lib/route-head";
+import { apiErrorMessage } from "@/lib/is-api-failure";
 
 const GENERAL_SETTINGS_HEAD = routeHead("General Settings");
 
@@ -133,7 +134,7 @@ function GeneralSettings() {
     return (
       <SettingsErrorCard
         title="Settings unavailable"
-        message={data.message || "Failed to load general settings."}
+        message={apiErrorMessage(data, "Failed to load general settings.")}
       />
     );
   }
@@ -236,7 +237,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
         if (context?.previousData) {
           queryClient.setQueryData([GENERAL_SETTINGS_KEY], context.previousData);
         }
-        showActionFailed("save settings", res.message);
+        showActionFailed("save settings", res);
         return;
       }
 

@@ -153,7 +153,7 @@ export default function CreateWatchRoomDialog({
       }),
     onSuccess: async data => {
       if (data.error) {
-        showActionFailed("create watch room", data.message);
+        showActionFailed("create watch room", data);
         return;
       }
 

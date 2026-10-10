@@ -195,7 +195,7 @@ describe("WatchRoomCard", () => {
 
     expect(showActionFailedMock).toHaveBeenCalledWith(
       "close watch room",
-      "Room deletion failed.",
+      expect.objectContaining({ error: true, message: "Room deletion failed." }),
     );
     expect(showSuccessMock).not.toHaveBeenCalled();
     expect(screen.getByText("Close watch room?")).toBeInTheDocument();

@@ -47,6 +47,7 @@ import { trimmedOrNull } from "@/lib/nullable";
 import { cn } from "@/lib/utils";
 import type { ApiResponseType, SettingsType } from "@/types";
 import { routeHead } from "@/lib/route-head";
+import { apiErrorMessage } from "@/lib/is-api-failure";
 
 const LIBRARIES_SETTINGS_HEAD = routeHead("Library Settings");
 
@@ -210,7 +211,7 @@ function LibrariesSettings() {
     return (
       <SettingsErrorCard
         title="Library settings unavailable"
-        message={data.message || "Failed to load library settings."}
+        message={apiErrorMessage(data, "Failed to load library settings.")}
       />
     );
   }
@@ -258,7 +259,7 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
     mutationFn: updateLibrarySettings,
     onSuccess: res => {
       if (res.error) {
-        const message = res.message || "Failed to save library paths.";
+        const message = apiErrorMessage(res, "Failed to save library paths.");
         setValidationField(fieldFromLibraryError(message));
         setFeedback({ message, tone: "error" });
         showActionFailed("save library paths", message);
@@ -345,7 +346,7 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
     try {
       const res = await library.trigger();
       if (res.error) {
-        const message = res.message || `Failed to start ${label} scan.`;
+        const message = apiErrorMessage(res, `Failed to start ${label} scan.`);
         setFeedback({ message, tone: "error" });
         showActionFailed(`scan ${label} library`, message);
         setActiveScan(current => (current === scan ? null : current));
