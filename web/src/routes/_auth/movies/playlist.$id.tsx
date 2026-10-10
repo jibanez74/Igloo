@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ListVideo } from "lucide-react";
@@ -16,6 +16,7 @@ import {
   moviePlaylistMoviesQueryOpts,
 } from "@/lib/query-opts";
 import {
+  FOCUS_VISIBLE_RING_CLASS,
   MOTION_LOADING_STATE_CLASS,
   MOTION_MICRO_COLORS_CLASS,
   MOVIE_PLAYLIST_DETAILS_KEY,
@@ -100,6 +101,7 @@ function MoviePlaylistContent({ playlistId, data }: MoviePlaylistContentProps) {
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<"asc" | "desc">("asc");
   const queryClient = useQueryClient();
+  const headingRef = useRef<HTMLHeadingElement | null>(null);
 
   const { playlist, movie_count, is_owner, can_edit } = data;
   const desc = unwrapString(playlist.description);
@@ -110,19 +112,27 @@ function MoviePlaylistContent({ playlistId, data }: MoviePlaylistContentProps) {
   const removeMutation = useMutation({
     mutationFn: (movieId: number) =>
       removeMovieFromMoviePlaylist(playlistId, movieId),
-    onSuccess: result => {
+    onSuccess: async result => {
       if (result.error) {
         showActionFailed("remove movie", result);
         return;
       }
-      void queryClient.invalidateQueries({
-        queryKey: [MOVIE_PLAYLIST_MOVIES_KEY, playlistId],
-      });
-      void queryClient.invalidateQueries({
-        queryKey: [MOVIE_PLAYLIST_DETAILS_KEY, playlistId],
-      });
-      void queryClient.invalidateQueries({ queryKey: [MOVIE_PLAYLISTS_KEY] });
       showRemoved("Movie", "from playlist");
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: [MOVIE_PLAYLIST_MOVIES_KEY, playlistId],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: [MOVIE_PLAYLIST_DETAILS_KEY, playlistId],
+        }),
+        queryClient.invalidateQueries({ queryKey: [MOVIE_PLAYLISTS_KEY] }),
+      ]);
+      // The menu handed focus back to its trigger, which left with the card.
+      // Keep a keyboard user on the page rather than at the top of the
+      // document: the heading is the skip-link target the music page uses.
+      if (document.activeElement === document.body) {
+        headingRef.current?.focus();
+      }
     },
     onError: () => {
       showActionFailed("remove movie");
@@ -137,7 +147,14 @@ function MoviePlaylistContent({ playlistId, data }: MoviePlaylistContentProps) {
         <div className="flex items-start gap-3">
           <ListVideo className="mt-1 size-8 shrink-0 text-primary" aria-hidden="true" />
           <div className="min-w-0">
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
+            <h1
+              ref={headingRef}
+              tabIndex={-1}
+              className={cn(
+                "rounded-sm text-2xl font-semibold tracking-tight text-foreground md:text-3xl",
+                FOCUS_VISIBLE_RING_CLASS,
+              )}
+            >
               {playlist.name}
             </h1>
             {desc ? (

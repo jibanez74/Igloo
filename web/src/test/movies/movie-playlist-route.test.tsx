@@ -204,6 +204,11 @@ describe("movie playlist route", () => {
     });
     expect(screen.getByText("Arrival")).toBeInTheDocument();
     expect(await screen.findByText("1 movie")).toBeInTheDocument();
+    // The menu's trigger left with the card, so focus moves to the heading
+    // rather than falling to the document.
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Weekend Picks" })).toHaveFocus();
+    });
     expect(
       fetchMock.mock.calls.some(
         ([input, init]) =>

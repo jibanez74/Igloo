@@ -789,8 +789,11 @@ afterwards; a refused request (an error envelope) is told apart from a
 skip and toasts through `showActionFailed`, with the dialog left open.
 Leaving a playlist asks nothing (it is reversible) and toasts
 `showRemoved`: a track from its row menu, a movie from its card menu, both
-only when the detail response says `can_edit`. A new library page composes
-the same parts. The
+only when the detail response says `can_edit`. A removed card takes its
+menu's trigger with it, so once the list has refetched the movie playlist
+page moves a focus that fell to the document onto its `h1` (a `tabIndex=-1`
+skip-link target like the music page's). A new library page composes the
+same parts. The
 search page's category tabs reuse `LIBRARY_POSTER_GRID_CLASS`,
 `LoadErrorAlert` and `PosterCardSkeleton` but stay page-local: their result
 count line, "No albums match 'q'" copy and non-grid tracks list are not a
