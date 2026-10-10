@@ -199,9 +199,12 @@ function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
   )
 }
 
-function SidebarInset({ className, ...props }: React.ComponentProps<"main">) {
+// A div, not shadcn's <main>: the inset holds the app header too, and the
+// header must stay outside the main landmark. AppShell marks up its content
+// area as <main>.
+function SidebarInset({ className, ...props }: React.ComponentProps<"div">) {
   return (
-    <main
+    <div
       data-slot="sidebar-inset"
       className={cn(
         "relative flex min-w-0 flex-1 flex-col bg-background",

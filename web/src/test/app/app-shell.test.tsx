@@ -32,7 +32,7 @@ vi.mock("@/components/ui/sidebar", () => ({
   SidebarInset: ({
     children,
     ...props
-  }: React.ComponentProps<"main">) => <main {...props}>{children}</main>,
+  }: React.ComponentProps<"div">) => <div {...props}>{children}</div>,
   SidebarProvider: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),
@@ -102,6 +102,12 @@ describe("AppShell", () => {
     expect(
       within(main).getByRole("heading", { name: /route content/i }),
     ).toBeInTheDocument();
+    // The app header is the banner, outside main: skipping to page content
+    // passes the search bar.
+    expect(screen.getByRole("banner")).toBeInTheDocument();
+    expect(
+      within(main).queryByRole("search", { name: /search library/i }),
+    ).not.toBeInTheDocument();
   });
 
   describe("minimized player spacing", () => {
@@ -119,11 +125,8 @@ describe("AppShell", () => {
         </AudioPlayerProvider>,
       );
 
-      const main = screen.getByRole("main");
-      const scroller = main.querySelector(".overflow-x-clip");
-      if (!scroller) {
-        throw new Error("Content container was not rendered");
-      }
+      // The content area is main itself.
+      const scroller = screen.getByRole("main");
 
       expect(scroller).not.toHaveClass("pb-28");
 

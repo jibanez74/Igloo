@@ -976,7 +976,6 @@ function AccountSettings() {
                   setDeleteConfirmText(e.target.value);
                   clearError("deleteConfirm");
                 }}
-                placeholder="DELETE"
                 className={`font-mono ${lightInputClassName}`}
                 aria-label="Type DELETE to confirm account deletion"
                 aria-describedby={describedBy(

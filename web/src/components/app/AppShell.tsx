@@ -33,27 +33,27 @@ export default function AppShell({ children }: PropsWithChildren) {
 
       <AppSidebar />
 
-      <SidebarInset
-        id="main"
-        tabIndex={-1}
-        className="bg-background focus:outline-hidden"
-      >
+      <SidebarInset className="bg-background">
         <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-4 border-b border-border bg-background/95 px-4 backdrop-blur-sm md:px-6">
           <SidebarTrigger className="-ml-1 text-muted-foreground hover:bg-accent hover:text-foreground md:hidden" />
           <Header />
         </header>
 
-        <div
+        {/* The header above is the banner; only page content is main, so
+            "Skip to page content" lands past the search bar. */}
+        <main
+          id="main"
+          tabIndex={-1}
           className={cn(
             // overflow-x-clip (not hidden/auto): clipping must not create a
             // scroll container, or sticky elements inside pages stop sticking
             // to the window scroll.
-            "flex min-h-0 min-w-0 flex-1 flex-col overflow-x-clip px-4 py-6 sm:px-6 lg:px-8",
+            "flex min-h-0 min-w-0 flex-1 flex-col overflow-x-clip px-4 py-6 focus:outline-hidden sm:px-6 lg:px-8",
             isMiniPlayerVisible && MINI_PLAYER_CLEARANCE_PADDING_CLASS,
           )}
         >
           {children}
-        </div>
+        </main>
       </SidebarInset>
     </SidebarProvider>
   );

@@ -570,7 +570,10 @@ and meta correctly, and a hard reload shows no theme flash.
 
 `AppShell.tsx`: skip link → shadcn `SidebarProvider` + `AppSidebar` (a fixed
 left-side, icon-collapsible contract; 16rem expanded / 3rem icon rail / 18rem
-mobile sheet that auto-closes on nav) + `SidebarInset` content column. The
+mobile sheet that auto-closes on nav) + `SidebarInset` content column (a
+`div`, unlike upstream shadcn): the sticky app header inside it is the page's
+banner landmark, and only the content area below it is `<main id="main">`, so
+the skip link lands past the search bar. The
 provider owns this state internally; the rail and Ctrl/Cmd+B toggle desktop
 collapse, while the mobile trigger controls the sheet.
 

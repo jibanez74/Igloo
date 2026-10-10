@@ -10,6 +10,9 @@ export function Toaster(props: ToasterProps) {
       theme={theme}
       closeButton
       position="top-right"
+      // Sonner's stylesheet gives the toaster a system font stack; inherit
+      // the app's Inter from body instead.
+      style={{ fontFamily: "inherit" }}
       richColors
       toastOptions={{
         classNames: {

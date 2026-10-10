@@ -1,5 +1,6 @@
 import { FOCUS_VISIBLE_RING_CLASS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { pluralize } from "@/lib/format";
 import type { MovieScanStatus, MusicScanStatus, ShowScanStatus } from "@/types/settings";
 
 type ScanState = MovieScanStatus["state"];
@@ -130,7 +131,7 @@ export default function ScanProgress(props: Props) {
           {status.issue_count > 0 && (
             <details>
               <summary className={cn("cursor-pointer rounded-sm", FOCUS_VISIBLE_RING_CLASS)}>
-                {status.issue_count} outstanding issues
+                {pluralize(status.issue_count, "outstanding issue")}
               </summary>
               <ul className="mt-2 list-disc space-y-1 pl-5">
                 {status.issues.map((issue, index) => (

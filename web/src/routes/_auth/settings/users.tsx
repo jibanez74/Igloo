@@ -837,7 +837,6 @@ function DeleteUserDialog({
                 setConfirmText(e.target.value);
                 onClearServerError();
               }}
-              placeholder="DELETE"
               className={`font-mono ${lightInputClassName}`}
               aria-label="Type DELETE to confirm user deletion"
               aria-invalid={invalid}

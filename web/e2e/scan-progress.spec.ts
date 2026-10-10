@@ -182,7 +182,7 @@ test.describe("Library scan progress", () => {
       await page.getByRole("tab", { name: "Libraries", exact: true }).click();
       await expect(page.getByRole("status").filter({ hasText: kind.completedText })).toBeVisible();
       await expect(start).toBeEnabled();
-      await page.getByText("1 outstanding issues", { exact: true }).focus();
+      await page.getByText("1 outstanding issue", { exact: true }).focus();
       await page.keyboard.press("Enter");
       await expect(page.getByText(kind.issue)).toBeVisible();
       expect(starts).toBe(1);

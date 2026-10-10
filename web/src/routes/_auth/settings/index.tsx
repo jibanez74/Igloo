@@ -720,7 +720,7 @@ function PathInput({
         />
       </div>
       <p id={descriptionId} className="text-sm text-muted-foreground">
-        This path must be readable by the server.
+        The server must be able to write to this directory.
       </p>
     </div>
   );
