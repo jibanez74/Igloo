@@ -558,7 +558,7 @@ function TrailerPage() {
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
                   FOCUS_VISIBLE_RING_CLASS,
-                  "rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90",
+                  "inline-flex items-center rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90",
                 )}
               >
                 <ArrowLeft className="mr-2 size-4" aria-hidden="true" />

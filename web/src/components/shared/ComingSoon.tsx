@@ -1,6 +1,5 @@
 import { Snowflake, Hammer, type LucideIcon } from "lucide-react";
 import {
-  MOTION_DECORATIVE_BOUNCE_CLASS,
   MOTION_DECORATIVE_PING_CLASS,
   MOTION_PAGE_ENTER_CLASS,
 } from "@/lib/constants";
@@ -32,7 +31,7 @@ export default function ComingSoon({
     >
       <div className={MOTION_PAGE_ENTER_CLASS}>
         {/* Animated icon container */}
-        <div className="relative mx-auto mb-8" aria-hidden="true">
+        <div className="relative mx-auto mb-8 w-fit" aria-hidden="true">
           {/* Outer glow ring */}
           <div
             data-motion="decorative"
@@ -88,37 +87,6 @@ export default function ComingSoon({
           <span className="h-px w-12 bg-linear-to-r from-transparent to-muted" />
           <Snowflake className="size-5 text-muted-foreground" aria-hidden="true" />
           <span className="h-px w-12 bg-linear-to-l from-transparent to-muted" />
-        </div>
-
-        {/* Progress dots animation - hidden from screen readers */}
-        <div
-          className="mt-6 flex items-center justify-center gap-1.5"
-          aria-hidden="true"
-        >
-          <span
-            data-motion="decorative"
-            className={cn(
-              "size-2 rounded-full bg-primary/60",
-              MOTION_DECORATIVE_BOUNCE_CLASS,
-            )}
-            style={{ animationDelay: "0ms" }}
-          />
-          <span
-            data-motion="decorative"
-            className={cn(
-              "size-2 rounded-full bg-primary/60",
-              MOTION_DECORATIVE_BOUNCE_CLASS,
-            )}
-            style={{ animationDelay: "150ms" }}
-          />
-          <span
-            data-motion="decorative"
-            className={cn(
-              "size-2 rounded-full bg-primary/60",
-              MOTION_DECORATIVE_BOUNCE_CLASS,
-            )}
-            style={{ animationDelay: "300ms" }}
-          />
         </div>
       </div>
     </section>

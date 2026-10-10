@@ -2,7 +2,6 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import ComingSoon from "@/components/shared/ComingSoon";
 import {
-  MOTION_DECORATIVE_BOUNCE_CLASS,
   MOTION_DECORATIVE_PING_CLASS,
   MOTION_PAGE_ENTER_CLASS,
 } from "@/lib/constants";
@@ -44,22 +43,21 @@ describe("ComingSoon", () => {
     expect(content).not.toHaveClass("translate-y-4");
   });
 
-  it("uses reduced-motion-safe decorative animation classes", () => {
+  it("keeps the one decorative ping reduced-motion safe and hugging the icon", () => {
     render(<ComingSoon title="Photos" />);
 
     const decorativeElements = Array.from(
       document.querySelectorAll('[data-motion="decorative"]'),
     );
 
-    expect(decorativeElements).toHaveLength(4);
+    // Only the glow ring animates; bouncing dots under static copy read as a
+    // loading indicator.
+    expect(decorativeElements).toHaveLength(1);
     expect(decorativeElements[0]).toHaveClass(
       ...MOTION_DECORATIVE_PING_CLASS.split(" "),
     );
-
-    for (const element of decorativeElements.slice(1)) {
-      expect(element).toHaveClass(
-        ...MOTION_DECORATIVE_BOUNCE_CLASS.split(" "),
-      );
-    }
+    // The ring fills its wrapper, so the wrapper must shrink to the icon
+    // circle or the ring stretches into a full-width pill.
+    expect(decorativeElements[0].parentElement).toHaveClass("w-fit");
   });
 });

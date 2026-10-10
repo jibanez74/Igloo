@@ -580,8 +580,6 @@ export const MOTION_SPINNER_STATE_CLASS =
   "animate-spin motion-reduce:animate-none";
 export const MOTION_DECORATIVE_PING_CLASS =
   "animate-ping motion-reduce:animate-none";
-export const MOTION_DECORATIVE_BOUNCE_CLASS =
-  "animate-bounce motion-reduce:animate-none";
 export const DETAIL_PAGE_CONTENT_ENTER_CLASS = MOTION_PAGE_ENTER_CLASS;
 /**
  * Detail-page hero scrims (design-system §1.2 over-media exception: literal
