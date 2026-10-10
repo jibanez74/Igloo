@@ -1,3 +1,4 @@
+import { useRef, type RefObject } from "react";
 import { MoreVertical, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
@@ -5,6 +6,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import {
   FOCUS_VISIBLE_RING_CLASS,
   MOTION_MICRO_COLORS_CLASS,
@@ -16,6 +18,11 @@ type PlaylistMovieMenuProps = {
   onRemove: () => void;
   /** Held while this movie's removal is in flight, so it cannot fire twice. */
   disabled?: boolean;
+  /**
+   * Where focus goes when the menu closes after its trigger has left with
+   * the card, so a keyboard user is not dropped at the top of the document.
+   */
+  fallbackFocusRef?: RefObject<HTMLElement | null>;
 };
 
 /**
@@ -27,12 +34,16 @@ export default function PlaylistMovieMenu({
   movieTitle,
   onRemove,
   disabled = false,
+  fallbackFocusRef,
 }: PlaylistMovieMenuProps) {
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
           type="button"
+          ref={triggerRef}
           disabled={disabled}
           aria-label={`More actions for ${movieTitle}`}
           className={cn(
@@ -44,7 +55,16 @@ export default function PlaylistMovieMenu({
           <MoreVertical className="size-4" aria-hidden="true" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
+      <DropdownMenuContent
+        align="end"
+        // Removal can finish, and unmount the card, before the menu has
+        // closed; the trigger is then gone and the default return would
+        // land on the document.
+        onCloseAutoFocus={event => {
+          event.preventDefault();
+          focusDialogRestoreTarget(triggerRef.current, fallbackFocusRef?.current);
+        }}
+      >
         <DropdownMenuItem onSelect={onRemove} variant="destructive">
           <Trash2 className="size-4" aria-hidden="true" />
           Remove from Playlist

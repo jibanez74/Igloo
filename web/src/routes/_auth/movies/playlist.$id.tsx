@@ -127,9 +127,10 @@ function MoviePlaylistContent({ playlistId, data }: MoviePlaylistContentProps) {
         }),
         queryClient.invalidateQueries({ queryKey: [MOVIE_PLAYLISTS_KEY] }),
       ]);
-      // The menu handed focus back to its trigger, which left with the card.
-      // Keep a keyboard user on the page rather than at the top of the
-      // document: the heading is the skip-link target the music page uses.
+      // When the menu closed before the card left, focus went back to its
+      // trigger and has now gone with it (the menu itself covers the other
+      // order). Keep a keyboard user on the page rather than at the top of
+      // the document: the heading is the skip-link target the music page uses.
       if (document.activeElement === document.body) {
         headingRef.current?.focus();
       }
@@ -185,6 +186,7 @@ function MoviePlaylistContent({ playlistId, data }: MoviePlaylistContentProps) {
                 <PlaylistMovieMenu
                   movieTitle={movie.title}
                   onRemove={() => removeMutation.mutate(movie.id)}
+                  fallbackFocusRef={headingRef}
                   disabled={
                     removeMutation.isPending &&
                     removeMutation.variables === movie.id
