@@ -292,7 +292,7 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
     <div
       ref={containerRef}
       className={cn(
-        "min-h-screen bg-background text-foreground [&:-webkit-full-screen]:fixed [&:-webkit-full-screen]:inset-0 [&:-webkit-full-screen]:h-screen [&:-webkit-full-screen]:w-screen [&:fullscreen]:fixed [&:fullscreen]:inset-0 [&:fullscreen]:h-screen [&:fullscreen]:w-screen",
+        "bg-background text-foreground [&:-webkit-full-screen]:fixed [&:-webkit-full-screen]:inset-0 [&:-webkit-full-screen]:h-screen [&:-webkit-full-screen]:w-screen [&:fullscreen]:fixed [&:fullscreen]:inset-0 [&:fullscreen]:h-screen [&:fullscreen]:w-screen",
         isImmersiveViewport &&
           "fixed inset-0 z-50 min-h-dvh w-full overflow-auto bg-background",
       )}
@@ -318,8 +318,11 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
 
       <div
         className={cn(
-          "mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8",
-          playerFullscreenMode && "max-w-none",
+          "mx-auto flex w-full max-w-7xl flex-col gap-6",
+          // Inside the shell its content padding already frames the room;
+          // fullscreen and the immersive phone view leave the shell, so the
+          // room supplies its own.
+          playerFullscreenMode && "max-w-none px-4 py-6 sm:px-6 lg:px-8",
         )}
       >
         <WatchRoomHeader
@@ -377,7 +380,6 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
             <WatchRoomMembersPanel
               members={room.members}
               ownerId={room.owner.id}
-              posterUrl={posterUrl}
               connectedUserIds={connectedUserIds}
             />
           ) : null}
@@ -406,7 +408,7 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
 
 export function WatchRoomLoading() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-card px-4">
+    <div className="flex min-h-[60vh] items-center justify-center px-4">
       <div className="text-center">
         <Spinner className="mx-auto mb-4 size-10 text-primary" />
         <p className="text-lg font-medium text-foreground">
@@ -427,7 +429,7 @@ export function WatchRoomUnavailable({
   onBackHome,
 }: WatchRoomUnavailableProps) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-card px-4">
+    <div className="flex min-h-[60vh] items-center justify-center px-4">
       <div className="max-w-md text-center">
         <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-destructive/10">
           <AlertCircle
@@ -686,7 +688,8 @@ function WatchRoomPlayerPanel({
             </div>
 
             <div className="flex items-center gap-4">
-              <p className="text-sm font-medium text-muted-foreground">
+              {/* Below sm the progress bar prints both times itself. */}
+              <p className="hidden text-sm font-medium text-muted-foreground sm:block">
                 {formatTimecode(currentTime, {
                   forceHours: duration >= 3600,
                 })}{" "}
@@ -736,14 +739,12 @@ function WatchRoomPlayerPanel({
 type WatchRoomMembersPanelProps = {
   members: WatchRoomMemberType[];
   ownerId: number;
-  posterUrl: string | null;
   connectedUserIds: number[];
 };
 
 function WatchRoomMembersPanel({
   members,
   ownerId,
-  posterUrl,
   connectedUserIds,
 }: WatchRoomMembersPanelProps) {
   return (
@@ -752,14 +753,6 @@ function WatchRoomMembersPanel({
         <Users className="size-5 text-primary" aria-hidden="true" />
         People in this room
       </h2>
-
-      {posterUrl && (
-        <img
-          src={posterUrl}
-          alt=""
-          className="mt-4 aspect-2/3 w-28 rounded-xl border border-border object-cover"
-        />
-      )}
 
       <ul className="mt-4 space-y-3">
         {members.map((member) => {
