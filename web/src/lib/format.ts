@@ -1,4 +1,4 @@
-import { LANGUAGE_NAMES } from "@/lib/constants";
+import { ISO_639_2_TO_1, LANGUAGE_NAMES } from "@/lib/constants";
 import type { LibraryMovieCrewType } from "@/types/movies";
 
 const months = [
@@ -382,7 +382,10 @@ export function capitalize(value: string): string {
 }
 
 /**
- * An ISO 639 code as a language name for display ("en" → "English"); an
+ * An ISO 639 code as a language name for display ("en", "eng", "pt-BR" →
+ * "English", …). Only the primary subtag is read: a two-letter code is looked
+ * up as is, a three-letter one (ffprobe's stream tags) through its ISO 639-2
+ * alias, never by prefix, so "fil" (Filipino) cannot read as Finnish. An
  * unknown code reads as itself in capitals rather than disappearing.
  */
 export function formatLanguageName(
@@ -390,8 +393,10 @@ export function formatLanguageName(
 ): string | undefined {
   const code = raw?.trim().toLowerCase();
   if (!code) return undefined;
-  const two = code.slice(0, 2);
-  if (LANGUAGE_NAMES[two]) return LANGUAGE_NAMES[two];
+  const primary = code.split(/[-_]/)[0];
+  const twoLetter = primary.length === 3 ? ISO_639_2_TO_1[primary] : primary;
+  const name = twoLetter?.length === 2 ? LANGUAGE_NAMES[twoLetter] : undefined;
+  if (name) return name;
   return code.length <= 3 ? code.toUpperCase() : capitalize(code);
 }
 

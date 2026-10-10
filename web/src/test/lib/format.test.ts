@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  formatLanguageName,
   capitalize,
   catalogYear,
   chapterLabel,
@@ -352,5 +353,33 @@ describe("chapterLabel", () => {
   it("names a blank or missing title by its 1-based position", () => {
     expect(chapterLabel("   ", 1)).toBe("Chapter 2");
     expect(chapterLabel(null, 4)).toBe("Chapter 5");
+  });
+});
+
+describe("formatLanguageName", () => {
+  it.each([
+    ["en", "English"],
+    ["EN", "English"],
+    ["eng", "English"],
+    ["jpn", "Japanese"],
+    ["ger", "German"],
+    ["pt-BR", "Portuguese"],
+    ["zh_Hant", "Chinese"],
+  ])("names %s as %s", (code, name) => {
+    expect(formatLanguageName(code)).toBe(name);
+  });
+
+  // Prefix matching once read these as Finnish, English and German.
+  it.each([
+    ["fil", "FIL"],
+    ["enm", "ENM"],
+    ["deutsch", "Deutsch"],
+  ])("never matches %s by prefix", (code, label) => {
+    expect(formatLanguageName(code)).toBe(label);
+  });
+
+  it("returns nothing for a missing or blank code", () => {
+    expect(formatLanguageName(undefined)).toBeUndefined();
+    expect(formatLanguageName("  ")).toBeUndefined();
   });
 });
