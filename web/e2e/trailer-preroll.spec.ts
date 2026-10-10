@@ -45,6 +45,37 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe("Trailer pre-roll", () => {
+  test("plays muted and offers Unmute when the browser blocks autoplay", async ({
+    page,
+  }) => {
+    const tracker = trackBrowserIssues(page);
+    const baseline = await fetchTrailerPreferences(page);
+
+    try {
+      await saveTrailerPreferences(page, { enabled: true, count: 2, source: "both" });
+      await mockYouTubePlayer(page, { autoplayBlocked: true });
+      const mediaRequests = await openHeldPlayer(page, movie, playUrl);
+
+      const region = prerollRegion(page);
+      await expect(region).toBeVisible();
+      // The muted retry played the trailer, so the control reads Pause.
+      await expect(
+        page.getByRole("button", { name: "Pause trailer (Space or K)" }),
+      ).toBeVisible();
+      const unmute = page.getByRole("button", { name: "Unmute trailer (M)" });
+      await expect(unmute).toBeVisible();
+
+      await unmute.click();
+      await expect(unmute).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Skip trailer (N)" })).toBeFocused();
+      expect(mediaRequests).toEqual([]);
+    } finally {
+      await saveTrailerPreferences(page, baseline);
+    }
+
+    tracker.assertClean();
+  });
+
   test("plays the queued trailers before the movie without touching the stream", async ({
     page,
   }) => {

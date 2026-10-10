@@ -115,6 +115,10 @@ describe("audio player like button", () => {
       name: ADD_LABEL,
     });
     expect(expandedButton).toHaveAttribute("aria-pressed", "false");
+    // The heart shares the title line, not the artist's.
+    expect(expandedButton.parentElement).toContainElement(
+      screen.getByRole("heading", { level: 1 }),
+    );
 
     // The minimized bar renders its own like button.
     fireEvent.click(screen.getByText("minimize player"));

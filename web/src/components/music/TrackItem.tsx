@@ -73,6 +73,13 @@ export default function TrackItem({
   dragHandleProps,
 }: TrackItemProps) {
   const likeButton = useLikeButtonState(id, title);
+  const durationLabel = formatTrackDuration(duration);
+  const secondLine =
+    variant === "album"
+      ? genres && genres.length > 0
+        ? genres.join(", ")
+        : null
+      : (subtitle ?? null);
 
   // Every row offers its actions menu (Add to Playlist at least) unless the
   // caller opts out; the album and musician pages pass only the link that
@@ -109,7 +116,7 @@ export default function TrackItem({
   return (
     <div
       className={cn(
-        "group flex items-center gap-3 p-3 hover:bg-muted/50 sm:gap-4 sm:px-4",
+        "group flex items-center gap-2 p-3 hover:bg-muted/50 sm:gap-4 sm:px-4",
         MOTION_TRACK_ROW_CLASS,
         isCurrentTrack && "bg-muted/40",
         isDragging && "opacity-50 shadow-lg ring-2 ring-ring/50",
@@ -158,19 +165,33 @@ export default function TrackItem({
           {title}
         </p>
 
-        {/* Subtitle row - genres for album, text for others */}
-        {variant === "album" && genres && genres.length > 0 ? (
-          <p className="mt-0.5 truncate text-sm text-muted-foreground">
-            {genres.join(", ")}
+        {/* Second line: genres for album, subtitle for others; below `sm` the
+            duration joins it (or stands alone) so the title keeps its room
+            beside the row's controls. Exactly one duration is in the
+            accessibility tree at any width: this one is `sm:hidden`, the
+            right-hand one `hidden sm:inline`. */}
+        {(secondLine !== null || durationLabel) && (
+          <p
+            className={cn(
+              "flex items-center gap-1 text-sm text-muted-foreground",
+              variant === "album" && "mt-0.5",
+              secondLine === null && "sm:hidden",
+            )}
+          >
+            {secondLine !== null && (
+              <span className="truncate">{secondLine}</span>
+            )}
+            <span className="flex shrink-0 items-center gap-1 sm:hidden">
+              {secondLine !== null && <span aria-hidden="true">·</span>}
+              <span className="tabular-nums">{durationLabel}</span>
+            </span>
           </p>
-        ) : subtitle ? (
-          <p className="truncate text-sm text-muted-foreground">{subtitle}</p>
-        ) : null}
+        )}
       </div>
 
       {/* Duration */}
-      <span className="shrink-0 text-sm text-muted-foreground tabular-nums">
-        {formatTrackDuration(duration)}
+      <span className="hidden shrink-0 text-sm text-muted-foreground tabular-nums sm:inline">
+        {durationLabel}
       </span>
 
       {/* Like button */}

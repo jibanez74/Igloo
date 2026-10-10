@@ -148,22 +148,25 @@ export default function NowPlayingDialog({
               )}
             </div>
 
-            <div className="mb-8 flex max-w-md items-center gap-3">
-              <div className="size-10 shrink-0" aria-hidden="true" />
-              <div className="min-w-0 text-center">
+            {/* The heart belongs to the title, so it sits on the title line,
+                centred on it behind a mirrored spacer that keeps the title
+                itself centred; the artist runs beneath on its own line. */}
+            <div className="mb-8 w-full max-w-md text-center">
+              <div className="flex items-center justify-center gap-3">
+                <div className="size-10 shrink-0" aria-hidden="true" />
                 <h1
                   id="track-title"
-                  className="truncate text-2xl font-bold text-foreground sm:text-3xl"
+                  className="min-w-0 truncate text-2xl font-bold text-foreground sm:text-3xl"
                 >
                   {track.title}
                 </h1>
-                <p className="mt-1 truncate text-lg text-primary">{artist}</p>
+                <PlayerLikeButton
+                  trackId={track.id}
+                  trackTitle={track.title}
+                  variant="expanded"
+                />
               </div>
-              <PlayerLikeButton
-                trackId={track.id}
-                trackTitle={track.title}
-                variant="expanded"
-              />
+              <p className="mt-1 truncate text-lg text-primary">{artist}</p>
             </div>
 
             <ProgressBar

@@ -16,6 +16,12 @@ type UseYouTubePlayerOptions = {
   onStateChange?: (state: YT.PlayerState) => void;
   onError?: (error: YT.PlayerError) => void;
   onEnd?: () => void;
+  /**
+   * When the browser refuses the autoplay (a cold page load has no user
+   * activation), mute and play again: muted autoplay is always allowed. The
+   * caller reads `isMuted` to offer an Unmute control.
+   */
+  muteOnAutoplayBlocked?: boolean;
 };
 
 type UseYouTubePlayerReturn = {
@@ -410,6 +416,16 @@ export function useYouTubePlayer(
     options.onError?.(errorCode);
   });
 
+  const handleAutoplayBlocked = useEffectEvent((event: YT.PlayerEvent) => {
+    if (!options.muteOnAutoplayBlocked) return;
+    event.target.mute();
+    event.target.playVideo();
+    setPlayerState(previous => ({
+      ...previous,
+      isMuted: true,
+    }));
+  });
+
   useEffect(() => {
     if (!videoId || !containerReady || !containerRef.current) {
       stopProgressTracking();
@@ -417,6 +433,9 @@ export function useYouTubePlayer(
     }
 
     let mounted = true;
+    // One muted retry per player: if the browser refuses even that, the
+    // reader keeps the Play button rather than a loop of retries.
+    let mutedFallbackUsed = false;
     let createdPlayer: YT.Player | null = null;
     let readyTimeoutId: number | null = null;
 
@@ -480,6 +499,11 @@ export function useYouTubePlayer(
               if (!mounted) return;
               clearReadyTimeout();
               handlePlayerError(event);
+            },
+            onAutoplayBlocked: event => {
+              if (!mounted || mutedFallbackUsed) return;
+              mutedFallbackUsed = true;
+              handleAutoplayBlocked(event);
             },
           },
         });

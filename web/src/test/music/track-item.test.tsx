@@ -242,3 +242,50 @@ describe("TrackItem like button", () => {
     });
   });
 });
+
+// Below `sm` the duration moves under the title; jsdom applies no CSS, so both
+// copies render and a test must never reach for `getByText("m:ss")` alone.
+describe("TrackItem duration", () => {
+  it("renders the duration beside the subtitle for phones and at the right for wider screens", () => {
+    renderWithQueryClient(
+      <TrackItem
+        id={7}
+        title="Signal Fire"
+        subtitle="The Band"
+        duration={211_000}
+        variant="library"
+        onPlay={vi.fn()}
+        showActionsMenu={false}
+      />,
+    );
+
+    const [inline, right] = screen.getAllByText("3:31");
+    expect(screen.getAllByText("3:31")).toHaveLength(2);
+    expect(inline.parentElement).toHaveClass("sm:hidden");
+    expect(right).toHaveClass("hidden", "sm:inline");
+    expect(screen.getByText("·")).toHaveAttribute("aria-hidden", "true");
+    // The subtitle and the inline duration share one line.
+    expect(screen.getByText("The Band").parentElement).toBe(
+      inline.parentElement?.parentElement,
+    );
+  });
+
+  it("gives an album row without genres a phone-only duration line", () => {
+    renderWithQueryClient(
+      <TrackItem
+        id={8}
+        title="Solo"
+        duration={61_000}
+        trackIndex={1}
+        variant="album"
+        onPlay={vi.fn()}
+        showActionsMenu={false}
+      />,
+    );
+
+    const [inline] = screen.getAllByText("1:01");
+    expect(screen.getAllByText("1:01")).toHaveLength(2);
+    expect(inline.closest("p")).toHaveClass("sm:hidden");
+    expect(screen.queryByText("·")).not.toBeInTheDocument();
+  });
+});

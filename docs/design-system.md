@@ -261,8 +261,8 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
   component or export a class-string constant (§2.3).
 - **`Badge`** (`ui/badge.tsx`) is the primitive for static pills — count
   pills, rating chips, status tags. It is non-interactive by design (a
-  `span`); actionable chips are Buttons. Rating-tier colors come from the
-  shared helpers in `lib/rating.ts` (§3.2). Pills that live in a semantic
+  `span`); actionable chips are Buttons. The one rating chip is
+  `TmdbScoreBadge` (§3.2). Pills that live in a semantic
   list nest the Badge inside the `<li>` (movie metadata chips, album
   metadata/genre pills). Navigational pills (e.g. the album page's artist
   pill) are `Link`s composing the pill classes with
@@ -370,9 +370,8 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
 
   ```tsx
   <li>
-    <Star aria-hidden="true" />
-    <span className="sr-only">Critic rating: 8.5 out of 10</span>
-    <span aria-hidden="true">8.5</span>
+    <span className="sr-only">Rated PG-13</span>
+    <span aria-hidden="true">PG-13</span>
   </li>
   ```
 
@@ -694,12 +693,14 @@ The contract:
   (`MovieCard` the movie details, `ShowCard` and `ContinueWatchingEpisodeCard`
   the show details). `InTheatersCard` passes none — an unreleased title has no
   detail query to warm.
-- Rating chips tier via `criticRatingClass` / `audienceRatingClass` in
-  `lib/rating.ts` (`bg-aurora` ≥7 / `bg-aurora/80` ≥5 / `bg-muted`),
-  rendered with the `Badge` primitive where no list semantics are needed
-  (§1.6). The
-  TMDB community score is always the labelled `TmdbScoreBadge`, never a tiered
-  chip: it is a different metric.
+- A rating is one thing everywhere: the labelled `TmdbScoreBadge` ("TMDB
+  8.2", `sr-only` "TMDB user score: 8.2 out of 10"). The library movie's
+  `critic_rating` is TMDB's `vote_average` from the scanner, so the movie hero
+  shows it as that badge, like the show and in-theaters heroes;
+  `InTheatersCard` wears the `size="sm"` badge in its poster corner,
+  `aria-hidden` because the card's link label already speaks the score. There
+  are no tiered amber/glacier rating chips (`lib/rating.ts` is gone), and
+  `audience_rating` has no source on the server, so nothing renders it.
 
 #### Grids and rails
 
@@ -941,6 +942,12 @@ is unknown or empty.
   get descriptive alt (`Album cover for {title}`, `Photo of {name}`,
   `Playlist cover for {name}`).
 
+- **Network logos** (`TMDB_LOGO_SIZE` `w92`, mostly dark marks drawn for
+  white backgrounds) sit on a `rounded-sm px-1 py-0.5 dark:bg-white/90` plate
+  in `ShowAboutSection`, so they survive the dark theme; the padding is always
+  on so a theme switch moves nothing, and the network's name is always printed
+  beside the mark, which stays `alt=""`.
+
 ### 3.4 UI states — loading, empty, error
 
 - **Loading, two tiers.** Route navigations suspend in loaders
@@ -1156,7 +1163,15 @@ require the full playback test pass.
   **Start movie**, and fullscreen (the expanded view where the browser lacks
   element fullscreen, never the warmed movie's video-only fullscreen). Keys
   follow the player's conventions and go through `useShortcutHints`:
-  Space/K, **N** skip, **S** start movie, F, Escape. Each trailer is announced once ("Trailer 1 of 2: Title") through
+  Space/K, **N** skip, **S** start movie, F, Escape. If the browser blocks the
+  autoplay (a cold direct load of `/movies/{id}/play` carries no user
+  activation), the hook's `muteOnAutoplayBlocked` answers YouTube's
+  `onAutoplayBlocked` by muting and playing again — muted autoplay is always
+  allowed, and the retry happens once per player — and the chrome gains an
+  outline **Unmute** ("Unmute trailer", **M**) beside the play control, which
+  unmutes, removes itself and hands focus to Skip trailer; a `LiveAnnouncer`
+  says the trailer is playing muted. When autoplay is allowed nothing
+  changes. Each trailer is announced once ("Trailer 1 of 2: Title") through
   `LiveAnnouncer`; an embed error (removed, private, embed-disabled) skips the
   trailer silently, an unavailable player ends the pre-roll, and no watch
   progress is saved until the movie starts. No feature-presentation card and
@@ -1178,7 +1193,9 @@ require the full playback test pass.
   starting a **new** track opens the **fullscreen Now Playing** view
   (`DialogFullscreenContent`, gradient `from-background via-muted
   to-background`, large art with disc-icon fallback, transport + volume +
-  "Track N of M"); "Minimize player (Escape)" (no suffix on touch, §1.7)
+  "Track N of M"; the like heart sits on the title line, centred on it behind
+  a mirrored `size-10` spacer so the title stays centred, with the artist line
+  beneath on its own); "Minimize player (Escape)" (no suffix on touch, §1.7)
   collapses it to the **docked
   mini bar** (`fixed inset-x-0 bottom-0 z-40 bg-background/95 backdrop-blur`)
   with track info, transport, close, and a bottom progress strip; below `sm`
@@ -1187,7 +1204,15 @@ require the full playback test pass.
   `TrackActionsMenu` (Add to Playlist, which opens the shared
   `AddToPlaylistDialog` of §3.2, then the links that lead somewhere
   else: an album row offers "Go to Artist", a musician row "Go to Album"),
-  so a track can join a playlist from wherever it is listed. The bar
+  so a track can join a playlist from wherever it is listed. Below `sm` a
+  track row moves its duration under the title — onto the subtitle line after
+  a `·`, or alone when the row has no subtitle — and tightens to `gap-2`, so
+  the title keeps room beside the heart, menu, play and (on a playlist) the
+  drag handle, all of which stay. The right-hand duration is `hidden
+  sm:inline` and the inline one `sm:hidden`: exactly one is in the
+  accessibility tree at any width, never an `sr-only` copy, and the virtual
+  row height (`VIRTUAL_LIST_TRACK_HEIGHT`) is unchanged because the second
+  line already existed. The bar
   persists across navigation; the current track's row in lists is
   highlighted (`text-primary` title + tinted row + pause state), and
   clicking that row **toggles play/pause in place** — it never rebuilds the

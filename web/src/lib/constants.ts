@@ -640,8 +640,9 @@ export const DETAIL_HERO_CONTENT_NO_ACTIONS_CLASS =
  * Quiet informational chips (certification, capability badges) rendered over
  * the hero backdrop — literal white/black per design-system §1.2.
  */
-export const OVER_MEDIA_BADGE_CLASS =
-  "border-white/25 bg-black/30 px-3 py-1 text-sm text-white/90";
+export const OVER_MEDIA_SURFACE_CLASS =
+  "border-white/25 bg-black/30 text-white/90";
+export const OVER_MEDIA_BADGE_CLASS = `${OVER_MEDIA_SURFACE_CLASS} px-3 py-1 text-sm`;
 export const CARD_INTERACTIVE_SURFACE_CLASS =
   "transition-[border-color,box-shadow,transform] duration-200 ease-out motion-reduce:transition-colors motion-reduce:hover:translate-y-0";
 /**

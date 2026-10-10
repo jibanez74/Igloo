@@ -202,6 +202,10 @@ describe("show details route", () => {
     const about = aboutHeading.closest("section");
     expect(about).not.toBeNull();
     expect(within(about as HTMLElement).getByText("Contract Network")).toBeInTheDocument();
+    // The mark sits on a light plate in the dark theme (design-system §3.3).
+    const logo = (about as HTMLElement).querySelector('img[src$="/network.png"]');
+    expect(logo).not.toBeNull();
+    expect(logo?.parentElement).toHaveClass("dark:bg-white/90", "rounded-sm");
   });
 
   it("carries the selected season into the trailer return link", async () => {

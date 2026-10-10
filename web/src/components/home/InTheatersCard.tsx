@@ -1,11 +1,9 @@
-import { Film, Star } from "lucide-react";
+import { Film } from "lucide-react";
 import PosterCard from "@/components/shared/PosterCard";
-import { Badge } from "@/components/ui/badge";
+import TmdbScoreBadge from "@/components/shared/TmdbScoreBadge";
 import { TMDB_POSTER_SIZE } from "@/lib/constants";
 import { catalogYear } from "@/lib/format";
-import { criticRatingClass } from "@/lib/rating";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
-import { cn } from "@/lib/utils";
 import type { TheaterMovieType } from "@/types";
 
 type InTheatersCardProps = {
@@ -13,8 +11,8 @@ type InTheatersCardProps = {
 };
 
 // An unreleased title is not in the library, so there is nothing to play and
-// no detail query to prefetch: the card is the poster, the critic rating and
-// a link to the TMDB-backed details page.
+// no detail query to prefetch: the card is the poster, its TMDB score and a
+// link to the TMDB-backed details page.
 export default function InTheatersCard({ movie }: InTheatersCardProps) {
   const { id, title, poster_path, vote_average, release_date } = movie;
 
@@ -33,19 +31,17 @@ export default function InTheatersCard({ movie }: InTheatersCardProps) {
       fallbackIcon={Film}
       title={title}
       subtitle={year ? String(year) : undefined}
-      detailsLabel={`${title}${year ? `, ${year}` : ""}${rating ? `, rated ${rating} out of 10` : ""}`}
+      detailsLabel={`${title}${year ? `, ${year}` : ""}${rating ? `, TMDB user score ${rating} out of 10` : ""}`}
       badge={
         rating && (
-          <Badge
-            className={cn(
-              "absolute top-2 right-2 rounded-md px-2 font-bold shadow-lg",
-              criticRatingClass(vote_average),
-            )}
+          // The link already speaks the score; the darker fill keeps the
+          // badge legible over raw poster art, which has no backdrop dim.
+          <TmdbScoreBadge
+            score={vote_average}
+            size="sm"
             aria-hidden="true"
-          >
-            <Star className="size-2.5 fill-current" aria-hidden="true" />
-            {rating}
-          </Badge>
+            className="absolute top-2 right-2 bg-black/60 shadow-lg backdrop-blur-sm"
+          />
         )
       }
     />

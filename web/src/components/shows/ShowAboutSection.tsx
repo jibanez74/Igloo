@@ -67,13 +67,18 @@ export default function ShowAboutSection({
               return (
                 <li key={network.id} className="flex items-center gap-1.5">
                   {logoUrl !== "" && (
-                    <img
-                      src={logoUrl}
-                      alt=""
-                      loading="lazy"
-                      decoding="async"
-                      className="h-4 w-auto max-w-16 object-contain"
-                    />
+                    // TMDB's network marks are drawn for white backgrounds, so
+                    // the dark theme gives them a light plate; the padding is
+                    // always on so a theme switch moves nothing.
+                    <span className="inline-flex shrink-0 items-center rounded-sm px-1 py-0.5 dark:bg-white/90">
+                      <img
+                        src={logoUrl}
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                        className="h-4 w-auto max-w-16 object-contain"
+                      />
+                    </span>
                   )}
                   <span>{network.name}</span>
                 </li>

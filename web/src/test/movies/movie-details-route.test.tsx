@@ -79,7 +79,7 @@ function movieDetailsResponse(
       overview: nullableString(overview),
       tag_line: nullableString(""),
       certification: nullableString("PG-13"),
-      critic_rating: nullableFloat64(92),
+      critic_rating: nullableFloat64(8.7),
       audience_rating: nullableFloat64(86),
       revenue: nullableFloat64(1000000),
       budget: nullableFloat64(500000),
@@ -500,6 +500,11 @@ describe("movie details route content", () => {
     ).toBeInTheDocument();
 
     const metadata = screen.getByRole("list", { name: "Movie details" });
+    // critic_rating is TMDB's vote_average, shown as the one rating badge.
+    expect(
+      within(metadata).getByText("TMDB user score: 8.7 out of 10"),
+    ).toBeInTheDocument();
+    expect(within(metadata).queryByText(/Critic rating/)).not.toBeInTheDocument();
     expect(within(metadata).getByText("PG-13")).toBeInTheDocument();
     expect(within(metadata).getByText("2 hr 6 min")).toBeInTheDocument();
     expect(within(metadata).getByText("July 4, 2024")).toBeInTheDocument();

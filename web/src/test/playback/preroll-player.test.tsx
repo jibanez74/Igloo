@@ -9,27 +9,32 @@ import type { PrerollTrailer } from "@/types";
 type FakeYouTubePlayer = {
   isReady: boolean;
   isPlaying: boolean;
+  isMuted: boolean;
   currentTime: number;
   duration: number;
   error: string | null;
   options: {
     videoId: string | null;
+    muteOnAutoplayBlocked?: boolean;
     onEnd?: () => void;
     onError?: (code: number) => void;
   } | null;
   togglePlay: ReturnType<typeof vi.fn>;
   seekTo: ReturnType<typeof vi.fn>;
+  unmute: ReturnType<typeof vi.fn>;
 };
 
 const fake = vi.hoisted((): FakeYouTubePlayer => ({
   isReady: true,
   isPlaying: true,
+  isMuted: false,
   currentTime: 0,
   duration: 120,
   error: null,
   options: null,
   togglePlay: vi.fn(),
   seekTo: vi.fn(),
+  unmute: vi.fn(),
 }));
 
 vi.mock("@/hooks/useYouTubePlayer", () => ({
@@ -42,7 +47,7 @@ vi.mock("@/hooks/useYouTubePlayer", () => ({
       currentTime: fake.currentTime,
       duration: fake.duration,
       volume: 100,
-      isMuted: false,
+      isMuted: fake.isMuted,
       error: fake.error,
       play: vi.fn(),
       pause: vi.fn(),
@@ -52,7 +57,7 @@ vi.mock("@/hooks/useYouTubePlayer", () => ({
       seekBackward: vi.fn(),
       setVolume: vi.fn(),
       mute: vi.fn(),
-      unmute: vi.fn(),
+      unmute: fake.unmute,
       toggleMute: vi.fn(),
       retry: vi.fn(),
     };
@@ -101,6 +106,8 @@ function renderPreroll(
 beforeEach(() => {
   fake.isReady = true;
   fake.isPlaying = true;
+  fake.isMuted = false;
+  fake.unmute.mockClear();
   fake.currentTime = 0;
   fake.duration = 120;
   fake.error = null;
@@ -267,5 +274,35 @@ describe("PrerollPlayer", () => {
   it("finishes at once when the queue request failed", () => {
     const { props } = renderPreroll({ trailers: undefined, loadFailed: true });
     expect(props.onFinish).toHaveBeenCalledTimes(1);
+  });
+});
+
+// A cold /play load has no user activation, so the browser may refuse the
+// autoplay; the hook then retries muted and the chrome offers Unmute.
+describe("PrerollPlayer muted fallback", () => {
+  it("runs the trailer muted when autoplay is blocked and offers Unmute", () => {
+    fake.isMuted = true;
+    renderPreroll();
+
+    expect(fake.options?.muteOnAutoplayBlocked).toBe(true);
+    expect(screen.getByText(/M to unmute the trailer/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Unmute trailer (M)" }));
+    expect(fake.unmute).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Skip trailer (N)" })).toHaveFocus();
+
+    fireEvent.keyDown(document.body, { key: "m" });
+    expect(fake.unmute).toHaveBeenCalledTimes(2);
+  });
+
+  it("has no Unmute while the trailer has sound", () => {
+    renderPreroll();
+
+    expect(
+      screen.queryByRole("button", { name: /Unmute trailer/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/M to unmute/)).not.toBeInTheDocument();
+    fireEvent.keyDown(document.body, { key: "m" });
+    expect(fake.unmute).not.toHaveBeenCalled();
   });
 });

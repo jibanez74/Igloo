@@ -65,6 +65,7 @@ declare global {
       onPlaybackQualityChange?: (event: OnPlaybackQualityChangeEvent) => void;
       onPlaybackRateChange?: (event: OnPlaybackRateChangeEvent) => void;
       onError?: (event: OnErrorEvent) => void;
+      onAutoplayBlocked?: (event: PlayerEvent) => void;
       onApiChange?: (event: PlayerEvent) => void;
     }
 
