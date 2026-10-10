@@ -21,6 +21,7 @@ import type {
   WatchRoomServerEventType,
 } from "@/types";
 import { clearTimeoutRef } from "@/lib/utils";
+import { apiErrorMessage } from "@/lib/is-api-failure";
 
 const MAX_RECONNECT_DELAY_MS = 16_000;
 
@@ -303,7 +304,7 @@ export function useWatchRoomConnection({
       if (cancelled) return;
 
       if (res.error) {
-        setPlaybackError(res.message || "Unable to join this watch room.");
+        setPlaybackError(apiErrorMessage(res, "Unable to join this watch room."));
         return;
       }
 

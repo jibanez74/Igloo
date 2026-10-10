@@ -1,3 +1,4 @@
+import { ISO_639_2_TO_1, LANGUAGE_NAMES } from "@/lib/constants";
 import type { LibraryMovieCrewType } from "@/types/movies";
 
 const months = [
@@ -378,6 +379,25 @@ export function chapterLabel(
 /** The string with its first character upper-cased: "movie" -> "Movie". */
 export function capitalize(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+/**
+ * An ISO 639 code as a language name for display ("en", "eng", "pt-BR" →
+ * "English", …). Only the primary subtag is read: a two-letter code is looked
+ * up as is, a three-letter one (ffprobe's stream tags) through its ISO 639-2
+ * alias, never by prefix, so "fil" (Filipino) cannot read as Finnish. An
+ * unknown code reads as itself in capitals rather than disappearing.
+ */
+export function formatLanguageName(
+  raw: string | undefined,
+): string | undefined {
+  const code = raw?.trim().toLowerCase();
+  if (!code) return undefined;
+  const primary = code.split(/[-_]/)[0];
+  const twoLetter = primary.length === 3 ? ISO_639_2_TO_1[primary] : primary;
+  const name = twoLetter?.length === 2 ? LANGUAGE_NAMES[twoLetter] : undefined;
+  if (name) return name;
+  return code.length <= 3 ? code.toUpperCase() : capitalize(code);
 }
 
 /** "1 episode", "3 seasons": count plus the noun, pluralized with an "s". */

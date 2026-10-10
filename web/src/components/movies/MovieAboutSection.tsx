@@ -1,5 +1,5 @@
 import AboutSection, { AboutRow } from "@/components/shared/AboutSection";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatLanguageName } from "@/lib/format";
 import { trimmedOrNull } from "@/lib/nullable";
 import type { LibraryMovieProductionCompanyType } from "@/types/movies";
 
@@ -21,8 +21,16 @@ export default function MovieAboutSection({
   companies,
 }: MovieAboutSectionProps) {
   const statusLabel = trimmedOrNull(status);
-  const languageLabel = trimmedOrNull(language);
+  const languageLabel = formatLanguageName(language ?? undefined);
   const companyNames = companies.map(pc => pc.name).join(", ");
+  const hasBudget = budget != null && budget > 0;
+  const hasRevenue = revenue != null && revenue > 0;
+
+  // An unmatched movie has none of these; a heading over nothing reads as
+  // missing content.
+  if (!companyNames && !statusLabel && !languageLabel && !hasBudget && !hasRevenue) {
+    return null;
+  }
 
   return (
     <AboutSection title={movieTitle}>
@@ -31,14 +39,10 @@ export default function MovieAboutSection({
       )}
       {statusLabel && <AboutRow label="Status">{statusLabel}</AboutRow>}
       {languageLabel && (
-        <AboutRow label="Original language">
-          {languageLabel.toUpperCase()}
-        </AboutRow>
+        <AboutRow label="Original language">{languageLabel}</AboutRow>
       )}
-      {budget != null && budget > 0 && (
-        <AboutRow label="Budget">{formatCurrency(budget)}</AboutRow>
-      )}
-      {revenue != null && revenue > 0 && (
+      {hasBudget && <AboutRow label="Budget">{formatCurrency(budget)}</AboutRow>}
+      {hasRevenue && (
         <AboutRow label="Revenue">{formatCurrency(revenue)}</AboutRow>
       )}
     </AboutSection>

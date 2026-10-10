@@ -1,4 +1,5 @@
 import { screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AudioPlayerNowPlayingContext } from "@/context/AudioPlayerContext";
 import type { PlaybackSettingsType } from "@/types";
@@ -104,5 +105,23 @@ describe("server playback form effective device notice", () => {
     expect(card).toHaveTextContent("Server");
     expect(saveButton.closest('[data-slot="card-footer"]')).not.toBeNull();
     expect(saveButton).toBeDisabled();
+  });
+
+  it("keeps an out-of-range upload cap inline and focuses the field on save", async () => {
+    const user = userEvent.setup();
+    await renderPlaybackSettings(nvidiaSettings());
+
+    const input = await screen.findByLabelText("Server upload bandwidth (Mbps)");
+    await user.clear(input);
+    await user.type(input, "0");
+    await user.click(screen.getByRole("button", { name: "Save Settings" }));
+
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(input).toHaveFocus();
+    expect(screen.getByText(/Server upload bandwidth must be greater than 0/)).toBeInTheDocument();
+    // The only request made is the initial load: nothing was saved.
+    expect(
+      vi.mocked(fetch).mock.calls.filter(([, init]) => init?.method === "PUT"),
+    ).toHaveLength(0);
   });
 });

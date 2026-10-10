@@ -40,12 +40,14 @@ import {
 import { lightInputClassName } from "@/lib/input-styles";
 import { passwordRuleError } from "@/lib/form-validation";
 import { cn, codePointLength, describedBy, getInitials } from "@/lib/utils";
-import { showSuccess, showActionFailed, showValidationError } from "@/lib/toast-helpers";
+import { showSuccess, showActionFailed } from "@/lib/toast-helpers";
 import type { AdminUserType } from "@/types";
 import { useDialogFocusRestore } from "@/hooks/useDialogFocusRestore";
 import { routeHead } from "@/lib/route-head";
+import { apiErrorMessage } from "@/lib/is-api-failure";
 
 const USERS_SETTINGS_HEAD = routeHead("User Management");
+const USER_ACTION_FALLBACK_MESSAGE = "Something went wrong. Please try again.";
 
 export const Route = createFileRoute("/_auth/settings/users")({
   head: () => USERS_SETTINGS_HEAD,
@@ -114,17 +116,6 @@ function validateNameEmail(
   return errors;
 }
 
-function firstErrorMessage(errors: UserFormErrors) {
-  return (
-    errors.name ??
-    errors.email ??
-    errors.password ??
-    errors.confirmPassword ??
-    errors.form ??
-    "Check the form for errors."
-  );
-}
-
 function UsersSettings() {
   const queryClient = useQueryClient();
   const { data: usersData, isLoading } = useQuery(adminUsersQueryOpts());
@@ -162,8 +153,8 @@ function UsersSettings() {
     mutationFn: adminCreateUser,
     onSuccess: res => {
       if (res.error) {
-        setDialogError(res.message);
-        showActionFailed("create user", res.message);
+        setDialogError(apiErrorMessage(res, USER_ACTION_FALLBACK_MESSAGE));
+        showActionFailed("create user", res);
         return;
       }
       showSuccess("User created successfully");
@@ -182,8 +173,8 @@ function UsersSettings() {
       adminUpdateUser(id, data),
     onSuccess: res => {
       if (res.error) {
-        setDialogError(res.message);
-        showActionFailed("update user", res.message);
+        setDialogError(apiErrorMessage(res, USER_ACTION_FALLBACK_MESSAGE));
+        showActionFailed("update user", res);
         return;
       }
       showSuccess("User updated successfully");
@@ -201,8 +192,8 @@ function UsersSettings() {
     mutationFn: adminDeleteUser,
     onSuccess: res => {
       if (res.error) {
-        setDialogError(res.message);
-        showActionFailed("delete user", res.message);
+        setDialogError(apiErrorMessage(res, USER_ACTION_FALLBACK_MESSAGE));
+        showActionFailed("delete user", res);
         return;
       }
       showSuccess("User deleted successfully");
@@ -224,8 +215,8 @@ function UsersSettings() {
       adminResetUserPassword(id, password),
     onSuccess: res => {
       if (res.error) {
-        setDialogError(res.message);
-        showActionFailed("reset password", res.message);
+        setDialogError(apiErrorMessage(res, USER_ACTION_FALLBACK_MESSAGE));
+        showActionFailed("reset password", res);
         return;
       }
       showSuccess("Password reset successfully");
@@ -270,8 +261,8 @@ function UsersSettings() {
           )}
 
           {!isLoading && usersData?.error && (
-            <p className="text-destructive">
-              {usersData.message || "Failed to load users"}
+            <p className="text-destructive" role="alert">
+              {apiErrorMessage(usersData, "Couldn’t load users. Please try again.")}
             </p>
           )}
 
@@ -288,7 +279,7 @@ function UsersSettings() {
                       {user.avatar && (
                         <AvatarImage src={user.avatar} alt={user.name} />
                       )}
-                      <AvatarFallback className="bg-primary/20 text-primary">
+                      <AvatarFallback className="bg-primary/10 text-primary">
                         {getInitials(user.name)}
                       </AvatarFallback>
                     </Avatar>
@@ -485,7 +476,6 @@ function CreateUserDialog({
 
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
-      showValidationError(firstErrorMessage(nextErrors));
       if (nextErrors.name) {
         document.getElementById(nameId)?.focus();
       } else if (nextErrors.email) {
@@ -681,7 +671,6 @@ function EditUserDialog({
 
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
-      showValidationError(firstErrorMessage(nextErrors));
       if (nextErrors.name) {
         document.getElementById(nameId)?.focus();
       } else {
@@ -848,7 +837,6 @@ function DeleteUserDialog({
                 setConfirmText(e.target.value);
                 onClearServerError();
               }}
-              placeholder="DELETE"
               className={`font-mono ${lightInputClassName}`}
               aria-label="Type DELETE to confirm user deletion"
               aria-invalid={invalid}
@@ -932,7 +920,6 @@ function ResetPasswordDialog({
 
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
-      showValidationError(firstErrorMessage(nextErrors));
       if (nextErrors.password) {
         document.getElementById(passwordId)?.focus();
       } else {

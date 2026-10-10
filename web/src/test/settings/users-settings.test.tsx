@@ -70,7 +70,10 @@ function defaultUsers() {
   ];
 }
 
-function setupUsersFetch(users: TestAdminUser[] = defaultUsers()) {
+function setupUsersFetch(
+  users: TestAdminUser[] = defaultUsers(),
+  { failList = false }: { failList?: boolean } = {},
+) {
   const requests: CapturedRequest[] = [];
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = requestURL(input);
@@ -87,6 +90,9 @@ function setupUsersFetch(users: TestAdminUser[] = defaultUsers()) {
     }
 
     if (url === "/api/admin/users" && method === "GET") {
+      if (failList) {
+        return jsonResponse({ error: true, message: "internal_error" }, 500);
+      }
       return jsonResponse({
         error: false,
         data: { users },
@@ -195,6 +201,15 @@ describe("Users settings", () => {
     });
   }
 
+  it("words a failed user list instead of showing the server constant", async () => {
+    setupUsersFetch(defaultUsers(), { failList: true });
+    await renderRoute("/settings/users");
+
+    const error = await screen.findByRole("alert");
+    expect(error).toHaveTextContent("Couldn’t load users. Please try again.");
+    expect(error).not.toHaveTextContent("internal_error");
+  });
+
   it("blocks short create passwords before calling the API", async () => {
     const user = userEvent.setup();
     const { requests } = await renderUsersRoute();
@@ -212,9 +227,9 @@ describe("Users settings", () => {
       "aria-invalid",
       "true",
     );
-    expect(showValidationErrorMock).toHaveBeenCalledWith(
-      "Password must be at least 9 characters.",
-    );
+    // Field errors stay inline (design-system §3.7); no toast repeats them.
+    expect(showValidationErrorMock).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("User password")).toHaveFocus();
     expect(mutationRequests(requests, "POST")).toHaveLength(0);
   });
 

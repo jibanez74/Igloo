@@ -255,7 +255,7 @@ describe("MovieLikeButton", () => {
     });
     expect(showActionFailedMock).toHaveBeenCalledWith(
       "update like",
-      "Like failed.",
+      expect.objectContaining({ error: true, message: "Like failed." }),
     );
   });
 });
@@ -322,7 +322,7 @@ describe("MovieDetailsHeroActions watched button", () => {
     });
     expect(showActionFailedMock).toHaveBeenCalledWith(
       "update watched status",
-      "Watched failed.",
+      expect.objectContaining({ error: true, message: "Watched failed." }),
     );
   });
 });

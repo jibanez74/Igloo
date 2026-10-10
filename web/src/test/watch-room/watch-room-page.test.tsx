@@ -1065,6 +1065,23 @@ describe("WatchRoomPageContent", () => {
     expect(navigateMock).not.toHaveBeenCalled();
   });
 
+  it("fits inside the shell and lists only people under its people heading", async () => {
+    const { container } = renderRoomPage(buildRoom({ movie_poster: "/arrival.jpg" }));
+
+    await waitFor(() => {
+      expect(joinWatchRoomMock).toHaveBeenCalledWith(7);
+    });
+
+    // The shell already adds its header and padding; a min-h-screen root
+    // made the page scroll past its content.
+    expect(container.firstElementChild).not.toHaveClass("min-h-screen");
+    const people = screen
+      .getByRole("heading", { name: "People in this room" })
+      .closest("aside") as HTMLElement;
+    expect(within(people).queryByRole("img")).not.toBeInTheDocument();
+    expect(people.querySelector("img")).toBeNull();
+  });
+
   it("renders the real volume control without crashing", async () => {
     renderRoomPage(buildRoom({ is_owner: false }));
 

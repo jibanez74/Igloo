@@ -1,6 +1,6 @@
 import AboutSection, { AboutRow } from "@/components/shared/AboutSection";
 import { TMDB_LOGO_SIZE } from "@/lib/constants";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatLanguageName } from "@/lib/format";
 import { trimmedOrNull, unwrapString } from "@/lib/nullable";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import type { ShowNetworkType, ShowProductionCompanyType } from "@/types";
@@ -35,9 +35,20 @@ export default function ShowAboutSection({
     originalNameLabel != null && originalNameLabel !== name;
   const statusLabel = trimmedOrNull(status);
   const typeLabel = trimmedOrNull(type);
-  const languageLabel = trimmedOrNull(language);
+  const languageLabel = formatLanguageName(language ?? undefined);
   const firstAired = trimmedOrNull(firstAirDate);
   const lastAired = trimmedOrNull(lastAirDate);
+
+  const hasRows =
+    showOriginalName ||
+    networks.length > 0 ||
+    companyNames !== "" ||
+    statusLabel ||
+    typeLabel ||
+    languageLabel ||
+    firstAired ||
+    lastAired;
+  if (!hasRows) return null;
 
   return (
     <AboutSection title={name}>
@@ -77,9 +88,7 @@ export default function ShowAboutSection({
       {statusLabel && <AboutRow label="Status">{statusLabel}</AboutRow>}
       {typeLabel && <AboutRow label="Type">{typeLabel}</AboutRow>}
       {languageLabel && (
-        <AboutRow label="Original language">
-          {languageLabel.toUpperCase()}
-        </AboutRow>
+        <AboutRow label="Original language">{languageLabel}</AboutRow>
       )}
       {firstAired && (
         <AboutRow label="First aired">

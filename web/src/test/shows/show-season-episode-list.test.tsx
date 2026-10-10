@@ -236,7 +236,7 @@ describe("ShowSeasonEpisodeList", () => {
     await waitFor(() => {
       expect(showActionFailedMock).toHaveBeenCalledWith(
         "update watched status",
-        "nope",
+        expect.objectContaining({ error: true, message: "nope" }),
       );
     });
     expect(

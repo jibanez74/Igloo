@@ -18,6 +18,7 @@ import type {
   DevicesListResponseType,
   QuickConnectLookupType,
 } from "@/types";
+import { apiErrorMessage } from "@/lib/is-api-failure";
 
 const CODE_LENGTH = 6;
 
@@ -114,7 +115,7 @@ export default function QuickConnectApproveCard() {
     mutationFn: (deviceCode: string) => lookupQuickConnect(deviceCode),
     onSuccess: res => {
       if (res.error) {
-        setError(res.status === 404 ? INVALID_CODE_MESSAGE : res.message);
+        setError(res.status === 404 ? INVALID_CODE_MESSAGE : apiErrorMessage(res, "Couldn’t check that code. Please try again."));
         return;
       }
 
@@ -158,9 +159,9 @@ export default function QuickConnectApproveCard() {
           setError(INVALID_CODE_MESSAGE);
           setStep("enter");
         } else {
-          setError(res.message);
+          setError(apiErrorMessage(res, "Couldn’t approve that device. Please try again."));
         }
-        showActionFailed("approve device", res.message);
+        showActionFailed("approve device", res);
         return;
       }
 
@@ -288,7 +289,7 @@ export default function QuickConnectApproveCard() {
                 autoCapitalize="characters"
                 spellCheck={false}
                 placeholder="e.g. XK4T7P"
-                className="font-mono tracking-widest uppercase sm:max-w-48"
+                className="font-mono tracking-widest uppercase placeholder:tracking-normal placeholder:normal-case sm:max-w-48"
                 aria-invalid={!!error || undefined}
                 aria-describedby={error ? codeErrorId : codeDescriptionId}
               />

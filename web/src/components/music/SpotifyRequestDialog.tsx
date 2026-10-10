@@ -111,7 +111,7 @@ export default function SpotifyRequestDialog<T extends SpotifySearchResult>({
     });
 
     if (response.error) {
-      showActionFailed(copy.failureAction, response.message);
+      showActionFailed(copy.failureAction, response);
       return;
     }
 

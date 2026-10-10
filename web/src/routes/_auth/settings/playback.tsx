@@ -40,7 +40,6 @@ import {
 import {
   showActionFailed,
   showSuccess,
-  showValidationError,
 } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
 import type {
@@ -50,6 +49,7 @@ import type {
   UpdatePlaybackSettingsRequest,
 } from "@/types";
 import { routeHead } from "@/lib/route-head";
+import { apiErrorMessage } from "@/lib/is-api-failure";
 
 const PLAYBACK_SETTINGS_HEAD = routeHead("Playback Settings");
 
@@ -129,7 +129,7 @@ function PlaybackSettings() {
         title="Settings unavailable"
         message={
           authData?.error
-            ? authData.message || "Failed to load user information."
+            ? apiErrorMessage(authData, "Failed to load user information.")
             : "User information not available."
         }
       />
@@ -140,7 +140,7 @@ function PlaybackSettings() {
     return (
       <SettingsErrorCard
         title="Settings unavailable"
-        message={data.message || "Failed to load playback settings."}
+        message={apiErrorMessage(data, "Failed to load playback settings.")}
       />
     );
   }
@@ -266,7 +266,7 @@ function ServerPlaybackForm({ settings }: ServerPlaybackFormProps) {
     mutationFn: updatePlaybackSettings,
     onSuccess: res => {
       if (res.error) {
-        showActionFailed("save playback settings", res.message);
+        showActionFailed("save playback settings", res);
         return;
       }
       // The PUT echoes the same envelope the GET returns, so the response is
@@ -314,7 +314,7 @@ function ServerPlaybackForm({ settings }: ServerPlaybackFormProps) {
     event.preventDefault();
     if (isServerUploadOutOfRange(form)) {
       setValidationMessage(SERVER_UPLOAD_VALIDATION_MESSAGE);
-      showValidationError(SERVER_UPLOAD_VALIDATION_MESSAGE);
+      (event.currentTarget.elements.namedItem("server_upload_mbps") as HTMLElement | null)?.focus();
       return;
     }
     setValidationMessage("");

@@ -160,7 +160,7 @@ export default function MovieDetailsHeroActions({
             data: emptyWatchProgress(),
           });
         }
-        showActionFailed("update watched status", res.message);
+        showActionFailed("update watched status", res);
         return;
       }
 

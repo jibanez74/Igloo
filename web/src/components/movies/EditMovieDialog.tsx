@@ -300,7 +300,7 @@ function TmdbTab({
   async function handleApply(selectedId: number) {
     const res = await identifyMovie(movieId, selectedId);
     if (res.error) {
-      showActionFailed("identify movie", res.message);
+      showActionFailed("identify movie", res);
       return;
     }
 
@@ -365,7 +365,7 @@ function ManualTab({
     setSaving(false);
 
     if (res.error) {
-      showActionFailed("update movie", res.message);
+      showActionFailed("update movie", res);
       return;
     }
 

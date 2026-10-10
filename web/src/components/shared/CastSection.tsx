@@ -119,7 +119,7 @@ export default function CastSection({ cast }: CastSectionProps) {
                   </p>
                   {episodeLabel && (
                     <p
-                      className="truncate text-xs text-muted-foreground/80"
+                      className="truncate text-xs text-muted-foreground"
                       aria-hidden="true"
                     >
                       {episodeLabel}

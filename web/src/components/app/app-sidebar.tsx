@@ -33,6 +33,7 @@ import {
 import { showError } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
 import BrandMark from "@/components/app/BrandMark";
+import { apiErrorMessage } from "@/lib/is-api-failure";
 
 type NavItem = {
   title: string;
@@ -108,7 +109,7 @@ export default function AppSidebar({
 
     const res = await logout();
     if (res.error) {
-      showError("Logout failed", res.message || "Please try again.");
+      showError("Logout failed", apiErrorMessage(res, "Please try again."));
       return;
     }
 

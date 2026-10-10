@@ -20,7 +20,6 @@ import {
 import {
   showSuccess,
   showActionFailed,
-  showValidationError,
 } from "@/lib/toast-helpers";
 import { lightInputClassName } from "@/lib/input-styles";
 import { describedBy } from "@/lib/utils";
@@ -65,7 +64,6 @@ export default function ProfilePinCard() {
     fieldId: string,
   ) => {
     setErrors(current => ({ ...current, [field]: message }));
-    showValidationError(message);
     document.getElementById(fieldId)?.focus();
   };
 
@@ -224,7 +222,7 @@ export default function ProfilePinCard() {
         )}
         {revealed && pinData?.error && (
           <p className="text-xs text-destructive" role="alert">
-            {pinData.message || "Failed to load your PIN."}
+            {apiErrorMessage(pinData, "Failed to load your PIN.")}
           </p>
         )}
 

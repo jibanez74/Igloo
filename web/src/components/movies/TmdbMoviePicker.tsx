@@ -110,7 +110,7 @@ export default function TmdbMoviePicker({
     setSearching(false);
 
     if (response.error || !response.data?.results) {
-      showActionFailed("search TMDB", response.message);
+      showActionFailed("search TMDB", response.error ? response : undefined);
       return;
     }
 

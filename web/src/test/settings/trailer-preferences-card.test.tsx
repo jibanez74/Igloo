@@ -106,7 +106,10 @@ describe("TrailerPreferencesCard", () => {
     await waitFor(() =>
       expect(showActionFailedMock).toHaveBeenCalledWith(
         "save trailer preferences",
-        "trailer count must be between 1 and 5",
+        expect.objectContaining({
+          error: true,
+          message: "trailer count must be between 1 and 5",
+        }),
       ),
     );
     expect(toggle()).toHaveAttribute("aria-checked", "false");

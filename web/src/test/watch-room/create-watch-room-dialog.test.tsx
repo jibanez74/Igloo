@@ -321,7 +321,7 @@ describe("CreateWatchRoomDialog", () => {
     await waitFor(() => {
       expect(showActionFailedMock).toHaveBeenCalledWith(
         "create watch room",
-        "No HLS profile is available.",
+        expect.objectContaining({ error: true, message: "No HLS profile is available." }),
       );
     });
 

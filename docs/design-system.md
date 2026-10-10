@@ -89,7 +89,7 @@ themes by `contrast.test.ts`.
 | `border` | `#2A3C57` | `#CBD9E8` | Borders |
 | `input` | white @ 8% | `#CBD9E8` | Input borders |
 | `ring` | `#38BDF8` | `#0EA5E9` | **The one focus color** |
-| `destructive` / `-foreground` | `#F87171` / `#08131F` | `#DC2626` / `#FFFFFF` | Danger / delete |
+| `destructive` / `-foreground` | `#F87171` / `#08131F` | `#B91C1C` / `#FFFFFF` | Danger / delete |
 | `aurora` / `-foreground` | `#F59E0B` / `#08131F` | same | Warm accent (sparing) |
 | `success` / `-foreground` | `#34D399` / `#08131F` | `#167050` / `#FFFFFF` | Success state |
 | `accent-teal` / `-foreground` | `#2DD4BF` / `#08131F` | `#0D9488` / `#08131F` | Secondary accent |
@@ -570,7 +570,10 @@ and meta correctly, and a hard reload shows no theme flash.
 
 `AppShell.tsx`: skip link → shadcn `SidebarProvider` + `AppSidebar` (a fixed
 left-side, icon-collapsible contract; 16rem expanded / 3rem icon rail / 18rem
-mobile sheet that auto-closes on nav) + `SidebarInset` content column. The
+mobile sheet that auto-closes on nav) + `SidebarInset` content column (a
+`div`, unlike upstream shadcn): the sticky app header inside it is the page's
+banner landmark, and only the content area below it is `<main id="main">`, so
+the skip link lands past the search bar. The
 provider owns this state internally; the rail and Ctrl/Cmd+B toggle desktop
 collapse, while the mobile trigger controls the sheet.
 
@@ -594,8 +597,8 @@ collapse, while the mobile trigger controls the sheet.
   window.
 
 **Unknown URLs** land on the shell's catch-all route (`routes/_auth/$.tsx`):
-a "Page not found" heading over `MediaNotFound` (title "Not found", "Back to
-Home"), titled through `head` like every page, so a mistyped address keeps
+`MediaNotFound` with the heading "Page not found" and "Back to Home",
+titled through `head` like every page, so a mistyped address keeps
 the sidebar, the header and a way back instead of the router's bare text.
 
 **The home page** is the shell's canonical composition: a hero heading, then
@@ -959,15 +962,16 @@ is unknown or empty.
   - The four ways a detail page fails to show its subject — an invalid id, a
     failed request, one still in flight, an empty response — are
     `MediaDetailGuard`, which every `$id` route wraps its content in. Three of
-    the four are dead ends, so each renders `MediaNotFound` (title "Not found"
-    for a 404 or an empty response, "No access" for a 403, "Error"
-    otherwise); its destination is
+    the four are dead ends, so each renders `MediaNotFound` with a page `h1`
+    ("Movie not found" for a bad id, a 404 or an empty response, "No access"
+    for a 403, "Couldn’t load this movie" otherwise); its destination is
     a named key (`music`, `moviePlaylists`, …) carrying both the route and the
     words on the link, so the two can never disagree and a destination may
     carry search params.
-  - A missing resource → `MediaNotFound`: a `SectionErrorAlert` plus a
-    **required** "Back to Movies/TV Shows/Music/Home" outline link, so the
-    page never dead-ends.
+  - A missing resource → `MediaNotFound`: the page `h1`, an untitled
+    `SectionErrorAlert` with one sentence (the heading already names the
+    failure), and a **required** "Back to Movies/TV Shows/Music/Home"
+    outline link, so the page never dead-ends.
   - A mutation → **toast** via `toast-helpers.ts`, never inline.
   - **The UI owns the words for failures it can name.** `apiRequest` stamps the
     HTTP `status` on every failure envelope it returns, and a surface maps the
@@ -1139,7 +1143,12 @@ require the full playback test pass.
   `closeButton`, top-right; toast surfaces tokenized with `!` overrides
   (`!bg-card`/`!bg-muted`, `!border-success/50`, `!border-destructive/50`).
   Fire success/failure through `lib/toast-helpers.ts`
-  (`showActionFailed(...)` etc.), not ad-hoc `toast()` calls.
+  (`showActionFailed(...)` etc.), not ad-hoc `toast()` calls. Hand
+  `showActionFailed` the failed envelope, not its `message`: it words the
+  description through `apiErrorMessage`, so only a server-worded 4xx reaches
+  the reader and a 5xx constant or the client's canned 404/network string
+  never does. Inline error text and load-error cards make the same choice
+  with `apiErrorMessage(res, fallback)`.
 - **NotificationBell** (header): ghost icon button with a glacier unread
   badge pill ("99+" cap; count also in the `aria-label`), opening a `w-80
   bg-card` popover — header row with "Mark all read", `max-h-96` scroll body
@@ -1189,7 +1198,10 @@ require the full playback test pass.
   go through the shared `ConfirmDialog`, and paged lists through
   `LibraryPagination` — neither is re-implemented per page.
 - Form-level failures toast; field-level validation renders inline with
-  `aria-invalid` (styled by the Button/Input base classes).
+  `aria-invalid` (styled by the Button/Input base classes) and moves focus to
+  the first invalid field. A field error is never repeated as a "Validation
+  error" toast; `showValidationError` is only for a rule with no field to mark
+  (no one invited to a room, a playlist name the dialog shows no slot for).
 - **Device-scoped settings apply instantly and carry no Save bar.** Settings
   that belong to the browser rather than the account (theme; the playback
   preferences in `lib/playback-preferences.ts`) persist to localStorage on

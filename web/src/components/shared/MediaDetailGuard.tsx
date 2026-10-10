@@ -26,8 +26,8 @@ type MediaDetailGuardProps<TPayload> = {
  * failed, a request still in flight, and a response that came back empty.
  *
  * Three of the four are dead ends, so each renders `MediaNotFound` with a way
- * out (design-system §3.4) rather than a bare heading. The UI owns every
- * sentence here: a 404 reads as the subject being missing, a 403 as the
+ * out (design-system §3.4): a page `h1` naming the failure, one alert sentence
+ * and a link back. The UI owns every sentence here: a 404 reads as the subject being missing, a 403 as the
  * reader not being allowed to see it, and anything else as a load that went
  * wrong, so neither the client's canned "404 - The resource…" string nor a
  * lowercase server constant ("access denied") ever reaches the reader.
@@ -45,14 +45,22 @@ export default function MediaDetailGuard<TPayload>({
   skeleton,
   children,
 }: MediaDetailGuardProps<TPayload>) {
+  const notFoundHeading = `${capitalize(noun)} not found`;
+
   if (id == null) {
-    return <MediaNotFound message={`That ${noun} link is not valid.`} back={back} />;
+    return (
+      <MediaNotFound
+        heading={notFoundHeading}
+        message={`That ${noun} link is not valid.`}
+        back={back}
+      />
+    );
   }
 
   if (data?.error && data.status === 404) {
     return (
       <MediaNotFound
-        title="Not found"
+        heading={notFoundHeading}
         message={`We couldn't find that ${noun}.`}
         back={back}
       />
@@ -62,7 +70,7 @@ export default function MediaDetailGuard<TPayload>({
   if (data?.error && data.status === 403) {
     return (
       <MediaNotFound
-        title="No access"
+        heading="No access"
         message={`You don't have access to this ${noun}.`}
         back={back}
       />
@@ -72,6 +80,7 @@ export default function MediaDetailGuard<TPayload>({
   if (isError || data?.error) {
     return (
       <MediaNotFound
+        heading={`Couldn’t load this ${noun}`}
         message={`Something went wrong while loading this ${noun}. Please try again later.`}
         back={back}
       />
@@ -85,8 +94,8 @@ export default function MediaDetailGuard<TPayload>({
   if (payload == null) {
     return (
       <MediaNotFound
-        title="Not found"
-        message={`${capitalize(noun)} not found.`}
+        heading={notFoundHeading}
+        message={`We couldn't find that ${noun}.`}
         back={back}
       />
     );

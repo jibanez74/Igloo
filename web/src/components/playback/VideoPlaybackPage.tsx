@@ -766,7 +766,7 @@ export default function VideoPlaybackPage({
     setResumeActionPending(false);
 
     if (res.error) {
-      showActionFailed("clear watch progress", res.message);
+      showActionFailed("clear watch progress", res);
       return;
     }
 

@@ -97,9 +97,9 @@ describe("ProfilePinCard", () => {
       "aria-describedby",
       expect.stringContaining(alert.id),
     );
-    expect(showValidationErrorMock).toHaveBeenCalledWith(
-      "PIN must be exactly 4 digits.",
-    );
+    // Field errors stay inline (design-system §3.7); no toast repeats them.
+    expect(showValidationErrorMock).not.toHaveBeenCalled();
+    expect(pinInput).toHaveFocus();
     expect(updateUserPinMock).not.toHaveBeenCalled();
   });
 

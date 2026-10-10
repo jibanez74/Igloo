@@ -58,3 +58,25 @@ describe("trailer route load errors", () => {
     ).toBeInTheDocument();
   });
 });
+
+describe("trailer route without a trailer", () => {
+  it("lays the Go Back icon and label out on one line", async () => {
+    mockTrailerFetch(() =>
+      jsonResponse({
+        error: false,
+        data: { movie: { title: "Resident Evil", videos: { results: [] } } },
+      }),
+    );
+
+    await renderRoute("/trailer?mediaType=movie&tmdbId=19");
+
+    expect(
+      await screen.findByRole("heading", { name: "No Trailer Available" }),
+    ).toBeInTheDocument();
+    // Without inline-flex the block-level svg stacks above the label.
+    expect(screen.getByRole("button", { name: "Go Back" })).toHaveClass(
+      "inline-flex",
+      "items-center",
+    );
+  });
+});

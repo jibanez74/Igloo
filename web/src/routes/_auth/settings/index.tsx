@@ -35,7 +35,6 @@ import { generalSettingsQueryOpts } from "@/lib/query-opts";
 import {
   showActionFailed,
   showSuccess,
-  showValidationError,
 } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
 import type {
@@ -45,6 +44,7 @@ import type {
   UpdateGeneralSettingsRequest,
 } from "@/types";
 import { routeHead } from "@/lib/route-head";
+import { apiErrorMessage } from "@/lib/is-api-failure";
 
 const GENERAL_SETTINGS_HEAD = routeHead("General Settings");
 
@@ -133,7 +133,7 @@ function GeneralSettings() {
     return (
       <SettingsErrorCard
         title="Settings unavailable"
-        message={data.message || "Failed to load general settings."}
+        message={apiErrorMessage(data, "Failed to load general settings.")}
       />
     );
   }
@@ -236,7 +236,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
         if (context?.previousData) {
           queryClient.setQueryData([GENERAL_SETTINGS_KEY], context.previousData);
         }
-        showActionFailed("save settings", res.message);
+        showActionFailed("save settings", res);
         return;
       }
 
@@ -345,7 +345,9 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
     if (message) {
       setValidationMessage(message);
       setValidationField(field);
-      showValidationError(message);
+      if (field) {
+        (event.currentTarget.elements.namedItem(field) as HTMLElement | null)?.focus();
+      }
       return;
     }
 
@@ -718,7 +720,7 @@ function PathInput({
         />
       </div>
       <p id={descriptionId} className="text-sm text-muted-foreground">
-        This path must be readable by the server.
+        The server must be able to write to this directory.
       </p>
     </div>
   );

@@ -104,7 +104,7 @@ export default function TrailerPreferencesCard() {
             context.previousData,
           );
         }
-        showActionFailed("save trailer preferences", res.message);
+        showActionFailed("save trailer preferences", res);
         return;
       }
       queryClient.setQueryData<TrailerPreferencesQueryData>(

@@ -1,7 +1,6 @@
 import {
   BITMAP_SUBTITLE_CODECS,
   ISO_639_2_TO_1,
-  LANGUAGE_NAMES,
   STREAM_MODES,
   SUBTITLE_OFF_VALUE,
 } from "@/lib/constants";
@@ -10,7 +9,7 @@ import {
   createCanPlayProbe,
   type CanPlayProbe,
 } from "@/lib/direct-play-probe";
-import { capitalize } from "@/lib/format";
+import { formatLanguageName } from "@/lib/format";
 import {
   unwrapInt,
   unwrapNormalizedString,
@@ -482,16 +481,6 @@ export function resolvePlaybackSettings(
     audioTrack: resolvedAudioTrack,
     subtitleTrack: resolvedSubtitleTrack,
   };
-}
-
-function formatLanguageName(
-  raw: string | undefined,
-): string | undefined {
-  const code = raw?.trim().toLowerCase();
-  if (!code) return undefined;
-  const two = code.slice(0, 2);
-  if (LANGUAGE_NAMES[two]) return LANGUAGE_NAMES[two];
-  return code.length <= 3 ? code.toUpperCase() : capitalize(code);
 }
 
 export function describePlaybackChannelLayout(

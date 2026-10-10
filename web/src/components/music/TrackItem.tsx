@@ -160,7 +160,7 @@ export default function TrackItem({
 
         {/* Subtitle row - genres for album, text for others */}
         {variant === "album" && genres && genres.length > 0 ? (
-          <p className="mt-0.5 truncate text-sm text-primary/60">
+          <p className="mt-0.5 truncate text-sm text-muted-foreground">
             {genres.join(", ")}
           </p>
         ) : subtitle ? (

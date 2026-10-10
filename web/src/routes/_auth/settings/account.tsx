@@ -57,7 +57,6 @@ import {
   showSuccess,
   showError,
   showActionFailed,
-  showValidationError,
 } from "@/lib/toast-helpers";
 import { useNavigate } from "@tanstack/react-router";
 import { lightInputClassName } from "@/lib/input-styles";
@@ -67,6 +66,7 @@ import QuickConnectApproveCard from "@/components/settings/QuickConnectApproveCa
 import DevicesCard from "@/components/settings/DevicesCard";
 import ProfilePinCard from "@/components/settings/ProfilePinCard";
 import { routeHead } from "@/lib/route-head";
+import { apiErrorMessage } from "@/lib/is-api-failure";
 
 const ACCOUNT_SETTINGS_HEAD = routeHead("Account Settings");
 
@@ -149,7 +149,6 @@ function AccountSettings() {
     fieldId: string,
   ) => {
     setErrors(current => ({ ...current, [field]: message }));
-    showValidationError(message);
     document.getElementById(fieldId)?.focus();
   };
 
@@ -170,9 +169,9 @@ function AccountSettings() {
       if (res.error) {
         setErrors(current => ({
           ...current,
-          name: res.message || "Failed to update name.",
+          name: apiErrorMessage(res, "Failed to update name."),
         }));
-        showActionFailed("update name", res.message);
+        showActionFailed("update name", res);
         await queryClient.invalidateQueries({ queryKey: [AUTH_USER_KEY] });
       } else {
         clearError("name");
@@ -196,9 +195,9 @@ function AccountSettings() {
       if (res.error) {
         setErrors(current => ({
           ...current,
-          email: res.message || "Failed to update email.",
+          email: apiErrorMessage(res, "Failed to update email."),
         }));
-        showActionFailed("update email", res.message);
+        showActionFailed("update email", res);
         await queryClient.invalidateQueries({ queryKey: [AUTH_USER_KEY] });
       } else {
         clearError("email");
@@ -224,9 +223,9 @@ function AccountSettings() {
       if (res.error) {
         setErrors(current => ({
           ...current,
-          currentPassword: res.message || "Failed to update password.",
+          currentPassword: apiErrorMessage(res, "Failed to update password."),
         }));
-        showActionFailed("update password", res.message);
+        showActionFailed("update password", res);
       } else {
         setErrors(current => ({
           ...current,
@@ -281,9 +280,9 @@ function AccountSettings() {
       if (res.error) {
         setErrors(current => ({
           ...current,
-          avatarUrl: res.message || "Failed to update avatar.",
+          avatarUrl: apiErrorMessage(res, "Failed to update avatar."),
         }));
-        showActionFailed("update avatar", res.message);
+        showActionFailed("update avatar", res);
         queryClient.invalidateQueries({ queryKey: [AUTH_USER_KEY] });
       } else {
         clearError("avatarUrl");
@@ -315,9 +314,9 @@ function AccountSettings() {
       if (res.error) {
         setErrors(current => ({
           ...current,
-          avatarUpload: res.message || "Failed to upload avatar.",
+          avatarUpload: apiErrorMessage(res, "Failed to upload avatar."),
         }));
-        showActionFailed("upload avatar", res.message);
+        showActionFailed("upload avatar", res);
         queryClient.invalidateQueries({ queryKey: [AUTH_USER_KEY] });
       } else {
         clearError("avatarUpload");
@@ -451,7 +450,6 @@ function AccountSettings() {
       const message =
         "Invalid file type. Allowed: JPEG, PNG, GIF, WebP.";
       setErrors(current => ({ ...current, avatarUpload: message }));
-      showValidationError(message);
       document.getElementById(avatarUploadId)?.focus();
       e.target.value = "";
       return;
@@ -460,7 +458,6 @@ function AccountSettings() {
     if (file.size > MAX_AVATAR_SIZE) {
       const message = "File too large. Maximum size is 20MB.";
       setErrors(current => ({ ...current, avatarUpload: message }));
-      showValidationError(message);
       document.getElementById(avatarUploadId)?.focus();
       e.target.value = "";
       return;
@@ -486,7 +483,7 @@ function AccountSettings() {
         const res = await deleteUserAccount();
 
         if (res.error) {
-          showActionFailed("delete account", res.message);
+          showActionFailed("delete account", res);
           setDeleteDialogOpen(false);
           setDeleteConfirmText("");
           return;
@@ -525,7 +522,7 @@ function AccountSettings() {
         title="Account unavailable"
         message={
           userData?.error
-            ? userData.message || "Failed to load user information"
+            ? apiErrorMessage(userData, "Failed to load user information")
             : "User information not available"
         }
       />
@@ -979,7 +976,6 @@ function AccountSettings() {
                   setDeleteConfirmText(e.target.value);
                   clearError("deleteConfirm");
                 }}
-                placeholder="DELETE"
                 className={`font-mono ${lightInputClassName}`}
                 aria-label="Type DELETE to confirm account deletion"
                 aria-describedby={describedBy(

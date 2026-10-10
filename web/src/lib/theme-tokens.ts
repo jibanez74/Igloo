@@ -96,9 +96,9 @@ export const THEME_TOKENS: Record<ThemeName, Record<string, ThemeToken>> = {
       hex: "#0A1322",
     },
     "--destructive": {
-      value: "oklch(0.577 0.215 27.3)",
-      hex: "#DC2626",
-      comment: "danger #DC2626",
+      value: "oklch(0.505 0.19 27.5)",
+      hex: "#B91C1C",
+      comment: "danger #B91C1C — 4.9:1 on its own /10 tint",
     },
     "--border": {
       value: "oklch(0.879 0.026 250)",
@@ -199,7 +199,7 @@ export const THEME_TOKENS: Record<ThemeName, Record<string, ThemeToken>> = {
     "--destructive-foreground": {
       value: "oklch(1 0 0)",
       hex: "#FFFFFF",
-      comment: "#FFFFFF — 4.83:1 on destructive",
+      comment: "#FFFFFF — 6.47:1 on destructive",
     },
     "--success-foreground": {
       value: "oklch(1 0 0)",

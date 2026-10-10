@@ -58,7 +58,7 @@ export default function RequestMovieDialog({
     });
 
     if (response.error) {
-      showActionFailed("send movie request", response.message);
+      showActionFailed("send movie request", response);
       return;
     }
 

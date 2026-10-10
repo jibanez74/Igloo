@@ -43,6 +43,9 @@ describe("MediaDetailGuard", () => {
   it("rejects a link that never named a subject", () => {
     renderGuard({ id: null });
 
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Album not found" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent(
       "That album link is not valid.",
     );
@@ -55,8 +58,10 @@ describe("MediaDetailGuard", () => {
       payload: null,
     });
 
+    expect(
+      screen.getByRole("heading", { level: 1, name: "No access" }),
+    ).toBeInTheDocument();
     const alert = screen.getByRole("alert");
-    expect(alert).toHaveTextContent("No access");
     expect(alert).toHaveTextContent("You don't have access to this album.");
     expect(alert).not.toHaveTextContent("access denied");
   });
@@ -75,8 +80,10 @@ describe("MediaDetailGuard", () => {
       payload: null,
     });
 
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Couldn’t load this album" }),
+    ).toBeInTheDocument();
     const alert = screen.getByRole("alert");
-    expect(alert).toHaveTextContent("Error");
     expect(alert).toHaveTextContent(
       "Something went wrong while loading this album. Please try again later.",
     );
@@ -96,8 +103,10 @@ describe("MediaDetailGuard", () => {
       payload: null,
     });
 
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Album not found" }),
+    ).toBeInTheDocument();
     const alert = screen.getByRole("alert");
-    expect(alert).toHaveTextContent("Not found");
     expect(alert).toHaveTextContent("We couldn't find that album.");
     expect(alert).not.toHaveTextContent("404");
   });
@@ -120,7 +129,12 @@ describe("MediaDetailGuard", () => {
   it("reports a response that came back without the subject", () => {
     renderGuard({ payload: null });
 
-    expect(screen.getByRole("alert")).toHaveTextContent("Album not found.");
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Album not found" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "We couldn't find that album.",
+    );
   });
 
   // Every failing branch is a dead end, so each must offer a way out.

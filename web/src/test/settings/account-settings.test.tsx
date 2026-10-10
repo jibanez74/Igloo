@@ -190,9 +190,9 @@ describe("Account settings", () => {
       "aria-describedby",
       expect.stringContaining(alert.id),
     );
-    expect(showValidationErrorMock).toHaveBeenCalledWith(
-      "New password must be at least 9 characters.",
-    );
+    // Field errors stay inline (design-system §3.7); no toast repeats them.
+    expect(showValidationErrorMock).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("New password")).toHaveFocus();
     expect(requestsFor(requests, "PUT", "/api/user/password")).toHaveLength(0);
   });
 
@@ -218,9 +218,9 @@ describe("Account settings", () => {
       "aria-describedby",
       expect.stringContaining(alert.id),
     );
-    expect(showValidationErrorMock).toHaveBeenCalledWith(
-      "New passwords do not match.",
-    );
+    // Field errors stay inline (design-system §3.7); no toast repeats them.
+    expect(showValidationErrorMock).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Confirm new password")).toHaveFocus();
     expect(requestsFor(requests, "PUT", "/api/user/password")).toHaveLength(0);
   });
 
@@ -242,9 +242,9 @@ describe("Account settings", () => {
       "aria-describedby",
       expect.stringContaining(alert.id),
     );
-    expect(showValidationErrorMock).toHaveBeenCalledWith(
-      "Invalid file type. Allowed: JPEG, PNG, GIF, WebP.",
-    );
+    // Field errors stay inline (design-system §3.7); no toast repeats them.
+    expect(showValidationErrorMock).not.toHaveBeenCalled();
+    expect(upload).toHaveFocus();
     expect(requestsFor(requests, "POST", "/api/user/avatar/upload")).toHaveLength(
       0,
     );

@@ -167,7 +167,7 @@ describe("DevicesCard", () => {
     await waitFor(() => {
       expect(showActionFailedMock).toHaveBeenCalledWith(
         "revoke device",
-        "something went wrong",
+        expect.objectContaining({ error: true, message: "something went wrong" }),
       );
     });
     expect(showSuccessMock).not.toHaveBeenCalled();
@@ -204,15 +204,17 @@ describe("DevicesCard", () => {
     });
   });
 
-  it("surfaces list errors", async () => {
+  it("words list errors itself instead of echoing the client's canned text", async () => {
     getDevicesMock.mockResolvedValue({
       error: true,
       message: "500 - A network error occurred while processing your request.",
+      status: 500,
     });
 
     renderCard();
 
     const error = await screen.findByRole("alert");
-    expect(error).toHaveTextContent(/network error/);
+    expect(error).toHaveTextContent("Couldn’t load your devices. Please try again.");
+    expect(error).not.toHaveTextContent(/network error/);
   });
 });

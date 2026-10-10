@@ -13,15 +13,10 @@ export const Route = createFileRoute("/_auth/$")({
 
 function NotFoundPage() {
   return (
-    <div className="mx-auto max-w-2xl">
-      <h1 className="mb-6 text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
-        Page not found
-      </h1>
-      <MediaNotFound
-        title="Not found"
-        message="There is no page at this address."
-        back="home"
-      />
-    </div>
+    <MediaNotFound
+      heading="Page not found"
+      message="There is no page at this address."
+      back="home"
+    />
   );
 }

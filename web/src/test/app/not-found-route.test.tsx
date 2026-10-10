@@ -28,9 +28,10 @@ describe("unknown URLs", () => {
     expect(
       await screen.findByRole("heading", { level: 1, name: "Page not found" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      "There is no page at this address.",
-    );
+    // The heading names the failure; the alert adds one sentence, untitled.
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("There is no page at this address.");
+    expect(alert).not.toHaveTextContent("Not found");
     expect(screen.getByRole("link", { name: "Back to Home" })).toHaveAttribute(
       "href",
       "/",

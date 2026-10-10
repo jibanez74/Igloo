@@ -59,6 +59,15 @@ describe("movie scan progress", () => {
     expect(screen.getByText(/copying.mkv: File is still changing/)).toBeVisible();
   });
 
+  it("counts a single outstanding issue in the singular", () => {
+    const status = movieScanStatus({
+      state: "completed-with-issues", processed: 418, failed: 1,
+      issue_count: 1, issues: [{ filename: "broken.mkv", phase: "local", reason: "Unable to probe this movie." }],
+    });
+    render(<ScanProgress library="movies" status={status} unavailable={false} />);
+    expect(screen.getByText("1 outstanding issue", { exact: true })).toBeInTheDocument();
+  });
+
   it("polls at two/ten seconds, retains status across navigation and failures, and pauses when hidden", async () => {
     vi.useFakeTimers();
     let status = movieScanStatus();
