@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Film } from "lucide-react";
 import PosterCard from "@/components/shared/PosterCard";
@@ -11,9 +12,15 @@ import type { LatestMovieType } from "@/types";
 type MovieCardProps = {
   movie: LatestMovieType;
   watchProgress?: { progressSec: number; durationSec: number };
+  /** The card's own menu, where a list offers actions on its movies. */
+  actions?: ReactNode;
 };
 
-export default function MovieCard({ movie, watchProgress }: MovieCardProps) {
+export default function MovieCard({
+  movie,
+  watchProgress,
+  actions,
+}: MovieCardProps) {
   const { id, title, poster_path, year } = movie;
   const queryClient = useQueryClient();
 
@@ -47,6 +54,7 @@ export default function MovieCard({ movie, watchProgress }: MovieCardProps) {
       detailsLabel={detailsLabel}
       playLabel={`${hasProgress ? "Resume" : "Play"} ${ariaTitle}`}
       watchProgress={watchProgress}
+      actions={actions}
       onPrefetch={handlePrefetch}
     />
   );

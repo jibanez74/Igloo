@@ -98,4 +98,20 @@ describe("PosterCard", () => {
 
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
   });
+
+  // The corner slot holds a control of the card's own, so it must sit beside
+  // the poster link rather than inside it: a button in an anchor is invalid
+  // and would navigate on activation.
+  it("renders the actions slot beside the poster link, never inside it", () => {
+    renderWithQueryClient(
+      <PosterCard
+        {...baseProps}
+        actions={<button type="button">Card actions</button>}
+      />,
+    );
+
+    const button = screen.getByRole("button", { name: "Card actions" });
+    expect(button.closest("a")).toBeNull();
+    expect(button.closest("article")).not.toBeNull();
+  });
 });

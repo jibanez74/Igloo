@@ -53,14 +53,24 @@ type PosterCardProps = {
   watchProgress?: PosterCardWatchProgress;
   /** Decorative corner slot over the poster - a rating badge, say. */
   badge?: ReactNode;
+  /**
+   * Interactive corner slot - a card's own menu. It sits outside the poster
+   * link, reveals with the card's hover and focus-within, stays while its
+   * menu is open, and is always shown where there is no hover to reveal it.
+   */
+  actions?: ReactNode;
   /** Warms the details query on hover and focus. */
   onPrefetch?: () => void;
 } & PosterCardPlayProps;
 
+const POSTER_ACTIONS_CLASS =
+  "absolute top-2 right-2 z-10 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 has-[[data-state=open]]:opacity-100 pointer-coarse:opacity-100";
+
 /**
  * The 2:3 media card used across the home rows and library grids: poster,
- * optional corner badge, optional watch-progress bar, and an optional play
- * action that bypasses the details page. The hover wash and the play control
+ * optional corner badge, optional watch-progress bar, an optional play
+ * action that bypasses the details page, and an optional actions corner for
+ * a menu of the card's own. The hover wash and the play control
  * travel together - a card with nothing single to play (a show, an unreleased
  * title) renders neither. The percent is announced through the poster link's
  * label, so the bar itself stays decorative.
@@ -76,6 +86,7 @@ export default function PosterCard({
   playLabel,
   watchProgress,
   badge,
+  actions,
   onPrefetch,
 }: PosterCardProps) {
   const { showPoster, onError } = usePosterFallback(posterUrl);
@@ -175,6 +186,12 @@ export default function PosterCard({
         >
           <Play className="size-7 fill-current" aria-hidden="true" />
         </Link>
+      )}
+
+      {actions && (
+        <div className={cn(CARD_ACTION_REVEAL_CLASS, POSTER_ACTIONS_CLASS)}>
+          {actions}
+        </div>
       )}
     </article>
   );

@@ -1,14 +1,16 @@
 import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ListVideo } from "lucide-react";
 import MovieCard from "@/components/movies/MovieCard";
+import PlaylistMovieMenu from "@/components/movies/PlaylistMovieMenu";
 import LibraryAllTab, {
   LibraryAllTabSkeleton,
 } from "@/components/shared/LibraryAllTab";
 import MediaDetailGuard from "@/components/shared/MediaDetailGuard";
 import PlaylistOwnerActions from "@/components/shared/PlaylistOwnerActions";
 import SkeletonStatus from "@/components/shared/SkeletonStatus";
+import { removeMovieFromMoviePlaylist } from "@/lib/api";
 import {
   moviePlaylistDetailsQueryOpts,
   moviePlaylistMoviesQueryOpts,
@@ -16,11 +18,15 @@ import {
 import {
   MOTION_LOADING_STATE_CLASS,
   MOTION_MICRO_COLORS_CLASS,
+  MOVIE_PLAYLIST_DETAILS_KEY,
+  MOVIE_PLAYLIST_MOVIES_KEY,
+  MOVIE_PLAYLISTS_KEY,
   MOVIES_PER_PAGE,
   MOVIES_PLAYLISTS_TAB_SEARCH,
   LIBRARY_NOUNS,
 } from "@/lib/constants";
 import { pluralize } from "@/lib/format";
+import { showActionFailed, showRemoved } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
 import { unwrapString } from "@/lib/nullable";
 import { parseRouteId } from "@/lib/route-id";
@@ -93,9 +99,35 @@ type MoviePlaylistContentProps = {
 function MoviePlaylistContent({ playlistId, data }: MoviePlaylistContentProps) {
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<"asc" | "desc">("asc");
+  const queryClient = useQueryClient();
 
-  const { playlist, movie_count, is_owner } = data;
+  const { playlist, movie_count, is_owner, can_edit } = data;
   const desc = unwrapString(playlist.description);
+
+  // Removal is reversible (the movie page adds it back), so it asks nothing
+  // and reports through a toast. The list, this header's count and the
+  // Playlists tab's card all carry the count, so all three refresh.
+  const removeMutation = useMutation({
+    mutationFn: (movieId: number) =>
+      removeMovieFromMoviePlaylist(playlistId, movieId),
+    onSuccess: result => {
+      if (result.error) {
+        showActionFailed("remove movie", result);
+        return;
+      }
+      void queryClient.invalidateQueries({
+        queryKey: [MOVIE_PLAYLIST_MOVIES_KEY, playlistId],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: [MOVIE_PLAYLIST_DETAILS_KEY, playlistId],
+      });
+      void queryClient.invalidateQueries({ queryKey: [MOVIE_PLAYLISTS_KEY] });
+      showRemoved("Movie", "from playlist");
+    },
+    onError: () => {
+      showActionFailed("remove movie");
+    },
+  });
 
   return (
     <div className="min-w-0">
@@ -128,7 +160,23 @@ function MoviePlaylistContent({ playlistId, data }: MoviePlaylistContentProps) {
       <LibraryAllTab
         queryOpts={moviePlaylistMoviesQueryOpts(playlistId, page, MOVIES_PER_PAGE, sort)}
         getItems={data => data.movies}
-        renderCard={movie => <MovieCard movie={movie} />}
+        renderCard={movie => (
+          <MovieCard
+            movie={movie}
+            actions={
+              can_edit ? (
+                <PlaylistMovieMenu
+                  movieTitle={movie.title}
+                  onRemove={() => removeMutation.mutate(movie.id)}
+                  disabled={
+                    removeMutation.isPending &&
+                    removeMutation.variables === movie.id
+                  }
+                />
+              ) : undefined
+            }
+          />
+        )}
         currentPage={page}
         sort={sort}
         perPage={MOVIES_PER_PAGE}
