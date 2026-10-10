@@ -1,6 +1,7 @@
 import type { MovieScanStatus, MusicScanStatus, ShowScanStatus } from "@/types/settings";
 import { mediaApiBasePath, movieMediaRef } from "@/lib/media-ref";
 import type {
+  AddMoviesToPlaylistRequest,
   AlbumDetailsResponseType,
   AlbumsListResponseType,
   AdminUserType,
@@ -761,6 +762,27 @@ export const deleteMoviePlaylist = (id: number) =>
   apiRequest<Record<string, never>>(`/api/movies/playlists/${id}`, {
     method: "DELETE",
   });
+
+export const addMoviesToMoviePlaylist = (
+  playlistId: number,
+  movieIds: number[],
+) =>
+  apiRequest<BulkAddResponseType>(
+    `/api/movies/playlists/${playlistId}/movies`,
+    {
+      method: "POST",
+      body: { movie_ids: movieIds } satisfies AddMoviesToPlaylistRequest,
+    },
+  );
+
+export const removeMovieFromMoviePlaylist = (
+  playlistId: number,
+  movieId: number,
+) =>
+  apiRequest<Record<string, never>>(
+    `/api/movies/playlists/${playlistId}/movies/${movieId}`,
+    { method: "DELETE" },
+  );
 
 // ============================================================================
 // Settings

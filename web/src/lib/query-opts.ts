@@ -2,15 +2,20 @@ import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import type {
   ApiResponseType,
   AuthUser,
+  MoviePlaylistsListResponseType,
+  MoviePlaylistSummaryType,
   MovieTechnicalDetailsResponse,
   PagedSearchTab,
   PlaybackMediaRef,
   PlaybackSettingsResponseType,
   PlaybackSettingsType,
+  PlaylistsListResponseType,
+  PlaylistSummaryType,
   ShowEpisodeTechnicalDetailsDataType,
   WatchProgressType,
 } from "@/types";
 import { movieMediaRef } from "@/lib/media-ref";
+import type { PlaylistKind, PlaylistPickerRow } from "@/lib/playlist-kinds";
 import {
   adminGetUsers,
   getAlbumDetails,
@@ -724,6 +729,36 @@ export function moviePlaylistsQueryOpts() {
     staleTime: STALE_LIST,
     gcTime: GC_DEFAULT,
   });
+}
+
+// The picker in AddToPlaylistDialog reads the library's own playlists list
+// under its own key, so it shares the cache with that library's Playlists tab,
+// and keeps only what it shows: the name, whether the viewer may add to it,
+// and how many items it holds.
+export function playlistPickerQueryOpts(kind: PlaylistKind) {
+  return queryOptions({
+    queryKey: [kind === "music" ? PLAYLISTS_KEY : MOVIE_PLAYLISTS_KEY],
+    queryFn: (): Promise<
+      | ApiResponseType<PlaylistsListResponseType>
+      | ApiResponseType<MoviePlaylistsListResponseType>
+    > => (kind === "music" ? getPlaylists() : getMoviePlaylists()),
+    select: (data): PlaylistPickerRow[] =>
+      data.error ? [] : data.data.playlists.map(toPlaylistPickerRow),
+    staleTime: STALE_LIST,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+function toPlaylistPickerRow(
+  playlist: PlaylistSummaryType | MoviePlaylistSummaryType,
+): PlaylistPickerRow {
+  return {
+    id: playlist.id,
+    name: playlist.name,
+    can_edit: playlist.can_edit,
+    item_count:
+      "movie_count" in playlist ? playlist.movie_count : playlist.track_count,
+  };
 }
 
 export function moviePlaylistDetailsQueryOpts(id: number) {

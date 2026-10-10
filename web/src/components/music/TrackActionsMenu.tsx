@@ -8,7 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import AddToPlaylistDialog from "@/components/music/AddToPlaylistDialog";
+import AddToPlaylistDialog from "@/components/shared/AddToPlaylistDialog";
 import { MOTION_TRACK_MENU_TRIGGER_CLASS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
@@ -114,10 +114,11 @@ export default function TrackActionsMenu({
       </DropdownMenu>
 
       <AddToPlaylistDialog
+        kind="music"
         open={showAddToPlaylist}
         onOpenChange={setShowAddToPlaylist}
-        trackId={trackId}
-        trackTitle={trackTitle}
+        itemId={trackId}
+        itemTitle={trackTitle}
         restoreFocusRef={actionsButtonRef}
       />
     </>
