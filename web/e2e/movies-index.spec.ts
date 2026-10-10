@@ -32,8 +32,7 @@ import {
 // tabs, grid, genres, pagination and sort both libraries share are covered by
 // library-index.spec.ts.
 
-const moviesPlaylistsPath =
-  "/movies?tab=playlists&allPage=1&sort=asc&genresPage=1&playlistsPage=1";
+const moviesPlaylistsPath = "/movies?tab=playlists";
 
 const signalFire = libraryMovie(101, "Signal Fire", 2024, "/signal-fire.jpg");
 const quietHarbor = libraryMovie(102, "Quiet Harbor", 2022);
@@ -427,7 +426,7 @@ test("playlists tab opens liked movies subview with URL-backed pagination", asyn
   await page.getByRole("button", { name: "Liked movies" }).click();
 
   await expect(page).toHaveURL(/tab=playlists/);
-  await expect(page).toHaveURL(/view=liked/);
+  await expect(page).toHaveURL(/playlistsView=liked/);
   await expect(page.getByRole("button", { name: "Back to playlists" })).toBeVisible();
   await expect(page.getByText("25 liked movies", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Signal Fire 2024", exact: true })).toBeVisible();
@@ -442,7 +441,7 @@ test("playlists tab opens liked movies subview with URL-backed pagination", asyn
 
   await page.getByRole("button", { name: "Back to playlists" }).click();
 
-  await expect(page).not.toHaveURL(/view=liked/);
+  await expect(page).not.toHaveURL(/playlistsView=liked/);
   await expect(page).not.toHaveURL(/playlistsPage=2/);
   await expect(page).toHaveURL(/tab=playlists/);
   await expect(page.getByRole("button", { name: "Liked movies" })).toBeVisible();

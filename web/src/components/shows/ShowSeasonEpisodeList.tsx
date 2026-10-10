@@ -220,7 +220,7 @@ export default function ShowSeasonEpisodeList({
   } else if (isError || data.error) {
     const message = apiErrorMessage(
       data,
-      "Failed to load episodes. Please try again.",
+      "Couldn’t load episodes.",
     );
     // LoadErrorAlert is a role="alert", so it announces itself; adding the
     // failure to LiveAnnouncer as well would announce it twice.

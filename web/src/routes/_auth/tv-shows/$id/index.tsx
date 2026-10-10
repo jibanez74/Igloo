@@ -130,7 +130,7 @@ function ShowDetailsPage() {
   // A malformed id never reaches the API: the query options disable
   // themselves for the zero sentinel, and the page goes straight to
   // not-found rather than sitting on a skeleton.
-  const { data, isPending, isError } = useQuery(
+  const { data, isPending, isError, refetch } = useQuery(
     showDetailsQueryOpts(showId ?? 0),
   );
 
@@ -139,6 +139,7 @@ function ShowDetailsPage() {
 
   return (
     <MediaDetailGuard
+      onRetry={() => void refetch()}
       id={showId}
       noun="show"
       back="shows"

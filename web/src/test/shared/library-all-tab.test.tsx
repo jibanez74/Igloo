@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { queryOptions } from "@tanstack/react-query";
 import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -23,7 +24,12 @@ function renderTab(
   {
     currentPage = 1,
     onPageChange = () => {},
-  }: { currentPage?: number; onPageChange?: (page: number) => void } = {},
+    toolbarStartSlot,
+  }: {
+    currentPage?: number;
+    onPageChange?: (page: number) => void;
+    toolbarStartSlot?: ReactNode;
+  } = {},
 ) {
   const opts = queryOptions({
     queryKey: ["library-all-tab-test", currentPage],
@@ -42,9 +48,14 @@ function renderTab(
       emptyIcon={Tv}
       onPageChange={onPageChange}
       onSortToggle={() => {}}
+      toolbarStartSlot={toolbarStartSlot}
     />,
   );
 }
+
+const toolbar = () =>
+  document.querySelector('[data-slot="library-tab-toolbar"]');
+const sortToggle = () => screen.queryByRole("button", { name: /Sorted A to Z/ });
 
 function onePage(items: Item[]): ApiResponseType<Payload> {
   return {
@@ -83,6 +94,9 @@ describe("LibraryAllTab", () => {
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("Shows are unavailable.");
 
+    // Nothing to order while the load has failed.
+    expect(sortToggle()).not.toBeInTheDocument();
+
     await user.click(screen.getByRole("button", { name: "Try again" }));
 
     await waitFor(() => {
@@ -90,6 +104,8 @@ describe("LibraryAllTab", () => {
     });
     expect(queryFn).toHaveBeenCalledTimes(2);
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    // One item is still nothing to order.
+    expect(sortToggle()).not.toBeInTheDocument();
   });
 
   it("renders the minimal empty state when the page has no items", async () => {
@@ -101,10 +117,42 @@ describe("LibraryAllTab", () => {
     expect(
       await screen.findByText("No shows found in your library."),
     ).toBeInTheDocument();
-    // The toolbar is reserved in every state, so it outlives the grid.
+    // An empty list has nothing to order, and a sort-only tab then has no
+    // reason to hold the row.
+    expect(sortToggle()).not.toBeInTheDocument();
+    expect(toolbar()).toBeNull();
+  });
+
+  it("keeps the sort toggle while the page is in flight", async () => {
+    renderTab(() => new Promise(() => {}));
+
+    expect(await screen.findByRole("status", { name: /Loading shows/ })).toBeInTheDocument();
+    expect(sortToggle()).toBeInTheDocument();
+  });
+
+  it("shows the sort toggle once there are two items to order", async () => {
+    renderTab(async () =>
+      onePage([
+        { id: 1, name: "Frost Harbor" },
+        { id: 2, name: "Quiet Channel" },
+      ]),
+    );
+
+    expect(await screen.findByText("Quiet Channel")).toBeInTheDocument();
+    expect(sortToggle()).toBeInTheDocument();
+  });
+
+  it("keeps the toolbar row for an empty list that has a start slot", async () => {
+    renderTab(async () => onePage([]), {
+      toolbarStartSlot: <span>Back to playlists</span>,
+    });
+
     expect(
-      screen.getByRole("button", { name: /Sorted A to Z/ }),
+      await screen.findByText("No shows found in your library."),
     ).toBeInTheDocument();
+    expect(toolbar()).not.toBeNull();
+    expect(screen.getByText("Back to playlists")).toBeInTheDocument();
+    expect(sortToggle()).not.toBeInTheDocument();
   });
 
   it("walks back to the last page when the requested page is out of range", async () => {

@@ -38,7 +38,7 @@ import {
   adminResetUserPassword,
 } from "@/lib/api";
 import { lightInputClassName } from "@/lib/input-styles";
-import { passwordRuleError } from "@/lib/form-validation";
+import { isValidEmail, passwordRuleError } from "@/lib/form-validation";
 import { cn, codePointLength, describedBy, getInitials } from "@/lib/utils";
 import { showSuccess, showActionFailed } from "@/lib/toast-helpers";
 import type { AdminUserType } from "@/types";
@@ -67,10 +67,6 @@ type DialogCloseAutoFocusHandler = (event: Event) => void;
 
 // Shared checkbox chrome for the "grant admin" toggle in the create/edit dialogs.
 const ADMIN_CHECKBOX_CLASS = "size-4 rounded-sm border-border bg-muted accent-primary";
-
-function isValidEmail(email: string) {
-  return /^[^\s@]+@[^\s@]+$/.test(email);
-}
 
 function hasDuplicateEmail(
   users: AdminUserType[],

@@ -43,7 +43,7 @@ export default function LibraryStats<
     return (
       <div className={className}>
         <LoadErrorAlert
-          message={apiErrorMessage(data, "Couldn’t load library statistics. Check your connection and try again.")}
+          message={apiErrorMessage(data, "Couldn’t load library statistics.")}
           onRetry={() => void refetch()}
         />
       </div>

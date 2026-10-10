@@ -7,11 +7,11 @@ import { HOME_ALBUM_GRID_CLASS } from "@/lib/constants";
 import { apiErrorMessage } from "@/lib/is-api-failure";
 
 export default function LatestAlbums() {
-  const { data, isPending } = useQuery(latestAlbumsQueryOpts());
+  const { data, isPending, refetch } = useQuery(latestAlbumsQueryOpts());
 
   const albums = data && !data.error ? (data.data?.albums ?? []) : [];
   const errorMessage = data?.error
-    ? apiErrorMessage(data, "Failed to load albums. Please try again later.")
+    ? apiErrorMessage(data, "Couldn’t load albums.")
     : undefined;
 
   return (
@@ -21,6 +21,7 @@ export default function LatestAlbums() {
       items={albums}
       isPending={isPending}
       errorMessage={errorMessage}
+      onRetry={() => void refetch()}
       loadingLabel="Loading albums..."
       emptyTitle="No Albums Yet"
       emptyDescription="Your music library is empty. Add some albums to get started with your personal music collection."

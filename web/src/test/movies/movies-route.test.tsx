@@ -105,7 +105,12 @@ function mockMoviesFetch(options?: {
       });
     }
 
-    if (url === `/api/movies/library?page=1&per_page=${MOVIES_PER_PAGE}&sort=asc`) {
+    // Both sort orders answer the same page: the grid hands `sort` to the API
+    // and renders what comes back, so the order itself is not under test.
+    if (
+      url === `/api/movies/library?page=1&per_page=${MOVIES_PER_PAGE}&sort=asc` ||
+      url === `/api/movies/library?page=1&per_page=${MOVIES_PER_PAGE}&sort=desc`
+    ) {
       return jsonResponse({
         error: false,
         data: {
@@ -429,7 +434,7 @@ describe("movies route focus restoration", () => {
   it("restores focus to the playlists toolbar liked movies button after returning", async () => {
     const user = userEvent.setup();
 
-    await renderMoviesRoute("/movies/?tab=playlists&view=liked");
+    await renderMoviesRoute("/movies/?tab=playlists&playlistsView=liked");
 
     await user.click(
       await screen.findByRole("button", { name: "Back to playlists" }),
@@ -442,15 +447,45 @@ describe("movies route focus restoration", () => {
 
   it("walks an out-of-range liked movies page back to the last real page", async () => {
     const { router } = await renderMoviesRoute(
-      "/movies/?tab=playlists&view=liked&playlistsPage=99",
+      "/movies/?tab=playlists&playlistsView=liked&playlistsPage=99",
     );
 
+    // The clamp walks back to page one, which the route strips as a default.
     await waitFor(() => {
-      expect(router.state.location.search).toMatchObject({ playlistsPage: 1 });
+      expect(router.state.location.search).toEqual({
+        tab: "playlists",
+        playlistsView: "liked",
+      });
     });
 
     expect(await screen.findByText("Moonlight")).toBeInTheDocument();
     expect(screen.getByText("1 liked movie", { exact: true })).toBeInTheDocument();
+  });
+
+  it("spells out only what differs from the default search", async () => {
+    const user = userEvent.setup();
+    const { router } = await renderMoviesRoute("/movies/");
+
+    expect(router.state.location.search).toEqual({});
+
+    await user.click(
+      await screen.findByRole("button", { name: "Sorted A to Z, click to sort Z to A" }),
+    );
+    await waitFor(() => {
+      expect(router.state.location.search).toEqual({ sort: "desc" });
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: "Sorted Z to A, click to sort A to Z" }),
+    );
+    await waitFor(() => {
+      expect(router.state.location.search).toEqual({});
+    });
+
+    await user.click(screen.getByRole("tab", { name: "Genres" }));
+    await waitFor(() => {
+      expect(router.state.location.search).toEqual({ tab: "genres" });
+    });
   });
 
   it("does not override dropdown focus behavior when liked movies is opened from More options", async () => {

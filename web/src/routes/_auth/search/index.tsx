@@ -1,4 +1,4 @@
-import { createFileRoute, Link, redirect } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect, stripSearchParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Search, Film, Tv, Disc3, User, Music } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -35,6 +35,7 @@ import {
   SEARCH_PER_PAGE,
   TRACK_LIST_CONTAINER_CLASS,
   LIBRARY_NOUNS,
+  SEARCH_INDEX_DEFAULT_SEARCH,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { scrollWindowToTop } from "@/lib/motion";
@@ -90,6 +91,7 @@ const SEARCH_HEAD = routeHead("Search");
 
 export const Route = createFileRoute("/_auth/search/")({
   validateSearch: searchSearchSchema,
+  search: { middlewares: [stripSearchParams(SEARCH_INDEX_DEFAULT_SEARCH)] },
   loaderDeps: ({ search: { q, tab, page } }) => ({ q, tab, page }),
   loader: async ({ context, cause, deps: { q, tab, page } }) => {
     const trimmed = q.trim();
@@ -369,7 +371,7 @@ function AllResultsTab({ q }: { q: string }) {
   if (isError || isApiFailure(data)) {
     return (
       <LoadErrorAlert
-        message={apiErrorMessage(data, "Couldn’t run that search. Check your connection and try again.")}
+        message={apiErrorMessage(data, "Couldn’t run that search.")}
         onRetry={() => void refetch()}
       />
     );
@@ -573,7 +575,7 @@ function CategoryResultsTab<K extends PagedSearchTab>({
   if (isError || isApiFailure(data)) {
     return (
       <LoadErrorAlert
-        message={apiErrorMessage(data, `Couldn’t load ${kind}. Check your connection and try again.`)}
+        message={apiErrorMessage(data, `Couldn’t load ${kind}.`)}
         onRetry={() => void refetch()}
       />
     );

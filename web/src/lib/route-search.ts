@@ -61,7 +61,7 @@ export const moviesSearchSchema = z.object({
     z.catch(z.number().check(z.int(), z.positive()), 1),
     1,
   ),
-  view: z.catch(z.optional(z.enum(["liked"])), undefined),
+  playlistsView: z.catch(z.optional(z.enum(["liked"])), undefined),
 });
 
 export type MoviesSearchParams = z.infer<typeof moviesSearchSchema>;

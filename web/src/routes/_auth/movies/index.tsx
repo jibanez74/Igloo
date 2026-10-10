@@ -5,7 +5,7 @@ import {
   type MutableRefObject,
   type RefObject,
 } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
   Film,
@@ -41,6 +41,7 @@ import {
   MOVIES_PER_PAGE,
   MUSIC_CARD_GRID_CLASS,
   LIBRARY_NOUNS,
+  MOVIES_INDEX_DEFAULT_SEARCH,
 } from "@/lib/constants";
 import {
   likedMoviesQueryOpts,
@@ -74,21 +75,22 @@ const MOVIES_HEAD = routeHead(
 export const Route = createFileRoute("/_auth/movies/")({
   head: () => MOVIES_HEAD,
   validateSearch: moviesSearchSchema,
+  search: { middlewares: [stripSearchParams(MOVIES_INDEX_DEFAULT_SEARCH)] },
   loaderDeps: ({
-    search: { allPage, sort, tab, genreId, genresPage, view, playlistsPage },
+    search: { allPage, sort, tab, genreId, genresPage, playlistsView, playlistsPage },
   }) => ({
     allPage,
     sort,
     tab,
     genreId,
     genresPage,
-    view,
+    playlistsView,
     playlistsPage,
   }),
   loader: async ({
     context,
     cause,
-    deps: { allPage, sort, tab, genreId, genresPage, view, playlistsPage },
+    deps: { allPage, sort, tab, genreId, genresPage, playlistsView, playlistsPage },
   }) => {
     const { queryClient } = context;
     const promises: Promise<unknown>[] = [
@@ -109,7 +111,7 @@ export const Route = createFileRoute("/_auth/movies/")({
     }
     if (tab === "playlists") {
       promises.push(queryClient.ensureQueryData(moviePlaylistsQueryOpts()));
-      if (view === "liked") {
+      if (playlistsView === "liked") {
         promises.push(
           queryClient.ensureQueryData(
             likedMoviesQueryOpts(playlistsPage, MOVIES_PER_PAGE, sort),
@@ -132,7 +134,7 @@ type PlaylistsFocusIntent =
 
 function MoviesPage() {
   const navigate = Route.useNavigate();
-  const { tab, allPage, sort, genreId, genresPage, view, playlistsPage } =
+  const { tab, allPage, sort, genreId, genresPage, playlistsView, playlistsPage } =
     Route.useSearch();
   const genresTabTriggerRef = useRef<HTMLButtonElement | null>(null);
   const playlistsTabTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -165,7 +167,7 @@ function MoviesPage() {
   if (tab === "playlists") {
     topLevelTabContent = (
       <PlaylistsTabContent
-        view={view}
+        playlistsView={playlistsView}
         playlistsPage={playlistsPage}
         sort={sort}
         focusIntentRef={playlistsFocusIntentRef}
@@ -199,7 +201,7 @@ function MoviesPage() {
     navigateWithTabTransition(nextTab, prev => ({
       ...prev,
       tab: nextTab,
-      ...(nextTab !== "playlists" ? { view: undefined } : {}),
+      ...(nextTab !== "playlists" ? { playlistsView: undefined } : {}),
     }));
   };
 
@@ -208,7 +210,7 @@ function MoviesPage() {
     navigateWithTabTransition("playlists", prev => ({
       ...prev,
       tab: "playlists",
-      view: "liked",
+      playlistsView: "liked",
       playlistsPage: 1,
     }));
   };
@@ -217,7 +219,7 @@ function MoviesPage() {
     navigateWithTabTransition("playlists", prev => ({
       ...prev,
       tab: "playlists",
-      view: undefined,
+      playlistsView: undefined,
       playlistsPage: 1,
     }));
   };
@@ -518,11 +520,11 @@ function GenresTabContent({
 }
 
 // ---------------------------------------------------------------------------
-// Playlists tab + Liked (view=liked)
+// Playlists tab + Liked (playlistsView=liked)
 // ---------------------------------------------------------------------------
 
 type PlaylistsTabContentProps = {
-  view: "liked" | undefined;
+  playlistsView: "liked" | undefined;
   playlistsPage: number;
   sort: "asc" | "desc";
   focusIntentRef: MutableRefObject<PlaylistsFocusIntent | null>;
@@ -531,7 +533,7 @@ type PlaylistsTabContentProps = {
 };
 
 function PlaylistsTabContent({
-  view,
+  playlistsView,
   playlistsPage,
   sort,
   focusIntentRef,
@@ -545,14 +547,14 @@ function PlaylistsTabContent({
 
   const { data, isLoading, isError, refetch } = useQuery({
     ...moviePlaylistsQueryOpts(),
-    enabled: view !== "liked",
+    enabled: playlistsView !== "liked",
   });
   const playlists = data?.error === false ? data.data.playlists : [];
 
   // The toolbar renders while the list loads, so the Liked button can take
   // focus back as soon as this view mounts.
   useEffect(() => {
-    if (view === "liked") return;
+    if (playlistsView === "liked") return;
     if (focusIntentRef.current !== "return-to-playlists") return;
 
     focusIntentRef.current = null;
@@ -560,7 +562,7 @@ function PlaylistsTabContent({
       likedMoviesButtonRef.current,
       playlistsTabTriggerRef.current,
     );
-  }, [focusIntentRef, playlistsTabTriggerRef, view]);
+  }, [focusIntentRef, playlistsTabTriggerRef, playlistsView]);
 
   const loadFailed = isError || isApiFailure(data);
 
@@ -570,7 +572,7 @@ function PlaylistsTabContent({
       to: "/movies",
       search: (prev: MoviesSearchParams) => ({
         ...prev,
-        view: "liked",
+        playlistsView: "liked",
         playlistsPage: 1,
       }),
       replace: true,
@@ -581,7 +583,7 @@ function PlaylistsTabContent({
     setShowCreate(true);
   };
 
-  if (view === "liked") {
+  if (playlistsView === "liked") {
     return (
       <LikedMoviesInPlaylistsTab
         playlistsPage={playlistsPage}
@@ -593,7 +595,7 @@ function PlaylistsTabContent({
             to: "/movies",
             search: (prev: MoviesSearchParams) => ({
               ...prev,
-              view: undefined,
+              playlistsView: undefined,
               playlistsPage: 1,
             }),
             replace: true,
@@ -624,7 +626,7 @@ function PlaylistsTabContent({
   } else if (loadFailed) {
     body = (
       <LoadErrorAlert
-        message={apiErrorMessage(data, "Couldn’t load playlists. Check your connection and try again.")}
+        message={apiErrorMessage(data, "Couldn’t load playlists.")}
         onRetry={() => void refetch()}
       />
     );

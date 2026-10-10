@@ -5,7 +5,11 @@ import {
   USER_PASSWORD_MAX_BYTES,
   USER_PASSWORD_MIN_LENGTH,
 } from "@/lib/constants";
-import { passwordRuleError, playlistFieldsError } from "@/lib/form-validation";
+import {
+  isValidEmail,
+  passwordRuleError,
+  playlistFieldsError,
+} from "@/lib/form-validation";
 
 describe("passwordRuleError", () => {
   it("accepts a password inside both limits", () => {
@@ -31,6 +35,19 @@ describe("passwordRuleError", () => {
     expect(passwordRuleError("short", "New password")).toBe(
       `New password must be at least ${USER_PASSWORD_MIN_LENGTH} characters.`,
     );
+  });
+});
+
+describe("isValidEmail", () => {
+  it("accepts an address with one @ and no whitespace", () => {
+    expect(isValidEmail("a@b.c")).toBe(true);
+    expect(isValidEmail("a@b")).toBe(true);
+  });
+
+  it("rejects whitespace, a missing @, and empty input", () => {
+    expect(isValidEmail("a b@c")).toBe(false);
+    expect(isValidEmail("ab.c")).toBe(false);
+    expect(isValidEmail("")).toBe(false);
   });
 });
 

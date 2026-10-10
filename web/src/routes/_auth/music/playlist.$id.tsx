@@ -131,12 +131,13 @@ function PlaylistPage() {
   // A malformed id never reaches the API: the query options disable
   // themselves for the zero sentinel, and the guard rejects the link before
   // it looks at the query state.
-  const { data, isPending, isError } = useQuery(
+  const { data, isPending, isError, refetch } = useQuery(
     playlistDetailsQueryOpts(playlistId ?? 0),
   );
 
   return (
     <MediaDetailGuard
+      onRetry={() => void refetch()}
       id={playlistId}
       noun="playlist"
       back="musicPlaylists"

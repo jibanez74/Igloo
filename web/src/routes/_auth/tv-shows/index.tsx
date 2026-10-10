@@ -1,5 +1,5 @@
 import { useRef, useState, type RefObject } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { Grid3X3, Tv } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import ShowCard from "@/components/shows/ShowCard";
@@ -20,6 +20,7 @@ import {
   MOTION_SECTION_ENTER_DELAYED_CLASS,
   SHOWS_PER_PAGE,
   LIBRARY_NOUNS,
+  SHOWS_INDEX_DEFAULT_SEARCH,
 } from "@/lib/constants";
 import {
   showsByGenreQueryOpts,
@@ -44,6 +45,7 @@ const TV_SHOWS_HEAD = routeHead(
 export const Route = createFileRoute("/_auth/tv-shows/")({
   head: () => TV_SHOWS_HEAD,
   validateSearch: showsSearchSchema,
+  search: { middlewares: [stripSearchParams(SHOWS_INDEX_DEFAULT_SEARCH)] },
   loaderDeps: ({ search: { allPage, sort, tab, genreId, genresPage } }) => ({
     allPage,
     sort,

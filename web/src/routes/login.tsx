@@ -1,4 +1,4 @@
-import { useState, useSyncExternalStore } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { showSuccess, showError } from "@/lib/toast-helpers";
 import { Mail, Lock, Eye, EyeOff, LogIn } from "lucide-react";
@@ -23,14 +23,14 @@ import {
   FOCUS_VISIBLE_RING_CLASS,
   MOTION_MICRO_COLORS_CLASS,
   MOTION_PAGE_ENTER_CLASS,
-  USER_PASSWORD_MIN_LENGTH,
 } from "@/lib/constants";
+import { isValidEmail } from "@/lib/form-validation";
 import {
   inputIconClassName,
   lightInputActionClassName,
   lightInputClassName,
 } from "@/lib/input-styles";
-import { cn } from "@/lib/utils";
+import { cn, describedBy } from "@/lib/utils";
 import { routeHead } from "@/lib/route-head";
 import { apiErrorMessage } from "@/lib/is-api-failure";
 
@@ -38,6 +38,11 @@ const LOGIN_HEAD = routeHead(
   "Sign In",
   "Sign in to access your personal Igloo media library.",
 );
+
+const EMAIL_ERROR_ID = "email-error";
+const PASSWORD_ERROR_ID = "password-error";
+
+type LoginErrors = Partial<Record<"email" | "password", string>>;
 
 export const Route = createFileRoute("/login")({
   head: () => LOGIN_HEAD,
@@ -59,6 +64,9 @@ export const Route = createFileRoute("/login")({
 function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [errors, setErrors] = useState<LoginErrors>({});
+  const emailRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
   const navigate = Route.useNavigate();
   const { redirect: redirectTo } = Route.useSearch();
   const { queryClient } = Route.useRouteContext();
@@ -69,10 +77,30 @@ function LoginPage() {
 
   const loginHandler = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setIsSubmitting(true);
     const formData = new FormData(e.currentTarget);
-    const email = formData.get("email") as string;
+    const email = (formData.get("email") as string).trim();
     const password = formData.get("password") as string;
+
+    // Field errors render inline and move focus (design-system §3.7); only the
+    // server's verdict on the credentials is a toast. The password has no
+    // client-side length rule: an account may predate the current minimum.
+    const nextErrors: LoginErrors = {};
+    if (!email) {
+      nextErrors.email = "Email is required.";
+    } else if (!isValidEmail(email)) {
+      nextErrors.email = "Enter a valid email address.";
+    }
+    if (!password) {
+      nextErrors.password = "Password is required.";
+    }
+    if (nextErrors.email || nextErrors.password) {
+      setErrors(nextErrors);
+      (nextErrors.email ? emailRef : passwordRef).current?.focus();
+      return;
+    }
+
+    setErrors({});
+    setIsSubmitting(true);
 
     try {
       const res = await login(email, password);
@@ -167,13 +195,14 @@ function LoginPage() {
         </CardHeader>
 
         <CardContent>
-          <form onSubmit={loginHandler} className="space-y-4">
+          <form onSubmit={loginHandler} noValidate className="space-y-4">
             {/* Email field */}
             <div className="space-y-1">
               <Label htmlFor="email">Email</Label>
               <div className="relative">
                 <Mail className={inputIconClassName} aria-hidden="true" />
                 <Input
+                  ref={emailRef}
                   autoFocus
                   type="email"
                   id="email"
@@ -181,10 +210,21 @@ function LoginPage() {
                   inputMode="email"
                   autoComplete="username"
                   required
+                  aria-required="true"
+                  aria-invalid={errors.email ? true : undefined}
+                  aria-describedby={describedBy(errors.email && EMAIL_ERROR_ID)}
+                  onChange={() => {
+                    if (errors.email) setErrors(current => ({ ...current, email: undefined }));
+                  }}
                   className={cn("pl-10", lightInputClassName)}
                   disabled={isSubmitting}
                 />
               </div>
+              {errors.email && (
+                <p id={EMAIL_ERROR_ID} className="text-xs text-destructive" role="alert">
+                  {errors.email}
+                </p>
+              )}
             </div>
 
             {/* Password field */}
@@ -193,12 +233,18 @@ function LoginPage() {
               <div className="relative">
                 <Lock className={inputIconClassName} aria-hidden="true" />
                 <Input
+                  ref={passwordRef}
                   type={showPassword ? "text" : "password"}
-                  minLength={USER_PASSWORD_MIN_LENGTH}
                   id="password"
                   name="password"
                   autoComplete="current-password"
                   required
+                  aria-required="true"
+                  aria-invalid={errors.password ? true : undefined}
+                  aria-describedby={describedBy(errors.password && PASSWORD_ERROR_ID)}
+                  onChange={() => {
+                    if (errors.password) setErrors(current => ({ ...current, password: undefined }));
+                  }}
                   className={cn("px-10", lightInputClassName)}
                   disabled={isSubmitting}
                 />
@@ -221,6 +267,11 @@ function LoginPage() {
                   )}
                 </button>
               </div>
+              {errors.password && (
+                <p id={PASSWORD_ERROR_ID} className="text-xs text-destructive" role="alert">
+                  {errors.password}
+                </p>
+              )}
             </div>
 
             {/* Submit button */}

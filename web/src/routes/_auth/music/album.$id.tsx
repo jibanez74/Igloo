@@ -134,12 +134,13 @@ function AlbumDetailsPage() {
   // A malformed id never reaches the API: the query options disable
   // themselves for the zero sentinel, and the page goes straight to
   // not-found rather than sitting on a skeleton.
-  const { data, isPending, isError } = useQuery(
+  const { data, isPending, isError, refetch } = useQuery(
     albumDetailsQueryOpts(albumId ?? 0),
   );
 
   return (
     <MediaDetailGuard
+      onRetry={() => void refetch()}
       id={albumId}
       noun="album"
       back="music"

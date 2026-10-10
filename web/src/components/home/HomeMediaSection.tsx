@@ -15,6 +15,8 @@ type HomeMediaSectionProps<T> = {
   items: T[];
   isPending?: boolean;
   errorMessage: string | undefined;
+  /** The query's refetch, rendered as Try again under the error. */
+  onRetry?: () => void;
   loadingLabel?: string;
   emptyTitle: string;
   emptyDescription: string;
@@ -32,6 +34,7 @@ export default function HomeMediaSection<T>({
   items,
   isPending = false,
   errorMessage,
+  onRetry,
   loadingLabel,
   emptyTitle,
   emptyDescription,
@@ -100,7 +103,7 @@ export default function HomeMediaSection<T>({
           <Spinner className="size-8 text-primary" />
         </div>
       ) : errorMessage ? (
-        <SectionErrorAlert message={errorMessage} />
+        <SectionErrorAlert message={errorMessage} onRetry={onRetry} />
       ) : items.length > 0 ? (
         <div className={gridClassName}>
           {items.map((item, index) => (

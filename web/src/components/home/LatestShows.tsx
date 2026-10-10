@@ -7,11 +7,11 @@ import { HOME_POSTER_GRID_CLASS } from "@/lib/constants";
 import { apiErrorMessage } from "@/lib/is-api-failure";
 
 export default function LatestShows() {
-  const { data, isPending } = useQuery(latestShowsQueryOpts());
+  const { data, isPending, refetch } = useQuery(latestShowsQueryOpts());
 
   const shows = data && !data.error ? (data.data?.shows ?? []) : [];
   const errorMessage = data?.error
-    ? apiErrorMessage(data, "Failed to load shows. Please try again later.")
+    ? apiErrorMessage(data, "Couldn’t load shows.")
     : undefined;
 
   return (
@@ -21,6 +21,7 @@ export default function LatestShows() {
       items={shows}
       isPending={isPending}
       errorMessage={errorMessage}
+      onRetry={() => void refetch()}
       loadingLabel="Loading shows..."
       emptyTitle="No Shows Yet"
       emptyDescription="Your TV show library is empty. Add a shows folder in settings and run a scan to get started."

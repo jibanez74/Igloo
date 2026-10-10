@@ -39,7 +39,7 @@ describe("trailer route load errors", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Couldn’t load the trailer details from TMDB. Check your connection and try again.",
+        "Couldn’t load the trailer details from TMDB.",
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText(/failed to fetch movie from tmdb/)).not.toBeInTheDocument();

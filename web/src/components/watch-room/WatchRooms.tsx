@@ -15,13 +15,13 @@ const WATCH_ROOMS_DESCRIPTION_ID = "watch-rooms-description";
 const WATCH_ROOMS_SUMMARY_ID = "watch-rooms-summary";
 
 export default function WatchRooms() {
-  const { data, isPending } = useQuery(watchRoomsQueryOpts());
+  const { data, isPending, refetch } = useQuery(watchRoomsQueryOpts());
 
   const rooms = data && !data.error ? (data.data?.rooms ?? []) : [];
   const hasError = data && data.error;
   const loadErrorMessage = apiErrorMessage(
     data,
-    "Failed to load watch rooms. Please try again later.",
+    "Couldn’t load watch rooms.",
   );
   const sectionDescribedBy = describedBy(
     WATCH_ROOMS_DESCRIPTION_ID,
@@ -92,6 +92,7 @@ export default function WatchRooms() {
       ) : hasError ? (
         <SectionErrorAlert
           message={loadErrorMessage}
+          onRetry={() => void refetch()}
         />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

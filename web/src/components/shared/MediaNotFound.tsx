@@ -47,10 +47,13 @@ export default function MediaNotFound({
   heading,
   message,
   back,
+  onRetry,
 }: {
   heading: string;
   message: string;
   back: BackDestination;
+  /** Try again inside the alert, for the one failure a retry can fix. */
+  onRetry?: () => void;
 }) {
   const { label, ...linkProps } = BACK_DESTINATIONS[back];
 
@@ -59,7 +62,7 @@ export default function MediaNotFound({
       <h1 className="mb-6 text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
         {heading}
       </h1>
-      <SectionErrorAlert title={null} message={message} />
+      <SectionErrorAlert title={null} message={message} onRetry={onRetry} />
       <Link
         {...linkProps}
         className={cn(buttonVariants({ variant: "outline" }), "mt-4")}
