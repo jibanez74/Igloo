@@ -295,6 +295,10 @@ test("opens a movie from the index by keyboard and defaults its play links to di
   await page.keyboard.press("Enter");
 
   await expect(page).toHaveTitle("Signal Fire (2024) - Igloo");
+  // critic_rating is TMDB's vote_average, worn as the one rating badge.
+  await expect(page.getByRole("list", { name: "Movie details" })).toContainText(
+    "TMDB user score: 8.7 out of 10",
+  );
   await expect(page).toHaveURL(new RegExp(`${moviePath}/?$`));
   await expect(
     page.getByRole("heading", { name: /Signal Fire/i, level: 1 }),

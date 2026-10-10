@@ -213,8 +213,6 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
         genres={genresForList}
         metadataSlot={
           <MovieDetailsMetadataChips
-            criticRating={null}
-            audienceRating={null}
             certificationLabel={certificationLabel}
             runtime={runtime}
             runTimeMins={movie.runtime ?? null}

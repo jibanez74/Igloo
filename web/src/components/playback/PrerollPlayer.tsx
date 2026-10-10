@@ -1,4 +1,4 @@
-import { Maximize, Minimize, Pause, Play } from "lucide-react";
+import { Maximize, Minimize, Pause, Play, VolumeX } from "lucide-react";
 import { useEffect, useEffectEvent, useRef, type RefObject } from "react";
 
 import ProgressBar from "@/components/playback/ProgressBar";
@@ -82,13 +82,16 @@ export default function PrerollPlayer({
     isPlaying,
     currentTime,
     duration,
+    isMuted,
     error,
     togglePlay,
     seekTo,
+    unmute,
   } = useYouTubePlayer({
     videoId: current?.youtube_key ?? null,
     autoplay: true,
     controls: false,
+    muteOnAutoplayBlocked: true,
     onEnd: queue.handleTrailerEnded,
     onError: () => {
       codeErrorKeyRef.current = current?.youtube_key ?? null;
@@ -178,6 +181,12 @@ export default function PrerollPlayer({
         event.preventDefault();
         queue.skipAll();
         break;
+      case "m":
+      case "M":
+        if (!isMuted) return;
+        event.preventDefault();
+        unmute();
+        break;
       case "f":
       case "F":
         event.preventDefault();
@@ -198,6 +207,13 @@ export default function PrerollPlayer({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
+
+  // The button removes itself once pressed, so focus moves on to the
+  // pre-roll's primary control rather than falling to the document (§1.7).
+  const handleUnmute = () => {
+    unmute();
+    skipButtonRef.current?.focus({ preventScroll: true });
+  };
 
   const fullscreenLabel = chromeFullscreenMode
     ? isImmersiveViewport && !isFullscreen
@@ -221,11 +237,18 @@ export default function PrerollPlayer({
         announcementKey={position}
         politeness="polite"
       />
+      <LiveAnnouncer
+        message={
+          isMuted ? "The trailer is playing muted. Press Unmute to hear it." : ""
+        }
+        announcementKey={`${position}:${isMuted}`}
+        politeness="polite"
+      />
       {showShortcutHints && (
         <p className="sr-only">
           Trailer keyboard shortcuts: Space or K to play or pause the trailer, N
           to skip the trailer, S to start the movie, F for fullscreen, Escape to
-          exit fullscreen.
+          exit fullscreen.{isMuted ? " M to unmute the trailer." : ""}
         </p>
       )}
 
@@ -336,6 +359,19 @@ export default function PrerollPlayer({
                     />
                   )}
                 </button>
+                {isMuted && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleUnmute}
+                    aria-label={withShortcut("Unmute trailer", "M")}
+                    className="border-border bg-muted text-foreground hover:bg-accent"
+                  >
+                    <VolumeX className="size-4" aria-hidden="true" />
+                    Unmute
+                  </Button>
+                )}
                 <Button
                   type="button"
                   ref={skipButtonRef}

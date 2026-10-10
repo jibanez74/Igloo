@@ -127,8 +127,7 @@ describe("ShowDetailsMetadataChips", () => {
       screen.getByText("TMDB user score: 8.4 out of 10"),
     ).toBeInTheDocument();
     expect(screen.getByText("TMDB")).toBeInTheDocument();
-    // The critic/audience chips are the only tiered ones; a different metric
-    // must not borrow their look.
+    // No rating is a tiered chip any more: the TMDB badge is the one look.
     expect(document.querySelector(".bg-aurora")).toBeNull();
   });
 

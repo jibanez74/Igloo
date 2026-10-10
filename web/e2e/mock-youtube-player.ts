@@ -2,6 +2,8 @@ import { type Page } from "@playwright/test";
 
 type MockYouTubePlayerOptions = {
   failFirstLoad?: boolean;
+  /** Refuse the first autoplay, as a browser without user activation does. */
+  autoplayBlocked?: boolean;
 };
 
 /**
@@ -15,9 +17,9 @@ type MockYouTubePlayerOptions = {
  */
 export async function mockYouTubePlayer(
   page: Page,
-  { failFirstLoad = false }: MockYouTubePlayerOptions = {},
+  { failFirstLoad = false, autoplayBlocked = false }: MockYouTubePlayerOptions = {},
 ) {
-  await page.addInitScript(({ failFirstLoad }) => {
+  await page.addInitScript(({ failFirstLoad, autoplayBlocked }) => {
     let playerCreations = 0;
 
     class FakePlayer {
@@ -44,6 +46,9 @@ export async function mockYouTubePlayer(
           }
 
           this.events.onReady?.({ target });
+          if (autoplayBlocked && options.playerVars?.autoplay === 1) {
+            this.events.onAutoplayBlocked?.({ target });
+          }
         }, 0);
       }
 
@@ -120,5 +125,5 @@ export async function mockYouTubePlayer(
         NOT_ALLOWED_DISGUISE: 150,
       },
     };
-  }, { failFirstLoad });
+  }, { failFirstLoad, autoplayBlocked });
 }

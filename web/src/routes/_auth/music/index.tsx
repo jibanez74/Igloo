@@ -384,7 +384,7 @@ function AlbumsTabContent({ currentPage }: { currentPage: number }) {
 function TrackRowSkeleton() {
   return (
     <div
-      className="flex items-center gap-3 p-3 sm:gap-4 sm:px-4"
+      className="flex items-center gap-2 p-3 sm:gap-4 sm:px-4"
       style={{ height: `${VIRTUAL_LIST_TRACK_HEIGHT}px` }}
     >
       <div

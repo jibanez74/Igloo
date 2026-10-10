@@ -3,8 +3,6 @@ import { describe, expect, it } from "vitest";
 import MovieDetailsMetadataChips from "@/components/movies/MovieDetailsMetadataChips";
 
 const baseProps = {
-  criticRating: null,
-  audienceRating: null,
   certificationLabel: null,
   releaseDateStr: null,
   tmdbVoteAverage: null,
@@ -47,6 +45,35 @@ describe("MovieDetailsMetadataChips", () => {
 
     expect(screen.getByText("Rated PG-13")).toBeInTheDocument();
     expect(screen.getByText("PG-13")).toBeInTheDocument();
+  });
+
+  it("renders the TMDB score as the labelled badge, never a tiered chip", () => {
+    render(
+      <MovieDetailsMetadataChips
+        {...baseProps}
+        runtime={null}
+        runTimeMins={null}
+        tmdbVoteAverage={8.2}
+      />,
+    );
+
+    expect(screen.getByText("TMDB user score: 8.2 out of 10")).toBeInTheDocument();
+    expect(screen.getByText("TMDB")).toBeInTheDocument();
+    expect(document.querySelector(".bg-aurora")).toBeNull();
+    expect(document.querySelector("svg.lucide-star")).toBeNull();
+  });
+
+  it("omits the score when there is none", () => {
+    render(
+      <MovieDetailsMetadataChips
+        {...baseProps}
+        runtime={null}
+        runTimeMins={null}
+        tmdbVoteAverage={0}
+      />,
+    );
+
+    expect(screen.queryByText(/TMDB user score/)).not.toBeInTheDocument();
   });
 
   it("renders capability badges with accessible descriptions", () => {

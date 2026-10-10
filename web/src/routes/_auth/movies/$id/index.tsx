@@ -222,8 +222,9 @@ function LibraryMovieDetailsContent({
   const releaseDateStr = unwrapString(movie.release_date);
   const overview = unwrapString(movie.overview);
   const runTimeMins = unwrapInt(movie.run_time);
-  const criticRating = unwrapFloat(movie.critic_rating);
-  const audienceRating = unwrapFloat(movie.audience_rating);
+  // critic_rating holds TMDB's vote_average (the scanner's only source for
+  // it), so the hero shows it as the TMDB badge every other page uses.
+  const tmdbVoteAverage = unwrapFloat(movie.critic_rating);
   const certification = unwrapString(movie.certification);
   const language = unwrapString(movie.language);
   const budget = unwrapFloat(movie.budget);
@@ -282,8 +283,7 @@ function LibraryMovieDetailsContent({
         genres={genres}
         metadataSlot={
           <MovieDetailsMetadataChips
-            criticRating={criticRating}
-            audienceRating={audienceRating}
+            tmdbVoteAverage={tmdbVoteAverage}
             certificationLabel={certificationLabel}
             runtime={runtime}
             runTimeMins={runTimeMins}

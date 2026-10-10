@@ -1,14 +1,11 @@
-import { Star, Clock, Calendar, Users } from "lucide-react";
+import { Clock, Calendar } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import TmdbScoreBadge from "@/components/shared/TmdbScoreBadge";
 import { OVER_MEDIA_BADGE_CLASS } from "@/lib/constants";
 import { formatDate, formatSpokenRuntimeMinutes } from "@/lib/format";
-import { audienceRatingClass, criticRatingClass } from "@/lib/rating";
 import type { MediaCapabilityBadge } from "@/types/movies";
 
 type MovieDetailsMetadataChipsProps = {
-  criticRating: number | null;
-  audienceRating: number | null;
   certificationLabel: string | null;
   runtime: string | null;
   runTimeMins: number | null;
@@ -18,8 +15,6 @@ type MovieDetailsMetadataChipsProps = {
 };
 
 export default function MovieDetailsMetadataChips({
-  criticRating,
-  audienceRating,
   certificationLabel,
   runtime,
   runTimeMins,
@@ -37,28 +32,6 @@ export default function MovieDetailsMetadataChips({
       {tmdbVoteAverage != null && tmdbVoteAverage > 0 && (
         <li>
           <TmdbScoreBadge score={tmdbVoteAverage} />
-        </li>
-      )}
-      {criticRating != null && criticRating > 0 && (
-        <li
-          className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 font-bold ${criticRatingClass(criticRating)}`}
-        >
-          <Star className="size-3.5 fill-current" aria-hidden="true" />
-          <span className="sr-only">
-            {`Critic rating: ${criticRating.toFixed(1)} out of 10`}
-          </span>
-          <span aria-hidden="true">{criticRating.toFixed(1)}</span>
-        </li>
-      )}
-      {audienceRating != null && audienceRating > 0 && (
-        <li
-          className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 font-bold ${audienceRatingClass(audienceRating)}`}
-        >
-          <Users className="size-3.5 fill-current" aria-hidden="true" />
-          <span className="sr-only">
-            {`Audience rating: ${audienceRating.toFixed(1)} out of 10`}
-          </span>
-          <span aria-hidden="true">{audienceRating.toFixed(1)}</span>
         </li>
       )}
       {certificationLabel && (
