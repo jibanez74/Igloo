@@ -2374,7 +2374,7 @@ export interface paths {
         };
         /**
          * List tracks in a music playlist
-         * @description Ordered by playlist position.
+         * @description Ordered by playlist position; tracks that share a position are listed in the order they were added.
          */
         get: operations["getPlaylistTracks"];
         put?: never;
@@ -2419,7 +2419,7 @@ export interface paths {
         get?: never;
         /**
          * Reorder tracks in a music playlist
-         * @description Owner or editing collaborator. Each listed track takes its index in track_ids as its position. Send every track in the playlist: ids not in the playlist are ignored, and tracks left out keep their previous position, which can tie with a new one and leave their relative order undefined. updated_at always changes.
+         * @description Owner or editing collaborator. Each listed track takes its index in track_ids as its position. Send every track in the playlist: ids not in the playlist are ignored, and tracks left out keep their previous position, which can tie with a new one; tied tracks are listed in the order they were added. updated_at always changes.
          */
         put: operations["reorderPlaylistTracks"];
         post?: never;

@@ -883,3 +883,107 @@ func TestMoviePlaylistUpdateAndRemove_ErrorPaths(t *testing.T) {
 		t.Fatalf("updated playlist = (%q, %+v), want Renamed pinned to movie %d", updatedName, updatedMovieID, fixtures.movieID)
 	}
 }
+
+// A reorder that leaves tracks out ties their positions with listed ones; the
+// listing breaks those ties by the order the tracks were added.
+func TestReorderPlaylistTracks_PartialListKeepsTiesInAddedOrder(t *testing.T) {
+	app := setupTestApp(t)
+	fixtures := createPlaylistFixtures(t, app)
+	musicianID := createTestMusician(t, app, "Tie Artist")
+	albumID := createTestAlbum(t, app, "Tie Album", "Tie Artist")
+	second := createTestTrack(t, app, "Tie Two", "/music/tie-2.flac", albumID, musicianID)
+	third := createTestTrack(t, app, "Tie Three", "/music/tie-3.flac", albumID, musicianID)
+	playlistPath := "/api/music/playlists/" + strconv.FormatInt(fixtures.trackPlaylist.ID, 10)
+
+	w := serveAs(t, app, fixtures.owner.ID, http.MethodPost, playlistPath+"/tracks",
+		fmt.Sprintf(`{"track_ids":[%d,%d,%d]}`, fixtures.trackID, second, third))
+	if w.Code != http.StatusOK {
+		t.Fatalf("add tracks status = %d: %s", w.Code, w.Body.String())
+	}
+
+	// third moves to position 0, which the first track still holds.
+	w = serveAs(t, app, fixtures.owner.ID, http.MethodPut, playlistPath+"/tracks/reorder", fmt.Sprintf(`{"track_ids":[%d]}`, third))
+	if w.Code != http.StatusOK {
+		t.Fatalf("reorder status = %d: %s", w.Code, w.Body.String())
+	}
+	want := []int64{fixtures.trackID, third, second}
+	if got := playlistTrackIDs(t, app, fixtures.owner.ID, fixtures.trackPlaylist.ID); !slices.Equal(got, want) {
+		t.Fatalf("order = %v, want %v", got, want)
+	}
+}
+
+func TestAddCollaborator_MissingUserIDIsABadRequest(t *testing.T) {
+	app := setupTestApp(t)
+	fixtures := createPlaylistFixtures(t, app)
+	router := authenticatedRouter(t, app, fixtures.owner.ID)
+
+	for _, playlist := range []struct {
+		path        string
+		operationID string
+	}{
+		{"/api/music/playlists/" + strconv.FormatInt(fixtures.trackPlaylist.ID, 10) + "/collaborators", "addCollaborator"},
+		{"/api/movies/playlists/" + strconv.FormatInt(fixtures.moviePlaylist.ID, 10) + "/collaborators", "addMoviePlaylistCollaborator"},
+	} {
+		for _, body := range []string{`{}`, `{"user_id":0}`} {
+			req := newOpenAPIJSONRequest(http.MethodPost, playlist.path, body)
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+			assertOpenAPIResponse(t, playlist.operationID, req, w)
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("%s %s status = %d, want 400: %s", playlist.path, body, w.Code, w.Body.String())
+			}
+		}
+	}
+}
+
+// A database failure partway through a reorder or a removal answers 500 and
+// leaves the playlist as it was, rather than committing half of the change.
+func TestPlaylistWritesRollBackOnDatabaseFailure(t *testing.T) {
+	app := setupTestApp(t)
+	fixtures := createPlaylistFixtures(t, app)
+	musicianID := createTestMusician(t, app, "Rollback Artist")
+	albumID := createTestAlbum(t, app, "Rollback Album", "Rollback Artist")
+	second := createTestTrack(t, app, "Rollback Two", "/music/rollback-2.flac", albumID, musicianID)
+	trackPath := "/api/music/playlists/" + strconv.FormatInt(fixtures.trackPlaylist.ID, 10)
+	moviePath := "/api/movies/playlists/" + strconv.FormatInt(fixtures.moviePlaylist.ID, 10)
+
+	w := serveAs(t, app, fixtures.owner.ID, http.MethodPost, trackPath+"/tracks", fmt.Sprintf(`{"track_ids":[%d,%d]}`, fixtures.trackID, second))
+	if w.Code != http.StatusOK {
+		t.Fatalf("add tracks status = %d: %s", w.Code, w.Body.String())
+	}
+	w = serveAs(t, app, fixtures.owner.ID, http.MethodPost, moviePath+"/movies", fmt.Sprintf(`{"movie_ids":[%d]}`, fixtures.movieID))
+	if w.Code != http.StatusOK {
+		t.Fatalf("add movie status = %d: %s", w.Code, w.Body.String())
+	}
+
+	_, err := app.DB.Exec(`CREATE TRIGGER fail_position BEFORE UPDATE OF position ON playlist_tracks BEGIN SELECT RAISE(ABORT, 'position update failed'); END`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w = serveAs(t, app, fixtures.owner.ID, http.MethodPut, trackPath+"/tracks/reorder", fmt.Sprintf(`{"track_ids":[%d,%d]}`, second, fixtures.trackID))
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("reorder status = %d, want 500: %s", w.Code, w.Body.String())
+	}
+
+	_, err = app.DB.Exec(`CREATE TRIGGER fail_timestamp BEFORE UPDATE OF updated_at ON playlists BEGIN SELECT RAISE(ABORT, 'timestamp update failed'); END`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w = serveAs(t, app, fixtures.owner.ID, http.MethodDelete, trackPath+"/tracks/"+strconv.FormatInt(second, 10), "")
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("remove track status = %d, want 500: %s", w.Code, w.Body.String())
+	}
+	w = serveAs(t, app, fixtures.owner.ID, http.MethodDelete, moviePath+"/movies/"+strconv.FormatInt(fixtures.movieID, 10), "")
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("remove movie status = %d, want 500: %s", w.Code, w.Body.String())
+	}
+
+	if got := playlistTrackIDs(t, app, fixtures.owner.ID, fixtures.trackPlaylist.ID); !slices.Equal(got, []int64{fixtures.trackID, second}) {
+		t.Fatalf("tracks = %v, want the original order with both tracks", got)
+	}
+	var movies int
+	err = app.DB.QueryRow(`SELECT COUNT(*) FROM playlist_movies WHERE playlist_id = ?`, fixtures.moviePlaylist.ID).Scan(&movies)
+	if err != nil || movies != 1 {
+		t.Fatalf("playlist movies = %d (%v), want the movie kept", movies, err)
+	}
+}

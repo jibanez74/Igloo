@@ -272,6 +272,8 @@ type Querier interface {
 	GetPlaylistMoviesPaginatedDesc(ctx context.Context, arg GetPlaylistMoviesPaginatedDescParams) ([]GetPlaylistMoviesPaginatedDescRow, error)
 	// Count and total duration in one pass; the playlist detail response needs both.
 	GetPlaylistTrackSummary(ctx context.Context, playlistID int64) (GetPlaylistTrackSummaryRow, error)
+	// A reorder that leaves tracks out can tie their positions with listed ones;
+	// id keeps tied tracks in the order they were added, so pages stay stable.
 	GetPlaylistTracksInfinite(ctx context.Context, arg GetPlaylistTracksInfiniteParams) ([]GetPlaylistTracksInfiniteRow, error)
 	// One seek for every playlist authorization decision: the playlist row by
 	// primary key plus this user's collaborator row (if any) by the
