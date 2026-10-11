@@ -5070,7 +5070,7 @@
             "$ref": "#/components/responses/InternalServerError"
           }
         },
-        "description": "Sorted by sort_name. Names that do not start with a letter A-Z are grouped under # and listed first."
+        "description": "Sorted by sort_name, which list items do not include, compared case-sensitively with id breaking ties. Sort names that do not start with a letter A-Z are grouped under # and listed first."
       }
     },
     "/api/music/musicians/{id}": {
@@ -5110,6 +5110,7 @@
           "Music"
         ],
         "summary": "List tracks alphabetically",
+        "description": "Sorted by title, case-insensitively, with id breaking ties. Titles that do not start with a letter A-Z are grouped under # and listed first.",
         "operationId": "getTracksAlphabetical",
         "parameters": [
           {
@@ -13571,7 +13572,8 @@
             "$ref": "#/components/schemas/SqlNullString"
           },
           "spotify_popularity": {
-            "$ref": "#/components/schemas/SqlNullFloat64"
+            "$ref": "#/components/schemas/SqlNullFloat64",
+            "description": "Valid is false until a Spotify match reports a nonzero popularity."
           },
           "musician": {
             "$ref": "#/components/schemas/SqlNullString"
@@ -13583,7 +13585,8 @@
             "$ref": "#/components/schemas/SqlNullInt64"
           },
           "total_tracks": {
-            "$ref": "#/components/schemas/SqlNullInt64"
+            "$ref": "#/components/schemas/SqlNullInt64",
+            "description": "The track count Spotify reports for the matched album, not the number of local tracks. Valid is false until a Spotify match reports one."
           },
           "cover": {
             "$ref": "#/components/schemas/SqlNullString"
@@ -13978,7 +13981,9 @@
             }
           },
           "total_duration": {
-            "type": "number"
+            "type": "integer",
+            "format": "int64",
+            "description": "Sum of track durations in milliseconds."
           }
         },
         "additionalProperties": false
@@ -14080,16 +14085,19 @@
             "type": "string"
           },
           "summary": {
-            "$ref": "#/components/schemas/SqlNullString"
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "A sentence built from the Spotify match's name, genres, popularity, and follower count. Valid is false until a Spotify match reports a popularity or a follower count."
           },
           "spotify_id": {
             "$ref": "#/components/schemas/SqlNullString"
           },
           "spotify_popularity": {
-            "$ref": "#/components/schemas/SqlNullFloat64"
+            "$ref": "#/components/schemas/SqlNullFloat64",
+            "description": "Valid is false until a Spotify match reports a nonzero popularity."
           },
           "spotify_followers": {
-            "$ref": "#/components/schemas/SqlNullInt64"
+            "$ref": "#/components/schemas/SqlNullInt64",
+            "description": "Valid is false until a Spotify match reports a nonzero follower count."
           },
           "thumb": {
             "$ref": "#/components/schemas/SqlNullString"
@@ -14214,7 +14222,9 @@
             }
           },
           "total_duration": {
-            "type": "number"
+            "type": "integer",
+            "format": "int64",
+            "description": "Sum of track durations in milliseconds."
           }
         },
         "additionalProperties": false
@@ -16904,12 +16914,12 @@
           "imported": {
             "type": "integer",
             "minimum": 0,
-            "description": "Processed files whose cleaned path had no stored fingerprint baseline at scan start."
+            "description": "Processed files whose cleaned path had no catalog track at scan start."
           },
           "updated": {
             "type": "integer",
             "minimum": 0,
-            "description": "Processed files whose cleaned path had a stored fingerprint baseline at scan start."
+            "description": "Processed files whose cleaned path already had a catalog track at scan start, including tracks without a stored fingerprint."
           },
           "unchanged": {
             "type": "integer",

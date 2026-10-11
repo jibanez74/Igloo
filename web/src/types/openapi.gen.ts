@@ -2153,7 +2153,7 @@ export interface paths {
         };
         /**
          * List musicians alphabetically
-         * @description Sorted by sort_name. Names that do not start with a letter A-Z are grouped under # and listed first.
+         * @description Sorted by sort_name, which list items do not include, compared case-sensitively with id breaking ties. Sort names that do not start with a letter A-Z are grouped under # and listed first.
          */
         get: operations["getMusiciansAlphabetical"];
         put?: never;
@@ -2188,7 +2188,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List tracks alphabetically */
+        /**
+         * List tracks alphabetically
+         * @description Sorted by title, case-insensitively, with id breaking ties. Titles that do not start with a letter A-Z are grouped under # and listed first.
+         */
         get: operations["getTracksAlphabetical"];
         put?: never;
         post?: never;
@@ -3893,10 +3896,12 @@ export interface components {
             title: string;
             sort_title: string;
             spotify_id: components["schemas"]["SqlNullString"];
+            /** @description Valid is false until a Spotify match reports a nonzero popularity. */
             spotify_popularity: components["schemas"]["SqlNullFloat64"];
             musician: components["schemas"]["SqlNullString"];
             release_date: components["schemas"]["SqlNullString"];
             year: components["schemas"]["SqlNullInt64"];
+            /** @description The track count Spotify reports for the matched album, not the number of local tracks. Valid is false until a Spotify match reports one. */
             total_tracks: components["schemas"]["SqlNullInt64"];
             cover: components["schemas"]["SqlNullString"];
             created_at: string;
@@ -4011,6 +4016,10 @@ export interface components {
             artists: components["schemas"]["AlbumArtist"][];
             track_genres: components["schemas"]["AlbumTrackGenre"][];
             album_genres: string[];
+            /**
+             * Format: int64
+             * @description Sum of track durations in milliseconds.
+             */
             total_duration: number;
         };
         AlbumDetailsEnvelope: components["schemas"]["JsonSuccess"] & {
@@ -4035,9 +4044,12 @@ export interface components {
             id: number;
             name: string;
             sort_name: string;
+            /** @description A sentence built from the Spotify match's name, genres, popularity, and follower count. Valid is false until a Spotify match reports a popularity or a follower count. */
             summary: components["schemas"]["SqlNullString"];
             spotify_id: components["schemas"]["SqlNullString"];
+            /** @description Valid is false until a Spotify match reports a nonzero popularity. */
             spotify_popularity: components["schemas"]["SqlNullFloat64"];
+            /** @description Valid is false until a Spotify match reports a nonzero follower count. */
             spotify_followers: components["schemas"]["SqlNullInt64"];
             thumb: components["schemas"]["SqlNullString"];
             created_at: string;
@@ -4075,6 +4087,10 @@ export interface components {
             albums: components["schemas"]["MusicianAlbum"][];
             tracks: components["schemas"]["MusicianTrack"][];
             genres: string[];
+            /**
+             * Format: int64
+             * @description Sum of track durations in milliseconds.
+             */
             total_duration: number;
         };
         MusicianDetailsEnvelope: components["schemas"]["JsonSuccess"] & {
@@ -4774,9 +4790,9 @@ export interface components {
             total: number;
             /** @description Files with a local outcome, including deferred and failed files. Music scans do not retry deferred files within a run. */
             processed: number;
-            /** @description Processed files whose cleaned path had no stored fingerprint baseline at scan start. */
+            /** @description Processed files whose cleaned path had no catalog track at scan start. */
             imported: number;
-            /** @description Processed files whose cleaned path had a stored fingerprint baseline at scan start. */
+            /** @description Processed files whose cleaned path already had a catalog track at scan start, including tracks without a stored fingerprint. */
             updated: number;
             /** @description Files skipped by matching filesystem metadata or identical bytes with only the fingerprint refreshed. */
             unchanged: number;

@@ -157,7 +157,8 @@ ORDER BY
     WHEN UPPER(SUBSTR(m.sort_name, 1, 1)) BETWEEN 'A' AND 'Z' THEN UPPER(SUBSTR(m.sort_name, 1, 1))
     ELSE '#'
   END,
-  m.sort_name
+  m.sort_name,
+  m.id
 LIMIT ?
 OFFSET ?
 `
@@ -177,6 +178,7 @@ type GetMusiciansAlphabeticalRow struct {
 
 // Returns musicians sorted alphabetically by sort_name with pagination.
 // Non-alphabetic names (numbers, symbols) are grouped under '#' and sorted first.
+// sort_name is not unique, so id breaks ties and pages stay stable.
 func (q *Queries) GetMusiciansAlphabetical(ctx context.Context, arg GetMusiciansAlphabeticalParams) ([]GetMusiciansAlphabeticalRow, error) {
 	rows, err := q.query(ctx, q.getMusiciansAlphabeticalStmt, getMusiciansAlphabetical, arg.Limit, arg.Offset)
 	if err != nil {
