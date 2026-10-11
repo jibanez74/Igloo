@@ -4576,8 +4576,9 @@ export interface components {
         QuickConnectInitiateRequest: {
             /** @description Leading and trailing Unicode whitespace is trimmed before storage and validation. The trimmed name must be nonempty and at most 100 UTF-8 bytes (not characters). The raw input may exceed 100 characters when excess characters are trimmed whitespace. */
             device_name: string;
-            /** @description Client platform identifier, e.g. android_tv, android, ios. */
+            /** @description Client platform identifier, e.g. android_tv, android, ios. At most 100 UTF-8 bytes; longer values return 400. */
             platform?: string;
+            /** @description At most 100 UTF-8 bytes; longer values return 400. */
             app_version?: string;
         };
         QuickConnectInitiateData: {
@@ -4637,7 +4638,9 @@ export interface components {
             password: string;
             /** @description Leading and trailing Unicode whitespace is trimmed before storage and validation. The trimmed name must be nonempty and at most 100 UTF-8 bytes (not characters). The raw input may exceed 100 characters when excess characters are trimmed whitespace. */
             device_name: string;
+            /** @description At most 100 UTF-8 bytes; longer values return 400. */
             platform?: string;
+            /** @description At most 100 UTF-8 bytes; longer values return 400. */
             app_version?: string;
         };
         DeviceTokenEnvelope: components["schemas"]["JsonSuccess"] & {

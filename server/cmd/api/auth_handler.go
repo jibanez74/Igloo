@@ -138,6 +138,11 @@ func (app *Application) AuthenticateDevice(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	if err := validateDeviceMetadata(request.Platform, request.AppVersion); err != nil {
+		helpers.ErrorJSON(w, err, http.StatusBadRequest)
+		return
+	}
+
 	user, err := app.Queries.GetUserByEmail(r.Context(), request.Email)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

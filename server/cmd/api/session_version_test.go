@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -229,6 +230,38 @@ func TestAccountChangesRejectDeviceTokens(t *testing.T) {
 	}
 	if code := sessionProbe(t, app, nil, token); code != http.StatusOK {
 		t.Fatalf("device after rejected changes = %d, want 200", code)
+	}
+}
+
+func TestDeviceMetadataIsCapped(t *testing.T) {
+	app := setupSessionTestApp(t)
+	app.InitRouter()
+	user := createTestUser(t, app, "Pairing", "pairing@example.com", false)
+	long := strings.Repeat("x", maxDeviceMetadataLength+1)
+	fits := strings.Repeat("x", maxDeviceMetadataLength)
+
+	for _, tt := range []struct {
+		operationID, target, base string
+		ok                        int
+	}{
+		{"initiateQuickConnect", "/api/quick-connect/initiate", `"device_name":"TV"`, http.StatusCreated},
+		{"authenticateDevice", "/api/auth/device-login", fmt.Sprintf(`"device_name":"TV","email":%q,"password":%q`, user.Email, testUserPassword), http.StatusOK},
+	} {
+		for _, field := range []string{"platform", "app_version"} {
+			req := newOpenAPIJSONRequest(http.MethodPost, tt.target, fmt.Sprintf(`{%s,%q:%q}`, tt.base, field, long))
+			w := httptest.NewRecorder()
+			app.Router.ServeHTTP(w, req)
+			assertOpenAPIExchange(t, tt.operationID, req, w)
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("%s with a %d-byte %s = %d, want 400", tt.operationID, len(long), field, w.Code)
+			}
+		}
+		req := newOpenAPIJSONRequest(http.MethodPost, tt.target, fmt.Sprintf(`{%s,"platform":%q,"app_version":%q}`, tt.base, fits, fits))
+		w := httptest.NewRecorder()
+		app.Router.ServeHTTP(w, req)
+		if w.Code != tt.ok {
+			t.Fatalf("%s at the cap = %d, want %d: %s", tt.operationID, w.Code, tt.ok, w.Body.String())
+		}
 	}
 }
 

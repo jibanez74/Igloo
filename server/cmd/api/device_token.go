@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"fmt"
 	"time"
 )
 
@@ -15,6 +16,9 @@ import (
 const (
 	deviceTokenPrefix   = "igd_"
 	maxDeviceNameLength = 100
+	// platform and app_version are stored as sent, and Quick Connect holds
+	// them in memory for unauthenticated callers, so they get the name's cap.
+	maxDeviceMetadataLength = 100
 
 	deviceLastSeenTTL = 5 * time.Minute
 
@@ -56,4 +60,16 @@ func generateDeviceToken() (string, string, error) {
 func hashDeviceToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])
+}
+
+// validateDeviceMetadata caps the platform and app_version a client reports
+// about itself, in bytes like the device name.
+func validateDeviceMetadata(platform, appVersion string) error {
+	if len(platform) > maxDeviceMetadataLength {
+		return fmt.Errorf("platform must be at most %d bytes", maxDeviceMetadataLength)
+	}
+	if len(appVersion) > maxDeviceMetadataLength {
+		return fmt.Errorf("app_version must be at most %d bytes", maxDeviceMetadataLength)
+	}
+	return nil
 }
