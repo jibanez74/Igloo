@@ -1827,6 +1827,12 @@ func (app *Application) planHLSSession(
 			return nil, fmt.Errorf("failed to load audio streams: %w", err)
 		}
 	}
+	// A room always passes its stored audio_track, and 0 is the only value
+	// room creation accepts for a movie without audio, so for a room it names
+	// no track and the session is video-only like a personal one.
+	if isRoom && len(audioStreams) == 0 {
+		audioTrack = nil
+	}
 	var selectedAudio *database.AudioStream
 	if len(audioStreams) == 0 {
 		if audioProfile != nil {

@@ -1084,6 +1084,48 @@ func TestCreateWatchRoom_HTTP_NonFirstAudioTrackAcceptedForHLS(t *testing.T) {
 	}
 }
 
+// A room stores audio_track 0 for a movie without audio, and its HLS session
+// must treat that as no track rather than reject it as a video-only selection,
+// which deleted the room and answered 500.
+func TestCreateWatchRoom_HTTP_HLSRoomForMovieWithoutAudio(t *testing.T) {
+	app := setupSessionTestApp(t)
+	app.FFmpeg = &fakeFFmpeg{
+		plans: []fakeFFmpegRunPlan{
+			{
+				WriteFiles: func(outDir string) error {
+					return fmp4testutil.WriteHLSFixture(outDir, fmp4testutil.Fixture{
+						SafeVideo: true,
+						Segments:  1,
+					})
+				},
+			},
+		},
+	}
+	owner := createTestUser(t, app, "Silent Owner", "silent-owner@example.com", false)
+
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 720)
+	_, err := app.DB.Exec(`DELETE FROM audio_streams WHERE movie_id = ?`, movieID)
+	if err != nil {
+		t.Fatalf("delete audio streams: %v", err)
+	}
+
+	handler := authenticatedRouter(t, app, owner.ID)
+	body := fmt.Sprintf(`{"movie_id":%d,"mode":"%s","audio_track":0,"invited_user_ids":[]}`, movieID, helpers.HLS_PROFILE_720P_3MBPS)
+	req := newOpenAPIJSONRequest(http.MethodPost, "/api/watch-rooms", body)
+	w := serveOpenAPIExchange(t, handler, "createWatchRoom", req, http.StatusCreated)
+
+	var resp helpers.JSONResponse
+	err = json.NewDecoder(w.Body).Decode(&resp)
+	if err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	roomID := int64(resp.Data.(map[string]any)["room_id"].(float64))
+	_, found, err := app.getActiveRoomHLSSession(roomID, RoomHLSSessionKey(roomID))
+	if err != nil || !found {
+		t.Fatalf("room session found = %v (%v), want the warmed session", found, err)
+	}
+}
+
 func TestCreateWatchRoom_HTTP_SubtitleTrackOutOfRangeRejected(t *testing.T) {
 	app := setupSessionTestApp(t)
 
