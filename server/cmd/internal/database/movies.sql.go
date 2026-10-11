@@ -457,7 +457,7 @@ SELECT
   poster_path,
   year
 FROM movies
-ORDER BY created_at DESC
+ORDER BY created_at DESC, id DESC
 LIMIT 12
 `
 
@@ -470,6 +470,8 @@ type GetLatestMoviesRow struct {
 
 // The home section renders title, poster and year only; certification is
 // deliberately absent so the row matches the documented LatestMovie exactly.
+// CURRENT_TIMESTAMP only has second resolution, so id breaks the ties a bulk
+// scan creates, as GetLatestShows does.
 func (q *Queries) GetLatestMovies(ctx context.Context) ([]GetLatestMoviesRow, error) {
 	rows, err := q.query(ctx, q.getLatestMoviesStmt, getLatestMovies)
 	if err != nil {
