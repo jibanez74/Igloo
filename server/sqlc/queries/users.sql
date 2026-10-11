@@ -82,12 +82,19 @@ SET
 WHERE id = ?
 RETURNING id, name, email, is_admin, avatar, pin, created_at, updated_at;
 
--- name: UpdateUserPassword :exec
+-- name: UpdateUserPassword :one
+-- Bumping session_version ends every cookie session that recorded the old
+-- one (see IsAuth).
 UPDATE users
 SET
   password = ?,
+  session_version = session_version + 1,
   updated_at = CURRENT_TIMESTAMP
-WHERE id = ?;
+WHERE id = ?
+RETURNING session_version;
+
+-- name: GetUserSessionVersion :one
+SELECT session_version FROM users WHERE id = ?;
 
 -- name: UpdateUserPin :one
 UPDATE users

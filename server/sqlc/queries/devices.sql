@@ -50,3 +50,8 @@ WHERE id = ?;
 -- name: DeleteDevicesUnusedSince :execrows
 DELETE FROM devices
 WHERE last_used_at < sqlc.arg(cutoff);
+
+-- name: DeleteDevicesForUser :exec
+-- A password change or reset revokes every device token the user holds.
+DELETE FROM devices
+WHERE user_id = ?;

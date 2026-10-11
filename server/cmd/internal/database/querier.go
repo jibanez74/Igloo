@@ -65,6 +65,8 @@ type Querier interface {
 	DeleteAlbum(ctx context.Context, id int64) (string, error)
 	DeleteDevice(ctx context.Context, id int64) error
 	DeleteDeviceForUser(ctx context.Context, arg DeleteDeviceForUserParams) (int64, error)
+	// A password change or reset revokes every device token the user holds.
+	DeleteDevicesForUser(ctx context.Context, userID int64) error
 	DeleteDevicesUnusedSince(ctx context.Context, cutoff string) (int64, error)
 	DeleteMergedMusicAlbum(ctx context.Context, id int64) error
 	DeleteMergedMusicArtist(ctx context.Context, id int64) error
@@ -437,6 +439,7 @@ type Querier interface {
 	GetUserPreferences(ctx context.Context, userID int64) (GetUserPreferencesRow, error)
 	// Returns the user's recently played tracks
 	GetUserRecentlyPlayed(ctx context.Context, arg GetUserRecentlyPlayedParams) ([]GetUserRecentlyPlayedRow, error)
+	GetUserSessionVersion(ctx context.Context, id int64) (int64, error)
 	// The public face of a user shown on resources other users can open (playlist
 	// owner, watch-room members): no email, password hash, admin flag or PIN.
 	GetUserSummary(ctx context.Context, id int64) (GetUserSummaryRow, error)
@@ -600,7 +603,9 @@ type Querier interface {
 	UpdateUserAvatar(ctx context.Context, arg UpdateUserAvatarParams) (UpdateUserAvatarRow, error)
 	UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) (UpdateUserEmailRow, error)
 	UpdateUserName(ctx context.Context, arg UpdateUserNameParams) (UpdateUserNameRow, error)
-	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
+	// Bumping session_version ends every cookie session that recorded the old
+	// one (see IsAuth).
+	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) (int64, error)
 	UpdateUserPin(ctx context.Context, arg UpdateUserPinParams) (UpdateUserPinRow, error)
 	// Matches idx_albums_title_musician, which treats a missing musician as '' so an
 	// untagged album cannot be inserted twice.

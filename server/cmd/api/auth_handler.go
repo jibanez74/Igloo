@@ -25,7 +25,24 @@ type AuthRequest struct {
 	Password string `json:"password"`
 }
 
+// Browser and device logins accept the same credentials, so they draw on one
+// per-IP budget; a limit on only one of them would leave the other open to
+// password guessing.
+const (
+	loginAttemptLimit  = 10
+	loginAttemptWindow = 5 * time.Minute
+)
+
+func (app *Application) allowLoginAttempt(r *http.Request) bool {
+	return app.AuthLimiter.Allow("login:"+clientIP(r), loginAttemptLimit, loginAttemptWindow)
+}
+
 func (app *Application) AuthenticateUser(w http.ResponseWriter, r *http.Request) {
+	if !app.allowLoginAttempt(r) {
+		helpers.ErrorJSON(w, errors.New(tooManyAttemptsMessage), http.StatusTooManyRequests)
+		return
+	}
+
 	var request AuthRequest
 
 	err := helpers.ReadJSON(w, r, &request)
@@ -72,6 +89,8 @@ func (app *Application) AuthenticateUser(w http.ResponseWriter, r *http.Request)
 	}
 
 	app.SessionManager.Put(r.Context(), cookieUserID, user.ID)
+	app.SessionManager.Put(r.Context(), cookieSessionVersion, user.SessionVersion)
+	app.rememberSessionVersion(user.ID, user.SessionVersion)
 
 	res := helpers.JSONResponse{
 		Error:   false,
@@ -94,7 +113,7 @@ type DeviceAuthRequest struct {
 // AuthenticateDevice is the password-based login path for TV / mobile
 // clients. It issues a long-lived bearer token and never touches the session.
 func (app *Application) AuthenticateDevice(w http.ResponseWriter, r *http.Request) {
-	if !app.AuthLimiter.Allow("dlogin:"+clientIP(r), 10, 5*time.Minute) {
+	if !app.allowLoginAttempt(r) {
 		helpers.ErrorJSON(w, errors.New(tooManyAttemptsMessage), http.StatusTooManyRequests)
 		return
 	}

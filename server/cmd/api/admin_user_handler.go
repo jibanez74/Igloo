@@ -346,6 +346,7 @@ func (app *Application) AdminDeleteUser(w http.ResponseWriter, r *http.Request) 
 	}
 
 	app.endDeletedOwnerRooms(roomIDs)
+	app.forgetDeletedSessionUser(targetID)
 	app.forgetUserDevices(targetID)
 
 	if user.Avatar.Valid {
@@ -401,14 +402,15 @@ func (app *Application) AdminResetUserPassword(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	err = app.Queries.UpdateUserPassword(r.Context(), database.UpdateUserPasswordParams{
-		Password: hashedPassword,
-		ID:       targetID,
-	})
+	version, err := app.changePassword(r.Context(), targetID, hashedPassword)
 	if err != nil {
 		app.Logger.Error("admin: failed to reset user password", "error", err, "target_id", targetID)
 		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
+	}
+	// An admin resetting their own password from a browser keeps that session.
+	if targetID == app.userIDFromRequest(r) && deviceAuthFrom(r.Context()) == nil {
+		app.keepSessionAfterPasswordChange(r, targetID, version)
 	}
 
 	app.Logger.Info("admin: user password reset", "user_id", targetID)
