@@ -823,7 +823,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List latest movies */
+        /**
+         * List latest movies
+         * @description Returns up to 12 of the most recently added movies, newest first.
+         */
         get: operations["getLatestMovies"];
         put?: never;
         post?: never;
@@ -842,7 +845,7 @@ export interface paths {
         };
         /**
          * List latest TV shows
-         * @description Returns the most recently discovered shows, newest first.
+         * @description Returns up to 12 of the most recently discovered shows, newest first.
          */
         get: operations["getLatestShows"];
         put?: never;
@@ -911,7 +914,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List TV shows for a genre */
+        /**
+         * List TV shows for a genre
+         * @description An unknown genre id answers an empty page.
+         */
         get: operations["getShowsByGenreLibrary"];
         put?: never;
         post?: never;
@@ -930,7 +936,7 @@ export interface paths {
         };
         /**
          * Get TV show details
-         * @description Returns one show with its seasons, aggregate cast and crew, creators, genres, networks, production companies, and extra videos, read in a single read-only transaction so the payload is one consistent snapshot. Seasons carry TMDB's episode count beside the number of episodes actually present; the local season count is the length of the seasons array. Episodes are fetched per season from the season episodes endpoint. Aggregate cast and crew are each capped at 100 rows. Filesystem locations are never exposed, and this endpoint provides no playback.
+         * @description Returns one show with its seasons, aggregate cast and crew, creators, genres, networks, production companies, and extra videos, read in a single read-only transaction so the payload is one consistent snapshot. Seasons carry TMDB's episode count beside the number of episodes actually present; the local season count is the length of the seasons array. Seasons are ordered by number, with specials (season 0) last. Episodes are fetched per season from the season episodes endpoint. Aggregate cast and crew are each capped at 100 rows. Filesystem locations are never exposed, and this endpoint provides no playback.
          */
         get: operations["getShowDetails"];
         put?: never;
@@ -970,7 +976,7 @@ export interface paths {
         };
         /**
          * Get the playback header for a TV episode
-         * @description Returns the episode with its season number and show identity, for the episode player's title and back navigation, plus the episode the player advances to when this one ends (with the caller's progress on it, or null after the last episode). Stream and track metadata come from the episode's technical details.
+         * @description Returns the episode with its season number and show identity, for the episode player's title and back navigation, plus the episode the player advances to when this one ends (with the caller's progress on it, or null when no later episode is backed by a different file, as after the last episode). Stream and track metadata come from the episode's technical details.
          */
         get: operations["getShowEpisode"];
         put?: never;
@@ -1216,7 +1222,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get the current user's like status for a movie */
+        /**
+         * Get the current user's like status for a movie
+         * @description An unknown movie answers is_liked false rather than 404.
+         */
         get: operations["getMovieLikeStatus"];
         put?: never;
         post?: never;
@@ -1250,7 +1259,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List movies for a genre */
+        /**
+         * List movies for a genre
+         * @description An unknown genre id answers an empty page.
+         */
         get: operations["getMoviesByGenreLibrary"];
         put?: never;
         post?: never;
@@ -1617,14 +1629,14 @@ export interface paths {
         post?: never;
         /**
          * Delete a movie from the library
-         * @description Admin-only endpoint. The request body is optional and is never rejected; the file is deleted only when the body sets delete_file to true, even if other parts of the body are malformed. Deleting the movie also deletes its watch rooms: their members receive room_deleted and their connections close. With delete_file true the file is removed from disk; a failure to remove it is logged and the response is still 200.
+         * @description Admin-only endpoint. The request body is optional and is never rejected. The file is deleted only when the body is a JSON object that sets delete_file to true; unknown fields or trailing content beside it do not prevent that, but a syntax error inside the object does. Deleting the movie also deletes its watch rooms: their members receive room_deleted and their connections close. With delete_file true the file is removed from disk; a failure to remove it is logged and the response is still 200.
          */
         delete: operations["deleteMovie"];
         options?: never;
         head?: never;
         /**
          * Partially update local movie metadata
-         * @description Admin-only endpoint. Only the fields present in the body change; a field sent as null is left unchanged. An empty string clears any field other than title to null (an empty title is stored as an empty string), and year 0 clears the year. Values are stored without format validation.
+         * @description Admin-only endpoint. Only the fields present in the body change; a field sent as null is left unchanged. An empty string clears any field other than title to null (an empty title is stored as an empty string), and year 0 clears the year. Values are stored without format validation. For a movie without a TMDB match, a later scan that finds one overwrites the descriptive fields, edits included; identify the movie first to keep edits.
          */
         patch: operations["updateMovieMetadata"];
         trace?: never;
@@ -3048,7 +3060,7 @@ export interface components {
             /** Format: int64 */
             available_episode_count: number;
         };
-        /** @description One episode in a season listing, with the requesting user's watch progress. progress_sec and duration_sec are null until a position is saved; watched is false until the episode is marked watched or a progress save reaches 95% of its duration. Every listed episode is playable: episodes exist only for probed files. */
+        /** @description One episode in a season listing, with the requesting user's watch progress. progress_sec and duration_sec are null until the user saves a position or marks the episode watched or unwatched. Marking it watched, or a save that reaches 95% of its duration, sets watched and resets progress_sec to 0; marking it unwatched, or a later save below 95%, clears watched. A mark or 95% save made before any other save stores 0 for duration_sec as well. Every listed episode is playable: episodes exist only for probed files. */
         ShowEpisode: {
             /** Format: int64 */
             id: number;
@@ -3302,6 +3314,7 @@ export interface components {
             is_forced: boolean;
             is_default: boolean;
         };
+        /** @description A chapter of the movie file; start_time is whole seconds, normalized into the file duration. */
         Chapter: {
             /** Format: int64 */
             id: number;
@@ -3318,7 +3331,7 @@ export interface components {
             /** Format: int64 */
             size: number;
             container: string;
-            /** @description The container media type the client direct-play gate reads, normalized from the stored value; the watch-room handler validates against this same value. */
+            /** @description The container media type the client direct-play gate reads, resolved from the container (the stored value is only a fallback); the watch-room handler validates against this same value. */
             mime_type: string;
             run_time: components["schemas"]["SqlNullInt64"];
             duration: components["schemas"]["SqlNullFloat64"];
@@ -3682,16 +3695,16 @@ export interface components {
             tmdb_id: number;
         };
         UpdateMovieMetadataRequest: {
-            title?: string;
+            title?: string | null;
             /** Format: int64 */
-            year?: number;
-            release_date?: string;
-            overview?: string;
-            tag_line?: string;
-            certification?: string;
-            poster_path?: string;
-            backdrop_path?: string;
-            language?: string;
+            year?: number | null;
+            release_date?: string | null;
+            overview?: string | null;
+            tag_line?: string | null;
+            certification?: string | null;
+            poster_path?: string | null;
+            backdrop_path?: string | null;
+            language?: string | null;
         };
         DeleteMovieRequest: {
             /** @default false */
@@ -4802,7 +4815,7 @@ export interface components {
             duration_sec: components["schemas"]["SqlNullFloat64"];
             watched: boolean;
         };
-        /** @description What the episode player needs to title itself, navigate back, and advance: the episode, its season number, its show, and the episode that follows it (null after the show's last episode). */
+        /** @description What the episode player needs to title itself, navigate back, and advance: the episode, its season number, its show, and the episode that follows it (null when no later episode is backed by a different file, as after the show's last episode). */
         ShowEpisodePlaybackData: {
             show: components["schemas"]["ShowEpisodePlaybackShow"];
             season: components["schemas"]["ShowEpisodePlaybackSeason"];
@@ -4879,7 +4892,7 @@ export interface components {
             is_forced: boolean;
             is_default: boolean;
         };
-        /** @description A chapter of a show file, start time normalized into the file duration. */
+        /** @description A chapter of a show file; start_time is whole seconds, normalized into the file duration. */
         ShowFileChapter: {
             /** Format: int64 */
             id: number;
@@ -4896,7 +4909,7 @@ export interface components {
             /** Format: int64 */
             size: number;
             container: string;
-            /** @description The container media type the client direct-play gate reads, normalized from the stored value. */
+            /** @description The container media type the client direct-play gate reads, resolved from the container (the stored value is only a fallback). */
             mime_type: string;
             duration: components["schemas"]["SqlNullFloat64"];
         };
@@ -6129,7 +6142,7 @@ export interface components {
         PerPageQuery: number;
         /** @description Default 50; clamped to 100. Larger values are clamped rather than rejected; missing, non-integer, and nonpositive values use the default. The response per_page reports the effective value. */
         MusicPerPageQuery: number;
-        /** @description Sort direction. The value is trimmed and case-insensitive; anything other than desc sorts ascending. */
+        /** @description Sort direction of the title order (name for TV shows), compared lowercased with ties broken by id. The value is trimmed and case-insensitive; anything other than desc sorts ascending. */
         SortQuery: "asc" | "desc";
         /** @description Default 50; clamped to 100. Larger values are clamped rather than rejected; missing, non-integer, and nonpositive values use the default. */
         LimitQuery: number;
@@ -7261,7 +7274,7 @@ export interface operations {
                 page?: components["parameters"]["PageQuery"];
                 /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
-                /** @description Sort direction. The value is trimmed and case-insensitive; anything other than desc sorts ascending. */
+                /** @description Sort direction of the title order (name for TV shows), compared lowercased with ties broken by id. The value is trimmed and case-insensitive; anything other than desc sorts ascending. */
                 sort?: components["parameters"]["SortQuery"];
             };
             header?: never;
@@ -7310,7 +7323,7 @@ export interface operations {
                 page?: components["parameters"]["PageQuery"];
                 /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
-                /** @description Sort direction. The value is trimmed and case-insensitive; anything other than desc sorts ascending. */
+                /** @description Sort direction of the title order (name for TV shows), compared lowercased with ties broken by id. The value is trimmed and case-insensitive; anything other than desc sorts ascending. */
                 sort?: components["parameters"]["SortQuery"];
             };
             header?: never;
@@ -7777,7 +7790,7 @@ export interface operations {
                 page?: components["parameters"]["PageQuery"];
                 /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
-                /** @description Sort direction. The value is trimmed and case-insensitive; anything other than desc sorts ascending. */
+                /** @description Sort direction of the title order (name for TV shows), compared lowercased with ties broken by id. The value is trimmed and case-insensitive; anything other than desc sorts ascending. */
                 sort?: components["parameters"]["SortQuery"];
             };
             header?: never;
@@ -7812,7 +7825,7 @@ export interface operations {
                 page?: components["parameters"]["PageQuery"];
                 /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
-                /** @description Sort direction. The value is trimmed and case-insensitive; anything other than desc sorts ascending. */
+                /** @description Sort direction of the title order (name for TV shows), compared lowercased with ties broken by id. The value is trimmed and case-insensitive; anything other than desc sorts ascending. */
                 sort?: components["parameters"]["SortQuery"];
             };
             header?: never;
@@ -7864,7 +7877,7 @@ export interface operations {
                 page?: components["parameters"]["PageQuery"];
                 /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
-                /** @description Sort direction. The value is trimmed and case-insensitive; anything other than desc sorts ascending. */
+                /** @description Sort direction of the title order (name for TV shows), compared lowercased with ties broken by id. The value is trimmed and case-insensitive; anything other than desc sorts ascending. */
                 sort?: components["parameters"]["SortQuery"];
             };
             header?: never;
@@ -7888,7 +7901,7 @@ export interface operations {
                 page?: components["parameters"]["PageQuery"];
                 /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
-                /** @description Sort direction. The value is trimmed and case-insensitive; anything other than desc sorts ascending. */
+                /** @description Sort direction of the title order (name for TV shows), compared lowercased with ties broken by id. The value is trimmed and case-insensitive; anything other than desc sorts ascending. */
                 sort?: components["parameters"]["SortQuery"];
             };
             header?: never;
