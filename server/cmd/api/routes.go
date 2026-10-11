@@ -48,7 +48,7 @@ func (app *Application) registerAPIRoutes(r chi.Router) {
 		r.Get("/health", app.HealthCheck)
 		r.Post("/auth/login", app.AuthenticateUser)
 		r.Post("/auth/device-login", app.AuthenticateDevice)
-		r.With(app.DeviceTokenAuth).Get("/auth/user", app.GetCurrentAuthUser)
+		r.With(app.DeviceTokenAuth, app.IsAuth).Get("/auth/user", app.GetCurrentAuthUser)
 		r.Post("/quick-connect/initiate", app.InitiateQuickConnect)
 		r.Post("/quick-connect/redeem", app.RedeemQuickConnect)
 		app.registerAuthenticatedAPIRoutes(r)

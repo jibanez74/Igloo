@@ -213,7 +213,7 @@ func (q *Queries) GetAllUsers(ctx context.Context) ([]GetAllUsersRow, error) {
 
 const getUser = `-- name: GetUser :one
 SELECT
-  id, name, email, password, is_admin, avatar, pin, created_at, updated_at
+  id, name, email, password, is_admin, avatar, pin, session_version, created_at, updated_at
 FROM users
 WHERE id = ?
 LIMIT 1
@@ -230,6 +230,7 @@ func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
 		&i.IsAdmin,
 		&i.Avatar,
 		&i.Pin,
+		&i.SessionVersion,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -238,7 +239,7 @@ func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
 
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT
-  id, name, email, password, is_admin, avatar, pin, created_at, updated_at
+  id, name, email, password, is_admin, avatar, pin, session_version, created_at, updated_at
 FROM users
 WHERE email = ?
 LIMIT 1
@@ -255,6 +256,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.IsAdmin,
 		&i.Avatar,
 		&i.Pin,
+		&i.SessionVersion,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -291,6 +293,17 @@ func (q *Queries) GetUserPin(ctx context.Context, id int64) (sql.NullString, err
 	var pin sql.NullString
 	err := row.Scan(&pin)
 	return pin, err
+}
+
+const getUserSessionVersion = `-- name: GetUserSessionVersion :one
+SELECT session_version FROM users WHERE id = ?
+`
+
+func (q *Queries) GetUserSessionVersion(ctx context.Context, id int64) (int64, error) {
+	row := q.queryRow(ctx, q.getUserSessionVersionStmt, getUserSessionVersion, id)
+	var session_version int64
+	err := row.Scan(&session_version)
+	return session_version, err
 }
 
 const getUserSummary = `-- name: GetUserSummary :one
@@ -497,12 +510,14 @@ func (q *Queries) UpdateUserName(ctx context.Context, arg UpdateUserNameParams) 
 	return i, err
 }
 
-const updateUserPassword = `-- name: UpdateUserPassword :exec
+const updateUserPassword = `-- name: UpdateUserPassword :one
 UPDATE users
 SET
   password = ?,
+  session_version = session_version + 1,
   updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
+RETURNING session_version
 `
 
 type UpdateUserPasswordParams struct {
@@ -510,9 +525,13 @@ type UpdateUserPasswordParams struct {
 	ID       int64  `json:"id"`
 }
 
-func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error {
-	_, err := q.exec(ctx, q.updateUserPasswordStmt, updateUserPassword, arg.Password, arg.ID)
-	return err
+// Bumping session_version ends every cookie session that recorded the old
+// one (see IsAuth).
+func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) (int64, error) {
+	row := q.queryRow(ctx, q.updateUserPasswordStmt, updateUserPassword, arg.Password, arg.ID)
+	var session_version int64
+	err := row.Scan(&session_version)
+	return session_version, err
 }
 
 const updateUserPin = `-- name: UpdateUserPin :one

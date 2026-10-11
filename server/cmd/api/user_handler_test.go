@@ -34,8 +34,10 @@ func TestUserProfileMutationHandlers_ConformToOpenAPI(t *testing.T) {
 	}{
 		{name: "name", operationID: "updateUserName", target: "/api/user/name", body: `{"name":"Updated Name"}`},
 		{name: "email", operationID: "updateUserEmail", target: "/api/user/email", body: `{"email":"updated@example.com"}`},
-		{name: "password", operationID: "updateUserPassword", target: "/api/user/password", body: fmt.Sprintf(`{"current_password":%q,"new_password":"updated password"}`, testUserPassword)},
 		{name: "avatar", operationID: "updateUserAvatar", target: "/api/user/avatar", body: `{"avatar":"https://example.com/avatar.png"}`},
+		// Last: the change moves the session to a new token, which this
+		// fixed-cookie handler does not follow.
+		{name: "password", operationID: "updateUserPassword", target: "/api/user/password", body: fmt.Sprintf(`{"current_password":%q,"new_password":"updated password"}`, testUserPassword)},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -44,7 +46,7 @@ func TestUserProfileMutationHandlers_ConformToOpenAPI(t *testing.T) {
 	}
 
 	pngHeader := []byte{'\x89', 'P', 'N', 'G', '\r', '\n', '\x1a', '\n'}
-	serveOpenAPIExchange(t, handler, "uploadUserAvatar", avatarUploadRequest(t, "avatar", "avatar.png", pngHeader), http.StatusOK)
+	serveOpenAPIExchange(t, authenticatedRouter(t, app, user.ID), "uploadUserAvatar", avatarUploadRequest(t, "avatar", "avatar.png", pngHeader), http.StatusOK)
 }
 
 func TestUserProfileMutations_RejectInvalidInput(t *testing.T) {

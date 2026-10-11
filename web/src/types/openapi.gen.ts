@@ -32,7 +32,7 @@ export interface paths {
         put?: never;
         /**
          * Log in with email and password
-         * @description The email is matched exactly as sent: it is not trimmed and the match is case-sensitive. Passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401.
+         * @description The email is matched exactly as sent: it is not trimmed and the match is case-sensitive. Passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401. Rate limited to 10 requests per 5 minutes per client IP (the TCP peer address, not forwarded headers), shared with device login.
          */
         post: operations["authenticateUser"];
         delete?: never;
@@ -89,7 +89,7 @@ export interface paths {
         put?: never;
         /**
          * Log in with email and password from a TV or mobile client and receive a device token
-         * @description The email is matched exactly as sent: it is not trimmed and the match is case-sensitive. Passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401. Rate limited to 10 requests per 5 minutes per client IP (the TCP peer address, not forwarded headers).
+         * @description The email is matched exactly as sent: it is not trimmed and the match is case-sensitive. Passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401. Rate limited to 10 requests per 5 minutes per client IP (the TCP peer address, not forwarded headers), shared with browser login.
          */
         post: operations["authenticateDevice"];
         delete?: never;
@@ -252,7 +252,7 @@ export interface paths {
         get?: never;
         /**
          * Update the current user's email
-         * @description The email is trimmed and stored without format validation. An address another account already uses (case-sensitive comparison) returns 409.
+         * @description Session-authenticated users only: requests carrying a device bearer token are rejected with 401. The email is trimmed and stored without format validation. An address another account already uses (case-sensitive comparison) returns 409.
          */
         put: operations["updateUserEmail"];
         post?: never;
@@ -272,7 +272,7 @@ export interface paths {
         get?: never;
         /**
          * Update the current user's password
-         * @description New passwords must contain at least 9 Unicode characters and at most 72 UTF-8 bytes. Passwords outside these limits are rejected with 400 before hashing. Current passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401.
+         * @description Session-authenticated users only: requests carrying a device bearer token are rejected with 401. New passwords must contain at least 9 Unicode characters and at most 72 UTF-8 bytes. Passwords outside these limits are rejected with 400 before hashing. Current passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401. The current-password check is limited to 10 attempts per 5 minutes per user (429). A successful change signs out every other browser session of the account and revokes all of its device tokens; the session that made the change continues under a renewed session cookie.
          */
         put: operations["updateUserPassword"];
         post?: never;
@@ -399,7 +399,7 @@ export interface paths {
         post?: never;
         /**
          * Delete the current user's account
-         * @description Admin accounts cannot delete themselves through this endpoint. Deleting the account also deletes everything it owns, including playlists and watch rooms shared with other users, the requests it filed, and its watch progress, likes and listening history; deletes its device tokens and uploaded avatar file; and ends the current session. Members of the watch rooms it owned receive room_deleted and their connections close.
+         * @description Session-authenticated users only: requests carrying a device bearer token are rejected with 401. Admin accounts cannot delete themselves through this endpoint. Deleting the account also deletes everything it owns, including playlists and watch rooms shared with other users, the requests it filed, and its watch progress, likes and listening history; deletes its device tokens and uploaded avatar file; and ends all of its browser sessions. Members of the watch rooms it owned receive room_deleted and their connections close.
          */
         delete: operations["deleteUserAccount"];
         options?: never;
@@ -1712,7 +1712,7 @@ export interface paths {
         post?: never;
         /**
          * Delete a user
-         * @description Admin-only endpoint. Returns 403 for deleting your own account or the last administrator. Deleting a user also deletes everything they own, including playlists and watch rooms shared with other users, the requests they filed, and their watch progress, likes and listening history, along with their device tokens and uploaded avatar file. Members of the watch rooms they owned receive room_deleted and their connections close.
+         * @description Admin-only endpoint. Returns 403 for deleting your own account or the last administrator. Deleting a user also deletes everything they own, including playlists and watch rooms shared with other users, the requests they filed, and their watch progress, likes and listening history, along with their device tokens and uploaded avatar file, and ends their browser sessions. Members of the watch rooms they owned receive room_deleted and their connections close.
          */
         delete: operations["adminDeleteUser"];
         options?: never;
@@ -1734,7 +1734,7 @@ export interface paths {
         get?: never;
         /**
          * Reset a user's password
-         * @description Admin-only endpoint. New passwords must contain at least 9 Unicode characters and at most 72 UTF-8 bytes. Passwords outside these limits are rejected with 400 before hashing. An unknown user returns 404.
+         * @description Admin-only endpoint. New passwords must contain at least 9 Unicode characters and at most 72 UTF-8 bytes. Passwords outside these limits are rejected with 400 before hashing. An unknown user returns 404. A reset signs the user out of every browser session and revokes all of their device tokens; an administrator resetting their own password keeps the session that made the request.
          */
         put: operations["adminResetUserPassword"];
         post?: never;
@@ -4576,8 +4576,9 @@ export interface components {
         QuickConnectInitiateRequest: {
             /** @description Leading and trailing Unicode whitespace is trimmed before storage and validation. The trimmed name must be nonempty and at most 100 UTF-8 bytes (not characters). The raw input may exceed 100 characters when excess characters are trimmed whitespace. */
             device_name: string;
-            /** @description Client platform identifier, e.g. android_tv, android, ios. */
+            /** @description Client platform identifier, e.g. android_tv, android, ios. At most 100 UTF-8 bytes; longer values return 400. */
             platform?: string;
+            /** @description At most 100 UTF-8 bytes; longer values return 400. */
             app_version?: string;
         };
         QuickConnectInitiateData: {
@@ -4637,7 +4638,9 @@ export interface components {
             password: string;
             /** @description Leading and trailing Unicode whitespace is trimmed before storage and validation. The trimmed name must be nonempty and at most 100 UTF-8 bytes (not characters). The raw input may exceed 100 characters when excess characters are trimmed whitespace. */
             device_name: string;
+            /** @description At most 100 UTF-8 bytes; longer values return 400. */
             platform?: string;
+            /** @description At most 100 UTF-8 bytes; longer values return 400. */
             app_version?: string;
         };
         DeviceTokenEnvelope: components["schemas"]["JsonSuccess"] & {
@@ -6471,6 +6474,7 @@ export interface operations {
             200: components["responses"]["MessageSuccess"];
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            429: components["responses"]["TooManyRequests"];
             500: components["responses"]["InternalServerError"];
         };
     };
@@ -6677,6 +6681,7 @@ export interface operations {
             200: components["responses"]["MessageSuccess"];
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            429: components["responses"]["TooManyRequests"];
             500: components["responses"]["InternalServerError"];
         };
     };

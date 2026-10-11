@@ -170,7 +170,9 @@ func (app *Application) LoadSessionReadOnly(next http.Handler) http.Handler {
 	})
 }
 
-// IsAuth rejects unauthenticated requests with 401.
+// IsAuth rejects unauthenticated requests with 401. A cookie session must
+// also belong to a user who still exists and has not changed their password
+// since it was created; a device token is checked by DeviceTokenAuth instead.
 func (app *Application) IsAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if deviceAuthFrom(r.Context()) != nil {
@@ -178,8 +180,12 @@ func (app *Application) IsAuth(next http.Handler) http.Handler {
 			return
 		}
 
-		if !app.SessionManager.Exists(r.Context(), cookieUserID) {
+		userID := app.SessionManager.GetInt64(r.Context(), cookieUserID)
+		if userID == 0 {
 			helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
+			return
+		}
+		if !app.requireCurrentCookieSession(w, r, userID) {
 			return
 		}
 

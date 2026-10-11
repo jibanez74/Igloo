@@ -235,6 +235,12 @@ func newAuthSessionCookie(t *testing.T, app *Application, userID int64) *http.Co
 	}
 
 	app.SessionManager.Put(ctx, cookieUserID, userID)
+	// Record the version a login would, so IsAuth accepts the session while
+	// the user exists; a missing user keeps the stale-session path testable.
+	version, err := app.Queries.GetUserSessionVersion(context.Background(), userID)
+	if err == nil {
+		app.SessionManager.Put(ctx, cookieSessionVersion, version)
+	}
 	token, _, err := app.SessionManager.Commit(ctx)
 	if err != nil {
 		t.Fatalf("commit test session: %v", err)
@@ -243,6 +249,24 @@ func newAuthSessionCookie(t *testing.T, app *Application, userID int64) *http.Co
 	return &http.Cookie{
 		Name:  app.SessionManager.Cookie.Name,
 		Value: token,
+	}
+}
+
+// ensureTestUserRow gives a test's literal user id a row: IsAuth only admits a
+// cookie session whose user exists, and many tests pick an id such as 42 for
+// an owner they never otherwise need.
+func ensureTestUserRow(t *testing.T, app *Application, userID int64) {
+	t.Helper()
+
+	_, err := app.DB.Exec(
+		`INSERT OR IGNORE INTO users (id, name, email, password) VALUES (?, ?, ?, ?)`,
+		userID,
+		fmt.Sprintf("Test User %d", userID),
+		fmt.Sprintf("test-user-%d@example.test", userID),
+		"unused",
+	)
+	if err != nil {
+		t.Fatalf("ensure user %d: %v", userID, err)
 	}
 }
 
@@ -262,6 +286,7 @@ func authenticatedRouter(t *testing.T, app *Application, userID int64) http.Hand
 
 	var cookie *http.Cookie
 	if userID != 0 {
+		ensureTestUserRow(t, app, userID)
 		cookie = newAuthSessionCookie(t, app, userID)
 	}
 

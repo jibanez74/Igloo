@@ -12,6 +12,9 @@ CREATE TABLE IF NOT EXISTS users (
   is_admin BOOLEAN NOT NULL DEFAULT false,
   avatar TEXT,
   pin TEXT CHECK (pin GLOB '[0-9][0-9][0-9][0-9]'),
+  -- Copied into each cookie session at login; a password change bumps it, so
+  -- every session from before the change stops matching.
+  session_version INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

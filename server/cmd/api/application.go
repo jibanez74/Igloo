@@ -87,6 +87,7 @@ type Application struct {
 	AuthLimiter                   *rateLimiter
 	DeviceLastSeen                *cache.Cache
 	DeviceAuthCache               *cache.Cache
+	SessionVersionCache           *cache.Cache
 	WatchRoomAuthCache            *watchRoomAuthCache
 	StreamFileCache               *generationCache[streamFile]
 	MovieStreamsCache             *generationCache[movieStreams]
@@ -376,6 +377,10 @@ func (app *Application) initRuntimeCaches() {
 
 	// Keeps bearer-token resolution off SQLite on the media hot path.
 	app.DeviceAuthCache = cache.New(deviceAuthCacheTTL, deviceAuthCacheTTL)
+
+	// Keeps the per-request session version check off SQLite, like the
+	// session reads themselves.
+	app.SessionVersionCache = cache.New(sessionVersionCacheTTL, sessionVersionCacheSweep)
 
 	app.WatchRoomAuthCache = newWatchRoomAuthCache()
 

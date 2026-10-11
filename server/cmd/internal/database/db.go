@@ -165,6 +165,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.deleteDeviceForUserStmt, err = db.PrepareContext(ctx, deleteDeviceForUser); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteDeviceForUser: %w", err)
 	}
+	if q.deleteDevicesForUserStmt, err = db.PrepareContext(ctx, deleteDevicesForUser); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteDevicesForUser: %w", err)
+	}
 	if q.deleteDevicesUnusedSinceStmt, err = db.PrepareContext(ctx, deleteDevicesUnusedSince); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteDevicesUnusedSince: %w", err)
 	}
@@ -677,6 +680,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.getUserRecentlyPlayedStmt, err = db.PrepareContext(ctx, getUserRecentlyPlayed); err != nil {
 		return nil, fmt.Errorf("error preparing query GetUserRecentlyPlayed: %w", err)
+	}
+	if q.getUserSessionVersionStmt, err = db.PrepareContext(ctx, getUserSessionVersion); err != nil {
+		return nil, fmt.Errorf("error preparing query GetUserSessionVersion: %w", err)
 	}
 	if q.getUserSummaryStmt, err = db.PrepareContext(ctx, getUserSummary); err != nil {
 		return nil, fmt.Errorf("error preparing query GetUserSummary: %w", err)
@@ -1330,6 +1336,11 @@ func (q *Queries) Close() error {
 	if q.deleteDeviceForUserStmt != nil {
 		if cerr := q.deleteDeviceForUserStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing deleteDeviceForUserStmt: %w", cerr)
+		}
+	}
+	if q.deleteDevicesForUserStmt != nil {
+		if cerr := q.deleteDevicesForUserStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteDevicesForUserStmt: %w", cerr)
 		}
 	}
 	if q.deleteDevicesUnusedSinceStmt != nil {
@@ -2187,6 +2198,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getUserRecentlyPlayedStmt: %w", cerr)
 		}
 	}
+	if q.getUserSessionVersionStmt != nil {
+		if cerr := q.getUserSessionVersionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getUserSessionVersionStmt: %w", cerr)
+		}
+	}
 	if q.getUserSummaryStmt != nil {
 		if cerr := q.getUserSummaryStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getUserSummaryStmt: %w", cerr)
@@ -2963,6 +2979,7 @@ type Queries struct {
 	deleteAlbumStmt                             *sql.Stmt
 	deleteDeviceStmt                            *sql.Stmt
 	deleteDeviceForUserStmt                     *sql.Stmt
+	deleteDevicesForUserStmt                    *sql.Stmt
 	deleteDevicesUnusedSinceStmt                *sql.Stmt
 	deleteMergedMusicAlbumStmt                  *sql.Stmt
 	deleteMergedMusicArtistStmt                 *sql.Stmt
@@ -3134,6 +3151,7 @@ type Queries struct {
 	getUserPinStmt                              *sql.Stmt
 	getUserPreferencesStmt                      *sql.Stmt
 	getUserRecentlyPlayedStmt                   *sql.Stmt
+	getUserSessionVersionStmt                   *sql.Stmt
 	getUserSummaryStmt                          *sql.Stmt
 	getUserTopAlbumsStmt                        *sql.Stmt
 	getUserTopGenresStmt                        *sql.Stmt
@@ -3325,6 +3343,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		deleteAlbumStmt:                             q.deleteAlbumStmt,
 		deleteDeviceStmt:                            q.deleteDeviceStmt,
 		deleteDeviceForUserStmt:                     q.deleteDeviceForUserStmt,
+		deleteDevicesForUserStmt:                    q.deleteDevicesForUserStmt,
 		deleteDevicesUnusedSinceStmt:                q.deleteDevicesUnusedSinceStmt,
 		deleteMergedMusicAlbumStmt:                  q.deleteMergedMusicAlbumStmt,
 		deleteMergedMusicArtistStmt:                 q.deleteMergedMusicArtistStmt,
@@ -3496,6 +3515,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getUserPinStmt:                              q.getUserPinStmt,
 		getUserPreferencesStmt:                      q.getUserPreferencesStmt,
 		getUserRecentlyPlayedStmt:                   q.getUserRecentlyPlayedStmt,
+		getUserSessionVersionStmt:                   q.getUserSessionVersionStmt,
 		getUserSummaryStmt:                          q.getUserSummaryStmt,
 		getUserTopAlbumsStmt:                        q.getUserTopAlbumsStmt,
 		getUserTopGenresStmt:                        q.getUserTopGenresStmt,

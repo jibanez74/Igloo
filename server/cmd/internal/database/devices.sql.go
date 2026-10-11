@@ -88,6 +88,17 @@ func (q *Queries) DeleteDeviceForUser(ctx context.Context, arg DeleteDeviceForUs
 	return result.RowsAffected()
 }
 
+const deleteDevicesForUser = `-- name: DeleteDevicesForUser :exec
+DELETE FROM devices
+WHERE user_id = ?
+`
+
+// A password change or reset revokes every device token the user holds.
+func (q *Queries) DeleteDevicesForUser(ctx context.Context, userID int64) error {
+	_, err := q.exec(ctx, q.deleteDevicesForUserStmt, deleteDevicesForUser, userID)
+	return err
+}
+
 const deleteDevicesUnusedSince = `-- name: DeleteDevicesUnusedSince :execrows
 DELETE FROM devices
 WHERE last_used_at < ?1
