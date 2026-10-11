@@ -44,6 +44,11 @@ func (app *Application) InitiateQuickConnect(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	if err := validateDeviceMetadata(request.Platform, request.AppVersion); err != nil {
+		helpers.ErrorJSON(w, err, http.StatusBadRequest)
+		return
+	}
+
 	code, secret, err := app.QuickConnect.Initiate(request.DeviceName, request.Platform, request.AppVersion)
 	if err != nil {
 		if errors.Is(err, errQuickConnectCapacityReached) {

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -142,8 +143,10 @@ type UpdateUserEmailRequest struct {
 	Email string `json:"email"`
 }
 
+// UpdateUserEmail takes a cookie session only: the email is the sign-in name,
+// so a stolen device token must not be able to move the account.
 func (app *Application) UpdateUserEmail(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
+	userID, ok := app.requireSessionUserID(w, r)
 	if !ok {
 		return
 	}
@@ -190,8 +193,10 @@ type UpdateUserPasswordRequest struct {
 	NewPassword     string `json:"new_password"`
 }
 
+// UpdateUserPassword takes a cookie session only: a stolen device token must
+// not be able to try passwords or lock the owner out.
 func (app *Application) UpdateUserPassword(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
+	userID, ok := app.requireSessionUserID(w, r)
 	if !ok {
 		return
 	}
@@ -223,6 +228,13 @@ func (app *Application) UpdateUserPassword(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// The current-password check is a password oracle, so it shares the
+	// login budget's size, per user rather than per address.
+	if !app.AuthLimiter.Allow("password:"+strconv.FormatInt(userID, 10), loginAttemptLimit, loginAttemptWindow) {
+		helpers.ErrorJSON(w, errors.New(tooManyAttemptsMessage), http.StatusTooManyRequests)
+		return
+	}
+
 	match, err := helpers.PasswordMatches(req.CurrentPassword, user.Password)
 	if err != nil {
 		app.Logger.Error(comparePasswordHashLogMessage, "error", err, "user_id", userID)
@@ -242,15 +254,13 @@ func (app *Application) UpdateUserPassword(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	err = app.Queries.UpdateUserPassword(r.Context(), database.UpdateUserPasswordParams{
-		Password: hashedPassword,
-		ID:       userID,
-	})
+	version, err := app.changePassword(r.Context(), userID, hashedPassword)
 	if err != nil {
 		app.Logger.Error("failed to update user password", "error", err, "user_id", userID)
 		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
+	app.keepSessionAfterPasswordChange(r, userID, version)
 
 	app.Logger.Info("user password updated successfully", "user_id", userID)
 
@@ -520,8 +530,10 @@ func (app *Application) deleteUploadedAvatar(userID int64, avatarURL string) {
 	}
 }
 
+// DeleteUserAccount takes a cookie session only, like the other account
+// changes a stolen device token must not reach.
 func (app *Application) DeleteUserAccount(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
+	userID, ok := app.requireSessionUserID(w, r)
 	if !ok {
 		return
 	}
@@ -550,6 +562,7 @@ func (app *Application) DeleteUserAccount(w http.ResponseWriter, r *http.Request
 	}
 
 	app.endDeletedOwnerRooms(roomIDs)
+	app.forgetDeletedSessionUser(userID)
 	app.forgetUserDevices(userID)
 
 	if user.Avatar.Valid {

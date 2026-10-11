@@ -232,15 +232,16 @@ type Subtitle struct {
 }
 
 type User struct {
-	ID        int64          `json:"id"`
-	Name      string         `json:"name"`
-	Email     string         `json:"email"`
-	Password  string         `json:"password"`
-	IsAdmin   bool           `json:"is_admin"`
-	Avatar    sql.NullString `json:"avatar"`
-	Pin       sql.NullString `json:"pin"`
-	CreatedAt string         `json:"created_at"`
-	UpdatedAt string         `json:"updated_at"`
+	ID             int64          `json:"id"`
+	Name           string         `json:"name"`
+	Email          string         `json:"email"`
+	Password       string         `json:"password"`
+	IsAdmin        bool           `json:"is_admin"`
+	Avatar         sql.NullString `json:"avatar"`
+	Pin            sql.NullString `json:"pin"`
+	SessionVersion int64          `json:"session_version"`
+	CreatedAt      string         `json:"created_at"`
+	UpdatedAt      string         `json:"updated_at"`
 }
 
 type VideoStream struct {

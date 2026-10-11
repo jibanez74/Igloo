@@ -3,7 +3,7 @@
   "info": {
     "title": "Igloo API",
     "version": "0.1.0",
-    "description": "HTTP API for the Igloo self-hosted media center. Most JSON endpoints return a shared envelope with error, optional message, and optional data fields. Device bearer tokens issued via Quick Connect or device login (Authorization: Bearer igd_...) are accepted on most routes that accept cookieAuth, except device-management, Quick Connect lookup/approval, and PIN retrieval endpoints, which require a cookie session. See each operation's security block for route-specific requirements. Authentication and session middleware failures return sanitized JSON error envelopes even on media, static-file, subtitle, image-proxy, HLS, and WebSocket routes. HEAD responses never include a body, including errors; their Content-Type describes the corresponding GET representation."
+    "description": "HTTP API for the Igloo self-hosted media center. Most JSON endpoints return a shared envelope with error, optional message, and optional data fields. Device bearer tokens issued via Quick Connect or device login (Authorization: Bearer igd_...) are accepted on most routes that accept cookieAuth, except device-management, Quick Connect lookup/approval, PIN retrieval, account deletion, and email and password changes, which require a cookie session. See each operation's security block for route-specific requirements. Authentication and session middleware failures return sanitized JSON error envelopes even on media, static-file, subtitle, image-proxy, HLS, and WebSocket routes. HEAD responses never include a body, including errors; their Content-Type describes the corresponding GET representation."
   },
   "servers": [
     {
@@ -141,11 +141,14 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
           }
         },
-        "description": "The email is matched exactly as sent: it is not trimmed and the match is case-sensitive. Passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401."
+        "description": "The email is matched exactly as sent: it is not trimmed and the match is case-sensitive. Passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401. Rate limited to 10 requests per 5 minutes per client IP (the TCP peer address, not forwarded headers), shared with device login."
       }
     },
     "/api/auth/user": {
@@ -217,7 +220,7 @@
             "$ref": "#/components/responses/InternalServerError"
           }
         },
-        "description": "The email is matched exactly as sent: it is not trimmed and the match is case-sensitive. Passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401. Rate limited to 10 requests per 5 minutes per client IP (the TCP peer address, not forwarded headers)."
+        "description": "The email is matched exactly as sent: it is not trimmed and the match is case-sensitive. Passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401. Rate limited to 10 requests per 5 minutes per client IP (the TCP peer address, not forwarded headers), shared with browser login."
       }
     },
     "/api/quick-connect/initiate": {
@@ -507,6 +510,11 @@
         ],
         "summary": "Update the current user's email",
         "operationId": "updateUserEmail",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
         "requestBody": {
           "$ref": "#/components/requestBodies/UpdateUserEmailRequest"
         },
@@ -527,7 +535,7 @@
             "$ref": "#/components/responses/InternalServerError"
           }
         },
-        "description": "The email is trimmed and stored without format validation. An address another account already uses (case-sensitive comparison) returns 409."
+        "description": "Session-authenticated users only: requests carrying a device bearer token are rejected with 401. The email is trimmed and stored without format validation. An address another account already uses (case-sensitive comparison) returns 409."
       }
     },
     "/api/user/password": {
@@ -537,6 +545,11 @@
         ],
         "summary": "Update the current user's password",
         "operationId": "updateUserPassword",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
         "requestBody": {
           "$ref": "#/components/requestBodies/UpdateUserPasswordRequest"
         },
@@ -550,11 +563,14 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
           }
         },
-        "description": "New passwords must contain at least 9 Unicode characters and at most 72 UTF-8 bytes. Passwords outside these limits are rejected with 400 before hashing. Current passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401."
+        "description": "Session-authenticated users only: requests carrying a device bearer token are rejected with 401. New passwords must contain at least 9 Unicode characters and at most 72 UTF-8 bytes. Passwords outside these limits are rejected with 400 before hashing. Current passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401. The current-password check is limited to 10 attempts per 5 minutes per user (429). A successful change signs out every other browser session of the account and revokes all of its device tokens; the session that made the change continues under a renewed session cookie."
       }
     },
     "/api/user/pin": {
@@ -749,8 +765,13 @@
           "User"
         ],
         "summary": "Delete the current user's account",
-        "description": "Admin accounts cannot delete themselves through this endpoint. Deleting the account also deletes everything it owns, including playlists and watch rooms shared with other users, the requests it filed, and its watch progress, likes and listening history; deletes its device tokens and uploaded avatar file; and ends the current session. Members of the watch rooms it owned receive room_deleted and their connections close.",
+        "description": "Session-authenticated users only: requests carrying a device bearer token are rejected with 401. Admin accounts cannot delete themselves through this endpoint. Deleting the account also deletes everything it owns, including playlists and watch rooms shared with other users, the requests it filed, and its watch progress, likes and listening history; deletes its device tokens and uploaded avatar file; and ends all of its browser sessions. Members of the watch rooms it owned receive room_deleted and their connections close.",
         "operationId": "deleteUserAccount",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "$ref": "#/components/responses/MessageSuccess"
@@ -3953,7 +3974,7 @@
           "Admin Users"
         ],
         "summary": "Delete a user",
-        "description": "Admin-only endpoint. Returns 403 for deleting your own account or the last administrator. Deleting a user also deletes everything they own, including playlists and watch rooms shared with other users, the requests they filed, and their watch progress, likes and listening history, along with their device tokens and uploaded avatar file. Members of the watch rooms they owned receive room_deleted and their connections close.",
+        "description": "Admin-only endpoint. Returns 403 for deleting your own account or the last administrator. Deleting a user also deletes everything they own, including playlists and watch rooms shared with other users, the requests they filed, and their watch progress, likes and listening history, along with their device tokens and uploaded avatar file, and ends their browser sessions. Members of the watch rooms they owned receive room_deleted and their connections close.",
         "operationId": "adminDeleteUser",
         "parameters": [
           {
@@ -3988,7 +4009,7 @@
           "Admin Users"
         ],
         "summary": "Reset a user's password",
-        "description": "Admin-only endpoint. New passwords must contain at least 9 Unicode characters and at most 72 UTF-8 bytes. Passwords outside these limits are rejected with 400 before hashing. An unknown user returns 404.",
+        "description": "Admin-only endpoint. New passwords must contain at least 9 Unicode characters and at most 72 UTF-8 bytes. Passwords outside these limits are rejected with 400 before hashing. An unknown user returns 404. A reset signs the user out of every browser session and revokes all of their device tokens; an administrator resetting their own password keeps the session that made the request.",
         "operationId": "adminResetUserPassword",
         "parameters": [
           {
@@ -6148,7 +6169,7 @@
         "type": "apiKey",
         "in": "cookie",
         "name": "session",
-        "description": "Server-side session cookie set by POST /api/auth/login. Sessions expire 30 days after login."
+        "description": "Server-side session cookie set by POST /api/auth/login. Sessions expire 30 days after login. A session stops working, with 401, once its user is deleted or the account's password changes (except the session that made the change)."
       },
       "bearerAuth": {
         "type": "http",
@@ -16048,10 +16069,11 @@
           },
           "platform": {
             "type": "string",
-            "description": "Client platform identifier, e.g. android_tv, android, ios."
+            "description": "Client platform identifier, e.g. android_tv, android, ios. At most 100 UTF-8 bytes; longer values return 400."
           },
           "app_version": {
-            "type": "string"
+            "type": "string",
+            "description": "At most 100 UTF-8 bytes; longer values return 400."
           }
         },
         "additionalProperties": false
@@ -16274,10 +16296,12 @@
             "description": "Leading and trailing Unicode whitespace is trimmed before storage and validation. The trimmed name must be nonempty and at most 100 UTF-8 bytes (not characters). The raw input may exceed 100 characters when excess characters are trimmed whitespace."
           },
           "platform": {
-            "type": "string"
+            "type": "string",
+            "description": "At most 100 UTF-8 bytes; longer values return 400."
           },
           "app_version": {
-            "type": "string"
+            "type": "string",
+            "description": "At most 100 UTF-8 bytes; longer values return 400."
           }
         },
         "additionalProperties": false
