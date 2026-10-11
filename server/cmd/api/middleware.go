@@ -284,8 +284,14 @@ func (app *Application) RequireAdmin(next http.Handler) http.Handler {
 		}
 
 		isAdmin, err := app.Queries.GetUserIsAdmin(r.Context(), userID)
-		if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			// The session outlived its user.
 			helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
+			return
+		}
+		if err != nil {
+			app.Logger.Error("failed to check admin status", "error", err, "user_id", userID)
+			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 			return
 		}
 

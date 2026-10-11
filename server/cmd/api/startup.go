@@ -186,12 +186,22 @@ func (app *Application) InitSettings(ctx context.Context) error {
 
 	app.Logger.Info("no settings found, creating default settings...")
 
+	// The seed is the one device value the Settings validation never sees, and
+	// the playback settings answer it back inside a fixed enum.
+	device := strings.ToLower(app.Config.HardwareAccelerationDevice)
+	if !validateHardwareAccelerationDevice(device) {
+		app.Logger.Warn("HARDWARE_ACCELERATION_DEVICE is not cpu, apple, nvidia, or intel; seeding cpu",
+			"value", app.Config.HardwareAccelerationDevice,
+		)
+		device = helpers.HARDWARE_ACCELERATION_DEVICE_CPU
+	}
+
 	params := database.CreateSettingsParams{
 		TmdbKey:                    helpers.NullString(app.Config.TmdbAPIKey),
 		JellyfinApiKey:             helpers.NullString(app.Config.JellyfinAPIKey),
 		SpotifyClientID:            helpers.NullString(app.Config.SpotifyClientID),
 		SpotifyClientSecret:        helpers.NullString(app.Config.SpotifyClientSecret),
-		HardwareAccelerationDevice: helpers.NullString(app.Config.HardwareAccelerationDevice),
+		HardwareAccelerationDevice: helpers.NullString(device),
 		EnableWatcher:              app.Config.EnableWatcher,
 		DownloadImages:             app.Config.DownloadImages,
 		MoviesDir:                  helpers.NullString(app.Config.MoviesDir),

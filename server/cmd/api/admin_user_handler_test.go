@@ -3,9 +3,12 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -156,5 +159,89 @@ func TestAdminDeleteUser_DeletesAdminWhenAnotherAdminExists(t *testing.T) {
 	}
 	if count != 1 {
 		t.Fatalf("expected 1 remaining admin, got %d", count)
+	}
+}
+
+// Required body fields must be sent: a missing is_admin used to read as
+// false and demote an administrator, a missing pin removed the PIN, and a
+// missing avatar cleared it.
+func TestRequiredUserFieldsAreNotDefaulted(t *testing.T) {
+	app := setupSessionTestApp(t)
+	admin := createTestUser(t, app, "Admin", "required-admin@example.com", true)
+	other := createTestUser(t, app, "Other Admin", "required-other@example.com", true)
+	adminRouter := authenticatedRouter(t, app, admin.ID)
+	longEmail := strings.Repeat("a", 256)
+
+	reject := func(t *testing.T, handler http.Handler, operationID, method, target, body string) {
+		t.Helper()
+		req := newOpenAPIJSONRequest(method, target, body)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		assertOpenAPIResponse(t, operationID, req, w)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("%s %s %s status = %d, want 400: %s", method, target, body, w.Code, w.Body.String())
+		}
+	}
+
+	otherPath := "/api/admin/users/" + strconv.FormatInt(other.ID, 10)
+	reject(t, adminRouter, "adminUpdateUser", http.MethodPatch, otherPath, `{"name":"Other Admin","email":"required-other@example.com"}`)
+	reject(t, adminRouter, "adminUpdateUser", http.MethodPatch, otherPath, `{"name":"Other Admin","email":"required-other@example.com","is_admin":null}`)
+	reject(t, adminRouter, "adminUpdateUser", http.MethodPatch, otherPath, fmt.Sprintf(`{"name":"Other Admin","email":%q,"is_admin":true}`, longEmail))
+	stored, err := app.Queries.GetUser(context.Background(), other.ID)
+	if err != nil || !stored.IsAdmin {
+		t.Fatalf("other admin = %+v (%v), want still an administrator", stored, err)
+	}
+
+	reject(t, adminRouter, "adminCreateUser", http.MethodPost, "/api/admin/users", `{"name":"New","email":"required-new@example.com","password":"long-enough-password"}`)
+	reject(t, adminRouter, "adminCreateUser", http.MethodPost, "/api/admin/users", fmt.Sprintf(`{"name":"New","email":%q,"password":"long-enough-password","is_admin":false}`, longEmail))
+	_, err = app.Queries.GetUserByEmail(context.Background(), "required-new@example.com")
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("rejected create stored a user: %v", err)
+	}
+
+	member := createTestUser(t, app, "Member", "required-member@example.com", false)
+	memberRouter := authenticatedRouter(t, app, member.ID)
+	serveOpenAPIExchange(t, memberRouter, "updateUserPin", newOpenAPIJSONRequest(http.MethodPut, "/api/user/pin", `{"pin":"1234"}`), http.StatusOK)
+	serveOpenAPIExchange(t, memberRouter, "updateUserAvatar", newOpenAPIJSONRequest(http.MethodPut, "/api/user/avatar", `{"avatar":"https://example.com/a.png"}`), http.StatusOK)
+	reject(t, memberRouter, "updateUserPin", http.MethodPut, "/api/user/pin", `{"current_pin":"1234"}`)
+	reject(t, memberRouter, "updateUserAvatar", http.MethodPut, "/api/user/avatar", `{}`)
+	stored, err = app.Queries.GetUser(context.Background(), member.ID)
+	if err != nil || stored.Pin.String != "1234" || stored.Avatar.String != "https://example.com/a.png" {
+		t.Fatalf("member = %+v (%v), want the PIN and avatar kept", stored, err)
+	}
+}
+
+// A user row that is gone means a stale session (401); any other failure to
+// read the admin flag is the server's (500), not the caller's.
+func TestRequireAdmin_SeparatesStaleSessionsFromDatabaseFailures(t *testing.T) {
+	app := setupSessionTestApp(t)
+	admin := createTestUser(t, app, "Admin", "require-admin@example.com", true)
+	gone := createTestUser(t, app, "Gone", "require-gone@example.com", false)
+	adminRouter := authenticatedRouter(t, app, admin.ID)
+	goneRouter := authenticatedRouter(t, app, gone.ID)
+
+	err := app.Queries.DeleteUser(context.Background(), gone.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/users", nil)
+	w := httptest.NewRecorder()
+	goneRouter.ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("deleted user status = %d, want 401: %s", w.Code, w.Body.String())
+	}
+
+	// The session read is served from the session cache, so only the admin
+	// check reaches the closed database.
+	err = app.DB.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	req = httptest.NewRequest(http.MethodGet, "/api/admin/users", nil)
+	w = httptest.NewRecorder()
+	adminRouter.ServeHTTP(w, req)
+	assertOpenAPIExchange(t, "adminGetUsers", req, w)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("database failure status = %d, want 500: %s", w.Code, w.Body.String())
 	}
 }

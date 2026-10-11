@@ -195,13 +195,7 @@ export type MediaCapabilityBadge = {
   description: string;
 };
 
-export type ChapterType = {
-  id: number;
-  title: string;
-  start_time: number;
-  thumb: NullableString;
-  movie_id: NullableInt64;
-};
+export type ChapterType = components["schemas"]["Chapter"];
 
 // TMDB search result (from POST /api/tmdb/movies/search)
 export type TmdbSearchResultType = {

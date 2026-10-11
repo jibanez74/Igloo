@@ -253,11 +253,10 @@ WHERE file_id = ?;
 INSERT INTO show_chapters (
   file_id,
   title,
-  start_time,
-  thumb
+  start_time
 )
 VALUES
-  (?, ?, ?, ?);
+  (?, ?, ?);
 
 -- name: UpsertNetwork :one
 INSERT INTO networks (tmdb_id, name, logo, country) VALUES (?, ?, ?, ?) ON CONFLICT (tmdb_id) DO UPDATE SET name = excluded.name, logo = excluded.logo, country = excluded.country RETURNING *;
@@ -642,7 +641,6 @@ SELECT
   id,
   title,
   start_time,
-  thumb,
   file_id
 FROM show_chapters
 WHERE file_id = ?

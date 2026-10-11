@@ -39,11 +39,10 @@ type AudioStream struct {
 }
 
 type Chapter struct {
-	ID        int64          `json:"id"`
-	Title     string         `json:"title"`
-	StartTime int64          `json:"start_time"`
-	Thumb     sql.NullString `json:"thumb"`
-	MovieID   int64          `json:"movie_id"`
+	ID        int64  `json:"id"`
+	Title     string `json:"title"`
+	StartTime int64  `json:"start_time"`
+	MovieID   int64  `json:"movie_id"`
 }
 
 type Movie struct {
@@ -170,11 +169,10 @@ type Show struct {
 }
 
 type ShowChapter struct {
-	ID        int64          `json:"id"`
-	Title     string         `json:"title"`
-	StartTime int64          `json:"start_time"`
-	Thumb     sql.NullString `json:"thumb"`
-	FileID    int64          `json:"file_id"`
+	ID        int64  `json:"id"`
+	Title     string `json:"title"`
+	StartTime int64  `json:"start_time"`
+	FileID    int64  `json:"file_id"`
 }
 
 type ShowEpisode struct {

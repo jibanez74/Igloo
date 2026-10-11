@@ -371,7 +371,9 @@ CREATE INDEX IF NOT EXISTS idx_movies_tmdb_id ON movies (tmdb_id);
 -- Keep this expression and tie-breaker aligned with GetMoviesLibraryAsc/Desc.
 CREATE INDEX IF NOT EXISTS idx_movies_title ON movies (LOWER(title), id);
 
-CREATE INDEX IF NOT EXISTS idx_movies_created_at ON movies (created_at DESC);
+-- Ascending, like idx_shows_created_at: read backwards it yields created_at
+-- DESC with rowid DESC, the latest row's whole ORDER BY.
+CREATE INDEX IF NOT EXISTS idx_movies_created_at ON movies (created_at);
 
 -- Stream indices are absolute ffprobe indices, including gaps from excluded streams.
 CREATE TABLE IF NOT EXISTS video_streams (
@@ -466,7 +468,6 @@ CREATE TABLE IF NOT EXISTS chapters (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   title TEXT NOT NULL,
   start_time INTEGER NOT NULL,
-  thumb TEXT,
   movie_id INTEGER NOT NULL,
   FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE ON UPDATE CASCADE
 );
@@ -1437,7 +1438,6 @@ CREATE TABLE
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
     start_time INTEGER NOT NULL,
-    thumb TEXT,
     file_id INTEGER NOT NULL,
     FOREIGN KEY (file_id) REFERENCES show_files (id) ON DELETE CASCADE ON UPDATE CASCADE
   );

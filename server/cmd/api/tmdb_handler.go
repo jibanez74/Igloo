@@ -205,6 +205,11 @@ func (app *Application) searchTmdbMovies(ctx context.Context, payload tmdbSearch
 		movie := &tmdb.TmdbMovie{TmdbID: payload.TmdbID}
 
 		err := app.Tmdb.GetTmdbMovieByID(ctx, movie)
+		if tmdb.IsNotFound(err) {
+			// An id TMDB does not know matches nothing, like a title that
+			// finds nothing.
+			return []tmdbSearchResult{}, nil
+		}
 		if err != nil {
 			return nil, errors.New("failed to fetch movie from TMDB")
 		}
@@ -313,8 +318,7 @@ func (app *Application) GetMovieByTmdbID(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		// An id TMDB does not know is the reader's mistake, not an outage: answer
 		// 404 so the client words it as a missing movie rather than a failure.
-		var status *tmdb.StatusError
-		if errors.As(err, &status) && status.StatusCode == http.StatusNotFound {
+		if tmdb.IsNotFound(err) {
 			helpers.ErrorJSON(w, errors.New("movie not found on tmdb"), http.StatusNotFound)
 			return
 		}

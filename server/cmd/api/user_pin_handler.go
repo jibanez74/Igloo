@@ -40,8 +40,9 @@ func (app *Application) allowPinAttempt(userID int64) bool {
 }
 
 type UpdateUserPinRequest struct {
-	Pin        string `json:"pin"`
-	CurrentPin string `json:"current_pin"`
+	// A pointer so a missing pin is a 400 rather than a silent removal.
+	Pin        *string `json:"pin"`
+	CurrentPin string  `json:"current_pin"`
 }
 
 // UpdateUserPin sets, changes, or removes the profile PIN. An empty pin
@@ -60,9 +61,15 @@ func (app *Application) UpdateUserPin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	removing := req.Pin == ""
+	if req.Pin == nil {
+		helpers.ErrorJSON(w, errors.New("pin is required"), http.StatusBadRequest)
+		return
+	}
+	newPin := *req.Pin
+
+	removing := newPin == ""
 	if !removing {
-		if err := validatePin(req.Pin); err != nil {
+		if err := validatePin(newPin); err != nil {
 			helpers.ErrorJSON(w, err, http.StatusBadRequest)
 			return
 		}
@@ -96,7 +103,7 @@ func (app *Application) UpdateUserPin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	pinValue := sql.NullString{String: req.Pin, Valid: !removing}
+	pinValue := sql.NullString{String: newPin, Valid: !removing}
 
 	user, err := app.Queries.UpdateUserPin(r.Context(), database.UpdateUserPinParams{
 		Pin: pinValue,

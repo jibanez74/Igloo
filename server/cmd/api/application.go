@@ -298,6 +298,17 @@ func (app *Application) invalidateDeletedWatchRooms(roomIDs []int64) {
 	}
 }
 
+// endDeletedOwnerRooms runs after a user deletion commits. The cascade removed
+// the rooms the user owned, so their members get room_deleted, and each room's
+// HLS session is torn down here: unlike a deleted movie's, nothing else would
+// stop it before its 30-minute idle expiry.
+func (app *Application) endDeletedOwnerRooms(roomIDs []int64) {
+	app.invalidateDeletedWatchRooms(roomIDs)
+	for _, roomID := range roomIDs {
+		app.CleanupRoomHLSSession(roomID)
+	}
+}
+
 // invalidateCommittedMovie drops everything derived from one movie's rows after
 // the scanner commits a rescan or deletion. It is a method rather than a closure so
 // the test harness can wire the same list; a cache missing from here serves

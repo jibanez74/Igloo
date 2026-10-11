@@ -108,7 +108,7 @@ LEFT JOIN albums AS a
 LEFT JOIN musicians AS m
   ON t.musician_id = m.id
 WHERE pt.playlist_id = ?
-ORDER BY pt.position ASC
+ORDER BY pt.position ASC, pt.id ASC
 LIMIT ?
 OFFSET ?
 `
@@ -136,6 +136,8 @@ type GetPlaylistTracksInfiniteRow struct {
 	MusicianName    sql.NullString `json:"musician_name"`
 }
 
+// A reorder that leaves tracks out can tie their positions with listed ones;
+// id keeps tied tracks in the order they were added, so pages stay stable.
 func (q *Queries) GetPlaylistTracksInfinite(ctx context.Context, arg GetPlaylistTracksInfiniteParams) ([]GetPlaylistTracksInfiniteRow, error) {
 	rows, err := q.query(ctx, q.getPlaylistTracksInfiniteStmt, getPlaylistTracksInfinite, arg.PlaylistID, arg.Limit, arg.Offset)
 	if err != nil {

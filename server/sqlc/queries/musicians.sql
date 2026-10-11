@@ -49,6 +49,7 @@ ORDER BY m.name ASC;
 -- name: GetMusiciansAlphabetical :many
 -- Returns musicians sorted alphabetically by sort_name with pagination.
 -- Non-alphabetic names (numbers, symbols) are grouped under '#' and sorted first.
+-- sort_name is not unique, so id breaks ties and pages stay stable.
 SELECT
   m.id,
   m.name,
@@ -83,7 +84,8 @@ ORDER BY
     WHEN UPPER(SUBSTR(m.sort_name, 1, 1)) BETWEEN 'A' AND 'Z' THEN UPPER(SUBSTR(m.sort_name, 1, 1))
     ELSE '#'
   END,
-  m.sort_name
+  m.sort_name,
+  m.id
 LIMIT ?
 OFFSET ?;
 

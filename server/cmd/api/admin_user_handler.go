@@ -67,7 +67,8 @@ type AdminCreateUserRequest struct {
 	Name     string `json:"name"`
 	Email    string `json:"email"`
 	Password string `json:"password"`
-	IsAdmin  bool   `json:"is_admin"`
+	// A pointer so a missing flag is a 400 instead of a silent false.
+	IsAdmin *bool `json:"is_admin"`
 }
 
 func (app *Application) AdminCreateUser(w http.ResponseWriter, r *http.Request) {
@@ -90,8 +91,13 @@ func (app *Application) AdminCreateUser(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if req.Email == "" {
-		helpers.ErrorJSON(w, errors.New(emailRequiredMessage), http.StatusBadRequest)
+	if err := validateUserEmail(req.Email); err != nil {
+		helpers.ErrorJSON(w, err, http.StatusBadRequest)
+		return
+	}
+
+	if req.IsAdmin == nil {
+		helpers.ErrorJSON(w, errors.New(isAdminRequiredMessage), http.StatusBadRequest)
 		return
 	}
 
@@ -111,7 +117,7 @@ func (app *Application) AdminCreateUser(w http.ResponseWriter, r *http.Request) 
 		Name:     req.Name,
 		Email:    req.Email,
 		Password: hashedPassword,
-		IsAdmin:  req.IsAdmin,
+		IsAdmin:  *req.IsAdmin,
 		Avatar:   sql.NullString{},
 	})
 	if err != nil {
@@ -140,7 +146,7 @@ func (app *Application) AdminCreateUser(w http.ResponseWriter, r *http.Request) 
 type AdminUpdateUserRequest struct {
 	Name    string `json:"name"`
 	Email   string `json:"email"`
-	IsAdmin bool   `json:"is_admin"`
+	IsAdmin *bool  `json:"is_admin"`
 }
 
 func (app *Application) AdminUpdateUser(w http.ResponseWriter, r *http.Request) {
@@ -170,14 +176,21 @@ func (app *Application) AdminUpdateUser(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if req.Email == "" {
-		helpers.ErrorJSON(w, errors.New(emailRequiredMessage), http.StatusBadRequest)
+	if err := validateUserEmail(req.Email); err != nil {
+		helpers.ErrorJSON(w, err, http.StatusBadRequest)
 		return
 	}
 
+	// Missing must not read as false: that would demote another admin.
+	if req.IsAdmin == nil {
+		helpers.ErrorJSON(w, errors.New(isAdminRequiredMessage), http.StatusBadRequest)
+		return
+	}
+	isAdmin := *req.IsAdmin
+
 	// Do not let an admin lock themselves out.
 	currentUserID := app.userIDFromRequest(r)
-	if targetID == currentUserID && !req.IsAdmin {
+	if targetID == currentUserID && !isAdmin {
 		helpers.ErrorJSON(w, errors.New("you cannot remove your own admin status"), http.StatusForbidden)
 		return
 	}
@@ -204,7 +217,7 @@ func (app *Application) AdminUpdateUser(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Keep at least one admin account.
-	if !req.IsAdmin && existing.IsAdmin {
+	if !isAdmin && existing.IsAdmin {
 		count, err := qtx.CountAdmins(r.Context())
 		if err != nil {
 			_ = tx.Rollback()
@@ -223,7 +236,7 @@ func (app *Application) AdminUpdateUser(w http.ResponseWriter, r *http.Request) 
 	user, err := qtx.AdminUpdateUser(r.Context(), database.AdminUpdateUserParams{
 		Name:    req.Name,
 		Email:   req.Email,
-		IsAdmin: req.IsAdmin,
+		IsAdmin: isAdmin,
 		ID:      targetID,
 	})
 	if err != nil {
@@ -309,6 +322,14 @@ func (app *Application) AdminDeleteUser(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
+	roomIDs, err := qtx.ListWatchRoomIDsByOwnerID(r.Context(), targetID)
+	if err != nil {
+		_ = tx.Rollback()
+		app.Logger.Error("admin: failed to list the user's watch rooms", "error", err, "target_id", targetID)
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		return
+	}
+
 	err = qtx.DeleteUser(r.Context(), targetID)
 	if err != nil {
 		_ = tx.Rollback()
@@ -324,6 +345,7 @@ func (app *Application) AdminDeleteUser(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	app.endDeletedOwnerRooms(roomIDs)
 	app.forgetUserDevices(targetID)
 
 	if user.Avatar.Valid {

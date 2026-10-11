@@ -49,7 +49,9 @@ LEFT JOIN albums AS a
 LEFT JOIN musicians AS m
   ON t.musician_id = m.id
 WHERE pt.playlist_id = ?
-ORDER BY pt.position ASC
+-- A reorder that leaves tracks out can tie their positions with listed ones;
+-- id keeps tied tracks in the order they were added, so pages stay stable.
+ORDER BY pt.position ASC, pt.id ASC
 LIMIT ?
 OFFSET ?;
 

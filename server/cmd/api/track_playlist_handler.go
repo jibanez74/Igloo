@@ -76,11 +76,21 @@ func (app *Application) GetPlaylist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	summary, _ := app.Queries.GetPlaylistTrackSummary(r.Context(), playlistId)
+	summary, err := app.Queries.GetPlaylistTrackSummary(r.Context(), playlistId)
+	if err != nil {
+		app.Logger.Error("failed to summarize playlist tracks", "error", err, "playlist_id", playlistId)
+		helpers.ErrorJSON(w, errors.New(fetchPlaylistMessage))
+		return
+	}
 
 	var collaborators []database.GetPlaylistCollaboratorsRow
 	if permission == PermissionOwner {
-		collaborators, _ = app.Queries.GetPlaylistCollaborators(r.Context(), playlistId)
+		collaborators, err = app.Queries.GetPlaylistCollaborators(r.Context(), playlistId)
+		if err != nil {
+			app.Logger.Error("failed to get playlist collaborators", "error", err, "playlist_id", playlistId)
+			helpers.ErrorJSON(w, errors.New(fetchPlaylistMessage))
+			return
+		}
 	}
 
 	res := helpers.JSONResponse{
@@ -145,7 +155,12 @@ func (app *Application) GetPlaylistTracks(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	total, _ := app.Queries.CountPlaylistTracks(r.Context(), playlistId)
+	total, err := app.Queries.CountPlaylistTracks(r.Context(), playlistId)
+	if err != nil {
+		app.Logger.Error("failed to count playlist tracks", "error", err, "playlist_id", playlistId)
+		helpers.ErrorJSON(w, errors.New("failed to fetch playlist tracks"))
+		return
+	}
 	hasMore := offset+int64(len(tracks)) < total
 
 	res := helpers.JSONResponse{
@@ -505,20 +520,15 @@ func (app *Application) RemoveTrackFromPlaylist(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	err = app.Queries.RemoveTrackFromPlaylist(r.Context(), database.RemoveTrackFromPlaylistParams{
-		PlaylistID: playlistId,
-		TrackID:    trackId,
+	err = app.removeFromPlaylist(r.Context(), playlistId, func(qtx *database.Queries) error {
+		return qtx.RemoveTrackFromPlaylist(r.Context(), database.RemoveTrackFromPlaylistParams{
+			PlaylistID: playlistId,
+			TrackID:    trackId,
+		})
 	})
 	if err != nil {
-		app.Logger.Error("failed to remove track from playlist", "error", err)
+		app.Logger.Error("failed to remove track from playlist", "error", err, "playlist_id", playlistId, "track_id", trackId)
 		helpers.ErrorJSON(w, errors.New("failed to remove track"))
-		return
-	}
-
-	timestampErr := app.Queries.UpdatePlaylistTimestamp(r.Context(), playlistId)
-	if timestampErr != nil {
-		app.Logger.Error(updatePlaylistTimestampLogMessage, "error", timestampErr, "playlist_id", playlistId)
-		helpers.ErrorJSON(w, errors.New(finalizePlaylistUpdateMessage))
 		return
 	}
 
@@ -581,9 +591,9 @@ func (app *Application) ReorderPlaylistTracks(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// One transaction for the whole reorder: previously each position update
-	// committed (and synced) individually, so a long playlist cost one fsync
-	// per track. Individual misses are still tolerated, as before.
+	// One transaction for the whole reorder, so a long playlist costs one fsync
+	// and a failed update leaves no partial order behind. An id that is not in
+	// the playlist updates no row, which is not an error.
 	tx, err := app.DB.BeginTx(r.Context(), nil)
 	if err != nil {
 		app.Logger.Error("failed to begin reorder transaction", "error", err, "playlist_id", playlistId)
@@ -600,7 +610,9 @@ func (app *Application) ReorderPlaylistTracks(w http.ResponseWriter, r *http.Req
 			TrackID:    trackId,
 		})
 		if err != nil {
-			app.Logger.Warn("failed to update track position", "error", err, "track_id", trackId, "position", i)
+			app.Logger.Error("failed to update track position", "error", err, "track_id", trackId, "position", i)
+			helpers.ErrorJSON(w, errors.New("failed to reorder tracks"))
+			return
 		}
 	}
 
@@ -744,6 +756,12 @@ func (app *Application) addCollaborator(
 	readErr := helpers.ReadJSON(w, r, &req)
 	if readErr != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
+		return
+	}
+
+	// A missing user_id decodes to 0; it is a bad request, not an unknown user.
+	if req.UserId < 1 {
+		helpers.ErrorJSON(w, errors.New("user_id is required"), http.StatusBadRequest)
 		return
 	}
 

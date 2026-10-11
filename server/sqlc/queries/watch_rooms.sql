@@ -121,3 +121,10 @@ WHERE id IN (sqlc.slice(ids));
 SELECT id FROM watch_rooms
 WHERE movie_id = ?
 ORDER BY id;
+
+-- name: ListWatchRoomIDsByOwnerID :many
+-- Deleting a user cascades away the rooms they own; the ids are read in the
+-- same transaction so the rooms' live state can be torn down after the commit.
+SELECT id FROM watch_rooms
+WHERE owner_user_id = ?
+ORDER BY id;

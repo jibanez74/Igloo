@@ -364,6 +364,38 @@ func TestInitSettings_UsesEnvVars(t *testing.T) {
 	}
 }
 
+// The playback settings answer the stored device inside a fixed enum, so a
+// first-run seed outside it is stored as cpu rather than echoed back.
+func TestInitSettings_SeedsCPUForAnUnknownDevice(t *testing.T) {
+	for _, tt := range []struct {
+		env  string
+		want string
+	}{
+		{env: "vaapi", want: "cpu"},
+		{env: "NVIDIA", want: "nvidia"},
+	} {
+		t.Run(tt.env, func(t *testing.T) {
+			app := setupTestApp(t)
+			clearSettingsRow(t, app)
+			clearRuntimeConfigEnv(t)
+			t.Setenv("HARDWARE_ACCELERATION_DEVICE", tt.env)
+			config, err := NewRuntimeConfig()
+			if err != nil {
+				t.Fatalf("NewRuntimeConfig failed: %v", err)
+			}
+			app.Config = config
+
+			err = app.InitSettings(context.Background())
+			if err != nil {
+				t.Fatalf("InitSettings failed: %v", err)
+			}
+			if got := app.settings.HardwareAccelerationDevice; got.String != tt.want || !got.Valid {
+				t.Fatalf("stored device = %q (valid=%v), want %q", got.String, got.Valid, tt.want)
+			}
+		})
+	}
+}
+
 func TestInitSettings_ExistingSettingsIgnoreConfigSeeds(t *testing.T) {
 	app := setupTestApp(t)
 

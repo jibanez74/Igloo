@@ -206,9 +206,9 @@ func (app *Application) GetWatchRooms(w http.ResponseWriter, r *http.Request) {
 
 // One joined query authorizes the member and returns the room, the same way
 // the media handlers and the WebSocket upgrade do. An unknown room and a room
-// the caller is not a member of both come back as 403, which is deliberate:
-// the room id is guessable, and the other room endpoints already refuse to
-// distinguish the two.
+// the caller is not a member of both come back as 403, as they do on those
+// routes: the room id is guessable. Join and delete answer 404 for an unknown
+// room instead, as their contract states.
 func (app *Application) GetWatchRoom(w http.ResponseWriter, r *http.Request) {
 	room, userID, ok := app.loadAuthorizedWatchRoomForRequest(w, r)
 	if !ok {

@@ -91,3 +91,42 @@ func TestMovieLists_SortDescendingReversesTheAscendingOrder(t *testing.T) {
 		})
 	}
 }
+
+// A bulk scan adds many movies within one second of created_at; the latest
+// row breaks those ties by id so the newest insert still comes first.
+func TestGetLatestMovies_BreaksSameSecondTiesByNewestID(t *testing.T) {
+	app := setupSessionTestApp(t)
+	user := createTestUser(t, app, "Viewer", "latest-viewer@example.com", false)
+	var ids []int64
+	for i := range 3 {
+		ids = append(ids, createTestMovie(t, app, fmt.Sprintf("Latest %d", i), fmt.Sprintf("/movies/latest-%d.mkv", i)))
+	}
+	_, err := app.DB.Exec(`UPDATE movies SET created_at = '2026-01-01 00:00:00'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	w := serveAs(t, app, user.ID, http.MethodGet, "/api/movies/latest", "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Data struct {
+			Movies []struct {
+				ID int64 `json:"id"`
+			} `json:"movies"`
+		} `json:"data"`
+	}
+	err = json.Unmarshal(w.Body.Bytes(), &resp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := make([]int64, 0, len(resp.Data.Movies))
+	for _, movie := range resp.Data.Movies {
+		got = append(got, movie.ID)
+	}
+	want := []int64{ids[2], ids[1], ids[0]}
+	if !slices.Equal(got, want) {
+		t.Fatalf("latest ids = %v, want %v", got, want)
+	}
+}

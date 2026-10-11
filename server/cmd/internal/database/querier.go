@@ -204,6 +204,8 @@ type Querier interface {
 	GetLatestAlbums(ctx context.Context) ([]GetLatestAlbumsRow, error)
 	// The home section renders title, poster and year only; certification is
 	// deliberately absent so the row matches the documented LatestMovie exactly.
+	// CURRENT_TIMESTAMP only has second resolution, so id breaks the ties a bulk
+	// scan creates, as GetLatestShows does.
 	GetLatestMovies(ctx context.Context) ([]GetLatestMoviesRow, error)
 	// created_at is written once by UpsertLocalShow, so it orders by first discovery.
 	// CURRENT_TIMESTAMP only has second resolution, so id breaks the ties a bulk scan creates.
@@ -245,6 +247,7 @@ type Querier interface {
 	GetMusicianBySpotifyID(ctx context.Context, spotifyID sql.NullString) (GetMusicianBySpotifyIDRow, error)
 	// Returns musicians sorted alphabetically by sort_name with pagination.
 	// Non-alphabetic names (numbers, symbols) are grouped under '#' and sorted first.
+	// sort_name is not unique, so id breaks ties and pages stay stable.
 	GetMusiciansAlphabetical(ctx context.Context, arg GetMusiciansAlphabeticalParams) ([]GetMusiciansAlphabeticalRow, error)
 	GetMusiciansByAlbumID(ctx context.Context, albumID int64) ([]GetMusiciansByAlbumIDRow, error)
 	GetMusiciansCount(ctx context.Context) (int64, error)
@@ -271,6 +274,8 @@ type Querier interface {
 	GetPlaylistMoviesPaginatedDesc(ctx context.Context, arg GetPlaylistMoviesPaginatedDescParams) ([]GetPlaylistMoviesPaginatedDescRow, error)
 	// Count and total duration in one pass; the playlist detail response needs both.
 	GetPlaylistTrackSummary(ctx context.Context, playlistID int64) (GetPlaylistTrackSummaryRow, error)
+	// A reorder that leaves tracks out can tie their positions with listed ones;
+	// id keeps tied tracks in the order they were added, so pages stay stable.
 	GetPlaylistTracksInfinite(ctx context.Context, arg GetPlaylistTracksInfiniteParams) ([]GetPlaylistTracksInfiniteRow, error)
 	// One seek for every playlist authorization decision: the playlist row by
 	// primary key plus this user's collaborator row (if any) by the
@@ -486,6 +491,9 @@ type Querier interface {
 	// from notification_reads.
 	ListNotificationsForUser(ctx context.Context, arg ListNotificationsForUserParams) ([]ListNotificationsForUserRow, error)
 	ListWatchRoomIDsByMovieID(ctx context.Context, movieID int64) ([]int64, error)
+	// Deleting a user cascades away the rooms they own; the ids are read in the
+	// same transaction so the rooms' live state can be torn down after the commit.
+	ListWatchRoomIDsByOwnerID(ctx context.Context, ownerUserID int64) ([]int64, error)
 	// SQLite needs a WHERE clause before an upsert's ON CONFLICT in INSERT ... SELECT,
 	// or it parses ON as a join constraint.
 	MarkAllNotificationsReadForUser(ctx context.Context, userID int64) error

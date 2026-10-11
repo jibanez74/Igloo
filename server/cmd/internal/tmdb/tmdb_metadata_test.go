@@ -378,14 +378,16 @@ func TestGetMoviesInTheaters(t *testing.T) {
 	}
 }
 
-func TestGetMoviesInTheaters_EmptyResultsReturnsError(t *testing.T) {
+// Nothing in theaters is an answer, not a failure: the handler lists it as an
+// empty page and the preroll pool retries it on its short TTL.
+func TestGetMoviesInTheaters_EmptyResultsAreEmpty(t *testing.T) {
 	client := newServerClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"results":[]}`))
 	}))
 
-	_, err := client.GetMoviesInTheaters(context.Background())
-	if err == nil {
-		t.Fatal("expected empty now-playing results to return error")
+	movies, err := client.GetMoviesInTheaters(context.Background())
+	if err != nil || len(movies) != 0 {
+		t.Fatalf("movies = %v, err = %v; want none and no error", movies, err)
 	}
 }
 

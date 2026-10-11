@@ -1002,7 +1002,6 @@ SELECT
   id,
   title,
   start_time,
-  thumb,
   file_id
 FROM show_chapters
 WHERE file_id = ?
@@ -1022,7 +1021,6 @@ func (q *Queries) GetShowChaptersByFileID(ctx context.Context, fileID int64) ([]
 			&i.ID,
 			&i.Title,
 			&i.StartTime,
-			&i.Thumb,
 			&i.FileID,
 		); err != nil {
 			return nil, err
@@ -2432,27 +2430,20 @@ const insertShowChapter = `-- name: InsertShowChapter :exec
 INSERT INTO show_chapters (
   file_id,
   title,
-  start_time,
-  thumb
+  start_time
 )
 VALUES
-  (?, ?, ?, ?)
+  (?, ?, ?)
 `
 
 type InsertShowChapterParams struct {
-	FileID    int64          `json:"file_id"`
-	Title     string         `json:"title"`
-	StartTime int64          `json:"start_time"`
-	Thumb     sql.NullString `json:"thumb"`
+	FileID    int64  `json:"file_id"`
+	Title     string `json:"title"`
+	StartTime int64  `json:"start_time"`
 }
 
 func (q *Queries) InsertShowChapter(ctx context.Context, arg InsertShowChapterParams) error {
-	_, err := q.exec(ctx, q.insertShowChapterStmt, insertShowChapter,
-		arg.FileID,
-		arg.Title,
-		arg.StartTime,
-		arg.Thumb,
-	)
+	_, err := q.exec(ctx, q.insertShowChapterStmt, insertShowChapter, arg.FileID, arg.Title, arg.StartTime)
 	return err
 }
 

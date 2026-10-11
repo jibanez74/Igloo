@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "generate:openapi": "openapi-typescript ../docs/openapi.json -o src/types/openapi.gen.ts",
+    "generate:openapi": "openapi-typescript ../docs/openapi.json --default-non-nullable false -o src/types/openapi.gen.ts",
     "check:openapi": "bun run generate:openapi && git diff --exit-code -- src/types/openapi.gen.ts",
     "lint:openapi": "redocly lint --config ../redocly.yaml ../docs/openapi.json",
     "build:openapi": "redocly build-docs --config ../redocly.yaml ../docs/openapi.json -o .openapi-docs/index.html",
