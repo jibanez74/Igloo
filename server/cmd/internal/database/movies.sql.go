@@ -323,7 +323,7 @@ func (q *Queries) GetCastByMovieID(ctx context.Context, movieID int64) ([]GetCas
 
 const getChaptersByMovieID = `-- name: GetChaptersByMovieID :many
 SELECT
-  id, title, start_time, thumb, movie_id
+  id, title, start_time, movie_id
 FROM chapters
 WHERE movie_id = ?
 ORDER BY start_time
@@ -343,7 +343,6 @@ func (q *Queries) GetChaptersByMovieID(ctx context.Context, movieID int64) ([]Ch
 			&i.ID,
 			&i.Title,
 			&i.StartTime,
-			&i.Thumb,
 			&i.MovieID,
 		); err != nil {
 			return nil, err
@@ -1383,27 +1382,20 @@ const insertChapter = `-- name: InsertChapter :exec
 INSERT INTO chapters (
   movie_id,
   title,
-  start_time,
-  thumb
+  start_time
 )
 VALUES
-  (?, ?, ?, ?)
+  (?, ?, ?)
 `
 
 type InsertChapterParams struct {
-	MovieID   int64          `json:"movie_id"`
-	Title     string         `json:"title"`
-	StartTime int64          `json:"start_time"`
-	Thumb     sql.NullString `json:"thumb"`
+	MovieID   int64  `json:"movie_id"`
+	Title     string `json:"title"`
+	StartTime int64  `json:"start_time"`
 }
 
 func (q *Queries) InsertChapter(ctx context.Context, arg InsertChapterParams) error {
-	_, err := q.exec(ctx, q.insertChapterStmt, insertChapter,
-		arg.MovieID,
-		arg.Title,
-		arg.StartTime,
-		arg.Thumb,
-	)
+	_, err := q.exec(ctx, q.insertChapterStmt, insertChapter, arg.MovieID, arg.Title, arg.StartTime)
 	return err
 }
 

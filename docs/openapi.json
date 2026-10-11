@@ -11301,7 +11301,6 @@
           "id",
           "title",
           "start_time",
-          "thumb",
           "movie_id"
         ],
         "properties": {
@@ -11315,9 +11314,6 @@
           "start_time": {
             "type": "integer",
             "format": "int64"
-          },
-          "thumb": {
-            "$ref": "#/components/schemas/SqlNullString"
           },
           "movie_id": {
             "type": "integer",
@@ -17405,7 +17401,6 @@
           "id",
           "title",
           "start_time",
-          "thumb",
           "file_id"
         ],
         "properties": {
@@ -17419,9 +17414,6 @@
           "start_time": {
             "type": "integer",
             "format": "int64"
-          },
-          "thumb": {
-            "$ref": "#/components/schemas/SqlNullString"
           },
           "file_id": {
             "type": "integer",

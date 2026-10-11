@@ -84,11 +84,10 @@ func (app *Application) GetShowEpisode(w http.ResponseWriter, r *http.Request) {
 // showChapterResponse is a show chapter with its start time normalized into
 // the file's duration, the way movie chapters are before they are served.
 type showChapterResponse struct {
-	ID        int64          `json:"id"`
-	Title     string         `json:"title"`
-	StartTime int64          `json:"start_time"`
-	Thumb     sql.NullString `json:"thumb"`
-	FileID    int64          `json:"file_id"`
+	ID        int64  `json:"id"`
+	Title     string `json:"title"`
+	StartTime int64  `json:"start_time"`
+	FileID    int64  `json:"file_id"`
 }
 
 // GetShowEpisodeTechnicalDetails is the TV twin of GetMovieTechnicalDetails:
@@ -163,7 +162,6 @@ func (app *Application) GetShowEpisodeTechnicalDetails(w http.ResponseWriter, r 
 			ID:        chapter.ID,
 			Title:     chapter.Title,
 			StartTime: normalizeChapterStartTimeSeconds(chapter.StartTime, durationSec),
-			Thumb:     chapter.Thumb,
 			FileID:    chapter.FileID,
 		}
 	}

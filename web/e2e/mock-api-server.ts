@@ -518,15 +518,13 @@ function movieTechnicalDetails(id: number) {
         id: 1,
         title: "Opening Credits",
         start_time: 0,
-        thumb: nullableString("/api/static/chapters/opening.svg"),
-        movie_id: nullableInt64(id),
+        movie_id: id,
       },
       {
         id: 2,
         title: "The Journey",
         start_time: 372,
-        thumb: nullableString(),
-        movie_id: nullableInt64(id),
+        movie_id: id,
       },
     ],
   } satisfies MovieTechnicalDetailsResponse;

@@ -2,7 +2,6 @@ package movie
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 
 	"igloo/cmd/internal/database"
@@ -21,7 +20,6 @@ func processChapters(ctx context.Context, qtx *database.Queries, movieID int64, 
 			MovieID:   movieID,
 			Title:     chapter.Tags.Title,
 			StartTime: scanner.ChapterStartTimeSeconds(chapter),
-			Thumb:     sql.NullString{},
 		})
 		if err != nil {
 			return fmt.Errorf("insert chapter failed: %w", err)

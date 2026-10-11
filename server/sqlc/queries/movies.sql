@@ -243,11 +243,10 @@ WHERE movie_id = ?;
 INSERT INTO chapters (
   movie_id,
   title,
-  start_time,
-  thumb
+  start_time
 )
 VALUES
-  (?, ?, ?, ?);
+  (?, ?, ?);
 
 -- name: CreateMovieGenre :exec
 -- Link movie to genre via junction table

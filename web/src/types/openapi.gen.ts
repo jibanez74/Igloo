@@ -3339,7 +3339,6 @@ export interface components {
             title: string;
             /** Format: int64 */
             start_time: number;
-            thumb: components["schemas"]["SqlNullString"];
             /** Format: int64 */
             movie_id: number;
         };
@@ -4943,7 +4942,6 @@ export interface components {
             title: string;
             /** Format: int64 */
             start_time: number;
-            thumb: components["schemas"]["SqlNullString"];
             /** Format: int64 */
             file_id: number;
         };
