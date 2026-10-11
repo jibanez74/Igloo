@@ -399,7 +399,7 @@ export interface paths {
         post?: never;
         /**
          * Delete the current user's account
-         * @description Admin accounts cannot delete themselves through this endpoint. Deleting the account also deletes everything it owns, including playlists and watch rooms shared with other users, the requests it filed, and its watch progress, likes and listening history; deletes its device tokens and uploaded avatar file; and ends the current session.
+         * @description Admin accounts cannot delete themselves through this endpoint. Deleting the account also deletes everything it owns, including playlists and watch rooms shared with other users, the requests it filed, and its watch progress, likes and listening history; deletes its device tokens and uploaded avatar file; and ends the current session. Members of the watch rooms it owned receive room_deleted and their connections close.
          */
         delete: operations["deleteUserAccount"];
         options?: never;
@@ -1712,7 +1712,7 @@ export interface paths {
         post?: never;
         /**
          * Delete a user
-         * @description Admin-only endpoint. Returns 403 for deleting your own account or the last administrator. Deleting a user also deletes everything they own, including playlists and watch rooms shared with other users, the requests they filed, and their watch progress, likes and listening history, along with their device tokens and uploaded avatar file.
+         * @description Admin-only endpoint. Returns 403 for deleting your own account or the last administrator. Deleting a user also deletes everything they own, including playlists and watch rooms shared with other users, the requests they filed, and their watch progress, likes and listening history, along with their device tokens and uploaded avatar file. Members of the watch rooms they owned receive room_deleted and their connections close.
          */
         delete: operations["adminDeleteUser"];
         options?: never;
@@ -1821,7 +1821,7 @@ export interface paths {
         };
         /**
          * Open a watch-room WebSocket
-         * @description Requires an authenticated room member before upgrading. Invalid room IDs, authentication failures, membership denial (including nonexistent rooms), and database failures use JSON error envelopes. Upgrade failures use text/plain: 400 for malformed handshake headers or key/version, 403 for a rejected Origin, and 500 for an unsupported server upgrade. Origin may be absent; otherwise it must match the request host with an https scheme when the server itself terminates TLS and http otherwise (X-Forwarded-Proto is not consulted), the configured VITE_DEV_SERVER origin, or HTTP port 3000 on the same local development hostname (localhost, 127.0.0.1, or ::1). On connection the server sends room_snapshot immediately. Client JSON messages follow WatchRoomClientEvent; server messages follow WatchRoomServerEvent. Any member may send playback commands. join requests another snapshot, ping receives pong, playback commands broadcast playback_changed to all room connections, member_joined goes to the other connections when a user opens their first connection, and member_left when a user's last connection closes while others remain. Playback state lives in server memory and resets to paused at 0 when the last connection leaves. Room deletion, including the removal of its movie, sends room_deleted and closes connections. Invalid JSON and unknown event types are ignored. The server sends a ping control frame every 40 seconds and closes a connection that sends no message or pong for 60 seconds, or that falls 256 messages behind.
+         * @description Requires an authenticated room member before upgrading. Invalid room IDs, authentication failures, membership denial (including nonexistent rooms), and database failures use JSON error envelopes. Upgrade failures use text/plain: 400 for malformed handshake headers or key/version, 403 for a rejected Origin, and 500 for an unsupported server upgrade. Origin may be absent; otherwise it must match the request host with an https scheme when the server itself terminates TLS and http otherwise (X-Forwarded-Proto is not consulted), the configured VITE_DEV_SERVER origin, or HTTP port 3000 on the same local development hostname (localhost, 127.0.0.1, or ::1). On connection the server sends room_snapshot immediately. Client JSON messages follow WatchRoomClientEvent; server messages follow WatchRoomServerEvent. Any member may send playback commands. join requests another snapshot, ping receives pong, playback commands broadcast playback_changed to all room connections, member_joined goes to the other connections when a user opens their first connection, and member_left when a user's last connection closes while others remain. Playback state lives in server memory and resets to paused at 0 when the last connection leaves. Room deletion, including the removal of its movie or of its owner's account, sends room_deleted and closes connections. Invalid JSON and unknown event types are ignored. The server sends a ping control frame every 40 seconds and closes a connection that sends no message or pong for 60 seconds, or that falls 256 messages behind.
          */
         get: operations["watchRoomWebSocket"];
         put?: never;

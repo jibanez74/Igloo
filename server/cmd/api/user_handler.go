@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -487,13 +488,14 @@ func (app *Application) DeleteUserAccount(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	err = app.Queries.DeleteUser(r.Context(), userID)
+	roomIDs, err := app.deleteUserWithRooms(r.Context(), userID)
 	if err != nil {
 		app.Logger.Error("failed to delete user", "error", err, "user_id", userID)
 		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 
+	app.endDeletedOwnerRooms(roomIDs)
 	app.forgetUserDevices(userID)
 
 	if user.Avatar.Valid {
@@ -513,4 +515,25 @@ func (app *Application) DeleteUserAccount(w http.ResponseWriter, r *http.Request
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, res)
+}
+
+// deleteUserWithRooms deletes the user and returns the ids of the watch rooms
+// the cascade removed with them, read in the same transaction.
+func (app *Application) deleteUserWithRooms(ctx context.Context, userID int64) ([]int64, error) {
+	tx, err := app.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	qtx := app.Queries.WithTx(tx)
+	roomIDs, err := qtx.ListWatchRoomIDsByOwnerID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	err = qtx.DeleteUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	return roomIDs, tx.Commit()
 }

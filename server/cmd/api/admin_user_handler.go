@@ -309,6 +309,14 @@ func (app *Application) AdminDeleteUser(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
+	roomIDs, err := qtx.ListWatchRoomIDsByOwnerID(r.Context(), targetID)
+	if err != nil {
+		_ = tx.Rollback()
+		app.Logger.Error("admin: failed to list the user's watch rooms", "error", err, "target_id", targetID)
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		return
+	}
+
 	err = qtx.DeleteUser(r.Context(), targetID)
 	if err != nil {
 		_ = tx.Rollback()
@@ -324,6 +332,7 @@ func (app *Application) AdminDeleteUser(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	app.endDeletedOwnerRooms(roomIDs)
 	app.forgetUserDevices(targetID)
 
 	if user.Avatar.Valid {

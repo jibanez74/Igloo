@@ -487,6 +487,9 @@ type Querier interface {
 	// from notification_reads.
 	ListNotificationsForUser(ctx context.Context, arg ListNotificationsForUserParams) ([]ListNotificationsForUserRow, error)
 	ListWatchRoomIDsByMovieID(ctx context.Context, movieID int64) ([]int64, error)
+	// Deleting a user cascades away the rooms they own; the ids are read in the
+	// same transaction so the rooms' live state can be torn down after the commit.
+	ListWatchRoomIDsByOwnerID(ctx context.Context, ownerUserID int64) ([]int64, error)
 	// SQLite needs a WHERE clause before an upsert's ON CONFLICT in INSERT ... SELECT,
 	// or it parses ON as a join constraint.
 	MarkAllNotificationsReadForUser(ctx context.Context, userID int64) error

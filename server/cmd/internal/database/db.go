@@ -768,6 +768,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.listWatchRoomIDsByMovieIDStmt, err = db.PrepareContext(ctx, listWatchRoomIDsByMovieID); err != nil {
 		return nil, fmt.Errorf("error preparing query ListWatchRoomIDsByMovieID: %w", err)
 	}
+	if q.listWatchRoomIDsByOwnerIDStmt, err = db.PrepareContext(ctx, listWatchRoomIDsByOwnerID); err != nil {
+		return nil, fmt.Errorf("error preparing query ListWatchRoomIDsByOwnerID: %w", err)
+	}
 	if q.markAllNotificationsReadForUserStmt, err = db.PrepareContext(ctx, markAllNotificationsReadForUser); err != nil {
 		return nil, fmt.Errorf("error preparing query MarkAllNotificationsReadForUser: %w", err)
 	}
@@ -2334,6 +2337,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing listWatchRoomIDsByMovieIDStmt: %w", cerr)
 		}
 	}
+	if q.listWatchRoomIDsByOwnerIDStmt != nil {
+		if cerr := q.listWatchRoomIDsByOwnerIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listWatchRoomIDsByOwnerIDStmt: %w", cerr)
+		}
+	}
 	if q.markAllNotificationsReadForUserStmt != nil {
 		if cerr := q.markAllNotificationsReadForUserStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing markAllNotificationsReadForUserStmt: %w", cerr)
@@ -3156,6 +3164,7 @@ type Queries struct {
 	listMusicTrackScanIndexStmt                 *sql.Stmt
 	listNotificationsForUserStmt                *sql.Stmt
 	listWatchRoomIDsByMovieIDStmt               *sql.Stmt
+	listWatchRoomIDsByOwnerIDStmt               *sql.Stmt
 	markAllNotificationsReadForUserStmt         *sql.Stmt
 	markMovieTmdbRetryStmt                      *sql.Stmt
 	markMovieUnwatchedStmt                      *sql.Stmt
@@ -3517,6 +3526,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		listMusicTrackScanIndexStmt:                 q.listMusicTrackScanIndexStmt,
 		listNotificationsForUserStmt:                q.listNotificationsForUserStmt,
 		listWatchRoomIDsByMovieIDStmt:               q.listWatchRoomIDsByMovieIDStmt,
+		listWatchRoomIDsByOwnerIDStmt:               q.listWatchRoomIDsByOwnerIDStmt,
 		markAllNotificationsReadForUserStmt:         q.markAllNotificationsReadForUserStmt,
 		markMovieTmdbRetryStmt:                      q.markMovieTmdbRetryStmt,
 		markMovieUnwatchedStmt:                      q.markMovieUnwatchedStmt,
