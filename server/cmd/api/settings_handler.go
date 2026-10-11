@@ -10,7 +10,6 @@ import (
 	"igloo/cmd/internal/scanner"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 )
 
@@ -331,12 +330,11 @@ func validatedOptionalMediaDir(value *string) (sql.NullString, error) {
 		return sql.NullString{}, nil
 	}
 
-	info, err := os.Stat(dir)
+	// The same check startup runs, which also opens the directory: a path
+	// saved here that startup would reject is blanked at the next restart.
+	err := helpers.ValidateDir(dir)
 	if err != nil {
 		return sql.NullString{}, err
-	}
-	if !info.IsDir() {
-		return sql.NullString{}, errors.New("path is not a directory")
 	}
 
 	return helpers.NullString(dir), nil

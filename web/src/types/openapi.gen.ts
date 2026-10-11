@@ -1947,7 +1947,7 @@ export interface paths {
         get?: never;
         /**
          * Update configured library paths
-         * @description Admin-only endpoint. Paths are trimmed and must name an existing directory (400 otherwise). null, a blank string, or an omitted field clears that library path. At startup, a configured path that is not accessible is treated as unset and reported as null without changing the stored value, until the next settings save reloads the stored path.
+         * @description Admin-only endpoint. Paths are trimmed and must name an existing, readable directory (400 otherwise). null, a blank string, or an omitted field clears that library path. At startup, a configured path that is not accessible is treated as unset and reported as null without changing the stored value, until the next settings save reloads the stored path.
          */
         put: operations["updateLibrarySettings"];
         post?: never;
