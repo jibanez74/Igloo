@@ -89,7 +89,7 @@ export interface paths {
         put?: never;
         /**
          * Log in with email and password from a TV or mobile client and receive a device token
-         * @description Passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401. Rate limited to 10 requests per 5 minutes per client IP (the TCP peer address, not forwarded headers).
+         * @description The email is matched exactly as sent: it is not trimmed and the match is case-sensitive. Passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401. Rate limited to 10 requests per 5 minutes per client IP (the TCP peer address, not forwarded headers).
          */
         post: operations["authenticateDevice"];
         delete?: never;
@@ -129,7 +129,7 @@ export interface paths {
         put?: never;
         /**
          * Poll a quick-connect code and receive a device token once approved
-         * @description Devices poll this endpoint at the advertised interval. Pending codes live only in this server process's memory, so a restart discards them. A 404 means the code or secret is missing, unknown, expired, or mismatched; the device should request a new code and start over. 400 is returned only for a malformed body. The approved response consumes the code. Rate limited to 60 requests per minute per client IP.
+         * @description Devices poll this endpoint at the advertised interval. Pending codes live only in this server process's memory, so a restart discards them. A 404 means the code or secret is missing, unknown, expired, or mismatched; the device should request a new code and start over. 400 is returned only for a malformed body. The approved response consumes the code. Rate limited to 60 requests per minute per client IP (the TCP peer address, not forwarded headers).
          */
         post: operations["redeemQuickConnect"];
         delete?: never;
@@ -296,7 +296,7 @@ export interface paths {
         get: operations["getUserPin"];
         /**
          * Set, change, or remove the current user's profile PIN
-         * @description An empty pin removes the PIN. Setting the first PIN needs no current_pin. When a PIN is already set, current_pin is required (400 when missing) and a wrong current_pin returns 401; those attempts share a 5-per-minute per-user rate limit with PIN verification.
+         * @description An empty pin removes the PIN. Setting the first PIN needs no current_pin. When a PIN is already set, every request counts toward a 5-per-minute per-user rate limit shared with PIN verification and is checked against it first; current_pin is then required (400 when missing) and a wrong current_pin returns 401.
          */
         put: operations["updateUserPin"];
         post?: never;
@@ -399,7 +399,7 @@ export interface paths {
         post?: never;
         /**
          * Delete the current user's account
-         * @description Admin accounts cannot delete themselves through this endpoint. Deleting the account also deletes its device tokens and uploaded avatar file, and ends the current session.
+         * @description Admin accounts cannot delete themselves through this endpoint. Deleting the account also deletes everything it owns, including playlists and watch rooms shared with other users, the requests it filed, and its watch progress, likes and listening history; deletes its device tokens and uploaded avatar file; and ends the current session.
          */
         delete: operations["deleteUserAccount"];
         options?: never;
@@ -1691,7 +1691,7 @@ export interface paths {
         put?: never;
         /**
          * Create a user
-         * @description Admin-only endpoint. New passwords must contain at least 9 Unicode characters and at most 72 UTF-8 bytes. Passwords outside these limits are rejected with 400 before hashing.
+         * @description Admin-only endpoint. Name and email are trimmed, and the email is stored without format validation. New passwords must contain at least 9 Unicode characters and at most 72 UTF-8 bytes. Passwords outside these limits are rejected with 400 before hashing.
          */
         post: operations["adminCreateUser"];
         delete?: never;
@@ -1712,14 +1712,14 @@ export interface paths {
         post?: never;
         /**
          * Delete a user
-         * @description Admin-only endpoint. Returns 403 for deleting your own account or the last administrator. Deleting a user also deletes their device tokens and uploaded avatar file.
+         * @description Admin-only endpoint. Returns 403 for deleting your own account or the last administrator. Deleting a user also deletes everything they own, including playlists and watch rooms shared with other users, the requests they filed, and their watch progress, likes and listening history, along with their device tokens and uploaded avatar file.
          */
         delete: operations["adminDeleteUser"];
         options?: never;
         head?: never;
         /**
          * Update a user
-         * @description Admin-only endpoint. Replaces the user's name, email, and admin flag; name and email are trimmed. Returns 403 when an administrator removes their own admin status or the last administrator's status, and 409 when the email belongs to another user.
+         * @description Admin-only endpoint. Replaces the user's name, email, and admin flag; name and email are trimmed, and the email is stored without format validation. Returns 403 when an administrator removes their own admin status or the last administrator's status, and 409 when the email belongs to another user.
          */
         patch: operations["adminUpdateUser"];
         trace?: never;
@@ -2678,7 +2678,6 @@ export interface components {
         /** @enum {string} */
         PlaybackMode: "direct" | "remux" | "2160p_16mbps" | "1080p_8mbps" | "1080p_6mbps" | "1080p_4mbps" | "720p_3mbps";
         LoginRequest: {
-            /** Format: email */
             email: string;
             /**
              * Format: password
@@ -2690,7 +2689,6 @@ export interface components {
             name: string;
         };
         UpdateUserEmailRequest: {
-            /** Format: email */
             email: string;
         };
         UpdateUserPasswordRequest: {
@@ -2733,9 +2731,9 @@ export interface components {
             /** Format: int64 */
             id: number;
             name: string;
-            /** Format: email */
             email: string;
             is_admin: boolean;
+            /** @description null, an absolute http or https URL, or a server path under /api/static/avatars/ for an uploaded image; fetching that path needs the same cookie or bearer authentication as the API. */
             avatar: string | null;
             has_pin: boolean;
             created_at: string;
@@ -2749,7 +2747,6 @@ export interface components {
         AdminUser: components["schemas"]["AuthUser"];
         AdminCreateUserRequest: {
             name: string;
-            /** Format: email */
             email: string;
             /**
              * Format: password
@@ -2760,7 +2757,6 @@ export interface components {
         };
         AdminUpdateUserRequest: {
             name: string;
-            /** Format: email */
             email: string;
             is_admin: boolean;
         };
@@ -2786,6 +2782,7 @@ export interface components {
             id: number;
             name: string;
             email: string;
+            /** @description null, an absolute http or https URL, or a server path under /api/static/avatars/ for an uploaded image; fetching that path needs the same cookie or bearer authentication as the API. */
             avatar: string | null;
         };
         InviteUsersData: {
@@ -3778,6 +3775,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             name: string;
+            /** @description null, an absolute http or https URL, or a server path under /api/static/avatars/ for an uploaded image; fetching that path needs the same cookie or bearer authentication as the API. */
             avatar: string | null;
         };
         WatchRoomListItem: {
@@ -4613,6 +4611,7 @@ export interface components {
             status: "pending" | "approved";
             /** @description Bearer device token. Present only when status is approved; returned exactly once. Store it; never display it. */
             token?: string;
+            /** @description The device created for this pairing. Present only when status is approved. */
             device?: components["schemas"]["Device"];
         };
         QuickConnectRedeemEnvelope: components["schemas"]["JsonSuccess"] & {
@@ -4631,7 +4630,6 @@ export interface components {
             code: string;
         };
         DeviceLoginRequest: {
-            /** Format: email */
             email: string;
             /**
              * Format: password
