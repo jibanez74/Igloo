@@ -1954,6 +1954,7 @@
           "TV Shows"
         ],
         "summary": "Clear current user's watch progress for a TV episode",
+        "description": "Removes the caller's saved position and watched flag. Returns cleared true even when nothing was stored.",
         "operationId": "deleteEpisodeWatchProgress",
         "parameters": [
           {
@@ -1985,6 +1986,7 @@
           "TV Shows"
         ],
         "summary": "Mark or unmark an episode as watched",
+        "description": "true marks the item watched and resets its saved position to 0; false clears watched and keeps the saved position. Either value creates the record when none exists, with progress_sec and duration_sec 0.",
         "operationId": "setEpisodeWatched",
         "parameters": [
           {
@@ -2042,7 +2044,7 @@
             "$ref": "#/components/responses/InternalServerError"
           }
         },
-        "description": "Ends every session the caller has for this media and playback_session, across profiles, audio selections, and start windows. Always returns 200, including when no session exists or the id is unknown; an invalid playback_session returns 400."
+        "description": "Ends every cached session the caller has for this media and playback_session, across profiles, audio selections, and start windows; a session still being created when the stop arrives is cached afterwards and ends on the idle timeout. Always returns 200, including when no session exists or the id is unknown; a malformed id or playback_session returns 400. Every response, errors included, carries Cache-Control: no-store, except a 401 from authentication."
       }
     },
     "/api/shows/episodes/{id}/hls/{profile}/playlist.m3u8": {
@@ -2051,7 +2053,7 @@
           "TV Shows"
         ],
         "summary": "Get an HLS playlist for a TV episode",
-        "description": "Creates or reuses the authenticated user's HLS session, then returns its media playlist. The same cookie or bearer authentication is required again on every rewritten manifest and asset request; credentials are not embedded in playlist URLs. Asset URLs propagate audio_track, the explicit audio profile pair, the normalized start, playback_session, and reload so they resolve the same session. Each user holds at most HLS_MAX_SESSIONS_PER_USER sessions (3 by default): at the cap the user's least recently used sessions are evicted, and 503 is returned only when every slot is still being created. Sessions expire after 5 minutes without a manifest or asset request. Creating a session ends the user's other sessions for the same media and playback_session (an earlier seek window, profile, or audio track), whose assets then return 404. A session whose FFmpeg process failed is replaced on the next manifest request. A cold manifest request can wait up to 30 seconds for a remux preflight (remux requests without a stored verdict), up to 15 seconds for transcode capacity, and up to 30 seconds for the first published output (init.mp4 for transcodes, the first segment for copy-video), so about 75 seconds in the worst case before a retryable 503. 404 also covers a start position with no playable media, and a keepalive=1 request whose session no longer exists.",
+        "description": "Creates or reuses the authenticated user's HLS session, then returns its media playlist. The same cookie or bearer authentication is required again on every rewritten manifest and asset request; credentials are not embedded in playlist URLs. Asset URLs propagate audio_track, the explicit audio profile pair, the normalized start, playback_session, and reload so they resolve the same session. Each user holds at most HLS_MAX_SESSIONS_PER_USER sessions (3 by default): at the cap the user's least recently used sessions are evicted, and 503 is returned only when every slot is still being created. Sessions expire after 5 minutes without a manifest or asset request. Creating a session ends the user's other sessions for the same media and playback_session (an earlier seek window, profile, or audio track), whose assets then return 404. A session whose FFmpeg process failed is replaced on the next manifest request without keepalive=1. A cold manifest request can wait up to 30 seconds for a remux preflight (remux requests without a stored verdict), up to 15 seconds for transcode capacity, and up to 30 seconds for the first published output (init.mp4 for transcodes, the first segment for copy-video), so one creation can take about 75 seconds before a retryable 503; a request that joined a creation whose own client went away runs it again. 404 also covers a start position with no playable media, a session stopped or replaced while the request waited (request the manifest again), and a keepalive=1 request whose session no longer exists or failed. Every response, errors included, carries Cache-Control: no-store, except a 401 from authentication.",
         "operationId": "episodeHlsManifest",
         "parameters": [
           {
@@ -2113,7 +2115,7 @@
           "TV Shows"
         ],
         "summary": "Get an HLS initialization file or media segment for a TV episode",
-        "description": "Serves an asset from a previously created personal HLS session. Request the manifest first, authenticate this request independently, and fetch the asset URLs exactly as the playlist rewrites them; they carry the normalized start and the other query parameters that select the same owner-scoped session. A ready file supports conditional and byte-range requests. A file that FFmpeg has not completed yet can wait up to 120 seconds before a retryable 503. Ready assets use video/mp4 and Last-Modified, without ETag. If-Match with a specific entity tag fails with empty 412; If-None-Match: * returns 304. If-Range supports date validators; a nonmatching validator causes a full 200 response.",
+        "description": "Serves an asset from a previously created personal HLS session. Request the manifest first, authenticate this request independently, and fetch the asset URLs exactly as the playlist rewrites them; they carry the normalized start and the other query parameters that select the same owner-scoped session. A ready file supports conditional and byte-range requests. A file that FFmpeg has not completed yet can wait up to 120 seconds before a retryable 503. Ready assets use video/mp4 and Last-Modified, without ETag. If-Match with a specific entity tag fails with empty 412; If-None-Match: * returns 304. If-Range supports date validators; a nonmatching validator causes a full 200 response. A 500 can mean FFmpeg failed before writing this file; the next manifest request without keepalive=1 replaces the failed session. Every response, errors included, carries Cache-Control: no-store, except a 401 from authentication and the plain-text 416.",
         "operationId": "episodeHlsSegment",
         "parameters": [
           {
@@ -3164,6 +3166,7 @@
           "Movies"
         ],
         "summary": "Clear current user's watch progress for a movie",
+        "description": "Removes the caller's saved position and watched flag. Returns cleared true even when nothing was stored.",
         "operationId": "deleteMovieWatchProgress",
         "parameters": [
           {
@@ -3226,6 +3229,7 @@
           "Movies"
         ],
         "summary": "Mark or unmark a movie as watched",
+        "description": "true marks the item watched and resets its saved position to 0; false clears watched and keeps the saved position. Either value creates the record when none exists, with progress_sec and duration_sec 0.",
         "operationId": "setMovieWatched",
         "parameters": [
           {
@@ -3260,7 +3264,7 @@
           "Movies"
         ],
         "summary": "Get the trailer queue to play before a movie",
-        "description": "The ordered YouTube trailers the caller's saved preferences select for this movie: in-theaters trailers first, then library trailers, never the movie itself, deduplicated by TMDB id, with either pool topping up the other. The list is empty when the feature is disabled or no trailer is available. Trailers stream from YouTube; the server never stores or proxies them. Works with a cookie session or a device bearer token.",
+        "description": "The ordered YouTube trailers the caller's saved preferences select for this movie: in-theaters trailers first, then library trailers, never the movie itself, deduplicated by TMDB id, with either pool topping up the other. The list is empty when the feature is disabled or no trailer is available. Trailers stream from YouTube; the server never stores or proxies them. When in-theaters trailers are needed and not cached, the response can wait up to 5 seconds for TMDB; past that the queue uses whatever was cached before, which can be nothing. Works with a cookie session or a device bearer token.",
         "operationId": "getMoviePreroll",
         "parameters": [
           {
@@ -3292,7 +3296,7 @@
           "Movies"
         ],
         "summary": "Get an HLS playlist for a movie",
-        "description": "Creates or reuses the authenticated user's HLS session, then returns its media playlist. The same cookie or bearer authentication is required again on every rewritten manifest and asset request; credentials are not embedded in playlist URLs. Asset URLs propagate audio_track, the explicit audio profile pair, the normalized start, playback_session, and reload so they resolve the same session. Each user holds at most HLS_MAX_SESSIONS_PER_USER sessions (3 by default): at the cap the user's least recently used sessions are evicted, and 503 is returned only when every slot is still being created. Sessions expire after 5 minutes without a manifest or asset request. Creating a session ends the user's other sessions for the same media and playback_session (an earlier seek window, profile, or audio track), whose assets then return 404. A session whose FFmpeg process failed is replaced on the next manifest request. A cold manifest request can wait up to 30 seconds for a remux preflight (remux requests without a stored verdict), up to 15 seconds for transcode capacity, and up to 30 seconds for the first published output (init.mp4 for transcodes, the first segment for copy-video), so about 75 seconds in the worst case before a retryable 503. 404 also covers a start position with no playable media, and a keepalive=1 request whose session no longer exists.",
+        "description": "Creates or reuses the authenticated user's HLS session, then returns its media playlist. The same cookie or bearer authentication is required again on every rewritten manifest and asset request; credentials are not embedded in playlist URLs. Asset URLs propagate audio_track, the explicit audio profile pair, the normalized start, playback_session, and reload so they resolve the same session. Each user holds at most HLS_MAX_SESSIONS_PER_USER sessions (3 by default): at the cap the user's least recently used sessions are evicted, and 503 is returned only when every slot is still being created. Sessions expire after 5 minutes without a manifest or asset request. Creating a session ends the user's other sessions for the same media and playback_session (an earlier seek window, profile, or audio track), whose assets then return 404. A session whose FFmpeg process failed is replaced on the next manifest request without keepalive=1. A cold manifest request can wait up to 30 seconds for a remux preflight (remux requests without a stored verdict), up to 15 seconds for transcode capacity, and up to 30 seconds for the first published output (init.mp4 for transcodes, the first segment for copy-video), so one creation can take about 75 seconds before a retryable 503; a request that joined a creation whose own client went away runs it again. 404 also covers a start position with no playable media, a session stopped or replaced while the request waited (request the manifest again), and a keepalive=1 request whose session no longer exists or failed. Every response, errors included, carries Cache-Control: no-store, except a 401 from authentication.",
         "operationId": "hlsManifest",
         "parameters": [
           {
@@ -3354,7 +3358,7 @@
           "Movies"
         ],
         "summary": "Get an HLS initialization file or media segment for a movie",
-        "description": "Serves an asset from a previously created personal HLS session. Request the manifest first, authenticate this request independently, and fetch the asset URLs exactly as the playlist rewrites them; they carry the normalized start and the other query parameters that select the same owner-scoped session. A ready file supports conditional and byte-range requests. A file that FFmpeg has not completed yet can wait up to 120 seconds before a retryable 503. Ready assets use video/mp4 and Last-Modified, without ETag. If-Match with a specific entity tag fails with empty 412; If-None-Match: * returns 304. If-Range supports date validators; a nonmatching validator causes a full 200 response.",
+        "description": "Serves an asset from a previously created personal HLS session. Request the manifest first, authenticate this request independently, and fetch the asset URLs exactly as the playlist rewrites them; they carry the normalized start and the other query parameters that select the same owner-scoped session. A ready file supports conditional and byte-range requests. A file that FFmpeg has not completed yet can wait up to 120 seconds before a retryable 503. Ready assets use video/mp4 and Last-Modified, without ETag. If-Match with a specific entity tag fails with empty 412; If-None-Match: * returns 304. If-Range supports date validators; a nonmatching validator causes a full 200 response. A 500 can mean FFmpeg failed before writing this file; the next manifest request without keepalive=1 replaces the failed session. Every response, errors included, carries Cache-Control: no-store, except a 401 from authentication and the plain-text 416.",
         "operationId": "hlsSegment",
         "parameters": [
           {
@@ -6131,7 +6135,7 @@
             "$ref": "#/components/responses/InternalServerError"
           }
         },
-        "description": "Ends every session the caller has for this media and playback_session, across profiles, audio selections, and start windows. Always returns 200, including when no session exists or the id is unknown; an invalid playback_session returns 400."
+        "description": "Ends every cached session the caller has for this media and playback_session, across profiles, audio selections, and start windows; a session still being created when the stop arrives is cached afterwards and ends on the idle timeout. Always returns 200, including when no session exists or the id is unknown; a malformed id or playback_session returns 400. Every response, errors included, carries Cache-Control: no-store, except a 401 from authentication."
       }
     }
   },
@@ -6475,7 +6479,7 @@
         "name": "audio_codec",
         "in": "query",
         "required": false,
-        "description": "Requested Dolby output codec for an explicit audio profile. Must appear together with audio_channels; supplying only one of the pair returns HTTP 400. Omitting both selects the default audio mode: a selected track confirmed as AAC-LC is copied unchanged, keeping its channel count, and every other selected track is encoded to stereo AAC at 320 kbps. Watch-room HLS always uses the default audio mode. Explicit requests always encode at a server-owned bitrate; aac is not an accepted explicit value.",
+        "description": "Requested Dolby output codec for an explicit audio profile. Must appear together with audio_channels; supplying only one of the pair returns HTTP 400. Omitting both selects the default audio mode: a selected track confirmed as AAC-LC is copied unchanged, keeping its channel count, and every other selected track is encoded to stereo AAC at 320 kbps. Watch-room HLS always uses the default audio mode. Explicit requests always encode at a server-owned bitrate; aac is not an accepted explicit value. An explicit pair on media without audio returns 400; when this server's FFmpeg lacks the requested encoder the manifest returns 500.",
         "schema": {
           "$ref": "#/components/schemas/HLSRequestedAudioCodec"
         }
@@ -7505,7 +7509,7 @@
             }
           },
           "X-Igloo-Actual-Start": {
-            "description": "Seconds into the movie where the session's media really begins. Stream copy cannot cut mid-GOP, so a copy-video session starts at the source keyframe at or before the requested start. Omitted when it has not been measured.",
+            "description": "Seconds into the source file where the session's media really begins. Stream copy cannot cut mid-GOP, so a copy-video session starts at the source keyframe at or before the requested start. Omitted when it has not been measured.",
             "schema": {
               "type": "number",
               "minimum": 0
@@ -8329,6 +8333,12 @@
                 "past-end"
               ]
             }
+          },
+          "Cache-Control": {
+            "schema": {
+              "type": "string",
+              "const": "no-store"
+            }
           }
         },
         "content": {
@@ -8408,6 +8418,12 @@
             "schema": {
               "type": "integer",
               "minimum": 1
+            }
+          },
+          "Cache-Control": {
+            "schema": {
+              "type": "string",
+              "const": "no-store"
             }
           }
         },
@@ -11473,7 +11489,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "The caller's saved position on one movie or TV episode. Null fields mean no progress has been saved."
+        "description": "The caller's saved position on one movie or TV episode. Null fields mean nothing has been saved. Marking the item watched, or a save that reaches 95% of the duration, resets progress_sec to 0; when such a mark or save, or an unwatched mark, creates the record, duration_sec is 0 as well."
       },
       "WatchProgressEnvelope": {
         "allOf": [
@@ -11693,7 +11709,8 @@
                 ],
                 "properties": {
                   "cleared": {
-                    "type": "boolean"
+                    "type": "boolean",
+                    "const": true
                   }
                 },
                 "additionalProperties": false

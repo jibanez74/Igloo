@@ -1019,7 +1019,10 @@ export interface paths {
         /** Update current user's watch progress for a TV episode */
         put: operations["updateEpisodeWatchProgress"];
         post?: never;
-        /** Clear current user's watch progress for a TV episode */
+        /**
+         * Clear current user's watch progress for a TV episode
+         * @description Removes the caller's saved position and watched flag. Returns cleared true even when nothing was stored.
+         */
         delete: operations["deleteEpisodeWatchProgress"];
         options?: never;
         head?: never;
@@ -1034,7 +1037,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Mark or unmark an episode as watched */
+        /**
+         * Mark or unmark an episode as watched
+         * @description true marks the item watched and resets its saved position to 0; false clears watched and keeps the saved position. Either value creates the record when none exists, with progress_sec and duration_sec 0.
+         */
         put: operations["setEpisodeWatched"];
         post?: never;
         delete?: never;
@@ -1054,7 +1060,7 @@ export interface paths {
         put?: never;
         /**
          * Stop a personal episode HLS playback session
-         * @description Ends every session the caller has for this media and playback_session, across profiles, audio selections, and start windows. Always returns 200, including when no session exists or the id is unknown; an invalid playback_session returns 400.
+         * @description Ends every cached session the caller has for this media and playback_session, across profiles, audio selections, and start windows; a session still being created when the stop arrives is cached afterwards and ends on the idle timeout. Always returns 200, including when no session exists or the id is unknown; a malformed id or playback_session returns 400. Every response, errors included, carries Cache-Control: no-store, except a 401 from authentication.
          */
         post: operations["stopEpisodeHlsSession"];
         delete?: never;
@@ -1072,7 +1078,7 @@ export interface paths {
         };
         /**
          * Get an HLS playlist for a TV episode
-         * @description Creates or reuses the authenticated user's HLS session, then returns its media playlist. The same cookie or bearer authentication is required again on every rewritten manifest and asset request; credentials are not embedded in playlist URLs. Asset URLs propagate audio_track, the explicit audio profile pair, the normalized start, playback_session, and reload so they resolve the same session. Each user holds at most HLS_MAX_SESSIONS_PER_USER sessions (3 by default): at the cap the user's least recently used sessions are evicted, and 503 is returned only when every slot is still being created. Sessions expire after 5 minutes without a manifest or asset request. Creating a session ends the user's other sessions for the same media and playback_session (an earlier seek window, profile, or audio track), whose assets then return 404. A session whose FFmpeg process failed is replaced on the next manifest request. A cold manifest request can wait up to 30 seconds for a remux preflight (remux requests without a stored verdict), up to 15 seconds for transcode capacity, and up to 30 seconds for the first published output (init.mp4 for transcodes, the first segment for copy-video), so about 75 seconds in the worst case before a retryable 503. 404 also covers a start position with no playable media, and a keepalive=1 request whose session no longer exists.
+         * @description Creates or reuses the authenticated user's HLS session, then returns its media playlist. The same cookie or bearer authentication is required again on every rewritten manifest and asset request; credentials are not embedded in playlist URLs. Asset URLs propagate audio_track, the explicit audio profile pair, the normalized start, playback_session, and reload so they resolve the same session. Each user holds at most HLS_MAX_SESSIONS_PER_USER sessions (3 by default): at the cap the user's least recently used sessions are evicted, and 503 is returned only when every slot is still being created. Sessions expire after 5 minutes without a manifest or asset request. Creating a session ends the user's other sessions for the same media and playback_session (an earlier seek window, profile, or audio track), whose assets then return 404. A session whose FFmpeg process failed is replaced on the next manifest request without keepalive=1. A cold manifest request can wait up to 30 seconds for a remux preflight (remux requests without a stored verdict), up to 15 seconds for transcode capacity, and up to 30 seconds for the first published output (init.mp4 for transcodes, the first segment for copy-video), so one creation can take about 75 seconds before a retryable 503; a request that joined a creation whose own client went away runs it again. 404 also covers a start position with no playable media, a session stopped or replaced while the request waited (request the manifest again), and a keepalive=1 request whose session no longer exists or failed. Every response, errors included, carries Cache-Control: no-store, except a 401 from authentication.
          */
         get: operations["episodeHlsManifest"];
         put?: never;
@@ -1092,7 +1098,7 @@ export interface paths {
         };
         /**
          * Get an HLS initialization file or media segment for a TV episode
-         * @description Serves an asset from a previously created personal HLS session. Request the manifest first, authenticate this request independently, and fetch the asset URLs exactly as the playlist rewrites them; they carry the normalized start and the other query parameters that select the same owner-scoped session. A ready file supports conditional and byte-range requests. A file that FFmpeg has not completed yet can wait up to 120 seconds before a retryable 503. Ready assets use video/mp4 and Last-Modified, without ETag. If-Match with a specific entity tag fails with empty 412; If-None-Match: * returns 304. If-Range supports date validators; a nonmatching validator causes a full 200 response.
+         * @description Serves an asset from a previously created personal HLS session. Request the manifest first, authenticate this request independently, and fetch the asset URLs exactly as the playlist rewrites them; they carry the normalized start and the other query parameters that select the same owner-scoped session. A ready file supports conditional and byte-range requests. A file that FFmpeg has not completed yet can wait up to 120 seconds before a retryable 503. Ready assets use video/mp4 and Last-Modified, without ETag. If-Match with a specific entity tag fails with empty 412; If-None-Match: * returns 304. If-Range supports date validators; a nonmatching validator causes a full 200 response. A 500 can mean FFmpeg failed before writing this file; the next manifest request without keepalive=1 replaces the failed session. Every response, errors included, carries Cache-Control: no-store, except a 401 from authentication and the plain-text 416.
          */
         get: operations["episodeHlsSegment"];
         put?: never;
@@ -1455,7 +1461,10 @@ export interface paths {
         /** Update current user's watch progress for a movie */
         put: operations["updateMovieWatchProgress"];
         post?: never;
-        /** Clear current user's watch progress for a movie */
+        /**
+         * Clear current user's watch progress for a movie
+         * @description Removes the caller's saved position and watched flag. Returns cleared true even when nothing was stored.
+         */
         delete: operations["deleteMovieWatchProgress"];
         options?: never;
         head?: never;
@@ -1487,7 +1496,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Mark or unmark a movie as watched */
+        /**
+         * Mark or unmark a movie as watched
+         * @description true marks the item watched and resets its saved position to 0; false clears watched and keeps the saved position. Either value creates the record when none exists, with progress_sec and duration_sec 0.
+         */
         put: operations["setMovieWatched"];
         post?: never;
         delete?: never;
@@ -1505,7 +1517,7 @@ export interface paths {
         };
         /**
          * Get the trailer queue to play before a movie
-         * @description The ordered YouTube trailers the caller's saved preferences select for this movie: in-theaters trailers first, then library trailers, never the movie itself, deduplicated by TMDB id, with either pool topping up the other. The list is empty when the feature is disabled or no trailer is available. Trailers stream from YouTube; the server never stores or proxies them. Works with a cookie session or a device bearer token.
+         * @description The ordered YouTube trailers the caller's saved preferences select for this movie: in-theaters trailers first, then library trailers, never the movie itself, deduplicated by TMDB id, with either pool topping up the other. The list is empty when the feature is disabled or no trailer is available. Trailers stream from YouTube; the server never stores or proxies them. When in-theaters trailers are needed and not cached, the response can wait up to 5 seconds for TMDB; past that the queue uses whatever was cached before, which can be nothing. Works with a cookie session or a device bearer token.
          */
         get: operations["getMoviePreroll"];
         put?: never;
@@ -1525,7 +1537,7 @@ export interface paths {
         };
         /**
          * Get an HLS playlist for a movie
-         * @description Creates or reuses the authenticated user's HLS session, then returns its media playlist. The same cookie or bearer authentication is required again on every rewritten manifest and asset request; credentials are not embedded in playlist URLs. Asset URLs propagate audio_track, the explicit audio profile pair, the normalized start, playback_session, and reload so they resolve the same session. Each user holds at most HLS_MAX_SESSIONS_PER_USER sessions (3 by default): at the cap the user's least recently used sessions are evicted, and 503 is returned only when every slot is still being created. Sessions expire after 5 minutes without a manifest or asset request. Creating a session ends the user's other sessions for the same media and playback_session (an earlier seek window, profile, or audio track), whose assets then return 404. A session whose FFmpeg process failed is replaced on the next manifest request. A cold manifest request can wait up to 30 seconds for a remux preflight (remux requests without a stored verdict), up to 15 seconds for transcode capacity, and up to 30 seconds for the first published output (init.mp4 for transcodes, the first segment for copy-video), so about 75 seconds in the worst case before a retryable 503. 404 also covers a start position with no playable media, and a keepalive=1 request whose session no longer exists.
+         * @description Creates or reuses the authenticated user's HLS session, then returns its media playlist. The same cookie or bearer authentication is required again on every rewritten manifest and asset request; credentials are not embedded in playlist URLs. Asset URLs propagate audio_track, the explicit audio profile pair, the normalized start, playback_session, and reload so they resolve the same session. Each user holds at most HLS_MAX_SESSIONS_PER_USER sessions (3 by default): at the cap the user's least recently used sessions are evicted, and 503 is returned only when every slot is still being created. Sessions expire after 5 minutes without a manifest or asset request. Creating a session ends the user's other sessions for the same media and playback_session (an earlier seek window, profile, or audio track), whose assets then return 404. A session whose FFmpeg process failed is replaced on the next manifest request without keepalive=1. A cold manifest request can wait up to 30 seconds for a remux preflight (remux requests without a stored verdict), up to 15 seconds for transcode capacity, and up to 30 seconds for the first published output (init.mp4 for transcodes, the first segment for copy-video), so one creation can take about 75 seconds before a retryable 503; a request that joined a creation whose own client went away runs it again. 404 also covers a start position with no playable media, a session stopped or replaced while the request waited (request the manifest again), and a keepalive=1 request whose session no longer exists or failed. Every response, errors included, carries Cache-Control: no-store, except a 401 from authentication.
          */
         get: operations["hlsManifest"];
         put?: never;
@@ -1545,7 +1557,7 @@ export interface paths {
         };
         /**
          * Get an HLS initialization file or media segment for a movie
-         * @description Serves an asset from a previously created personal HLS session. Request the manifest first, authenticate this request independently, and fetch the asset URLs exactly as the playlist rewrites them; they carry the normalized start and the other query parameters that select the same owner-scoped session. A ready file supports conditional and byte-range requests. A file that FFmpeg has not completed yet can wait up to 120 seconds before a retryable 503. Ready assets use video/mp4 and Last-Modified, without ETag. If-Match with a specific entity tag fails with empty 412; If-None-Match: * returns 304. If-Range supports date validators; a nonmatching validator causes a full 200 response.
+         * @description Serves an asset from a previously created personal HLS session. Request the manifest first, authenticate this request independently, and fetch the asset URLs exactly as the playlist rewrites them; they carry the normalized start and the other query parameters that select the same owner-scoped session. A ready file supports conditional and byte-range requests. A file that FFmpeg has not completed yet can wait up to 120 seconds before a retryable 503. Ready assets use video/mp4 and Last-Modified, without ETag. If-Match with a specific entity tag fails with empty 412; If-None-Match: * returns 304. If-Range supports date validators; a nonmatching validator causes a full 200 response. A 500 can mean FFmpeg failed before writing this file; the next manifest request without keepalive=1 replaces the failed session. Every response, errors included, carries Cache-Control: no-store, except a 401 from authentication and the plain-text 416.
          */
         get: operations["hlsSegment"];
         put?: never;
@@ -2600,7 +2612,7 @@ export interface paths {
         put?: never;
         /**
          * Stop a personal movie HLS playback session
-         * @description Ends every session the caller has for this media and playback_session, across profiles, audio selections, and start windows. Always returns 200, including when no session exists or the id is unknown; an invalid playback_session returns 400.
+         * @description Ends every cached session the caller has for this media and playback_session, across profiles, audio selections, and start windows; a session still being created when the stop arrives is cached afterwards and ends on the idle timeout. Always returns 200, including when no session exists or the id is unknown; a malformed id or playback_session returns 400. Every response, errors included, carries Cache-Control: no-store, except a 401 from authentication.
          */
         post: operations["stopPersonalHlsSession"];
         delete?: never;
@@ -3363,7 +3375,7 @@ export interface components {
         SetWatchedRequest: {
             watched: boolean;
         };
-        /** @description The caller's saved position on one movie or TV episode. Null fields mean no progress has been saved. */
+        /** @description The caller's saved position on one movie or TV episode. Null fields mean nothing has been saved. Marking the item watched, or a save that reaches 95% of the duration, resets progress_sec to 0; when such a mark or save, or an unwatched mark, creates the record, duration_sec is 0 as well. */
         WatchProgress: {
             progress_sec: number | null;
             duration_sec: number | null;
@@ -3426,7 +3438,8 @@ export interface components {
         };
         ClearedEnvelope: components["schemas"]["JsonSuccess"] & {
             data: {
-                cleared: boolean;
+                /** @constant */
+                cleared: true;
             };
         };
         MovieWatchedEnvelope: components["schemas"]["JsonSuccess"] & {
@@ -5381,7 +5394,7 @@ export interface components {
                 "Cache-Control"?: "no-store";
                 /** @description Profile FFmpeg actually ran. This differs from the requested profile in the path when the remux safety gate forces a transcode, so a `remux` request can be answered with a transcode profile here, and when a requested transcode profile is taller than the effective encoder supports (software encoding runs 2160p_16mbps as 1080p_8mbps). */
                 "X-Igloo-Effective-Profile": components["schemas"]["HLSProfile"];
-                /** @description Seconds into the movie where the session's media really begins. Stream copy cannot cut mid-GOP, so a copy-video session starts at the source keyframe at or before the requested start. Omitted when it has not been measured. */
+                /** @description Seconds into the source file where the session's media really begins. Stream copy cannot cut mid-GOP, so a copy-video session starts at the source keyframe at or before the requested start. Omitted when it has not been measured. */
                 "X-Igloo-Actual-Start"?: number;
                 /** @description Codec of the audio the session actually produces: the resolved explicit ac3/eac3 encode, or aac in the default audio mode (a copied AAC-LC track or the stereo AAC encode). Diagnostic only; the media stream stays the playback authority. Omitted for video-only sessions. */
                 "X-Igloo-Effective-Audio-Codec"?: components["schemas"]["HLSEffectiveAudioCodec"];
@@ -5889,6 +5902,7 @@ export interface components {
             headers: {
                 /** @description Present with the value past-end when FFmpeg exited cleanly without writing the requested segment, so the client can end the stream instead of rebasing the session. Absent when the session is unknown or was stopped. */
                 "X-Igloo-Segment"?: "past-end";
+                "Cache-Control"?: "no-store";
                 [name: string]: unknown;
             };
             content: {
@@ -5954,6 +5968,7 @@ export interface components {
             headers: {
                 /** @description Seconds to wait before retrying this HLS request. */
                 "Retry-After": number;
+                "Cache-Control"?: "no-store";
                 [name: string]: unknown;
             };
             content: {
@@ -6169,7 +6184,7 @@ export interface components {
         HLSReloadQuery: string;
         /** @description Set to 1 for a keepalive ping: the request refreshes the session's idle TTL and returns the playlist as usual, but never creates a session. When the session is gone (evicted, stopped, or failed) it returns 404, so the client can rebase at its playhead instead of having a session recreated at a stale start. Not propagated into asset URLs. */
         HLSKeepaliveQuery: "1";
-        /** @description Requested Dolby output codec for an explicit audio profile. Must appear together with audio_channels; supplying only one of the pair returns HTTP 400. Omitting both selects the default audio mode: a selected track confirmed as AAC-LC is copied unchanged, keeping its channel count, and every other selected track is encoded to stereo AAC at 320 kbps. Watch-room HLS always uses the default audio mode. Explicit requests always encode at a server-owned bitrate; aac is not an accepted explicit value. */
+        /** @description Requested Dolby output codec for an explicit audio profile. Must appear together with audio_channels; supplying only one of the pair returns HTTP 400. Omitting both selects the default audio mode: a selected track confirmed as AAC-LC is copied unchanged, keeping its channel count, and every other selected track is encoded to stereo AAC at 320 kbps. Watch-room HLS always uses the default audio mode. Explicit requests always encode at a server-owned bitrate; aac is not an accepted explicit value. An explicit pair on media without audio returns 400; when this server's FFmpeg lacks the requested encoder the manifest returns 500. */
         HLSAudioCodecQuery: components["schemas"]["HLSRequestedAudioCodec"];
         /** @description Maximum output channels for an explicit audio profile: 2 means at most stereo, 6 preserves up to 5.1. A ceiling, never a target - mono and stereo sources are never upmixed, and sources above the maximum are downmixed with a full channel-layout conversion. Must appear together with audio_codec; supplying only one of the pair returns HTTP 400. */
         HLSAudioChannelsQuery: components["schemas"]["HLSAudioChannelLimit"];
@@ -7510,7 +7525,7 @@ export interface operations {
             query: {
                 /** @description Zero-based ordinal into the media's audio streams ordered by stream_index (not the ffprobe stream index). Required for media with audio; omit it for video-only media. */
                 audio_track?: components["parameters"]["AudioTrackQuery"];
-                /** @description Requested Dolby output codec for an explicit audio profile. Must appear together with audio_channels; supplying only one of the pair returns HTTP 400. Omitting both selects the default audio mode: a selected track confirmed as AAC-LC is copied unchanged, keeping its channel count, and every other selected track is encoded to stereo AAC at 320 kbps. Watch-room HLS always uses the default audio mode. Explicit requests always encode at a server-owned bitrate; aac is not an accepted explicit value. */
+                /** @description Requested Dolby output codec for an explicit audio profile. Must appear together with audio_channels; supplying only one of the pair returns HTTP 400. Omitting both selects the default audio mode: a selected track confirmed as AAC-LC is copied unchanged, keeping its channel count, and every other selected track is encoded to stereo AAC at 320 kbps. Watch-room HLS always uses the default audio mode. Explicit requests always encode at a server-owned bitrate; aac is not an accepted explicit value. An explicit pair on media without audio returns 400; when this server's FFmpeg lacks the requested encoder the manifest returns 500. */
                 audio_codec?: components["parameters"]["HLSAudioCodecQuery"];
                 /** @description Maximum output channels for an explicit audio profile: 2 means at most stereo, 6 preserves up to 5.1. A ceiling, never a target - mono and stereo sources are never upmixed, and sources above the maximum are downmixed with a full channel-layout conversion. Must appear together with audio_codec; supplying only one of the pair returns HTTP 400. */
                 audio_channels?: components["parameters"]["HLSAudioChannelsQuery"];
@@ -7546,7 +7561,7 @@ export interface operations {
             query: {
                 /** @description Zero-based ordinal into the media's audio streams ordered by stream_index (not the ffprobe stream index). Required for media with audio; omit it for video-only media. */
                 audio_track?: components["parameters"]["AudioTrackQuery"];
-                /** @description Requested Dolby output codec for an explicit audio profile. Must appear together with audio_channels; supplying only one of the pair returns HTTP 400. Omitting both selects the default audio mode: a selected track confirmed as AAC-LC is copied unchanged, keeping its channel count, and every other selected track is encoded to stereo AAC at 320 kbps. Watch-room HLS always uses the default audio mode. Explicit requests always encode at a server-owned bitrate; aac is not an accepted explicit value. */
+                /** @description Requested Dolby output codec for an explicit audio profile. Must appear together with audio_channels; supplying only one of the pair returns HTTP 400. Omitting both selects the default audio mode: a selected track confirmed as AAC-LC is copied unchanged, keeping its channel count, and every other selected track is encoded to stereo AAC at 320 kbps. Watch-room HLS always uses the default audio mode. Explicit requests always encode at a server-owned bitrate; aac is not an accepted explicit value. An explicit pair on media without audio returns 400; when this server's FFmpeg lacks the requested encoder the manifest returns 500. */
                 audio_codec?: components["parameters"]["HLSAudioCodecQuery"];
                 /** @description Maximum output channels for an explicit audio profile: 2 means at most stereo, 6 preserves up to 5.1. A ceiling, never a target - mono and stereo sources are never upmixed, and sources above the maximum are downmixed with a full channel-layout conversion. Must appear together with audio_codec; supplying only one of the pair returns HTTP 400. */
                 audio_channels?: components["parameters"]["HLSAudioChannelsQuery"];
@@ -8253,7 +8268,7 @@ export interface operations {
             query: {
                 /** @description Zero-based ordinal into the media's audio streams ordered by stream_index (not the ffprobe stream index). Required for media with audio; omit it for video-only media. */
                 audio_track?: components["parameters"]["AudioTrackQuery"];
-                /** @description Requested Dolby output codec for an explicit audio profile. Must appear together with audio_channels; supplying only one of the pair returns HTTP 400. Omitting both selects the default audio mode: a selected track confirmed as AAC-LC is copied unchanged, keeping its channel count, and every other selected track is encoded to stereo AAC at 320 kbps. Watch-room HLS always uses the default audio mode. Explicit requests always encode at a server-owned bitrate; aac is not an accepted explicit value. */
+                /** @description Requested Dolby output codec for an explicit audio profile. Must appear together with audio_channels; supplying only one of the pair returns HTTP 400. Omitting both selects the default audio mode: a selected track confirmed as AAC-LC is copied unchanged, keeping its channel count, and every other selected track is encoded to stereo AAC at 320 kbps. Watch-room HLS always uses the default audio mode. Explicit requests always encode at a server-owned bitrate; aac is not an accepted explicit value. An explicit pair on media without audio returns 400; when this server's FFmpeg lacks the requested encoder the manifest returns 500. */
                 audio_codec?: components["parameters"]["HLSAudioCodecQuery"];
                 /** @description Maximum output channels for an explicit audio profile: 2 means at most stereo, 6 preserves up to 5.1. A ceiling, never a target - mono and stereo sources are never upmixed, and sources above the maximum are downmixed with a full channel-layout conversion. Must appear together with audio_codec; supplying only one of the pair returns HTTP 400. */
                 audio_channels?: components["parameters"]["HLSAudioChannelsQuery"];
@@ -8289,7 +8304,7 @@ export interface operations {
             query: {
                 /** @description Zero-based ordinal into the media's audio streams ordered by stream_index (not the ffprobe stream index). Required for media with audio; omit it for video-only media. */
                 audio_track?: components["parameters"]["AudioTrackQuery"];
-                /** @description Requested Dolby output codec for an explicit audio profile. Must appear together with audio_channels; supplying only one of the pair returns HTTP 400. Omitting both selects the default audio mode: a selected track confirmed as AAC-LC is copied unchanged, keeping its channel count, and every other selected track is encoded to stereo AAC at 320 kbps. Watch-room HLS always uses the default audio mode. Explicit requests always encode at a server-owned bitrate; aac is not an accepted explicit value. */
+                /** @description Requested Dolby output codec for an explicit audio profile. Must appear together with audio_channels; supplying only one of the pair returns HTTP 400. Omitting both selects the default audio mode: a selected track confirmed as AAC-LC is copied unchanged, keeping its channel count, and every other selected track is encoded to stereo AAC at 320 kbps. Watch-room HLS always uses the default audio mode. Explicit requests always encode at a server-owned bitrate; aac is not an accepted explicit value. An explicit pair on media without audio returns 400; when this server's FFmpeg lacks the requested encoder the manifest returns 500. */
                 audio_codec?: components["parameters"]["HLSAudioCodecQuery"];
                 /** @description Maximum output channels for an explicit audio profile: 2 means at most stereo, 6 preserves up to 5.1. A ceiling, never a target - mono and stereo sources are never upmixed, and sources above the maximum are downmixed with a full channel-layout conversion. Must appear together with audio_codec; supplying only one of the pair returns HTTP 400. */
                 audio_channels?: components["parameters"]["HLSAudioChannelsQuery"];
