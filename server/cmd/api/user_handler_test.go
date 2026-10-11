@@ -17,7 +17,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestUserProfileMutationHandlers_ConformToOpenAPI(t *testing.T) {
@@ -208,10 +207,10 @@ func TestUserAvatar_ReplacingOrClearingRemovesTheUploadedFile(t *testing.T) {
 		t.Fatalf("replaced avatar %s was not deleted", pngPath)
 	}
 
-	// The same type reuses the file name; the replacement must not delete it.
-	time.Sleep(2 * time.Millisecond)
-	if again := upload(t, "three.gif", []byte("GIF89a\x02\x00\x02\x00\x00\x00\x00")); again != gifPath || !fileExists(gifPath) {
-		t.Fatalf("same-type replacement = %s (exists=%v), want %s kept", again, fileExists(gifPath), gifPath)
+	// The same type still gets a file of its own, and the one it replaces goes.
+	again := upload(t, "three.gif", []byte("GIF89a\x02\x00\x02\x00\x00\x00\x00"))
+	if again == gifPath || !fileExists(again) || fileExists(gifPath) {
+		t.Fatalf("same-type replacement = %s (exists=%v), previous %s (exists=%v)", again, fileExists(again), gifPath, fileExists(gifPath))
 	}
 
 	req := newOpenAPIJSONRequest(http.MethodPut, "/api/user/avatar", `{"avatar":"https://example.com/avatar.png"}`)
@@ -256,11 +255,70 @@ func uploadAvatarAs(t *testing.T, app *Application, userID int64) string {
 		t.Fatalf("upload avatar for user %d status = %d: %s", userID, w.Code, w.Body.String())
 	}
 
-	path := filepath.Join(app.CurrentSettings().StaticDir, "avatars", fmt.Sprintf("%d.png", userID))
+	stored, err := app.Queries.GetUser(context.Background(), userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(app.CurrentSettings().StaticDir, "avatars", uploadedAvatarFileName(stored.Avatar.String))
 	if _, err := os.Stat(path); err != nil {
 		t.Fatalf("uploaded avatar %s is missing: %v", path, err)
 	}
 	return path
+}
+
+// When the account cannot be pointed at a new upload, the avatar it has must
+// be untouched and the new file must not linger.
+func TestUploadUserAvatar_FailedAccountUpdateKeepsTheCurrentAvatar(t *testing.T) {
+	app := setupSessionTestApp(t)
+	user := createTestUser(t, app, "Uploader", "uploader@example.com", false)
+	current := uploadAvatarAs(t, app, user.ID)
+	before, err := os.ReadFile(current)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = app.DB.Exec(`CREATE TRIGGER fail_avatar BEFORE UPDATE OF avatar ON users BEGIN SELECT RAISE(ABORT, 'avatar update failed'); END`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := httptest.NewRecorder()
+	authenticatedRouter(t, app, user.ID).ServeHTTP(w, avatarUploadRequest(t, "avatar", "replacement.png", []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\x0dIHDR-replacement")))
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500: %s", w.Code, w.Body.String())
+	}
+
+	after, err := os.ReadFile(current)
+	if err != nil || string(after) != string(before) {
+		t.Fatalf("current avatar changed or vanished after a failed upload (%v)", err)
+	}
+	entries, err := os.ReadDir(filepath.Dir(current))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != filepath.Base(current) {
+		t.Fatalf("avatars dir = %v, want only %s", entries, filepath.Base(current))
+	}
+}
+
+func TestIsOwnUploadedAvatarName(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		want bool
+	}{
+		{"7-1791677952553000000.png", true},
+		{"7-1.webp", true},
+		{"17-1791677952553000000.png", false},
+		{"7.png", false},
+		{"7-.png", false},
+		{"7-12a.png", false},
+		{"7-123.txt", false},
+		{"7-123/../8-123.png", false},
+		{"../7-123.png", false},
+	} {
+		if got := isOwnUploadedAvatarName(7, tt.name); got != tt.want {
+			t.Errorf("isOwnUploadedAvatarName(7, %q) = %v, want %v", tt.name, got, tt.want)
+		}
+	}
 }
 
 func TestUpdateUserAvatar_RejectsValuesThatAreNotExternalURLs(t *testing.T) {

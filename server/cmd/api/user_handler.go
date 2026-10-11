@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -330,7 +331,7 @@ func (app *Application) UpdateUserAvatar(w http.ResponseWriter, r *http.Request)
 }
 
 // uploadedAvatarURLPrefix is the URL UploadUserAvatar publishes an avatar
-// under; the file behind it is static/avatars/<userID><ext>.
+// under; the file behind it is static/avatars/<userID>-<unix nanos><ext>.
 const uploadedAvatarURLPrefix = "/api/static/avatars/"
 
 var allowedAvatarMimeTypes = map[string]string{
@@ -401,11 +402,15 @@ func (app *Application) UploadUserAvatar(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	filename := fmt.Sprintf("%d%s", userID, ext)
+	// Every upload gets a file name of its own. Static files are served with
+	// a year-long max-age, so a reused name would keep showing the previous
+	// image, and writing over the file the account points at would change the
+	// avatar even when the account update below fails.
+	filename := fmt.Sprintf("%d-%d%s", userID, time.Now().UnixNano(), ext)
 	filePath := filepath.Join(avatarsDir, filename)
 
-	// A temp file renamed into place: a failed write never leaves a truncated
-	// image under the name the account may already point at.
+	// A temp file renamed into place, so a failed write leaves nothing under
+	// the new name.
 	err = writeAvatarFile(avatarsDir, filePath, file)
 	if err != nil {
 		app.Logger.Error("failed to write avatar file", "error", err, "path", filePath)
@@ -413,14 +418,7 @@ func (app *Application) UploadUserAvatar(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// The file name repeats on every upload of the same type, and static
-	// files are served with a year-long max-age, so the version makes each
-	// upload a new URL that caches have not seen.
-	avatarURL := fmt.Sprintf("%s%s?v=%d", uploadedAvatarURLPrefix, filename, time.Now().UnixMilli())
-	previousFile := ""
-	if currentUser.Avatar.Valid {
-		previousFile = uploadedAvatarFileName(currentUser.Avatar.String)
-	}
+	avatarURL := uploadedAvatarURLPrefix + filename
 
 	user, err := app.Queries.UpdateUserAvatar(r.Context(), database.UpdateUserAvatarParams{
 		Avatar: sql.NullString{String: avatarURL, Valid: true},
@@ -428,16 +426,12 @@ func (app *Application) UploadUserAvatar(w http.ResponseWriter, r *http.Request)
 	})
 	if err != nil {
 		app.Logger.Error("failed to update user avatar in database", "error", err, "user_id", userID)
-		// The account still points at the previous upload, which shares this
-		// name when the type is unchanged; only a new name can go.
-		if previousFile != filename {
-			_ = os.Remove(filePath)
-		}
+		_ = os.Remove(filePath)
 		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 
-	if currentUser.Avatar.Valid && previousFile != filename {
+	if currentUser.Avatar.Valid {
 		app.deleteUploadedAvatar(userID, currentUser.Avatar.String)
 	}
 
@@ -460,14 +454,35 @@ func (app *Application) UploadUserAvatar(w http.ResponseWriter, r *http.Request)
 }
 
 // uploadedAvatarFileName returns the file name an uploaded avatar URL points
-// at, without its version query, or "" for any other avatar value.
+// at, or "" for any other avatar value.
 func uploadedAvatarFileName(avatarURL string) string {
 	name, ok := strings.CutPrefix(avatarURL, uploadedAvatarURLPrefix)
 	if !ok {
 		return ""
 	}
-	name, _, _ = strings.Cut(name, "?")
 	return name
+}
+
+// isOwnUploadedAvatarName reports whether name has the exact shape
+// UploadUserAvatar gives userID's files: <userID>-<digits><allowed ext>. The
+// name comes from a stored value, and this shape cannot reach another user's
+// file or leave the avatars directory.
+func isOwnUploadedAvatarName(userID int64, name string) bool {
+	rest, ok := strings.CutPrefix(name, strconv.FormatInt(userID, 10)+"-")
+	if !ok {
+		return false
+	}
+	ext := filepath.Ext(rest)
+	stamp := strings.TrimSuffix(rest, ext)
+	if stamp == "" || strings.Trim(stamp, "0123456789") != "" {
+		return false
+	}
+	for _, allowed := range allowedAvatarMimeTypes {
+		if ext == allowed {
+			return true
+		}
+	}
+	return false
 }
 
 func writeAvatarFile(dir, path string, src io.Reader) error {
@@ -495,18 +510,7 @@ func writeAvatarFile(dir, path string, src io.Reader) error {
 // file or one that climbs out of the static directory, is left alone.
 func (app *Application) deleteUploadedAvatar(userID int64, avatarURL string) {
 	name := uploadedAvatarFileName(avatarURL)
-	if name == "" {
-		return
-	}
-
-	ownUpload := false
-	for _, ext := range allowedAvatarMimeTypes {
-		if name == fmt.Sprintf("%d%s", userID, ext) {
-			ownUpload = true
-			break
-		}
-	}
-	if !ownUpload {
+	if !isOwnUploadedAvatarName(userID, name) {
 		return
 	}
 

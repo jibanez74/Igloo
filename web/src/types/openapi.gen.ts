@@ -357,7 +357,7 @@ export interface paths {
         put?: never;
         /**
          * Upload a user avatar image
-         * @description Writes the image to the static directory's avatars folder and points the account at it. The stored path carries a version query that changes on every upload, so caches holding the previous image do not answer for the new one. An earlier upload under another file name is deleted once the account points at the new image.
+         * @description Writes the image to the static directory's avatars folder under a new file name and points the account at it, so caches holding the previous image never answer for the new one. The previous upload is deleted once the account points at the new image; if the account cannot be updated, the new file is removed and the current avatar is untouched.
          */
         post: operations["uploadUserAvatar"];
         delete?: never;
