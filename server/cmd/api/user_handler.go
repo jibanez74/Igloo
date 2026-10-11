@@ -293,22 +293,12 @@ func (app *Application) UpdateUserAvatar(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	currentUser, err := app.Queries.GetUser(r.Context(), userID)
-	if err != nil {
-		app.Logger.Error("failed to get user for avatar update", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
-		return
-	}
-
 	var avatarValue sql.NullString
 	if avatar != "" {
 		avatarValue = sql.NullString{String: avatar, Valid: true}
 	}
 
-	user, err := app.Queries.UpdateUserAvatar(r.Context(), database.UpdateUserAvatarParams{
-		Avatar: avatarValue,
-		ID:     userID,
-	})
+	user, replaced, err := app.replaceUserAvatar(r.Context(), userID, avatarValue)
 	if err != nil {
 		app.Logger.Error("failed to update user avatar", "error", err, "user_id", userID)
 		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
@@ -316,8 +306,8 @@ func (app *Application) UpdateUserAvatar(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Only now that the account no longer points at it.
-	if currentUser.Avatar.Valid {
-		app.deleteUploadedAvatar(userID, currentUser.Avatar.String)
+	if replaced.Valid {
+		app.deleteUploadedAvatar(userID, replaced.String)
 	}
 
 	res := helpers.JSONResponse{
@@ -387,13 +377,6 @@ func (app *Application) UploadUserAvatar(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	currentUser, err := app.Queries.GetUser(r.Context(), userID)
-	if err != nil {
-		app.Logger.Error("failed to get user for avatar upload", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
-		return
-	}
-
 	avatarsDir := filepath.Join(app.CurrentSettings().StaticDir, "avatars")
 	_, err = helpers.GetOrCreateDir(avatarsDir)
 	if err != nil {
@@ -420,10 +403,7 @@ func (app *Application) UploadUserAvatar(w http.ResponseWriter, r *http.Request)
 
 	avatarURL := uploadedAvatarURLPrefix + filename
 
-	user, err := app.Queries.UpdateUserAvatar(r.Context(), database.UpdateUserAvatarParams{
-		Avatar: sql.NullString{String: avatarURL, Valid: true},
-		ID:     userID,
-	})
+	user, replaced, err := app.replaceUserAvatar(r.Context(), userID, sql.NullString{String: avatarURL, Valid: true})
 	if err != nil {
 		app.Logger.Error("failed to update user avatar in database", "error", err, "user_id", userID)
 		_ = os.Remove(filePath)
@@ -431,8 +411,8 @@ func (app *Application) UploadUserAvatar(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if currentUser.Avatar.Valid {
-		app.deleteUploadedAvatar(userID, currentUser.Avatar.String)
+	if replaced.Valid {
+		app.deleteUploadedAvatar(userID, replaced.String)
 	}
 
 	app.Logger.Info("avatar uploaded successfully",
@@ -451,6 +431,37 @@ func (app *Application) UploadUserAvatar(w http.ResponseWriter, r *http.Request)
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, res)
+}
+
+// replaceUserAvatar points the account at avatar and returns the value it
+// replaced, read in the same transaction. The pool's single connection
+// serializes transactions, so of two concurrent changes each gets the value it
+// actually replaced and deletes only that file; reading the old value first
+// would let both delete the same file and orphan the first new upload.
+func (app *Application) replaceUserAvatar(ctx context.Context, userID int64, avatar sql.NullString) (database.UpdateUserAvatarRow, sql.NullString, error) {
+	tx, err := app.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return database.UpdateUserAvatarRow{}, sql.NullString{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	qtx := app.Queries.WithTx(tx)
+	current, err := qtx.GetUser(ctx, userID)
+	if err != nil {
+		return database.UpdateUserAvatarRow{}, sql.NullString{}, err
+	}
+	user, err := qtx.UpdateUserAvatar(ctx, database.UpdateUserAvatarParams{
+		Avatar: avatar,
+		ID:     userID,
+	})
+	if err != nil {
+		return database.UpdateUserAvatarRow{}, sql.NullString{}, err
+	}
+	err = tx.Commit()
+	if err != nil {
+		return database.UpdateUserAvatarRow{}, sql.NullString{}, err
+	}
+	return user, current.Avatar, nil
 }
 
 // uploadedAvatarFileName returns the file name an uploaded avatar URL points

@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -219,8 +220,8 @@ func TestUserAvatar_ReplacingOrClearingRemovesTheUploadedFile(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("set avatar URL status = %d: %s", w.Code, w.Body.String())
 	}
-	if fileExists(gifPath) {
-		t.Fatalf("avatar %s survived switching to an external URL", gifPath)
+	if fileExists(again) {
+		t.Fatalf("avatar %s survived switching to an external URL", again)
 	}
 	stored, err := app.Queries.GetUser(context.Background(), user.ID)
 	if err != nil {
@@ -297,6 +298,43 @@ func TestUploadUserAvatar_FailedAccountUpdateKeepsTheCurrentAvatar(t *testing.T)
 	}
 	if len(entries) != 1 || entries[0].Name() != filepath.Base(current) {
 		t.Fatalf("avatars dir = %v, want only %s", entries, filepath.Base(current))
+	}
+}
+
+// Concurrent replacements must each delete the file they replaced, so only
+// the avatar the account ends up pointing at stays on disk.
+func TestUploadUserAvatar_ConcurrentReplacementsLeaveOneFile(t *testing.T) {
+	app := setupSessionTestApp(t)
+	user := createTestUser(t, app, "Uploader", "uploader@example.com", false)
+	handler := authenticatedRouter(t, app, user.ID)
+	uploadAvatarAs(t, app, user.ID)
+
+	var wait sync.WaitGroup
+	for i := range 8 {
+		wait.Go(func() {
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, avatarUploadRequest(t, "avatar", fmt.Sprintf("%d.png", i), []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\x0dIHDR")))
+			if w.Code != http.StatusOK {
+				t.Errorf("upload %d status = %d: %s", i, w.Code, w.Body.String())
+			}
+		})
+	}
+	wait.Wait()
+
+	stored, err := app.Queries.GetUser(context.Background(), user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(filepath.Join(app.CurrentSettings().StaticDir, "avatars"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != uploadedAvatarFileName(stored.Avatar.String) {
+		names := make([]string, 0, len(entries))
+		for _, entry := range entries {
+			names = append(names, entry.Name())
+		}
+		t.Fatalf("avatars dir = %v, want only the stored %q", names, stored.Avatar.String)
 	}
 }
 
