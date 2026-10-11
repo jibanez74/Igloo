@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -648,6 +649,73 @@ func TestWatchRoomWebSocket_ReceivesRoomDeletedOnDelete(t *testing.T) {
 	guestDeleted := readUntilEventType(t, guestConn, "room_deleted")
 	if guestDeleted.RoomID != room.ID {
 		t.Fatalf("guest room_deleted event had wrong room_id: got %d want %d", guestDeleted.RoomID, room.ID)
+	}
+}
+
+// Deleting a user cascades away the rooms they own, and both delete paths must
+// finish the job the way a room or movie deletion does: members hear
+// room_deleted, cached authorizations go, and the room is tombstoned.
+func TestDeletingRoomOwnerEndsTheirRooms(t *testing.T) {
+	tests := []struct {
+		name        string
+		operationID string
+		request     func(ownerID int64) *http.Request
+		caller      func(t *testing.T, app *Application, ownerID int64) int64
+	}{
+		{
+			name:        "self delete",
+			operationID: "deleteUserAccount",
+			request: func(int64) *http.Request {
+				return newOpenAPIJSONRequest(http.MethodDelete, "/api/user", "")
+			},
+			caller: func(_ *testing.T, _ *Application, ownerID int64) int64 { return ownerID },
+		},
+		{
+			name:        "admin delete",
+			operationID: "adminDeleteUser",
+			request: func(ownerID int64) *http.Request {
+				return newOpenAPIJSONRequest(http.MethodDelete, "/api/admin/users/"+strconv.FormatInt(ownerID, 10), "")
+			},
+			caller: func(t *testing.T, app *Application, _ int64) int64 {
+				return createTestUser(t, app, "Admin", "admin-owner-delete@example.com", true).ID
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := setupTestApp(t)
+			ctx := context.Background()
+			ownerID, movieID := createTestUserAndMovie(t, app)
+			guest := createTestUser(t, app, "Guest", "guest-owner-delete@example.com", false)
+			room := createTestRoom(t, app, ownerID, movieID)
+			addMembersToRoom(t, app, room.ID, ownerID, guest.ID)
+			_, err := app.loadAuthorizedWatchRoom(ctx, room.ID, guest.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			server := setupWatchRoomWSTestServer(t, app)
+			guestConn, _ := dialWatchRoomSocket(t, app, server.URL, room.ID, guest.ID)
+			defer guestConn.Close()
+			readUntilEventType(t, guestConn, "room_snapshot")
+
+			callerID := tt.caller(t, app, ownerID)
+			serveOpenAPIExchange(t, authenticatedRouter(t, app, callerID), tt.operationID, tt.request(ownerID), http.StatusOK)
+
+			event := readUntilEventType(t, guestConn, "room_deleted")
+			if event.RoomID != room.ID {
+				t.Fatalf("room_deleted room_id = %d, want %d", event.RoomID, room.ID)
+			}
+			app.WatchRoomAuthCache.mu.Lock()
+			_, cached := app.WatchRoomAuthCache.entries[watchRoomAuthKey{roomID: room.ID, userID: guest.ID}]
+			app.WatchRoomAuthCache.mu.Unlock()
+			if cached {
+				t.Fatal("room authorization survived the owner's deletion")
+			}
+			if !app.isRoomHLSSessionDeleted(room.ID) {
+				t.Fatal("room HLS session was not marked deleted")
+			}
+		})
 	}
 }
 

@@ -52,6 +52,12 @@ func (app *Application) IdentifyMovie(w http.ResponseWriter, r *http.Request) {
 
 	tmdbMovie := &tmdb.TmdbMovie{TmdbID: payload.TmdbID}
 	if err := app.Tmdb.GetTmdbMovieByID(ctx, tmdbMovie); err != nil {
+		// 404 already answers an unknown local movie here, so an id TMDB does
+		// not know is a bad request field rather than a missing resource.
+		if tmdb.IsNotFound(err) {
+			helpers.ErrorJSON(w, errors.New("tmdb_id not found on TMDB"), http.StatusBadRequest)
+			return
+		}
 		app.Logger.Error("tmdb get by id failed", "error", err, "tmdb_id", payload.TmdbID)
 		helpers.ErrorJSON(w, errors.New("failed to fetch movie from TMDB"))
 		return

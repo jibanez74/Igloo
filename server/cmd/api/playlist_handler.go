@@ -132,3 +132,25 @@ func (app *Application) getPlaylistOwner(ctx context.Context, ownerID int64) (us
 
 	return owner, nil
 }
+
+// removeFromPlaylist deletes one item and moves the playlist's updated_at in
+// one transaction, so a failed timestamp never answers 500 for an item that is
+// already gone.
+func (app *Application) removeFromPlaylist(ctx context.Context, playlistID int64, remove func(*database.Queries) error) error {
+	tx, err := app.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	qtx := app.Queries.WithTx(tx)
+	err = remove(qtx)
+	if err != nil {
+		return err
+	}
+	err = qtx.UpdatePlaylistTimestamp(ctx, playlistID)
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
+}

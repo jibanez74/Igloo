@@ -234,8 +234,7 @@ function signalFireTechnicalDetails(): MovieTechnicalDetailsResponse {
         id: 50,
         title: "Opening Credits",
         start_time: 372,
-        thumb: nullableString("/opening-credits.jpg"),
-        movie_id: nullableInt64(SIGNAL_FIRE_ID),
+        movie_id: SIGNAL_FIRE_ID,
       },
     ],
   };

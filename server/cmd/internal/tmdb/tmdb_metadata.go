@@ -232,10 +232,6 @@ func (t *tmdbClient) GetMoviesInTheaters(ctx context.Context) ([]*TmdbMovie, err
 		return nil, err
 	}
 
-	if len(results) == 0 {
-		return nil, errors.New("no movies found in theaters")
-	}
-
 	return tmdbMoviePointers(results), nil
 }
 
@@ -364,6 +360,13 @@ type StatusError struct {
 
 func (e *StatusError) Error() string {
 	return fmt.Sprintf("tmdb status %d: %s", e.StatusCode, e.Message)
+}
+
+// IsNotFound reports whether TMDB answered 404, which for a lookup by id means
+// the id names nothing on TMDB.
+func IsNotFound(err error) bool {
+	var status *StatusError
+	return errors.As(err, &status) && status.StatusCode == http.StatusNotFound
 }
 
 // ProviderFailure classifies failures for scan dispatch. Valid no-match results

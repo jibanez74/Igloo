@@ -12,8 +12,7 @@ function chapter(id: number, title: string, startTime: number): ChapterType {
     id,
     title,
     start_time: startTime,
-    thumb: { String: "", Valid: false },
-    movie_id: { Int64: 17, Valid: true },
+    movie_id: 17,
   };
 }
 

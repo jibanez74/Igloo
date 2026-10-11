@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"igloo/cmd/internal/database"
@@ -58,9 +60,10 @@ const (
 
 // Said by both the self-service and the admin user handlers.
 const (
-	userNotFoundMessage  = "user not found"
-	nameRequiredMessage  = "name is required"
-	emailRequiredMessage = "email is required"
+	userNotFoundMessage    = "user not found"
+	nameRequiredMessage    = "name is required"
+	emailRequiredMessage   = "email is required"
+	isAdminRequiredMessage = "is_admin is required"
 
 	// The fragment SQLite puts in the error when an insert or update collides
 	// with a unique index, which is how a taken email is detected.
@@ -72,6 +75,19 @@ const (
 func validateUserName(name string) error {
 	if utf8.RuneCountInString(name) > userNameMaxLength {
 		return fmt.Errorf("name must be %d characters or less", userNameMaxLength)
+	}
+	return nil
+}
+
+// validateUserEmail checks a trimmed email for the self-service and admin
+// handlers alike: required, and at most userEmailMaxLength characters. The
+// format is not validated.
+func validateUserEmail(email string) error {
+	if email == "" {
+		return errors.New(emailRequiredMessage)
+	}
+	if utf8.RuneCountInString(email) > userEmailMaxLength {
+		return fmt.Errorf("email must be %d characters or less", userEmailMaxLength)
 	}
 	return nil
 }
@@ -140,13 +156,8 @@ func (app *Application) UpdateUserEmail(w http.ResponseWriter, r *http.Request) 
 
 	req.Email = strings.TrimSpace(req.Email)
 
-	if req.Email == "" {
-		helpers.ErrorJSON(w, errors.New(emailRequiredMessage), http.StatusBadRequest)
-		return
-	}
-
-	if utf8.RuneCountInString(req.Email) > userEmailMaxLength {
-		helpers.ErrorJSON(w, fmt.Errorf("email must be %d characters or less", userEmailMaxLength), http.StatusBadRequest)
+	if err := validateUserEmail(req.Email); err != nil {
+		helpers.ErrorJSON(w, err, http.StatusBadRequest)
 		return
 	}
 
@@ -252,7 +263,8 @@ func (app *Application) UpdateUserPassword(w http.ResponseWriter, r *http.Reques
 }
 
 type UpdateUserAvatarRequest struct {
-	Avatar string `json:"avatar"`
+	// A pointer so a missing avatar is a 400 rather than a silent clear.
+	Avatar *string `json:"avatar"`
 }
 
 func (app *Application) UpdateUserAvatar(w http.ResponseWriter, r *http.Request) {
@@ -267,9 +279,15 @@ func (app *Application) UpdateUserAvatar(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	if req.Avatar == nil {
+		helpers.ErrorJSON(w, errors.New("avatar is required"), http.StatusBadRequest)
+		return
+	}
+	avatar := *req.Avatar
+
 	// Uploaded avatars are set only by UploadUserAvatar; this endpoint takes an
 	// external image URL or clears the avatar.
-	if !isOptionalHTTPURL(req.Avatar) {
+	if !isOptionalHTTPURL(avatar) {
 		helpers.ErrorJSON(w, errors.New("avatar must be an http or https URL"), http.StatusBadRequest)
 		return
 	}
@@ -281,13 +299,9 @@ func (app *Application) UpdateUserAvatar(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if currentUser.Avatar.Valid {
-		app.deleteUploadedAvatar(userID, currentUser.Avatar.String)
-	}
-
 	var avatarValue sql.NullString
-	if req.Avatar != "" {
-		avatarValue = sql.NullString{String: req.Avatar, Valid: true}
+	if avatar != "" {
+		avatarValue = sql.NullString{String: avatar, Valid: true}
 	}
 
 	user, err := app.Queries.UpdateUserAvatar(r.Context(), database.UpdateUserAvatarParams{
@@ -298,6 +312,11 @@ func (app *Application) UpdateUserAvatar(w http.ResponseWriter, r *http.Request)
 		app.Logger.Error("failed to update user avatar", "error", err, "user_id", userID)
 		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
+	}
+
+	// Only now that the account no longer points at it.
+	if currentUser.Avatar.Valid {
+		app.deleteUploadedAvatar(userID, currentUser.Avatar.String)
 	}
 
 	res := helpers.JSONResponse{
@@ -374,10 +393,6 @@ func (app *Application) UploadUserAvatar(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if currentUser.Avatar.Valid {
-		app.deleteUploadedAvatar(userID, currentUser.Avatar.String)
-	}
-
 	avatarsDir := filepath.Join(app.CurrentSettings().StaticDir, "avatars")
 	_, err = helpers.GetOrCreateDir(avatarsDir)
 	if err != nil {
@@ -389,21 +404,23 @@ func (app *Application) UploadUserAvatar(w http.ResponseWriter, r *http.Request)
 	filename := fmt.Sprintf("%d%s", userID, ext)
 	filePath := filepath.Join(avatarsDir, filename)
 
-	dst, err := os.Create(filePath)
+	// A temp file renamed into place: a failed write never leaves a truncated
+	// image under the name the account may already point at.
+	err = writeAvatarFile(avatarsDir, filePath, file)
 	if err != nil {
-		app.Logger.Error("failed to create avatar file", "error", err, "path", filePath)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
-		return
-	}
-	defer dst.Close()
-
-	if _, err := io.Copy(dst, file); err != nil {
 		app.Logger.Error("failed to write avatar file", "error", err, "path", filePath)
 		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 
-	avatarURL := uploadedAvatarURLPrefix + filename
+	// The file name repeats on every upload of the same type, and static
+	// files are served with a year-long max-age, so the version makes each
+	// upload a new URL that caches have not seen.
+	avatarURL := fmt.Sprintf("%s%s?v=%d", uploadedAvatarURLPrefix, filename, time.Now().UnixMilli())
+	previousFile := ""
+	if currentUser.Avatar.Valid {
+		previousFile = uploadedAvatarFileName(currentUser.Avatar.String)
+	}
 
 	user, err := app.Queries.UpdateUserAvatar(r.Context(), database.UpdateUserAvatarParams{
 		Avatar: sql.NullString{String: avatarURL, Valid: true},
@@ -411,9 +428,17 @@ func (app *Application) UploadUserAvatar(w http.ResponseWriter, r *http.Request)
 	})
 	if err != nil {
 		app.Logger.Error("failed to update user avatar in database", "error", err, "user_id", userID)
-		os.Remove(filePath)
+		// The account still points at the previous upload, which shares this
+		// name when the type is unchanged; only a new name can go.
+		if previousFile != filename {
+			_ = os.Remove(filePath)
+		}
 		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
+	}
+
+	if currentUser.Avatar.Valid && previousFile != filename {
+		app.deleteUploadedAvatar(userID, currentUser.Avatar.String)
 	}
 
 	app.Logger.Info("avatar uploaded successfully",
@@ -434,13 +459,43 @@ func (app *Application) UploadUserAvatar(w http.ResponseWriter, r *http.Request)
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
+// uploadedAvatarFileName returns the file name an uploaded avatar URL points
+// at, without its version query, or "" for any other avatar value.
+func uploadedAvatarFileName(avatarURL string) string {
+	name, ok := strings.CutPrefix(avatarURL, uploadedAvatarURLPrefix)
+	if !ok {
+		return ""
+	}
+	name, _, _ = strings.Cut(name, "?")
+	return name
+}
+
+func writeAvatarFile(dir, path string, src io.Reader) error {
+	tmp, err := os.CreateTemp(dir, ".avatar-*")
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(tmp, src)
+	closeErr := tmp.Close()
+	if err == nil {
+		err = closeErr
+	}
+	if err == nil {
+		err = os.Rename(tmp.Name(), path)
+	}
+	if err != nil {
+		_ = os.Remove(tmp.Name())
+	}
+	return err
+}
+
 // deleteUploadedAvatar removes the file UploadUserAvatar wrote for userID.
 // The path comes from a stored value, so only the exact name the upload
 // produces for this user is deleted; any other value, including another user's
 // file or one that climbs out of the static directory, is left alone.
 func (app *Application) deleteUploadedAvatar(userID int64, avatarURL string) {
-	name, ok := strings.CutPrefix(avatarURL, uploadedAvatarURLPrefix)
-	if !ok {
+	name := uploadedAvatarFileName(avatarURL)
+	if name == "" {
 		return
 	}
 
@@ -487,13 +542,14 @@ func (app *Application) DeleteUserAccount(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	err = app.Queries.DeleteUser(r.Context(), userID)
+	roomIDs, err := app.deleteUserWithRooms(r.Context(), userID)
 	if err != nil {
 		app.Logger.Error("failed to delete user", "error", err, "user_id", userID)
 		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 
+	app.endDeletedOwnerRooms(roomIDs)
 	app.forgetUserDevices(userID)
 
 	if user.Avatar.Valid {
@@ -513,4 +569,25 @@ func (app *Application) DeleteUserAccount(w http.ResponseWriter, r *http.Request
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, res)
+}
+
+// deleteUserWithRooms deletes the user and returns the ids of the watch rooms
+// the cascade removed with them, read in the same transaction.
+func (app *Application) deleteUserWithRooms(ctx context.Context, userID int64) ([]int64, error) {
+	tx, err := app.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	qtx := app.Queries.WithTx(tx)
+	roomIDs, err := qtx.ListWatchRoomIDsByOwnerID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	err = qtx.DeleteUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	return roomIDs, tx.Commit()
 }

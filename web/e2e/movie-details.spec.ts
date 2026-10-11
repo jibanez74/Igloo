@@ -176,8 +176,7 @@ const technicalDetailsPayload = {
       id: 50,
       title: "Opening Credits",
       start_time: chapterStartSeconds,
-      thumb: nullableString("/opening-credits.jpg"),
-      movie_id: nullableInt64(movieId),
+      movie_id: movieId,
     },
   ],
 } satisfies MovieTechnicalDetailsResponse;

@@ -173,11 +173,21 @@ func (app *Application) GetMoviePlaylist(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	movieCount, _ := app.Queries.CountPlaylistMovies(r.Context(), playlistID)
+	movieCount, err := app.Queries.CountPlaylistMovies(r.Context(), playlistID)
+	if err != nil {
+		app.Logger.Error("failed to count playlist movies", "error", err, "playlist_id", playlistID)
+		helpers.ErrorJSON(w, errors.New(fetchPlaylistMessage))
+		return
+	}
 
 	var collaborators []database.GetPlaylistCollaboratorsRow
 	if permission == PermissionOwner {
-		collaborators, _ = app.Queries.GetPlaylistCollaborators(r.Context(), playlistID)
+		collaborators, err = app.Queries.GetPlaylistCollaborators(r.Context(), playlistID)
+		if err != nil {
+			app.Logger.Error("failed to get playlist collaborators", "error", err, "playlist_id", playlistID)
+			helpers.ErrorJSON(w, errors.New(fetchPlaylistMessage))
+			return
+		}
 	}
 
 	res := helpers.JSONResponse{
@@ -603,20 +613,15 @@ func (app *Application) RemoveMovieFromMoviePlaylist(w http.ResponseWriter, r *h
 		return
 	}
 
-	err = app.Queries.RemoveMovieFromPlaylist(r.Context(), database.RemoveMovieFromPlaylistParams{
-		PlaylistID: playlistID,
-		MovieID:    movieID,
+	err = app.removeFromPlaylist(r.Context(), playlistID, func(qtx *database.Queries) error {
+		return qtx.RemoveMovieFromPlaylist(r.Context(), database.RemoveMovieFromPlaylistParams{
+			PlaylistID: playlistID,
+			MovieID:    movieID,
+		})
 	})
 	if err != nil {
-		app.Logger.Error("failed to remove movie from playlist", "error", err)
+		app.Logger.Error("failed to remove movie from playlist", "error", err, "playlist_id", playlistID, "movie_id", movieID)
 		helpers.ErrorJSON(w, errors.New("failed to remove movie"))
-		return
-	}
-
-	timestampErr := app.Queries.UpdatePlaylistTimestamp(r.Context(), playlistID)
-	if timestampErr != nil {
-		app.Logger.Error(updatePlaylistTimestampLogMessage, "error", timestampErr, "playlist_id", playlistID)
-		helpers.ErrorJSON(w, errors.New(finalizePlaylistUpdateMessage), http.StatusInternalServerError)
 		return
 	}
 

@@ -254,6 +254,14 @@ func TestSearchTmdbMovies_HTTPByID(t *testing.T) {
 	if len(resp.Data.Results) != 1 || resp.Data.Results[0].TmdbID != 603 || resp.Data.Results[0].Title != "The Matrix" {
 		t.Fatalf("results = %+v, want single Matrix result", resp.Data.Results)
 	}
+
+	// An id TMDB does not know matches nothing, like a title that finds
+	// nothing, rather than failing the search.
+	unknown := newOpenAPIJSONRequest(http.MethodPost, "/api/tmdb/movies/search", `{"tmdb_id":604}`)
+	w = serveOpenAPIExchange(t, router, "searchTmdbMovies", unknown, http.StatusOK)
+	if !strings.Contains(w.Body.String(), `"results":[]`) {
+		t.Fatalf("unknown tmdb_id body = %s, want empty results", w.Body.String())
+	}
 }
 
 func TestTmdbHandlers_HTTPUnavailable(t *testing.T) {
@@ -567,6 +575,19 @@ func TestGetMoviesInTheaters_HTTPLimitsResults(t *testing.T) {
 	}
 }
 
+// TMDB listing nothing in theaters is an empty list, not a failure.
+func TestGetMoviesInTheaters_HTTPEmptyList(t *testing.T) {
+	app := setupTestApp(t)
+	app.Tmdb = &stubTmdbClient{theaterMovies: []*tmdb.TmdbMovie{}}
+	actor := createTestUser(t, app, "Actor", "actor@example.com", false)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/tmdb/movies/in-theaters", nil)
+	w := serveOpenAPIExchange(t, authenticatedRouter(t, app, actor.ID), "getMoviesInTheaters", req, http.StatusOK)
+	if !strings.Contains(w.Body.String(), `"movies":[]`) {
+		t.Fatalf("body = %s, want an empty movies list", w.Body.String())
+	}
+}
+
 func TestGetMoviesInTheaters_HTTPError(t *testing.T) {
 	app := setupTestApp(t)
 
@@ -718,6 +739,15 @@ func TestIdentifyMovie_HTTPErrorPaths(t *testing.T) {
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("missing movie status = %d, want 404", w.Code)
+	}
+
+	// For a movie that exists, an id TMDB does not know is the caller's bad
+	// field, not a server failure.
+	_, movieID := createTestUserAndMovie(t, app)
+	unknown := newOpenAPIJSONRequest(http.MethodPut, "/api/movies/"+strconv.FormatInt(movieID, 10)+"/identify", `{"tmdb_id":604}`)
+	w = serveOpenAPIExchange(t, router, "identifyMovie", unknown, http.StatusBadRequest)
+	if !strings.Contains(w.Body.String(), "tmdb_id not found on TMDB") {
+		t.Fatalf("unknown tmdb_id body = %s", w.Body.String())
 	}
 }
 

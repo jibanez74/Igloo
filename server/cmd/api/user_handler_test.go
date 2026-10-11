@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestUserProfileMutationHandlers_ConformToOpenAPI(t *testing.T) {
@@ -166,6 +167,7 @@ func TestUserAvatar_ReplacingOrClearingRemovesTheUploadedFile(t *testing.T) {
 	handler := authenticatedRouter(t, app, user.ID)
 	avatarsDir := filepath.Join(app.CurrentSettings().StaticDir, "avatars")
 
+	var lastURL string
 	upload := func(t *testing.T, filename string, content []byte) string {
 		t.Helper()
 		w := httptest.NewRecorder()
@@ -180,7 +182,13 @@ func TestUserAvatar_ReplacingOrClearingRemovesTheUploadedFile(t *testing.T) {
 		if !stored.Avatar.Valid || !strings.HasPrefix(stored.Avatar.String, "/api/static/avatars/") {
 			t.Fatalf("stored avatar = %+v, want an uploaded avatar URL", stored.Avatar)
 		}
-		return filepath.Join(avatarsDir, strings.TrimPrefix(stored.Avatar.String, "/api/static/avatars/"))
+		// Every upload is a new URL, so caches holding the previous image
+		// under a year-long max-age do not answer for the new one.
+		if stored.Avatar.String == lastURL {
+			t.Fatalf("upload %s kept the previous URL %q", filename, lastURL)
+		}
+		lastURL = stored.Avatar.String
+		return filepath.Join(avatarsDir, uploadedAvatarFileName(stored.Avatar.String))
 	}
 	fileExists := func(path string) bool {
 		_, err := os.Stat(path)
@@ -198,6 +206,12 @@ func TestUserAvatar_ReplacingOrClearingRemovesTheUploadedFile(t *testing.T) {
 	}
 	if fileExists(pngPath) {
 		t.Fatalf("replaced avatar %s was not deleted", pngPath)
+	}
+
+	// The same type reuses the file name; the replacement must not delete it.
+	time.Sleep(2 * time.Millisecond)
+	if again := upload(t, "three.gif", []byte("GIF89a\x02\x00\x02\x00\x00\x00\x00")); again != gifPath || !fileExists(gifPath) {
+		t.Fatalf("same-type replacement = %s (exists=%v), want %s kept", again, fileExists(gifPath), gifPath)
 	}
 
 	req := newOpenAPIJSONRequest(http.MethodPut, "/api/user/avatar", `{"avatar":"https://example.com/avatar.png"}`)
@@ -270,7 +284,7 @@ func TestUpdateUserAvatar_RejectsValuesThatAreNotExternalURLs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stored.Avatar.String != uploadedAvatarURLPrefix+filepath.Base(uploaded) {
+	if uploadedAvatarFileName(stored.Avatar.String) != filepath.Base(uploaded) {
 		t.Fatalf("stored avatar = %+v, want the upload kept after rejected updates", stored.Avatar)
 	}
 	if _, err := os.Stat(uploaded); err != nil {

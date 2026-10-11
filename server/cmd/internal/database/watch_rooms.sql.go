@@ -442,3 +442,34 @@ func (q *Queries) ListWatchRoomIDsByMovieID(ctx context.Context, movieID int64) 
 	}
 	return items, nil
 }
+
+const listWatchRoomIDsByOwnerID = `-- name: ListWatchRoomIDsByOwnerID :many
+SELECT id FROM watch_rooms
+WHERE owner_user_id = ?
+ORDER BY id
+`
+
+// Deleting a user cascades away the rooms they own; the ids are read in the
+// same transaction so the rooms' live state can be torn down after the commit.
+func (q *Queries) ListWatchRoomIDsByOwnerID(ctx context.Context, ownerUserID int64) ([]int64, error) {
+	rows, err := q.query(ctx, q.listWatchRoomIDsByOwnerIDStmt, listWatchRoomIDsByOwnerID, ownerUserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

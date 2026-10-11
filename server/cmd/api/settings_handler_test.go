@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -314,6 +315,29 @@ func TestUpdateLibrarySettings_RejectsMissingMediaDirectory(t *testing.T) {
 	}`, filepath.Join(t.TempDir(), "missing"))
 	w := serveAs(t, app, admin.ID, http.MethodPut, "/api/settings/libraries", body)
 
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// Startup rejects a library directory it cannot open, so saving one must too;
+// otherwise it saves with 200 and is blanked at the next restart.
+func TestUpdateLibrarySettings_RejectsUnreadableMediaDirectory(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads any directory")
+	}
+	app := setupSessionTestApp(t)
+	admin := createTestUser(t, app, "Settings Admin", "settings-admin@example.com", true)
+
+	dir := filepath.Join(t.TempDir(), "locked")
+	err := os.Mkdir(dir, 0o000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+
+	body := fmt.Sprintf(`{"movies_dir": %q, "shows_dir": null, "music_dir": null}`, dir)
+	w := serveAs(t, app, admin.ID, http.MethodPut, "/api/settings/libraries", body)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
 	}

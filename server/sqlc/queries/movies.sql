@@ -44,13 +44,15 @@ LEFT JOIN movie_tmdb_retries r ON r.movie_id = c.id;
 -- name: GetLatestMovies :many
 -- The home section renders title, poster and year only; certification is
 -- deliberately absent so the row matches the documented LatestMovie exactly.
+-- CURRENT_TIMESTAMP only has second resolution, so id breaks the ties a bulk
+-- scan creates, as GetLatestShows does.
 SELECT
   id,
   title,
   poster_path,
   year
 FROM movies
-ORDER BY created_at DESC
+ORDER BY created_at DESC, id DESC
 LIMIT 12;
 
 -- name: UpsertMovie :one
@@ -241,11 +243,10 @@ WHERE movie_id = ?;
 INSERT INTO chapters (
   movie_id,
   title,
-  start_time,
-  thumb
+  start_time
 )
 VALUES
-  (?, ?, ?, ?);
+  (?, ?, ?);
 
 -- name: CreateMovieGenre :exec
 -- Link movie to genre via junction table
