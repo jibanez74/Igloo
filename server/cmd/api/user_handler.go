@@ -60,9 +60,10 @@ const (
 
 // Said by both the self-service and the admin user handlers.
 const (
-	userNotFoundMessage  = "user not found"
-	nameRequiredMessage  = "name is required"
-	emailRequiredMessage = "email is required"
+	userNotFoundMessage    = "user not found"
+	nameRequiredMessage    = "name is required"
+	emailRequiredMessage   = "email is required"
+	isAdminRequiredMessage = "is_admin is required"
 
 	// The fragment SQLite puts in the error when an insert or update collides
 	// with a unique index, which is how a taken email is detected.
@@ -74,6 +75,19 @@ const (
 func validateUserName(name string) error {
 	if utf8.RuneCountInString(name) > userNameMaxLength {
 		return fmt.Errorf("name must be %d characters or less", userNameMaxLength)
+	}
+	return nil
+}
+
+// validateUserEmail checks a trimmed email for the self-service and admin
+// handlers alike: required, and at most userEmailMaxLength characters. The
+// format is not validated.
+func validateUserEmail(email string) error {
+	if email == "" {
+		return errors.New(emailRequiredMessage)
+	}
+	if utf8.RuneCountInString(email) > userEmailMaxLength {
+		return fmt.Errorf("email must be %d characters or less", userEmailMaxLength)
 	}
 	return nil
 }
@@ -142,13 +156,8 @@ func (app *Application) UpdateUserEmail(w http.ResponseWriter, r *http.Request) 
 
 	req.Email = strings.TrimSpace(req.Email)
 
-	if req.Email == "" {
-		helpers.ErrorJSON(w, errors.New(emailRequiredMessage), http.StatusBadRequest)
-		return
-	}
-
-	if utf8.RuneCountInString(req.Email) > userEmailMaxLength {
-		helpers.ErrorJSON(w, fmt.Errorf("email must be %d characters or less", userEmailMaxLength), http.StatusBadRequest)
+	if err := validateUserEmail(req.Email); err != nil {
+		helpers.ErrorJSON(w, err, http.StatusBadRequest)
 		return
 	}
 
@@ -254,7 +263,8 @@ func (app *Application) UpdateUserPassword(w http.ResponseWriter, r *http.Reques
 }
 
 type UpdateUserAvatarRequest struct {
-	Avatar string `json:"avatar"`
+	// A pointer so a missing avatar is a 400 rather than a silent clear.
+	Avatar *string `json:"avatar"`
 }
 
 func (app *Application) UpdateUserAvatar(w http.ResponseWriter, r *http.Request) {
@@ -269,9 +279,15 @@ func (app *Application) UpdateUserAvatar(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	if req.Avatar == nil {
+		helpers.ErrorJSON(w, errors.New("avatar is required"), http.StatusBadRequest)
+		return
+	}
+	avatar := *req.Avatar
+
 	// Uploaded avatars are set only by UploadUserAvatar; this endpoint takes an
 	// external image URL or clears the avatar.
-	if !isOptionalHTTPURL(req.Avatar) {
+	if !isOptionalHTTPURL(avatar) {
 		helpers.ErrorJSON(w, errors.New("avatar must be an http or https URL"), http.StatusBadRequest)
 		return
 	}
@@ -284,8 +300,8 @@ func (app *Application) UpdateUserAvatar(w http.ResponseWriter, r *http.Request)
 	}
 
 	var avatarValue sql.NullString
-	if req.Avatar != "" {
-		avatarValue = sql.NullString{String: req.Avatar, Valid: true}
+	if avatar != "" {
+		avatarValue = sql.NullString{String: avatar, Valid: true}
 	}
 
 	user, err := app.Queries.UpdateUserAvatar(r.Context(), database.UpdateUserAvatarParams{

@@ -9037,7 +9037,8 @@
             "maxLength": 100
           },
           "email": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 255
           },
           "password": {
             "type": "string",
@@ -9066,7 +9067,8 @@
             "maxLength": 100
           },
           "email": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 255
           },
           "is_admin": {
             "type": "boolean"
