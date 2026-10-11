@@ -22,7 +22,7 @@
   "tags": [
     {
       "name": "System",
-      "description": "Health and server metadata"
+      "description": "Server and database health"
     },
     {
       "name": "Auth",
@@ -940,7 +940,7 @@
             "$ref": "#/components/responses/Unauthorized"
           },
           "403": {
-            "description": "Forbidden static path.",
+            "description": "The path contains .. or names a directory.",
             "content": {
               "text/plain": {
                 "schema": {
@@ -1282,7 +1282,7 @@
             "$ref": "#/components/responses/InternalServerError"
           }
         },
-        "description": "Works whether or not a TMDB key is configured. Content-Type, Cache-Control, ETag, and Last-Modified are copied from the upstream response. A file name containing `..` returns 400."
+        "description": "Works whether or not a TMDB key is configured. Content-Type, Cache-Control, ETag, and Last-Modified are copied from the upstream response. A file name containing `..` returns 400. Any upstream status other than 200, including 404, returns 502. Conditional request headers are not forwarded, so success is always a full 200."
       }
     },
     "/api/tmdb/movies/search": {
@@ -1312,7 +1312,7 @@
             "$ref": "#/components/responses/InternalServerError"
           }
         },
-        "description": "Requires a nonblank title (trimmed) or a positive tmdb_id; otherwise 400. A positive tmdb_id returns that single TMDB movie and ignores title and year. Upstream TMDB failures return 500."
+        "description": "Requires a nonblank title (trimmed) or a positive tmdb_id; otherwise 400. A positive tmdb_id returns that single TMDB movie and ignores title and year. Otherwise the result is the first page of TMDB's title search, adult titles excluded, ranked by how well title and year match; a year narrows the search, and when it finds nothing the search is retried without it. No match is an empty list. Upstream TMDB failures return 500."
       }
     },
     "/api/tmdb/movies/in-theaters": {
@@ -1321,6 +1321,7 @@
           "TMDB"
         ],
         "summary": "List movies currently in theaters",
+        "description": "Up to 12 movies from the first page of TMDB's US now-playing list, in TMDB's order.",
         "operationId": "getMoviesInTheaters",
         "responses": {
           "200": {
@@ -1416,7 +1417,7 @@
             "$ref": "#/components/responses/InternalServerError"
           }
         },
-        "description": "Content-Type, Cache-Control, ETag, and Last-Modified are copied from the upstream response."
+        "description": "Fetches the video's hqdefault.jpg from YouTube. Content-Type, Cache-Control, ETag, and Last-Modified are copied from the upstream response. Any upstream status other than 200, including 404, returns 502. Conditional request headers are not forwarded, so success is always a full 200."
       }
     },
     "/api/search": {
@@ -4025,6 +4026,7 @@
           "Watch Rooms"
         ],
         "summary": "List watch rooms visible to the current user",
+        "description": "Rooms the caller belongs to, as owner or invitee, newest first.",
         "operationId": "getWatchRooms",
         "responses": {
           "200": {
@@ -4070,7 +4072,7 @@
           "Watch Rooms"
         ],
         "summary": "Get watch-room details",
-        "description": "Authenticates the requester and authorizes current room membership. Successful membership lookups may be cached for up to 30 seconds.",
+        "description": "Authenticates the requester and authorizes current room membership. Successful membership lookups may be cached for up to 30 seconds. An unknown room returns 403, the same as a room the caller is not a member of.",
         "operationId": "getWatchRoom",
         "parameters": [
           {
@@ -4229,7 +4231,7 @@
             }
           }
         },
-        "description": "Requires an authenticated room member before upgrading. Invalid room IDs, authentication failures, membership denial (including nonexistent rooms), and database failures use JSON error envelopes. Upgrade failures use text/plain: 400 for malformed handshake headers or key/version, 403 for a rejected Origin, and 500 for an unsupported server upgrade. Origin may be absent; otherwise it must match the request host with an https scheme when the server itself terminates TLS and http otherwise (X-Forwarded-Proto is not consulted), the configured VITE_DEV_SERVER origin, or HTTP port 3000 on the same local development hostname (localhost, 127.0.0.1, or ::1). On connection the server sends room_snapshot immediately. Client JSON messages follow WatchRoomClientEvent; server messages follow WatchRoomServerEvent. Any member may send playback commands. join requests another snapshot, ping receives pong, playback commands broadcast playback_changed to all room connections, member_joined goes to the other connections when a user opens their first connection, and member_left when a user's last connection closes while others remain. Playback state lives in server memory and resets to paused at 0 when the last connection leaves. Room deletion, including the removal of its movie, sends room_deleted and closes connections. Invalid JSON and unknown event types are ignored. WebSocket ping/pong control frames also keep the connection alive.",
+        "description": "Requires an authenticated room member before upgrading. Invalid room IDs, authentication failures, membership denial (including nonexistent rooms), and database failures use JSON error envelopes. Upgrade failures use text/plain: 400 for malformed handshake headers or key/version, 403 for a rejected Origin, and 500 for an unsupported server upgrade. Origin may be absent; otherwise it must match the request host with an https scheme when the server itself terminates TLS and http otherwise (X-Forwarded-Proto is not consulted), the configured VITE_DEV_SERVER origin, or HTTP port 3000 on the same local development hostname (localhost, 127.0.0.1, or ::1). On connection the server sends room_snapshot immediately. Client JSON messages follow WatchRoomClientEvent; server messages follow WatchRoomServerEvent. Any member may send playback commands. join requests another snapshot, ping receives pong, playback commands broadcast playback_changed to all room connections, member_joined goes to the other connections when a user opens their first connection, and member_left when a user's last connection closes while others remain. Playback state lives in server memory and resets to paused at 0 when the last connection leaves. Room deletion, including the removal of its movie, sends room_deleted and closes connections. Invalid JSON and unknown event types are ignored. The server sends a ping control frame every 40 seconds and closes a connection that sends no message or pong for 60 seconds, or that falls 256 messages behind.",
         "x-websocket-client-event": {
           "$ref": "#/components/schemas/WatchRoomClientEvent"
         },
@@ -4244,7 +4246,7 @@
           "Watch Rooms"
         ],
         "summary": "Direct-stream a watch-room movie",
-        "description": "Authenticates the requester and authorizes current room membership on every request, including range requests. Successful membership lookups may be cached for up to 30 seconds. Serves the original file with its media MIME type, a strong ETag, Last-Modified, byte ranges, and conditional request support. A matching If-None-Match returns 304; failed If-Match or If-Unmodified-Since returns empty 412. Range errors use text/plain. Returns 409 when a pinned selected subtitle ordinal is out of range after rescanning, selects a different stream_index, or its pinned non-null language changes. Recreate the room to select current tracks. The check is skipped when subtitle_track is null.",
+        "description": "Authenticates the requester and authorizes current room membership on every request, including range requests. Successful membership lookups may be cached for up to 30 seconds. An unknown room returns 403, the same as a room the caller is not a member of. A room that does not use direct playback returns 400. 404 means the movie or its file no longer exists. Serves the original file with its media MIME type, a strong ETag, Last-Modified, byte ranges, and conditional request support. A matching If-None-Match returns 304; failed If-Match or If-Unmodified-Since returns empty 412. Range errors use text/plain. Returns 409 when a pinned selected subtitle ordinal is out of range after rescanning, selects a different stream_index, or its pinned non-null language changes. Recreate the room to select current tracks. The check is skipped when subtitle_track is null.",
         "operationId": "streamWatchRoomMovie",
         "parameters": [
           {
@@ -4317,7 +4319,7 @@
           "Watch Rooms"
         ],
         "summary": "Headers for a direct watch-room movie stream",
-        "description": "Identical to GET but returns headers only, with no response body. The requester is authenticated and current room membership is authorized on every request; successful membership lookups may be cached for up to 30 seconds. Serves the original file with its media MIME type, a strong ETag, Last-Modified, byte ranges, and conditional request support. A matching If-None-Match returns 304; failed If-Match or If-Unmodified-Since returns empty 412. Range errors use text/plain. Content-Type describes the corresponding GET response, including application/json for handler/middleware errors or text/plain for range errors. Returns 409 when a pinned selected subtitle ordinal is out of range after rescanning, selects a different stream_index, or its pinned non-null language changes. Recreate the room to select current tracks. The check is skipped when subtitle_track is null.",
+        "description": "Identical to GET but returns headers only, with no response body. The requester is authenticated and current room membership is authorized on every request; successful membership lookups may be cached for up to 30 seconds. An unknown room returns 403, the same as a room the caller is not a member of. A room that does not use direct playback returns 400. 404 means the movie or its file no longer exists. Serves the original file with its media MIME type, a strong ETag, Last-Modified, byte ranges, and conditional request support. A matching If-None-Match returns 304; failed If-Match or If-Unmodified-Since returns empty 412. Range errors use text/plain. Content-Type describes the corresponding GET response, including application/json for handler/middleware errors or text/plain for range errors. Returns 409 when a pinned selected subtitle ordinal is out of range after rescanning, selects a different stream_index, or its pinned non-null language changes. Recreate the room to select current tracks. The check is skipped when subtitle_track is null.",
         "operationId": "streamWatchRoomMovieHead",
         "parameters": [
           {
@@ -4493,7 +4495,7 @@
           "Watch Rooms"
         ],
         "summary": "Get the HLS playlist for a watch room",
-        "description": "Creates or reuses the room-scoped HLS session and returns its media playlist. Every member must authenticate every manifest and asset request; room membership is authorized on each request, with successful membership lookups cached for up to 30 seconds. Credentials are not embedded in playlist URLs. Rewritten asset URLs carry the room's selected audio_track. Room sessions never wait for transcode capacity: a full pool returns 503 at once. A cold room can spend up to 30 seconds on a remux preflight and up to 30 seconds waiting for the first output before a retryable 503. A direct-mode room returns 400. Returns 409 when a pinned selected audio or subtitle ordinal is out of range after rescanning, selects a different stream_index, or its pinned non-null language changes. Recreate the room to select current tracks. The audio check is skipped when the room was created for a movie without audio, and the subtitle check when subtitle_track is null.",
+        "description": "Creates or reuses the room's single HLS session, which always starts at 0, and returns its media playlist. Every member must authenticate every manifest and asset request; room membership is authorized on each request, with successful membership lookups cached for up to 30 seconds. An unknown room returns 403, the same as a room the caller is not a member of. Credentials are not embedded in playlist URLs. Rewritten asset URLs carry the room's selected audio_track. Any member's manifest or asset request keeps the session alive; after 30 minutes without one, or after its FFmpeg process fails, the next manifest request starts a new session from the beginning. Room sessions never wait for transcode capacity: a full pool returns 503 at once. A cold room can spend up to 30 seconds on a remux preflight and up to 30 seconds waiting for the first output before a retryable 503. A direct-mode room returns 400. 404 means the session was stopped while the request waited (request the manifest again) or has no playable media. Returns 409 when a pinned selected audio or subtitle ordinal is out of range after rescanning, selects a different stream_index, or its pinned non-null language changes. Recreate the room to select current tracks. The audio check is skipped when the room was created for a movie without audio, and the subtitle check when subtitle_track is null. Every response, errors included, carries Cache-Control: no-store, except a 401 from authentication.",
         "operationId": "watchRoomHLSManifest",
         "parameters": [
           {
@@ -4544,7 +4546,7 @@
           "Watch Rooms"
         ],
         "summary": "Get a watch-room HLS initialization file or media segment",
-        "description": "Serves an asset from a room HLS session after independently authenticating the requester and authorizing current room membership. Successful membership lookups are cached for up to 30 seconds. Request the room manifest first and follow its rewritten asset URLs. The session is selected by the room alone; query parameters on asset URLs are ignored. A ready file supports conditional and byte-range requests. A file that FFmpeg has not completed yet can wait up to 120 seconds before a retryable 503. Ready assets use video/mp4 and Last-Modified, without ETag. If-Match with a specific entity tag fails with empty 412; If-None-Match: * returns 304. If-Range supports date validators; a nonmatching validator causes a full 200 response.",
+        "description": "Serves an asset from a room HLS session after independently authenticating the requester and authorizing current room membership. Successful membership lookups are cached for up to 30 seconds. An unknown room returns 403, the same as a room the caller is not a member of. Request the room manifest first and follow its rewritten asset URLs. The session is selected by the room alone; query parameters on asset URLs are ignored. A ready file supports conditional and byte-range requests. A file that FFmpeg has not completed yet can wait up to 120 seconds before a retryable 503. Ready assets use video/mp4 and Last-Modified, without ETag. If-Match with a specific entity tag fails with empty 412; If-None-Match: * returns 304. If-Range supports date validators; a nonmatching validator causes a full 200 response. Asset requests refresh the session's 30-minute idle timer but never create a session; with no live session, including in a direct-mode room, they return 404. A 500 can mean FFmpeg failed before writing this file; the next manifest request replaces the failed session. Every response, errors included, carries Cache-Control: no-store, except a 401 from authentication and the plain-text 416.",
         "operationId": "watchRoomHLSSegment",
         "parameters": [
           {
@@ -6208,7 +6210,7 @@
         "name": "path",
         "in": "path",
         "required": true,
-        "description": "Relative file path below the configured static directory.",
+        "description": "File path below the configured static directory; it may contain slashes, for example avatars/12.png.",
         "schema": {
           "type": "string"
         }
@@ -12671,6 +12673,7 @@
           },
           "library_movie_id": {
             "type": "integer",
+            "description": "Local movie id; present only when already_in_library is true.",
             "format": "int64"
           }
         },
@@ -13108,7 +13111,7 @@
       },
       "UserSummary": {
         "type": "object",
-        "description": "The public face of a user as other users see it: no email or admin flag. Carried by watch rooms (owner, members) and playlist details (owner).",
+        "description": "The public face of a user as other users see it: no email or admin flag. Carried by watch rooms (owner, members), watch-room WebSocket member events, and playlist details (owner).",
         "required": [
           "id",
           "name",
@@ -13457,16 +13460,19 @@
             "type": "boolean"
           },
           "position_sec": {
-            "type": "number"
+            "type": "number",
+            "description": "Room position in seconds at updated_at; while not paused it advances in real time from updated_at."
           },
           "updated_at": {
-            "type": "string"
+            "type": "string",
+            "format": "date-time"
           }
         },
         "additionalProperties": false
       },
       "WatchRoomServerEvent": {
         "type": "object",
+        "description": "Server JSON message. room_snapshot carries playback and connected_user_ids; playback_changed carries playback; member_joined and member_left carry member and connected_user_ids; room_deleted and pong carry only type and room_id.",
         "required": [
           "type",
           "room_id"
@@ -13495,6 +13501,7 @@
           },
           "connected_user_ids": {
             "type": "array",
+            "description": "Users with at least one open connection after the event, ascending.",
             "items": {
               "type": "integer",
               "format": "int64"
