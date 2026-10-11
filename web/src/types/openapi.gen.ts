@@ -357,7 +357,7 @@ export interface paths {
         put?: never;
         /**
          * Upload a user avatar image
-         * @description Writes the image to the static directory's avatars folder and points the account at it. The stored path carries a version query that changes on every upload, so caches holding the previous image do not answer for the new one. An earlier upload under another file name is deleted once the account points at the new image.
+         * @description Writes the image to the static directory's avatars folder under a new file name and points the account at it, so caches holding the previous image never answer for the new one. The previous upload is deleted once the account points at the new image; if the account cannot be updated, the new file is removed and the current avatar is untouched.
          */
         post: operations["uploadUserAvatar"];
         delete?: never;
@@ -3729,7 +3729,7 @@ export interface components {
         };
         DeleteMovieRequest: {
             /** @default false */
-            delete_file: boolean;
+            delete_file?: boolean;
         };
         TmdbStatusEnvelope: components["schemas"]["JsonSuccess"] & {
             data: {
@@ -3816,18 +3816,18 @@ export interface components {
              * @description Zero-based ordinal into the movie's audio streams. Must be less than the movie's audio stream count, must be 0 for a movie without audio, and must be 0 when `mode` is `direct` because direct playback always serves the container's first audio track.
              * @default 0
              */
-            audio_track: number;
+            audio_track?: number;
             /**
              * Format: int64
              * @description Null disables subtitles. Otherwise a zero-based ordinal into subtitle rows ordered by stream_index, strictly less than the current subtitle count. Non-null values are invalid for a movie without subtitles.
              * @default null
              */
-            subtitle_track: number | null;
+            subtitle_track?: number | null;
             /**
              * @description Users who become room members. The owner is always a member; their own id and duplicates are dropped.
              * @default []
              */
-            invited_user_ids: number[];
+            invited_user_ids?: number[];
         };
         WatchRoomsEnvelope: components["schemas"]["JsonSuccess"] & {
             data: {
@@ -4259,7 +4259,7 @@ export interface components {
              * @description Lets the collaborator add and remove items, and reorder tracks in a music playlist.
              * @default false
              */
-            can_edit: boolean;
+            can_edit?: boolean;
         };
         MusicPlaylistsData: {
             playlists: components["schemas"]["PlaylistSummary"][];
