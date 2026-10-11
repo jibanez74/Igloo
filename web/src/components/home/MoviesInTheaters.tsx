@@ -34,7 +34,7 @@ export default function MoviesInTheaters() {
       onRetry={() => void refetch()}
       loadingLabel="Loading movies..."
       emptyTitle="No Movies Available"
-      emptyDescription="Unable to fetch movies currently playing in theaters. Check back later."
+      emptyDescription="No movies are listed as playing in theaters right now. Check back later."
       emptyIcon={Film}
       countNoun="movie"
       gridClassName={HOME_POSTER_GRID_CLASS}

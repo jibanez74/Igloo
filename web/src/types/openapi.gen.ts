@@ -630,7 +630,7 @@ export interface paths {
         put?: never;
         /**
          * Search TMDB movies
-         * @description Requires a nonblank title (trimmed) or a positive tmdb_id; otherwise 400. A positive tmdb_id returns that single TMDB movie and ignores title and year. Otherwise the result is the first page of TMDB's title search, adult titles excluded, ranked by how well title and year match; a year narrows the search, and when it finds nothing the search is retried without it. No match is an empty list. Upstream TMDB failures return 500.
+         * @description Requires a nonblank title (trimmed) or a positive tmdb_id; otherwise 400. A positive tmdb_id returns that single TMDB movie, or an empty list when TMDB does not know the id, and ignores title and year. Otherwise the result is the first page of TMDB's title search, adult titles excluded, ranked by how well title and year match; a year narrows the search, and when it finds nothing the search is retried without it. No match is an empty list. Upstream TMDB failures return 500.
          */
         post: operations["searchTmdbMovies"];
         delete?: never;
@@ -1622,7 +1622,7 @@ export interface paths {
         get?: never;
         /**
          * Replace local movie metadata from a TMDB movie
-         * @description Admin-only endpoint. Returns 503 when TMDB is not configured and 404 for an unknown movie before TMDB is contacted; a failed TMDB lookup returns 500. Successful Identify atomically replaces TMDB descriptive metadata and relationships and clears pending enrichment retries. Audience rating and file-derived duration/runtime are preserved. Automatic scans retain the selected TMDB identity; stale in-flight enrichment cannot overwrite a changed identity. Failed Identify leaves metadata and retry state unchanged.
+         * @description Admin-only endpoint. Returns 503 when TMDB is not configured and 404 for an unknown movie before TMDB is contacted; a tmdb_id TMDB does not know returns 400, and any other failed TMDB lookup returns 500. Successful Identify atomically replaces TMDB descriptive metadata and relationships and clears pending enrichment retries. Audience rating and file-derived duration/runtime are preserved. Automatic scans retain the selected TMDB identity; stale in-flight enrichment cannot overwrite a changed identity. Failed Identify leaves metadata and retry state unchanged.
          */
         put: operations["identifyMovie"];
         post?: never;
