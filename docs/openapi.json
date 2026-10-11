@@ -2736,7 +2736,7 @@
             "$ref": "#/components/responses/InternalServerError"
           }
         },
-        "description": "Owner or editing collaborator. Movies are appended in request order. Ids already in the playlist, repeated ids, and unknown ids count as skipped; any other failure adds nothing and returns 500. updated_at changes only when a movie was added."
+        "description": "Owner or editing collaborator. Ids already in the playlist, repeated ids, and unknown ids count as skipped; any other failure adds nothing and returns 500. updated_at changes only when a movie was added."
       }
     },
     "/api/movies/playlists/{id}/movies/{movieId}": {
@@ -2774,7 +2774,7 @@
             "$ref": "#/components/responses/InternalServerError"
           }
         },
-        "description": "Owner or editing collaborator. Returns 200 even when the movie is not in the playlist."
+        "description": "Owner or editing collaborator. Returns 200 even when the movie is not in the playlist; updated_at changes either way."
       }
     },
     "/api/movies/playlists": {
@@ -5764,7 +5764,7 @@
             "$ref": "#/components/responses/InternalServerError"
           }
         },
-        "description": "Owner or editing collaborator. Returns 200 even when the track is not in the playlist. The remaining positions are not renumbered."
+        "description": "Owner or editing collaborator. Returns 200 even when the track is not in the playlist; updated_at changes either way. The remaining positions are not renumbered."
       }
     },
     "/api/music/playlists/{id}/tracks/reorder": {
@@ -5802,7 +5802,7 @@
             "$ref": "#/components/responses/InternalServerError"
           }
         },
-        "description": "Owner or editing collaborator. Each listed track takes its index in track_ids as its position. Send every track in the playlist: ids not in the playlist are ignored, and tracks left out keep their previous position, which can tie with a new one and leave their relative order undefined."
+        "description": "Owner or editing collaborator. Each listed track takes its index in track_ids as its position. Send every track in the playlist: ids not in the playlist are ignored, and tracks left out keep their previous position, which can tie with a new one and leave their relative order undefined. updated_at always changes."
       }
     },
     "/api/music/playlists/{id}/collaborators": {
@@ -14729,7 +14729,8 @@
             "type": "string"
           },
           "username": {
-            "type": "string"
+            "type": "string",
+            "description": "The collaborator's name, as in UserSummary.name. Users sign in by email, so this is not a unique handle."
           },
           "email": {
             "type": "string"
@@ -14913,7 +14914,8 @@
             "format": "int64"
           },
           "duration": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "description": "Sum of track durations in milliseconds."
           },
           "is_owner": {

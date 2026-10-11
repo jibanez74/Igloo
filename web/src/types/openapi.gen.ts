@@ -1296,7 +1296,7 @@ export interface paths {
         put?: never;
         /**
          * Add movies to a movie playlist
-         * @description Owner or editing collaborator. Movies are appended in request order. Ids already in the playlist, repeated ids, and unknown ids count as skipped; any other failure adds nothing and returns 500. updated_at changes only when a movie was added.
+         * @description Owner or editing collaborator. Ids already in the playlist, repeated ids, and unknown ids count as skipped; any other failure adds nothing and returns 500. updated_at changes only when a movie was added.
          */
         post: operations["addMoviesToMoviePlaylist"];
         delete?: never;
@@ -1317,7 +1317,7 @@ export interface paths {
         post?: never;
         /**
          * Remove a movie from a movie playlist
-         * @description Owner or editing collaborator. Returns 200 even when the movie is not in the playlist.
+         * @description Owner or editing collaborator. Returns 200 even when the movie is not in the playlist; updated_at changes either way.
          */
         delete: operations["removeMovieFromMoviePlaylist"];
         options?: never;
@@ -2401,7 +2401,7 @@ export interface paths {
         post?: never;
         /**
          * Remove a track from a music playlist
-         * @description Owner or editing collaborator. Returns 200 even when the track is not in the playlist. The remaining positions are not renumbered.
+         * @description Owner or editing collaborator. Returns 200 even when the track is not in the playlist; updated_at changes either way. The remaining positions are not renumbered.
          */
         delete: operations["removeTrackFromPlaylist"];
         options?: never;
@@ -2419,7 +2419,7 @@ export interface paths {
         get?: never;
         /**
          * Reorder tracks in a music playlist
-         * @description Owner or editing collaborator. Each listed track takes its index in track_ids as its position. Send every track in the playlist: ids not in the playlist are ignored, and tracks left out keep their previous position, which can tie with a new one and leave their relative order undefined.
+         * @description Owner or editing collaborator. Each listed track takes its index in track_ids as its position. Send every track in the playlist: ids not in the playlist are ignored, and tracks left out keep their previous position, which can tie with a new one and leave their relative order undefined. updated_at always changes.
          */
         put: operations["reorderPlaylistTracks"];
         post?: never;
@@ -4225,6 +4225,7 @@ export interface components {
             can_edit: boolean;
             created_at: string;
             updated_at: string;
+            /** @description The collaborator's name, as in UserSummary.name. Users sign in by email, so this is not a unique handle. */
             username: string;
             email: string;
         };
@@ -4273,7 +4274,10 @@ export interface components {
             playlist: components["schemas"]["Playlist"];
             /** Format: int64 */
             track_count: number;
-            /** @description Sum of track durations in milliseconds. */
+            /**
+             * Format: int64
+             * @description Sum of track durations in milliseconds.
+             */
             duration: number;
             is_owner: boolean;
             can_edit: boolean;
