@@ -146,26 +146,16 @@ import {
   MOVIE_PREROLL_KEY,
   PREROLL_FETCH_TIMEOUT_MS,
 } from "@/lib/constants";
-
-/**
- * TanStack Query cache tuning (v5: `gcTime` replaces former `cacheTime`).
- *
- * - staleTime: while fresh, the query will not refetch on mount/window focus.
- * - gcTime: how long inactive cached data is kept after the last observer unmounts.
- *
- * Library / user-editable data uses shorter stale times; TMDB-style catalogs longer.
- */
-const MIN = 60_000;
-/** 1 min — current user; also long scrolling lists where tracks can change */
-const STALE_1M = MIN;
-const STALE_LIST = 2 * MIN;
-const STALE_CATALOG = 5 * MIN;
-const STALE_THEATERS = 10 * MIN;
-const STALE_TECH = 10 * MIN;
-const STALE_30S = 30_000;
-
-const GC_DEFAULT = 10 * MIN;
-const GC_LONG = 30 * MIN;
+import {
+  freshFor,
+  GC_LONG,
+  STALE_1M,
+  STALE_30S,
+  STALE_CATALOG,
+  STALE_LIST,
+  STALE_TECH,
+  STALE_THEATERS,
+} from "@/lib/query-client";
 
 // ============================================================================
 // Auth
@@ -183,8 +173,7 @@ export function authUserQueryOpts(options?: { revalidate?: boolean }) {
   return queryOptions({
     queryKey: [AUTH_USER_KEY],
     queryFn: getAuthUser,
-    staleTime: options?.revalidate ? 0 : STALE_1M,
-    gcTime: GC_DEFAULT,
+    staleTime: options?.revalidate ? 0 : freshFor(STALE_1M),
   });
 }
 
@@ -205,7 +194,6 @@ export function userPinQueryOpts() {
     queryKey: [USER_PIN_KEY],
     queryFn: getUserPin,
     staleTime: 0,
-    gcTime: GC_DEFAULT,
   });
 }
 
@@ -217,8 +205,7 @@ export function devicesQueryOpts() {
   return queryOptions({
     queryKey: [DEVICES_KEY],
     queryFn: getDevices,
-    staleTime: STALE_30S,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_30S),
   });
 }
 
@@ -231,7 +218,6 @@ export function notificationsQueryOpts() {
     queryKey: [NOTIFICATIONS_KEY],
     queryFn: getNotifications,
     staleTime: 0,
-    gcTime: GC_DEFAULT,
   });
 }
 
@@ -239,8 +225,7 @@ export function unreadNotificationCountQueryOpts() {
   return queryOptions({
     queryKey: [NOTIFICATIONS_UNREAD_COUNT_KEY],
     queryFn: getUnreadNotificationCount,
-    staleTime: STALE_30S,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_30S),
     // Poll so the bell badge reflects new requests without a manual refresh.
     refetchInterval: 30_000,
   });
@@ -254,7 +239,7 @@ export function latestMoviesQueryOpts() {
   return queryOptions({
     queryKey: [LATEST_MOVIES_KEY],
     queryFn: getLatestMovies,
-    staleTime: STALE_CATALOG,
+    staleTime: freshFor(STALE_CATALOG),
     gcTime: GC_LONG,
   });
 }
@@ -263,7 +248,7 @@ export function latestShowsQueryOpts() {
   return queryOptions({
     queryKey: [LATEST_SHOWS_KEY],
     queryFn: getLatestShows,
-    staleTime: STALE_CATALOG,
+    staleTime: freshFor(STALE_CATALOG),
     gcTime: GC_LONG,
   });
 }
@@ -273,8 +258,7 @@ export function showDetailsQueryOpts(id: number) {
     queryKey: [SHOW_DETAILS_KEY, id],
     queryFn: () => getShowDetails(id),
     enabled: id > 0,
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_LIST),
   });
 }
 
@@ -290,8 +274,7 @@ export function showSeasonEpisodesQueryOpts(
     queryKey: [SHOW_SEASON_EPISODES_KEY, showId, seasonNumber],
     queryFn: () => getShowSeasonEpisodes(showId, seasonNumber),
     enabled: showId > 0 && seasonNumber >= 0,
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_LIST),
   });
 }
 
@@ -303,8 +286,7 @@ export function showsLibraryQueryOpts(
   return queryOptions({
     queryKey: [SHOWS_LIBRARY_KEY, page, perPage, sort],
     queryFn: () => getShowsLibrary(page, perPage, sort),
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_LIST),
   });
 }
 
@@ -312,8 +294,7 @@ export function showsGenresQueryOpts() {
   return queryOptions({
     queryKey: [SHOWS_GENRES_KEY],
     queryFn: getShowGenresWithCounts,
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_LIST),
   });
 }
 
@@ -327,8 +308,7 @@ export function showsByGenreQueryOpts(
     queryKey: [SHOWS_BY_GENRE_KEY, genreId, page, perPage, sort],
     queryFn: () => getShowsByGenre(genreId, page, perPage, sort),
     enabled: genreId > 0,
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_LIST),
   });
 }
 
@@ -336,8 +316,7 @@ export function showsStatsQueryOpts() {
   return queryOptions({
     queryKey: [SHOWS_STATS_KEY],
     queryFn: getShowsStats,
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_LIST),
   });
 }
 
@@ -348,8 +327,7 @@ export function continueWatchingQueryOpts() {
   return queryOptions({
     queryKey: [CONTINUE_WATCHING_KEY],
     queryFn: getContinueWatching,
-    staleTime: STALE_30S,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_30S),
   });
 }
 
@@ -357,7 +335,7 @@ export function latestAlbumsQueryOpts() {
   return queryOptions({
     queryKey: [LATEST_ALBUMS_KEY],
     queryFn: getLatestAlbums,
-    staleTime: STALE_CATALOG,
+    staleTime: freshFor(STALE_CATALOG),
     gcTime: GC_LONG,
   });
 }
@@ -366,7 +344,7 @@ export function inTheatersQueryOpts() {
   return queryOptions({
     queryKey: [MOVIES_IN_THEATERS_KEY],
     queryFn: getMoviesInTheaters,
-    staleTime: STALE_THEATERS,
+    staleTime: freshFor(STALE_THEATERS),
     gcTime: GC_LONG,
   });
 }
@@ -378,7 +356,7 @@ export function movieDetailsQueryOpts(id: number) {
     queryKey: [MOVIE_DETAILS_KEY, id],
     queryFn: () => getMovieInTheaterDetails(id),
     enabled: id > 0,
-    staleTime: STALE_CATALOG,
+    staleTime: freshFor(STALE_CATALOG),
     gcTime: GC_LONG,
   });
 }
@@ -387,17 +365,17 @@ export function trailerPreferencesQueryOpts() {
   return queryOptions({
     queryKey: [TRAILER_PREFERENCES_KEY],
     queryFn: getTrailerPreferences,
-    staleTime: STALE_CATALOG,
+    staleTime: freshFor(STALE_CATALOG),
     gcTime: GC_LONG,
   });
 }
 
 /**
  * The trailer queue for one play. Never retried: a failed or slow request
- * resolves to an error envelope the player treats as "no trailers". Never
- * stale while the play lasts, so a window focus or reconnect cannot swap the
- * queue under the trailer playing; never kept once the play unmounts, so the
- * next play draws a fresh random queue.
+ * resolves to an error envelope the player treats as "no trailers". Static
+ * while the play lasts, so a window focus, reconnect or invalidation cannot
+ * swap the queue under the trailer playing; never kept once the play
+ * unmounts, so the next play draws a fresh random queue.
  */
 export function moviePrerollQueryOpts(movieId: number) {
   return queryOptions({
@@ -406,7 +384,7 @@ export function moviePrerollQueryOpts(movieId: number) {
       getMoviePreroll(movieId, AbortSignal.timeout(PREROLL_FETCH_TIMEOUT_MS)),
     enabled: movieId > 0,
     retry: false,
-    staleTime: Infinity,
+    staleTime: "static",
     gcTime: 0,
   });
 }
@@ -415,8 +393,7 @@ export function tmdbStatusQueryOpts() {
   return queryOptions({
     queryKey: [TMDB_STATUS_KEY],
     queryFn: getTmdbStatus,
-    staleTime: STALE_CATALOG,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_CATALOG),
   });
 }
 
@@ -424,8 +401,7 @@ export function spotifyStatusQueryOpts() {
   return queryOptions({
     queryKey: [SPOTIFY_STATUS_KEY],
     queryFn: getSpotifyStatus,
-    staleTime: STALE_CATALOG,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_CATALOG),
   });
 }
 
@@ -438,8 +414,7 @@ export function libraryMovieDetailsQueryOpts(id: number) {
     queryKey: [LIBRARY_MOVIE_DETAILS_KEY, id],
     queryFn: () => getMovieDetails(id),
     enabled: id > 0,
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_LIST),
   });
 }
 
@@ -448,7 +423,7 @@ export function movieTechnicalDetailsQueryOpts(id: number) {
     queryKey: [MOVIE_TECHNICAL_DETAILS_KEY, id],
     queryFn: () => getMovieTechnicalDetails(id),
     enabled: id > 0,
-    staleTime: STALE_TECH,
+    staleTime: freshFor(STALE_TECH),
     gcTime: GC_LONG,
   });
 }
@@ -482,7 +457,7 @@ export function mediaTechnicalDetailsQueryOpts(media: PlaybackMediaRef) {
         ? getMovieTechnicalDetails(media.id)
         : getShowEpisodeTechnicalDetails(media.id),
     enabled: media.id > 0,
-    staleTime: STALE_TECH,
+    staleTime: freshFor(STALE_TECH),
     gcTime: GC_LONG,
   });
 }
@@ -494,8 +469,7 @@ export function mediaWatchProgressQueryOpts(media: PlaybackMediaRef) {
     queryKey: mediaWatchProgressQueryKey(media),
     queryFn: () => getMediaWatchProgress(media),
     enabled: media.id > 0,
-    staleTime: STALE_30S,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_30S),
   });
 }
 
@@ -514,8 +488,7 @@ export function showEpisodeQueryOpts(episodeId: number) {
     queryKey: [EPISODE_KEY, episodeId],
     queryFn: () => getShowEpisode(episodeId),
     enabled: episodeId > 0,
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_LIST),
   });
 }
 
@@ -527,8 +500,7 @@ export function moviesLibraryQueryOpts(
   return queryOptions({
     queryKey: [MOVIES_LIBRARY_KEY, page, perPage, sort],
     queryFn: () => getMoviesLibrary(page, perPage, sort),
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_LIST),
   });
 }
 
@@ -536,8 +508,7 @@ export function moviesGenresQueryOpts() {
   return queryOptions({
     queryKey: [MOVIES_GENRES_KEY],
     queryFn: getMovieGenresWithCounts,
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_LIST),
   });
 }
 
@@ -551,8 +522,7 @@ export function moviesByGenreQueryOpts(
     queryKey: [MOVIES_BY_GENRE_KEY, genreId, page, perPage, sort],
     queryFn: () => getMoviesByGenre(genreId, page, perPage, sort),
     enabled: genreId > 0,
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_LIST),
   });
 }
 
@@ -560,8 +530,7 @@ export function moviesStatsQueryOpts() {
   return queryOptions({
     queryKey: [MOVIES_STATS_KEY],
     queryFn: getMoviesStats,
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_LIST),
   });
 }
 
@@ -573,8 +542,7 @@ export function likedMoviesQueryOpts(
   return queryOptions({
     queryKey: [MOVIES_LIKED_KEY, page, perPage, sort],
     queryFn: () => getLikedMovies(page, perPage, sort),
-    staleTime: STALE_1M,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_1M),
   });
 }
 
@@ -583,8 +551,7 @@ export function movieLikeStatusQueryOpts(movieId: number) {
     queryKey: [MOVIE_LIKE_STATUS_KEY, movieId],
     queryFn: () => getMovieLikeStatus(movieId),
     enabled: movieId > 0,
-    staleTime: STALE_1M,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_1M),
   });
 }
 
@@ -597,8 +564,7 @@ export function albumDetailsQueryOpts(id: number) {
     queryKey: [ALBUM_DETAILS_KEY, id],
     queryFn: () => getAlbumDetails(id),
     enabled: id > 0,
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_LIST),
   });
 }
 
@@ -609,8 +575,7 @@ export function albumsPaginatedQueryOpts(
   return queryOptions({
     queryKey: [ALBUMS_PAGINATED_KEY, page, perPage],
     queryFn: () => getAlbumsPaginated(page, perPage),
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_LIST),
   });
 }
 
@@ -623,8 +588,7 @@ export function tracksInfiniteQueryOpts(pageSize = TRACKS_INFINITE_PAGE_SIZE) {
       if (lastPage.error || !lastPage.data?.has_more) return undefined;
       return lastPage.data.offset + lastPage.data.limit;
     },
-    staleTime: STALE_1M,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_1M),
   });
 }
 
@@ -632,8 +596,7 @@ export function likedTrackIdsQueryOpts() {
   return queryOptions({
     queryKey: [LIKED_TRACK_IDS_KEY],
     queryFn: getLikedTrackIds,
-    staleTime: STALE_1M,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_1M),
   });
 }
 
@@ -644,8 +607,7 @@ export function likedTracksQueryOpts(
   return queryOptions({
     queryKey: [LIKED_TRACKS_KEY, page, perPage],
     queryFn: () => getLikedTracks(page, perPage),
-    staleTime: STALE_1M,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_1M),
   });
 }
 
@@ -656,8 +618,7 @@ export function musiciansPaginatedQueryOpts(
   return queryOptions({
     queryKey: [MUSICIANS_PAGINATED_KEY, page, perPage],
     queryFn: () => getMusiciansPaginated(page, perPage),
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_LIST),
   });
 }
 
@@ -666,8 +627,7 @@ export function musicianDetailsQueryOpts(id: number) {
     queryKey: [MUSICIAN_DETAILS_KEY, id],
     queryFn: () => getMusicianDetails(id),
     enabled: id > 0,
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_LIST),
   });
 }
 
@@ -675,8 +635,7 @@ export function musicStatsQueryOpts() {
   return queryOptions({
     queryKey: [MUSIC_STATS_KEY],
     queryFn: getMusicStats,
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_LIST),
   });
 }
 
@@ -688,8 +647,7 @@ export function playlistsQueryOpts() {
   return queryOptions({
     queryKey: [PLAYLISTS_KEY],
     queryFn: getPlaylists,
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_LIST),
   });
 }
 
@@ -698,8 +656,7 @@ export function playlistDetailsQueryOpts(id: number) {
     queryKey: [PLAYLIST_DETAILS_KEY, id],
     queryFn: () => getPlaylistDetails(id),
     enabled: id > 0,
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_LIST),
   });
 }
 
@@ -717,8 +674,7 @@ export function playlistTracksInfiniteQueryOpts(
       return lastPage.data.next_offset;
     },
     enabled: playlistId > 0,
-    staleTime: STALE_1M,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_1M),
   });
 }
 
@@ -726,8 +682,7 @@ export function moviePlaylistsQueryOpts() {
   return queryOptions({
     queryKey: [MOVIE_PLAYLISTS_KEY],
     queryFn: getMoviePlaylists,
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_LIST),
   });
 }
 
@@ -744,8 +699,7 @@ export function playlistPickerQueryOpts(kind: PlaylistKind) {
     > => (kind === "music" ? getPlaylists() : getMoviePlaylists()),
     select: (data): PlaylistPickerRow[] =>
       data.error ? [] : data.data.playlists.map(toPlaylistPickerRow),
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_LIST),
   });
 }
 
@@ -766,8 +720,7 @@ export function moviePlaylistDetailsQueryOpts(id: number) {
     queryKey: [MOVIE_PLAYLIST_DETAILS_KEY, id],
     queryFn: () => getMoviePlaylistDetails(id),
     enabled: id > 0,
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_LIST),
   });
 }
 
@@ -781,8 +734,7 @@ export function moviePlaylistMoviesQueryOpts(
     queryKey: [MOVIE_PLAYLIST_MOVIES_KEY, playlistId, page, perPage, sort],
     queryFn: () => getMoviePlaylistMovies(playlistId, page, perPage, sort),
     enabled: playlistId > 0,
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_LIST),
   });
 }
 
@@ -794,7 +746,7 @@ export function settingsQueryOpts() {
   return queryOptions({
     queryKey: [SETTINGS_KEY],
     queryFn: getSettings,
-    staleTime: STALE_CATALOG,
+    staleTime: freshFor(STALE_CATALOG),
     gcTime: GC_LONG,
   });
 }
@@ -803,8 +755,7 @@ export function generalSettingsQueryOpts() {
   return queryOptions({
     queryKey: [GENERAL_SETTINGS_KEY],
     queryFn: getGeneralSettings,
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_LIST),
   });
 }
 
@@ -814,7 +765,7 @@ export function playbackSettingsQueryOpts() {
   return queryOptions({
     queryKey: [PLAYBACK_SETTINGS_KEY],
     queryFn: getPlaybackSettings,
-    staleTime: STALE_CATALOG,
+    staleTime: freshFor(STALE_CATALOG),
     gcTime: GC_LONG,
   });
 }
@@ -834,8 +785,7 @@ export function adminUsersQueryOpts() {
   return queryOptions({
     queryKey: [ADMIN_USERS_KEY],
     queryFn: adminGetUsers,
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_LIST),
   });
 }
 
@@ -850,8 +800,7 @@ export function searchAllQueryOpts(q: string) {
     queryKey: [SEARCH_ALL_KEY, trimmed],
     queryFn: () => searchAll(trimmed),
     enabled: trimmed.length > 0,
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_LIST),
   });
 }
 
@@ -866,8 +815,7 @@ export function searchCategoryQueryOpts<K extends PagedSearchTab>(
     queryKey: [SEARCH_CATEGORY_KEYS[kind], trimmed, page, perPage],
     queryFn: () => searchCategory(kind, trimmed, page, perPage),
     enabled: trimmed.length > 0,
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_LIST),
   });
 }
 
@@ -879,8 +827,7 @@ export function watchRoomsQueryOpts() {
   return queryOptions({
     queryKey: [WATCH_ROOMS_KEY],
     queryFn: getWatchRooms,
-    staleTime: STALE_30S,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_30S),
   });
 }
 
@@ -889,8 +836,7 @@ export function watchRoomQueryOpts(id: number) {
     queryKey: [WATCH_ROOM_KEY, id],
     queryFn: () => getWatchRoom(id),
     enabled: id > 0,
-    staleTime: STALE_30S,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_30S),
   });
 }
 
@@ -899,8 +845,7 @@ export function watchRoomInviteUsersQueryOpts(enabled: boolean = true) {
     queryKey: [WATCH_ROOM_INVITE_USERS_KEY],
     queryFn: getWatchRoomInviteUsers,
     enabled,
-    staleTime: STALE_30S,
-    gcTime: GC_DEFAULT,
+    staleTime: freshFor(STALE_30S),
   });
 }
 
