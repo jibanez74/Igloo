@@ -2,6 +2,7 @@ import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { DETAIL_PAGE_CONTENT_ENTER_CLASS } from "@/lib/constants";
+import { albumDetailsQueryOpts } from "@/lib/query-opts";
 import type { AlbumDetailsResponseType, TrackType } from "@/types";
 import { jsonResponse, requestURL } from "../helpers/api";
 import { nullableFloat64, nullableInt64, nullableString } from "../helpers/fixtures";
@@ -456,6 +457,39 @@ describe("album details content", () => {
 });
 
 describe("album details deletion", () => {
+  it("leaves the page before refreshing the library, so the deleted album is never refetched", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockAlbumDetailsFetch({ isAdmin: true });
+    const { router, queryClient } = await renderRoute("/music/album/42");
+    const detailsRequests = () =>
+      fetchMock.mock.calls.filter(
+        ([input]) => requestURL(input) === "/api/music/albums/details/42",
+      ).length;
+
+    expect(
+      await screen.findByRole("heading", { name: /Blue Record/i }),
+    ).toBeInTheDocument();
+    const requestsBeforeDelete = detailsRequests();
+
+    await user.click(screen.getByRole("button", { name: "More options" }));
+    await user.click(screen.getByRole("menuitem", { name: "Delete Album" }));
+    await user.click(
+      within(
+        await screen.findByRole("alertdialog", { name: "Delete Album" }),
+      ).getByRole("button", { name: "Delete Album" }),
+    );
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe("/music");
+    });
+    await waitFor(() => {
+      expect(
+        queryClient.getQueryData(albumDetailsQueryOpts(42).queryKey),
+      ).toBeUndefined();
+    });
+    expect(detailsRequests()).toBe(requestsBeforeDelete);
+  });
+
   it("keeps the delete dialog open and reenabled after an API error response", async () => {
     const user = userEvent.setup();
     const { router } = await renderAlbumDetailsRoute("/music/album/42", {

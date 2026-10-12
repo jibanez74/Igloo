@@ -1,7 +1,8 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { PLAYLIST_TRACKS_PAGE_SIZE } from "@/lib/constants";
+import { PLAYLIST_TRACKS_KEY, PLAYLIST_TRACKS_PAGE_SIZE } from "@/lib/constants";
+import { playlistDetailsQueryOpts } from "@/lib/query-opts";
 import type { components } from "@/types/openapi.gen";
 import { jsonResponse, requestURL } from "../helpers/api";
 import { layOutTrackRows, pressKey } from "../helpers/drag";
@@ -149,7 +150,7 @@ describe("music playlist route", () => {
     const fetchMock = mockPlaylistFetch(roadTrip());
     const user = userEvent.setup();
 
-    const { router } = await renderRoute("/music/playlist/21");
+    const { router, queryClient } = await renderRoute("/music/playlist/21");
 
     await user.click(await screen.findByRole("button", { name: "Delete playlist" }));
 
@@ -168,6 +169,16 @@ describe("music playlist route", () => {
           (init as RequestInit | undefined)?.method === "DELETE",
       ),
     ).toBe(true);
+    // Once its page is gone, nothing of the deleted playlist stays cached for
+    // Back to render again.
+    await waitFor(() => {
+      expect(
+        queryClient.getQueryData(playlistDetailsQueryOpts(21).queryKey),
+      ).toBeUndefined();
+    });
+    expect(
+      queryClient.getQueriesData({ queryKey: [PLAYLIST_TRACKS_KEY, 21] }),
+    ).toEqual([]);
   });
 
   it("shows the empty copy and no Play pair for a playlist without tracks", async () => {

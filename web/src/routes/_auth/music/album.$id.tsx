@@ -192,7 +192,7 @@ function AlbumDetailsContent({
   // liked lists and any playlist may show, so every music query goes stale.
   const deleteMutation = useMutation({
     mutationFn: () => deleteAlbum(album.id),
-    onSuccess: (result) => {
+    onSuccess: async (result) => {
       if (result.error) {
         showActionFailed(
           "delete album",
@@ -205,9 +205,14 @@ function AlbumDetailsContent({
         "Album",
         `"${album.title}" has been removed from your library.`,
       );
-      invalidateLibraryQueries(queryClient, "music");
       setIsDeleteDialogOpen(false);
-      navigate({ to: "/music", search: { tab: "albums" } });
+      // Leave the album's page first: invalidating while its details query is
+      // still observed refetches the deleted album into a 404 under the user.
+      await navigate({ to: "/music", search: { tab: "albums" } });
+      queryClient.removeQueries({
+        queryKey: albumDetailsQueryOpts(album.id).queryKey,
+      });
+      invalidateLibraryQueries(queryClient, "music");
     },
     onError: (error) => {
       console.error("Failed to delete album:", error);

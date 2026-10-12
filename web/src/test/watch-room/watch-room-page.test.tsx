@@ -9,6 +9,8 @@ import {
   HLS_SESSION_LOST_MAX_ATTEMPTS,
   HLS_SESSION_LOST_MIN_INTERVAL_MS,
   MOTION_PLAYER_CHROME_BUTTON_CLASS,
+  WATCH_ROOMS_KEY,
+  WATCH_ROOM_KEY,
   WATCH_ROOM_SEEK_STEP_SEC,
 } from "@/lib/constants";
 import type { WatchRoomDetailType } from "@/types";
@@ -989,6 +991,37 @@ describe("WatchRoomPageContent", () => {
     expect(navigateMock).toHaveBeenCalledWith({ to: "/", replace: true });
   });
 
+  it("drops the closed room from this viewer's cache when room_deleted arrives", async () => {
+    const { queryClient } = renderRoomPage(buildRoom({ is_owner: false }));
+    queryClient.setQueryData([WATCH_ROOM_KEY, 7], {
+      error: false,
+      data: { room: buildRoom({ is_owner: false }) },
+    });
+    queryClient.setQueryData([WATCH_ROOMS_KEY], {
+      error: false,
+      data: { rooms: [{ id: 7 }, { id: 8 }] },
+    });
+    await waitFor(() => {
+      expect(FakeWebSocket.instances).toHaveLength(1);
+    });
+
+    FakeWebSocket.instances[0].emitMessage({
+      type: "room_deleted",
+      room_id: 7,
+    });
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith({ to: "/", replace: true });
+    });
+    await waitFor(() => {
+      expect(queryClient.getQueryData([WATCH_ROOM_KEY, 7])).toBeUndefined();
+    });
+    expect(queryClient.getQueryData([WATCH_ROOMS_KEY])).toEqual({
+      error: false,
+      data: { rooms: [{ id: 8 }] },
+    });
+  });
+
   // The server answers a room the viewer may not see with a lowercase
   // "access denied" and a 403; a missing one is the client's 404 string.
   it.each([
@@ -1108,7 +1141,18 @@ describe("WatchRoomPageContent", () => {
     });
 
     const user = userEvent.setup();
-    renderRoomPage(buildRoom({ is_owner: true }));
+    const { queryClient } = renderRoomPage(buildRoom({ is_owner: true }));
+    queryClient.setQueryData([WATCH_ROOM_KEY, 7], {
+      error: false,
+      data: { room: buildRoom({ is_owner: true }) },
+    });
+    // The page still observes the room's entry until it has navigated away,
+    // so the entry must outlive the navigation and only then go.
+    let roomCachedWhenLeaving: unknown;
+    navigateMock.mockImplementation(() => {
+      roomCachedWhenLeaving = queryClient.getQueryData([WATCH_ROOM_KEY, 7]);
+      return Promise.resolve();
+    });
 
     await waitFor(() => {
       expect(joinWatchRoomMock).toHaveBeenCalledWith(7);
@@ -1134,6 +1178,10 @@ describe("WatchRoomPageContent", () => {
 
     expect(navigateMock).toHaveBeenCalledTimes(1);
     expect(navigateMock).toHaveBeenCalledWith({ to: "/", replace: true });
+    expect(roomCachedWhenLeaving).toBeDefined();
+    await waitFor(() => {
+      expect(queryClient.getQueryData([WATCH_ROOM_KEY, 7])).toBeUndefined();
+    });
 
     FakeWebSocket.instances[0].emitMessage({
       type: "room_deleted",

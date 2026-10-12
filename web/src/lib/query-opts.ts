@@ -874,6 +874,41 @@ export function watchRoomQueryOpts(id: number) {
   });
 }
 
+/**
+ * Drops a closed watch room from the cache: out of the rooms list at once,
+ * then its own entry, so the room's loader can never serve it again. The
+ * room's page observes that entry, and removing it there makes the page
+ * refetch the deleted room, so `leaveRoomPage` (when the page is open) runs
+ * in between.
+ */
+export async function forgetWatchRoom(
+  queryClient: QueryClient,
+  roomId: number,
+  leaveRoomPage?: () => unknown,
+) {
+  const roomsKey = watchRoomsQueryOpts().queryKey;
+  const rooms = queryClient.getQueryData(roomsKey);
+  if (rooms?.error === false) {
+    queryClient.setQueryData(roomsKey, {
+      ...rooms,
+      data: {
+        ...rooms.data,
+        rooms: rooms.data.rooms.filter(room => room.id !== roomId),
+      },
+    });
+  }
+  void queryClient.invalidateQueries({ queryKey: roomsKey });
+
+  try {
+    await leaveRoomPage?.();
+  } finally {
+    queryClient.removeQueries({
+      queryKey: watchRoomQueryOpts(roomId).queryKey,
+      exact: true,
+    });
+  }
+}
+
 export function watchRoomInviteUsersQueryOpts(enabled: boolean = true) {
   return queryOptions({
     queryKey: [WATCH_ROOM_INVITE_USERS_KEY],

@@ -12,7 +12,7 @@ import {
 import { PLAYLIST_KINDS, type PlaylistKind } from "@/lib/playlist-kinds";
 import { showActionFailed, showDeleted } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
-import type { NullableString } from "@/types";
+import type { ApiResponseType, NullableString } from "@/types";
 
 type OwnedPlaylist = {
   id: number;
@@ -27,6 +27,20 @@ type PlaylistOwnerActionsProps = {
   playlist: OwnedPlaylist;
   className?: string;
 };
+
+// Either library's playlists list, as far as removing one row needs to know.
+type PlaylistsListData = ApiResponseType<{ playlists: { id: number }[] }>;
+
+const withoutPlaylist = (list: PlaylistsListData | undefined, id: number) =>
+  list?.error === false
+    ? {
+        ...list,
+        data: {
+          ...list.data,
+          playlists: list.data.playlists.filter(row => row.id !== id),
+        },
+      }
+    : list;
 
 const ACTION_BUTTON_CLASS =
   "inline-flex items-center gap-1.5 rounded-sm text-xs text-muted-foreground sm:gap-2 sm:text-sm";
@@ -49,14 +63,23 @@ export default function PlaylistOwnerActions({
 
   const deleteMutation = useMutation({
     mutationFn: () => api.remove(playlist.id),
-    onSuccess: (result) => {
+    onSuccess: async (result) => {
       if (result.error) {
         showActionFailed("delete playlist", result);
         return;
       }
-      queryClient.invalidateQueries({ queryKey: [api.listKey] });
       showDeleted("Playlist");
-      navigate(api.index);
+      // The Playlists tab renders from the cached list on arrival, so the
+      // deleted card goes before the page does.
+      queryClient.setQueryData<PlaylistsListData>([api.listKey], list =>
+        withoutPlaylist(list, playlist.id),
+      );
+      void queryClient.invalidateQueries({ queryKey: [api.listKey] });
+      // The playlist's own queries are observed until its page goes; removing
+      // them before would refetch the deleted playlist.
+      await navigate(api.index);
+      queryClient.removeQueries({ queryKey: [api.detailsKey, playlist.id] });
+      queryClient.removeQueries({ queryKey: [api.itemsKey, playlist.id] });
     },
     onError: () => {
       showActionFailed("delete playlist");
