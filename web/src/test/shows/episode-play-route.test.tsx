@@ -456,6 +456,22 @@ describe("episode play route", () => {
     );
   });
 
+  it("reports a malformed episode id as not found without asking for the episode", async () => {
+    const fetchMock = mockEpisodeApi();
+
+    await renderEpisodeRoute(
+      `/tv-shows/${SHOW_ID}/episodes/abc/play?mode=direct&audio_track=0&subtitle_track=off&start=0`,
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Episode not found",
+    );
+    const episodeRequests = fetchMock.mock.calls
+      .map(([input]) => requestURL(input))
+      .filter(url => url.startsWith("/api/shows/episodes/"));
+    expect(episodeRequests).toEqual([]);
+  });
+
   it("reports an unknown episode in the player's not-found copy", async () => {
     mockEpisodeApi({ episodeStatus: 404 });
 

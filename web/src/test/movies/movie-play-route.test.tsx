@@ -821,3 +821,32 @@ describe("movie play route play button", () => {
     ).toBeInTheDocument();
   });
 });
+
+describe("movie play route with a malformed id", () => {
+  beforeEach(() => {
+    stubMediaElement();
+  });
+
+  it("reports the movie as not found without asking for it or its trailers", async () => {
+    const fetchMock = mockMovieApi();
+
+    await renderRoute(`/movies/abc/play?${FRESH_SEARCH}`, {
+      wrapper: (children) => (
+        <AudioPlayerProvider>{children}</AudioPlayerProvider>
+      ),
+    });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Movie not found",
+    );
+    // The zero sentinel reaches no movie endpoint: not the details, the
+    // technical details, nor the trailer pre-roll the page opened into.
+    const sentinelRequests = fetchMock.mock.calls
+      .map(([input]) => requestURL(input))
+      .filter(
+        (url) =>
+          url.startsWith("/api/movies/0/") || url === "/api/movies/details/0",
+      );
+    expect(sentinelRequests).toEqual([]);
+  });
+});
