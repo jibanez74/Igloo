@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { useRef } from "react";
+import { createFileRoute, Link, stripSearchParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ListVideo, User } from "lucide-react";
 import MovieCard from "@/components/movies/MovieCard";
@@ -19,6 +19,7 @@ import {
   FOCUS_VISIBLE_RING_CLASS,
   MOTION_LOADING_STATE_CLASS,
   MOTION_MICRO_COLORS_CLASS,
+  MOVIE_PLAYLIST_DEFAULT_SEARCH,
   MOVIE_PLAYLIST_DETAILS_KEY,
   MOVIE_PLAYLIST_MOVIES_KEY,
   MOVIE_PLAYLISTS_KEY,
@@ -32,21 +33,32 @@ import { cn } from "@/lib/utils";
 import { unwrapString } from "@/lib/nullable";
 import { parseRouteId } from "@/lib/route-id";
 import { routeHead } from "@/lib/route-head";
-import type { MoviePlaylistDetailResponseType, SortOrder } from "@/types";
+import { loadOnEntry } from "@/lib/route-loads";
+import { moviePlaylistSearchSchema } from "@/lib/route-search";
+import type { MoviePlaylistDetailResponseType } from "@/types";
 
 const MOVIE_PLAYLIST_FALLBACK_HEAD = routeHead("Movie Playlist");
 
 export const Route = createFileRoute("/_auth/movies/playlist/$id")({
-  loader: async ({ context, params }) => {
+  validateSearch: moviePlaylistSearchSchema,
+  search: { middlewares: [stripSearchParams(MOVIE_PLAYLIST_DEFAULT_SEARCH)] },
+  loaderDeps: ({ search: { page, sort } }) => ({ page, sort }),
+  loader: async ({ context, params, cause, deps: { page, sort } }) => {
     const id = parseRouteId(params.id);
     if (id == null) return { playlistName: null };
 
-    const [details] = await Promise.all([
-      context.queryClient.ensureQueryData(moviePlaylistDetailsQueryOpts(id)),
+    const detailsLoad = context.queryClient.ensureQueryData(
+      moviePlaylistDetailsQueryOpts(id),
+    );
+    await loadOnEntry(cause, [
+      detailsLoad,
       context.queryClient.ensureQueryData(
-        moviePlaylistMoviesQueryOpts(id, 1, MOVIES_PER_PAGE, "asc"),
+        moviePlaylistMoviesQueryOpts(id, page, MOVIES_PER_PAGE, sort),
       ),
     ]);
+    // A page or sort change starts the list without waiting for it; the
+    // details were loaded on entry, so the title does not wait either.
+    const details = await detailsLoad;
 
     return {
       playlistName: details.error
@@ -99,8 +111,8 @@ type MoviePlaylistContentProps = {
 };
 
 function MoviePlaylistContent({ playlistId, data }: MoviePlaylistContentProps) {
-  const [page, setPage] = useState(1);
-  const [sort, setSort] = useState<SortOrder>("asc");
+  const { page, sort } = Route.useSearch();
+  const navigate = Route.useNavigate();
   const queryClient = useQueryClient();
   const headingRef = useRef<HTMLHeadingElement | null>(null);
 
@@ -209,11 +221,22 @@ function MoviePlaylistContent({ playlistId, data }: MoviePlaylistContentProps) {
         noun={LIBRARY_NOUNS.movie}
         emptyIcon={ListVideo}
         emptyMessage="No movies in this playlist yet."
-        onPageChange={setPage}
-        onSortToggle={() => {
-          setSort(s => (s === "asc" ? "desc" : "asc"));
-          setPage(1);
-        }}
+        onPageChange={newPage =>
+          navigate({
+            search: prev => ({ ...prev, page: newPage }),
+            replace: true,
+          })
+        }
+        onSortToggle={() =>
+          navigate({
+            search: prev => ({
+              ...prev,
+              sort: prev.sort === "asc" ? "desc" : "asc",
+              page: 1,
+            }),
+            replace: true,
+          })
+        }
         toolbarStartSlot={
           <span className="text-sm text-muted-foreground">Playlist movies</span>
         }

@@ -76,6 +76,14 @@ export type MoviesSearchParams = z.infer<typeof moviesSearchSchema>;
 
 // The TV show library mirrors the movie one minus playlists: two tabs, a page
 // per tab, one shared sort, and the selected genre.
+export const moviePlaylistSearchSchema = z.object({
+  page: z._default(
+    z.catch(z.number().check(z.int(), z.positive()), 1),
+    1,
+  ),
+  sort: z._default(z.catch(z.enum(["asc", "desc"]), "asc"), "asc"),
+});
+
 export const showsSearchSchema = z.object({
   tab: z._default(z.catch(z.enum(["all", "genres"]), "all"), "all"),
   allPage: z._default(
