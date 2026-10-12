@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   DndContext,
   closestCenter,
@@ -187,22 +188,29 @@ export default function DraggableTrackList({
           </div>
         </SortableContext>
 
-        {/* Drag overlay for better visual feedback */}
-        <DragOverlay>
-          {activeTrack ? (
-            <div className="rounded-lg bg-card shadow-2xl ring-2 ring-ring">
-              <TrackItem
-                {...trackRowProps(activeTrack)}
-                variant="playlist"
-                isPlaying={false}
-                isCurrentTrack={false}
-                onPlay={() => {}}
-                isDraggable
-                isDragging
-              />
-            </div>
-          ) : null}
-        </DragOverlay>
+        {/* The overlay is position: fixed at viewport coordinates, and its
+            rect is what collision detection measures. The page's enter
+            animation keeps a transform on an ancestor, which would make that
+            ancestor its containing block and shift the overlay (and the drop
+            target) by the ancestor's offset, so it renders under body. */}
+        {createPortal(
+          <DragOverlay>
+            {activeTrack ? (
+              <div className="rounded-lg bg-card shadow-2xl ring-2 ring-ring">
+                <TrackItem
+                  {...trackRowProps(activeTrack)}
+                  variant="playlist"
+                  isPlaying={false}
+                  isCurrentTrack={false}
+                  onPlay={() => {}}
+                  isDraggable
+                  isDragging
+                />
+              </div>
+            ) : null}
+          </DragOverlay>,
+          document.body,
+        )}
       </DndContext>
     </div>
   );
