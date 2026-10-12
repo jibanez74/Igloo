@@ -12,12 +12,14 @@ vi.mock("@/hooks/useAudioPlayerActions", () => import("../helpers/audio-player")
 vi.mock("@/hooks/useAudioPlayerNowPlaying", () => import("../helpers/audio-player"));
 
 const showActionFailedMock = vi.fn();
+const showRemovedMock = vi.fn();
 
 vi.mock("@/lib/toast-helpers", async () => ({
   ...(await vi.importActual<typeof import("@/lib/toast-helpers")>(
     "@/lib/toast-helpers",
   )),
   showActionFailed: (...args: unknown[]) => showActionFailedMock(...args),
+  showRemoved: (...args: unknown[]) => showRemovedMock(...args),
 }));
 
 const TRACKS_PAGE_URL = (offset: number) =>
@@ -240,6 +242,77 @@ describe("music playlist route", () => {
       );
     });
     expect(screen.getByText("Alabaster")).toBeInTheDocument();
+  });
+
+  it("reports a refused track removal instead of confirming it", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockPlaylistFetch(roadTrip());
+    const respond = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((input, init) => {
+      if (
+        requestURL(input) === "/api/music/playlists/21/tracks/1" &&
+        init?.method === "DELETE"
+      ) {
+        return jsonResponse(
+          { error: true, message: "You can't edit this playlist." },
+          403,
+        );
+      }
+      return respond(input, init);
+    });
+
+    await renderRoute("/music/playlist/21");
+    await user.click(
+      await screen.findByRole("button", { name: "More actions for Alabaster" }),
+    );
+    await user.click(
+      await screen.findByRole("menuitem", { name: /Remove from Playlist/ }),
+    );
+
+    await waitFor(() => {
+      expect(showActionFailedMock).toHaveBeenCalledWith(
+        "remove track",
+        expect.objectContaining({ error: true, status: 403 }),
+      );
+    });
+    expect(showRemovedMock).not.toHaveBeenCalled();
+  });
+
+  it("refreshes the header's details after removing a track", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockPlaylistFetch(roadTrip());
+    const respond = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((input, init) => {
+      if (
+        requestURL(input) === "/api/music/playlists/21/tracks/1" &&
+        init?.method === "DELETE"
+      ) {
+        return jsonResponse({ error: false, message: "Track removed" });
+      }
+      return respond(input, init);
+    });
+    const detailsRequests = () =>
+      fetchMock.mock.calls.filter(
+        ([input, init]) =>
+          requestURL(input) === "/api/music/playlists/21" &&
+          (init?.method ?? "GET") === "GET",
+      ).length;
+
+    await renderRoute("/music/playlist/21");
+    await user.click(
+      await screen.findByRole("button", { name: "More actions for Alabaster" }),
+    );
+    const before = detailsRequests();
+    await user.click(
+      await screen.findByRole("menuitem", { name: /Remove from Playlist/ }),
+    );
+
+    await waitFor(() => {
+      expect(showRemovedMock).toHaveBeenCalledWith("Track", "from playlist");
+    });
+    await waitFor(() => {
+      expect(detailsRequests()).toBeGreaterThan(before);
+    });
   });
 
   it("rejects a malformed playlist id without asking the API", async () => {

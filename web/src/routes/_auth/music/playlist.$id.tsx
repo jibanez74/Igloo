@@ -200,19 +200,43 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
   // retry below them; only a list with nothing to show fails as a whole.
   const tracksLoadFailed = tracksFailed && tracksData === undefined;
 
-  // Remove track mutation
+  // Remove track mutation. The header's count and duration come from the
+  // details query, so it refreshes with the tracks and the playlists list.
   const removeTrackMutation = useMutation({
     mutationFn: (trackId: number) =>
       removeTrackFromPlaylist(playlistId, trackId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [PLAYLIST_TRACKS_KEY, playlistId] });
-      queryClient.invalidateQueries({ queryKey: [PLAYLISTS_KEY] });
+    onSuccess: async result => {
+      if (result.error) {
+        showActionFailed("remove track", result);
+        return;
+      }
       showRemoved("Track", "from playlist");
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: [PLAYLIST_TRACKS_KEY, playlistId],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: playlistDetailsQueryOpts(playlistId).queryKey,
+        }),
+        queryClient.invalidateQueries({ queryKey: [PLAYLISTS_KEY] }),
+      ]);
     },
     onError: () => {
       showActionFailed("remove track");
     },
   });
+
+  // The menu can be reopened while a removal is in flight; asking again for
+  // the same track would only fail once the first one lands.
+  const removeTrack = (trackId: number) => {
+    if (
+      removeTrackMutation.isPending &&
+      removeTrackMutation.variables === trackId
+    ) {
+      return;
+    }
+    removeTrackMutation.mutate(trackId);
+  };
 
   // Reorder tracks mutation
   const reorderMutation = useMutation({
@@ -463,7 +487,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
                 ? apiErrorMessage(tracksError, "Couldn’t load more tracks.")
                 : null
             }
-            onRemoveTrack={(trackId) => removeTrackMutation.mutate(trackId)}
+            onRemoveTrack={removeTrack}
             onReorderTracks={(trackIds) => reorderMutation.mutate(trackIds)}
           />
         )}
