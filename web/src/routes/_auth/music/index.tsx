@@ -17,10 +17,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Spinner } from "@/components/ui/spinner";
 import { useContentFadeTransition } from "@/hooks/useContentFadeTransition";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
-import { useVirtualizedInfiniteLoader } from "@/hooks/useVirtualizedInfiniteLoader";
+import {
+  useVirtualizedInfiniteLoader,
+  type FetchNextPage,
+} from "@/hooks/useVirtualizedInfiniteLoader";
 import { useWindowScrollMargin } from "@/hooks/useWindowScrollMargin";
 import { showActionFailed } from "@/lib/toast-helpers";
 import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
+import InfiniteListFooter from "@/components/shared/InfiniteListFooter";
 import LoadErrorAlert from "@/components/shared/LoadErrorAlert";
 import { apiErrorMessage, isApiFailure } from "@/lib/is-api-failure";
 import { pluralize } from "@/lib/format";
@@ -415,26 +419,23 @@ function TracksListSkeleton() {
 function TracksTabContent() {
   const {
     data,
+    error,
     fetchNextPage,
     hasNextPage,
-    isFetchingNextPage,
-    isLoading,
     isError,
+    isFetchingNextPage,
+    isFetchNextPageError,
+    isLoading,
     refetch,
   } = useInfiniteQuery(tracksInfiniteQueryOpts());
 
-  const firstPage = data?.pages[0];
-  const firstPageFailed = isApiFailure(firstPage);
+  const pages = data?.pages ?? [];
 
   // Get total tracks count from first page
-  const totalTracks =
-    data?.pages[0]?.error === false ? (data.pages[0].data?.total ?? 0) : 0;
+  const totalTracks = pages[0]?.total ?? 0;
 
   // Flatten all pages into a single array
-  const allTracks =
-    data?.pages.flatMap(page =>
-      page.error === false ? (page.data?.tracks ?? []) : [],
-    ) ?? [];
+  const allTracks = pages.flatMap(page => page.tracks);
 
   // Convert to virtual items (tracks + letter headers)
   const virtualItems = flattenToVirtualItems(allTracks);
@@ -451,13 +452,12 @@ function TracksTabContent() {
     return <TracksListSkeleton />;
   }
 
-  if (isError || firstPageFailed) {
+  // A later page that fails keeps the pages already shown and offers its own
+  // retry below them; only a list with nothing to show fails as a whole.
+  if (isError && !data) {
     return (
       <LoadErrorAlert
-        message={apiErrorMessage(
-          firstPage,
-          "Couldn’t load tracks.",
-        )}
+        message={apiErrorMessage(error, "Couldn’t load tracks.")}
         onRetry={() => void refetch()}
       />
     );
@@ -492,6 +492,11 @@ function TracksTabContent() {
         hasNextPage={hasNextPage}
         isFetchingNextPage={isFetchingNextPage}
         fetchNextPage={fetchNextPage}
+        loadMoreError={
+          isFetchNextPageError
+            ? apiErrorMessage(error, "Couldn’t load more tracks.")
+            : null
+        }
       />
     </div>
   );
@@ -503,7 +508,8 @@ type VirtualizedTracksListProps = {
   totalTracks: number;
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
-  fetchNextPage: () => Promise<unknown>;
+  fetchNextPage: FetchNextPage;
+  loadMoreError: string | null;
 };
 
 function VirtualizedTracksList({
@@ -513,6 +519,7 @@ function VirtualizedTracksList({
   hasNextPage,
   isFetchingNextPage,
   fetchNextPage,
+  loadMoreError,
 }: VirtualizedTracksListProps) {
   "use no memo";
 
@@ -610,11 +617,11 @@ function VirtualizedTracksList({
 
       </div>
 
-      {isFetchingNextPage && (
-        <div className="flex justify-center py-4">
-          <Spinner className="size-6 text-primary" />
-        </div>
-      )}
+      <InfiniteListFooter
+        isFetchingNextPage={isFetchingNextPage}
+        loadMoreError={loadMoreError}
+        onRetry={() => void fetchNextPage()}
+      />
     </div>
   );
 }

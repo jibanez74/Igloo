@@ -1,3 +1,28 @@
+import type { ApiFailureType, ApiResponseType } from "@/types";
+
+/**
+ * What a query throws when it must fail as a query instead of caching the
+ * failure envelope (the infinite track lists, whose pages cannot hold one).
+ * It carries the envelope, so apiErrorMessage words it like any other failure.
+ */
+export class ApiFailureError extends Error {
+  readonly failure: ApiFailureType;
+
+  constructor(failure: ApiFailureType) {
+    super(failure.message);
+    this.name = "ApiFailureError";
+    this.failure = failure;
+  }
+}
+
+/** A successful envelope's payload; a failure envelope throws ApiFailureError. */
+export function unwrapApiData<T extends Record<string, unknown>>(
+  res: ApiResponseType<T>,
+): T {
+  if (res.error) throw new ApiFailureError(res);
+  return res.data;
+}
+
 /** Type guard for API responses shaped as `{ error: true, message: string }`. */
 
 export function isApiFailure(data: unknown): data is { error: true; message: string } {
@@ -19,8 +44,10 @@ export function isApiFailure(data: unknown): data is { error: true; message: str
  * message is internal error text ("failed to add movies to playlist") rather
  * than copy written for a person. `apiRequest` stamps the status on every
  * failure. Every load-error surface makes the same choice, so it is made here.
+ * It also takes an ApiFailureError, the envelope a throwing query rethrew.
  */
-export function apiErrorMessage(data: unknown, fallback: string): string {
+export function apiErrorMessage(error: unknown, fallback: string): string {
+  const data = error instanceof ApiFailureError ? error.failure : error;
   if (!isApiFailure(data)) return fallback;
   const status = (data as { status?: unknown }).status;
   if (typeof status === "number" && (status === 404 || status >= 500)) {

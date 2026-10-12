@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { queryOptions } from "@tanstack/react-query";
+import { ApiFailureError } from "@/lib/is-api-failure";
 import { createQueryClient, freshFor, STALE_LIST } from "@/lib/query-client";
 
 const FAILURE = { error: true as const, message: "Server unavailable", status: 503 };
@@ -65,6 +66,22 @@ describe("createQueryClient", () => {
 
     expect(queries?.gcTime).toBe(10 * 60_000);
     expect(queries?.retry).toBe(false);
+  });
+
+  it("retries a server or network failure twice and a 4xx never", () => {
+    const retry = createQueryClient().getDefaultOptions().queries?.retry;
+    if (typeof retry !== "function") throw new Error("retry is not a predicate");
+
+    const serverFailure = new ApiFailureError({ ...FAILURE, status: 503 });
+    const networkFailure = new ApiFailureError({ error: true, message: "offline" });
+    const notFound = new ApiFailureError({ ...FAILURE, status: 404 });
+
+    expect(retry(0, serverFailure)).toBe(true);
+    expect(retry(1, serverFailure)).toBe(true);
+    expect(retry(2, serverFailure)).toBe(false);
+    expect(retry(0, networkFailure)).toBe(true);
+    expect(retry(0, notFound)).toBe(false);
+    expect(retry(0, new Error("unexpected"))).toBe(false);
   });
 
   it("gives every client its own cache", () => {

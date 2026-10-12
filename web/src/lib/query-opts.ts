@@ -16,6 +16,7 @@ import type {
   SortOrder,
   WatchProgressType,
 } from "@/types";
+import { unwrapApiData } from "@/lib/is-api-failure";
 import { movieMediaRef } from "@/lib/media-ref";
 import type { PlaylistKind, PlaylistPickerRow } from "@/lib/playlist-kinds";
 import {
@@ -606,8 +607,10 @@ export function albumsPaginatedQueryOpts(
 // Refetching an infinite list replays every page it holds, one request after
 // another: after scrolling a large library, dozens per window focus. These
 // lists change through scans and playlist edits, which invalidate them, so
-// they skip the focus refetch. freshFor would never see a failure in
-// { pages } data, so they take a plain staleTime.
+// they skip the focus refetch. A page cannot hold a failure envelope, so their
+// pages unwrap it and throw ApiFailureError: a failed page is a query error
+// (retried, then offered again) and never ends the list early. With no
+// envelope cached they take a plain staleTime.
 const INFINITE_LIST_CACHE = {
   staleTime: STALE_LIST,
   refetchOnWindowFocus: false,
@@ -616,12 +619,11 @@ const INFINITE_LIST_CACHE = {
 export function tracksInfiniteQueryOpts(pageSize = TRACKS_INFINITE_PAGE_SIZE) {
   return infiniteQueryOptions({
     queryKey: [TRACKS_INFINITE_KEY, pageSize],
-    queryFn: ({ pageParam = 0 }) => getTracksPaginated(pageSize, pageParam),
+    queryFn: async ({ pageParam }) =>
+      unwrapApiData(await getTracksPaginated(pageSize, pageParam)),
     initialPageParam: 0,
-    getNextPageParam: lastPage => {
-      if (lastPage.error || !lastPage.data?.has_more) return undefined;
-      return lastPage.data.offset + lastPage.data.limit;
-    },
+    getNextPageParam: lastPage =>
+      lastPage.has_more ? lastPage.offset + lastPage.limit : undefined,
     ...INFINITE_LIST_CACHE,
   });
 }
@@ -700,13 +702,11 @@ export function playlistTracksInfiniteQueryOpts(
 ) {
   return infiniteQueryOptions({
     queryKey: [PLAYLIST_TRACKS_KEY, playlistId, pageSize],
-    queryFn: ({ pageParam = 0 }) =>
-      getPlaylistTracks(playlistId, pageSize, pageParam),
+    queryFn: async ({ pageParam }) =>
+      unwrapApiData(await getPlaylistTracks(playlistId, pageSize, pageParam)),
     initialPageParam: 0,
-    getNextPageParam: lastPage => {
-      if (lastPage.error || !lastPage.data?.has_more) return undefined;
-      return lastPage.data.next_offset;
-    },
+    getNextPageParam: lastPage =>
+      lastPage.has_more ? lastPage.next_offset : undefined,
     enabled: playlistId > 0,
     ...INFINITE_LIST_CACHE,
   });

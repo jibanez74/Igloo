@@ -39,6 +39,8 @@ type MockMusicFetchOptions = {
   emptyPlaylists?: boolean;
   emptyLikedTracks?: boolean;
   failFirstTracksRequest?: boolean;
+  /** The first page says there is more; the next page fails once with a 503. */
+  failFirstNextTracksPage?: boolean;
   failFirstPlaylistsRequest?: boolean;
   failFirstLikedTracksRequest?: boolean;
 };
@@ -47,6 +49,7 @@ function mockMusicFetch(options: MockMusicFetchOptions = {}) {
   const spotifyAvailable = options.spotifyAvailable ?? true;
   const emptyMusicians = options.emptyMusicians ?? false;
   let tracksRequestCount = 0;
+  let nextTracksPageRequestCount = 0;
   let playlistsRequestCount = 0;
   let likedTracksRequestCount = 0;
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
@@ -147,12 +150,38 @@ function mockMusicFetch(options: MockMusicFetchOptions = {}) {
       const tracks = options.emptyTracks
         ? []
         : [track(1, "Alabaster"), track(2, "Borrowed Light")];
+      const hasMore = options.failFirstNextTracksPage === true;
       return jsonResponse({
         error: false,
         data: {
           tracks,
-          total: tracks.length,
+          total: hasMore ? tracks.length + 1 : tracks.length,
           offset: 0,
+          limit: TRACKS_INFINITE_PAGE_SIZE,
+          has_more: hasMore,
+        },
+      });
+    }
+
+    if (
+      url ===
+      `/api/music/tracks?limit=${TRACKS_INFINITE_PAGE_SIZE}&offset=${TRACKS_INFINITE_PAGE_SIZE}`
+    ) {
+      nextTracksPageRequestCount += 1;
+
+      if (nextTracksPageRequestCount === 1) {
+        return jsonResponse(
+          { error: true, message: "tracks page query failed" },
+          503,
+        );
+      }
+
+      return jsonResponse({
+        error: false,
+        data: {
+          tracks: [track(3, "Cascade")],
+          total: 3,
+          offset: TRACKS_INFINITE_PAGE_SIZE,
           limit: TRACKS_INFINITE_PAGE_SIZE,
           has_more: false,
         },
@@ -396,6 +425,27 @@ describe("music route tracks tab", () => {
     await user.click(screen.getByRole("button", { name: "Try again" }));
 
     expect(await screen.findByRole("list", { name: "Tracks" })).toBeInTheDocument();
+    expect(screen.getByText("Alabaster")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("keeps the loaded tracks and offers Try again when a later page fails", async () => {
+    const user = userEvent.setup();
+
+    await renderMusicRoute("/music/?tab=tracks", {
+      failFirstNextTracksPage: true,
+    });
+
+    // The first page is short, so the list asks for the next one at once.
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Couldn’t load more tracks.",
+    );
+    expect(screen.getByRole("list", { name: "Tracks" })).toBeInTheDocument();
+    expect(screen.getByText("Alabaster")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(await screen.findByText("Cascade")).toBeInTheDocument();
     expect(screen.getByText("Alabaster")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
