@@ -323,7 +323,7 @@ describe("Account settings", () => {
 
   it("deletes the account without calling logout after the session is destroyed", async () => {
     const user = userEvent.setup();
-    const { requests, router } = await renderAccountRoute();
+    const { requests, router, queryClient } = await renderAccountRoute();
 
     await user.click(screen.getByRole("button", { name: "Delete account" }));
     const dialog = screen.getByRole("dialog", { name: "Delete Account" });
@@ -348,8 +348,19 @@ describe("Account settings", () => {
     );
     expect(requestsFor(requests, "DELETE", "/api/user")).toHaveLength(1);
     expect(requestsFor(requests, "DELETE", "/api/auth/logout")).toHaveLength(0);
-    expect(requestsFor(requests, "GET", "/api/auth/user").length).toBeGreaterThan(
-      0,
+    // The login guard knows the session is gone, so nothing asks for the
+    // user again (that 401 used to land in the cache under the old page),
+    // and nothing the deleted account loaded stays cached.
+    await waitFor(() => {
+      expect(queryClient.getQueryCache().getAll()).toEqual([]);
+    });
+    const deleteIndex = requests.findIndex(
+      request => request.method === "DELETE" && request.url === "/api/user",
     );
+    expect(
+      requests
+        .slice(deleteIndex)
+        .filter(request => request.url === "/api/auth/user"),
+    ).toEqual([]);
   });
 });

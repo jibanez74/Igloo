@@ -60,13 +60,13 @@ import {
   showError,
   showActionFailed,
 } from "@/lib/toast-helpers";
-import { useNavigate } from "@tanstack/react-router";
 import { lightInputClassName } from "@/lib/input-styles";
 import { cn, codePointLength, describedBy, getInitials } from "@/lib/utils";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import QuickConnectApproveCard from "@/components/settings/QuickConnectApproveCard";
 import DevicesCard from "@/components/settings/DevicesCard";
 import ProfilePinCard from "@/components/settings/ProfilePinCard";
+import { useEndSession } from "@/hooks/useEndSession";
 import { routeHead } from "@/lib/route-head";
 import { apiErrorMessage } from "@/lib/is-api-failure";
 
@@ -99,7 +99,7 @@ const ALLOWED_AVATAR_TYPES = [
 
 function AccountSettings() {
   const { queryClient } = Route.useRouteContext();
-  const navigate = useNavigate();
+  const endSession = useEndSession();
   const authQuery = authUserQueryOpts();
   const authKey = authQuery.queryKey;
   const { data: userData, isLoading } = useQuery(authQuery);
@@ -477,8 +477,7 @@ function AccountSettings() {
         }
 
         showSuccess("Account deleted successfully");
-        queryClient.removeQueries();
-        await navigate({ to: "/login", replace: true });
+        await endSession();
       } catch {
         showError("Failed to delete account");
         setDeleteDialogOpen(false);
