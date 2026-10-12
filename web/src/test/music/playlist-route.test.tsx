@@ -183,10 +183,11 @@ describe("music playlist route", () => {
     const user = userEvent.setup();
     const fetchMock = mockPlaylistFetch(roadTrip());
     const respond = fetchMock.getMockImplementation()!;
+    // Failing until Try again: the loader's warm-up and the list's own
+    // mount retry both see the failure.
     let failTracks = true;
     fetchMock.mockImplementation((input, init) => {
       if (failTracks && requestURL(input) === TRACKS_PAGE_URL(0)) {
-        failTracks = false;
         return jsonResponse({ error: true, message: "tracks query failed" }, 503);
       }
       return respond(input, init);
@@ -201,6 +202,7 @@ describe("music playlist route", () => {
       screen.queryByText("No tracks in this playlist yet."),
     ).not.toBeInTheDocument();
 
+    failTracks = false;
     await user.click(screen.getByRole("button", { name: "Try again" }));
 
     expect(await screen.findByText("Alabaster")).toBeInTheDocument();

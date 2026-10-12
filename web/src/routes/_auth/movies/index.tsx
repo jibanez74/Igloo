@@ -93,12 +93,17 @@ export const Route = createFileRoute("/_auth/movies/")({
     deps: { allPage, sort, tab, genreId, genresPage, playlistsView, playlistsPage },
   }) => {
     const { queryClient } = context;
+    // The stats sit above every tab; the rest warms only the tab on show.
     const promises: Promise<unknown>[] = [
       queryClient.ensureQueryData(moviesStatsQueryOpts()),
-      queryClient.ensureQueryData(
-        moviesLibraryQueryOpts(allPage, MOVIES_PER_PAGE, sort),
-      ),
     ];
+    if (tab === "all") {
+      promises.push(
+        queryClient.ensureQueryData(
+          moviesLibraryQueryOpts(allPage, MOVIES_PER_PAGE, sort),
+        ),
+      );
+    }
     if (tab === "genres") {
       promises.push(queryClient.ensureQueryData(moviesGenresQueryOpts()));
       if (genreId != null && genreId > 0) {
@@ -110,14 +115,13 @@ export const Route = createFileRoute("/_auth/movies/")({
       }
     }
     if (tab === "playlists") {
-      promises.push(queryClient.ensureQueryData(moviePlaylistsQueryOpts()));
-      if (playlistsView === "liked") {
-        promises.push(
-          queryClient.ensureQueryData(
-            likedMoviesQueryOpts(playlistsPage, MOVIES_PER_PAGE, sort),
-          ),
-        );
-      }
+      promises.push(
+        playlistsView === "liked"
+          ? queryClient.ensureQueryData(
+              likedMoviesQueryOpts(playlistsPage, MOVIES_PER_PAGE, sort),
+            )
+          : queryClient.ensureQueryData(moviePlaylistsQueryOpts()),
+      );
     }
     await loadOnEntry(cause, promises);
   },

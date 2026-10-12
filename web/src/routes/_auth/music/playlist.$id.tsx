@@ -106,6 +106,13 @@ export const Route = createFileRoute("/_auth/music/playlist/$id")({
     const id = parseRouteId(params.id);
     if (id == null) return { playlist: null };
 
+    // The first tracks page starts beside the details so the list rarely
+    // spins after the page paints. Its pages throw, and retry a server
+    // failure, so the loader does not wait on them: the list's own spinner
+    // and alert cover them.
+    void context.queryClient.prefetchInfiniteQuery(
+      playlistTracksInfiniteQueryOpts(id),
+    );
     const res = await context.queryClient.ensureQueryData(
       playlistDetailsQueryOpts(id),
     );

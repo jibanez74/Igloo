@@ -100,22 +100,55 @@ export const Route = createFileRoute("/_auth/music/")({
   head: () => MUSIC_HEAD,
   validateSearch: musicSearchSchema,
   search: { middlewares: [stripSearchParams(MUSIC_INDEX_DEFAULT_SEARCH)] },
-  loaderDeps: ({ search: { albumsPage, musiciansPage } }) => ({
+  loaderDeps: ({
+    search: { tab, albumsPage, musiciansPage, playlistsView, likedTracksPage },
+  }) => ({
+    tab,
     albumsPage,
     musiciansPage,
+    playlistsView,
+    likedTracksPage,
   }),
-  loader: async ({ context, cause, deps: { albumsPage, musiciansPage } }) => {
+  loader: async ({ context, cause, deps }) => {
     const { queryClient } = context;
-
-    await loadOnEntry(cause, [
+    // The stats sit above every tab; the rest warms only the tab on show.
+    const loads: Promise<unknown>[] = [
       queryClient.ensureQueryData(musicStatsQueryOpts()),
-      queryClient.ensureQueryData(
-        albumsPaginatedQueryOpts(albumsPage, ALBUMS_PER_PAGE)
-      ),
-      queryClient.ensureQueryData(
-        musiciansPaginatedQueryOpts(musiciansPage, MUSICIANS_PER_PAGE)
-      ),
-    ]);
+    ];
+
+    switch (deps.tab) {
+      case "albums":
+        loads.push(
+          queryClient.ensureQueryData(
+            albumsPaginatedQueryOpts(deps.albumsPage, ALBUMS_PER_PAGE),
+          ),
+        );
+        break;
+      case "musicians":
+        loads.push(
+          queryClient.ensureQueryData(
+            musiciansPaginatedQueryOpts(deps.musiciansPage, MUSICIANS_PER_PAGE),
+          ),
+        );
+        break;
+      case "tracks":
+        // Its pages throw, and retry a server failure, so the loader starts
+        // the first page without waiting on it: the tab's skeleton and alert
+        // cover the load, and a failure never reaches the route's boundary.
+        void queryClient.prefetchInfiniteQuery(tracksInfiniteQueryOpts());
+        break;
+      case "playlists":
+        loads.push(
+          deps.playlistsView === "liked"
+            ? queryClient.ensureQueryData(
+                likedTracksQueryOpts(deps.likedTracksPage),
+              )
+            : queryClient.ensureQueryData(playlistsQueryOpts()),
+        );
+        break;
+    }
+
+    await loadOnEntry(cause, loads);
   },
   component: MusicPage,
 });

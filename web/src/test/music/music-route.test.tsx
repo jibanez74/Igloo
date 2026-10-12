@@ -38,7 +38,8 @@ type MockMusicFetchOptions = {
   emptyTracks?: boolean;
   emptyPlaylists?: boolean;
   emptyLikedTracks?: boolean;
-  failFirstTracksRequest?: boolean;
+  /** Fails the first tracks page while `current` is true. */
+  tracksFailing?: { current: boolean };
   /** The first page says there is more; the next page fails once with a 503. */
   failFirstNextTracksPage?: boolean;
   failFirstPlaylistsRequest?: boolean;
@@ -48,7 +49,6 @@ type MockMusicFetchOptions = {
 function mockMusicFetch(options: MockMusicFetchOptions = {}) {
   const spotifyAvailable = options.spotifyAvailable ?? true;
   const emptyMusicians = options.emptyMusicians ?? false;
-  let tracksRequestCount = 0;
   let nextTracksPageRequestCount = 0;
   let playlistsRequestCount = 0;
   let likedTracksRequestCount = 0;
@@ -138,9 +138,7 @@ function mockMusicFetch(options: MockMusicFetchOptions = {}) {
     }
 
     if (url === `/api/music/tracks?limit=${TRACKS_INFINITE_PAGE_SIZE}&offset=0`) {
-      tracksRequestCount += 1;
-
-      if (options.failFirstTracksRequest && tracksRequestCount === 1) {
+      if (options.tracksFailing?.current) {
         return jsonResponse({
           error: true,
           message: "The tracks library is temporarily unavailable.",
@@ -411,9 +409,10 @@ describe("music route tracks tab", () => {
   it("shows an API failure and loads tracks after retrying", async () => {
     const user = userEvent.setup();
 
-    await renderMusicRoute("/music/?tab=tracks", {
-      failFirstTracksRequest: true,
-    });
+    // Failing until Try again: the loader's warm-up and the tab's own mount
+    // retry both see the failure.
+    const tracksFailing = { current: true };
+    await renderMusicRoute("/music/?tab=tracks", { tracksFailing });
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "The tracks library is temporarily unavailable.",
@@ -422,6 +421,7 @@ describe("music route tracks tab", () => {
       screen.queryByText("No tracks found in your library."),
     ).not.toBeInTheDocument();
 
+    tracksFailing.current = false;
     await user.click(screen.getByRole("button", { name: "Try again" }));
 
     expect(await screen.findByRole("list", { name: "Tracks" })).toBeInTheDocument();
