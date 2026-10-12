@@ -31,7 +31,6 @@ import SettingsSaveBar from "@/components/settings/SettingsSaveBar";
 import { musicStatsQueryOpts, moviesStatsQueryOpts, movieScanStatusQueryOpts, musicScanStatusQueryOpts, showScanStatusQueryOpts, showsStatsQueryOpts, settingsQueryOpts } from "@/lib/query-opts";
 import { showActionFailed, showSuccess } from "@/lib/toast-helpers";
 import { triggerMusicScan, triggerMovieScan, triggerShowScan, updateLibrarySettings } from "@/lib/api";
-import { invalidateLibraryQueries } from "@/lib/library-cache";
 import { useIsMiniPlayerVisible } from "@/hooks/useIsMiniPlayerVisible";
 import {
   MINI_PLAYER_CLEARANCE_BOTTOM_CLASS,
@@ -267,12 +266,12 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
       setForm(formFromSettings(nextSettings));
       setValidationField(null);
       setFeedback({ message: "Library paths saved.", tone: "success" });
+      // The PUT answers with the saved settings: no refetch needed.
       queryClient.setQueryData(settingsQueryOpts().queryKey, {
         error: false,
         message: res.message,
         data: nextSettings,
       });
-      queryClient.invalidateQueries({ queryKey: settingsQueryOpts().queryKey });
       showSuccess("Library paths saved");
     },
     onError: () => {
@@ -357,7 +356,8 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
         "Scan started",
         `${library.title} library scan has been initiated`,
       );
-      invalidateLibraryQueries(queryClient, scan);
+      // The scan hooks refresh the library's lists once the status shows
+      // the new run.
       await queryClient.invalidateQueries({ queryKey: [library.statusKey] });
       setActiveScan(current => (current === scan ? null : current));
     } catch {

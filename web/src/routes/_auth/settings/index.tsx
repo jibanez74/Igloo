@@ -223,17 +223,15 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
         return;
       }
 
-      queryClient.setQueryData(
-        settingsKey,
-        {
-          error: false,
-          message: res.message,
-          data: {
-            settings: res.data.settings,
-          },
+      // The PUT answers with the saved settings, so the cache takes them
+      // as they are rather than refetching.
+      queryClient.setQueryData(settingsKey, {
+        error: false,
+        message: res.message,
+        data: {
+          settings: res.data.settings,
         },
-      );
-      queryClient.invalidateQueries({ queryKey: settingsKey });
+      });
 
       if (res.data.restart_required) {
         showSuccess(
