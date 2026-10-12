@@ -313,11 +313,12 @@ test("continue watching reveals the same resume action on movies and episodes", 
 }) => {
   const browserIssues = trackBrowserIssues(page);
   const unexpectedApiRequests = await mockHomeApi(page);
-  // Hovering a card warms its details page (design-system §PosterCard);
-  // registered after the catch-all, this route answers those requests first.
+  // Hovering a card warms its details page (design-system §PosterCard), the
+  // movie page's playback settings included; registered after the catch-all,
+  // this route answers those requests first.
   const prefetched = new Set<string>();
   await page.route(
-    /\/api\/(movies\/(details\/)?104|shows\/details\/301)(\/|$)/,
+    /\/api\/(movies\/(details\/)?104|shows\/details\/301|settings\/playback)(\/|$)/,
     async route => {
       prefetched.add(new URL(route.request().url()).pathname);
       await fulfillJSON(route, apiResponse(null));
