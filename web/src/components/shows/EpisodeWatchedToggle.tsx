@@ -8,7 +8,10 @@ import { showSeasonEpisodesQueryOpts } from "@/lib/query-opts";
 import { showActionFailed } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
 import { refreshWatchQueries } from "@/lib/video-playback-exit";
-import type { ApiResponseType, ShowSeasonEpisodesDataType } from "@/types";
+import type { ShowSeasonEpisodesDataType } from "@/types";
+
+type EpisodeRow = ShowSeasonEpisodesDataType["episodes"][number];
+type EpisodeWatchState = Pick<EpisodeRow, "watched" | "progress_sec">;
 
 type EpisodeWatchedToggleProps = {
   showId: number;
@@ -21,9 +24,10 @@ type EpisodeWatchedToggleProps = {
 
 /**
  * Marks one episode watched or unwatched. The season list is the source of
- * truth on the page, so the toggle updates that cached payload optimistically
- * (the row re-renders at once), restores it on failure, and refreshes every
- * watch query that shows the episode once the server has answered.
+ * truth on the page, so the toggle updates its own row of that cached payload
+ * optimistically (the row re-renders at once), restores only that row on
+ * failure (another row's toggle may be in flight), and refreshes every watch
+ * query that shows the episode once the server has answered.
  */
 export default function EpisodeWatchedToggle({
   showId,
@@ -35,31 +39,46 @@ export default function EpisodeWatchedToggle({
   const queryClient = useQueryClient();
   const seasonKey = showSeasonEpisodesQueryOpts(showId, seasonNumber).queryKey;
 
-  const setSeasonWatched = (nextWatched: boolean) => {
-    queryClient.setQueryData<ApiResponseType<ShowSeasonEpisodesDataType>>(
-      seasonKey,
-      (previous) => {
-        if (!previous || previous.error) return previous;
-        return {
-          ...previous,
-          data: {
-            ...previous.data,
-            episodes: previous.data.episodes.map((episode) =>
-              episode.id === episodeId
-                ? {
-                    ...episode,
-                    watched: nextWatched,
-                    // Marking watched clears the position, as the server does.
-                    progress_sec: nextWatched
-                      ? { Float64: 0, Valid: false }
-                      : episode.progress_sec,
-                  }
-                : episode,
-            ),
-          },
-        };
+  // The cached row of this episode, read fresh each time so the other rows
+  // keep whatever their own toggles wrote meanwhile.
+  const episodeRow = () => {
+    const season = queryClient.getQueryData(seasonKey);
+    return season?.error === false
+      ? season.data.episodes.find((episode) => episode.id === episodeId)
+      : undefined;
+  };
+
+  const setEpisodeRow = (state: EpisodeWatchState) => {
+    const season = queryClient.getQueryData(seasonKey);
+    if (season?.error !== false) return;
+    queryClient.setQueryData(seasonKey, {
+      ...season,
+      data: {
+        ...season.data,
+        episodes: season.data.episodes.map((episode) =>
+          episode.id === episodeId ? { ...episode, ...state } : episode,
+        ),
       },
-    );
+    });
+  };
+
+  const setEpisodeWatched = (nextWatched: boolean) => {
+    const row = episodeRow();
+    if (!row) return;
+    setEpisodeRow({
+      watched: nextWatched,
+      // Marking watched clears the position, as the server does.
+      progress_sec: nextWatched ? { Float64: 0, Valid: false } : row.progress_sec,
+    });
+  };
+
+  // With no cached row to restore, the season refetches instead.
+  const rollback = (previous: EpisodeWatchState | undefined) => {
+    if (previous) {
+      setEpisodeRow(previous);
+    } else {
+      void queryClient.invalidateQueries({ queryKey: seasonKey });
+    }
   };
 
   const mutation = useMutation({
@@ -67,21 +86,26 @@ export default function EpisodeWatchedToggle({
       setMediaWatched(episodeMediaRef(episodeId), nextWatched),
     onMutate: async (nextWatched: boolean) => {
       await queryClient.cancelQueries({ queryKey: seasonKey });
-      const previous =
-        queryClient.getQueryData<ApiResponseType<ShowSeasonEpisodesDataType>>(
-          seasonKey,
-        );
-      setSeasonWatched(nextWatched);
-      return { previous };
+      const row = episodeRow();
+      setEpisodeWatched(nextWatched);
+      return {
+        previous: row
+          ? { watched: row.watched, progress_sec: row.progress_sec }
+          : undefined,
+      };
+    },
+    onError: (_error, _nextWatched, context) => {
+      rollback(context?.previous);
+      showActionFailed("update watched status");
     },
     onSuccess: (res, _nextWatched, context) => {
       if (res.error) {
-        queryClient.setQueryData(seasonKey, context?.previous);
+        rollback(context?.previous);
         showActionFailed("update watched status", res);
         return;
       }
 
-      setSeasonWatched(res.data.watched);
+      setEpisodeWatched(res.data.watched);
       // The season rows, the episode's own progress entry and Home's
       // continue-watching row all show this episode's state.
       void refreshWatchQueries(queryClient, episodeMediaRef(episodeId), {

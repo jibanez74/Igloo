@@ -246,6 +246,55 @@ describe("ShowSeasonEpisodeList", () => {
     expect(within(row).queryByText("Watched")).not.toBeInTheDocument();
   });
 
+  it("rolls back only its own row while another row's toggle is in flight", async () => {
+    const user = userEvent.setup();
+    const firstRequest = deferredResponse();
+    const secondRequest = deferredResponse();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = requestURL(input);
+        if (url === "/api/shows/episodes/70101/watch-progress/watched") {
+          return firstRequest.promise;
+        }
+        if (url === "/api/shows/episodes/70102/watch-progress/watched") {
+          return secondRequest.promise;
+        }
+        return jsonResponse({ error: false, data: seasonWithProgress() });
+      }),
+    );
+
+    renderWithQueryClient(
+      <ShowSeasonEpisodeList showId={SHOW_ID} seasonNumber={1} />,
+    );
+
+    const first = await screen.findByRole("article", { name: /1\.\s*S1 Episode 1/ });
+    const second = screen.getByRole("article", { name: /2\.\s*S1 Episode 2/ });
+    await user.click(
+      within(first).getByRole("button", { name: "Mark S1 E1 as watched" }),
+    );
+    await user.click(
+      within(second).getByRole("button", { name: "Mark S1 E2 as unwatched" }),
+    );
+    await waitFor(() => {
+      expect(
+        within(second).getByRole("button", { name: "Mark S1 E2 as watched" }),
+      ).toHaveAttribute("aria-pressed", "false");
+    });
+
+    firstRequest.resolve(jsonResponse({ error: true, message: "nope" }, 500));
+
+    await waitFor(() => {
+      expect(
+        within(first).getByRole("button", { name: "Mark S1 E1 as watched" }),
+      ).toHaveAttribute("aria-pressed", "false");
+    });
+    // The second row still shows its own pending change.
+    expect(
+      within(second).getByRole("button", { name: "Mark S1 E2 as watched" }),
+    ).toHaveAttribute("aria-pressed", "false");
+  });
+
   it("renders episode rows with number, runtime, air date, and overview", async () => {
     vi.stubGlobal(
       "fetch",

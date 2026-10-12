@@ -80,6 +80,11 @@ export default function TrailerPreferencesCard() {
   const sourceId = useId();
   const sourceHintId = useId();
 
+  // Undoes the optimistic write when the save is refused or fails.
+  const restorePrefs = (previousData: typeof data) => {
+    if (previousData) queryClient.setQueryData(prefsKey, previousData);
+  };
+
   const saveMutation = useMutation({
     mutationFn: ({ prefs }: SaveVariables) => updateTrailerPreferences(prefs),
     onMutate: async ({ prefs }) => {
@@ -90,9 +95,7 @@ export default function TrailerPreferencesCard() {
     },
     onSuccess: (res, variables, context) => {
       if (res.error) {
-        if (context?.previousData) {
-          queryClient.setQueryData(prefsKey, context.previousData);
-        }
+        restorePrefs(context?.previousData);
         showActionFailed("save trailer preferences", res);
         return;
       }
@@ -105,9 +108,7 @@ export default function TrailerPreferencesCard() {
       setAnnouncementKey((current) => current + 1);
     },
     onError: (_error, _variables, context) => {
-      if (context?.previousData) {
-        queryClient.setQueryData(prefsKey, context.previousData);
-      }
+      restorePrefs(context?.previousData);
       showActionFailed(
         "save trailer preferences",
         "An unexpected error occurred",

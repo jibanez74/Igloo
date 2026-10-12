@@ -121,6 +121,16 @@ export default function MovieDetailsHeroActions({
       ? Boolean(watchProgressData.data.watched)
       : false;
 
+  // Undoes the optimistic write. With nothing cached before it, the real
+  // progress is unknown, so it refetches rather than claiming "unwatched".
+  const rollbackWatched = (previous: typeof watchProgressData) => {
+    if (previous === undefined) {
+      void queryClient.invalidateQueries({ queryKey: watchProgressKey });
+      return;
+    }
+    queryClient.setQueryData(watchProgressKey, previous);
+  };
+
   const watchedMutation = useMutation({
     mutationFn: (nextWatched: boolean) => setMovieWatched(movieId, nextWatched),
     onMutate: async (nextWatched: boolean) => {
@@ -142,14 +152,7 @@ export default function MovieDetailsHeroActions({
       return { previous };
     },
     onError: (_err, _nextWatched, context) => {
-      if (context?.previous !== undefined) {
-        queryClient.setQueryData(watchProgressKey, context.previous);
-      } else {
-        queryClient.setQueryData(watchProgressKey, {
-          error: false,
-          data: emptyWatchProgress(),
-        });
-      }
+      rollbackWatched(context?.previous);
       showActionFailed(
         "update watched status",
         "Unable to update watched status. Please try again.",
@@ -157,14 +160,7 @@ export default function MovieDetailsHeroActions({
     },
     onSuccess: (res, nextWatched, context) => {
       if (res.error) {
-        if (context?.previous !== undefined) {
-          queryClient.setQueryData(watchProgressKey, context.previous);
-        } else {
-          queryClient.setQueryData(watchProgressKey, {
-            error: false,
-            data: emptyWatchProgress(),
-          });
-        }
+        rollbackWatched(context?.previous);
         showActionFailed("update watched status", res);
         return;
       }
