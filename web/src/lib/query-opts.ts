@@ -158,7 +158,7 @@ import {
 } from "@/lib/query-client";
 
 // ============================================================================
-// Auth
+// Auth & user
 // ============================================================================
 
 /**
@@ -197,6 +197,15 @@ export function userPinQueryOpts() {
   });
 }
 
+export function trailerPreferencesQueryOpts() {
+  return queryOptions({
+    queryKey: [TRAILER_PREFERENCES_KEY],
+    queryFn: getTrailerPreferences,
+    staleTime: freshFor(STALE_CATALOG),
+    gcTime: GC_LONG,
+  });
+}
+
 // ============================================================================
 // Devices (Quick Connect)
 // ============================================================================
@@ -232,7 +241,7 @@ export function unreadNotificationCountQueryOpts() {
 }
 
 // ============================================================================
-// Home / catalog (latest, in-theaters, TMDB/Spotify status)
+// Home & external catalogs (latest, continue watching, TMDB, Spotify)
 // ============================================================================
 
 export function latestMoviesQueryOpts() {
@@ -252,6 +261,172 @@ export function latestShowsQueryOpts() {
     gcTime: GC_LONG,
   });
 }
+
+export function latestAlbumsQueryOpts() {
+  return queryOptions({
+    queryKey: [LATEST_ALBUMS_KEY],
+    queryFn: getLatestAlbums,
+    staleTime: freshFor(STALE_CATALOG),
+    gcTime: GC_LONG,
+  });
+}
+
+// Progress changes with every playback session, so keep this as fresh as the
+// per-movie watch-progress query (STALE_30S). Movies and episodes arrive
+// together, already merged and ordered by the server.
+export function continueWatchingQueryOpts() {
+  return queryOptions({
+    queryKey: [CONTINUE_WATCHING_KEY],
+    queryFn: getContinueWatching,
+    staleTime: freshFor(STALE_30S),
+  });
+}
+
+export function inTheatersQueryOpts() {
+  return queryOptions({
+    queryKey: [MOVIES_IN_THEATERS_KEY],
+    queryFn: getMoviesInTheaters,
+    staleTime: freshFor(STALE_THEATERS),
+    gcTime: GC_LONG,
+  });
+}
+
+// Detail for a TMDB in-theater movie (not a library movie — see
+// libraryMovieDetailsQueryOpts for that). Backed by getMovieInTheaterDetails.
+export function movieDetailsQueryOpts(id: number) {
+  return queryOptions({
+    queryKey: [MOVIE_DETAILS_KEY, id],
+    queryFn: () => getMovieInTheaterDetails(id),
+    enabled: id > 0,
+    staleTime: freshFor(STALE_CATALOG),
+    gcTime: GC_LONG,
+  });
+}
+
+export function tmdbStatusQueryOpts() {
+  return queryOptions({
+    queryKey: [TMDB_STATUS_KEY],
+    queryFn: getTmdbStatus,
+    staleTime: freshFor(STALE_CATALOG),
+  });
+}
+
+export function spotifyStatusQueryOpts() {
+  return queryOptions({
+    queryKey: [SPOTIFY_STATUS_KEY],
+    queryFn: getSpotifyStatus,
+    staleTime: freshFor(STALE_CATALOG),
+  });
+}
+
+// ============================================================================
+// Movies library
+// ============================================================================
+
+export function libraryMovieDetailsQueryOpts(id: number) {
+  return queryOptions({
+    queryKey: [LIBRARY_MOVIE_DETAILS_KEY, id],
+    queryFn: () => getMovieDetails(id),
+    enabled: id > 0,
+    staleTime: freshFor(STALE_LIST),
+  });
+}
+
+export function movieTechnicalDetailsQueryOpts(id: number) {
+  return queryOptions({
+    queryKey: [MOVIE_TECHNICAL_DETAILS_KEY, id],
+    queryFn: () => getMovieTechnicalDetails(id),
+    enabled: id > 0,
+    staleTime: freshFor(STALE_TECH),
+    gcTime: GC_LONG,
+  });
+}
+
+export function moviesLibraryQueryOpts(
+  page: number,
+  perPage: number = MOVIES_PER_PAGE,
+  sort: "asc" | "desc" = "asc",
+) {
+  return queryOptions({
+    queryKey: [MOVIES_LIBRARY_KEY, page, perPage, sort],
+    queryFn: () => getMoviesLibrary(page, perPage, sort),
+    staleTime: freshFor(STALE_LIST),
+  });
+}
+
+export function moviesGenresQueryOpts() {
+  return queryOptions({
+    queryKey: [MOVIES_GENRES_KEY],
+    queryFn: getMovieGenresWithCounts,
+    staleTime: freshFor(STALE_LIST),
+  });
+}
+
+export function moviesByGenreQueryOpts(
+  genreId: number,
+  page: number,
+  perPage: number = MOVIES_PER_PAGE,
+  sort: "asc" | "desc" = "asc",
+) {
+  return queryOptions({
+    queryKey: [MOVIES_BY_GENRE_KEY, genreId, page, perPage, sort],
+    queryFn: () => getMoviesByGenre(genreId, page, perPage, sort),
+    enabled: genreId > 0,
+    staleTime: freshFor(STALE_LIST),
+  });
+}
+
+export function moviesStatsQueryOpts() {
+  return queryOptions({
+    queryKey: [MOVIES_STATS_KEY],
+    queryFn: getMoviesStats,
+    staleTime: freshFor(STALE_LIST),
+  });
+}
+
+export function likedMoviesQueryOpts(
+  page: number,
+  perPage: number = MOVIES_PER_PAGE,
+  sort: "asc" | "desc" = "asc",
+) {
+  return queryOptions({
+    queryKey: [MOVIES_LIKED_KEY, page, perPage, sort],
+    queryFn: () => getLikedMovies(page, perPage, sort),
+    staleTime: freshFor(STALE_1M),
+  });
+}
+
+export function movieLikeStatusQueryOpts(movieId: number) {
+  return queryOptions({
+    queryKey: [MOVIE_LIKE_STATUS_KEY, movieId],
+    queryFn: () => getMovieLikeStatus(movieId),
+    enabled: movieId > 0,
+    staleTime: freshFor(STALE_1M),
+  });
+}
+
+/**
+ * The trailer queue for one play. Never retried: a failed or slow request
+ * resolves to an error envelope the player treats as "no trailers". Static
+ * while the play lasts, so a window focus, reconnect or invalidation cannot
+ * swap the queue under the trailer playing; never kept once the play
+ * unmounts, so the next play draws a fresh random queue.
+ */
+export function moviePrerollQueryOpts(movieId: number) {
+  return queryOptions({
+    queryKey: [MOVIE_PREROLL_KEY, movieId],
+    queryFn: () =>
+      getMoviePreroll(movieId, AbortSignal.timeout(PREROLL_FETCH_TIMEOUT_MS)),
+    enabled: movieId > 0,
+    retry: false,
+    staleTime: "static",
+    gcTime: 0,
+  });
+}
+
+// ============================================================================
+// TV shows library
+// ============================================================================
 
 export function showDetailsQueryOpts(id: number) {
   return queryOptions({
@@ -320,113 +495,18 @@ export function showsStatsQueryOpts() {
   });
 }
 
-// Progress changes with every playback session, so keep this as fresh as the
-// per-movie watch-progress query (STALE_30S). Movies and episodes arrive
-// together, already merged and ordered by the server.
-export function continueWatchingQueryOpts() {
+export function showEpisodeQueryOpts(episodeId: number) {
   return queryOptions({
-    queryKey: [CONTINUE_WATCHING_KEY],
-    queryFn: getContinueWatching,
-    staleTime: freshFor(STALE_30S),
-  });
-}
-
-export function latestAlbumsQueryOpts() {
-  return queryOptions({
-    queryKey: [LATEST_ALBUMS_KEY],
-    queryFn: getLatestAlbums,
-    staleTime: freshFor(STALE_CATALOG),
-    gcTime: GC_LONG,
-  });
-}
-
-export function inTheatersQueryOpts() {
-  return queryOptions({
-    queryKey: [MOVIES_IN_THEATERS_KEY],
-    queryFn: getMoviesInTheaters,
-    staleTime: freshFor(STALE_THEATERS),
-    gcTime: GC_LONG,
-  });
-}
-
-// Detail for a TMDB in-theater movie (not a library movie — see
-// libraryMovieDetailsQueryOpts for that). Backed by getMovieInTheaterDetails.
-export function movieDetailsQueryOpts(id: number) {
-  return queryOptions({
-    queryKey: [MOVIE_DETAILS_KEY, id],
-    queryFn: () => getMovieInTheaterDetails(id),
-    enabled: id > 0,
-    staleTime: freshFor(STALE_CATALOG),
-    gcTime: GC_LONG,
-  });
-}
-
-export function trailerPreferencesQueryOpts() {
-  return queryOptions({
-    queryKey: [TRAILER_PREFERENCES_KEY],
-    queryFn: getTrailerPreferences,
-    staleTime: freshFor(STALE_CATALOG),
-    gcTime: GC_LONG,
-  });
-}
-
-/**
- * The trailer queue for one play. Never retried: a failed or slow request
- * resolves to an error envelope the player treats as "no trailers". Static
- * while the play lasts, so a window focus, reconnect or invalidation cannot
- * swap the queue under the trailer playing; never kept once the play
- * unmounts, so the next play draws a fresh random queue.
- */
-export function moviePrerollQueryOpts(movieId: number) {
-  return queryOptions({
-    queryKey: [MOVIE_PREROLL_KEY, movieId],
-    queryFn: () =>
-      getMoviePreroll(movieId, AbortSignal.timeout(PREROLL_FETCH_TIMEOUT_MS)),
-    enabled: movieId > 0,
-    retry: false,
-    staleTime: "static",
-    gcTime: 0,
-  });
-}
-
-export function tmdbStatusQueryOpts() {
-  return queryOptions({
-    queryKey: [TMDB_STATUS_KEY],
-    queryFn: getTmdbStatus,
-    staleTime: freshFor(STALE_CATALOG),
-  });
-}
-
-export function spotifyStatusQueryOpts() {
-  return queryOptions({
-    queryKey: [SPOTIFY_STATUS_KEY],
-    queryFn: getSpotifyStatus,
-    staleTime: freshFor(STALE_CATALOG),
-  });
-}
-
-// ============================================================================
-// Movies library
-// ============================================================================
-
-export function libraryMovieDetailsQueryOpts(id: number) {
-  return queryOptions({
-    queryKey: [LIBRARY_MOVIE_DETAILS_KEY, id],
-    queryFn: () => getMovieDetails(id),
-    enabled: id > 0,
+    queryKey: [EPISODE_KEY, episodeId],
+    queryFn: () => getShowEpisode(episodeId),
+    enabled: episodeId > 0,
     staleTime: freshFor(STALE_LIST),
   });
 }
 
-export function movieTechnicalDetailsQueryOpts(id: number) {
-  return queryOptions({
-    queryKey: [MOVIE_TECHNICAL_DETAILS_KEY, id],
-    queryFn: () => getMovieTechnicalDetails(id),
-    enabled: id > 0,
-    staleTime: freshFor(STALE_TECH),
-    gcTime: GC_LONG,
-  });
-}
+// ============================================================================
+// Playback (movies and episodes share one pipeline)
+// ============================================================================
 
 /**
  * Either technical-details payload: the player reads the streams and the file
@@ -481,78 +561,6 @@ export function mediaWatchProgressQueryKey(media: PlaybackMediaRef) {
 
 export function movieWatchProgressQueryOpts(id: number) {
   return mediaWatchProgressQueryOpts(movieMediaRef(id));
-}
-
-export function showEpisodeQueryOpts(episodeId: number) {
-  return queryOptions({
-    queryKey: [EPISODE_KEY, episodeId],
-    queryFn: () => getShowEpisode(episodeId),
-    enabled: episodeId > 0,
-    staleTime: freshFor(STALE_LIST),
-  });
-}
-
-export function moviesLibraryQueryOpts(
-  page: number,
-  perPage: number = MOVIES_PER_PAGE,
-  sort: "asc" | "desc" = "asc",
-) {
-  return queryOptions({
-    queryKey: [MOVIES_LIBRARY_KEY, page, perPage, sort],
-    queryFn: () => getMoviesLibrary(page, perPage, sort),
-    staleTime: freshFor(STALE_LIST),
-  });
-}
-
-export function moviesGenresQueryOpts() {
-  return queryOptions({
-    queryKey: [MOVIES_GENRES_KEY],
-    queryFn: getMovieGenresWithCounts,
-    staleTime: freshFor(STALE_LIST),
-  });
-}
-
-export function moviesByGenreQueryOpts(
-  genreId: number,
-  page: number,
-  perPage: number = MOVIES_PER_PAGE,
-  sort: "asc" | "desc" = "asc",
-) {
-  return queryOptions({
-    queryKey: [MOVIES_BY_GENRE_KEY, genreId, page, perPage, sort],
-    queryFn: () => getMoviesByGenre(genreId, page, perPage, sort),
-    enabled: genreId > 0,
-    staleTime: freshFor(STALE_LIST),
-  });
-}
-
-export function moviesStatsQueryOpts() {
-  return queryOptions({
-    queryKey: [MOVIES_STATS_KEY],
-    queryFn: getMoviesStats,
-    staleTime: freshFor(STALE_LIST),
-  });
-}
-
-export function likedMoviesQueryOpts(
-  page: number,
-  perPage: number = MOVIES_PER_PAGE,
-  sort: "asc" | "desc" = "asc",
-) {
-  return queryOptions({
-    queryKey: [MOVIES_LIKED_KEY, page, perPage, sort],
-    queryFn: () => getLikedMovies(page, perPage, sort),
-    staleTime: freshFor(STALE_1M),
-  });
-}
-
-export function movieLikeStatusQueryOpts(movieId: number) {
-  return queryOptions({
-    queryKey: [MOVIE_LIKE_STATUS_KEY, movieId],
-    queryFn: () => getMovieLikeStatus(movieId),
-    enabled: movieId > 0,
-    staleTime: freshFor(STALE_1M),
-  });
 }
 
 // ============================================================================
@@ -858,6 +866,11 @@ export function watchRoomInviteUsersQueryOpts(enabled: boolean = true) {
     staleTime: freshFor(STALE_30S),
   });
 }
+
+// ============================================================================
+// Library scan status. Unlike the queries above these throw on a failure
+// envelope, so a failed poll is a query error rather than cached data.
+// ============================================================================
 
 const scanStatusQueryOpts = <T extends Record<string, unknown>,>(
   key: string,
