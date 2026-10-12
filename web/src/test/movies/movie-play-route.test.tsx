@@ -144,9 +144,12 @@ type MovieApiOptions = {
   /** The queue the preroll endpoint answers with; "fail" answers a 500. */
   preroll?: PrerollTrailer[] | "fail";
   progress?: { progress_sec: number; duration_sec: number };
+  /** The first technical-details request answers a 503; later ones succeed. */
+  failTechnicalDetailsOnce?: boolean;
 };
 
 function mockMovieApi(options: MovieApiOptions = {}) {
+  let technicalDetailsRequests = 0;
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = requestURL(input);
     const method = init?.method ?? "GET";
@@ -165,6 +168,13 @@ function mockMovieApi(options: MovieApiOptions = {}) {
       return jsonResponse({ error: false, data: movieDetails });
     }
     if (url === `/api/movies/${MOVIE_ID}/technical-details`) {
+      technicalDetailsRequests += 1;
+      if (options.failTechnicalDetailsOnce && technicalDetailsRequests === 1) {
+        return jsonResponse(
+          { error: true, message: "failed to read the movie's streams" },
+          503,
+        );
+      }
       return jsonResponse({ error: false, data: technicalDetails });
     }
     if (url === `/api/movies/${MOVIE_ID}/preroll`) {
@@ -848,5 +858,29 @@ describe("movie play route with a malformed id", () => {
           url.startsWith("/api/movies/0/") || url === "/api/movies/details/0",
       );
     expect(sentinelRequests).toEqual([]);
+  });
+});
+
+describe("movie play route technical details", () => {
+  beforeEach(() => {
+    stubMediaElement();
+  });
+
+  it("reports a failure instead of starting a stream, and plays after Try again", async () => {
+    mockMovieApi({ failTechnicalDetailsOnce: true });
+
+    await renderMovieRoute(FRESH_SEARCH);
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Playback failed");
+    expect(alert).toHaveTextContent(
+      "The movie's technical details could not be loaded.",
+    );
+    expect(document.querySelector("video")).toBeNull();
+
+    fireEvent.click(within(alert).getByRole("button", { name: "Try again" }));
+
+    expect(await movieVideo()).toBeInTheDocument();
+    expect(screen.queryByText("Playback failed")).toBeNull();
   });
 });

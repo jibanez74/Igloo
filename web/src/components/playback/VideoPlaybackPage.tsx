@@ -230,6 +230,8 @@ export default function VideoPlaybackPage({
   const {
     techPending,
     techLoaded,
+    techError,
+    refetchTech,
     directPlayAvailable,
     playbackPreferencesReady,
     watchProgressData,
@@ -272,6 +274,7 @@ export default function VideoPlaybackPage({
     hasDetails: !notFound && !detailsPending,
     requestedMode: mode,
     techPending,
+    techError,
     playbackPreferencesReady,
     modeUnavailable,
     playbackError,
@@ -907,6 +910,7 @@ export default function VideoPlaybackPage({
         mediaNoun={kind}
         onBack={handleBack}
         onRetry={() => {
+          if (techError) void refetchTech();
           resetRecovery();
           // Try again remounts the player paused, as it always has.
           carriedPlayRef.current = false;
