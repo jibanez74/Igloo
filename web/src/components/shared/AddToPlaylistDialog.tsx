@@ -18,6 +18,7 @@ import { PLAYLIST_KINDS, type PlaylistKind } from "@/lib/playlist-kinds";
 import { capitalize, pluralize } from "@/lib/format";
 import { MOTION_MICRO_COLORS_CLASS } from "@/lib/constants";
 import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
+import LoadErrorAlert from "@/components/shared/LoadErrorAlert";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import type { ApiFailureType } from "@/types";
 
@@ -61,12 +62,13 @@ export default function AddToPlaylistDialog({
   const itemLabel = capitalize(itemNoun.singular);
   const EmptyIcon = PICKER_EMPTY_ICONS[kind];
 
-  const { data: playlists = [], isLoading } = useQuery({
+  const { data: playlists, isLoading, refetch } = useQuery({
     ...playlistPickerQueryOpts(kind),
     enabled: open,
   });
+  const loadFailed = playlists === null;
 
-  const editablePlaylists = playlists.filter((p) => p.can_edit);
+  const editablePlaylists = (playlists ?? []).filter((p) => p.can_edit);
 
   const filteredPlaylists = !searchQuery.trim()
     ? editablePlaylists
@@ -197,60 +199,68 @@ export default function AddToPlaylistDialog({
           />
         )}
 
-        {/* Playlists list */}
-        <div className="max-h-64 overflow-y-auto">
-          {isLoading ? (
-            <div className="flex justify-center py-8">
-              <Spinner className="size-6 text-primary" />
-            </div>
-          ) : filteredPlaylists.length === 0 ? (
-            <div className="rounded-lg border border-border/50 bg-muted/50 py-8 text-center">
-              <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-full bg-linear-to-br from-muted via-muted to-primary/40">
-                <EmptyIcon className="size-5 text-primary/40" aria-hidden="true" />
+        {/* Playlists list. A failed load is not "no playlists". */}
+        {loadFailed && (
+          <LoadErrorAlert
+            message="Couldn’t load your playlists."
+            onRetry={() => void refetch()}
+          />
+        )}
+        {!loadFailed && (
+          <div className="max-h-64 overflow-y-auto">
+            {isLoading ? (
+              <div className="flex justify-center py-8">
+                <Spinner className="size-6 text-primary" />
               </div>
-              <p className="text-muted-foreground">
-                {editablePlaylists.length === 0
-                  ? "No playlists yet. Create one to get started."
-                  : "No playlists match your search."}
-              </p>
-            </div>
-          ) : (
-            <ul className="space-y-1">
-              {filteredPlaylists.map((playlist) => (
-                <li key={playlist.id}>
-                  <button
-                    type="button"
-                    onClick={() => togglePlaylist(playlist.id, playlist.name)}
-                    aria-pressed={selectedPlaylists.has(playlist.id)}
-                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left ${MOTION_MICRO_COLORS_CLASS} ${
-                      selectedPlaylists.has(playlist.id)
-                        ? "bg-primary/20 text-foreground"
-                        : "text-muted-foreground hover:bg-muted"
-                    }`}
-                  >
-                    <div
-                      className={`flex size-5 items-center justify-center rounded-sm border ${
+            ) : filteredPlaylists.length === 0 ? (
+              <div className="rounded-lg border border-border/50 bg-muted/50 py-8 text-center">
+                <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-full bg-linear-to-br from-muted via-muted to-primary/40">
+                  <EmptyIcon className="size-5 text-primary/40" aria-hidden="true" />
+                </div>
+                <p className="text-muted-foreground">
+                  {editablePlaylists.length === 0
+                    ? "No playlists yet. Create one to get started."
+                    : "No playlists match your search."}
+                </p>
+              </div>
+            ) : (
+              <ul className="space-y-1">
+                {filteredPlaylists.map((playlist) => (
+                  <li key={playlist.id}>
+                    <button
+                      type="button"
+                      onClick={() => togglePlaylist(playlist.id, playlist.name)}
+                      aria-pressed={selectedPlaylists.has(playlist.id)}
+                      className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left ${MOTION_MICRO_COLORS_CLASS} ${
                         selectedPlaylists.has(playlist.id)
-                          ? "border-primary bg-primary"
-                          : "border-border"
+                          ? "bg-primary/20 text-foreground"
+                          : "text-muted-foreground hover:bg-muted"
                       }`}
                     >
-                      {selectedPlaylists.has(playlist.id) && (
-                        <Check className="size-3 text-primary-foreground" aria-hidden="true" />
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium">{playlist.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {pluralize(playlist.item_count, itemNoun.singular)}
-                      </p>
-                    </div>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+                      <div
+                        className={`flex size-5 items-center justify-center rounded-sm border ${
+                          selectedPlaylists.has(playlist.id)
+                            ? "border-primary bg-primary"
+                            : "border-border"
+                        }`}
+                      >
+                        {selectedPlaylists.has(playlist.id) && (
+                          <Check className="size-3 text-primary-foreground" aria-hidden="true" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-medium">{playlist.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {pluralize(playlist.item_count, itemNoun.singular)}
+                        </p>
+                      </div>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
 
         <DialogFooter className="gap-2 sm:gap-0">
           <Button

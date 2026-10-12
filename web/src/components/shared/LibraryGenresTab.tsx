@@ -150,6 +150,9 @@ export default function LibraryGenresTab<
   const getAnnouncement = () => {
     if (!hasSelectedGenre) return undefined;
     if (itemsLoading) return undefined;
+    // The error alert speaks for itself (role="alert"); an empty list here
+    // would announce "none in this genre" over it.
+    if (itemsError || isApiFailure(itemsRes)) return undefined;
     if (items.length === 0) return `No ${noun.plural} in this genre`;
     return `Showing ${items.length} ${nounForCount(items.length, noun)}, page ${genresPage} of ${totalPages}`;
   };

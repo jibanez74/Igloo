@@ -733,7 +733,8 @@ export function moviePlaylistsQueryOpts() {
 // The picker in AddToPlaylistDialog reads the library's own playlists list
 // under its own key, so it shares the cache with that library's Playlists tab,
 // and keeps only what it shows: the name, whether the viewer may add to it,
-// and how many items it holds.
+// and how many items it holds. A failed load selects null, so the picker can
+// tell it from a library with no playlists.
 export function playlistPickerQueryOpts(kind: PlaylistKind) {
   return queryOptions({
     queryKey: [kind === "music" ? PLAYLISTS_KEY : MOVIE_PLAYLISTS_KEY],
@@ -741,8 +742,8 @@ export function playlistPickerQueryOpts(kind: PlaylistKind) {
       | ApiResponseType<PlaylistsListResponseType>
       | ApiResponseType<MoviePlaylistsListResponseType>
     > => (kind === "music" ? getPlaylists() : getMoviePlaylists()),
-    select: (data): PlaylistPickerRow[] =>
-      data.error ? [] : data.data.playlists.map(toPlaylistPickerRow),
+    select: (data): PlaylistPickerRow[] | null =>
+      data.error ? null : data.data.playlists.map(toPlaylistPickerRow),
     staleTime: freshFor(STALE_LIST),
   });
 }

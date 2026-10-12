@@ -1,4 +1,5 @@
 import { screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import TechnicalDetailsDialog from "@/components/movies/TechnicalDetailsDialog";
 import {
@@ -10,6 +11,7 @@ import type {
   ApiResponseType,
   MovieTechnicalDetailsResponse,
 } from "@/types";
+import { jsonResponse } from "../helpers/api";
 import { nullableFloat64, nullableInt64 } from "../helpers/fixtures";
 import { createTestQueryClient, renderWithQueryClient } from "../helpers/render";
 
@@ -53,6 +55,32 @@ function renderDialog(runtimeMinutes: number | null) {
 }
 
 describe("TechnicalDetailsDialog", () => {
+  it("reports a failed load with Try again instead of an empty body", async () => {
+    const user = userEvent.setup();
+    const queryClient = createTestQueryClient();
+    queryClient.setQueryData([MOVIE_TECHNICAL_DETAILS_KEY, 22], {
+      error: true,
+      message: "failed to read streams",
+      status: 500,
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => jsonResponse(technicalDetails(116))),
+    );
+
+    renderWithQueryClient(
+      <TechnicalDetailsDialog movieId={22} open onOpenChange={vi.fn()} />,
+      { queryClient },
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Failed to load technical details.",
+    );
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByText("arrival.mp4")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
   it("does not render rounded duration when runtime formats to no value", () => {
     renderDialog(0);
 

@@ -30,6 +30,7 @@ import {
   tmdbStatusQueryOpts,
   trailerPreferencesQueryOpts,
 } from "@/lib/query-opts";
+import { apiErrorMessage } from "@/lib/is-api-failure";
 import { showActionFailed } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
 import type {
@@ -124,7 +125,7 @@ export default function TrailerPreferencesCard() {
     return (
       <SettingsErrorCard
         title="Trailer preferences unavailable"
-        message={data?.message || "Failed to load trailer preferences."}
+        message={apiErrorMessage(data, "Failed to load trailer preferences.")}
       />
     );
   }

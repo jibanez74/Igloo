@@ -18,6 +18,8 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
+import LoadErrorAlert from "@/components/shared/LoadErrorAlert";
+import { apiErrorMessage } from "@/lib/is-api-failure";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 
 function formatFileSize(bytes: number): string {
@@ -222,11 +224,12 @@ export default function TechnicalDetailsDialog({
 }) {
   const titleRef = useRef<HTMLHeadingElement>(null);
 
-  const { data, isPending, isError } = useQuery(
+  const { data, isPending, isError, refetch } = useQuery(
     movieTechnicalDetailsQueryOpts(movieId),
   );
 
   const details = data?.data;
+  const loadFailed = isError || data?.error === true;
   const runTime = details ? unwrapInt(details.movie.run_time) : null;
   const formattedRuntime = formatRuntimeMinutes(runTime);
   const durationSec = details ? unwrapFloat(details.movie.duration) : null;
@@ -284,10 +287,11 @@ export default function TechnicalDetailsDialog({
           </div>
         )}
 
-        {isError && (
-          <div className="py-8 text-center text-sm text-destructive" role="alert">
-            Failed to load technical details.
-          </div>
+        {loadFailed && (
+          <LoadErrorAlert
+            message={apiErrorMessage(data, "Failed to load technical details.")}
+            onRetry={() => void refetch()}
+          />
         )}
 
         {details && (
