@@ -280,9 +280,12 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
   //
   // fetchNextPage resolves with the updated observer result, so the loop reads
   // hasNextPage off that instead of the stale value captured in this closure.
-  // It never rejects (TanStack swallows the error), so a failed page shows up
-  // as isFetchNextPageError on that result, which ends the loop; the
-  // page-count guard stops it if a round ever adds no page for another reason.
+  // Called without throwOnError it never rejects (TanStack swallows the
+  // error; useVirtualizedInfiniteLoader passes throwOnError to get a
+  // rejection instead), so a failed page shows up as isFetchNextPageError on
+  // that result, which ends the loop. A 5xx page resolves only after its
+  // retries. The page-count guard stops the loop if a round ever adds no page
+  // for another reason.
   const loadRemainingTracks = async () => {
     let result = await fetchNextPage();
     let pageCount = result.data?.pages.length ?? 0;
