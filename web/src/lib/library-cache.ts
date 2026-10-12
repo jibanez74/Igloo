@@ -2,6 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import {
   ALBUM_DETAILS_KEY,
   ALBUMS_PAGINATED_KEY,
+  CONTINUE_WATCHING_KEY,
   EPISODE_KEY,
   EPISODE_TECHNICAL_DETAILS_KEY,
   LATEST_ALBUMS_KEY,
@@ -25,6 +26,8 @@ import {
   PLAYLIST_DETAILS_KEY,
   PLAYLIST_TRACKS_KEY,
   PLAYLISTS_KEY,
+  SEARCH_ALL_KEY,
+  SEARCH_CATEGORY_KEYS,
   SHOW_DETAILS_KEY,
   SHOW_SEASON_EPISODES_KEY,
   SHOWS_BY_GENRE_KEY,
@@ -32,12 +35,15 @@ import {
   SHOWS_LIBRARY_KEY,
   SHOWS_STATS_KEY,
   TRACKS_INFINITE_KEY,
+  WATCH_ROOMS_KEY,
 } from "@/lib/constants";
 import { isApiFailure } from "@/lib/is-api-failure";
 import { showActionFailed, showSuccess } from "@/lib/toast-helpers";
 
 // Every query a scan or a bulk change to one library can leave stale: its
-// lists, details, statistics and playlists.
+// lists, details, statistics and playlists, the search results that list its
+// items, and the rows elsewhere that show them (continue watching; a watch
+// room's movie title and poster).
 const LIBRARY_QUERY_KEYS = {
   movies: [
     MOVIES_STATS_KEY,
@@ -51,6 +57,10 @@ const LIBRARY_QUERY_KEYS = {
     MOVIE_PLAYLISTS_KEY,
     MOVIE_PLAYLIST_DETAILS_KEY,
     MOVIE_PLAYLIST_MOVIES_KEY,
+    SEARCH_ALL_KEY,
+    SEARCH_CATEGORY_KEYS.movies,
+    CONTINUE_WATCHING_KEY,
+    WATCH_ROOMS_KEY,
   ],
   music: [
     MUSIC_STATS_KEY,
@@ -65,6 +75,10 @@ const LIBRARY_QUERY_KEYS = {
     PLAYLISTS_KEY,
     PLAYLIST_DETAILS_KEY,
     PLAYLIST_TRACKS_KEY,
+    SEARCH_ALL_KEY,
+    SEARCH_CATEGORY_KEYS.albums,
+    SEARCH_CATEGORY_KEYS.musicians,
+    SEARCH_CATEGORY_KEYS.tracks,
   ],
   shows: [
     SHOWS_STATS_KEY,
@@ -76,6 +90,9 @@ const LIBRARY_QUERY_KEYS = {
     SHOW_SEASON_EPISODES_KEY,
     EPISODE_KEY,
     EPISODE_TECHNICAL_DETAILS_KEY,
+    SEARCH_ALL_KEY,
+    SEARCH_CATEGORY_KEYS.shows,
+    CONTINUE_WATCHING_KEY,
   ],
 } as const;
 
