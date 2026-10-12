@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { PLAYLIST_TRACKS_PAGE_SIZE } from "@/lib/constants";
 import type { components } from "@/types/openapi.gen";
 import { jsonResponse, requestURL } from "../helpers/api";
+import { layOutTrackRows, pressKey } from "../helpers/drag";
 import { authUser, nullableString, userSummary } from "../helpers/fixtures";
 import { playlist, playlistDetail, playlistTrack } from "../helpers/music";
 import { readDocumentHead, renderRoute } from "../helpers/render-route";
@@ -313,6 +314,103 @@ describe("music playlist route", () => {
     await waitFor(() => {
       expect(detailsRequests()).toBeGreaterThan(before);
     });
+  });
+
+  it("falls back to the server's order when a reorder is refused", async () => {
+    const fetchMock = mockPlaylistFetch(roadTrip());
+    const respond = fetchMock.getMockImplementation()!;
+    const reorderRequests: unknown[] = [];
+    fetchMock.mockImplementation((input, init) => {
+      if (requestURL(input) === "/api/music/playlists/21/tracks/reorder") {
+        reorderRequests.push(JSON.parse(String(init?.body)));
+        return jsonResponse(
+          { error: true, message: "You can't edit this playlist." },
+          403,
+        );
+      }
+      return respond(input, init);
+    });
+
+    await renderRoute("/music/playlist/21");
+    await screen.findByText("Alabaster");
+    layOutTrackRows(["Alabaster", "Borrowed Light"]);
+    const titlesInOrder = () =>
+      screen
+        .getAllByText(/^(Alabaster|Borrowed Light)$/)
+        .map(element => element.textContent);
+
+    const handle = (
+      await screen.findAllByRole("button", { name: "Drag to reorder" })
+    )[1];
+    handle.focus();
+    pressKey(handle, "Space");
+    await screen.findByText(/^Picked up Borrowed Light/);
+    pressKey(handle, "ArrowUp");
+    await screen.findByText("Borrowed Light is over Alabaster");
+    pressKey(handle, "Space");
+
+    await waitFor(() => {
+      expect(reorderRequests).toEqual([{ track_ids: [2, 1] }]);
+    });
+    await waitFor(() => {
+      expect(showActionFailedMock).toHaveBeenCalledWith(
+        "reorder tracks",
+        expect.objectContaining({ status: 403 }),
+      );
+    });
+    await waitFor(() => {
+      expect(titlesInOrder()).toEqual(["Alabaster", "Borrowed Light"]);
+    });
+  });
+
+  it("keeps a saved reorder once the server's list comes back", async () => {
+    const mock = roadTrip();
+    const fetchMock = mockPlaylistFetch(mock);
+    const respond = fetchMock.getMockImplementation()!;
+    let saved = false;
+    fetchMock.mockImplementation((input, init) => {
+      const url = requestURL(input);
+      if (url === "/api/music/playlists/21/tracks/reorder") {
+        saved = true;
+        return jsonResponse({ error: false, message: "Tracks reordered" });
+      }
+      if (saved && url === TRACKS_PAGE_URL(0)) {
+        return jsonResponse({
+          error: false,
+          data: {
+            tracks: [...mock.tracks].reverse(),
+            total: 2,
+            has_more: false,
+            next_offset: 2,
+          },
+        });
+      }
+      return respond(input, init);
+    });
+
+    await renderRoute("/music/playlist/21");
+    await screen.findByText("Alabaster");
+    layOutTrackRows(["Alabaster", "Borrowed Light"]);
+    const titlesInOrder = () =>
+      screen
+        .getAllByText(/^(Alabaster|Borrowed Light)$/)
+        .map(element => element.textContent);
+
+    const handle = (
+      await screen.findAllByRole("button", { name: "Drag to reorder" })
+    )[1];
+    handle.focus();
+    pressKey(handle, "Space");
+    await screen.findByText(/^Picked up Borrowed Light/);
+    pressKey(handle, "ArrowUp");
+    await screen.findByText("Borrowed Light is over Alabaster");
+    pressKey(handle, "Space");
+
+    await waitFor(() => expect(saved).toBe(true));
+    await waitFor(() => {
+      expect(titlesInOrder()).toEqual(["Borrowed Light", "Alabaster"]);
+    });
+    expect(showActionFailedMock).not.toHaveBeenCalled();
   });
 
   it("rejects a malformed playlist id without asking the API", async () => {

@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import DraggableTrackList from "@/components/music/DraggableTrackList";
 import { renderWithQueryClient } from "@/test/helpers/render";
+import { layOutTrackRows, pressKey } from "@/test/helpers/drag";
 import { playlistTrack } from "@/test/helpers/music";
 
 const prefersCoarse = vi.hoisted(() => ({ value: false }));
@@ -55,33 +56,7 @@ function recordAnnouncements() {
 
 const observers: MutationObserver[] = [];
 
-// jsdom lays nothing out, so the keyboard sensor has no slot to move to. Stack
-// the rows 50 px apart: an element holding one drag handle is the row named in
-// it. The drag overlay holds a handle too, so it lands on the dragged row.
-const TITLES = ["Alabaster", "Borrowed Light"];
-
-function layOutRows() {
-  const original = Element.prototype.getBoundingClientRect;
-  vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (
-    this: Element,
-  ) {
-    const handles = screen
-      .queryAllByRole("button", { name: "Drag to reorder" })
-      .filter(handle => this === handle || this.contains(handle));
-    if (handles.length !== 1) return original.call(this);
-    let row: Element | null = handles[0];
-    while (row && !TITLES.some(title => row!.textContent?.includes(title))) {
-      row = row.parentElement;
-    }
-    const index = TITLES.findIndex(title => row?.textContent?.includes(title));
-    if (index === -1) return original.call(this);
-    return DOMRect.fromRect({ x: 0, y: index * 50, width: 400, height: 50 });
-  });
-}
-
-function pressKey(target: HTMLElement, code: string) {
-  fireEvent.keyDown(target, { code, key: code === "Space" ? " " : code });
-}
+const layOutRows = () => layOutTrackRows(["Alabaster", "Borrowed Light"]);
 
 afterEach(() => {
   prefersCoarse.value = false;

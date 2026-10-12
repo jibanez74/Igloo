@@ -238,26 +238,39 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
     removeTrackMutation.mutate(trackId);
   };
 
-  // Reorder tracks mutation
+  // The order a drag dropped, shown until the server answers. It is set in
+  // the same render the drag ends in, so the drop animation lands on the new
+  // slot (the mutation's own state reaches React a tick later).
+  const [dropOrder, setDropOrder] = useState<number[] | null>(null);
+
+  // Reorder tracks mutation. Scoped so consecutive drags save in order, and
+  // pending until the refetch lands, so the server's order takes over from
+  // the dropped one without a flash of the old order.
   const reorderMutation = useMutation({
     mutationFn: (trackIds: number[]) =>
       reorderPlaylistTracks(playlistId, trackIds),
+    scope: { id: `playlist-reorder-${playlistId}` },
     onSuccess: (result) => {
-      if (result.error) {
-        showActionFailed("reorder tracks", result);
-        // Refetch to restore original order
-        queryClient.invalidateQueries({ queryKey: [PLAYLIST_TRACKS_KEY, playlistId] });
-        return;
-      }
-      // Invalidate to sync with server
-      queryClient.invalidateQueries({ queryKey: [PLAYLIST_TRACKS_KEY, playlistId] });
+      if (result.error) showActionFailed("reorder tracks", result);
     },
     onError: () => {
       showActionFailed("reorder tracks");
-      // Refetch to restore original order
-      queryClient.invalidateQueries({ queryKey: [PLAYLIST_TRACKS_KEY, playlistId] });
     },
+    onSettled: () =>
+      queryClient.invalidateQueries({
+        queryKey: [PLAYLIST_TRACKS_KEY, playlistId],
+      }),
   });
+
+  const reorderTracks = (trackIds: number[]) => {
+    setDropOrder(trackIds);
+    reorderMutation.mutate(trackIds, {
+      // Only the latest drag's callback runs; a refused order falls back to
+      // the refetched server order here.
+      onSettled: () =>
+        setDropOrder((current) => (current === trackIds ? null : current)),
+    });
+  };
 
   // The tracks list is an infinite query, so allTracks only holds the pages the
   // user has scrolled into, while the header buttons promise the playlist's
@@ -487,8 +500,9 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
                 ? apiErrorMessage(tracksError, "Couldn’t load more tracks.")
                 : null
             }
+            dropOrder={dropOrder}
             onRemoveTrack={removeTrack}
-            onReorderTracks={(trackIds) => reorderMutation.mutate(trackIds)}
+            onReorderTracks={reorderTracks}
           />
         )}
       </section>
@@ -511,6 +525,8 @@ type PlaylistTracksListProps = {
   isFetchingNextPage: boolean;
   fetchNextPage: FetchNextPage;
   loadMoreError: string | null;
+  /** A dropped order still being saved; null once the server's order is back. */
+  dropOrder: number[] | null;
   onRemoveTrack: (trackId: number) => void;
   onReorderTracks: (trackIds: number[]) => void;
 };
@@ -527,19 +543,20 @@ function PlaylistTracksList({
   isFetchingNextPage,
   fetchNextPage,
   loadMoreError,
+  dropOrder,
   onRemoveTrack,
   onReorderTracks,
 }: PlaylistTracksListProps) {
   const audioPlayer = useAudioPlayerActions();
 
-  // Local optimistic order override keyed by track ids.
-  const [optimisticTrackIds, setOptimisticTrackIds] = useState<number[] | null>(null);
+  // The dropped order applies only while it still names exactly these tracks;
+  // a removal landing meanwhile falls back to the server's list.
   const trackMap = new Map(tracks.map((track) => [track.id, track]));
   const orderedTracks =
-    optimisticTrackIds !== null &&
-    optimisticTrackIds.length === tracks.length &&
-    optimisticTrackIds.every((trackId) => trackMap.has(trackId))
-      ? optimisticTrackIds
+    dropOrder !== null &&
+    dropOrder.length === tracks.length &&
+    dropOrder.every((trackId) => trackMap.has(trackId))
+      ? dropOrder
           .map((trackId) => trackMap.get(trackId))
           .filter((track): track is PlaylistTrackType => track !== undefined)
       : tracks;
@@ -552,15 +569,6 @@ function PlaylistTracksList({
       orderedTracks.map(playlistTrackToPlayableData),
       track.id,
     );
-  };
-
-  // Handle reorder with optimistic update
-  const handleReorder = (newTrackIds: number[]) => {
-    // Optimistic update
-    setOptimisticTrackIds(newTrackIds);
-
-    // Call the API
-    onReorderTracks(newTrackIds);
   };
 
   // Use draggable list for smaller playlists that user can edit
@@ -579,7 +587,7 @@ function PlaylistTracksList({
           <DraggableTrackList
             tracks={orderedTracks}
             canEdit={canEdit}
-            onReorder={handleReorder}
+            onReorder={onReorderTracks}
             onPlayTrack={handlePlayTrack}
             onRemoveTrack={onRemoveTrack}
           />
