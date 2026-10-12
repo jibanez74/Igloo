@@ -204,13 +204,14 @@ export function setSignedInUser(queryClient: QueryClient, user: AuthUser) {
 /**
  * The current user's plaintext profile PIN (session-only endpoint). Fetched on
  * demand when the user reveals the PIN in account settings — always refetch so
- * a stale PIN is never shown.
+ * a stale PIN is never shown, and never kept once nothing shows it.
  */
 export function userPinQueryOpts() {
   return queryOptions({
     queryKey: [USER_PIN_KEY],
     queryFn: getUserPin,
     staleTime: 0,
+    gcTime: 0,
   });
 }
 

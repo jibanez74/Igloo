@@ -85,6 +85,17 @@ export default function ProfilePinCard() {
     document.getElementById(fieldId)?.focus();
   };
 
+  // Drops the plaintext PIN from the cache without fetching it again, so the
+  // next reveal waits for a fresh copy ("…") instead of showing this one.
+  // resetQueries would refetch at once: the reveal's observer is still
+  // enabled while the click that hides it is handled.
+  const forgetPin = () => {
+    queryClient
+      .getQueryCache()
+      .find({ queryKey: userPinQueryOpts().queryKey, exact: true })
+      ?.reset();
+  };
+
   const pinMutation = useMutation({
     mutationFn: ({ pin, current }: { pin: string; current?: string }) =>
       updateUserPin(pin, current),
@@ -105,8 +116,8 @@ export default function ProfilePinCard() {
       setCurrentPin("");
       setNewPin("");
       setRevealed(false);
+      forgetPin();
       setSignedInUser(queryClient, res.data.user);
-      queryClient.invalidateQueries({ queryKey: userPinQueryOpts().queryKey });
       showSuccess(removing ? "PIN removed" : "PIN saved");
     },
     onError: (_error, variables) => {
@@ -173,7 +184,8 @@ export default function ProfilePinCard() {
   };
 
   const handleToggleReveal = () => {
-    setRevealed(current => !current);
+    if (revealed) forgetPin();
+    setRevealed(!revealed);
   };
 
   let revealedPinDisplay = "••••";

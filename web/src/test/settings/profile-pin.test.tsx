@@ -152,6 +152,33 @@ describe("ProfilePinCard", () => {
     expect(screen.queryByText("1234")).not.toBeInTheDocument();
   });
 
+  it("re-reveals with a fresh copy instead of the PIN it showed before", async () => {
+    getAuthUserMock.mockResolvedValue(
+      authUser(testUser({ has_pin: true })),
+    );
+    const user = userEvent.setup();
+    renderCard();
+
+    await user.click(await screen.findByRole("button", { name: "Show PIN" }));
+    expect(await screen.findByText("1234")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Hide PIN" }));
+
+    // The PIN changed elsewhere while it was hidden.
+    let resolvePin!: (value: unknown) => void;
+    getUserPinMock.mockReturnValue(
+      new Promise(resolve => {
+        resolvePin = resolve;
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: "Show PIN" }));
+
+    expect(screen.getByText("…")).toBeInTheDocument();
+    expect(screen.queryByText("1234")).not.toBeInTheDocument();
+    resolvePin({ error: false, data: { pin: "5678" } });
+    expect(await screen.findByText("5678")).toBeInTheDocument();
+    expect(getUserPinMock).toHaveBeenCalledTimes(2);
+  });
+
   it("removes the PIN with the current PIN", async () => {
     getAuthUserMock.mockResolvedValue(
       authUser(testUser({ has_pin: true })),
