@@ -26,6 +26,7 @@ import {
 import { useSidebar } from "@/components/ui/sidebar-context";
 import { logout } from "@/lib/api";
 import {
+  MINI_PLAYER_CLEARANCE_PADDING_CLASS,
   MOTION_MICRO_OPACITY_CLASS,
   MOVIES_INDEX_DEFAULT_SEARCH,
   SHOWS_INDEX_DEFAULT_SEARCH,
@@ -35,6 +36,7 @@ import { cn } from "@/lib/utils";
 import BrandMark from "@/components/app/BrandMark";
 import { apiErrorMessage } from "@/lib/is-api-failure";
 import { useEndSession } from "@/hooks/useEndSession";
+import { useIsMiniPlayerVisible } from "@/hooks/useIsMiniPlayerVisible";
 
 type NavItem = {
   title: string;
@@ -86,6 +88,10 @@ export default function AppSidebar({
   const endSession = useEndSession();
   const [loggingOut, setLoggingOut] = useState(false);
   const { isMobile, setOpenMobile } = useSidebar();
+  // The fixed mini player spans the full width, so on desktop the sidebar
+  // column stops above it and Logout stays clickable. The mobile sheet opens
+  // over the bar and ignores this className.
+  const isMiniPlayerVisible = useIsMiniPlayerVisible();
   const currentPath = routerState.location.pathname;
 
   // Close the mobile sidebar when navigating on a mobile screen
@@ -123,7 +129,10 @@ export default function AppSidebar({
 
   return (
     <Sidebar
-      className="border-sidebar-border bg-sidebar **:data-[slot=sidebar-inner]:bg-sidebar"
+      className={cn(
+        "border-sidebar-border bg-sidebar **:data-[slot=sidebar-inner]:bg-sidebar",
+        isMiniPlayerVisible && MINI_PLAYER_CLEARANCE_PADDING_CLASS,
+      )}
       {...props}
     >
       {/* Header with Logo */}

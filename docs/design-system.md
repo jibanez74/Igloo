@@ -597,7 +597,9 @@ collapse, while the mobile trigger controls the sheet.
   `lib/input-styles.ts` (an allowlisted raw-color exception, §1.2).
 - Content: `px-4 py-6 sm:px-6 lg:px-8`; when the mini audio player is visible
   the shell adds `MINI_PLAYER_CLEARANCE_PADDING_CLASS` (`pb-28 sm:pb-24`) so
-  content never hides behind it. **Scrolling happens on the window** — virtual
+  content never hides behind it. The desktop sidebar column takes the same
+  class, so its footer (Logout) sits above the full-width bar instead of under
+  it; the mobile sheet opens above the bar and needs none. **Scrolling happens on the window** — virtual
   lists must use `useWindowVirtualizer` (§3.4), never a nested scroll
   container. For the same reason the content column clips with
   `overflow-x-clip`, not `overflow-x-hidden`/`auto`: those create a scroll

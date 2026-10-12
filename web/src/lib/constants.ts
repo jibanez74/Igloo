@@ -768,7 +768,8 @@ export const LIBRARY_TAB_TRIGGER_CLASS = "min-h-10 min-w-0 p-2 sm:px-4";
 /**
  * Clearance for the fixed audio mini player (AudioPlayer.tsx). Both values
  * encode the same player-bar height and must change together: the shell pads
- * its content so pages scroll clear of the bar, and in-page sticky bottom
+ * its content so pages scroll clear of the bar, the desktop sidebar pads its
+ * column so the footer's Logout sits above it, and in-page sticky bottom
  * elements offset above it.
  */
 export const MINI_PLAYER_CLEARANCE_PADDING_CLASS = "pb-28 sm:pb-24";
