@@ -17,6 +17,7 @@ import {
 import { NOTIFICATION_TITLES } from "@/lib/constants";
 import { parseServerTimestamp } from "@/lib/format";
 import {
+  invalidateNotifications,
   notificationsQueryOpts,
   unreadNotificationCountQueryOpts,
 } from "@/lib/query-opts";
@@ -125,14 +126,6 @@ export default function NotificationBell() {
     });
   }, [freshListData, queryClient]);
 
-  function invalidateNotifications() {
-    void queryClient.invalidateQueries({
-      queryKey: notificationsQueryOpts().queryKey,
-    });
-    void queryClient.invalidateQueries({
-      queryKey: unreadNotificationCountQueryOpts().queryKey,
-    });
-  }
 
   const markReadMutation = useMutation({
     mutationFn: (id: number) => markNotificationRead(id),
@@ -141,7 +134,7 @@ export default function NotificationBell() {
         showActionFailed("update notification", res);
         return;
       }
-      invalidateNotifications();
+      invalidateNotifications(queryClient);
     },
     onError: () => showActionFailed("update notification"),
   });
@@ -153,7 +146,7 @@ export default function NotificationBell() {
         showActionFailed("mark all as read", res);
         return;
       }
-      invalidateNotifications();
+      invalidateNotifications(queryClient);
     },
     onError: () => showActionFailed("mark all as read"),
   });
@@ -165,7 +158,7 @@ export default function NotificationBell() {
         showActionFailed("dismiss notification", res);
         return;
       }
-      invalidateNotifications();
+      invalidateNotifications(queryClient);
     },
     onError: () => showActionFailed("dismiss notification"),
   });

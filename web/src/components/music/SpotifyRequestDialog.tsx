@@ -1,5 +1,5 @@
 import type { ReactNode, RefObject } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -14,7 +14,10 @@ import SpotifyPicker, {
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import { createNotification } from "@/lib/api";
 import { NOTIFICATION_TITLES } from "@/lib/constants";
-import { authUserQueryOpts } from "@/lib/query-opts";
+import {
+  authUserQueryOpts,
+  invalidateNotifications,
+} from "@/lib/query-opts";
 import { showActionFailed, showCreated } from "@/lib/toast-helpers";
 import type { ApiResponseType } from "@/types";
 
@@ -79,6 +82,7 @@ export default function SpotifyRequestDialog<T extends SpotifySearchResult>({
   buildDetailLines,
   interceptConfirm,
 }: SpotifyRequestDialogProps<T>) {
+  const queryClient = useQueryClient();
   const { data: authData } = useQuery(authUserQueryOpts());
   const copy = KIND_COPY[kind];
 
@@ -115,6 +119,8 @@ export default function SpotifyRequestDialog<T extends SpotifySearchResult>({
       return;
     }
 
+    // An admin's own bell shows the request without waiting for its poll.
+    invalidateNotifications(queryClient);
     showCreated(
       copy.toastTitle,
       `"${selectedResult.title}" was sent to the admin notification queue.`,

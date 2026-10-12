@@ -247,6 +247,16 @@ export function notificationsQueryOpts() {
   });
 }
 
+/** Marks the notification list and the bell's unread count stale. */
+export function invalidateNotifications(queryClient: QueryClient) {
+  void queryClient.invalidateQueries({
+    queryKey: notificationsQueryOpts().queryKey,
+  });
+  void queryClient.invalidateQueries({
+    queryKey: unreadNotificationCountQueryOpts().queryKey,
+  });
+}
+
 export function unreadNotificationCountQueryOpts() {
   return queryOptions({
     queryKey: [NOTIFICATIONS_UNREAD_COUNT_KEY],

@@ -22,9 +22,12 @@ import {
 } from "@/components/ui/dialog";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Users, UserPlus, Pencil, Trash2, KeyRound, ShieldCheck, ShieldOff } from "lucide-react";
-import { adminUsersQueryOpts, authUserQueryOpts } from "@/lib/query-opts";
 import {
-  ADMIN_USERS_KEY,
+  adminUsersQueryOpts,
+  authUserQueryOpts,
+  watchRoomInviteUsersQueryOpts,
+} from "@/lib/query-opts";
+import {
   SETTINGS_CARD_SURFACE_CLASS,
   USER_EMAIL_MAX_LENGTH,
   USER_NAME_MAX_LENGTH,
@@ -145,6 +148,16 @@ function UsersSettings() {
     restoreFocus();
   };
 
+  // Both the admin list and the watch-room invite list show every user.
+  const refreshUserLists = () => {
+    void queryClient.invalidateQueries({
+      queryKey: adminUsersQueryOpts().queryKey,
+    });
+    void queryClient.invalidateQueries({
+      queryKey: watchRoomInviteUsersQueryOpts().queryKey,
+    });
+  };
+
   const createMutation = useMutation({
     mutationFn: adminCreateUser,
     onSuccess: res => {
@@ -154,7 +167,7 @@ function UsersSettings() {
         return;
       }
       showSuccess("User created successfully");
-      queryClient.invalidateQueries({ queryKey: [ADMIN_USERS_KEY] });
+      refreshUserLists();
       closeDialog();
     },
     onError: () => {
@@ -174,7 +187,7 @@ function UsersSettings() {
         return;
       }
       showSuccess("User updated successfully");
-      queryClient.invalidateQueries({ queryKey: [ADMIN_USERS_KEY] });
+      refreshUserLists();
       closeDialog();
     },
     onError: () => {
@@ -193,7 +206,7 @@ function UsersSettings() {
         return;
       }
       showSuccess("User deleted successfully");
-      queryClient.invalidateQueries({ queryKey: [ADMIN_USERS_KEY] });
+      refreshUserLists();
       closeDialog();
     },
     onError: () => {
@@ -203,7 +216,7 @@ function UsersSettings() {
     },
   });
 
-  // An admin password reset changes nothing the [ADMIN_USERS_KEY] list renders,
+  // An admin password reset changes nothing either user list renders,
   // which is why it is the only mutation here without an invalidate.
   // react-doctor-disable-next-line react-doctor/query-mutation-missing-invalidation
   const resetPasswordMutation = useMutation({
