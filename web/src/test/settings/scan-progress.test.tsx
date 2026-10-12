@@ -117,6 +117,30 @@ describe("movie scan progress", () => {
     client.clear();
   });
 
+  it("backs off to the idle pace while a running report keeps failing", async () => {
+    vi.useFakeTimers();
+    let failed = false;
+    const fetchMock = vi.fn(() => jsonResponse(failed
+      ? { error: true, message: "Status temporarily unavailable", status: 503 }
+      : { error: false, data: movieScanStatus() }));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createTestQueryClient();
+    renderWithQueryClient(<ScanView />, { queryClient: client });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(screen.getByRole("status")).toHaveTextContent("Inspecting and importing movies");
+
+    failed = true;
+    await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
+    expect(screen.getByRole("alert")).toHaveTextContent("last known progress");
+    const afterFirstFailure = fetchMock.mock.calls.length;
+    // The stale data still says "running"; the poll no longer treats it so.
+    await act(async () => { await vi.advanceTimersByTimeAsync(9_000); });
+    expect(fetchMock).toHaveBeenCalledTimes(afterFirstFailure);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
+    expect(fetchMock).toHaveBeenCalledTimes(afterFirstFailure + 1);
+    client.clear();
+  });
+
   it("discovers a running scan without watching idle status, then stops once it finishes", async () => {
     vi.useFakeTimers();
     let status = movieScanStatus();

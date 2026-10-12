@@ -28,7 +28,7 @@ type ScanStatusConfig<T extends ScanStatusLike & Record<string, unknown>> = {
 };
 
 // Polls a scan report every two seconds while it runs and every ten seconds
-// otherwise, pausing in hidden tabs. Without watchIdle the first request still
+// otherwise (or while the report keeps failing), pausing in hidden tabs. Without watchIdle the first request still
 // goes out, so a scan started elsewhere is discovered on any route; polling
 // then continues only while it runs. Committed work refreshes the library
 // statistics; a new run, phase or terminal state refreshes the library lists.
@@ -43,9 +43,14 @@ function useScanStatus<T extends ScanStatusLike & Record<string, unknown>>(
     enabled: query =>
       enabled && visible && (watchIdle || query.state.status === "pending" || query.state.data?.state === "running"),
     refetchOnMount: "always",
-    refetchInterval: query => visible
-      ? query.state.data?.state === "running" ? 2_000 : 10_000
-      : false,
+    refetchInterval: query => {
+      if (!visible) return false;
+      // A failing report (the server restarting, the session gone) keeps its
+      // last "running" data; retrying that every two seconds for as long as
+      // the failure lasts helps nobody, so it backs off to the idle pace.
+      if (query.state.status === "error") return 10_000;
+      return query.state.data?.state === "running" ? 2_000 : 10_000;
+    },
     refetchIntervalInBackground: false,
   });
   const status = query.data;
