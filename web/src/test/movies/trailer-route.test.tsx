@@ -80,3 +80,18 @@ describe("trailer route without a trailer", () => {
     );
   });
 });
+
+describe("trailer route with a hand-edited link", () => {
+  it("opens the dialog without a trailer instead of failing the route", async () => {
+    const movieResponse = vi.fn(() => jsonResponse({ error: false, data: {} }));
+    mockTrailerFetch(movieResponse);
+
+    await renderRoute("/trailer?mediaType=movie&tmdbId=abc");
+
+    expect(
+      await screen.findByRole("heading", { name: "No Trailer Available" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Something went wrong!")).not.toBeInTheDocument();
+    expect(movieResponse).not.toHaveBeenCalled();
+  });
+});

@@ -11,6 +11,7 @@ import {
   musicSearchSchema,
   searchSearchSchema,
   showsSearchSchema,
+  trailerSearchSchema,
 } from "@/lib/route-search";
 
 // Each index route strips its defaults on navigation with the same object its
@@ -24,5 +25,35 @@ describe("route search defaults", () => {
     ["search", searchSearchSchema, SEARCH_INDEX_DEFAULT_SEARCH],
   ])("%s: the schema fills in exactly the stripped defaults", (_name, schema, defaults) => {
     expect(z.parse(schema, {})).toEqual(defaults);
+  });
+});
+
+// The router JSON-parses search values, so a hand-typed all-digit key or
+// return path arrives as a number.
+describe("trailer search", () => {
+  it.each([
+    ["mediaType", { mediaType: "podcast" }],
+    ["tmdbId", { tmdbId: "abc" }],
+    ["tmdbId", { tmdbId: -4 }],
+    ["videoKey", { videoKey: 12345 }],
+    ["returnTo", { returnTo: 123 }],
+  ])("drops an invalid %s instead of failing", (field, search) => {
+    expect(z.parse(trailerSearchSchema, search)).toEqual({ [field]: undefined });
+  });
+
+  it("keeps valid values and still sanitizes the return path", () => {
+    expect(
+      z.parse(trailerSearchSchema, {
+        mediaType: "movie",
+        tmdbId: "19",
+        videoKey: "signal-fire-trailer",
+        returnTo: "https://evil.example/",
+      }),
+    ).toEqual({
+      mediaType: "movie",
+      tmdbId: 19,
+      videoKey: "signal-fire-trailer",
+      returnTo: "/",
+    });
   });
 });

@@ -10,15 +10,23 @@ export const loginSearchSchema = z.object({
   ),
 });
 
+// Each field falls back to undefined, so a hand-edited link opens the dialog
+// in its "No Trailer Available" state instead of failing the route.
 export const trailerSearchSchema = z.object({
-  mediaType: z.optional(z.enum(["movie", "tv"])),
-  tmdbId: z.optional(z.coerce.number().check(z.int(), z.positive())),
-  videoKey: z.optional(z.string()),
-  returnTo: z.optional(
-    z.pipe(
-      z.string(),
-      z.transform((url: string) => getSafeRedirect(url, "/")),
+  mediaType: z.catch(z.optional(z.enum(["movie", "tv"])), undefined),
+  tmdbId: z.catch(
+    z.optional(z.coerce.number().check(z.int(), z.positive())),
+    undefined,
+  ),
+  videoKey: z.catch(z.optional(z.string()), undefined),
+  returnTo: z.catch(
+    z.optional(
+      z.pipe(
+        z.string(),
+        z.transform((url: string) => getSafeRedirect(url, "/")),
+      ),
     ),
+    undefined,
   ),
 });
 
