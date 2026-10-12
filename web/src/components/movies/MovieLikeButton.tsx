@@ -44,6 +44,16 @@ export default function MovieLikeButton({
   const isLiked =
     data?.error === false ? Boolean(data.data.is_liked) : false;
 
+  // Undoes the optimistic flip. With nothing cached before it, the real state
+  // is unknown, so it refetches rather than claiming "not liked".
+  const rollback = (previous: typeof data) => {
+    if (previous === undefined) {
+      void queryClient.invalidateQueries({ queryKey: likeKey });
+      return;
+    }
+    queryClient.setQueryData(likeKey, previous);
+  };
+
   const mutation = useMutation({
     mutationFn: () => toggleLikeMovie(movieId),
     onMutate: async () => {
@@ -56,11 +66,7 @@ export default function MovieLikeButton({
       return { previous };
     },
     onError: (_err, _vars, context) => {
-      if (context?.previous !== undefined) {
-        queryClient.setQueryData(likeKey, context.previous);
-      } else {
-        queryClient.setQueryData(likeKey, likeStatusResponse(false));
-      }
+      rollback(context?.previous);
       showActionFailed(
         "update like",
         "Unable to update liked status. Please try again.",
@@ -68,11 +74,7 @@ export default function MovieLikeButton({
     },
     onSuccess: (res, _vars, context) => {
       if (res.error) {
-        if (context?.previous !== undefined) {
-          queryClient.setQueryData(likeKey, context.previous);
-        } else {
-          queryClient.setQueryData(likeKey, likeStatusResponse(false));
-        }
+        rollback(context?.previous);
         showActionFailed("update like", res);
         return;
       }

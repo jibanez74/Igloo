@@ -66,15 +66,18 @@ function PlayMoviePage() {
   const { id } = Route.useParams();
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
-  // 0 for a malformed id: the request then 404s into the player's error
-  // screen, exactly as an unknown movie does.
-  const movieId = parseRouteId(id) ?? 0;
+  // 0 for a malformed id disables the details query, which then never leaves
+  // pending, so the id itself makes the page not found, like an unknown movie.
+  const parsedId = parseRouteId(id);
+  const movieId = parsedId ?? 0;
 
   const { data, isPending, isError } = useQuery(
     libraryMovieDetailsQueryOpts(movieId),
   );
   const movie = data && !data.error ? data.data?.movie : null;
-  const notFound = Boolean(isError || (data && data.error) || (data && !movie));
+  const notFound =
+    parsedId === null ||
+    Boolean(isError || (data && data.error) || (data && !movie));
 
   return (
     // Keyed on the movie: the player's refs and state belong to one media

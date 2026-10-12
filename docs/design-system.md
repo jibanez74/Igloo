@@ -1021,6 +1021,12 @@ is unknown or empty.
     `HomeMediaSection`), the watch-room list. Both hand the query's `refetch`
     in as `onRetry`, so the alert carries the same Try again control as
     `LoadErrorAlert`.
+  - A later page of an infinite list (the Tracks tab, a playlist's tracks) →
+    `InfiniteListFooter`. The pages already shown stay, and a
+    `LoadErrorAlert` under them retries the page (`fetchNextPage()`);
+    scrolling back to the end retries too. Only a list with nothing loaded
+    yet fails as a whole. These pages throw rather than cache an envelope, so
+    their detection is `isError && !data`.
   - A Settings card → `SettingsErrorCard` (and `SettingsLoadingCard` for its
     pending state), so the card keeps its place in the page.
   - The four ways a detail page fails to show its subject — an invalid id, a

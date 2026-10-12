@@ -59,12 +59,17 @@ export const Route = createFileRoute("/_auth/tv-shows/")({
     deps: { allPage, sort, tab, genreId, genresPage },
   }) => {
     const { queryClient } = context;
+    // The stats sit above every tab; the rest warms only the tab on show.
     const promises: Promise<unknown>[] = [
       queryClient.ensureQueryData(showsStatsQueryOpts()),
-      queryClient.ensureQueryData(
-        showsLibraryQueryOpts(allPage, SHOWS_PER_PAGE, sort),
-      ),
     ];
+    if (tab === "all") {
+      promises.push(
+        queryClient.ensureQueryData(
+          showsLibraryQueryOpts(allPage, SHOWS_PER_PAGE, sort),
+        ),
+      );
+    }
     if (tab === "genres") {
       promises.push(queryClient.ensureQueryData(showsGenresQueryOpts()));
       if (genreId != null && genreId > 0) {

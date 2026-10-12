@@ -14,6 +14,7 @@ describe("derivePlaybackStatus", () => {
           hasDetails: true,
           requestedMode,
           techPending: false,
+          techError: null,
           playbackPreferencesReady: false,
           modeUnavailable: false,
           playbackError: null,
@@ -35,6 +36,7 @@ describe("derivePlaybackStatus", () => {
           hasDetails: true,
           requestedMode,
           techPending: true,
+          techError: null,
           playbackPreferencesReady: true,
           modeUnavailable: false,
           playbackError: null,
@@ -52,11 +54,34 @@ describe("derivePlaybackStatus", () => {
         hasDetails: false,
         requestedMode: "direct",
         techPending: true,
+        techError: null,
         playbackPreferencesReady: false,
         modeUnavailable: false,
         playbackError: null,
       }),
     ).toEqual({ kind: "loading", message: "Loading episode..." });
+  });
+
+  // Playback never requests a stream before technical details resolve
+  // (docs/ffmpeg.md), so their failure is the player's error, not a guess.
+  it("reports a failure to load technical details instead of starting", () => {
+    expect(
+      derivePlaybackStatus({
+        mediaNoun: "movie",
+        notFound: false,
+        detailsPending: false,
+        hasDetails: true,
+        requestedMode: "direct",
+        techPending: false,
+        techError: "The movie's technical details could not be loaded.",
+        playbackPreferencesReady: true,
+        modeUnavailable: false,
+        playbackError: null,
+      }),
+    ).toEqual({
+      kind: "error",
+      message: "The movie's technical details could not be loaded.",
+    });
   });
 
   it("reports ready once preferences and technical details resolve", () => {
@@ -68,6 +93,7 @@ describe("derivePlaybackStatus", () => {
         hasDetails: true,
         requestedMode: "direct",
         techPending: false,
+        techError: null,
         playbackPreferencesReady: true,
         modeUnavailable: false,
         playbackError: null,

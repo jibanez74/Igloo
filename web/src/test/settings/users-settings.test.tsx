@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { jsonResponse, requestURL } from "../helpers/api";
 import { passwordCases } from "../helpers/password-cases";
+import { watchRoomInviteUsersQueryOpts } from "@/lib/query-opts";
 import { renderRoute } from "../helpers/render-route";
 
 const showValidationErrorMock = vi.fn();
@@ -142,11 +143,11 @@ function setupUsersFetch(
 
 async function renderUsersRoute(users = defaultUsers()) {
   const { requests } = setupUsersFetch(users);
-  await renderRoute("/settings/users");
+  const { queryClient } = await renderRoute("/settings/users");
 
   await screen.findByRole("button", { name: "Add User" });
   await screen.findByText("Dana Scully");
-  return { requests };
+  return { requests, queryClient };
 }
 
 function mutationRequests(requests: CapturedRequest[], method: string) {
@@ -208,6 +209,26 @@ describe("Users settings", () => {
     const error = await screen.findByRole("alert");
     expect(error).toHaveTextContent("Couldn’t load users. Please try again.");
     expect(error).not.toHaveTextContent("internal_error");
+  });
+
+  it("refreshes the watch-room invite list along with the users after a create", async () => {
+    const user = userEvent.setup();
+    const { requests, queryClient } = await renderUsersRoute();
+    const inviteListKey = watchRoomInviteUsersQueryOpts().queryKey;
+    queryClient.setQueryData(inviteListKey, { error: false, data: { users: [] } });
+
+    await user.click(screen.getByRole("button", { name: "Add User" }));
+    await user.type(screen.getByLabelText("User name"), "Walter Skinner");
+    await user.type(screen.getByLabelText("User email"), "skinner@example.com");
+    await user.type(screen.getByLabelText("User password"), "LongEnough123");
+    await user.click(screen.getByRole("button", { name: "Create User" }));
+
+    await waitFor(() => {
+      expect(mutationRequests(requests, "POST")).toHaveLength(1);
+    });
+    await waitFor(() => {
+      expect(queryClient.getQueryState(inviteListKey)?.isInvalidated).toBe(true);
+    });
   });
 
   it("blocks short create passwords before calling the API", async () => {

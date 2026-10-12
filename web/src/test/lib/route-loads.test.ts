@@ -1,4 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  MOVIES_INDEX_DEFAULT_SEARCH,
+  MUSIC_INDEX_DEFAULT_SEARCH,
+  SHOWS_INDEX_DEFAULT_SEARCH,
+} from "@/lib/constants";
 import { loadOnEntry } from "@/lib/route-loads";
 import { showDetailsQueryOpts } from "@/lib/query-opts";
 import { Route as MoviesRoute } from "@/routes/_auth/movies/index";
@@ -6,6 +11,7 @@ import { Route as MusicRoute } from "@/routes/_auth/music/index";
 import { Route as SearchRoute } from "@/routes/_auth/search/index";
 import { Route as ShowDetailsRoute } from "@/routes/_auth/tv-shows/$id/index";
 import { Route as TvShowsRoute } from "@/routes/_auth/tv-shows/index";
+import { jsonResponse, requestURL } from "../helpers/api";
 import { createTestQueryClient } from "../helpers/render";
 import { SHOW_ID, showDetails } from "../helpers/show-details";
 
@@ -86,7 +92,17 @@ describe("in-page navigations do not wait for the page's queries", () => {
       TvShowsRoute,
       { allPage: 1, sort: "title", tab: "genres", genreId: 3, genresPage: 2 },
     ],
-    ["music", MusicRoute, { albumsPage: 2, musiciansPage: 1 }],
+    [
+      "music",
+      MusicRoute,
+      {
+        tab: "playlists",
+        albumsPage: 2,
+        musiciansPage: 1,
+        playlistsView: "liked",
+        likedTracksPage: 2,
+      },
+    ],
     ["search, all tab", SearchRoute, { q: "frost", tab: "all", page: 1 }],
     ["search, a category", SearchRoute, { q: "frost", tab: "movies", page: 9 }],
   ];
@@ -138,5 +154,68 @@ describe("in-page navigations do not wait for the page's queries", () => {
 
   it("entering a show waits for the selected season's episodes", async () => {
     expect(await settles(showLoad("enter"))).toBe(false);
+  });
+});
+
+describe("index loaders warm only the tab on show", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  async function warmedPaths(route: RouteWithLoader, deps: Record<string, unknown>) {
+    const fetchMock = vi.fn<(input: RequestInfo | URL) => Promise<Response>>(
+      () => jsonResponse({ error: false, data: {} }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const queryClient = createTestQueryClient();
+
+    await runLoader(route, { context: { queryClient }, cause: "enter", deps });
+
+    return fetchMock.mock.calls.map(([input]) => requestURL(input).split("?")[0]);
+  }
+
+  it("skips the movies All list on the Genres tab", async () => {
+    const paths = await warmedPaths(MoviesRoute, {
+      ...MOVIES_INDEX_DEFAULT_SEARCH,
+      tab: "genres",
+    });
+
+    expect(paths).toContain("/api/movies/stats");
+    expect(paths).toContain("/api/movies/genres");
+    expect(paths).not.toContain("/api/movies/library");
+  });
+
+  it("warms the liked movies, not the playlists list, in the liked view", async () => {
+    const paths = await warmedPaths(MoviesRoute, {
+      ...MOVIES_INDEX_DEFAULT_SEARCH,
+      tab: "playlists",
+      playlistsView: "liked",
+    });
+
+    expect(paths).toContain("/api/movies/liked");
+    expect(paths).not.toContain("/api/movies/playlists");
+    expect(paths).not.toContain("/api/movies/library");
+  });
+
+  it("skips the TV shows All list on the Genres tab", async () => {
+    const paths = await warmedPaths(TvShowsRoute, {
+      ...SHOWS_INDEX_DEFAULT_SEARCH,
+      tab: "genres",
+    });
+
+    expect(paths).toContain("/api/shows/genres");
+    expect(paths).not.toContain("/api/shows/library");
+  });
+
+  it("warms the music tab on show instead of the album and musician grids", async () => {
+    const paths = await warmedPaths(MusicRoute, {
+      ...MUSIC_INDEX_DEFAULT_SEARCH,
+      tab: "tracks",
+    });
+
+    expect(paths).toContain("/api/music/stats");
+    expect(paths).toContain("/api/music/tracks");
+    expect(paths).not.toContain("/api/music/albums");
+    expect(paths).not.toContain("/api/music/musicians");
   });
 });

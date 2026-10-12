@@ -141,6 +141,42 @@ beforeEach(() => {
 });
 
 describe("AddToPlaylistDialog", () => {
+  it("offers Try again instead of the empty copy when the playlists fail to load", async () => {
+    const user = userEvent.setup();
+    const queryClient = createTestQueryClient();
+    queryClient.setQueryData([PLAYLISTS_KEY], {
+      error: true,
+      message: "failed to list playlists",
+      status: 500,
+    });
+    getPlaylistsMock.mockResolvedValue(musicPlaylists());
+
+    renderWithQueryClient(
+      <AddToPlaylistDialog
+        kind="music"
+        open
+        onOpenChange={vi.fn()}
+        itemId={7}
+        itemTitle="First Contact"
+      />,
+      { queryClient },
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Couldn’t load your playlists.",
+    );
+    expect(
+      screen.queryByText("No playlists yet. Create one to get started."),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    });
+    expect(getPlaylistsMock).toHaveBeenCalled();
+  });
+
   it("gives the playlist search input an accessible name", () => {
     renderDialog("music");
 

@@ -4,6 +4,10 @@ import { showSuccess, showError } from "@/lib/toast-helpers";
 import { Mail, Lock, Eye, EyeOff, LogIn } from "lucide-react";
 import BrandMark from "@/components/app/BrandMark";
 import { login } from "@/lib/api";
+import {
+  arrivedLoggedOut,
+  useForgetEndedSession,
+} from "@/hooks/useEndSession";
 import { authUserQueryOpts } from "@/lib/query-opts";
 import { loginSearchSchema } from "@/lib/route-search";
 import { getActiveTheme, subscribeTheme } from "@/lib/theme";
@@ -47,7 +51,12 @@ type LoginErrors = Partial<Record<"email" | "password", string>>;
 export const Route = createFileRoute("/login")({
   head: () => LOGIN_HEAD,
   validateSearch: loginSearchSchema,
-  beforeLoad: async ({ context, search }) => {
+  beforeLoad: async ({ context, search, location }) => {
+    // An explicit logout arrives here knowing the session is gone; asking
+    // would write a 401 into the shared auth entry while the previous page
+    // is still on screen (useEndSession).
+    if (arrivedLoggedOut(location.state)) return;
+
     const res = await context.queryClient.fetchQuery(
       authUserQueryOpts({ revalidate: true }),
     );
@@ -62,6 +71,7 @@ export const Route = createFileRoute("/login")({
 });
 
 function LoginPage() {
+  useForgetEndedSession();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<LoginErrors>({});
@@ -119,7 +129,8 @@ function LoginPage() {
         return;
       }
 
-      queryClient.removeQueries();
+      // Nothing the previous session cached may carry over to this user.
+      queryClient.clear();
       const authRes = await queryClient.fetchQuery(
         authUserQueryOpts({ revalidate: true }),
       );

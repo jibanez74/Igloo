@@ -136,6 +136,7 @@ function playbackStatus(
     hasDetails: true,
     requestedMode,
     techPending: data.techPending,
+    techError: data.techError,
     playbackPreferencesReady: data.playbackPreferencesReady,
     modeUnavailable: data.modeUnavailable,
     playbackError: null,
@@ -662,6 +663,12 @@ describe("useVideoPlaybackData", () => {
     );
     expect(result.current.streamUrl).toContain("audio_track=1");
     expect(result.current.streamUrl).not.toContain("/stream");
+    // ...and the player reports the failure rather than starting even that
+    // stream without knowing what the file holds.
+    expect(playbackStatus(result.current, "direct")).toEqual({
+      kind: "error",
+      message: "Technical details unavailable",
+    });
   });
 
   it("keeps cold direct playback preparing until technical details resolve", async () => {

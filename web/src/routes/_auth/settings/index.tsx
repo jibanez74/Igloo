@@ -37,6 +37,8 @@ import {
 } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
 import type {
+  ApiResponseType,
+  GeneralSettingsResponseType,
   GeneralSettingsType,
   UpdateGeneralSettingsRequest,
 } from "@/types";
@@ -180,6 +182,12 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   }
 
   const settingsKey = generalSettingsQueryOpts().queryKey;
+  // Undoes the optimistic write when the save is refused or fails.
+  const restoreSettings = (
+    previousData: ApiResponseType<GeneralSettingsResponseType> | undefined,
+  ) => {
+    if (previousData) queryClient.setQueryData(settingsKey, previousData);
+  };
   const updateMutation = useMutation({
     mutationFn: updateGeneralSettings,
     onMutate: async nextSettings => {
@@ -216,9 +224,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
     },
     onSuccess: (res, _nextSettings, context) => {
       if (res.error) {
-        if (context?.previousData) {
-          queryClient.setQueryData(settingsKey, context.previousData);
-        }
+        restoreSettings(context?.previousData);
         showActionFailed("save settings", res);
         return;
       }
@@ -244,9 +250,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
       showSuccess("Settings saved");
     },
     onError: (_error, _nextSettings, context) => {
-      if (context?.previousData) {
-        queryClient.setQueryData(settingsKey, context.previousData);
-      }
+      restoreSettings(context?.previousData);
       showActionFailed("save settings", "An unexpected error occurred");
     },
   });

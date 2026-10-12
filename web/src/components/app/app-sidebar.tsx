@@ -1,5 +1,5 @@
-import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { Link, useRouterState } from "@tanstack/react-router";
 import {
   Home,
   Music,
@@ -34,6 +34,7 @@ import { showError } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
 import BrandMark from "@/components/app/BrandMark";
 import { apiErrorMessage } from "@/lib/is-api-failure";
+import { useEndSession } from "@/hooks/useEndSession";
 
 type NavItem = {
   title: string;
@@ -82,8 +83,8 @@ export default function AppSidebar({
   ...props
 }: React.ComponentProps<typeof Sidebar>) {
   const routerState = useRouterState();
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const endSession = useEndSession();
+  const [loggingOut, setLoggingOut] = useState(false);
   const { isMobile, setOpenMobile } = useSidebar();
   const currentPath = routerState.location.pathname;
 
@@ -103,18 +104,21 @@ export default function AppSidebar({
   };
 
   const handleLogout = async () => {
+    if (loggingOut) return;
     if (isMobile) {
       setOpenMobile(false);
     }
+    setLoggingOut(true);
 
     const res = await logout();
-    if (res.error) {
+    // A 401 means the session had already ended, which is all logout wants.
+    if (res.error && res.status !== 401) {
       showError("Logout failed", apiErrorMessage(res, "Please try again."));
+      setLoggingOut(false);
       return;
     }
 
-    queryClient.removeQueries();
-    navigate({ to: "/login", replace: true });
+    await endSession();
   };
 
   return (

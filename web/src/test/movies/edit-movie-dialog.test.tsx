@@ -3,7 +3,11 @@ import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import EditMovieDialog from "@/components/movies/EditMovieDialog";
-import { LIBRARY_MOVIE_DETAILS_KEY } from "@/lib/constants";
+import {
+  LIBRARY_MOVIE_DETAILS_KEY,
+  MOVIES_LIBRARY_KEY,
+  SEARCH_CATEGORY_KEYS,
+} from "@/lib/constants";
 import type { ApiResponseType, LibraryMovieDetailsMovieType, TmdbSearchResultType } from "@/types";
 import { nullableInt64, nullableString } from "../helpers/fixtures";
 import { createTestQueryClient, renderWithQueryClient } from "../helpers/render";
@@ -284,6 +288,11 @@ describe("EditMovieDialog", () => {
     const user = userEvent.setup();
     const { rerenderDialog, onOpenChange, queryClient } = renderDialog();
     const refreshOrder = recordRefreshOrder(queryClient, routerMocks.invalidate);
+    // Lists elsewhere that show the movie's title.
+    const libraryPage = [MOVIES_LIBRARY_KEY, 1, 24, "asc"];
+    const searchPage = [SEARCH_CATEGORY_KEYS.movies, "matrix", 1, 24];
+    queryClient.setQueryData(libraryPage, { error: false, data: {} });
+    queryClient.setQueryData(searchPage, { error: false, data: {} });
 
     await openManualTab(user);
 
@@ -316,6 +325,8 @@ describe("EditMovieDialog", () => {
       expect(routerMocks.invalidate).toHaveBeenCalledOnce();
     });
     expectRefetchedBeforeReload(refreshOrder, [LIBRARY_MOVIE_DETAILS_KEY, 17]);
+    expect(queryClient.getQueryState(libraryPage)?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(searchPage)?.isInvalidated).toBe(true);
   });
 
   it("supports keyboard selection when identifying a movie with TMDB", async () => {

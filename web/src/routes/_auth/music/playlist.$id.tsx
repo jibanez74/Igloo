@@ -18,6 +18,8 @@ import MusicDetailBackNav from "@/components/music/MusicDetailBackNav";
 import PlayShuffleButtons from "@/components/music/PlayShuffleButtons";
 import MusicDetailSkeleton from "@/components/music/MusicDetailSkeleton";
 import MediaDetailGuard from "@/components/shared/MediaDetailGuard";
+import InfiniteListFooter from "@/components/shared/InfiniteListFooter";
+import LoadErrorAlert from "@/components/shared/LoadErrorAlert";
 
 // Lazy load DraggableTrackList to reduce initial bundle size
 // This component includes the heavy @dnd-kit packages
@@ -34,7 +36,10 @@ import { convertToAudioTrack, dedupeById } from "@/lib/audio-utils";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useTrackPlaybackMatcher } from "@/hooks/useTrackPlaybackMatcher";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
-import { useVirtualizedInfiniteLoader } from "@/hooks/useVirtualizedInfiniteLoader";
+import {
+  useVirtualizedInfiniteLoader,
+  type FetchNextPage,
+} from "@/hooks/useVirtualizedInfiniteLoader";
 import { useWindowScrollMargin } from "@/hooks/useWindowScrollMargin";
 import { formatDuration, pluralize } from "@/lib/format";
 import {
@@ -48,6 +53,7 @@ import {
   VIRTUAL_LIST_TRACK_HEIGHT,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { apiErrorMessage } from "@/lib/is-api-failure";
 import { parseRouteId } from "@/lib/route-id";
 import { listenHead, routeHead } from "@/lib/route-head";
 import type {
@@ -100,6 +106,13 @@ export const Route = createFileRoute("/_auth/music/playlist/$id")({
     const id = parseRouteId(params.id);
     if (id == null) return { playlist: null };
 
+    // The first tracks page starts beside the details so the list rarely
+    // spins after the page paints. Its pages throw, and retry a server
+    // failure, so the loader does not wait on them: the list's own spinner
+    // and alert cover them.
+    void context.queryClient.prefetchInfiniteQuery(
+      playlistTracksInfiniteQueryOpts(id),
+    );
     const res = await context.queryClient.ensureQueryData(
       playlistDetailsQueryOpts(id),
     );
@@ -171,52 +184,93 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
   // Infinite query for tracks
   const {
     data: tracksData,
+    error: tracksError,
     fetchNextPage,
     hasNextPage,
+    isError: tracksFailed,
     isFetchingNextPage,
+    isFetchNextPageError,
     isLoading: isLoadingTracks,
+    refetch: refetchTracks,
   } = useInfiniteQuery(playlistTracksInfiniteQueryOpts(playlistId));
 
   // Flatten all pages into a single array
-  const allTracks =
-    tracksData?.pages.flatMap((page) =>
-      page.error === false ? (page.data?.tracks ?? []) : []
-    ) ?? [];
+  const allTracks = tracksData?.pages.flatMap((page) => page.tracks) ?? [];
+  // A later page that fails keeps the pages already shown and offers its own
+  // retry below them; only a list with nothing to show fails as a whole.
+  const tracksLoadFailed = tracksFailed && tracksData === undefined;
 
-  // Remove track mutation
+  // Remove track mutation. The header's count and duration come from the
+  // details query, so it refreshes with the tracks and the playlists list.
   const removeTrackMutation = useMutation({
     mutationFn: (trackId: number) =>
       removeTrackFromPlaylist(playlistId, trackId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [PLAYLIST_TRACKS_KEY, playlistId] });
-      queryClient.invalidateQueries({ queryKey: [PLAYLISTS_KEY] });
+    onSuccess: async result => {
+      if (result.error) {
+        showActionFailed("remove track", result);
+        return;
+      }
       showRemoved("Track", "from playlist");
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: [PLAYLIST_TRACKS_KEY, playlistId],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: playlistDetailsQueryOpts(playlistId).queryKey,
+        }),
+        queryClient.invalidateQueries({ queryKey: [PLAYLISTS_KEY] }),
+      ]);
     },
     onError: () => {
       showActionFailed("remove track");
     },
   });
 
-  // Reorder tracks mutation
+  // The menu can be reopened while a removal is in flight; asking again for
+  // the same track would only fail once the first one lands.
+  const removeTrack = (trackId: number) => {
+    if (
+      removeTrackMutation.isPending &&
+      removeTrackMutation.variables === trackId
+    ) {
+      return;
+    }
+    removeTrackMutation.mutate(trackId);
+  };
+
+  // The order a drag dropped, shown until the server answers. It is set in
+  // the same render the drag ends in, so the drop animation lands on the new
+  // slot (the mutation's own state reaches React a tick later).
+  const [dropOrder, setDropOrder] = useState<number[] | null>(null);
+
+  // Reorder tracks mutation. Scoped so consecutive drags save in order, and
+  // pending until the refetch lands, so the server's order takes over from
+  // the dropped one without a flash of the old order.
   const reorderMutation = useMutation({
     mutationFn: (trackIds: number[]) =>
       reorderPlaylistTracks(playlistId, trackIds),
+    scope: { id: `playlist-reorder-${playlistId}` },
     onSuccess: (result) => {
-      if (result.error) {
-        showActionFailed("reorder tracks", result);
-        // Refetch to restore original order
-        queryClient.invalidateQueries({ queryKey: [PLAYLIST_TRACKS_KEY, playlistId] });
-        return;
-      }
-      // Invalidate to sync with server
-      queryClient.invalidateQueries({ queryKey: [PLAYLIST_TRACKS_KEY, playlistId] });
+      if (result.error) showActionFailed("reorder tracks", result);
     },
     onError: () => {
       showActionFailed("reorder tracks");
-      // Refetch to restore original order
-      queryClient.invalidateQueries({ queryKey: [PLAYLIST_TRACKS_KEY, playlistId] });
     },
+    onSettled: () =>
+      queryClient.invalidateQueries({
+        queryKey: [PLAYLIST_TRACKS_KEY, playlistId],
+      }),
   });
+
+  const reorderTracks = (trackIds: number[]) => {
+    setDropOrder(trackIds);
+    reorderMutation.mutate(trackIds, {
+      // Only the latest drag's callback runs; a refused order falls back to
+      // the refetched server order here.
+      onSettled: () =>
+        setDropOrder((current) => (current === trackIds ? null : current)),
+    });
+  };
 
   // The tracks list is an infinite query, so allTracks only holds the pages the
   // user has scrolled into, while the header buttons promise the playlist's
@@ -226,15 +280,17 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
   //
   // fetchNextPage resolves with the updated observer result, so the loop reads
   // hasNextPage off that instead of the stale value captured in this closure.
-  // It never rejects (TanStack swallows the error, and apiRequest returns an
-  // error envelope rather than throwing), so a failed page shows up only as a
-  // short result — hence the page-count guard, which stops the loop if a round
-  // ever fails to add a page.
+  // Called without throwOnError it never rejects (TanStack swallows the
+  // error; useVirtualizedInfiniteLoader passes throwOnError to get a
+  // rejection instead), so a failed page shows up as isFetchNextPageError on
+  // that result, which ends the loop. A 5xx page resolves only after its
+  // retries. The page-count guard stops the loop if a round ever adds no page
+  // for another reason.
   const loadRemainingTracks = async () => {
     let result = await fetchNextPage();
     let pageCount = result.data?.pages.length ?? 0;
 
-    while (result.hasNextPage) {
+    while (result.hasNextPage && !result.isFetchNextPageError) {
       result = await fetchNextPage();
 
       const nextCount = result.data?.pages.length ?? 0;
@@ -242,11 +298,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
       pageCount = nextCount;
     }
 
-    return (
-      result.data?.pages.flatMap((page) =>
-        page.error === false ? (page.data?.tracks ?? []) : [],
-      ) ?? []
-    );
+    return result.data?.pages.flatMap((page) => page.tracks) ?? [];
   };
 
   // playQueue/shuffleQueue instead of playTrack: these header buttons are
@@ -413,11 +465,21 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
           Tracks
         </h2>
 
-        {isLoadingTracks ? (
+        {isLoadingTracks && (
           <div className="flex justify-center py-12">
             <Spinner className="size-8 text-primary" />
           </div>
-        ) : allTracks.length === 0 ? (
+        )}
+        {tracksLoadFailed && (
+          <LoadErrorAlert
+            message={apiErrorMessage(
+              tracksError,
+              "Couldn’t load this playlist’s tracks.",
+            )}
+            onRetry={() => void refetchTracks()}
+          />
+        )}
+        {tracksData !== undefined && allTracks.length === 0 && (
           <div className="rounded-xl border border-primary/10 bg-muted/30 py-12 text-center">
             <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-linear-to-br from-muted via-muted to-primary/40">
               <Music className="size-6 text-primary/40" aria-hidden="true" />
@@ -427,7 +489,8 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
               Add tracks from your library to get started.
             </p>
           </div>
-        ) : (
+        )}
+        {allTracks.length > 0 && (
           <PlaylistTracksList
             playlistId={playlistId}
             tracks={allTracks}
@@ -435,8 +498,14 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
             hasNextPage={hasNextPage}
             isFetchingNextPage={isFetchingNextPage}
             fetchNextPage={fetchNextPage}
-            onRemoveTrack={(trackId) => removeTrackMutation.mutate(trackId)}
-            onReorderTracks={(trackIds) => reorderMutation.mutate(trackIds)}
+            loadMoreError={
+              isFetchNextPageError
+                ? apiErrorMessage(tracksError, "Couldn’t load more tracks.")
+                : null
+            }
+            dropOrder={dropOrder}
+            onRemoveTrack={removeTrack}
+            onReorderTracks={reorderTracks}
           />
         )}
       </section>
@@ -457,7 +526,10 @@ type PlaylistTracksListProps = {
   canEdit: boolean;
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
-  fetchNextPage: () => Promise<unknown>;
+  fetchNextPage: FetchNextPage;
+  loadMoreError: string | null;
+  /** A dropped order still being saved; null once the server's order is back. */
+  dropOrder: number[] | null;
   onRemoveTrack: (trackId: number) => void;
   onReorderTracks: (trackIds: number[]) => void;
 };
@@ -473,19 +545,21 @@ function PlaylistTracksList({
   hasNextPage,
   isFetchingNextPage,
   fetchNextPage,
+  loadMoreError,
+  dropOrder,
   onRemoveTrack,
   onReorderTracks,
 }: PlaylistTracksListProps) {
   const audioPlayer = useAudioPlayerActions();
 
-  // Local optimistic order override keyed by track ids.
-  const [optimisticTrackIds, setOptimisticTrackIds] = useState<number[] | null>(null);
+  // The dropped order applies only while it still names exactly these tracks;
+  // a removal landing meanwhile falls back to the server's list.
   const trackMap = new Map(tracks.map((track) => [track.id, track]));
   const orderedTracks =
-    optimisticTrackIds !== null &&
-    optimisticTrackIds.length === tracks.length &&
-    optimisticTrackIds.every((trackId) => trackMap.has(trackId))
-      ? optimisticTrackIds
+    dropOrder !== null &&
+    dropOrder.length === tracks.length &&
+    dropOrder.every((trackId) => trackMap.has(trackId))
+      ? dropOrder
           .map((trackId) => trackMap.get(trackId))
           .filter((track): track is PlaylistTrackType => track !== undefined)
       : tracks;
@@ -498,15 +572,6 @@ function PlaylistTracksList({
       orderedTracks.map(playlistTrackToPlayableData),
       track.id,
     );
-  };
-
-  // Handle reorder with optimistic update
-  const handleReorder = (newTrackIds: number[]) => {
-    // Optimistic update
-    setOptimisticTrackIds(newTrackIds);
-
-    // Call the API
-    onReorderTracks(newTrackIds);
   };
 
   // Use draggable list for smaller playlists that user can edit
@@ -525,16 +590,16 @@ function PlaylistTracksList({
           <DraggableTrackList
             tracks={orderedTracks}
             canEdit={canEdit}
-            onReorder={handleReorder}
+            onReorder={onReorderTracks}
             onPlayTrack={handlePlayTrack}
             onRemoveTrack={onRemoveTrack}
           />
         </Suspense>
-        {isFetchingNextPage && (
-          <div className="flex justify-center py-4">
-            <Spinner className="size-6 text-primary" />
-          </div>
-        )}
+        <InfiniteListFooter
+          isFetchingNextPage={isFetchingNextPage}
+          loadMoreError={loadMoreError}
+          onRetry={() => void fetchNextPage()}
+        />
       </>
     );
   }
@@ -548,6 +613,7 @@ function PlaylistTracksList({
       hasNextPage={hasNextPage}
       isFetchingNextPage={isFetchingNextPage}
       fetchNextPage={fetchNextPage}
+      loadMoreError={loadMoreError}
       onPlayTrack={handlePlayTrack}
       onRemoveTrack={onRemoveTrack}
     />
@@ -560,7 +626,8 @@ type VirtualizedPlaylistTracksListProps = {
   canEdit: boolean;
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
-  fetchNextPage: () => Promise<unknown>;
+  fetchNextPage: FetchNextPage;
+  loadMoreError: string | null;
   onPlayTrack: (track: PlaylistTrackType) => void;
   onRemoveTrack: (trackId: number) => void;
 };
@@ -572,6 +639,7 @@ function VirtualizedPlaylistTracksList({
   hasNextPage,
   isFetchingNextPage,
   fetchNextPage,
+  loadMoreError,
   onPlayTrack,
   onRemoveTrack,
 }: VirtualizedPlaylistTracksListProps) {
@@ -644,11 +712,11 @@ function VirtualizedPlaylistTracksList({
         })}
       </div>
 
-      {isFetchingNextPage && (
-        <div className="flex justify-center py-4">
-          <Spinner className="size-6 text-primary" />
-        </div>
-      )}
+      <InfiniteListFooter
+        isFetchingNextPage={isFetchingNextPage}
+        loadMoreError={loadMoreError}
+        onRetry={() => void fetchNextPage()}
+      />
     </div>
   );
 }

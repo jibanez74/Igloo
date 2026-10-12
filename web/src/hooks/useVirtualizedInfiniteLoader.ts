@@ -1,11 +1,16 @@
 import { useRef } from "react";
 import type { Virtualizer } from "@tanstack/react-virtual";
 
+/** An infinite query's fetchNextPage, as the list components pass it down. */
+export type FetchNextPage = (options?: {
+  throwOnError?: boolean;
+}) => Promise<unknown>;
+
 type UseVirtualizedInfiniteLoaderOptions = {
   itemCount: number;
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
-  fetchNextPage: () => Promise<unknown>;
+  fetchNextPage: FetchNextPage;
   scopeKey: string | number;
   loadAheadItems?: number;
 };
@@ -34,8 +39,10 @@ export function useVirtualizedInfiniteLoader({
     isFetchingNextRef.current = true;
     let fetchFailed = false;
 
+    // throwOnError: TanStack otherwise swallows a failed page, and the guard
+    // below would then never let a later scroll ask for it again.
     try {
-      await fetchNextPage();
+      await fetchNextPage({ throwOnError: true });
     } catch {
       fetchFailed = true;
     }

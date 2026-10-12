@@ -12,10 +12,8 @@ import {
   FOCUS_VISIBLE_RING_CLASS,
   MOTION_MICRO_CONTROL_CLASS,
 } from "@/lib/constants";
-import {
-  libraryMovieDetailsQueryOpts,
-  movieTechnicalDetailsQueryOpts,
-} from "@/lib/query-opts";
+import { invalidateLibraryQueries } from "@/lib/library-cache";
+import { libraryMovieDetailsQueryOpts } from "@/lib/query-opts";
 import { cn } from "@/lib/utils";
 import { unwrapInt, unwrapString } from "@/lib/nullable";
 import {
@@ -268,20 +266,21 @@ export default function EditMovieDialog({
   );
 }
 
-// The movie page's head takes the title from its loader data, which only
-// changes on a router load. Wait for the details refetch, then reload that
-// route, so the tab title follows an identify or a manual edit.
+// An identify or a manual edit changes what every movie list, search result,
+// continue-watching row and watch room shows of the movie, not just this page.
+// The page's head takes the title from its loader data, which only changes on
+// a router load, so wait for the details refetch, then reload that route.
 async function refreshMovieDetails(
   queryClient: QueryClient,
   router: ReturnType<typeof useRouter>,
   movieId: number,
 ) {
-  queryClient.invalidateQueries({
-    queryKey: movieTechnicalDetailsQueryOpts(movieId).queryKey,
-  });
-  await queryClient.invalidateQueries({
-    queryKey: libraryMovieDetailsQueryOpts(movieId).queryKey,
-  });
+  invalidateLibraryQueries(queryClient, "movies");
+  // Join the details refetch the line above started rather than restart it.
+  await queryClient.invalidateQueries(
+    { queryKey: libraryMovieDetailsQueryOpts(movieId).queryKey },
+    { cancelRefetch: false },
+  );
   await router.invalidate({
     filter: match => match.routeId === "/_auth/movies/$id/",
   });

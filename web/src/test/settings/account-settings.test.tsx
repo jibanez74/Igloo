@@ -2,8 +2,9 @@ import type React from "react";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import { authUserFrom, authUserQueryOpts } from "@/lib/query-opts";
 import type { AuthUser } from "@/types";
-import { jsonResponse, requestURL } from "../helpers/api";
+import { deferredResponse, jsonResponse, requestURL } from "../helpers/api";
 import { passwordCases } from "../helpers/password-cases";
 import { renderRoute } from "../helpers/render-route";
 
@@ -46,7 +47,26 @@ function testUser(overrides: Partial<AuthUser> = {}): AuthUser {
   };
 }
 
-function setupAccountFetch(user: AuthUser = testUser()) {
+function isNameBody(body: unknown): body is { name: string } {
+  return (
+    typeof body === "object" &&
+    body !== null &&
+    "name" in body &&
+    typeof body.name === "string"
+  );
+}
+
+type AccountFetchOptions = {
+  /** Answers the avatar URL request in place of the stored-copy reply. */
+  avatarResponse?: Promise<Response>;
+  /** Saves a name change; by default the server refuses it as taken. */
+  acceptName?: boolean;
+};
+
+function setupAccountFetch(
+  user: AuthUser = testUser(),
+  { avatarResponse, acceptName = false }: AccountFetchOptions = {},
+) {
   const requests: CapturedRequest[] = [];
   let currentUser: AuthUser | null = user;
 
@@ -82,6 +102,27 @@ function setupAccountFetch(user: AuthUser = testUser()) {
       });
     }
 
+    if (url === "/api/user/name" && method === "PUT") {
+      if (acceptName && currentUser && isNameBody(body)) {
+        currentUser = { ...currentUser, name: body.name };
+        return jsonResponse({ error: false, data: { user: currentUser } });
+      }
+      return jsonResponse(
+        { error: true, message: "name is already taken" },
+        409,
+      );
+    }
+
+    if (url === "/api/user/avatar" && method === "PUT") {
+      if (avatarResponse) return avatarResponse;
+      // The server stores its own copy of the image and answers with it.
+      currentUser = currentUser && {
+        ...currentUser,
+        avatar: "/api/static/avatars/2-stored.webp",
+      };
+      return jsonResponse({ error: false, data: { user: currentUser } });
+    }
+
     if (url === "/api/user/avatar/upload" && method === "POST") {
       return jsonResponse({
         error: false,
@@ -107,12 +148,15 @@ function setupAccountFetch(user: AuthUser = testUser()) {
   return { requests };
 }
 
-async function renderAccountRoute(user = testUser()) {
-  const { requests } = setupAccountFetch(user);
-  const { router } = await renderRoute("/settings/account");
+async function renderAccountRoute(
+  user = testUser(),
+  options: AccountFetchOptions = {},
+) {
+  const { requests } = setupAccountFetch(user, options);
+  const { router, queryClient } = await renderRoute("/settings/account");
 
   await screen.findByText("Profile Information");
-  return { requests, router };
+  return { requests, router, queryClient };
 }
 
 function requestsFor(
@@ -126,6 +170,127 @@ function requestsFor(
 }
 
 describe("Account settings", () => {
+  it("keeps the signed-in user when the server refuses a name change", async () => {
+    const user = userEvent.setup();
+    const { requests } = await renderAccountRoute();
+    const userRequestsBefore = requestsFor(requests, "GET", "/api/auth/user").length;
+
+    const nameInput = screen.getByLabelText("Name");
+    await user.clear(nameInput);
+    await user.type(nameInput, "Fox Mulder");
+    await user.click(screen.getByRole("button", { name: "Save profile" }));
+
+    await waitFor(() => {
+      expect(showActionFailedMock).toHaveBeenCalledWith(
+        "update name",
+        expect.objectContaining({ status: 409 }),
+      );
+    });
+    // A refusal changes nothing on the server, so nothing is refetched over
+    // the cached user (a network error there used to replace it).
+    expect(requestsFor(requests, "GET", "/api/auth/user")).toHaveLength(
+      userRequestsBefore,
+    );
+    expect(screen.getByText("Profile Information")).toBeInTheDocument();
+  });
+
+  it("caches the avatar the server stored rather than the URL typed in", async () => {
+    const user = userEvent.setup();
+    const { queryClient } = await renderAccountRoute();
+
+    await user.type(
+      screen.getByLabelText("Avatar image URL"),
+      "https://example.com/me.jpg",
+    );
+    await user.click(screen.getByRole("button", { name: "Set URL" }));
+
+    await waitFor(() => {
+      expect(showSuccessMock).toHaveBeenCalledWith("Avatar updated successfully");
+    });
+    expect(
+      authUserFrom(queryClient.getQueryData(authUserQueryOpts().queryKey))
+        ?.avatar,
+    ).toBe("/api/static/avatars/2-stored.webp");
+  });
+
+  it("drops an avatar response that arrives after the session ended", async () => {
+    const user = userEvent.setup();
+    const avatarRequest = deferredResponse();
+    const { router, queryClient } = await renderAccountRoute(testUser(), {
+      avatarResponse: avatarRequest.promise,
+    });
+
+    await user.type(
+      screen.getByLabelText("Avatar image URL"),
+      "https://example.com/me.jpg",
+    );
+    await user.click(screen.getByRole("button", { name: "Set URL" }));
+    await screen.findByRole("button", { name: "Saving..." });
+
+    // What useEndSession does on logout; the login page then clears the cache.
+    await router.navigate({
+      to: "/login",
+      replace: true,
+      state: previous => ({ ...previous, loggedOut: true }),
+    });
+    await waitFor(() => {
+      expect(queryClient.getQueryCache().getAll()).toEqual([]);
+    });
+
+    avatarRequest.resolve(
+      jsonResponse({
+        error: false,
+        data: { user: testUser({ avatar: "/api/static/avatars/2-stored.webp" }) },
+      }),
+    );
+    // Let the response reach the mutation's callbacks.
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    expect(queryClient.getQueryCache().getAll()).toEqual([]);
+    expect(showSuccessMock).not.toHaveBeenCalled();
+    expect(showActionFailedMock).not.toHaveBeenCalled();
+  });
+
+  it("undoes only the avatar when the URL fails after a name change saved", async () => {
+    const user = userEvent.setup();
+    const avatarRequest = deferredResponse();
+    const { queryClient } = await renderAccountRoute(testUser(), {
+      avatarResponse: avatarRequest.promise,
+      acceptName: true,
+    });
+    const cachedUser = () =>
+      authUserFrom(queryClient.getQueryData(authUserQueryOpts().queryKey));
+
+    await user.type(
+      screen.getByLabelText("Avatar image URL"),
+      "https://example.com/me.jpg",
+    );
+    await user.click(screen.getByRole("button", { name: "Set URL" }));
+    await waitFor(() => {
+      expect(cachedUser()?.avatar).toBe("https://example.com/me.jpg");
+    });
+
+    const nameInput = screen.getByLabelText("Name");
+    await user.clear(nameInput);
+    await user.type(nameInput, "Fox Mulder");
+    await user.click(screen.getByRole("button", { name: "Save profile" }));
+    await waitFor(() => {
+      expect(showSuccessMock).toHaveBeenCalledWith("Name updated successfully");
+    });
+
+    avatarRequest.resolve(
+      jsonResponse({ error: true, message: "avatar unreachable" }, 422),
+    );
+    await waitFor(() => {
+      expect(showActionFailedMock).toHaveBeenCalledWith(
+        "update avatar",
+        expect.objectContaining({ status: 422 }),
+      );
+    });
+
+    expect(cachedUser()).toMatchObject({ name: "Fox Mulder", avatar: null });
+  });
+
   it.each(passwordCases)("validates $name when changing a password", async ({ password, error }) => {
     const user = userEvent.setup();
     const { requests } = await renderAccountRoute();
@@ -263,7 +428,7 @@ describe("Account settings", () => {
 
   it("deletes the account without calling logout after the session is destroyed", async () => {
     const user = userEvent.setup();
-    const { requests, router } = await renderAccountRoute();
+    const { requests, router, queryClient } = await renderAccountRoute();
 
     await user.click(screen.getByRole("button", { name: "Delete account" }));
     const dialog = screen.getByRole("dialog", { name: "Delete Account" });
@@ -288,8 +453,19 @@ describe("Account settings", () => {
     );
     expect(requestsFor(requests, "DELETE", "/api/user")).toHaveLength(1);
     expect(requestsFor(requests, "DELETE", "/api/auth/logout")).toHaveLength(0);
-    expect(requestsFor(requests, "GET", "/api/auth/user").length).toBeGreaterThan(
-      0,
+    // The login guard knows the session is gone, so nothing asks for the
+    // user again (that 401 used to land in the cache under the old page),
+    // and nothing the deleted account loaded stays cached.
+    await waitFor(() => {
+      expect(queryClient.getQueryCache().getAll()).toEqual([]);
+    });
+    const deleteIndex = requests.findIndex(
+      request => request.method === "DELETE" && request.url === "/api/user",
     );
+    expect(
+      requests
+        .slice(deleteIndex)
+        .filter(request => request.url === "/api/auth/user"),
+    ).toEqual([]);
   });
 });

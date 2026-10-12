@@ -22,6 +22,8 @@ import {
 import { mockApi } from "./e2e-mock-api";
 import { libraryMovie } from "./fixtures/movies";
 import {
+  playlist as playlistRow,
+  playlistDetail,
   playlistSummary,
   simpleAlbum,
   simpleMusician,
@@ -221,6 +223,29 @@ async function mockMusicIndexApi(
 
         playlists.push(playlist);
         await fulfillJSON(route, apiResponse({ playlist }));
+        return true;
+      }
+
+      // Hovering a card warms its page (details and first tracks page), and
+      // a card this mock created can land under the pointer as its dialog
+      // closes.
+      const createdPage = url.pathname.match(
+        /^\/api\/music\/playlists\/(\d+)(\/tracks)?$/,
+      );
+      const created = createdPage
+        ? playlists.find(row => row.id === Number(createdPage[1]) && row.id >= 100)
+        : undefined;
+      if (createdPage && created && method === "GET") {
+        await fulfillJSON(
+          route,
+          apiResponse(
+            createdPage[2]
+              ? { tracks: [], total: 0, has_more: false, next_offset: 0 }
+              : playlistDetail({
+                  playlist: playlistRow({ id: created.id, name: created.name }),
+                }),
+          ),
+        );
         return true;
       }
 

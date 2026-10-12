@@ -7,7 +7,7 @@ import {
 } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import RequestMovieDialog from "@/components/movies/RequestMovieDialog";
-import { AUTH_USER_KEY } from "@/lib/constants";
+import { AUTH_USER_KEY, NOTIFICATIONS_UNREAD_COUNT_KEY } from "@/lib/constants";
 import type {
   ApiResponseType,
   CreateNotificationResponseType,
@@ -146,7 +146,7 @@ function renderDialog() {
 
   renderWithQueryClient(<DialogHarness />, { queryClient });
 
-  return { onOpenChange };
+  return { onOpenChange, queryClient };
 }
 
 afterEach(() => {
@@ -183,7 +183,11 @@ describe("RequestMovieDialog", () => {
     apiMocks.createNotification.mockResolvedValue(notificationResponse());
 
     const user = userEvent.setup();
-    const { onOpenChange } = renderDialog();
+    const { onOpenChange, queryClient } = renderDialog();
+    queryClient.setQueryData([NOTIFICATIONS_UNREAD_COUNT_KEY], {
+      error: false,
+      data: { unread_count: 0 },
+    });
 
     await user.type(screen.getByLabelText("Title"), "Coherence");
     await user.type(screen.getByLabelText("Year"), "2013");
@@ -230,6 +234,10 @@ describe("RequestMovieDialog", () => {
     });
     expect(screen.queryByRole("dialog", { name: "Request Movie" }))
       .not.toBeInTheDocument();
+    // An admin's own bell counts the request without waiting for its poll.
+    expect(
+      queryClient.getQueryState([NOTIFICATIONS_UNREAD_COUNT_KEY])?.isInvalidated,
+    ).toBe(true);
 
     expect(
       await screen.findByText(

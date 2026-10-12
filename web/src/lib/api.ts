@@ -267,7 +267,7 @@ export const updateUserPin = (pin: string, currentPin?: string) =>
   });
 
 export const updateUserAvatar = (avatar: string) =>
-  apiRequest("/api/user/avatar", {
+  apiRequest<{ user: AuthUser }>("/api/user/avatar", {
     method: "PUT",
     body: { avatar },
   });

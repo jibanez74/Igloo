@@ -77,15 +77,18 @@ function PlayEpisodePage() {
   const { id, episodeId: episodeIdParam } = Route.useParams();
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
-  // 0 for a malformed id: the request then 404s into the player's error
-  // screen, exactly as an unknown episode does.
-  const episodeId = parseRouteId(episodeIdParam) ?? 0;
+  // 0 for a malformed id disables the episode query, which then never leaves
+  // pending, so the id itself makes the page not found, like an unknown
+  // episode.
+  const parsedId = parseRouteId(episodeIdParam);
+  const episodeId = parsedId ?? 0;
 
   const { data, isPending, isError } = useQuery(
     showEpisodeQueryOpts(episodeId),
   );
   const payload = data && !data.error ? data.data : null;
-  const notFound = Boolean(isError || (data && data.error));
+  const notFound =
+    parsedId === null || Boolean(isError || (data && data.error));
 
   // Back lands on the season the episode belongs to, so a viewer who paged
   // to season four is not dropped on season one.

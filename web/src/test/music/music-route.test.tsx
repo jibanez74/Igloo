@@ -38,7 +38,10 @@ type MockMusicFetchOptions = {
   emptyTracks?: boolean;
   emptyPlaylists?: boolean;
   emptyLikedTracks?: boolean;
-  failFirstTracksRequest?: boolean;
+  /** Fails the first tracks page while `current` is true. */
+  tracksFailing?: { current: boolean };
+  /** The first page says there is more; the next page fails once with a 503. */
+  failFirstNextTracksPage?: boolean;
   failFirstPlaylistsRequest?: boolean;
   failFirstLikedTracksRequest?: boolean;
 };
@@ -46,7 +49,7 @@ type MockMusicFetchOptions = {
 function mockMusicFetch(options: MockMusicFetchOptions = {}) {
   const spotifyAvailable = options.spotifyAvailable ?? true;
   const emptyMusicians = options.emptyMusicians ?? false;
-  let tracksRequestCount = 0;
+  let nextTracksPageRequestCount = 0;
   let playlistsRequestCount = 0;
   let likedTracksRequestCount = 0;
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
@@ -135,9 +138,7 @@ function mockMusicFetch(options: MockMusicFetchOptions = {}) {
     }
 
     if (url === `/api/music/tracks?limit=${TRACKS_INFINITE_PAGE_SIZE}&offset=0`) {
-      tracksRequestCount += 1;
-
-      if (options.failFirstTracksRequest && tracksRequestCount === 1) {
+      if (options.tracksFailing?.current) {
         return jsonResponse({
           error: true,
           message: "The tracks library is temporarily unavailable.",
@@ -147,12 +148,38 @@ function mockMusicFetch(options: MockMusicFetchOptions = {}) {
       const tracks = options.emptyTracks
         ? []
         : [track(1, "Alabaster"), track(2, "Borrowed Light")];
+      const hasMore = options.failFirstNextTracksPage === true;
       return jsonResponse({
         error: false,
         data: {
           tracks,
-          total: tracks.length,
+          total: hasMore ? tracks.length + 1 : tracks.length,
           offset: 0,
+          limit: TRACKS_INFINITE_PAGE_SIZE,
+          has_more: hasMore,
+        },
+      });
+    }
+
+    if (
+      url ===
+      `/api/music/tracks?limit=${TRACKS_INFINITE_PAGE_SIZE}&offset=${TRACKS_INFINITE_PAGE_SIZE}`
+    ) {
+      nextTracksPageRequestCount += 1;
+
+      if (nextTracksPageRequestCount === 1) {
+        return jsonResponse(
+          { error: true, message: "tracks page query failed" },
+          503,
+        );
+      }
+
+      return jsonResponse({
+        error: false,
+        data: {
+          tracks: [track(3, "Cascade")],
+          total: 3,
+          offset: TRACKS_INFINITE_PAGE_SIZE,
           limit: TRACKS_INFINITE_PAGE_SIZE,
           has_more: false,
         },
@@ -382,9 +409,10 @@ describe("music route tracks tab", () => {
   it("shows an API failure and loads tracks after retrying", async () => {
     const user = userEvent.setup();
 
-    await renderMusicRoute("/music/?tab=tracks", {
-      failFirstTracksRequest: true,
-    });
+    // Failing until Try again: the loader's warm-up and the tab's own mount
+    // retry both see the failure.
+    const tracksFailing = { current: true };
+    await renderMusicRoute("/music/?tab=tracks", { tracksFailing });
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "The tracks library is temporarily unavailable.",
@@ -393,9 +421,31 @@ describe("music route tracks tab", () => {
       screen.queryByText("No tracks found in your library."),
     ).not.toBeInTheDocument();
 
+    tracksFailing.current = false;
     await user.click(screen.getByRole("button", { name: "Try again" }));
 
     expect(await screen.findByRole("list", { name: "Tracks" })).toBeInTheDocument();
+    expect(screen.getByText("Alabaster")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("keeps the loaded tracks and offers Try again when a later page fails", async () => {
+    const user = userEvent.setup();
+
+    await renderMusicRoute("/music/?tab=tracks", {
+      failFirstNextTracksPage: true,
+    });
+
+    // The first page is short, so the list asks for the next one at once.
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Couldn’t load more tracks.",
+    );
+    expect(screen.getByRole("list", { name: "Tracks" })).toBeInTheDocument();
+    expect(screen.getByText("Alabaster")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(await screen.findByText("Cascade")).toBeInTheDocument();
     expect(screen.getByText("Alabaster")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });

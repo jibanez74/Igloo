@@ -30,6 +30,8 @@ type PlaybackStatusArgs = {
   hasDetails: boolean;
   requestedMode: StreamModeId;
   techPending: boolean;
+  /** Why the technical details failed to load; null while they load or once they have. */
+  techError: string | null;
   playbackPreferencesReady: boolean;
   modeUnavailable: boolean;
   playbackError: string | null;
@@ -151,6 +153,9 @@ export function derivePlaybackStatus(args: PlaybackStatusArgs): PlaybackStatus {
   if (args.techPending) {
     return { kind: "loading", message: "Preparing playback..." };
   }
+  // Without technical details no mode is known to be playable, so a failure
+  // to load them stops here rather than starting the requested stream blind.
+  if (args.techError) return { kind: "error", message: args.techError };
   if (args.modeUnavailable) {
     return {
       kind: "modeUnavailable",

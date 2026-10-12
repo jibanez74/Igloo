@@ -135,6 +135,19 @@ describe("TrailerPreferencesCard", () => {
     ).toHaveAccessibleDescription(hint.textContent ?? "");
   });
 
+  it("words a server failure instead of showing its internal message", async () => {
+    getTrailerPreferencesMock.mockResolvedValue({
+      error: true,
+      message: "sql: database is locked",
+      status: 500,
+    });
+    renderWithQueryClient(<TrailerPreferencesCard />);
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Failed to load trailer preferences.");
+    expect(alert).not.toHaveTextContent("database is locked");
+  });
+
   it("keeps its place with a loading card, then an error card", async () => {
     getTrailerPreferencesMock.mockResolvedValue({
       error: true,

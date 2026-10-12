@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { KeyRound } from "lucide-react";
 import SettingsCardHeader from "@/components/settings/SettingsCardHeader";
+import { sessionEndedSince, sessionStamp } from "@/hooks/useEndSession";
 import { updateUserPin } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/is-api-failure";
 import {
@@ -85,10 +86,23 @@ export default function ProfilePinCard() {
     document.getElementById(fieldId)?.focus();
   };
 
+  // Drops the plaintext PIN from the cache without fetching it again, so the
+  // next reveal waits for a fresh copy ("…") instead of showing this one.
+  // resetQueries would refetch at once: the reveal's observer is still
+  // enabled while the click that hides it is handled.
+  const forgetPin = () => {
+    queryClient
+      .getQueryCache()
+      .find({ queryKey: userPinQueryOpts().queryKey, exact: true })
+      ?.reset();
+  };
+
   const pinMutation = useMutation({
     mutationFn: ({ pin, current }: { pin: string; current?: string }) =>
       updateUserPin(pin, current),
-    onSuccess: (res, variables) => {
+    onMutate: sessionStamp,
+    onSuccess: (res, variables, stamp) => {
+      if (sessionEndedSince(stamp)) return;
       const removing = variables.pin === "";
       const action = removing ? "remove PIN" : "update PIN";
 
@@ -105,11 +119,12 @@ export default function ProfilePinCard() {
       setCurrentPin("");
       setNewPin("");
       setRevealed(false);
+      forgetPin();
       setSignedInUser(queryClient, res.data.user);
-      queryClient.invalidateQueries({ queryKey: userPinQueryOpts().queryKey });
       showSuccess(removing ? "PIN removed" : "PIN saved");
     },
-    onError: (_error, variables) => {
+    onError: (_error, variables, stamp) => {
+      if (sessionEndedSince(stamp)) return;
       const removing = variables.pin === "";
       const action = removing ? "remove PIN" : "update PIN";
       showMutationError(
@@ -173,7 +188,8 @@ export default function ProfilePinCard() {
   };
 
   const handleToggleReveal = () => {
-    setRevealed(current => !current);
+    if (revealed) forgetPin();
+    setRevealed(!revealed);
   };
 
   let revealedPinDisplay = "••••";

@@ -197,6 +197,37 @@ describe("PlaybackSettingsDialog", () => {
     ).toBeGreaterThan(0);
   });
 
+  it("reports a failed technical-details load instead of offering no modes", () => {
+    prefersCoarse.value = true;
+    const queryClient = createTestQueryClient();
+    queryClient.setQueryData([MOVIE_TECHNICAL_DETAILS_KEY, 22], {
+      error: true,
+      message: "failed to read streams",
+      status: 500,
+    });
+
+    renderWithQueryClient(
+      <PlaybackSettingsDialog
+        movieId={22}
+        open
+        onOpenChange={vi.fn()}
+        settings={{ mode: "direct", audioTrack: 0, subtitleTrack: null }}
+        onSave={vi.fn()}
+      />,
+      { queryClient },
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "The movie's technical details could not be loaded.",
+    );
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(
+      screen.queryByText("No playback modes are available for this movie yet."),
+    ).toBeNull();
+    expect(screen.getByLabelText("Playback")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Done" })).toBeDisabled();
+  });
+
   it("only offers modes the source supports once technical details arrive", () => {
     prefersCoarse.value = true;
     const queryClient = createTestQueryClient();

@@ -49,6 +49,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import LoadErrorAlert from "@/components/shared/LoadErrorAlert";
+import { apiErrorMessage } from "@/lib/is-api-failure";
 import { Label } from "@/components/ui/label";
 import type { RefObject } from "react";
 import { usePrefersCoarsePointer } from "@/hooks/use-coarse-pointer";
@@ -67,6 +69,7 @@ type PlaybackSettingsDialogProps = {
 
 type ModeOption = { id: StreamModeId; label: string };
 const NO_PLAYBACK_MODES_LABEL = "No playback modes are available for this movie yet.";
+const MODES_UNAVAILABLE_LABEL = "Unavailable";
 
 type PlaybackSettingsDialogFormProps = {
   settings: PlaybackSettings;
@@ -75,6 +78,9 @@ type PlaybackSettingsDialogFormProps = {
   subtitleStreams: SubtitleType[];
   isPending: boolean;
   techLoaded: boolean;
+  /** Why the technical details failed to load; null while they load or once they have. */
+  loadError: string | null;
+  onRetry: () => void;
   prefersCoarsePointer: boolean;
   selectPortalContainer: HTMLElement | undefined;
   onSave: (settings: PlaybackSettings) => void;
@@ -88,6 +94,8 @@ function PlaybackSettingsDialogForm({
   subtitleStreams,
   isPending,
   techLoaded,
+  loadError,
+  onRetry,
   prefersCoarsePointer,
   selectPortalContainer,
   onSave,
@@ -112,10 +120,12 @@ function PlaybackSettingsDialogForm({
   const audioSelectDisabled =
     loadingSelectsDisabled || availableModes.length === 0;
   const canSave = mode !== null;
-  const modePlaceholder =
-    isPending && !techLoaded
-      ? PLAYBACK_SETTINGS_SUMMARY_LOADING
-      : NO_PLAYBACK_MODES_LABEL;
+  let modePlaceholder = NO_PLAYBACK_MODES_LABEL;
+  if (loadError) {
+    modePlaceholder = MODES_UNAVAILABLE_LABEL;
+  } else if (isPending && !techLoaded) {
+    modePlaceholder = PLAYBACK_SETTINGS_SUMMARY_LOADING;
+  }
 
   const handleSave = () => {
     if (!mode) return;
@@ -384,9 +394,14 @@ function PlaybackSettingsDialogForm({
         </div>
       </div>
 
-      <p className="mt-1 text-sm/relaxed text-muted-foreground" aria-live="polite">
-        {summaryText}
-      </p>
+      {/* A failed load is not "no modes": it says so, with a way to retry. */}
+      {loadError ? (
+        <LoadErrorAlert message={loadError} onRetry={onRetry} />
+      ) : (
+        <p className="mt-1 text-sm/relaxed text-muted-foreground" aria-live="polite">
+          {summaryText}
+        </p>
+      )}
 
       <DialogFooter className="gap-2 sm:gap-0">
         <Button
@@ -424,7 +439,12 @@ export default function PlaybackSettingsDialog({
     null,
   );
 
-  const { data, isPending } = useQuery(movieTechnicalDetailsQueryOpts(movieId));
+  const { data, isPending, refetch } = useQuery(
+    movieTechnicalDetailsQueryOpts(movieId),
+  );
+  const loadError = data?.error
+    ? apiErrorMessage(data, "The movie's technical details could not be loaded.")
+    : null;
   const { data: playbackSettingsData } = useQuery(playbackSettingsQueryOpts());
   const maxTranscodeHeight =
     playbackSettingsFromResponse(playbackSettingsData)?.max_transcode_height;
@@ -474,6 +494,8 @@ export default function PlaybackSettingsDialog({
           subtitleStreams={subtitleStreams}
           isPending={isPending}
           techLoaded={techLoaded}
+          loadError={loadError}
+          onRetry={() => void refetch()}
           prefersCoarsePointer={prefersCoarsePointer}
           selectPortalContainer={selectPortalContainer}
           onSave={draft => {

@@ -1,6 +1,6 @@
 import type { RefObject } from "react";
 import { Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -13,7 +13,10 @@ import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import { createNotification } from "@/lib/api";
 import { NOTIFICATION_TITLES } from "@/lib/constants";
 import { catalogYear } from "@/lib/format";
-import { authUserQueryOpts } from "@/lib/query-opts";
+import {
+  authUserQueryOpts,
+  invalidateNotifications,
+} from "@/lib/query-opts";
 import {
   showActionFailed,
   showCreated,
@@ -31,6 +34,7 @@ export default function RequestMovieDialog({
   onOpenChange,
   restoreFocusRef,
 }: RequestMovieDialogProps) {
+  const queryClient = useQueryClient();
   const { data: authData } = useQuery(authUserQueryOpts());
 
   async function handleConfirm(selectedResult: TmdbSearchResultType) {
@@ -62,6 +66,8 @@ export default function RequestMovieDialog({
       return;
     }
 
+    // An admin's own bell shows the request without waiting for its poll.
+    invalidateNotifications(queryClient);
     onOpenChange(false);
     window.setTimeout(() => {
       showCreated(

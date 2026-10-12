@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import type { RefObject } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
   AlertCircle,
@@ -27,6 +27,7 @@ import { formatTimecode } from "@/lib/format";
 import { apiErrorMessage } from "@/lib/is-api-failure";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import {
+  forgetWatchRoom,
   movieTechnicalDetailsQueryOpts,
   watchRoomQueryOpts,
 } from "@/lib/query-opts";
@@ -78,6 +79,7 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
     exitFullscreenIfActive,
   } = useVideoFullscreen({ containerRef, videoRef });
 
+  const queryClient = useQueryClient();
   const { data, isPending, isError } = useQuery(watchRoomQueryOpts(roomId));
   const room = data?.error === false ? data.data.room : null;
   const currentRoomId = room?.id ?? null;
@@ -112,7 +114,12 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
     videoRef,
     onCurrentTimeChange: setCurrentTime,
     onPlayingChange: setPlaying,
-    onRoomDeleted: () => navigate({ to: "/", replace: true }),
+    // The owner closed the room: leave it, and drop it from this viewer's
+    // cache so Home's list and the room's loader cannot offer it again.
+    onRoomDeleted: () =>
+      void forgetWatchRoom(queryClient, roomId, () =>
+        navigate({ to: "/", replace: true }),
+      ),
   });
 
   const subtitleTrackIndex = room?.subtitle_track ?? null;
@@ -253,9 +260,11 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
   });
   const { showShortcutHints } = useShortcutHints();
 
+  // Returned so the delete dialog waits for the page to go before it drops
+  // the room's cache entry.
   const handleOwnerDeleteSuccess = () => {
     closeRoomConnection();
-    navigate({ to: "/", replace: true });
+    return navigate({ to: "/", replace: true });
   };
 
   if (isPending) {

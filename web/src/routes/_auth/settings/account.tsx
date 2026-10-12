@@ -34,7 +34,6 @@ import SettingsCardHeader from "@/components/settings/SettingsCardHeader";
 import SettingsErrorCard from "@/components/settings/SettingsErrorCard";
 import SettingsLoadingCard from "@/components/settings/SettingsLoadingCard";
 import {
-  adminUsersQueryOpts,
   authUserFrom,
   authUserQueryOpts,
   setSignedInUser,
@@ -61,13 +60,17 @@ import {
   showError,
   showActionFailed,
 } from "@/lib/toast-helpers";
-import { useNavigate } from "@tanstack/react-router";
 import { lightInputClassName } from "@/lib/input-styles";
 import { cn, codePointLength, describedBy, getInitials } from "@/lib/utils";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import QuickConnectApproveCard from "@/components/settings/QuickConnectApproveCard";
 import DevicesCard from "@/components/settings/DevicesCard";
 import ProfilePinCard from "@/components/settings/ProfilePinCard";
+import {
+  sessionEndedSince,
+  sessionStamp,
+  useEndSession,
+} from "@/hooks/useEndSession";
 import { routeHead } from "@/lib/route-head";
 import { apiErrorMessage } from "@/lib/is-api-failure";
 
@@ -90,6 +93,9 @@ type AccountErrorField =
 
 type AccountErrors = Partial<Record<AccountErrorField, string>>;
 
+/** The avatar an optimistic URL change wrote, and the one it replaced. */
+type AvatarRollback = { optimistic: string; previous: string | null };
+
 const MAX_AVATAR_SIZE = 20 * 1024 * 1024;
 const ALLOWED_AVATAR_TYPES = [
   "image/jpeg",
@@ -100,7 +106,7 @@ const ALLOWED_AVATAR_TYPES = [
 
 function AccountSettings() {
   const { queryClient } = Route.useRouteContext();
-  const navigate = useNavigate();
+  const endSession = useEndSession();
   const authQuery = authUserQueryOpts();
   const authKey = authQuery.queryKey;
   const { data: userData, isLoading } = useQuery(authQuery);
@@ -164,20 +170,22 @@ function AccountSettings() {
   // Name update mutation
   const updateNameMutation = useMutation({
     mutationFn: (newName: string) => updateUserName(newName),
-    onError: err => {
+    onMutate: sessionStamp,
+    onError: (err, _newName, stamp) => {
+      if (sessionEndedSince(stamp)) return;
       showActionFailed(
         "update name",
         err instanceof Error ? err.message : "An error occurred",
       );
     },
-    onSuccess: async res => {
+    onSuccess: (res, _newName, stamp) => {
+      if (sessionEndedSince(stamp)) return;
       if (res.error) {
         setErrors(current => ({
           ...current,
           name: apiErrorMessage(res, "Failed to update name."),
         }));
         showActionFailed("update name", res);
-        await queryClient.invalidateQueries({ queryKey: authKey });
       } else {
         clearError("name");
         showSuccess("Name updated successfully");
@@ -189,20 +197,22 @@ function AccountSettings() {
   // Email update mutation
   const updateEmailMutation = useMutation({
     mutationFn: (newEmail: string) => updateUserEmail(newEmail),
-    onError: err => {
+    onMutate: sessionStamp,
+    onError: (err, _newEmail, stamp) => {
+      if (sessionEndedSince(stamp)) return;
       showActionFailed(
         "update email",
         err instanceof Error ? err.message : "An error occurred",
       );
     },
-    onSuccess: async res => {
+    onSuccess: (res, _newEmail, stamp) => {
+      if (sessionEndedSince(stamp)) return;
       if (res.error) {
         setErrors(current => ({
           ...current,
           email: apiErrorMessage(res, "Failed to update email."),
         }));
         showActionFailed("update email", res);
-        await queryClient.invalidateQueries({ queryKey: authKey });
       } else {
         clearError("email");
         showSuccess("Email updated successfully");
@@ -247,12 +257,33 @@ function AccountSettings() {
     },
   });
 
+  // A refused change leaves the server's user as it was, so the cached one
+  // stays right too; only the optimistic avatar needs undoing. It is undone
+  // on the user cached now, and only while it still shows: a name change or
+  // upload that saved meanwhile stays.
+  const restoreAvatar = (rollback: AvatarRollback | undefined) => {
+    const current = queryClient.getQueryData(authKey);
+    if (
+      !rollback ||
+      current?.error !== false ||
+      current.data.user.avatar !== rollback.optimistic
+    ) {
+      return;
+    }
+    queryClient.setQueryData(authKey, {
+      ...current,
+      data: { user: { ...current.data.user, avatar: rollback.previous } },
+    });
+  };
+
   // Avatar URL update mutation with optimistic updates
   const updateAvatarUrlMutation = useMutation({
     mutationFn: (avatar: string) => updateUserAvatar(avatar),
     onMutate: async newAvatar => {
+      const stamp = sessionStamp();
       await queryClient.cancelQueries({ queryKey: authKey });
       const previousData = queryClient.getQueryData(authKey);
+      let rollback: AvatarRollback | undefined;
 
       if (previousData?.error === false) {
         queryClient.setQueryData(authKey, {
@@ -261,63 +292,62 @@ function AccountSettings() {
             user: { ...previousData.data.user, avatar: newAvatar },
           },
         });
+        rollback = {
+          optimistic: newAvatar,
+          previous: previousData.data.user.avatar,
+        };
       }
 
-      return { previousData };
+      return { ...stamp, rollback };
     },
     onError: (err, _newAvatar, context) => {
-      if (context?.previousData) {
-        queryClient.setQueryData(authKey, context.previousData);
-      }
+      if (sessionEndedSince(context)) return;
+      restoreAvatar(context?.rollback);
       showActionFailed(
         "update avatar",
         err instanceof Error ? err.message : "An error occurred",
       );
     },
-    onSuccess: res => {
+    onSuccess: (res, _newAvatar, context) => {
+      if (sessionEndedSince(context)) return;
       if (res.error) {
+        restoreAvatar(context?.rollback);
         setErrors(current => ({
           ...current,
           avatarUrl: apiErrorMessage(res, "Failed to update avatar."),
         }));
         showActionFailed("update avatar", res);
-        queryClient.invalidateQueries({ queryKey: authKey });
       } else {
         clearError("avatarUrl");
         showSuccess("Avatar updated successfully");
         setAvatarUrl("");
-        queryClient.invalidateQueries({
-          queryKey: adminUsersQueryOpts().queryKey,
-        });
+        // The server's copy replaces the optimistic one: it is what was
+        // stored, and the admin user list shows it too.
+        setSignedInUser(queryClient, res.data.user);
       }
     },
   });
 
-  // Avatar upload mutation with optimistic updates
+  // Avatar upload mutation: the server returns the user with the stored
+  // avatar, which replaces the cached one.
   const uploadAvatarMutation = useMutation({
     mutationFn: (file: File) => uploadUserAvatar(file),
-    onMutate: async () => {
-      await queryClient.cancelQueries({ queryKey: authKey });
-      const previousData = queryClient.getQueryData(authKey);
-      return { previousData };
-    },
-    onError: (err, _file, context) => {
-      if (context?.previousData) {
-        queryClient.setQueryData(authKey, context.previousData);
-      }
+    onMutate: sessionStamp,
+    onError: (err, _file, stamp) => {
+      if (sessionEndedSince(stamp)) return;
       showActionFailed(
         "upload avatar",
         err instanceof Error ? err.message : "An error occurred",
       );
     },
-    onSuccess: res => {
+    onSuccess: (res, _file, stamp) => {
+      if (sessionEndedSince(stamp)) return;
       if (res.error) {
         setErrors(current => ({
           ...current,
           avatarUpload: apiErrorMessage(res, "Failed to upload avatar."),
         }));
         showActionFailed("upload avatar", res);
-        queryClient.invalidateQueries({ queryKey: authKey });
       } else {
         clearError("avatarUpload");
         showSuccess("Avatar uploaded successfully");
@@ -484,8 +514,7 @@ function AccountSettings() {
         }
 
         showSuccess("Account deleted successfully");
-        queryClient.removeQueries();
-        await navigate({ to: "/login", replace: true });
+        await endSession();
       } catch {
         showError("Failed to delete account");
         setDeleteDialogOpen(false);

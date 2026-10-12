@@ -86,10 +86,10 @@ export default function QuickConnectApproveCard() {
     useState<QuickConnectLookupType | null>(null);
   const [connectedName, setConnectedName] = useState<string | null>(null);
 
-  // Read only inside the devices query's refetchInterval callback, never
-  // rendered — refs keep them current without re-rendering the card.
-  const knownDeviceIdsRef = useRef<number[] | null>(null);
-  const waitDeadlineRef = useRef<number | null>(null);
+  // The devices the account had before the approval, so the new one stands
+  // out. Null until known: when the approval could not read them first, the
+  // first poll supplies them.
+  const [knownDeviceIds, setKnownDeviceIds] = useState<number[] | null>(null);
 
   const codeInputRef = useRef<HTMLInputElement | null>(null);
   const stepHeadingRef = useRef<HTMLHeadingElement | null>(null);
@@ -166,8 +166,7 @@ export default function QuickConnectApproveCard() {
       }
 
       setError(null);
-      knownDeviceIdsRef.current = baselineDeviceIds;
-      waitDeadlineRef.current = Date.now() + WAIT_FOR_DEVICE_MS;
+      setKnownDeviceIds(baselineDeviceIds);
       setStep("waiting");
     },
     onError: () => {
@@ -178,56 +177,60 @@ export default function QuickConnectApproveCard() {
   });
 
   // While waiting, poll the shared devices query; DevicesCard observes the
-  // same key, so its list updates live as soon as the device finishes. The
-  // interval callback runs after every fetch, which makes it the natural
-  // place to spot the new device (or give up at the deadline) and stop.
-  useQuery({
+  // same key, so its list updates live as soon as the device finishes.
+  const waiting = step === "waiting";
+  const { data: devicesData } = useQuery({
     ...devicesQueryOpts(),
-    enabled: step === "waiting",
+    enabled: waiting,
     staleTime: 0,
-    refetchInterval: query => {
-      if (step !== "waiting") return false;
-
-      const data = query.state.data;
-      const devices =
-        data && data.error === false && data.data?.devices
-          ? data.data.devices
-          : null;
-      if (!devices) {
-        return 2000;
-      }
-
-      const currentKnownDeviceIds = knownDeviceIdsRef.current;
-      if (currentKnownDeviceIds === null) {
-        knownDeviceIdsRef.current = devices.map(device => device.id);
-        return 2000;
-      }
-
-      const fresh = devices.find(
-        device =>
-          // One user's own devices - a handful of entries, and inside a 2s poll rather
-          // than a render path.
-          // react-doctor-disable-next-line react-doctor/js-set-map-lookups
-          !currentKnownDeviceIds.includes(device.id) &&
-          matchesPendingDevice(device, pendingDevice),
-      );
-      if (fresh) {
-        setConnectedName(fresh.name);
-        setStep("done");
-        showSuccess("Device connected", `${fresh.name} is now signed in.`);
-        return false;
-      }
-
-      const waitDeadline = waitDeadlineRef.current;
-      if (waitDeadline !== null && Date.now() > waitDeadline) {
-        setConnectedName(null);
-        setStep("done");
-        return false;
-      }
-
-      return 2000;
-    },
+    refetchInterval: waiting ? 2000 : false,
   });
+  const polledDevices =
+    waiting && devicesData?.error === false ? devicesData.data.devices : null;
+
+  // State adjusted while rendering rather than in an effect: the first good
+  // poll supplies the baseline when the approval could not, and a matching
+  // device absent from it is the one that just signed in.
+  if (polledDevices && knownDeviceIds === null) {
+    setKnownDeviceIds(polledDevices.map(device => device.id));
+  }
+  const connectedDevice =
+    polledDevices && knownDeviceIds
+      ? polledDevices.find(
+          device =>
+            // One user's own devices: a handful of entries.
+            // react-doctor-disable-next-line react-doctor/js-set-map-lookups
+            !knownDeviceIds.includes(device.id) &&
+            matchesPendingDevice(device, pendingDevice),
+        )
+      : undefined;
+  if (connectedDevice) {
+    setConnectedName(connectedDevice.name);
+    setStep("done");
+  }
+
+  useEffect(() => {
+    if (step === "done" && connectedName) {
+      showSuccess("Device connected", `${connectedName} is now signed in.`);
+    }
+  }, [step, connectedName]);
+
+  // Stop waiting after the deadline whatever the polls return, failures
+  // included. The device can still finish later, so the devices list is
+  // marked stale rather than left showing the rows from before the approval.
+  useEffect(() => {
+    if (!waiting) return;
+
+    const timeout = window.setTimeout(() => {
+      setConnectedName(null);
+      setStep("done");
+      void queryClient.invalidateQueries({
+        queryKey: devicesQueryOpts().queryKey,
+      });
+    }, WAIT_FOR_DEVICE_MS);
+
+    return () => window.clearTimeout(timeout);
+  }, [waiting, queryClient]);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -256,8 +259,7 @@ export default function QuickConnectApproveCard() {
   const handleReset = () => {
     setCode("");
     setPendingDevice(null);
-    knownDeviceIdsRef.current = [];
-    waitDeadlineRef.current = null;
+    setKnownDeviceIds(null);
     setConnectedName(null);
     setError(null);
     setStep("enter");

@@ -16,6 +16,7 @@ import type {
   SortOrder,
   WatchProgressType,
 } from "@/types";
+import { unwrapApiData } from "@/lib/is-api-failure";
 import { movieMediaRef } from "@/lib/media-ref";
 import type { PlaylistKind, PlaylistPickerRow } from "@/lib/playlist-kinds";
 import {
@@ -203,13 +204,14 @@ export function setSignedInUser(queryClient: QueryClient, user: AuthUser) {
 /**
  * The current user's plaintext profile PIN (session-only endpoint). Fetched on
  * demand when the user reveals the PIN in account settings — always refetch so
- * a stale PIN is never shown.
+ * a stale PIN is never shown, and never kept once nothing shows it.
  */
 export function userPinQueryOpts() {
   return queryOptions({
     queryKey: [USER_PIN_KEY],
     queryFn: getUserPin,
     staleTime: 0,
+    gcTime: 0,
   });
 }
 
@@ -243,6 +245,16 @@ export function notificationsQueryOpts() {
     queryKey: [NOTIFICATIONS_KEY],
     queryFn: getNotifications,
     staleTime: 0,
+  });
+}
+
+/** Marks the notification list and the bell's unread count stale. */
+export function invalidateNotifications(queryClient: QueryClient) {
+  void queryClient.invalidateQueries({
+    queryKey: notificationsQueryOpts().queryKey,
+  });
+  void queryClient.invalidateQueries({
+    queryKey: unreadNotificationCountQueryOpts().queryKey,
   });
 }
 
@@ -606,8 +618,10 @@ export function albumsPaginatedQueryOpts(
 // Refetching an infinite list replays every page it holds, one request after
 // another: after scrolling a large library, dozens per window focus. These
 // lists change through scans and playlist edits, which invalidate them, so
-// they skip the focus refetch. freshFor would never see a failure in
-// { pages } data, so they take a plain staleTime.
+// they skip the focus refetch. A page cannot hold a failure envelope, so their
+// pages unwrap it and throw ApiFailureError: a failed page is a query error
+// (retried, then offered again) and never ends the list early. With no
+// envelope cached they take a plain staleTime.
 const INFINITE_LIST_CACHE = {
   staleTime: STALE_LIST,
   refetchOnWindowFocus: false,
@@ -616,12 +630,11 @@ const INFINITE_LIST_CACHE = {
 export function tracksInfiniteQueryOpts(pageSize = TRACKS_INFINITE_PAGE_SIZE) {
   return infiniteQueryOptions({
     queryKey: [TRACKS_INFINITE_KEY, pageSize],
-    queryFn: ({ pageParam = 0 }) => getTracksPaginated(pageSize, pageParam),
+    queryFn: async ({ pageParam }) =>
+      unwrapApiData(await getTracksPaginated(pageSize, pageParam)),
     initialPageParam: 0,
-    getNextPageParam: lastPage => {
-      if (lastPage.error || !lastPage.data?.has_more) return undefined;
-      return lastPage.data.offset + lastPage.data.limit;
-    },
+    getNextPageParam: lastPage =>
+      lastPage.has_more ? lastPage.offset + lastPage.limit : undefined,
     ...INFINITE_LIST_CACHE,
   });
 }
@@ -700,13 +713,11 @@ export function playlistTracksInfiniteQueryOpts(
 ) {
   return infiniteQueryOptions({
     queryKey: [PLAYLIST_TRACKS_KEY, playlistId, pageSize],
-    queryFn: ({ pageParam = 0 }) =>
-      getPlaylistTracks(playlistId, pageSize, pageParam),
+    queryFn: async ({ pageParam }) =>
+      unwrapApiData(await getPlaylistTracks(playlistId, pageSize, pageParam)),
     initialPageParam: 0,
-    getNextPageParam: lastPage => {
-      if (lastPage.error || !lastPage.data?.has_more) return undefined;
-      return lastPage.data.next_offset;
-    },
+    getNextPageParam: lastPage =>
+      lastPage.has_more ? lastPage.next_offset : undefined,
     enabled: playlistId > 0,
     ...INFINITE_LIST_CACHE,
   });
@@ -723,7 +734,8 @@ export function moviePlaylistsQueryOpts() {
 // The picker in AddToPlaylistDialog reads the library's own playlists list
 // under its own key, so it shares the cache with that library's Playlists tab,
 // and keeps only what it shows: the name, whether the viewer may add to it,
-// and how many items it holds.
+// and how many items it holds. A failed load selects null, so the picker can
+// tell it from a library with no playlists.
 export function playlistPickerQueryOpts(kind: PlaylistKind) {
   return queryOptions({
     queryKey: [kind === "music" ? PLAYLISTS_KEY : MOVIE_PLAYLISTS_KEY],
@@ -731,8 +743,8 @@ export function playlistPickerQueryOpts(kind: PlaylistKind) {
       | ApiResponseType<PlaylistsListResponseType>
       | ApiResponseType<MoviePlaylistsListResponseType>
     > => (kind === "music" ? getPlaylists() : getMoviePlaylists()),
-    select: (data): PlaylistPickerRow[] =>
-      data.error ? [] : data.data.playlists.map(toPlaylistPickerRow),
+    select: (data): PlaylistPickerRow[] | null =>
+      data.error ? null : data.data.playlists.map(toPlaylistPickerRow),
     staleTime: freshFor(STALE_LIST),
   });
 }
@@ -872,6 +884,41 @@ export function watchRoomQueryOpts(id: number) {
     enabled: id > 0,
     staleTime: freshFor(STALE_30S),
   });
+}
+
+/**
+ * Drops a closed watch room from the cache: out of the rooms list at once,
+ * then its own entry, so the room's loader can never serve it again. The
+ * room's page observes that entry, and removing it there makes the page
+ * refetch the deleted room, so `leaveRoomPage` (when the page is open) runs
+ * in between.
+ */
+export async function forgetWatchRoom(
+  queryClient: QueryClient,
+  roomId: number,
+  leaveRoomPage?: () => unknown,
+) {
+  const roomsKey = watchRoomsQueryOpts().queryKey;
+  const rooms = queryClient.getQueryData(roomsKey);
+  if (rooms?.error === false) {
+    queryClient.setQueryData(roomsKey, {
+      ...rooms,
+      data: {
+        ...rooms.data,
+        rooms: rooms.data.rooms.filter(room => room.id !== roomId),
+      },
+    });
+  }
+  void queryClient.invalidateQueries({ queryKey: roomsKey });
+
+  try {
+    await leaveRoomPage?.();
+  } finally {
+    queryClient.removeQueries({
+      queryKey: watchRoomQueryOpts(roomId).queryKey,
+      exact: true,
+    });
+  }
 }
 
 export function watchRoomInviteUsersQueryOpts(enabled: boolean = true) {

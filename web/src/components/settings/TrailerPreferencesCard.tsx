@@ -30,6 +30,7 @@ import {
   tmdbStatusQueryOpts,
   trailerPreferencesQueryOpts,
 } from "@/lib/query-opts";
+import { apiErrorMessage } from "@/lib/is-api-failure";
 import { showActionFailed } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
 import type {
@@ -80,6 +81,11 @@ export default function TrailerPreferencesCard() {
   const sourceId = useId();
   const sourceHintId = useId();
 
+  // Undoes the optimistic write when the save is refused or fails.
+  const restorePrefs = (previousData: typeof data) => {
+    if (previousData) queryClient.setQueryData(prefsKey, previousData);
+  };
+
   const saveMutation = useMutation({
     mutationFn: ({ prefs }: SaveVariables) => updateTrailerPreferences(prefs),
     onMutate: async ({ prefs }) => {
@@ -90,9 +96,7 @@ export default function TrailerPreferencesCard() {
     },
     onSuccess: (res, variables, context) => {
       if (res.error) {
-        if (context?.previousData) {
-          queryClient.setQueryData(prefsKey, context.previousData);
-        }
+        restorePrefs(context?.previousData);
         showActionFailed("save trailer preferences", res);
         return;
       }
@@ -105,9 +109,7 @@ export default function TrailerPreferencesCard() {
       setAnnouncementKey((current) => current + 1);
     },
     onError: (_error, _variables, context) => {
-      if (context?.previousData) {
-        queryClient.setQueryData(prefsKey, context.previousData);
-      }
+      restorePrefs(context?.previousData);
       showActionFailed(
         "save trailer preferences",
         "An unexpected error occurred",
@@ -123,7 +125,7 @@ export default function TrailerPreferencesCard() {
     return (
       <SettingsErrorCard
         title="Trailer preferences unavailable"
-        message={data?.message || "Failed to load trailer preferences."}
+        message={apiErrorMessage(data, "Failed to load trailer preferences.")}
       />
     );
   }

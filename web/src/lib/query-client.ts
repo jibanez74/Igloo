@@ -1,6 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import type { DefaultOptions } from "@tanstack/react-query";
-import { isApiFailure } from "@/lib/is-api-failure";
+import { ApiFailureError, isApiFailure } from "@/lib/is-api-failure";
 
 /**
  * TanStack Query cache tuning (v5: `gcTime` replaces former `cacheTime`).
@@ -42,12 +42,30 @@ export function freshFor(ms: number) {
     isApiFailure(query.state.data) ? Math.min(ms, FAILURE_STALE_MS) : ms;
 }
 
+/**
+ * Retry only sees thrown errors, and nearly every query caches its failure
+ * envelope instead. The infinite lists throw ApiFailureError: a server or
+ * network failure (the client stamps a network error 500) is tried twice
+ * more, a 4xx never. Anything else that throws is not retried.
+ */
+function retryServerFailures(failureCount: number, error: unknown) {
+  return (
+    failureCount < 2 &&
+    error instanceof ApiFailureError &&
+    (error.failure.status ?? 500) >= 500
+  );
+}
+
 /** The app's QueryClient. `overrides` layer per section on top of the defaults. */
 export function createQueryClient(overrides: DefaultOptions = {}) {
   return new QueryClient({
     defaultOptions: {
       ...overrides,
-      queries: { gcTime: GC_DEFAULT, ...overrides.queries },
+      queries: {
+        gcTime: GC_DEFAULT,
+        retry: retryServerFailures,
+        ...overrides.queries,
+      },
     },
   });
 }

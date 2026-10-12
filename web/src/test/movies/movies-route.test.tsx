@@ -403,6 +403,20 @@ describe("movies route genres", () => {
   });
 });
 
+describe("movies route genre failures", () => {
+  it("leaves a failed genre list to its alert instead of announcing it empty", async () => {
+    // Genre 11's movies are not mocked, so the list request fails with a 500.
+    await renderMoviesRoute("/movies/?tab=genres&genreId=11");
+
+    expect(
+      await screen.findByText("Couldn’t load movies for this genre."),
+    ).toBeInTheDocument();
+    // LiveAnnouncer speaks 100 ms after its message changes.
+    await new Promise(resolve => setTimeout(resolve, 150));
+    expect(screen.queryByText("No movies in this genre")).not.toBeInTheDocument();
+  });
+});
+
 describe("movies route focus restoration", () => {
   it("restores focus to the selected genre button after clearing the filter", async () => {
     const user = userEvent.setup();

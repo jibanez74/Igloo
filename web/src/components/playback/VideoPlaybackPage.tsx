@@ -230,6 +230,8 @@ export default function VideoPlaybackPage({
   const {
     techPending,
     techLoaded,
+    techError,
+    refetchTech,
     directPlayAvailable,
     playbackPreferencesReady,
     watchProgressData,
@@ -272,6 +274,7 @@ export default function VideoPlaybackPage({
     hasDetails: !notFound && !detailsPending,
     requestedMode: mode,
     techPending,
+    techError,
     playbackPreferencesReady,
     modeUnavailable,
     playbackError,
@@ -281,9 +284,10 @@ export default function VideoPlaybackPage({
   // Fetched from the first render, alongside watch progress, so the queue is
   // normally known before the resume decision lands; a slow or failed request
   // resolves to an error envelope and the movie starts as it always did.
+  // The override replaces the factory's own `id > 0` guard, so it repeats it.
   const prerollQuery = useQuery({
     ...moviePrerollQueryOpts(id),
-    enabled: prerollPhase,
+    enabled: prerollPhase && id > 0,
   });
   const prerollTrailers =
     prerollQuery.data?.error === false
@@ -906,6 +910,7 @@ export default function VideoPlaybackPage({
         mediaNoun={kind}
         onBack={handleBack}
         onRetry={() => {
+          if (techError) void refetchTech();
           resetRecovery();
           // Try again remounts the player paused, as it always has.
           carriedPlayRef.current = false;

@@ -83,6 +83,8 @@ export const Route = createFileRoute("/_auth/movies/$id/")({
       context.queryClient.ensureQueryData(
         movieWatchProgressQueryOpts(movieId),
       ),
+      // The Play link's default mode reads the server's playback settings.
+      context.queryClient.ensureQueryData(playbackSettingsQueryOpts()),
     ]);
 
     const movie = details.error ? null : details.data.movie;

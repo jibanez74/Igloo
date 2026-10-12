@@ -1,5 +1,6 @@
 import { useEffect, useEffectEvent, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { apiErrorMessage } from "@/lib/is-api-failure";
 import { mediaKey } from "@/lib/media-ref";
 import {
   getAvailableModes,
@@ -69,9 +70,11 @@ export function useVideoPlaybackData({
   const mode: StreamModeId = search.mode ?? "direct";
   const provisionalMode = resolveModeForAudioTrack(mode, audioTrack);
 
-  const { data: techData, isPending: techPending } = useQuery(
-    mediaTechnicalDetailsQueryOpts(media),
-  );
+  const {
+    data: techData,
+    isPending: techPending,
+    refetch: refetchTech,
+  } = useQuery(mediaTechnicalDetailsQueryOpts(media));
   const { data: watchProgressData, isPending: watchProgressPending } = useQuery(
     mediaWatchProgressQueryOpts(media),
   );
@@ -91,6 +94,12 @@ export function useVideoPlaybackData({
     serverPlaybackSettings,
   );
   const techPayload = techData?.error === false ? techData.data : null;
+  const techError = techData?.error
+    ? apiErrorMessage(
+        techData,
+        `The ${media.kind}'s technical details could not be loaded.`,
+      )
+    : null;
   const techLoaded = !techPending && techPayload != null;
   const techFile = techPayload ? playbackTechnicalFile(techPayload) : null;
   const videoStreams = techPayload?.video_streams ?? [];
@@ -251,6 +260,8 @@ export function useVideoPlaybackData({
   return {
     techPending,
     techLoaded,
+    techError,
+    refetchTech,
     directPlayAvailable,
     playbackPreferencesReady,
     watchProgressData,
