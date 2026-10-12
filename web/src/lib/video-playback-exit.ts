@@ -1,6 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import {
   CONTINUE_WATCHING_KEY,
+  EPISODE_KEY,
   PLAYBACK_EXIT_SYNC_TIMEOUT_MS,
   SHOW_SEASON_EPISODES_KEY,
 } from "@/lib/constants";
@@ -30,6 +31,23 @@ export function watchListQueryKeys(media: PlaybackMediaRef) {
     : [[CONTINUE_WATCHING_KEY], [SHOW_SEASON_EPISODES_KEY]];
 }
 
+// An episode's entry carries `next_episode`, the episode after it with this
+// user's progress, which the up-next card resumes from. A change to one
+// episode's progress therefore dates the entry of the episode before it,
+// which the caller cannot name, so every cached episode is marked stale.
+// Nothing refetches here: a play page refetches its entry when it mounts,
+// and the episode playing now keeps the entry it is showing.
+export function markNextEpisodesStale(
+  queryClient: QueryClient,
+  media: PlaybackMediaRef,
+) {
+  if (media.kind !== "episode") return Promise.resolve();
+  return queryClient.invalidateQueries({
+    queryKey: [EPISODE_KEY],
+    refetchType: "none",
+  });
+}
+
 // Every watch-related cache must refresh on exit: the media's own
 // watch-progress entry (staleTime 30s) feeds the Resume dialog when the play
 // page is reopened right away, plus the lists above. Exit refetches the lists
@@ -47,6 +65,7 @@ export function refreshWatchQueries(
     queryClient.invalidateQueries({
       queryKey: mediaWatchProgressQueryKey(media),
     }),
+    markNextEpisodesStale(queryClient, media),
   ]);
 }
 

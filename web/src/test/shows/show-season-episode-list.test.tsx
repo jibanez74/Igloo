@@ -2,7 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import ShowSeasonEpisodeList from "@/components/shows/ShowSeasonEpisodeList";
-import { CONTINUE_WATCHING_KEY } from "@/lib/constants";
+import { CONTINUE_WATCHING_KEY, EPISODE_KEY } from "@/lib/constants";
 import {
   countFetchRequests,
   deferredResponse,
@@ -201,6 +201,38 @@ describe("ShowSeasonEpisodeList", () => {
       expect(invalidateSpy).toHaveBeenCalledWith(
         expect.objectContaining({ queryKey: [CONTINUE_WATCHING_KEY] }),
       );
+    });
+  });
+
+  // E1's player offers E2 as up next from E1's own cached entry, so marking
+  // E2 must date that entry or the card resumes E2 from its old position.
+  it("marks the previous episode's up-next stale after marking an episode watched", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) =>
+        requestURL(input) === "/api/shows/episodes/70101/watch-progress/watched"
+          ? jsonResponse({
+              error: false,
+              data: { episode_id: 70101, watched: true },
+            })
+          : jsonResponse({ error: false, data: seasonWithProgress() }),
+      ),
+    );
+
+    const { queryClient } = renderWithQueryClient(
+      <ShowSeasonEpisodeList showId={SHOW_ID} seasonNumber={1} />,
+    );
+    const previousEpisodeKey = [EPISODE_KEY, 70001];
+    queryClient.setQueryData(previousEpisodeKey, { error: false, data: {} });
+
+    const row = await screen.findByRole("article", { name: /1\.\s*S1 Episode 1/ });
+    await user.click(
+      within(row).getByRole("button", { name: "Mark S1 E1 as watched" }),
+    );
+
+    await waitFor(() => {
+      expect(queryClient.getQueryState(previousEpisodeKey)?.isInvalidated).toBe(true);
     });
   });
 

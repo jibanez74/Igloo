@@ -1,7 +1,7 @@
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AudioPlayerProvider } from "@/context/AudioPlayerContext";
-import { MOVIE_CONTROLS_IDLE_MS } from "@/lib/constants";
+import { EPISODE_KEY, MOVIE_CONTROLS_IDLE_MS } from "@/lib/constants";
 import { stubMediaElement } from "../helpers/dom";
 import { authUser, nullableFloat64, nullableInt64, nullableString } from "../helpers/fixtures";
 import { jsonResponse, requestURL } from "../helpers/api";
@@ -267,6 +267,29 @@ describe("episode play route", () => {
 
     const dialog = await screen.findByRole("dialog", { name: "Resume playback?" });
     expect(dialog).toHaveTextContent("Resume from 10:00");
+  });
+
+  // The episode before this one offers it as up next from its own cached
+  // entry, which must not keep the cleared position.
+  it("dates earlier episodes' up-next when the episode starts over, keeping its own entry", async () => {
+    mockEpisodeApi({ progress: { progress_sec: 600, duration_sec: 2700 } });
+
+    const { queryClient } = await renderEpisodeRoute(
+      `/tv-shows/${SHOW_ID}/episodes/${EPISODE_ID}/play?mode=direct&audio_track=0&subtitle_track=off&start=0`,
+    );
+    const previousEpisodeKey = [EPISODE_KEY, EPISODE_ID - 1];
+    queryClient.setQueryData(previousEpisodeKey, { error: false, data: {} });
+
+    await screen.findByRole("dialog", { name: "Resume playback?" });
+    await waitFor(() => {
+      expect(queryClient.getQueryData([EPISODE_KEY, EPISODE_ID])).toBeDefined();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Start from beginning" }));
+
+    await waitFor(() => {
+      expect(queryClient.getQueryState(previousEpisodeKey)?.isInvalidated).toBe(true);
+    });
+    expect(queryClient.getQueryData([EPISODE_KEY, EPISODE_ID])).toBeDefined();
   });
 
   it("falls back to the episode's season on the show page when there is no history", async () => {
