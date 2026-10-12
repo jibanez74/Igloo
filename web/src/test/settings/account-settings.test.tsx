@@ -2,6 +2,7 @@ import type React from "react";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import { authUserFrom, authUserQueryOpts } from "@/lib/query-opts";
 import type { AuthUser } from "@/types";
 import { jsonResponse, requestURL } from "../helpers/api";
 import { passwordCases } from "../helpers/password-cases";
@@ -82,6 +83,22 @@ function setupAccountFetch(user: AuthUser = testUser()) {
       });
     }
 
+    if (url === "/api/user/name" && method === "PUT") {
+      return jsonResponse(
+        { error: true, message: "name is already taken" },
+        409,
+      );
+    }
+
+    if (url === "/api/user/avatar" && method === "PUT") {
+      // The server stores its own copy of the image and answers with it.
+      currentUser = currentUser && {
+        ...currentUser,
+        avatar: "/api/static/avatars/2-stored.webp",
+      };
+      return jsonResponse({ error: false, data: { user: currentUser } });
+    }
+
     if (url === "/api/user/avatar/upload" && method === "POST") {
       return jsonResponse({
         error: false,
@@ -109,10 +126,10 @@ function setupAccountFetch(user: AuthUser = testUser()) {
 
 async function renderAccountRoute(user = testUser()) {
   const { requests } = setupAccountFetch(user);
-  const { router } = await renderRoute("/settings/account");
+  const { router, queryClient } = await renderRoute("/settings/account");
 
   await screen.findByText("Profile Information");
-  return { requests, router };
+  return { requests, router, queryClient };
 }
 
 function requestsFor(
@@ -126,6 +143,49 @@ function requestsFor(
 }
 
 describe("Account settings", () => {
+  it("keeps the signed-in user when the server refuses a name change", async () => {
+    const user = userEvent.setup();
+    const { requests } = await renderAccountRoute();
+    const userRequestsBefore = requestsFor(requests, "GET", "/api/auth/user").length;
+
+    const nameInput = screen.getByLabelText("Name");
+    await user.clear(nameInput);
+    await user.type(nameInput, "Fox Mulder");
+    await user.click(screen.getByRole("button", { name: "Save profile" }));
+
+    await waitFor(() => {
+      expect(showActionFailedMock).toHaveBeenCalledWith(
+        "update name",
+        expect.objectContaining({ status: 409 }),
+      );
+    });
+    // A refusal changes nothing on the server, so nothing is refetched over
+    // the cached user (a network error there used to replace it).
+    expect(requestsFor(requests, "GET", "/api/auth/user")).toHaveLength(
+      userRequestsBefore,
+    );
+    expect(screen.getByText("Profile Information")).toBeInTheDocument();
+  });
+
+  it("caches the avatar the server stored rather than the URL typed in", async () => {
+    const user = userEvent.setup();
+    const { queryClient } = await renderAccountRoute();
+
+    await user.type(
+      screen.getByLabelText("Avatar image URL"),
+      "https://example.com/me.jpg",
+    );
+    await user.click(screen.getByRole("button", { name: "Set URL" }));
+
+    await waitFor(() => {
+      expect(showSuccessMock).toHaveBeenCalledWith("Avatar updated successfully");
+    });
+    expect(
+      authUserFrom(queryClient.getQueryData(authUserQueryOpts().queryKey))
+        ?.avatar,
+    ).toBe("/api/static/avatars/2-stored.webp");
+  });
+
   it.each(passwordCases)("validates $name when changing a password", async ({ password, error }) => {
     const user = userEvent.setup();
     const { requests } = await renderAccountRoute();

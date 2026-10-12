@@ -34,7 +34,6 @@ import SettingsCardHeader from "@/components/settings/SettingsCardHeader";
 import SettingsErrorCard from "@/components/settings/SettingsErrorCard";
 import SettingsLoadingCard from "@/components/settings/SettingsLoadingCard";
 import {
-  adminUsersQueryOpts,
   authUserFrom,
   authUserQueryOpts,
   setSignedInUser,
@@ -170,14 +169,13 @@ function AccountSettings() {
         err instanceof Error ? err.message : "An error occurred",
       );
     },
-    onSuccess: async res => {
+    onSuccess: res => {
       if (res.error) {
         setErrors(current => ({
           ...current,
           name: apiErrorMessage(res, "Failed to update name."),
         }));
         showActionFailed("update name", res);
-        await queryClient.invalidateQueries({ queryKey: authKey });
       } else {
         clearError("name");
         showSuccess("Name updated successfully");
@@ -195,14 +193,13 @@ function AccountSettings() {
         err instanceof Error ? err.message : "An error occurred",
       );
     },
-    onSuccess: async res => {
+    onSuccess: res => {
       if (res.error) {
         setErrors(current => ({
           ...current,
           email: apiErrorMessage(res, "Failed to update email."),
         }));
         showActionFailed("update email", res);
-        await queryClient.invalidateQueries({ queryKey: authKey });
       } else {
         clearError("email");
         showSuccess("Email updated successfully");
@@ -247,6 +244,12 @@ function AccountSettings() {
     },
   });
 
+  // A refused change leaves the server's user as it was, so the cached one
+  // stays right too; only an optimistic write needs undoing.
+  const restoreAuthUser = (previousData: typeof userData) => {
+    if (previousData) queryClient.setQueryData(authKey, previousData);
+  };
+
   // Avatar URL update mutation with optimistic updates
   const updateAvatarUrlMutation = useMutation({
     mutationFn: (avatar: string) => updateUserAvatar(avatar),
@@ -266,45 +269,36 @@ function AccountSettings() {
       return { previousData };
     },
     onError: (err, _newAvatar, context) => {
-      if (context?.previousData) {
-        queryClient.setQueryData(authKey, context.previousData);
-      }
+      restoreAuthUser(context?.previousData);
       showActionFailed(
         "update avatar",
         err instanceof Error ? err.message : "An error occurred",
       );
     },
-    onSuccess: res => {
+    onSuccess: (res, _newAvatar, context) => {
       if (res.error) {
+        restoreAuthUser(context?.previousData);
         setErrors(current => ({
           ...current,
           avatarUrl: apiErrorMessage(res, "Failed to update avatar."),
         }));
         showActionFailed("update avatar", res);
-        queryClient.invalidateQueries({ queryKey: authKey });
       } else {
         clearError("avatarUrl");
         showSuccess("Avatar updated successfully");
         setAvatarUrl("");
-        queryClient.invalidateQueries({
-          queryKey: adminUsersQueryOpts().queryKey,
-        });
+        // The server's copy replaces the optimistic one: it is what was
+        // stored, and the admin user list shows it too.
+        setSignedInUser(queryClient, res.data.user);
       }
     },
   });
 
-  // Avatar upload mutation with optimistic updates
+  // Avatar upload mutation: the server returns the user with the stored
+  // avatar, which replaces the cached one.
   const uploadAvatarMutation = useMutation({
     mutationFn: (file: File) => uploadUserAvatar(file),
-    onMutate: async () => {
-      await queryClient.cancelQueries({ queryKey: authKey });
-      const previousData = queryClient.getQueryData(authKey);
-      return { previousData };
-    },
-    onError: (err, _file, context) => {
-      if (context?.previousData) {
-        queryClient.setQueryData(authKey, context.previousData);
-      }
+    onError: err => {
       showActionFailed(
         "upload avatar",
         err instanceof Error ? err.message : "An error occurred",
@@ -317,7 +311,6 @@ function AccountSettings() {
           avatarUpload: apiErrorMessage(res, "Failed to upload avatar."),
         }));
         showActionFailed("upload avatar", res);
-        queryClient.invalidateQueries({ queryKey: authKey });
       } else {
         clearError("avatarUpload");
         showSuccess("Avatar uploaded successfully");
