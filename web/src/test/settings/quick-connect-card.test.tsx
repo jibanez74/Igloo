@@ -244,6 +244,27 @@ describe("QuickConnectApproveCard", () => {
     expect(showSuccessMock).not.toHaveBeenCalled();
   });
 
+  it("stops waiting at the deadline even while every poll fails", async () => {
+    vi.useFakeTimers();
+    renderCard();
+    getDevicesMock.mockResolvedValue({
+      error: true,
+      message: "devices query failed",
+      status: 500,
+    });
+
+    await submitCodeAndConfirm();
+    expect(screen.getByRole("status")).toHaveTextContent(/Waiting for/);
+
+    await flushAsync(32_000);
+
+    expect(screen.getByRole("status")).toHaveTextContent("Device approved");
+    // The failing poll stops with the wait instead of running on forever.
+    const pollsAtDeadline = getDevicesMock.mock.calls.length;
+    await flushAsync(10_000);
+    expect(getDevicesMock.mock.calls.length).toBe(pollsAtDeadline);
+  });
+
   it("rejects codes that are not six characters without calling the API", async () => {
     const user = userEvent.setup();
     renderCard();
