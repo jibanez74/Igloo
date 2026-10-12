@@ -47,14 +47,25 @@ function testUser(overrides: Partial<AuthUser> = {}): AuthUser {
   };
 }
 
+function isNameBody(body: unknown): body is { name: string } {
+  return (
+    typeof body === "object" &&
+    body !== null &&
+    "name" in body &&
+    typeof body.name === "string"
+  );
+}
+
 type AccountFetchOptions = {
   /** Answers the avatar URL request in place of the stored-copy reply. */
   avatarResponse?: Promise<Response>;
+  /** Saves a name change; by default the server refuses it as taken. */
+  acceptName?: boolean;
 };
 
 function setupAccountFetch(
   user: AuthUser = testUser(),
-  { avatarResponse }: AccountFetchOptions = {},
+  { avatarResponse, acceptName = false }: AccountFetchOptions = {},
 ) {
   const requests: CapturedRequest[] = [];
   let currentUser: AuthUser | null = user;
@@ -92,6 +103,10 @@ function setupAccountFetch(
     }
 
     if (url === "/api/user/name" && method === "PUT") {
+      if (acceptName && currentUser && isNameBody(body)) {
+        currentUser = { ...currentUser, name: body.name };
+        return jsonResponse({ error: false, data: { user: currentUser } });
+      }
       return jsonResponse(
         { error: true, message: "name is already taken" },
         409,
@@ -234,6 +249,46 @@ describe("Account settings", () => {
     expect(queryClient.getQueryCache().getAll()).toEqual([]);
     expect(showSuccessMock).not.toHaveBeenCalled();
     expect(showActionFailedMock).not.toHaveBeenCalled();
+  });
+
+  it("undoes only the avatar when the URL fails after a name change saved", async () => {
+    const user = userEvent.setup();
+    const avatarRequest = deferredResponse();
+    const { queryClient } = await renderAccountRoute(testUser(), {
+      avatarResponse: avatarRequest.promise,
+      acceptName: true,
+    });
+    const cachedUser = () =>
+      authUserFrom(queryClient.getQueryData(authUserQueryOpts().queryKey));
+
+    await user.type(
+      screen.getByLabelText("Avatar image URL"),
+      "https://example.com/me.jpg",
+    );
+    await user.click(screen.getByRole("button", { name: "Set URL" }));
+    await waitFor(() => {
+      expect(cachedUser()?.avatar).toBe("https://example.com/me.jpg");
+    });
+
+    const nameInput = screen.getByLabelText("Name");
+    await user.clear(nameInput);
+    await user.type(nameInput, "Fox Mulder");
+    await user.click(screen.getByRole("button", { name: "Save profile" }));
+    await waitFor(() => {
+      expect(showSuccessMock).toHaveBeenCalledWith("Name updated successfully");
+    });
+
+    avatarRequest.resolve(
+      jsonResponse({ error: true, message: "avatar unreachable" }, 422),
+    );
+    await waitFor(() => {
+      expect(showActionFailedMock).toHaveBeenCalledWith(
+        "update avatar",
+        expect.objectContaining({ status: 422 }),
+      );
+    });
+
+    expect(cachedUser()).toMatchObject({ name: "Fox Mulder", avatar: null });
   });
 
   it.each(passwordCases)("validates $name when changing a password", async ({ password, error }) => {

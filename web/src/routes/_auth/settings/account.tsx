@@ -93,6 +93,9 @@ type AccountErrorField =
 
 type AccountErrors = Partial<Record<AccountErrorField, string>>;
 
+/** The avatar an optimistic URL change wrote, and the one it replaced. */
+type AvatarRollback = { optimistic: string; previous: string | null };
+
 const MAX_AVATAR_SIZE = 20 * 1024 * 1024;
 const ALLOWED_AVATAR_TYPES = [
   "image/jpeg",
@@ -255,9 +258,22 @@ function AccountSettings() {
   });
 
   // A refused change leaves the server's user as it was, so the cached one
-  // stays right too; only an optimistic write needs undoing.
-  const restoreAuthUser = (previousData: typeof userData) => {
-    if (previousData) queryClient.setQueryData(authKey, previousData);
+  // stays right too; only the optimistic avatar needs undoing. It is undone
+  // on the user cached now, and only while it still shows: a name change or
+  // upload that saved meanwhile stays.
+  const restoreAvatar = (rollback: AvatarRollback | undefined) => {
+    const current = queryClient.getQueryData(authKey);
+    if (
+      !rollback ||
+      current?.error !== false ||
+      current.data.user.avatar !== rollback.optimistic
+    ) {
+      return;
+    }
+    queryClient.setQueryData(authKey, {
+      ...current,
+      data: { user: { ...current.data.user, avatar: rollback.previous } },
+    });
   };
 
   // Avatar URL update mutation with optimistic updates
@@ -267,6 +283,7 @@ function AccountSettings() {
       const stamp = sessionStamp();
       await queryClient.cancelQueries({ queryKey: authKey });
       const previousData = queryClient.getQueryData(authKey);
+      let rollback: AvatarRollback | undefined;
 
       if (previousData?.error === false) {
         queryClient.setQueryData(authKey, {
@@ -275,13 +292,17 @@ function AccountSettings() {
             user: { ...previousData.data.user, avatar: newAvatar },
           },
         });
+        rollback = {
+          optimistic: newAvatar,
+          previous: previousData.data.user.avatar,
+        };
       }
 
-      return { ...stamp, previousData };
+      return { ...stamp, rollback };
     },
     onError: (err, _newAvatar, context) => {
       if (sessionEndedSince(context)) return;
-      restoreAuthUser(context?.previousData);
+      restoreAvatar(context?.rollback);
       showActionFailed(
         "update avatar",
         err instanceof Error ? err.message : "An error occurred",
@@ -290,7 +311,7 @@ function AccountSettings() {
     onSuccess: (res, _newAvatar, context) => {
       if (sessionEndedSince(context)) return;
       if (res.error) {
-        restoreAuthUser(context?.previousData);
+        restoreAvatar(context?.rollback);
         setErrors(current => ({
           ...current,
           avatarUrl: apiErrorMessage(res, "Failed to update avatar."),
