@@ -66,6 +66,7 @@ import {
 import { routeHead } from "@/lib/route-head";
 import { loadOnEntry } from "@/lib/route-loads";
 import SkeletonStatus from "@/components/shared/SkeletonStatus";
+import type { SortOrder } from "@/types";
 
 const MOVIES_HEAD = routeHead(
   "Movies",
@@ -386,7 +387,7 @@ function MoreMenu({
 
 type AllMoviesTabContentProps = {
   currentPage: number;
-  sort: "asc" | "desc";
+  sort: SortOrder;
 };
 
 function AllMoviesTabContent({ currentPage, sort }: AllMoviesTabContentProps) {
@@ -434,7 +435,7 @@ function AllMoviesTabContent({ currentPage, sort }: AllMoviesTabContentProps) {
 type GenresTabContentProps = {
   genreId: number | undefined;
   genresPage: number;
-  sort: "asc" | "desc";
+  sort: SortOrder;
   fallbackFocusRef: RefObject<HTMLButtonElement | null>;
 };
 
@@ -526,7 +527,7 @@ function GenresTabContent({
 type PlaylistsTabContentProps = {
   playlistsView: "liked" | undefined;
   playlistsPage: number;
-  sort: "asc" | "desc";
+  sort: SortOrder;
   focusIntentRef: MutableRefObject<PlaylistsFocusIntent | null>;
   primeEnterLikedFocus: () => void;
   playlistsTabTriggerRef: RefObject<HTMLButtonElement | null>;
@@ -668,7 +669,7 @@ const LIKED_MOVIE_NOUN = { singular: "liked movie", plural: "liked movies" };
 
 type LikedMoviesInPlaylistsTabProps = {
   playlistsPage: number;
-  sort: "asc" | "desc";
+  sort: SortOrder;
   onExitLiked: () => void;
   focusIntentRef: MutableRefObject<PlaylistsFocusIntent | null>;
 };

@@ -36,6 +36,7 @@ import {
 } from "@/lib/route-search";
 import { routeHead } from "@/lib/route-head";
 import { loadOnEntry } from "@/lib/route-loads";
+import type { SortOrder } from "@/types";
 
 const TV_SHOWS_HEAD = routeHead(
   "TV Shows",
@@ -218,7 +219,7 @@ function MoreMenu() {
 
 type AllShowsTabContentProps = {
   currentPage: number;
-  sort: "asc" | "desc";
+  sort: SortOrder;
 };
 
 function AllShowsTabContent({ currentPage, sort }: AllShowsTabContentProps) {
@@ -266,7 +267,7 @@ function AllShowsTabContent({ currentPage, sort }: AllShowsTabContentProps) {
 type GenresTabContentProps = {
   genreId: number | undefined;
   genresPage: number;
-  sort: "asc" | "desc";
+  sort: SortOrder;
   fallbackFocusRef: RefObject<HTMLButtonElement | null>;
 };
 

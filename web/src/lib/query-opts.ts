@@ -12,6 +12,7 @@ import type {
   PlaylistsListResponseType,
   PlaylistSummaryType,
   ShowEpisodeTechnicalDetailsDataType,
+  SortOrder,
   WatchProgressType,
 } from "@/types";
 import { movieMediaRef } from "@/lib/media-ref";
@@ -345,7 +346,7 @@ export function movieTechnicalDetailsQueryOpts(id: number) {
 export function moviesLibraryQueryOpts(
   page: number,
   perPage: number = MOVIES_PER_PAGE,
-  sort: "asc" | "desc" = "asc",
+  sort: SortOrder = "asc",
 ) {
   return queryOptions({
     queryKey: [MOVIES_LIBRARY_KEY, page, perPage, sort],
@@ -366,7 +367,7 @@ export function moviesByGenreQueryOpts(
   genreId: number,
   page: number,
   perPage: number = MOVIES_PER_PAGE,
-  sort: "asc" | "desc" = "asc",
+  sort: SortOrder = "asc",
 ) {
   return queryOptions({
     queryKey: [MOVIES_BY_GENRE_KEY, genreId, page, perPage, sort],
@@ -387,7 +388,7 @@ export function moviesStatsQueryOpts() {
 export function likedMoviesQueryOpts(
   page: number,
   perPage: number = MOVIES_PER_PAGE,
-  sort: "asc" | "desc" = "asc",
+  sort: SortOrder = "asc",
 ) {
   return queryOptions({
     queryKey: [MOVIES_LIKED_KEY, page, perPage, sort],
@@ -456,7 +457,7 @@ export function showSeasonEpisodesQueryOpts(
 export function showsLibraryQueryOpts(
   page: number,
   perPage: number = SHOWS_PER_PAGE,
-  sort: "asc" | "desc" = "asc",
+  sort: SortOrder = "asc",
 ) {
   return queryOptions({
     queryKey: [SHOWS_LIBRARY_KEY, page, perPage, sort],
@@ -477,7 +478,7 @@ export function showsByGenreQueryOpts(
   genreId: number,
   page: number,
   perPage: number = SHOWS_PER_PAGE,
-  sort: "asc" | "desc" = "asc",
+  sort: SortOrder = "asc",
 ) {
   return queryOptions({
     queryKey: [SHOWS_BY_GENRE_KEY, genreId, page, perPage, sort],
@@ -746,7 +747,7 @@ export function moviePlaylistMoviesQueryOpts(
   playlistId: number,
   page: number,
   perPage: number = MOVIES_PER_PAGE,
-  sort: "asc" | "desc" = "asc",
+  sort: SortOrder = "asc",
 ) {
   return queryOptions({
     queryKey: [MOVIE_PLAYLIST_MOVIES_KEY, playlistId, page, perPage, sort],

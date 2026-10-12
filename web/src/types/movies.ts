@@ -4,6 +4,7 @@ import type {
   NullableString,
 } from "./nullable";
 import type { components } from "./openapi.gen";
+import type { SortOrder } from "./api";
 
 // Movie from our library (scanned) - used for Latest Movies on home (API returns poster_path; frontend builds URL)
 export type LatestMovieType = components["schemas"]["LatestMovie"];
@@ -18,7 +19,7 @@ export type MoviesLibraryPaginatedDataType = {
   page: number;
   per_page: number;
   total_pages: number;
-  sort: "asc" | "desc";
+  sort: SortOrder;
 };
 
 /** GET /api/movies/stats */

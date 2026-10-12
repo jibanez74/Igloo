@@ -1,6 +1,11 @@
 // API RESPONSE TYPES
 // Types for API responses and router context
 
+import type { components } from "./openapi.gen";
+
+/** The `sort` query parameter the paged library lists take. */
+export type SortOrder = components["parameters"]["SortQuery"];
+
 
 // Successful API response structure
 export type ApiSuccessType<T extends Record<string, unknown>> = {
