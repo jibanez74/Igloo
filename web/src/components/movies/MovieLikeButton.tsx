@@ -8,7 +8,6 @@ import {
   FOCUS_VISIBLE_RING_CLASS,
   MOTION_MICRO_COLORS_CLASS,
   MOVIES_LIKED_KEY,
-  MOVIE_LIKE_STATUS_KEY,
 } from "@/lib/constants";
 import { movieLikeStatusQueryOpts } from "@/lib/query-opts";
 import { cn } from "@/lib/utils";
@@ -39,38 +38,28 @@ export default function MovieLikeButton({
   className = "",
 }: MovieLikeButtonProps) {
   const queryClient = useQueryClient();
-  const { data, isLoading } = useQuery(movieLikeStatusQueryOpts(movieId));
+  const likeQuery = movieLikeStatusQueryOpts(movieId);
+  const likeKey = likeQuery.queryKey;
+  const { data, isLoading } = useQuery(likeQuery);
   const isLiked =
     data?.error === false ? Boolean(data.data.is_liked) : false;
 
   const mutation = useMutation({
     mutationFn: () => toggleLikeMovie(movieId),
     onMutate: async () => {
-      await queryClient.cancelQueries({
-        queryKey: [MOVIE_LIKE_STATUS_KEY, movieId],
-      });
-      const key = [MOVIE_LIKE_STATUS_KEY, movieId] as const;
-      const previous = queryClient.getQueryData<ApiResponseType<LikeStatusPayload>>(
-        key,
-      );
+      await queryClient.cancelQueries({ queryKey: likeKey });
+      const previous = queryClient.getQueryData(likeKey);
       const nextLiked = previous?.error === false
         ? !previous.data.is_liked
         : true;
-      queryClient.setQueryData<ApiResponseType<LikeStatusPayload>>(
-        key,
-        likeStatusResponse(nextLiked),
-      );
+      queryClient.setQueryData(likeKey, likeStatusResponse(nextLiked));
       return { previous };
     },
     onError: (_err, _vars, context) => {
-      const key = [MOVIE_LIKE_STATUS_KEY, movieId] as const;
       if (context?.previous !== undefined) {
-        queryClient.setQueryData(key, context.previous);
+        queryClient.setQueryData(likeKey, context.previous);
       } else {
-        queryClient.setQueryData<ApiResponseType<LikeStatusPayload>>(
-          key,
-          likeStatusResponse(false),
-        );
+        queryClient.setQueryData(likeKey, likeStatusResponse(false));
       }
       showActionFailed(
         "update like",
@@ -78,23 +67,16 @@ export default function MovieLikeButton({
       );
     },
     onSuccess: (res, _vars, context) => {
-      const key = [MOVIE_LIKE_STATUS_KEY, movieId] as const;
       if (res.error) {
         if (context?.previous !== undefined) {
-          queryClient.setQueryData(key, context.previous);
+          queryClient.setQueryData(likeKey, context.previous);
         } else {
-          queryClient.setQueryData<ApiResponseType<LikeStatusPayload>>(
-            key,
-            likeStatusResponse(false),
-          );
+          queryClient.setQueryData(likeKey, likeStatusResponse(false));
         }
         showActionFailed("update like", res);
         return;
       }
-      queryClient.setQueryData<ApiResponseType<LikeStatusPayload>>(
-        key,
-        likeStatusResponse(res.data.is_liked),
-      );
+      queryClient.setQueryData(likeKey, likeStatusResponse(res.data.is_liked));
       // Keep the movie grid mounted — do not invalidate MOVIES_LIBRARY_KEY (refetch was
       // stealing focus / scrolling). Liked tab list only refetches when that query is active.
       void queryClient.invalidateQueries({ queryKey: [MOVIES_LIKED_KEY] });

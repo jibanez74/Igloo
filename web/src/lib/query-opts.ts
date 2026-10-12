@@ -1,4 +1,5 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import type {
   ApiResponseType,
   AuthUser,
@@ -183,6 +184,20 @@ export function authUserFrom(
   res: ApiResponseType<{ user: AuthUser }> | undefined,
 ): AuthUser | null {
   return res?.error === false ? (res.data?.user ?? null) : null;
+}
+
+/**
+ * Writes the user an account mutation returned into the shared auth entry,
+ * and marks the admin user list stale, which shows the same row.
+ */
+export function setSignedInUser(queryClient: QueryClient, user: AuthUser) {
+  queryClient.setQueryData(authUserQueryOpts().queryKey, {
+    error: false,
+    data: { user },
+  });
+  void queryClient.invalidateQueries({
+    queryKey: adminUsersQueryOpts().queryKey,
+  });
 }
 
 /**

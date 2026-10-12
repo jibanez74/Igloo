@@ -24,7 +24,6 @@ import {
   SETTINGS_SELECT_ITEM_CLASS,
   SETTINGS_SELECT_TRIGGER_CLASS,
   TRAILER_COUNT_OPTIONS,
-  TRAILER_PREFERENCES_KEY,
   TRAILER_SOURCE_OPTIONS,
 } from "@/lib/constants";
 import {
@@ -34,7 +33,6 @@ import {
 import { showActionFailed } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
 import type {
-  ApiResponseType,
   TrailerPreferencesData,
   TrailerSource,
 } from "@/types";
@@ -45,8 +43,6 @@ const ACCOUNT_SCOPE_DESCRIPTION =
 const ACCOUNT_SAVED_SUFFIX = "Saved to your account.";
 const TMDB_UNAVAILABLE_HINT =
   "In theaters trailers are unavailable because TMDB is not configured on this server. Library trailers will be used instead.";
-
-type TrailerPreferencesQueryData = ApiResponseType<TrailerPreferencesData>;
 
 type SaveVariables = {
   prefs: TrailerPreferencesData;
@@ -73,7 +69,9 @@ function isTrailerSource(value: string): value is TrailerSource {
  */
 export default function TrailerPreferencesCard() {
   const queryClient = useQueryClient();
-  const { data, isPending } = useQuery(trailerPreferencesQueryOpts());
+  const prefsQuery = trailerPreferencesQueryOpts();
+  const prefsKey = prefsQuery.queryKey;
+  const { data, isPending } = useQuery(prefsQuery);
   const { data: tmdbStatusData } = useQuery(tmdbStatusQueryOpts());
   const [announcement, setAnnouncement] = useState("");
   const [announcementKey, setAnnouncementKey] = useState(0);
@@ -85,41 +83,30 @@ export default function TrailerPreferencesCard() {
   const saveMutation = useMutation({
     mutationFn: ({ prefs }: SaveVariables) => updateTrailerPreferences(prefs),
     onMutate: async ({ prefs }) => {
-      await queryClient.cancelQueries({ queryKey: [TRAILER_PREFERENCES_KEY] });
-      const previousData =
-        queryClient.getQueryData<TrailerPreferencesQueryData>([
-          TRAILER_PREFERENCES_KEY,
-        ]);
-      queryClient.setQueryData<TrailerPreferencesQueryData>(
-        [TRAILER_PREFERENCES_KEY],
-        { error: false, data: prefs },
-      );
+      await queryClient.cancelQueries({ queryKey: prefsKey });
+      const previousData = queryClient.getQueryData(prefsKey);
+      queryClient.setQueryData(prefsKey, { error: false, data: prefs });
       return { previousData };
     },
     onSuccess: (res, variables, context) => {
       if (res.error) {
         if (context?.previousData) {
-          queryClient.setQueryData(
-            [TRAILER_PREFERENCES_KEY],
-            context.previousData,
-          );
+          queryClient.setQueryData(prefsKey, context.previousData);
         }
         showActionFailed("save trailer preferences", res);
         return;
       }
-      queryClient.setQueryData<TrailerPreferencesQueryData>(
-        [TRAILER_PREFERENCES_KEY],
-        { error: false, message: res.message, data: res.data },
-      );
+      queryClient.setQueryData(prefsKey, {
+        error: false,
+        message: res.message,
+        data: res.data,
+      });
       setAnnouncement(`${variables.announcement} ${ACCOUNT_SAVED_SUFFIX}`);
       setAnnouncementKey((current) => current + 1);
     },
     onError: (_error, _variables, context) => {
       if (context?.previousData) {
-        queryClient.setQueryData(
-          [TRAILER_PREFERENCES_KEY],
-          context.previousData,
-        );
+        queryClient.setQueryData(prefsKey, context.previousData);
       }
       showActionFailed(
         "save trailer preferences",

@@ -23,7 +23,6 @@ import SettingsLoadingCard from "@/components/settings/SettingsLoadingCard";
 import SettingsSaveBar from "@/components/settings/SettingsSaveBar";
 import { useIsMiniPlayerVisible } from "@/hooks/useIsMiniPlayerVisible";
 import {
-  GENERAL_SETTINGS_KEY,
   MINI_PLAYER_CLEARANCE_BOTTOM_CLASS,
   MOTION_SETTINGS_SURFACE_CLASS,
   SETTINGS_CARD_SURFACE_CLASS,
@@ -38,8 +37,6 @@ import {
 } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
 import type {
-  ApiResponseType,
-  GeneralSettingsResponseType,
   GeneralSettingsType,
   UpdateGeneralSettingsRequest,
 } from "@/types";
@@ -61,8 +58,6 @@ type SecretField =
   | "spotify_client_secret";
 
 type BaseURLField = "immich_base_url" | "jellyfin_base_url";
-
-type GeneralSettingsQueryData = ApiResponseType<GeneralSettingsResponseType>;
 
 function formFromSettings(
   settings: GeneralSettingsType,
@@ -184,64 +179,52 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
     }
   }
 
+  const settingsKey = generalSettingsQueryOpts().queryKey;
   const updateMutation = useMutation({
     mutationFn: updateGeneralSettings,
     onMutate: async nextSettings => {
-      await queryClient.cancelQueries({ queryKey: [GENERAL_SETTINGS_KEY] });
+      await queryClient.cancelQueries({ queryKey: settingsKey });
 
-      const previousData = queryClient.getQueryData<GeneralSettingsQueryData>([
-        GENERAL_SETTINGS_KEY,
-      ]);
+      const previousData = queryClient.getQueryData(settingsKey);
 
-      queryClient.setQueryData<GeneralSettingsQueryData>(
-        [GENERAL_SETTINGS_KEY],
-        current => {
-          if (current?.error !== false || !current.data?.settings) {
-            return current;
-          }
-
-          return {
-            ...current,
-            data: {
-              ...current.data,
-              settings: {
-                ...current.data.settings,
-                tmdb_key: trimmedOrNull(nextSettings.tmdb_key),
-                immich_base_url: trimmedOrNull(nextSettings.immich_base_url),
-                immich_api_key: trimmedOrNull(nextSettings.immich_api_key),
-                jellyfin_base_url: trimmedOrNull(
-                  nextSettings.jellyfin_base_url,
-                ),
-                jellyfin_api_key: trimmedOrNull(nextSettings.jellyfin_api_key),
-                spotify_client_id: trimmedOrNull(
-                  nextSettings.spotify_client_id,
-                ),
-                spotify_client_secret: trimmedOrNull(
-                  nextSettings.spotify_client_secret,
-                ),
-                enable_watcher: nextSettings.enable_watcher,
-                download_images: nextSettings.download_images,
-                static_dir: nextSettings.static_dir,
-                transcode_dir: nextSettings.transcode_dir,
-              },
+      if (previousData?.error === false) {
+        queryClient.setQueryData(settingsKey, {
+          ...previousData,
+          data: {
+            ...previousData.data,
+            settings: {
+              ...previousData.data.settings,
+              tmdb_key: trimmedOrNull(nextSettings.tmdb_key),
+              immich_base_url: trimmedOrNull(nextSettings.immich_base_url),
+              immich_api_key: trimmedOrNull(nextSettings.immich_api_key),
+              jellyfin_base_url: trimmedOrNull(nextSettings.jellyfin_base_url),
+              jellyfin_api_key: trimmedOrNull(nextSettings.jellyfin_api_key),
+              spotify_client_id: trimmedOrNull(nextSettings.spotify_client_id),
+              spotify_client_secret: trimmedOrNull(
+                nextSettings.spotify_client_secret,
+              ),
+              enable_watcher: nextSettings.enable_watcher,
+              download_images: nextSettings.download_images,
+              static_dir: nextSettings.static_dir,
+              transcode_dir: nextSettings.transcode_dir,
             },
-          };
-        },
-      );
+          },
+        });
+      }
 
       return { previousData };
     },
     onSuccess: (res, _nextSettings, context) => {
       if (res.error) {
         if (context?.previousData) {
-          queryClient.setQueryData([GENERAL_SETTINGS_KEY], context.previousData);
+          queryClient.setQueryData(settingsKey, context.previousData);
         }
         showActionFailed("save settings", res);
         return;
       }
 
-      queryClient.setQueryData<GeneralSettingsQueryData>(
-        [GENERAL_SETTINGS_KEY],
+      queryClient.setQueryData(
+        settingsKey,
         {
           error: false,
           message: res.message,
@@ -250,7 +233,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
           },
         },
       );
-      queryClient.invalidateQueries({ queryKey: [GENERAL_SETTINGS_KEY] });
+      queryClient.invalidateQueries({ queryKey: settingsKey });
 
       if (res.data.restart_required) {
         showSuccess(
@@ -264,7 +247,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
     },
     onError: (_error, _nextSettings, context) => {
       if (context?.previousData) {
-        queryClient.setQueryData([GENERAL_SETTINGS_KEY], context.previousData);
+        queryClient.setQueryData(settingsKey, context.previousData);
       }
       showActionFailed("save settings", "An unexpected error occurred");
     },

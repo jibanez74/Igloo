@@ -40,7 +40,6 @@ import {
   SHOW_SCAN_STATUS_KEY,
   SETTINGS_CARD_SURFACE_CLASS,
   SETTINGS_INPUT_CLASS,
-  SETTINGS_KEY,
 } from "@/lib/constants";
 import { trimmedOrNull } from "@/lib/nullable";
 import { cn } from "@/lib/utils";
@@ -115,8 +114,6 @@ type FormFeedback = {
   message: string;
   tone: "neutral" | "success" | "error";
 };
-
-type SettingsQueryData = ApiResponseType<SettingsType>;
 
 const DEFAULT_FEEDBACK: FormFeedback = {
   message: "Saved library paths are used by scan and playback features.",
@@ -270,12 +267,12 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
       setForm(formFromSettings(nextSettings));
       setValidationField(null);
       setFeedback({ message: "Library paths saved.", tone: "success" });
-      queryClient.setQueryData<SettingsQueryData>([SETTINGS_KEY], {
+      queryClient.setQueryData(settingsQueryOpts().queryKey, {
         error: false,
         message: res.message,
         data: nextSettings,
       });
-      queryClient.invalidateQueries({ queryKey: [SETTINGS_KEY] });
+      queryClient.invalidateQueries({ queryKey: settingsQueryOpts().queryKey });
       showSuccess("Library paths saved");
     },
     onError: () => {

@@ -13,7 +13,8 @@ const showSuccessMock = vi.fn();
 const showActionFailedMock = vi.fn();
 const showValidationErrorMock = vi.fn();
 
-vi.mock("@/lib/api", () => ({
+vi.mock("@/lib/api", async () => ({
+  ...(await vi.importActual<typeof import("@/lib/api")>("@/lib/api")),
   getAuthUser: (...args: unknown[]) => getAuthUserMock(...args),
   getUserPin: (...args: unknown[]) => getUserPinMock(...args),
   updateUserPin: (...args: unknown[]) => updateUserPinMock(...args),

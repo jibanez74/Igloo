@@ -14,11 +14,7 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
 } from "@/lib/api";
-import {
-  NOTIFICATION_TITLES,
-  NOTIFICATIONS_KEY,
-  NOTIFICATIONS_UNREAD_COUNT_KEY,
-} from "@/lib/constants";
+import { NOTIFICATION_TITLES } from "@/lib/constants";
 import { parseServerTimestamp } from "@/lib/format";
 import {
   notificationsQueryOpts,
@@ -27,7 +23,6 @@ import {
 import { showActionFailed } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
 import type {
-  ApiResponseType,
   NotificationListItemType,
   NotificationTitle,
   NotificationsListResponseType,
@@ -124,18 +119,18 @@ export default function NotificationBell() {
       return;
     }
 
-    queryClient.setQueryData<
-      ApiResponseType<UnreadNotificationCountResponseType>
-    >([NOTIFICATIONS_UNREAD_COUNT_KEY], {
+    queryClient.setQueryData(unreadNotificationCountQueryOpts().queryKey, {
       error: false,
       data: { unread_count: freshListData.unread_count },
     });
   }, [freshListData, queryClient]);
 
   function invalidateNotifications() {
-    void queryClient.invalidateQueries({ queryKey: [NOTIFICATIONS_KEY] });
     void queryClient.invalidateQueries({
-      queryKey: [NOTIFICATIONS_UNREAD_COUNT_KEY],
+      queryKey: notificationsQueryOpts().queryKey,
+    });
+    void queryClient.invalidateQueries({
+      queryKey: unreadNotificationCountQueryOpts().queryKey,
     });
   }
 
