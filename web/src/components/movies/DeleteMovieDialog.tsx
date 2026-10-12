@@ -6,7 +6,7 @@ import {
   CONTINUE_WATCHING_KEY,
   LIBRARY_MOVIE_DETAILS_KEY,
 } from "@/lib/constants";
-import { invalidateMovieLibraryQueries } from "@/lib/movie-library-cache";
+import { invalidateLibraryQueries } from "@/lib/library-cache";
 import { showActionFailed, showDeleted } from "@/lib/toast-helpers";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -63,7 +63,7 @@ export default function DeleteMovieDialog({
     } finally {
       // Every movie list can hold the deleted title, and so can Home's
       // continue-watching row.
-      invalidateMovieLibraryQueries(queryClient);
+      invalidateLibraryQueries(queryClient, "movies");
       void queryClient.invalidateQueries({ queryKey: [CONTINUE_WATCHING_KEY] });
     }
   }

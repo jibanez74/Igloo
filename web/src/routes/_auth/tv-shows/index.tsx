@@ -28,7 +28,6 @@ import {
   showsLibraryQueryOpts,
   showsStatsQueryOpts,
 } from "@/lib/query-opts";
-import { refreshShowLibraryCache } from "@/lib/show-library-cache";
 import { cn } from "@/lib/utils";
 import {
   showsSearchSchema,
@@ -205,8 +204,7 @@ function MoreMenu() {
   return (
     <LibraryMoreMenu open={menuOpen} onOpenChange={setMenuOpen}>
       <RefreshLibraryMenuItem
-        refresh={refreshShowLibraryCache}
-        libraryNoun="Show"
+        library="shows"
         onSettled={() => setMenuOpen(false)}
       />
     </LibraryMoreMenu>

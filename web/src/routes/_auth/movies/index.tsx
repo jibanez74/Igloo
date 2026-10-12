@@ -55,7 +55,6 @@ import {
 import LoadErrorAlert from "@/components/shared/LoadErrorAlert";
 import { nounForCount } from "@/lib/format";
 import { apiErrorMessage, isApiFailure } from "@/lib/is-api-failure";
-import { refreshMovieLibraryCache } from "@/lib/movie-library-cache";
 import { cn } from "@/lib/utils";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import RequestMovieDialog from "@/components/movies/RequestMovieDialog";
@@ -357,8 +356,7 @@ function MoreMenu({
           Movie playlists
         </DropdownMenuItem>
         <RefreshLibraryMenuItem
-          refresh={refreshMovieLibraryCache}
-          libraryNoun="Movie"
+          library="movies"
           onSettled={() => setMenuOpen(false)}
         />
         <RequestMediaMenuItem

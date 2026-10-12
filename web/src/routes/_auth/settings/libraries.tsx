@@ -1,7 +1,6 @@
 import ScanProgress from "@/components/settings/ScanProgress";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { QueryClient } from "@tanstack/react-query";
 import { Fragment, useId, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import {
@@ -32,9 +31,7 @@ import SettingsSaveBar from "@/components/settings/SettingsSaveBar";
 import { musicStatsQueryOpts, moviesStatsQueryOpts, movieScanStatusQueryOpts, musicScanStatusQueryOpts, showScanStatusQueryOpts, showsStatsQueryOpts, settingsQueryOpts } from "@/lib/query-opts";
 import { showActionFailed, showSuccess } from "@/lib/toast-helpers";
 import { triggerMusicScan, triggerMovieScan, triggerShowScan, updateLibrarySettings } from "@/lib/api";
-import { invalidateMovieLibraryQueries } from "@/lib/movie-library-cache";
-import { invalidateMusicLibraryQueries } from "@/lib/music-library-cache";
-import { invalidateShowLibraryQueries } from "@/lib/show-library-cache";
+import { invalidateLibraryQueries } from "@/lib/library-cache";
 import { useIsMiniPlayerVisible } from "@/hooks/useIsMiniPlayerVisible";
 import {
   MINI_PLAYER_CLEARANCE_BOTTOM_CLASS,
@@ -67,7 +64,6 @@ type ScanLibrary = {
   title: string;
   statusKey: string;
   trigger: () => Promise<ApiResponseType<{ message: string }>>;
-  invalidateLibrary: (queryClient: QueryClient) => void;
 };
 
 // Everything that differs between the two scannable libraries lives here;
@@ -79,7 +75,6 @@ const SCAN_LIBRARIES: Record<ImplementedScan, ScanLibrary> = {
     title: "Movies",
     statusKey: MOVIE_SCAN_STATUS_KEY,
     trigger: triggerMovieScan,
-    invalidateLibrary: invalidateMovieLibraryQueries,
   },
   music: {
     field: "music_dir",
@@ -87,7 +82,6 @@ const SCAN_LIBRARIES: Record<ImplementedScan, ScanLibrary> = {
     title: "Music",
     statusKey: MUSIC_SCAN_STATUS_KEY,
     trigger: triggerMusicScan,
-    invalidateLibrary: invalidateMusicLibraryQueries,
   },
   shows: {
     field: "shows_dir",
@@ -95,7 +89,6 @@ const SCAN_LIBRARIES: Record<ImplementedScan, ScanLibrary> = {
     title: "TV Shows",
     statusKey: SHOW_SCAN_STATUS_KEY,
     trigger: triggerShowScan,
-    invalidateLibrary: invalidateShowLibraryQueries,
   },
 };
 
@@ -367,7 +360,7 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
         "Scan started",
         `${library.title} library scan has been initiated`,
       );
-      library.invalidateLibrary(queryClient);
+      invalidateLibraryQueries(queryClient, scan);
       await queryClient.invalidateQueries({ queryKey: [library.statusKey] });
       setActiveScan(current => (current === scan ? null : current));
     } catch {

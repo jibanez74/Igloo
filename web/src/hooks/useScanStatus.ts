@@ -1,12 +1,9 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { QueryClient } from "@tanstack/react-query";
 import { movieScanStatusQueryOpts, musicScanStatusQueryOpts, showScanStatusQueryOpts } from "@/lib/query-opts";
 import type { ScanStatusQueryOpts } from "@/lib/query-opts";
 import { MOVIES_STATS_KEY, MUSIC_STATS_KEY, SHOWS_STATS_KEY } from "@/lib/constants";
-import { invalidateMovieLibraryQueries } from "@/lib/movie-library-cache";
-import { invalidateMusicLibraryQueries } from "@/lib/music-library-cache";
-import { invalidateShowLibraryQueries } from "@/lib/show-library-cache";
+import { invalidateLibraryQueries, type Library } from "@/lib/library-cache";
 import type { MovieScanStatus, MusicScanStatus, ShowScanStatus } from "@/types/settings";
 
 const subscribeVisibility = (onChange: () => void) => {
@@ -27,7 +24,7 @@ type ScanStatusConfig<T extends ScanStatusLike & Record<string, unknown>> = {
   // statsKey is the library statistics query committed work refreshes; a
   // library without statistics leaves it unset.
   statsKey?: string;
-  invalidateLibrary: (queryClient: QueryClient) => void;
+  library: Library;
 };
 
 // Polls a scan report every two seconds while it runs and every ten seconds
@@ -64,10 +61,10 @@ function useScanStatus<T extends ScanStatusLike & Record<string, unknown>>(
   const phase = status?.phase;
   const state = status?.state;
   const runId = status?.run_id;
-  const invalidateLibrary = config.invalidateLibrary;
+  const library = config.library;
   useEffect(() => {
-    if (runId) invalidateLibrary(queryClient);
-  }, [queryClient, invalidateLibrary, phase, state, runId]);
+    if (runId) invalidateLibraryQueries(queryClient, library);
+  }, [queryClient, library, phase, state, runId]);
 
   return query;
 }
@@ -75,19 +72,19 @@ function useScanStatus<T extends ScanStatusLike & Record<string, unknown>>(
 const MOVIE_SCAN: ScanStatusConfig<MovieScanStatus> = {
   queryOptions: movieScanStatusQueryOpts,
   statsKey: MOVIES_STATS_KEY,
-  invalidateLibrary: invalidateMovieLibraryQueries,
+  library: "movies",
 };
 
 const MUSIC_SCAN: ScanStatusConfig<MusicScanStatus> = {
   queryOptions: musicScanStatusQueryOpts,
   statsKey: MUSIC_STATS_KEY,
-  invalidateLibrary: invalidateMusicLibraryQueries,
+  library: "music",
 };
 
 const SHOW_SCAN: ScanStatusConfig<ShowScanStatus> = {
   queryOptions: showScanStatusQueryOpts,
   statsKey: SHOWS_STATS_KEY,
-  invalidateLibrary: invalidateShowLibraryQueries,
+  library: "shows",
 };
 
 export function useMovieScanStatus(options: ScanStatusOptions = {}) {

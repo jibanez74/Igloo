@@ -1,5 +1,5 @@
 import { useState, type ReactNode, type RefObject } from "react";
-import { useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { MoreHorizontal, Plus, RefreshCw } from "lucide-react";
 import {
   DropdownMenu,
@@ -13,10 +13,7 @@ import {
   LIBRARY_MENU_ITEM_CLASS,
   MOTION_MICRO_CONTROL_CLASS,
 } from "@/lib/constants";
-import {
-  refreshLibraryWithToasts,
-  type LibraryRefreshNoun,
-} from "@/lib/library-refresh";
+import { refreshLibraryWithToasts, type Library } from "@/lib/library-cache";
 import { cn } from "@/lib/utils";
 
 type LibraryMoreMenuProps = {
@@ -56,15 +53,13 @@ export default function LibraryMoreMenu({
 }
 
 type RefreshLibraryMenuItemProps = {
-  refresh: (queryClient: QueryClient) => Promise<void>;
-  libraryNoun: LibraryRefreshNoun;
+  library: Library;
   /** Called once the refresh settles, so the owning menu can close. */
   onSettled: () => void;
 };
 
 export function RefreshLibraryMenuItem({
-  refresh,
-  libraryNoun,
+  library,
   onSettled,
 }: RefreshLibraryMenuItemProps) {
   const queryClient = useQueryClient();
@@ -74,7 +69,7 @@ export function RefreshLibraryMenuItem({
     if (refreshingLibrary) return;
 
     setRefreshingLibrary(true);
-    await refreshLibraryWithToasts(queryClient, refresh, libraryNoun);
+    await refreshLibraryWithToasts(queryClient, library);
     // refreshLibraryWithToasts owns the try/catch and never throws, precisely so
     // this reset can be plain sequential code (see its doc comment).
     // react-doctor-disable-next-line react-doctor/no-loading-flag-reset-outside-finally
