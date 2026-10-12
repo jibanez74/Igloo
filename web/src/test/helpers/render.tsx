@@ -1,17 +1,19 @@
 import type { PropsWithChildren, ReactElement } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { render } from "@testing-library/react";
+import { createQueryClient } from "@/lib/query-client";
 
-/** A QueryClient that fails fast, so tests never wait on retry backoff. */
+/**
+ * The app's QueryClient, failing fast so tests never wait on retry backoff.
+ */
 export function createTestQueryClient() {
-  return new QueryClient({
-    defaultOptions: {
-      mutations: {
-        retry: false,
-      },
-      queries: {
-        retry: false,
-      },
+  return createQueryClient({
+    mutations: {
+      retry: false,
+    },
+    queries: {
+      retry: false,
     },
   });
 }

@@ -9,12 +9,14 @@ import { KeyRound } from "lucide-react";
 import SettingsCardHeader from "@/components/settings/SettingsCardHeader";
 import { updateUserPin } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/is-api-failure";
-import { authUserFrom, authUserQueryOpts, userPinQueryOpts } from "@/lib/query-opts";
 import {
-  ADMIN_USERS_KEY,
-  AUTH_USER_KEY,
+  authUserFrom,
+  authUserQueryOpts,
+  setSignedInUser,
+  userPinQueryOpts,
+} from "@/lib/query-opts";
+import {
   SETTINGS_CARD_SURFACE_CLASS,
-  USER_PIN_KEY,
   USER_PIN_LENGTH,
 } from "@/lib/constants";
 import {
@@ -103,14 +105,8 @@ export default function ProfilePinCard() {
       setCurrentPin("");
       setNewPin("");
       setRevealed(false);
-      if (res.data?.user) {
-        queryClient.setQueryData([AUTH_USER_KEY], {
-          error: false,
-          data: { user: res.data.user },
-        });
-      }
-      queryClient.invalidateQueries({ queryKey: [USER_PIN_KEY] });
-      queryClient.invalidateQueries({ queryKey: [ADMIN_USERS_KEY] });
+      setSignedInUser(queryClient, res.data.user);
+      queryClient.invalidateQueries({ queryKey: userPinQueryOpts().queryKey });
       showSuccess(removing ? "PIN removed" : "PIN saved");
     },
     onError: (_error, variables) => {

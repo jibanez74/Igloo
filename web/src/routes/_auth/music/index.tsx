@@ -20,7 +20,6 @@ import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { useVirtualizedInfiniteLoader } from "@/hooks/useVirtualizedInfiniteLoader";
 import { useWindowScrollMargin } from "@/hooks/useWindowScrollMargin";
 import { showActionFailed } from "@/lib/toast-helpers";
-import { refreshMusicLibraryCache } from "@/lib/music-library-cache";
 import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
 import LoadErrorAlert from "@/components/shared/LoadErrorAlert";
 import { apiErrorMessage, isApiFailure } from "@/lib/is-api-failure";
@@ -283,8 +282,7 @@ function MoreMenu() {
         triggerRef={moreOptionsButtonRef}
       >
         <RefreshLibraryMenuItem
-          refresh={refreshMusicLibraryCache}
-          libraryNoun="Music"
+          library="music"
           onSettled={() => setMenuOpen(false)}
         />
         <RequestMediaMenuItem

@@ -9,9 +9,7 @@ import {
 } from "@/components/shared/LibraryAllTab";
 import LibraryEmptyState from "@/components/shared/LibraryEmptyState";
 import LibraryPagination from "@/components/shared/LibraryPagination";
-import LibrarySortToggle, {
-  type LibrarySortDirection,
-} from "@/components/shared/LibrarySortToggle";
+import LibrarySortToggle from "@/components/shared/LibrarySortToggle";
 import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
 import SkeletonStatus from "@/components/shared/SkeletonStatus";
 import LoadErrorAlert from "@/components/shared/LoadErrorAlert";
@@ -26,6 +24,7 @@ import { nounForCount } from "@/lib/format";
 import { apiErrorMessage, isApiFailure } from "@/lib/is-api-failure";
 import { scrollWindowToTop } from "@/lib/motion";
 import { cn } from "@/lib/utils";
+import type { SortOrder } from "@/types";
 
 
 // One chip geometry whether or not a genre is selected: the grid used to swap
@@ -57,7 +56,7 @@ type LibraryGenresTabProps<
   renderCard: (item: TItem) => ReactNode;
   genreId: number | undefined;
   genresPage: number;
-  sort: LibrarySortDirection;
+  sort: SortOrder;
   perPage: number;
   noun: LibraryNoun;
   emptyIcon: LucideIcon;

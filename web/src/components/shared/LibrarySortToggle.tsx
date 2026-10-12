@@ -4,11 +4,10 @@ import {
   MOTION_MICRO_CONTROL_CLASS,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-
-export type LibrarySortDirection = "asc" | "desc";
+import type { SortOrder } from "@/types";
 
 type LibrarySortToggleProps = {
-  sort: LibrarySortDirection;
+  sort: SortOrder;
   onToggle: () => void;
 };
 

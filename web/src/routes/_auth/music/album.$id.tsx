@@ -17,7 +17,7 @@ import {
   authUserQueryOpts,
 } from "@/lib/query-opts";
 import { deleteAlbum } from "@/lib/api";
-import { invalidateMusicLibraryQueries } from "@/lib/music-library-cache";
+import { invalidateLibraryQueries } from "@/lib/library-cache";
 import { parseRouteId } from "@/lib/route-id";
 import { listenHead, routeHead } from "@/lib/route-head";
 import { unwrapString, unwrapInt, unwrapFloat } from "@/lib/nullable";
@@ -205,7 +205,7 @@ function AlbumDetailsContent({
         "Album",
         `"${album.title}" has been removed from your library.`,
       );
-      invalidateMusicLibraryQueries(queryClient);
+      invalidateLibraryQueries(queryClient, "music");
       setIsDeleteDialogOpen(false);
       navigate({ to: "/music", search: { tab: "albums" } });
     },

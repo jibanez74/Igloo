@@ -2,11 +2,9 @@ import { useState, type RefObject } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { deleteMovie } from "@/lib/api";
-import {
-  CONTINUE_WATCHING_KEY,
-  LIBRARY_MOVIE_DETAILS_KEY,
-} from "@/lib/constants";
-import { invalidateMovieLibraryQueries } from "@/lib/movie-library-cache";
+import { CONTINUE_WATCHING_KEY } from "@/lib/constants";
+import { invalidateLibraryQueries } from "@/lib/library-cache";
+import { libraryMovieDetailsQueryOpts } from "@/lib/query-opts";
 import { showActionFailed, showDeleted } from "@/lib/toast-helpers";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -52,7 +50,7 @@ export default function DeleteMovieDialog({
     if (!deleted) return;
 
     queryClient.removeQueries({
-      queryKey: [LIBRARY_MOVIE_DETAILS_KEY, movieId],
+      queryKey: libraryMovieDetailsQueryOpts(movieId).queryKey,
     });
     showDeleted(`"${movieTitle}"`);
     onOpenChange(false);
@@ -63,7 +61,7 @@ export default function DeleteMovieDialog({
     } finally {
       // Every movie list can hold the deleted title, and so can Home's
       // continue-watching row.
-      invalidateMovieLibraryQueries(queryClient);
+      invalidateLibraryQueries(queryClient, "movies");
       void queryClient.invalidateQueries({ queryKey: [CONTINUE_WATCHING_KEY] });
     }
   }

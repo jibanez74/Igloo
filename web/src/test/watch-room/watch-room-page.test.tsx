@@ -178,7 +178,8 @@ vi.mock("@tanstack/react-query", async () => {
   };
 });
 
-vi.mock("@/lib/api", () => ({
+vi.mock("@/lib/api", async () => ({
+  ...(await vi.importActual<typeof import("@/lib/api")>("@/lib/api")),
   deleteWatchRoom: (...args: unknown[]) => deleteWatchRoomMock(...args),
   joinWatchRoom: (...args: unknown[]) => joinWatchRoomMock(...args),
 }));

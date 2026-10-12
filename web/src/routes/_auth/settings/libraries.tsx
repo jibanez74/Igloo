@@ -1,7 +1,6 @@
 import ScanProgress from "@/components/settings/ScanProgress";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { QueryClient } from "@tanstack/react-query";
 import { Fragment, useId, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import {
@@ -32,9 +31,6 @@ import SettingsSaveBar from "@/components/settings/SettingsSaveBar";
 import { musicStatsQueryOpts, moviesStatsQueryOpts, movieScanStatusQueryOpts, musicScanStatusQueryOpts, showScanStatusQueryOpts, showsStatsQueryOpts, settingsQueryOpts } from "@/lib/query-opts";
 import { showActionFailed, showSuccess } from "@/lib/toast-helpers";
 import { triggerMusicScan, triggerMovieScan, triggerShowScan, updateLibrarySettings } from "@/lib/api";
-import { invalidateMovieLibraryQueries } from "@/lib/movie-library-cache";
-import { invalidateMusicLibraryQueries } from "@/lib/music-library-cache";
-import { invalidateShowLibraryQueries } from "@/lib/show-library-cache";
 import { useIsMiniPlayerVisible } from "@/hooks/useIsMiniPlayerVisible";
 import {
   MINI_PLAYER_CLEARANCE_BOTTOM_CLASS,
@@ -43,7 +39,6 @@ import {
   SHOW_SCAN_STATUS_KEY,
   SETTINGS_CARD_SURFACE_CLASS,
   SETTINGS_INPUT_CLASS,
-  SETTINGS_KEY,
 } from "@/lib/constants";
 import { trimmedOrNull } from "@/lib/nullable";
 import { cn } from "@/lib/utils";
@@ -67,7 +62,6 @@ type ScanLibrary = {
   title: string;
   statusKey: string;
   trigger: () => Promise<ApiResponseType<{ message: string }>>;
-  invalidateLibrary: (queryClient: QueryClient) => void;
 };
 
 // Everything that differs between the two scannable libraries lives here;
@@ -79,7 +73,6 @@ const SCAN_LIBRARIES: Record<ImplementedScan, ScanLibrary> = {
     title: "Movies",
     statusKey: MOVIE_SCAN_STATUS_KEY,
     trigger: triggerMovieScan,
-    invalidateLibrary: invalidateMovieLibraryQueries,
   },
   music: {
     field: "music_dir",
@@ -87,7 +80,6 @@ const SCAN_LIBRARIES: Record<ImplementedScan, ScanLibrary> = {
     title: "Music",
     statusKey: MUSIC_SCAN_STATUS_KEY,
     trigger: triggerMusicScan,
-    invalidateLibrary: invalidateMusicLibraryQueries,
   },
   shows: {
     field: "shows_dir",
@@ -95,7 +87,6 @@ const SCAN_LIBRARIES: Record<ImplementedScan, ScanLibrary> = {
     title: "TV Shows",
     statusKey: SHOW_SCAN_STATUS_KEY,
     trigger: triggerShowScan,
-    invalidateLibrary: invalidateShowLibraryQueries,
   },
 };
 
@@ -122,8 +113,6 @@ type FormFeedback = {
   message: string;
   tone: "neutral" | "success" | "error";
 };
-
-type SettingsQueryData = ApiResponseType<SettingsType>;
 
 const DEFAULT_FEEDBACK: FormFeedback = {
   message: "Saved library paths are used by scan and playback features.",
@@ -277,12 +266,12 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
       setForm(formFromSettings(nextSettings));
       setValidationField(null);
       setFeedback({ message: "Library paths saved.", tone: "success" });
-      queryClient.setQueryData<SettingsQueryData>([SETTINGS_KEY], {
+      // The PUT answers with the saved settings: no refetch needed.
+      queryClient.setQueryData(settingsQueryOpts().queryKey, {
         error: false,
         message: res.message,
         data: nextSettings,
       });
-      queryClient.invalidateQueries({ queryKey: [SETTINGS_KEY] });
       showSuccess("Library paths saved");
     },
     onError: () => {
@@ -367,7 +356,8 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
         "Scan started",
         `${library.title} library scan has been initiated`,
       );
-      library.invalidateLibrary(queryClient);
+      // The scan hooks refresh the library's lists once the status shows
+      // the new run.
       await queryClient.invalidateQueries({ queryKey: [library.statusKey] });
       setActiveScan(current => (current === scan ? null : current));
     } catch {

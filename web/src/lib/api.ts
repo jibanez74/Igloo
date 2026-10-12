@@ -84,6 +84,7 @@ import type {
   TrailerPreferencesData,
   UpdateTrailerPreferencesRequest,
   MoviePrerollData,
+  SortOrder,
 } from "@/types";
 import {
   ALBUMS_PER_PAGE,
@@ -128,6 +129,22 @@ function withQuery(path: string, params: Record<string, string | number | boolea
   }
 
   return `${path}?${query}`;
+}
+
+/** One page of a paged list: `page`/`per_page`, plus `sort` where the list takes one. */
+function getPage<T extends Record<string, unknown>>(
+  path: string,
+  page: number,
+  perPage: number,
+  sort?: SortOrder,
+) {
+  return apiRequest<T>(
+    withQuery(path, {
+      page,
+      per_page: perPage,
+      ...(sort === undefined ? {} : { sort }),
+    }),
+  );
 }
 
 /**
@@ -367,15 +384,8 @@ export const getShowEpisodeTechnicalDetails = (episodeId: number) =>
 export const getShowsLibrary = (
   page: number,
   perPage: number = SHOWS_PER_PAGE,
-  sort: "asc" | "desc" = "asc",
-) =>
-  apiRequest<ShowsLibraryDataType>(
-    withQuery("/api/shows/library", {
-      page,
-      per_page: perPage,
-      sort,
-    }),
-  );
+  sort: SortOrder = "asc",
+) => getPage<ShowsLibraryDataType>("/api/shows/library", page, perPage, sort);
 
 export const getShowGenresWithCounts = () =>
   apiRequest<ShowGenresDataType>("/api/shows/genres");
@@ -384,14 +394,13 @@ export const getShowsByGenre = (
   genreId: number,
   page: number,
   perPage: number = SHOWS_PER_PAGE,
-  sort: "asc" | "desc" = "asc",
+  sort: SortOrder = "asc",
 ) =>
-  apiRequest<ShowsLibraryDataType>(
-    withQuery(`/api/shows/genres/${genreId}/shows`, {
-      page,
-      per_page: perPage,
-      sort,
-    }),
+  getPage<ShowsLibraryDataType>(
+    `/api/shows/genres/${genreId}/shows`,
+    page,
+    perPage,
+    sort,
   );
 
 export const getShowsStats = () =>
@@ -472,14 +481,13 @@ export const deleteMovie = (movieId: number, deleteFile: boolean) =>
 export const getMoviesLibrary = (
   page: number,
   perPage: number = MOVIES_PER_PAGE,
-  sort: "asc" | "desc" = "asc",
+  sort: SortOrder = "asc",
 ) =>
-  apiRequest<MoviesLibraryPaginatedDataType>(
-    withQuery("/api/movies/library", {
-      page,
-      per_page: perPage,
-      sort,
-    }),
+  getPage<MoviesLibraryPaginatedDataType>(
+    "/api/movies/library",
+    page,
+    perPage,
+    sort,
   );
 
 export const getMovieGenresWithCounts = () =>
@@ -489,14 +497,13 @@ export const getMoviesByGenre = (
   genreId: number,
   page: number,
   perPage: number = MOVIES_PER_PAGE,
-  sort: "asc" | "desc" = "asc",
+  sort: SortOrder = "asc",
 ) =>
-  apiRequest<MoviesLibraryPaginatedDataType>(
-    withQuery(`/api/movies/genres/${genreId}/movies`, {
-      page,
-      per_page: perPage,
-      sort,
-    }),
+  getPage<MoviesLibraryPaginatedDataType>(
+    `/api/movies/genres/${genreId}/movies`,
+    page,
+    perPage,
+    sort,
   );
 
 export const getMoviesStats = () =>
@@ -505,14 +512,13 @@ export const getMoviesStats = () =>
 export const getLikedMovies = (
   page: number,
   perPage: number = MOVIES_PER_PAGE,
-  sort: "asc" | "desc" = "asc",
+  sort: SortOrder = "asc",
 ) =>
-  apiRequest<MoviesLibraryPaginatedDataType>(
-    withQuery("/api/movies/liked", {
-      page,
-      per_page: perPage,
-      sort,
-    }),
+  getPage<MoviesLibraryPaginatedDataType>(
+    "/api/movies/liked",
+    page,
+    perPage,
+    sort,
   );
 
 export const getMovieLikeStatus = (movieId: number) =>
@@ -584,13 +590,7 @@ export const deleteAlbum = (id: number) =>
 export const getAlbumsPaginated = (
   page: number,
   perPage: number = ALBUMS_PER_PAGE,
-) =>
-  apiRequest<AlbumsListResponseType>(
-    withQuery("/api/music/albums", {
-      page,
-      per_page: perPage,
-    }),
-  );
+) => getPage<AlbumsListResponseType>("/api/music/albums", page, perPage);
 
 export const getTracksPaginated = (limit: number, offset: number) =>
   apiRequest<TracksListResponseType>(
@@ -622,13 +622,7 @@ export const toggleLikeTrack = (trackId: number) =>
 export const getLikedTracks = (
   page: number,
   perPage: number = LIKED_TRACKS_PER_PAGE,
-) =>
-  apiRequest<LikedTracksResponseType>(
-    withQuery("/api/music/tracks/liked", {
-      page,
-      per_page: perPage,
-    }),
-  );
+) => getPage<LikedTracksResponseType>("/api/music/tracks/liked", page, perPage);
 
 export const getLikedTrackIds = () =>
   apiRequest<LikedTrackIdsResponseType>("/api/music/tracks/liked-ids");
@@ -637,12 +631,7 @@ export const getMusiciansPaginated = (
   page: number,
   perPage: number = MUSICIANS_PER_PAGE,
 ) =>
-  apiRequest<MusiciansListResponseType>(
-    withQuery("/api/music/musicians", {
-      page,
-      per_page: perPage,
-    }),
-  );
+  getPage<MusiciansListResponseType>("/api/music/musicians", page, perPage);
 
 export const getMusicianDetails = (id: number) =>
   apiRequest<MusicianDetailsResponseType>(`/api/music/musicians/${id}`);
@@ -733,14 +722,13 @@ export const getMoviePlaylistMovies = (
   playlistId: number,
   page: number,
   perPage: number = MOVIES_PER_PAGE,
-  sort: "asc" | "desc" = "asc",
+  sort: SortOrder = "asc",
 ) =>
-  apiRequest<MoviesLibraryPaginatedDataType>(
-    withQuery(`/api/movies/playlists/${playlistId}/movies`, {
-      page,
-      per_page: perPage,
-      sort,
-    }),
+  getPage<MoviesLibraryPaginatedDataType>(
+    `/api/movies/playlists/${playlistId}/movies`,
+    page,
+    perPage,
+    sort,
   );
 
 export const createMoviePlaylist = (data: CreateMoviePlaylistRequest) =>

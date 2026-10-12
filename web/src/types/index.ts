@@ -128,6 +128,7 @@ export type {
   ApiSuccessType,
   ApiFailureType,
   ApiResponseType,
+  SortOrder,
 } from "./api";
 
 // User types

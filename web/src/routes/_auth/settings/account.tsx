@@ -33,10 +33,13 @@ import {
 import SettingsCardHeader from "@/components/settings/SettingsCardHeader";
 import SettingsErrorCard from "@/components/settings/SettingsErrorCard";
 import SettingsLoadingCard from "@/components/settings/SettingsLoadingCard";
-import { authUserFrom, authUserQueryOpts } from "@/lib/query-opts";
 import {
-  AUTH_USER_KEY,
-  ADMIN_USERS_KEY,
+  adminUsersQueryOpts,
+  authUserFrom,
+  authUserQueryOpts,
+  setSignedInUser,
+} from "@/lib/query-opts";
+import {
   USER_EMAIL_MAX_LENGTH,
   USER_NAME_MAX_LENGTH,
   USER_PASSWORD_MAX_BYTES,
@@ -98,7 +101,9 @@ const ALLOWED_AVATAR_TYPES = [
 function AccountSettings() {
   const { queryClient } = Route.useRouteContext();
   const navigate = useNavigate();
-  const { data: userData, isLoading } = useQuery(authUserQueryOpts());
+  const authQuery = authUserQueryOpts();
+  const authKey = authQuery.queryKey;
+  const { data: userData, isLoading } = useQuery(authQuery);
   const [isDeleting, startDeleteTransition] = useTransition();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
@@ -172,12 +177,11 @@ function AccountSettings() {
           name: apiErrorMessage(res, "Failed to update name."),
         }));
         showActionFailed("update name", res);
-        await queryClient.invalidateQueries({ queryKey: [AUTH_USER_KEY] });
+        await queryClient.invalidateQueries({ queryKey: authKey });
       } else {
         clearError("name");
         showSuccess("Name updated successfully");
-        queryClient.setQueryData([AUTH_USER_KEY], res);
-        await queryClient.invalidateQueries({ queryKey: [ADMIN_USERS_KEY] });
+        setSignedInUser(queryClient, res.data.user);
       }
     },
   });
@@ -198,12 +202,11 @@ function AccountSettings() {
           email: apiErrorMessage(res, "Failed to update email."),
         }));
         showActionFailed("update email", res);
-        await queryClient.invalidateQueries({ queryKey: [AUTH_USER_KEY] });
+        await queryClient.invalidateQueries({ queryKey: authKey });
       } else {
         clearError("email");
         showSuccess("Email updated successfully");
-        queryClient.setQueryData([AUTH_USER_KEY], res);
-        await queryClient.invalidateQueries({ queryKey: [ADMIN_USERS_KEY] });
+        setSignedInUser(queryClient, res.data.user);
       }
     },
   });
@@ -248,28 +251,23 @@ function AccountSettings() {
   const updateAvatarUrlMutation = useMutation({
     mutationFn: (avatar: string) => updateUserAvatar(avatar),
     onMutate: async newAvatar => {
-      await queryClient.cancelQueries({ queryKey: [AUTH_USER_KEY] });
-      const previousData = queryClient.getQueryData([AUTH_USER_KEY]);
+      await queryClient.cancelQueries({ queryKey: authKey });
+      const previousData = queryClient.getQueryData(authKey);
 
-      queryClient.setQueryData<typeof userData>([AUTH_USER_KEY], old => {
-        if (!old || old.error || !old.data?.user) return old;
-        return {
-          ...old,
+      if (previousData?.error === false) {
+        queryClient.setQueryData(authKey, {
+          ...previousData,
           data: {
-            ...old.data,
-            user: {
-              ...old.data.user,
-              avatar: newAvatar,
-            },
+            user: { ...previousData.data.user, avatar: newAvatar },
           },
-        };
-      });
+        });
+      }
 
       return { previousData };
     },
     onError: (err, _newAvatar, context) => {
       if (context?.previousData) {
-        queryClient.setQueryData([AUTH_USER_KEY], context.previousData);
+        queryClient.setQueryData(authKey, context.previousData);
       }
       showActionFailed(
         "update avatar",
@@ -283,12 +281,14 @@ function AccountSettings() {
           avatarUrl: apiErrorMessage(res, "Failed to update avatar."),
         }));
         showActionFailed("update avatar", res);
-        queryClient.invalidateQueries({ queryKey: [AUTH_USER_KEY] });
+        queryClient.invalidateQueries({ queryKey: authKey });
       } else {
         clearError("avatarUrl");
         showSuccess("Avatar updated successfully");
         setAvatarUrl("");
-        queryClient.invalidateQueries({ queryKey: [ADMIN_USERS_KEY] });
+        queryClient.invalidateQueries({
+          queryKey: adminUsersQueryOpts().queryKey,
+        });
       }
     },
   });
@@ -297,13 +297,13 @@ function AccountSettings() {
   const uploadAvatarMutation = useMutation({
     mutationFn: (file: File) => uploadUserAvatar(file),
     onMutate: async () => {
-      await queryClient.cancelQueries({ queryKey: [AUTH_USER_KEY] });
-      const previousData = queryClient.getQueryData([AUTH_USER_KEY]);
+      await queryClient.cancelQueries({ queryKey: authKey });
+      const previousData = queryClient.getQueryData(authKey);
       return { previousData };
     },
     onError: (err, _file, context) => {
       if (context?.previousData) {
-        queryClient.setQueryData([AUTH_USER_KEY], context.previousData);
+        queryClient.setQueryData(authKey, context.previousData);
       }
       showActionFailed(
         "upload avatar",
@@ -317,17 +317,11 @@ function AccountSettings() {
           avatarUpload: apiErrorMessage(res, "Failed to upload avatar."),
         }));
         showActionFailed("upload avatar", res);
-        queryClient.invalidateQueries({ queryKey: [AUTH_USER_KEY] });
+        queryClient.invalidateQueries({ queryKey: authKey });
       } else {
         clearError("avatarUpload");
         showSuccess("Avatar uploaded successfully");
-        if (res.data?.user) {
-          queryClient.setQueryData([AUTH_USER_KEY], {
-            error: false,
-            data: { user: res.data.user },
-          });
-        }
-        queryClient.invalidateQueries({ queryKey: [ADMIN_USERS_KEY] });
+        setSignedInUser(queryClient, res.data.user);
       }
     },
   });

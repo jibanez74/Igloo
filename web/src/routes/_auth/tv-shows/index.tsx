@@ -28,7 +28,6 @@ import {
   showsLibraryQueryOpts,
   showsStatsQueryOpts,
 } from "@/lib/query-opts";
-import { refreshShowLibraryCache } from "@/lib/show-library-cache";
 import { cn } from "@/lib/utils";
 import {
   showsSearchSchema,
@@ -36,6 +35,7 @@ import {
 } from "@/lib/route-search";
 import { routeHead } from "@/lib/route-head";
 import { loadOnEntry } from "@/lib/route-loads";
+import type { SortOrder } from "@/types";
 
 const TV_SHOWS_HEAD = routeHead(
   "TV Shows",
@@ -204,8 +204,7 @@ function MoreMenu() {
   return (
     <LibraryMoreMenu open={menuOpen} onOpenChange={setMenuOpen}>
       <RefreshLibraryMenuItem
-        refresh={refreshShowLibraryCache}
-        libraryNoun="Show"
+        library="shows"
         onSettled={() => setMenuOpen(false)}
       />
     </LibraryMoreMenu>
@@ -218,7 +217,7 @@ function MoreMenu() {
 
 type AllShowsTabContentProps = {
   currentPage: number;
-  sort: "asc" | "desc";
+  sort: SortOrder;
 };
 
 function AllShowsTabContent({ currentPage, sort }: AllShowsTabContentProps) {
@@ -266,7 +265,7 @@ function AllShowsTabContent({ currentPage, sort }: AllShowsTabContentProps) {
 type GenresTabContentProps = {
   genreId: number | undefined;
   genresPage: number;
-  sort: "asc" | "desc";
+  sort: SortOrder;
   fallbackFocusRef: RefObject<HTMLButtonElement | null>;
 };
 

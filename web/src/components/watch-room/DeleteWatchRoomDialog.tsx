@@ -1,7 +1,7 @@
 import { useState, type RefObject } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { deleteWatchRoom } from "@/lib/api";
-import { WATCH_ROOM_KEY, WATCH_ROOMS_KEY } from "@/lib/constants";
+import { watchRoomQueryOpts, watchRoomsQueryOpts } from "@/lib/query-opts";
 import {
   showActionFailed,
   showSuccess,
@@ -63,19 +63,15 @@ export default function DeleteWatchRoomDialog({
         onDeleteError?.();
         showActionFailed("close watch room", res);
       } else {
-        queryClient.setQueryData(
-          [WATCH_ROOMS_KEY],
-          (
-            existing:
-              | ApiResponseType<{ rooms: WatchRoomType[] }>
-              | undefined,
-          ) => removeDeletedRoomFromCache(existing, roomId),
+        const roomsKey = watchRoomsQueryOpts().queryKey;
+        queryClient.setQueryData(roomsKey, existing =>
+          removeDeletedRoomFromCache(existing, roomId),
         );
         queryClient.removeQueries({
-          queryKey: [WATCH_ROOM_KEY, roomId],
+          queryKey: watchRoomQueryOpts(roomId).queryKey,
           exact: true,
         });
-        void queryClient.invalidateQueries({ queryKey: [WATCH_ROOMS_KEY] });
+        void queryClient.invalidateQueries({ queryKey: roomsKey });
 
         showSuccess(
           "Watch room closed",

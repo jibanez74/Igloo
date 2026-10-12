@@ -32,7 +32,7 @@ import { cn } from "@/lib/utils";
 import { unwrapString } from "@/lib/nullable";
 import { parseRouteId } from "@/lib/route-id";
 import { routeHead } from "@/lib/route-head";
-import type { MoviePlaylistDetailResponseType } from "@/types";
+import type { MoviePlaylistDetailResponseType, SortOrder } from "@/types";
 
 const MOVIE_PLAYLIST_FALLBACK_HEAD = routeHead("Movie Playlist");
 
@@ -100,7 +100,7 @@ type MoviePlaylistContentProps = {
 
 function MoviePlaylistContent({ playlistId, data }: MoviePlaylistContentProps) {
   const [page, setPage] = useState(1);
-  const [sort, setSort] = useState<"asc" | "desc">("asc");
+  const [sort, setSort] = useState<SortOrder>("asc");
   const queryClient = useQueryClient();
   const headingRef = useRef<HTMLHeadingElement | null>(null);
 

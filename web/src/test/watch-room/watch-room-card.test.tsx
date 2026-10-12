@@ -63,7 +63,8 @@ vi.mock("@/components/ui/avatar", () => ({
   ),
 }));
 
-vi.mock("@/lib/api", () => ({
+vi.mock("@/lib/api", async () => ({
+  ...(await vi.importActual<typeof import("@/lib/api")>("@/lib/api")),
   deleteWatchRoom: (...args: unknown[]) => deleteWatchRoomMock(...args),
 }));
 

@@ -7,9 +7,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import LibraryEmptyState from "@/components/shared/LibraryEmptyState";
 import LibraryPagination from "@/components/shared/LibraryPagination";
-import LibrarySortToggle, {
-  type LibrarySortDirection,
-} from "@/components/shared/LibrarySortToggle";
+import LibrarySortToggle from "@/components/shared/LibrarySortToggle";
 import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
 import LoadErrorAlert from "@/components/shared/LoadErrorAlert";
 import { PosterCardSkeleton } from "@/components/shared/PosterCard";
@@ -19,7 +17,7 @@ import SkeletonStatus from "@/components/shared/SkeletonStatus";
 import { apiErrorMessage, isApiFailure } from "@/lib/is-api-failure";
 import { scrollWindowToTop } from "@/lib/motion";
 import { cn } from "@/lib/utils";
-import type { ApiResponseType } from "@/types";
+import type { ApiResponseType, SortOrder } from "@/types";
 
 /**
  * The query a library tab owns: the page prepares the queryOptions(), the tab
@@ -53,7 +51,7 @@ export type LibraryNoun = {
  */
 type LibrarySortProps =
   | {
-      sort: LibrarySortDirection;
+      sort: SortOrder;
       onSortToggle: () => void;
     }
   | {

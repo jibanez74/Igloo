@@ -10,10 +10,12 @@ import {
   DIALOG_SCROLL_CONTENT_CLASS,
   DIALOG_SCROLL_HEADER_CLASS,
   FOCUS_VISIBLE_RING_CLASS,
-  LIBRARY_MOVIE_DETAILS_KEY,
   MOTION_MICRO_CONTROL_CLASS,
-  MOVIE_TECHNICAL_DETAILS_KEY,
 } from "@/lib/constants";
+import {
+  libraryMovieDetailsQueryOpts,
+  movieTechnicalDetailsQueryOpts,
+} from "@/lib/query-opts";
 import { cn } from "@/lib/utils";
 import { unwrapInt, unwrapString } from "@/lib/nullable";
 import {
@@ -275,10 +277,10 @@ async function refreshMovieDetails(
   movieId: number,
 ) {
   queryClient.invalidateQueries({
-    queryKey: [MOVIE_TECHNICAL_DETAILS_KEY, movieId],
+    queryKey: movieTechnicalDetailsQueryOpts(movieId).queryKey,
   });
   await queryClient.invalidateQueries({
-    queryKey: [LIBRARY_MOVIE_DETAILS_KEY, movieId],
+    queryKey: libraryMovieDetailsQueryOpts(movieId).queryKey,
   });
   await router.invalidate({
     filter: match => match.routeId === "/_auth/movies/$id/",

@@ -22,7 +22,6 @@ import SettingsLoadingCard from "@/components/settings/SettingsLoadingCard";
 import SettingsSaveBar from "@/components/settings/SettingsSaveBar";
 import {
   MOTION_SETTINGS_SURFACE_CLASS,
-  PLAYBACK_SETTINGS_KEY,
   SETTINGS_CARD_SURFACE_CLASS,
   SETTINGS_INPUT_CLASS,
   SETTINGS_SELECT_CONTENT_CLASS,
@@ -44,7 +43,6 @@ import {
 import { cn } from "@/lib/utils";
 import type {
   HardwareAccelerationDevice,
-  PlaybackSettingsResponseType,
   PlaybackSettingsType,
   UpdatePlaybackSettingsRequest,
 } from "@/types";
@@ -212,12 +210,6 @@ function EffectiveDeviceNotice({ settings }: { settings: PlaybackSettingsType })
   );
 }
 
-type PlaybackSettingsQueryData = {
-  error: false;
-  message?: string;
-  data?: PlaybackSettingsResponseType;
-};
-
 /** The server-wide half of the page: admin-only, and the only part that saves. */
 function formFromSettings(
   settings: PlaybackSettingsType,
@@ -271,10 +263,7 @@ function ServerPlaybackForm({ settings }: ServerPlaybackFormProps) {
       }
       // The PUT echoes the same envelope the GET returns, so the response is
       // the authoritative catalog -- no merge, no refetch.
-      queryClient.setQueryData<PlaybackSettingsQueryData>(
-        [PLAYBACK_SETTINGS_KEY],
-        res,
-      );
+      queryClient.setQueryData(playbackSettingsQueryOpts().queryKey, res);
       showSuccess("Playback settings saved");
     },
     onError: () => {
