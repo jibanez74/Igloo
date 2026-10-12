@@ -579,6 +579,16 @@ export function albumsPaginatedQueryOpts(
   });
 }
 
+// Refetching an infinite list replays every page it holds, one request after
+// another: after scrolling a large library, dozens per window focus. These
+// lists change through scans and playlist edits, which invalidate them, so
+// they skip the focus refetch. freshFor would never see a failure in
+// { pages } data, so they take a plain staleTime.
+const INFINITE_LIST_CACHE = {
+  staleTime: STALE_LIST,
+  refetchOnWindowFocus: false,
+} as const;
+
 export function tracksInfiniteQueryOpts(pageSize = TRACKS_INFINITE_PAGE_SIZE) {
   return infiniteQueryOptions({
     queryKey: [TRACKS_INFINITE_KEY, pageSize],
@@ -588,7 +598,7 @@ export function tracksInfiniteQueryOpts(pageSize = TRACKS_INFINITE_PAGE_SIZE) {
       if (lastPage.error || !lastPage.data?.has_more) return undefined;
       return lastPage.data.offset + lastPage.data.limit;
     },
-    staleTime: freshFor(STALE_1M),
+    ...INFINITE_LIST_CACHE,
   });
 }
 
@@ -674,7 +684,7 @@ export function playlistTracksInfiniteQueryOpts(
       return lastPage.data.next_offset;
     },
     enabled: playlistId > 0,
-    staleTime: freshFor(STALE_1M),
+    ...INFINITE_LIST_CACHE,
   });
 }
 
