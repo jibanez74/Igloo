@@ -66,7 +66,11 @@ import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import QuickConnectApproveCard from "@/components/settings/QuickConnectApproveCard";
 import DevicesCard from "@/components/settings/DevicesCard";
 import ProfilePinCard from "@/components/settings/ProfilePinCard";
-import { useEndSession } from "@/hooks/useEndSession";
+import {
+  sessionEndedSince,
+  sessionStamp,
+  useEndSession,
+} from "@/hooks/useEndSession";
 import { routeHead } from "@/lib/route-head";
 import { apiErrorMessage } from "@/lib/is-api-failure";
 
@@ -163,13 +167,16 @@ function AccountSettings() {
   // Name update mutation
   const updateNameMutation = useMutation({
     mutationFn: (newName: string) => updateUserName(newName),
-    onError: err => {
+    onMutate: sessionStamp,
+    onError: (err, _newName, stamp) => {
+      if (sessionEndedSince(stamp)) return;
       showActionFailed(
         "update name",
         err instanceof Error ? err.message : "An error occurred",
       );
     },
-    onSuccess: res => {
+    onSuccess: (res, _newName, stamp) => {
+      if (sessionEndedSince(stamp)) return;
       if (res.error) {
         setErrors(current => ({
           ...current,
@@ -187,13 +194,16 @@ function AccountSettings() {
   // Email update mutation
   const updateEmailMutation = useMutation({
     mutationFn: (newEmail: string) => updateUserEmail(newEmail),
-    onError: err => {
+    onMutate: sessionStamp,
+    onError: (err, _newEmail, stamp) => {
+      if (sessionEndedSince(stamp)) return;
       showActionFailed(
         "update email",
         err instanceof Error ? err.message : "An error occurred",
       );
     },
-    onSuccess: res => {
+    onSuccess: (res, _newEmail, stamp) => {
+      if (sessionEndedSince(stamp)) return;
       if (res.error) {
         setErrors(current => ({
           ...current,
@@ -254,6 +264,7 @@ function AccountSettings() {
   const updateAvatarUrlMutation = useMutation({
     mutationFn: (avatar: string) => updateUserAvatar(avatar),
     onMutate: async newAvatar => {
+      const stamp = sessionStamp();
       await queryClient.cancelQueries({ queryKey: authKey });
       const previousData = queryClient.getQueryData(authKey);
 
@@ -266,9 +277,10 @@ function AccountSettings() {
         });
       }
 
-      return { previousData };
+      return { ...stamp, previousData };
     },
     onError: (err, _newAvatar, context) => {
+      if (sessionEndedSince(context)) return;
       restoreAuthUser(context?.previousData);
       showActionFailed(
         "update avatar",
@@ -276,6 +288,7 @@ function AccountSettings() {
       );
     },
     onSuccess: (res, _newAvatar, context) => {
+      if (sessionEndedSince(context)) return;
       if (res.error) {
         restoreAuthUser(context?.previousData);
         setErrors(current => ({
@@ -298,13 +311,16 @@ function AccountSettings() {
   // avatar, which replaces the cached one.
   const uploadAvatarMutation = useMutation({
     mutationFn: (file: File) => uploadUserAvatar(file),
-    onError: err => {
+    onMutate: sessionStamp,
+    onError: (err, _file, stamp) => {
+      if (sessionEndedSince(stamp)) return;
       showActionFailed(
         "upload avatar",
         err instanceof Error ? err.message : "An error occurred",
       );
     },
-    onSuccess: res => {
+    onSuccess: (res, _file, stamp) => {
+      if (sessionEndedSince(stamp)) return;
       if (res.error) {
         setErrors(current => ({
           ...current,

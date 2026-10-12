@@ -19,6 +19,25 @@ export function arrivedLoggedOut(state: unknown): boolean {
 }
 
 /**
+ * How many sessions have ended on this page. Clearing the cache does not stop
+ * a mutation that is still in flight: its callbacks run when the response
+ * arrives and would write the previous user back into the cache, or over the
+ * next one's. A mutation that writes the signed-in user therefore stamps the
+ * session it started in (sessionStamp, from onMutate) and drops its response
+ * once that session has ended (sessionEndedSince).
+ */
+let endedSessions = 0;
+
+export function sessionStamp() {
+  return { session: endedSessions };
+}
+
+/** Whether the session a mutation was stamped in has ended since. */
+export function sessionEndedSince(stamp: { session: number } | undefined) {
+  return stamp?.session !== endedSessions;
+}
+
+/**
  * Leaves for /login once the server session has ended (logout, account
  * deletion). Playback stops first, so the mini player goes with it, and the
  * login guard skips its auth check for this navigation, so no 401 lands in
@@ -45,9 +64,10 @@ export function useEndSession() {
  * On the login page: forgets everything the previous user loaded once
  * useEndSession has brought them here. The navigation resolves before React
  * unmounts the shell, whose queries would rebuild whatever a clear dropped,
- * so it runs from this page's effect, after the shell is gone. It clears the
- * query cache, the mutation cache (which holds password-change variables)
- * and the router's cached matches.
+ * so it runs from this page's effect, after the shell is gone. It ends the
+ * session for mutations still in flight, then clears the query cache, the
+ * mutation cache (which holds password-change variables) and the router's
+ * cached matches.
  */
 export function useForgetEndedSession() {
   const queryClient = useQueryClient();
@@ -58,6 +78,7 @@ export function useForgetEndedSession() {
 
   useEffect(() => {
     if (!loggedOut) return;
+    endedSessions += 1;
     queryClient.clear();
     router.clearCache();
   }, [loggedOut, queryClient, router]);

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { KeyRound } from "lucide-react";
 import SettingsCardHeader from "@/components/settings/SettingsCardHeader";
+import { sessionEndedSince, sessionStamp } from "@/hooks/useEndSession";
 import { updateUserPin } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/is-api-failure";
 import {
@@ -99,7 +100,9 @@ export default function ProfilePinCard() {
   const pinMutation = useMutation({
     mutationFn: ({ pin, current }: { pin: string; current?: string }) =>
       updateUserPin(pin, current),
-    onSuccess: (res, variables) => {
+    onMutate: sessionStamp,
+    onSuccess: (res, variables, stamp) => {
+      if (sessionEndedSince(stamp)) return;
       const removing = variables.pin === "";
       const action = removing ? "remove PIN" : "update PIN";
 
@@ -120,7 +123,8 @@ export default function ProfilePinCard() {
       setSignedInUser(queryClient, res.data.user);
       showSuccess(removing ? "PIN removed" : "PIN saved");
     },
-    onError: (_error, variables) => {
+    onError: (_error, variables, stamp) => {
+      if (sessionEndedSince(stamp)) return;
       const removing = variables.pin === "";
       const action = removing ? "remove PIN" : "update PIN";
       showMutationError(

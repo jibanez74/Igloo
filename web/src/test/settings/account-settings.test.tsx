@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { authUserFrom, authUserQueryOpts } from "@/lib/query-opts";
 import type { AuthUser } from "@/types";
-import { jsonResponse, requestURL } from "../helpers/api";
+import { deferredResponse, jsonResponse, requestURL } from "../helpers/api";
 import { passwordCases } from "../helpers/password-cases";
 import { renderRoute } from "../helpers/render-route";
 
@@ -47,7 +47,15 @@ function testUser(overrides: Partial<AuthUser> = {}): AuthUser {
   };
 }
 
-function setupAccountFetch(user: AuthUser = testUser()) {
+type AccountFetchOptions = {
+  /** Answers the avatar URL request in place of the stored-copy reply. */
+  avatarResponse?: Promise<Response>;
+};
+
+function setupAccountFetch(
+  user: AuthUser = testUser(),
+  { avatarResponse }: AccountFetchOptions = {},
+) {
   const requests: CapturedRequest[] = [];
   let currentUser: AuthUser | null = user;
 
@@ -91,6 +99,7 @@ function setupAccountFetch(user: AuthUser = testUser()) {
     }
 
     if (url === "/api/user/avatar" && method === "PUT") {
+      if (avatarResponse) return avatarResponse;
       // The server stores its own copy of the image and answers with it.
       currentUser = currentUser && {
         ...currentUser,
@@ -124,8 +133,11 @@ function setupAccountFetch(user: AuthUser = testUser()) {
   return { requests };
 }
 
-async function renderAccountRoute(user = testUser()) {
-  const { requests } = setupAccountFetch(user);
+async function renderAccountRoute(
+  user = testUser(),
+  options: AccountFetchOptions = {},
+) {
+  const { requests } = setupAccountFetch(user, options);
   const { router, queryClient } = await renderRoute("/settings/account");
 
   await screen.findByText("Profile Information");
@@ -184,6 +196,44 @@ describe("Account settings", () => {
       authUserFrom(queryClient.getQueryData(authUserQueryOpts().queryKey))
         ?.avatar,
     ).toBe("/api/static/avatars/2-stored.webp");
+  });
+
+  it("drops an avatar response that arrives after the session ended", async () => {
+    const user = userEvent.setup();
+    const avatarRequest = deferredResponse();
+    const { router, queryClient } = await renderAccountRoute(testUser(), {
+      avatarResponse: avatarRequest.promise,
+    });
+
+    await user.type(
+      screen.getByLabelText("Avatar image URL"),
+      "https://example.com/me.jpg",
+    );
+    await user.click(screen.getByRole("button", { name: "Set URL" }));
+    await screen.findByRole("button", { name: "Saving..." });
+
+    // What useEndSession does on logout; the login page then clears the cache.
+    await router.navigate({
+      to: "/login",
+      replace: true,
+      state: previous => ({ ...previous, loggedOut: true }),
+    });
+    await waitFor(() => {
+      expect(queryClient.getQueryCache().getAll()).toEqual([]);
+    });
+
+    avatarRequest.resolve(
+      jsonResponse({
+        error: false,
+        data: { user: testUser({ avatar: "/api/static/avatars/2-stored.webp" }) },
+      }),
+    );
+    // Let the response reach the mutation's callbacks.
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    expect(queryClient.getQueryCache().getAll()).toEqual([]);
+    expect(showSuccessMock).not.toHaveBeenCalled();
+    expect(showActionFailedMock).not.toHaveBeenCalled();
   });
 
   it.each(passwordCases)("validates $name when changing a password", async ({ password, error }) => {
