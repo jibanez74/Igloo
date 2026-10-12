@@ -119,7 +119,40 @@ type ApiRequestOptions = {
   body?: unknown;
   /** Aborting resolves the usual network-failure envelope; it never throws. */
   signal?: AbortSignal;
+  /**
+   * The caller answers a 401 itself: the credentials the request carried
+   * were wrong (login, the current password or PIN), or, for logout, the
+   * session had already ended. Any other 401 means the server ended the
+   * session, which onSessionExpired reports.
+   */
+  handlesUnauthorized?: boolean;
 };
+
+const sessionExpiredListeners = new Set<() => void>();
+
+/**
+ * Calls `listener` whenever the server answers a request with a 401 the
+ * caller does not handle itself: the session has expired, was revoked, or
+ * its user is gone. Returns the unsubscribe function.
+ */
+export function onSessionExpired(listener: () => void) {
+  sessionExpiredListeners.add(listener);
+  return () => {
+    sessionExpiredListeners.delete(listener);
+  };
+}
+
+function notifySessionExpired() {
+  for (const listener of sessionExpiredListeners) {
+    listener();
+  }
+}
+
+function warnUnlessAborted(endpoint: string, err: unknown) {
+  if (!(err instanceof DOMException && err.name === "AbortError")) {
+    console.warn(`apiRequest failed: ${endpoint}`, err);
+  }
+}
 
 function withQuery(path: string, params: Record<string, string | number | boolean>) {
   const query = new URLSearchParams();
@@ -155,30 +188,41 @@ async function apiRequest<T extends Record<string, unknown>>(
   endpoint: string,
   options: ApiRequestOptions = {},
 ): Promise<ApiResponseType<T>> {
-  const { method = "GET", body, signal } = options;
+  const { method = "GET", body, signal, handlesUnauthorized = false } = options;
 
+  let res: Response;
   try {
-    const res = await fetch(endpoint, {
+    res = await fetch(endpoint, {
       method,
       credentials: "include",
       headers: body ? { "Content-Type": "application/json" } : undefined,
       body: body ? JSON.stringify(body) : undefined,
       signal,
     });
+  } catch (err) {
+    warnUnlessAborted(endpoint, err);
+    return NETWORK_ERROR;
+  }
 
-    if (res.status === 404) {
-      return ERROR_NOTFOUND;
-    }
+  // Before the body is read, so a 401 a proxy answered without JSON still
+  // counts, and outside the try, so a listener's own failure is not reported
+  // as a network error.
+  if (res.status === 401 && !handlesUnauthorized) {
+    notifySessionExpired();
+  }
 
+  if (res.status === 404) {
+    return ERROR_NOTFOUND;
+  }
+
+  try {
     const data = (await res.json()) as ApiResponseType<T>;
     // Stamp the status so a surface can word a failure by what happened
     // (401 on login, 403 on a room) while keeping the server's message as its
     // fallback.
     return data.error ? { ...data, status: res.status } : data;
   } catch (err) {
-    if (!(err instanceof DOMException && err.name === "AbortError")) {
-      console.warn(`apiRequest failed: ${endpoint}`, err);
-    }
+    warnUnlessAborted(endpoint, err);
     return NETWORK_ERROR;
   }
 }
@@ -191,11 +235,13 @@ export const login = (email: string, password: string) =>
   apiRequest("/api/auth/login", {
     method: "POST",
     body: { email, password },
+    handlesUnauthorized: true,
   });
 
 export const logout = () =>
   apiRequest("/api/auth/logout", {
     method: "DELETE",
+    handlesUnauthorized: true,
   });
 
 export const getAuthUser = () =>
@@ -254,6 +300,7 @@ export const updateUserPassword = (
   apiRequest("/api/user/password", {
     method: "PUT",
     body: { current_password: currentPassword, new_password: newPassword },
+    handlesUnauthorized: true,
   });
 
 export const getUserPin = () =>
@@ -264,6 +311,7 @@ export const updateUserPin = (pin: string, currentPin?: string) =>
     method: "PUT",
     body:
       currentPin === undefined ? { pin } : { pin, current_pin: currentPin },
+    handlesUnauthorized: true,
   });
 
 export const updateUserAvatar = (avatar: string) =>
@@ -286,6 +334,10 @@ export const uploadUserAvatar = async (
       body: formData,
       credentials: "include",
     });
+
+    if (response.status === 401) {
+      notifySessionExpired();
+    }
 
     if (response.status === 404) {
       return ERROR_NOTFOUND;

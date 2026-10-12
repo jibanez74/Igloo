@@ -26,6 +26,14 @@ function isExpectedInvalidLoginResponse(response: Response) {
   );
 }
 
+// Once the session ends, whatever the open page asks for is refused.
+function isSessionEndedResponse(response: Response) {
+  return (
+    response.status() === 401 &&
+    new URL(response.url()).pathname.startsWith("/api/")
+  );
+}
+
 // Only a real instance without a TMDB key answers this 503; the mock always
 // serves in-theaters data.
 function isExpectedInTheatersUnavailableResponse(response: Response) {
@@ -389,6 +397,62 @@ test.describe("Login screen", () => {
     await expect
       .poll(() => new URL(page.url()).searchParams.get("redirect"))
       .toBe("/settings/account");
+
+    tracker.assertClean();
+  });
+
+  // Clearing the cookie stands in for the server ending the session (expiry,
+  // a password change elsewhere): every request after it is a 401.
+  test("sends a reader whose session ended on a navigation to log in, then back", async ({
+    page,
+    context,
+  }) => {
+    const env = readE2EEnv();
+    const tracker = trackLoginBrowserIssues(page, isSessionEndedResponse);
+
+    await loginPageViaApi(page);
+    await page.goto("/settings/account");
+    await expect(page.getByText("Profile Information")).toBeVisible();
+
+    await context.clearCookies();
+    await page.getByRole("link", { name: "Movies" }).click();
+
+    await expect(page).toHaveURL(appPath("/login"));
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("redirect"))
+      .toBe("/movies");
+    await expect(page.getByText("You've been signed out.")).toBeVisible();
+
+    const loginResponse = await submitLogin(page, env.email, env.password);
+    expect(loginResponse.status()).toBe(200);
+    await expect(page).toHaveURL(appPath("/movies"));
+
+    tracker.assertClean();
+  });
+
+  test("signs out when a request on the open page hears the session ended", async ({
+    page,
+    context,
+  }) => {
+    const env = readE2EEnv();
+    const tracker = trackLoginBrowserIssues(page, isSessionEndedResponse);
+
+    await loginPageViaApi(page);
+    await page.goto("/settings/account");
+    await expect(page.getByText("Profile Information")).toBeVisible();
+
+    await context.clearCookies();
+    // Opening the bell fetches the notification list, with no navigation.
+    await page.getByRole("button", { name: /^Notifications/ }).click();
+
+    await expect(page).toHaveURL(appPath("/login"));
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("redirect"))
+      .toBe("/settings/account");
+
+    await submitLogin(page, env.email, env.password);
+    await expect(page).toHaveURL(appPath("/settings/account"));
+    await expect(page.getByText("Profile Information")).toBeVisible();
 
     tracker.assertClean();
   });
