@@ -137,7 +137,7 @@ func (s *Scanner) processMusicBatch(ctx context.Context, scan *musicScanContext,
 		case isDeferred:
 			report.status.Deferred++
 			report.Issue(file.Path, scanner.PhaseLocal, scanner.ReasonFileDeferredNextScan)
-			s.logger.Debug("deferred track", "path", file.Path, "reason", deferred.Reason, "eligible_at", deferred.EligibleAt)
+			s.logger.Debug("deferred track", "path", file.Path, "reason", deferred.Reason)
 		case err != nil:
 			report.status.Failed++
 			report.Issue(file.Path, scanner.PhaseLocal, reasonFailed)

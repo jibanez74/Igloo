@@ -3,6 +3,8 @@ package scanner
 import (
 	"database/sql"
 	"time"
+
+	"igloo/cmd/internal/tmdb"
 )
 
 const (
@@ -33,4 +35,24 @@ func MissBackoffElapsed(attempts int64, lastAttemptAt sql.NullInt64, now time.Ti
 	backoff := min(TmdbMissBackoff<<shift, TmdbMissBackoffMax)
 	eligibleAt := time.Unix(lastAttemptAt.Int64, 0).Add(backoff)
 	return !now.Before(eligibleAt)
+}
+
+// ProviderBreaker stops enrichment dispatch after an authentication failure
+// or a run of transient provider failures; pending entities retry on a later
+// scan. Only errors returned by the TMDB client are observed.
+type ProviderBreaker struct {
+	consecutive int
+	Stopped     bool
+}
+
+func (b *ProviderBreaker) Observe(err error) {
+	authentication, transient := tmdb.ProviderFailure(err)
+	if transient {
+		b.consecutive++
+	} else {
+		b.consecutive = 0
+	}
+	if authentication || b.consecutive >= MaxConsecutiveProviderFailures {
+		b.Stopped = true
+	}
 }

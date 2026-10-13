@@ -159,9 +159,6 @@ func subtitleFields(stream ffprobe.Stream) SubtitleFields {
 // (codec level, coded width and height) go through helpers.NullInt64 instead,
 // because there a 0 carries no meaning and NULL is the honest record.
 func parseNullInt64(value string) sql.NullInt64 {
-	if value == "" {
-		return sql.NullInt64{}
-	}
 	parsed, err := strconv.ParseInt(value, 10, 64)
 	if err != nil {
 		return sql.NullInt64{}

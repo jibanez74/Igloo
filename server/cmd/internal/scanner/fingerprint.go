@@ -44,11 +44,10 @@ const (
 )
 
 // FileDeferral also carries the observed fingerprint when a later validation
-// detects a change. EligibleAt is set for quiet-period deferrals.
+// detects a change.
 type FileDeferral struct {
 	Reason      DeferralReason
 	Fingerprint FileFingerprint
-	EligibleAt  time.Time
 }
 
 func (d *FileDeferral) Error() string { return string(d.Reason) }
@@ -68,13 +67,14 @@ type FileInspection struct {
 }
 
 // StoredFingerprint rebuilds the persisted baseline from the nullable scan
-// index columns shared by the movie and music catalogs.
+// index columns every catalog shares.
 func StoredFingerprint(size int64, mtimeNS, ctimeNS sql.NullInt64, device, inode sql.NullString) FileFingerprint {
 	return FileFingerprint{Size: size, MtimeNS: mtimeNS.Int64, CtimeNS: ctimeNS.Int64, Device: device.String, Inode: inode.String}
 }
 
+// Close releases the descriptor; it is safe on a nil inspection.
 func (r *FileInspection) Close() error {
-	if r.file == nil {
+	if r == nil || r.file == nil {
 		return nil
 	}
 	err := r.file.Close()

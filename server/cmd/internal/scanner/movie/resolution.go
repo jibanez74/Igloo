@@ -144,32 +144,18 @@ func (s *Scanner) resolveLocalMovie(ctx context.Context, file scanner.ScanFile, 
 		return nil, fmt.Errorf("ffprobe failed (required): %w", err)
 	}
 
-	mimeType := helpers.VideoMimeTypes[file.Ext]
-	if mimeType == "" {
-		mimeType = "application/octet-stream"
-	}
-
+	// The walk only yields ValidVideoExtensions, each of which has a MIME type.
+	durationSec, _ := helpers.ParseDurationSeconds(info.Format.Duration)
 	params := database.UpsertMovieParams{
 		Title:     titleYear.Title,
+		Year:      helpers.NullInt64(int64(titleYear.Year)),
 		FilePath:  file.Path,
 		FileName:  filepath.Base(file.Path),
 		Size:      file.Size,
 		Container: file.Ext,
-		MimeType:  mimeType,
-		Adult:     false,
-	}
-
-	if titleYear.Year > 0 {
-		params.Year = helpers.NullInt64(int64(titleYear.Year))
-	}
-
-	durationSec, validDuration := helpers.ParseDurationSeconds(info.Format.Duration)
-	if validDuration && durationSec > 0 {
-		params.Duration = helpers.NullFloat64(durationSec)
-		runTimeMinutes := int64(math.Round(durationSec / 60))
-		if runTimeMinutes > 0 {
-			params.RunTime = helpers.NullInt64(runTimeMinutes)
-		}
+		MimeType:  helpers.VideoMimeTypes[file.Ext],
+		Duration:  helpers.NullFloat64(durationSec),
+		RunTime:   helpers.NullInt64(int64(math.Round(durationSec / 60))),
 	}
 
 	return &localMovie{

@@ -64,6 +64,24 @@ type Progress struct {
 	Issues      []Issue    `json:"issues"`
 }
 
+// Counts are the file and enrichment counters every scanner's status carries;
+// scanners embed it beside Progress and their own extra counters.
+type Counts struct {
+	Total               int `json:"total"`
+	Processed           int `json:"processed"`
+	Imported            int `json:"imported"`
+	Updated             int `json:"updated"`
+	Unchanged           int `json:"unchanged"`
+	Failed              int `json:"failed"`
+	Deferred            int `json:"deferred"`
+	Deleted             int `json:"deleted"`
+	EnrichmentTotal     int `json:"enrichment_total"`
+	EnrichmentProcessed int `json:"enrichment_processed"`
+	Enriched            int `json:"enriched"`
+	EnrichmentFailed    int `json:"enrichment_failed"`
+	EnrichmentUnmatched int `json:"enrichment_unmatched"`
+}
+
 type Issue struct {
 	Filename string    `json:"filename"`
 	Phase    ScanPhase `json:"phase"`
@@ -141,10 +159,6 @@ func (r *Report) DropIssue(path string, phase ScanPhase) {
 	}
 	delete(r.issues, key)
 	r.issueVersion++
-}
-
-func (r *Report) IssueCount() int {
-	return len(r.issues)
 }
 
 func (r *Report) Activate(path string) {

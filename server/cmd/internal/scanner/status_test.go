@@ -16,7 +16,7 @@ func TestReportIssuesDoNotCollide(t *testing.T) {
 	report.Issue("/library/b.mkv", PhaseDiscovery, "unreadable")
 	report.Issue("/library/a.mkv", PhaseLocal, "unreadable")
 
-	if report.IssueCount() != 3 {
+	if len(report.issues) != 3 {
 		t.Fatalf("issues collided: %v", report.issues)
 	}
 }

@@ -113,9 +113,10 @@ func TestEnrichmentDeferralIsNotAFailure(t *testing.T) {
 	}
 
 	s.recordEnrichment(report, result, enrichmentSkipped)
+	report.Publish(&report.status.Progress)
 
-	if report.status.EnrichmentFailed != 0 || report.status.EnrichmentUnmatched != 0 || report.IssueCount() != 0 {
-		t.Fatalf("deferral recorded as a failure: %+v issues=%d", report.status, report.IssueCount())
+	if report.status.EnrichmentFailed != 0 || report.status.EnrichmentUnmatched != 0 || report.status.IssueCount != 0 {
+		t.Fatalf("deferral recorded as a failure: %+v", report.status)
 	}
 }
 

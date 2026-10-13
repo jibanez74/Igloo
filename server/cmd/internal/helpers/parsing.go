@@ -110,17 +110,6 @@ func ParseBitRate(bitRateStr string) int64 {
 	return parsed
 }
 
-// ClampFloat64 returns v limited to [lo, hi]. If lo > hi, the bounds are swapped.
-// If v, lo, or hi is NaN, the result follows IEEE 754 (NaN propagates); callers that
-// require finite values should validate before calling. It lives beside the parsers as
-// the range guard applied to the values they produce.
-func ClampFloat64(v, lo, hi float64) float64 {
-	if lo > hi {
-		lo, hi = hi, lo
-	}
-	return min(max(v, lo), hi)
-}
-
 // ParseDate attempts common audio metadata date formats.
 func ParseDate(s string) (time.Time, error) {
 	if s == "" {

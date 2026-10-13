@@ -86,9 +86,8 @@ func (s *Scanner) enrichMovies(ctx context.Context, scan *movieScanContext, repo
 	sort.Slice(candidates, func(i, j int) bool { return candidates[i].file.Path < candidates[j].file.Path })
 	report.status.EnrichmentTotal = len(candidates)
 	s.publish(report)
-	consecutive := 0
-	stopped := false
-	scanner.RunWorkers(ctx, scanWorkers, candidates, func() bool { return !stopped }, s.prepareEnrichment,
+	breaker := &scanner.ProviderBreaker{}
+	scanner.RunWorkers(ctx, scanWorkers, candidates, func() bool { return !breaker.Stopped }, s.prepareEnrichment,
 		func(job enrichmentJob) {
 			report.Activate(job.file.Path)
 			s.publish(report)
@@ -98,14 +97,8 @@ func (s *Scanner) enrichMovies(ctx context.Context, scan *movieScanContext, repo
 			contextErr := ctx.Err()
 			if contextErr == nil {
 				report.status.EnrichmentProcessed++
-				authentication, transient := tmdb.ProviderFailure(result.providerErr)
-				if transient {
-					consecutive++
-				} else {
-					consecutive = 0
-				}
-				if authentication || consecutive >= scanner.MaxConsecutiveProviderFailures {
-					stopped = true
+				breaker.Observe(result.providerErr)
+				if breaker.Stopped {
 					report.Issue("", scanner.PhaseEnrichment, reasonStopped)
 				}
 				outcome := enrichmentSkipped

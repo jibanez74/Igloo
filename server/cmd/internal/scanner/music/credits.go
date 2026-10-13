@@ -92,14 +92,13 @@ func shouldSplitCompoundArtistCredits(err error) bool {
 }
 
 func isArtistSuffix(value string) bool {
-	trimmed := strings.TrimSpace(value)
-	suffix := strings.ToLower(strings.TrimSuffix(trimmed, "."))
+	suffix := strings.ToLower(strings.TrimSuffix(value, "."))
 
 	switch suffix {
 	case "jr", "sr", "ii", "iii", "iv":
 		return true
 	case "v", "vi":
-		return strings.HasSuffix(trimmed, ".")
+		return strings.HasSuffix(value, ".")
 	default:
 		return false
 	}

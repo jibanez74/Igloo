@@ -31,9 +31,6 @@ func (s *Scanner) processSpotifyAlbumGenres(ctx context.Context, qtx *database.Q
 }
 
 func (s *Scanner) processSpotifyEntityGenres(ctx context.Context, qtx *database.Queries, scan *musicScanContext, genres []string, createRelationship func(int64) error) error {
-	if len(genres) == 0 {
-		return nil
-	}
 	for _, tag := range genres {
 		genreID, err := s.getOrCreateMusicGenreID(ctx, qtx, scan, tag)
 		if err != nil {

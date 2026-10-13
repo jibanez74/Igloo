@@ -10,10 +10,8 @@ import (
 // they may touch report and index maps without locking.
 //
 // shouldContinue is a stop gate, not a pause: once it returns false (or ctx is
-// canceled) no further job is dispatched, and the remaining jobs are dropped as
-// soon as the in-flight ones drain -- the loop does not wait for it to reopen.
-// Results already in flight are always delivered. Both callers want that: the
-// movie retry window closes for good, and so does the TMDB circuit breaker.
+// canceled) no further job is dispatched and the rest are dropped, though
+// results already in flight are still delivered.
 func RunWorkers[J, R any](
 	ctx context.Context,
 	workers int,

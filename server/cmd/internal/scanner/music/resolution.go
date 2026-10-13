@@ -124,9 +124,7 @@ func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, 
 		}
 	}
 
-	if info.Format.BitRate != "" {
-		params.BitRate = helpers.ParseBitRate(info.Format.BitRate)
-	}
+	params.BitRate = helpers.ParseBitRate(info.Format.BitRate)
 
 	if tags.Disc != "" {
 		disc, parseErr := helpers.ParseSlashNumber(tags.Disc)
@@ -160,13 +158,12 @@ func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, 
 		params.Codec = stream.CodecName
 		params.Profile = stream.Profile
 
-		if stream.ChannelLayout != "" {
-			params.Channels = stream.ChannelLayout
-			params.ChannelLayout = stream.ChannelLayout
-		} else {
-			params.Channels = strconv.Itoa(stream.Channels)
-			params.ChannelLayout = strconv.Itoa(stream.Channels)
+		channels := stream.ChannelLayout
+		if channels == "" {
+			channels = strconv.Itoa(stream.Channels)
 		}
+		params.Channels = channels
+		params.ChannelLayout = channels
 
 		language := strings.TrimSpace(stream.Tags.Language)
 		unknown := language == "" || strings.EqualFold(language, "und")

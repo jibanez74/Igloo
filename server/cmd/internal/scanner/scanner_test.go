@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"igloo/cmd/internal/scanner/scannertest"
 	"os"
@@ -36,27 +37,39 @@ func TestNormalizedScanCacheKey(t *testing.T) {
 	}
 }
 
-func TestScanGuardSingleFlight(t *testing.T) {
-	var g ScanGuard
-	var wins int64
-	var mu sync.Mutex
-	var wg sync.WaitGroup
+func TestLauncherAdmitsOneScanAtATime(t *testing.T) {
+	var scans sync.WaitGroup
+	launcher := Launcher{Wait: &scans}
+	directory := sql.NullString{String: "/library", Valid: true}
+	release := make(chan struct{})
 
+	var mu sync.Mutex
+	started := 0
+	var callers sync.WaitGroup
 	for i := 0; i < 50; i++ {
-		wg.Add(1)
+		callers.Add(1)
 		go func() {
-			defer wg.Done()
-			if g.TryBegin() {
+			defer callers.Done()
+			result := launcher.Launch(directory, func() {}, func(string) { <-release })
+			if result.Status == StartStarted {
 				mu.Lock()
-				wins++
+				started++
 				mu.Unlock()
 			}
 		}()
 	}
-	wg.Wait()
+	callers.Wait()
+	close(release)
+	scans.Wait()
 
-	if wins != 1 {
-		t.Fatalf("expected exactly one TryBegin winner, got %d", wins)
+	if started != 1 {
+		t.Fatalf("expected exactly one scan to start, got %d", started)
+	}
+
+	result := launcher.Launch(directory, func() {}, func(string) {})
+	scans.Wait()
+	if result.Status != StartStarted {
+		t.Fatalf("a finished scan must let the next one start, got status %d", result.Status)
 	}
 }
 
