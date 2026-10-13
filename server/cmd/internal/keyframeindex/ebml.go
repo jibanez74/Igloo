@@ -77,10 +77,7 @@ func extractEBML(ctx context.Context, r io.ReaderAt, size int64) (Index, error) 
 	}
 	segmentEnd := size
 	if segment.DataSize != ebmlUnknownSize {
-		segmentEnd = segment.DataStart + segment.DataSize
-		if segmentEnd > size {
-			segmentEnd = size
-		}
+		segmentEnd = min(segment.DataStart+segment.DataSize, size)
 	}
 
 	locations, err := locateEBMLIndexElements(ctx, r, segment.DataStart, segmentEnd)
@@ -115,7 +112,7 @@ func extractEBML(ctx context.Context, r io.ReaderAt, size int64) (Index, error) 
 		videoTrack = track
 	}
 
-	if err = checkContext(ctx); err != nil {
+	if err = ctx.Err(); err != nil {
 		return Index{}, err
 	}
 
@@ -161,7 +158,7 @@ func locateViaSeekHead(ctx context.Context, r io.ReaderAt, segmentDataStart, seg
 	// child is not a SeekHead falls out of the loop immediately.
 	seekHeadOffset := segmentDataStart
 	for hop := 0; hop < maxSeekHeadHops && seekHeadOffset != 0; hop++ {
-		err := checkContext(ctx)
+		err := ctx.Err()
 		if err != nil {
 			return locations, err
 		}
@@ -227,7 +224,7 @@ func locateViaLinearWalk(
 ) (ebmlIndexLocations, error) {
 	offset := segmentDataStart
 	for element := 0; element < maxEBMLTopLevelElements && offset < segmentEnd; element++ {
-		if err := checkContext(ctx); err != nil {
+		if err := ctx.Err(); err != nil {
 			return locations, err
 		}
 
@@ -389,10 +386,7 @@ func parseEBMLSeekEntry(data []byte) (uint32, uint64, error) {
 		switch id {
 		case seekEntryIDID:
 			// The SeekID payload is the raw bytes of the referenced element ID.
-			raw := uint64(0)
-			for _, b := range childData {
-				raw = raw<<8 | uint64(b)
-			}
+			raw := ebmlUint(childData)
 			if raw <= math.MaxUint32 {
 				targetID = uint32(raw)
 			}
@@ -417,10 +411,7 @@ func readEBMLBoundedPayload(r io.ReaderAt, offset, segmentEnd int64, wantID uint
 	if element.ID != wantID {
 		return nil, fmt.Errorf("expected element 0x%X at offset %d, found 0x%X", wantID, offset, element.ID)
 	}
-	if element.DataSize == ebmlUnknownSize {
-		return nil, ErrNoIndex
-	}
-	if element.DataSize > maxPayloadBytes {
+	if element.DataSize == ebmlUnknownSize || element.DataSize > maxPayloadBytes {
 		return nil, ErrNoIndex
 	}
 

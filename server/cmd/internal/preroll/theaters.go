@@ -29,10 +29,9 @@ type TheaterSource interface {
 // YouTube keys only) in memory for a few hours, so a play never fans out into
 // one TMDB call per movie. Nothing is persisted.
 type TheatersPool struct {
-	source      TheaterSource
-	logger      logger.LoggerInterface
-	now         func() time.Time
-	concurrency int
+	source TheaterSource
+	logger logger.LoggerInterface
+	now    func() time.Time
 
 	mu         sync.Mutex
 	trailers   []Trailer
@@ -42,10 +41,9 @@ type TheatersPool struct {
 
 func NewTheatersPool(source TheaterSource, log logger.LoggerInterface) *TheatersPool {
 	return &TheatersPool{
-		source:      source,
-		logger:      log,
-		now:         time.Now,
-		concurrency: theatersConcurrency,
+		source: source,
+		logger: log,
+		now:    time.Now,
 	}
 }
 
@@ -127,7 +125,7 @@ func (p *TheatersPool) resolve(ctx context.Context) ([]Trailer, error) {
 	}
 
 	results := make([]*Trailer, len(movies))
-	permits := make(chan struct{}, p.concurrency)
+	permits := make(chan struct{}, theatersConcurrency)
 	var wait sync.WaitGroup
 	for index, listed := range movies {
 		if listed == nil || listed.TmdbID == 0 {

@@ -100,9 +100,8 @@ func hlsEncoderForcesIDR(encoder string, caps Capabilities) bool {
 	case "h264_qsv":
 		return caps.SupportsEncoderOption("h264_qsv", "forced_idr")
 	default:
-		// hlsVideoEncoder only ever produces the four encoders above, so this
-		// is unreachable today; refusing to claim the guarantee is the right
-		// answer for any encoder added to that table without a case here.
+		// Refuse the guarantee for an encoder added to hlsVideoEncoder
+		// without a case here.
 		return false
 	}
 }
@@ -155,13 +154,11 @@ func HLSSegmentCount(durationSec float64, frameRate float64) int {
 }
 
 // HLSUsesTempFile reports whether the hls muxer writes each segment to a
-// .tmp name and renames it on close (-hls_flags temp_file), which is what
-// lets the api package judge a segment complete by its final name's
-// existence alone. Exported for the same reason as HLSSegmentsAreIndependent:
-// the args builder and the serving side must agree from one predicate.
-// The embedded FFmpeg supports the flag; the capability gate only protects a
-// swapped IGLOO_FFMPEG_PATH binary, which falls back to the successor-file
-// readiness heuristic.
+// .tmp name and renames it on close (-hls_flags temp_file), which lets the api
+// package judge a segment complete by its final name alone. The args builder
+// and the serving side share this one predicate. The embedded FFmpeg supports
+// the flag; the gate only protects a swapped IGLOO_FFMPEG_PATH binary, which
+// falls back to the successor-file readiness heuristic.
 func HLSUsesTempFile(p HLSParams) bool {
 	return p.Capabilities.SupportsMuxerFlag("hls", "temp_file")
 }
@@ -345,17 +342,11 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 	// one plus-joined occurrence — a second -hls_flags would silently replace
 	// the first.
 	hlsFlags := make([]string, 0, 2)
-	// independent_segments only emits #EXT-X-INDEPENDENT-SEGMENTS in the
-	// playlist; segmentation is unaffected. The claim is only made where it is
-	// proven: transcodes pin an IDR to every segment boundary, while
-	// copy-video output is validated by sampling four fragments and so is
-	// never proven source-wide.
+	// independent_segments only adds the playlist tag; segmentation is
+	// unaffected.
 	if HLSSegmentsAreIndependent(p) {
 		hlsFlags = append(hlsFlags, "independent_segments")
 	}
-	// temp_file writes each segment to a .tmp name and renames it on close,
-	// so a segment's final name existing means it is complete — the serving
-	// side (segmentReady) relies on exactly that contract.
 	if HLSUsesTempFile(p) {
 		hlsFlags = append(hlsFlags, "temp_file")
 	}
@@ -392,12 +383,8 @@ func validateHLSAudioProfile(profile *helpers.HLSResolvedAudioProfile) error {
 	return nil
 }
 
-// appendHLSNvidiaEncoderArgs adds the NVENC encoder settings. -forced-idr is
-// what makes -force_key_frames produce IDR frames: with it at its default of
-// false, FFmpeg asks NVENC for a plain intra frame, and later frames may still
-// reference across it — which would break segment-level random access and make
-// #EXT-X-INDEPENDENT-SEGMENTS a lie. hlsEncoderForcesIDR reads the same
-// capability, so a build without the option loses the tag instead.
+// appendHLSNvidiaEncoderArgs adds the NVENC encoder settings; -forced-idr is
+// what makes -force_key_frames produce IDR frames (see hlsEncoderForcesIDR).
 func appendHLSNvidiaEncoderArgs(args []string, caps Capabilities) []string {
 	args = append(args, "-rc", "vbr", "-preset", "p4")
 	if caps.SupportsEncoderOption("h264_nvenc", "forced-idr") {
@@ -573,7 +560,6 @@ func (f *ffmpeg) RunHLS(
 
 	cmd := exec.CommandContext(ctx, f.bin, args...)
 	cmd.Dir = absOutDir
-	cmd.Stdout = nil
 
 	stderrPipe, err := cmd.StderrPipe()
 	if err != nil {
@@ -616,16 +602,9 @@ func (f *ffmpeg) RunHLS(
 		stderrWg.Wait()
 		exitErr := cmd.Wait()
 		if onExit != nil {
-			n := hlsStderrTailLines
-			if ringIdx < n {
-				n = ringIdx
-			}
+			n := min(ringIdx, hlsStderrTailLines)
 			tail := make([]string, 0, n)
-			start := ringIdx - n
-			if start < 0 {
-				start = 0
-			}
-			for i := start; i < ringIdx; i++ {
+			for i := ringIdx - n; i < ringIdx; i++ {
 				tail = append(tail, ring[i%hlsStderrTailLines])
 			}
 			onExit(exitErr, tail)

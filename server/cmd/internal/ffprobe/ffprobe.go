@@ -106,11 +106,6 @@ func Cleanup() error {
 	instanceMu.Lock()
 	defer instanceMu.Unlock()
 
-	if extractedDir == "" {
-		instance = nil
-		return nil
-	}
-
 	err := mediabin.CleanupExtracted("ffprobe", extractedDir)
 	if err != nil {
 		return err

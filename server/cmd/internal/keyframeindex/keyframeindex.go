@@ -78,10 +78,7 @@ func Extract(ctx context.Context, r io.ReaderAt, size int64, container string) (
 // every index read back out of the database through it, so a corrupt row is
 // rejected rather than silently mis-seeking a copy-video session.
 func Finalize(idx Index) (Index, error) {
-	if len(idx.KeyframeSec) == 0 {
-		return Index{}, ErrNoIndex
-	}
-	if len(idx.KeyframeSec) > maxKeyframeCount {
+	if len(idx.KeyframeSec) == 0 || len(idx.KeyframeSec) > maxKeyframeCount {
 		return Index{}, ErrNoIndex
 	}
 
@@ -106,19 +103,7 @@ func Finalize(idx Index) (Index, error) {
 	}
 	idx.KeyframeSec = deduped
 
-	if last := idx.KeyframeSec[len(idx.KeyframeSec)-1]; idx.DurationSec < last {
-		idx.DurationSec = last
-	}
+	idx.DurationSec = max(idx.DurationSec, idx.KeyframeSec[len(idx.KeyframeSec)-1])
 
 	return idx, nil
-}
-
-// checkContext is the per-element cancellation point shared by both parsers.
-// Individual reads are size-capped, so checking between reads bounds total
-// work without plumbing deadlines into every read call.
-func checkContext(ctx context.Context) error {
-	if ctx == nil {
-		return nil
-	}
-	return ctx.Err()
 }

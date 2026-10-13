@@ -43,19 +43,10 @@ func ValidatePreferences(prefs Preferences) error {
 	if !countInRange {
 		return ErrInvalidCount
 	}
-	if !IsSource(prefs.Source) {
+	if !slices.Contains(Sources, prefs.Source) {
 		return ErrInvalidSource
 	}
 	return nil
-}
-
-func IsSource(value string) bool {
-	for _, source := range Sources {
-		if source == value {
-			return true
-		}
-	}
-	return false
 }
 
 // Trailer is one queue entry. Source is SourceLibrary or SourceTheaters;
@@ -96,14 +87,12 @@ func Select(prefs Preferences, library, theaters []Trailer, excludeTmdbID int64,
 
 	missing := prefs.Count - len(chosenTheaters) - len(chosenLibrary)
 	if missing > 0 {
-		var extra []Trailer
-		theatersPool, extra = take(theatersPool, missing, seen)
+		_, extra := take(theatersPool, missing, seen)
 		chosenTheaters = append(chosenTheaters, extra...)
 		missing -= len(extra)
 	}
 	if missing > 0 {
-		var extra []Trailer
-		_, extra = take(libraryPool, missing, seen)
+		_, extra := take(libraryPool, missing, seen)
 		chosenLibrary = append(chosenLibrary, extra...)
 	}
 

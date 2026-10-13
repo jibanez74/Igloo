@@ -221,11 +221,11 @@ func pruneStaleCacheEntries(binRoot, binaryName, keep string) {
 	}
 }
 
+// CleanupExtracted removes an extraction directory; an empty dir (nothing was
+// extracted) is a no-op, as os.RemoveAll("") is.
 func CleanupExtracted(binaryName, dir string) error {
-	if dir == "" {
-		return nil
-	}
-	if err := os.RemoveAll(dir); err != nil {
+	err := os.RemoveAll(dir)
+	if err != nil {
 		return fmt.Errorf("failed to cleanup %s: %w", binaryName, err)
 	}
 	return nil
