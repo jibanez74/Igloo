@@ -31,15 +31,11 @@ func (app *Application) GetUsers(w http.ResponseWriter, r *http.Request) {
 
 	users := make([]userListSummary, 0, len(rows))
 	for _, row := range rows {
-		var avatar *string
-		if row.Avatar.Valid {
-			avatar = &row.Avatar.String
-		}
 		users = append(users, userListSummary{
 			ID:     row.ID,
 			Name:   row.Name,
 			Email:  row.Email,
-			Avatar: avatar,
+			Avatar: helpers.StringPtrFromNull(row.Avatar),
 		})
 	}
 

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"database/sql"
 	"errors"
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
@@ -13,9 +12,7 @@ import (
 
 const (
 	quickConnectInvalidCodeMessage = "invalid or expired code"
-	quickConnectBusyMessage        = "quick connect is busy, please try again later"
-
-	quickConnectPollSeconds = 2
+	quickConnectPollSeconds        = 2
 )
 
 type InitiateQuickConnectRequest struct {
@@ -39,12 +36,8 @@ func (app *Application) InitiateQuickConnect(w http.ResponseWriter, r *http.Requ
 	}
 
 	request.DeviceName = strings.TrimSpace(request.DeviceName)
-	if request.DeviceName == "" || len(request.DeviceName) > maxDeviceNameLength {
-		helpers.ErrorJSON(w, errors.New("device_name is required and must be at most 100 characters"), http.StatusBadRequest)
-		return
-	}
-
-	if err := validateDeviceMetadata(request.Platform, request.AppVersion); err != nil {
+	err = validateDeviceInfo(request.DeviceName, request.Platform, request.AppVersion)
+	if err != nil {
 		helpers.ErrorJSON(w, err, http.StatusBadRequest)
 		return
 	}
@@ -52,7 +45,7 @@ func (app *Application) InitiateQuickConnect(w http.ResponseWriter, r *http.Requ
 	code, secret, err := app.QuickConnect.Initiate(request.DeviceName, request.Platform, request.AppVersion)
 	if err != nil {
 		if errors.Is(err, errQuickConnectCapacityReached) {
-			helpers.ErrorJSON(w, errors.New(quickConnectBusyMessage), http.StatusServiceUnavailable)
+			helpers.ErrorJSON(w, errors.New("quick connect is busy, please try again later"), http.StatusServiceUnavailable)
 			return
 		}
 
@@ -106,7 +99,7 @@ func (app *Application) RedeemQuickConnect(w http.ResponseWriter, r *http.Reques
 			Data: map[string]any{
 				"status": "approved",
 				"token":  token,
-				"device": deviceResponseMap(device.ID, device.Name, device.Platform, device.AppVersion, device.CreatedAt, device.LastUsedAt),
+				"device": deviceResponseMap(database.GetDevicesByUserRow(device)),
 			},
 		})
 	default:
@@ -200,12 +193,7 @@ func (app *Application) ApproveQuickConnect(w http.ResponseWriter, r *http.Reque
 // device. The plaintext token exists only in the caller's response; on
 // failure an error response has already been written and ok is false.
 func (app *Application) issueDeviceToken(w http.ResponseWriter, r *http.Request, userID int64, deviceName, platform, appVersion string) (string, database.CreateDeviceRow, bool) {
-	token, tokenHash, err := generateDeviceToken()
-	if err != nil {
-		app.serverError(w, err, "failed to generate device token", internalServerErrorMessage)
-		return "", database.CreateDeviceRow{}, false
-	}
-
+	token, tokenHash := generateDeviceToken()
 	device, err := app.Queries.CreateDevice(r.Context(), database.CreateDeviceParams{
 		UserID:     userID,
 		Name:       deviceName,
@@ -240,18 +228,13 @@ func normalizeQuickConnectCode(code string) string {
 	return strings.Map(stripSeparators, strings.ToUpper(strings.TrimSpace(code)))
 }
 
-func deviceResponseMap(id int64, name, platform string, appVersion sql.NullString, createdAt, lastUsedAt string) map[string]any {
-	var version *string
-	if appVersion.Valid {
-		version = &appVersion.String
-	}
-
+func deviceResponseMap(device database.GetDevicesByUserRow) map[string]any {
 	return map[string]any{
-		"id":           id,
-		"name":         name,
-		"platform":     platform,
-		"app_version":  version,
-		"created_at":   createdAt,
-		"last_used_at": lastUsedAt,
+		"id":           device.ID,
+		"name":         device.Name,
+		"platform":     device.Platform,
+		"app_version":  helpers.StringPtrFromNull(device.AppVersion),
+		"created_at":   device.CreatedAt,
+		"last_used_at": device.LastUsedAt,
 	}
 }

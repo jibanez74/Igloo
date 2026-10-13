@@ -27,10 +27,6 @@ type trailerPreferencesResponse struct {
 	Source  string `json:"source"`
 }
 
-func trailerPreferencesPayload(prefs preroll.Preferences) trailerPreferencesResponse {
-	return trailerPreferencesResponse{Enabled: prefs.Enabled, Count: prefs.Count, Source: prefs.Source}
-}
-
 // loadTrailerPreferences returns the stored preferences, or the defaults when
 // the user has never saved any.
 func (app *Application) loadTrailerPreferences(ctx context.Context, userID int64) (preroll.Preferences, error) {
@@ -57,7 +53,7 @@ func (app *Application) GetTrailerPreferences(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: trailerPreferencesPayload(prefs)})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: trailerPreferencesResponse(prefs)})
 }
 
 func (app *Application) UpdateTrailerPreferences(w http.ResponseWriter, r *http.Request) {
@@ -94,5 +90,5 @@ func (app *Application) UpdateTrailerPreferences(w http.ResponseWriter, r *http.
 	}
 
 	stored := preroll.Preferences{Enabled: row.TrailersEnabled, Count: int(row.TrailersCount), Source: row.TrailersSource}
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: trailerPreferencesPayload(stored)})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: trailerPreferencesResponse(stored)})
 }

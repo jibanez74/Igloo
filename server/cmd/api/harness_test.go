@@ -500,12 +500,9 @@ func createTestTrack(t *testing.T, app *Application, title, filePath string, alb
 func createTestDevice(t *testing.T, app *Application, userID int64, name, platform string) string {
 	t.Helper()
 
-	token, tokenHash, err := generateDeviceToken()
-	if err != nil {
-		t.Fatalf("generate device token: %v", err)
-	}
+	token, tokenHash := generateDeviceToken()
 
-	_, err = app.Queries.CreateDevice(context.Background(), database.CreateDeviceParams{
+	_, err := app.Queries.CreateDevice(context.Background(), database.CreateDeviceParams{
 		UserID:    userID,
 		Name:      name,
 		Platform:  platform,

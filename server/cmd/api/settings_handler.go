@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -41,13 +40,8 @@ type updateGeneralSettingsRequest struct {
 	TranscodeDir        string `json:"transcode_dir"`
 }
 
-type librarySettingsResponse struct {
-	MoviesDir *string `json:"movies_dir"`
-	ShowsDir  *string `json:"shows_dir"`
-	MusicDir  *string `json:"music_dir"`
-}
-
-type updateLibrarySettingsRequest struct {
+// librarySettings is both the library settings response and the update request.
+type librarySettings struct {
 	MoviesDir *string `json:"movies_dir"`
 	ShowsDir  *string `json:"shows_dir"`
 	MusicDir  *string `json:"music_dir"`
@@ -69,8 +63,8 @@ func mapGeneralSettingsResponse(settings database.Setting) generalSettingsRespon
 	}
 }
 
-func mapLibrarySettingsResponse(settings database.Setting) librarySettingsResponse {
-	return librarySettingsResponse{
+func mapLibrarySettingsResponse(settings database.Setting) librarySettings {
+	return librarySettings{
 		MoviesDir: helpers.StringPtrFromNull(settings.MoviesDir),
 		ShowsDir:  helpers.StringPtrFromNull(settings.ShowsDir),
 		MusicDir:  helpers.StringPtrFromNull(settings.MusicDir),
@@ -119,10 +113,7 @@ func (app *Application) SetSettings(settings *database.Setting) {
 //
 // Anything that touches the filesystem or the network must be validated before
 // calling this -- the lock is held for the whole callback.
-func (app *Application) withSettingsWrite(
-	ctx context.Context,
-	fn func(current database.Setting) (database.Setting, error),
-) (database.Setting, error) {
+func (app *Application) withSettingsWrite(fn func(current database.Setting) (database.Setting, error)) (database.Setting, error) {
 	app.settingsMu.Lock()
 	defer app.settingsMu.Unlock()
 
@@ -148,9 +139,7 @@ func (app *Application) GetGeneralSettings(w http.ResponseWriter, _ *http.Reques
 	settings := *app.CurrentSettings()
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Data: map[string]any{
-			"settings": mapGeneralSettingsResponse(settings),
-		},
+		Data: map[string]any{"settings": mapGeneralSettingsResponse(settings)},
 	})
 }
 
@@ -162,15 +151,12 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	req.TmdbKey = strings.TrimSpace(req.TmdbKey)
-	req.ImmichBaseURL = strings.TrimSpace(req.ImmichBaseURL)
-	req.ImmichApiKey = strings.TrimSpace(req.ImmichApiKey)
-	req.JellyfinBaseURL = strings.TrimSpace(req.JellyfinBaseURL)
-	req.JellyfinApiKey = strings.TrimSpace(req.JellyfinApiKey)
-	req.SpotifyClientID = strings.TrimSpace(req.SpotifyClientID)
-	req.SpotifyClientSecret = strings.TrimSpace(req.SpotifyClientSecret)
-	req.StaticDir = strings.TrimSpace(req.StaticDir)
-	req.TranscodeDir = strings.TrimSpace(req.TranscodeDir)
+	for _, field := range []*string{
+		&req.TmdbKey, &req.ImmichBaseURL, &req.ImmichApiKey, &req.JellyfinBaseURL, &req.JellyfinApiKey,
+		&req.SpotifyClientID, &req.SpotifyClientSecret, &req.StaticDir, &req.TranscodeDir,
+	} {
+		*field = strings.TrimSpace(*field)
+	}
 
 	if !isOptionalHTTPURL(req.JellyfinBaseURL) {
 		helpers.ErrorJSON(w, errors.New("jellyfin base URL must be a valid http or https URL"), http.StatusBadRequest)
@@ -209,7 +195,7 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 	// The directory validation above touches the filesystem, so it stays
 	// outside the lock; only the read-compare-write runs under it.
 	var restartRequired bool
-	updatedSettings, err := app.withSettingsWrite(r.Context(), func(current database.Setting) (database.Setting, error) {
+	updatedSettings, err := app.withSettingsWrite(func(current database.Setting) (database.Setting, error) {
 		updated, err := app.Queries.UpdateGeneralSettings(r.Context(), database.UpdateGeneralSettingsParams{
 			TmdbKey:             helpers.NullString(req.TmdbKey),
 			ImmichBaseUrl:       helpers.NullString(req.ImmichBaseURL),
@@ -250,17 +236,13 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 // The static and transcode directories are read live, and the remaining
 // integration values are stored without a server feature that reads them.
 func generalSettingsRestartRequired(previous *database.Setting, next database.Setting) bool {
-	if previous == nil {
-		return false
-	}
-
 	return previous.TmdbKey != next.TmdbKey ||
 		previous.SpotifyClientID != next.SpotifyClientID ||
 		previous.SpotifyClientSecret != next.SpotifyClientSecret
 }
 
 func (app *Application) UpdateLibrarySettings(w http.ResponseWriter, r *http.Request) {
-	var req updateLibrarySettingsRequest
+	var req librarySettings
 	err := helpers.ReadJSON(w, r, &req)
 	if err != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
@@ -290,7 +272,7 @@ func (app *Application) UpdateLibrarySettings(w http.ResponseWriter, r *http.Req
 
 	// The directory validation above touches the filesystem, so it stays
 	// outside the lock; only the write and the cache refresh run under it.
-	updatedSettings, err := app.withSettingsWrite(r.Context(), func(database.Setting) (database.Setting, error) {
+	updatedSettings, err := app.withSettingsWrite(func(database.Setting) (database.Setting, error) {
 		return app.Queries.UpdateLibrarySettings(r.Context(), database.UpdateLibrarySettingsParams{
 			MoviesDir: moviesDir,
 			ShowsDir:  showsDir,
@@ -304,9 +286,7 @@ func (app *Application) UpdateLibrarySettings(w http.ResponseWriter, r *http.Req
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Message: "Library settings updated",
-		Data: map[string]any{
-			"settings": mapLibrarySettingsResponse(updatedSettings),
-		},
+		Data:    map[string]any{"settings": mapLibrarySettingsResponse(updatedSettings)},
 	})
 }
 

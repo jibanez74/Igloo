@@ -68,11 +68,7 @@ func (app *Application) GetLikedTrackIDsForUser(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Data: map[string]any{
-			"liked_track_ids": trackIDs,
-		},
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"liked_track_ids": trackIDs}})
 }
 
 // GetLikedTracks returns the current user's liked tracks as a paginated list,
@@ -130,11 +126,7 @@ func (app *Application) GetTrackByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Data: map[string]any{
-			"track": track,
-		},
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"track": track}})
 }
 
 // StreamTrack streams the audio file for playback.
@@ -264,11 +256,7 @@ func (app *Application) GetShuffleTracks(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Data: map[string]any{
-			"tracks": tracks,
-		},
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"tracks": tracks}})
 }
 
 func (app *Application) GetMusicStats(w http.ResponseWriter, r *http.Request) {

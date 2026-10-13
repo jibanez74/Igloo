@@ -25,11 +25,15 @@ const (
 	quickConnectCodeAlphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 )
 
+type quickConnectDeviceInfo struct {
+	deviceName string
+	platform   string
+	appVersion string
+}
+
 type quickConnectEntry struct {
+	quickConnectDeviceInfo
 	secretHash     [32]byte
-	deviceName     string
-	platform       string
-	appVersion     string
 	approvedUserID int64
 	expiresAt      time.Time
 }
@@ -55,10 +59,7 @@ func NewQuickConnectBroker() *QuickConnectBroker {
 // device-held secret required to redeem it once approved.
 func (b *QuickConnectBroker) Initiate(deviceName, platform, appVersion string) (string, string, error) {
 	secretBytes := make([]byte, 32)
-	_, err := rand.Read(secretBytes)
-	if err != nil {
-		return "", "", err
-	}
+	rand.Read(secretBytes)
 	secret := base64.RawURLEncoding.EncodeToString(secretBytes)
 
 	b.mu.Lock()
@@ -71,10 +72,7 @@ func (b *QuickConnectBroker) Initiate(deviceName, platform, appVersion string) (
 
 	var code string
 	for {
-		code, err = generateQuickConnectCode()
-		if err != nil {
-			return "", "", err
-		}
+		code = generateQuickConnectCode()
 		_, exists := b.entries[code]
 		if !exists {
 			break
@@ -82,11 +80,9 @@ func (b *QuickConnectBroker) Initiate(deviceName, platform, appVersion string) (
 	}
 
 	b.entries[code] = &quickConnectEntry{
-		secretHash: sha256.Sum256([]byte(secret)),
-		deviceName: deviceName,
-		platform:   platform,
-		appVersion: appVersion,
-		expiresAt:  b.now().Add(quickConnectCodeTTL),
+		quickConnectDeviceInfo: quickConnectDeviceInfo{deviceName: deviceName, platform: platform, appVersion: appVersion},
+		secretHash:             sha256.Sum256([]byte(secret)),
+		expiresAt:              b.now().Add(quickConnectCodeTTL),
 	}
 
 	return code, secret, nil
@@ -111,12 +107,6 @@ func (b *QuickConnectBroker) Approve(code string, userID int64) bool {
 	return true
 }
 
-type quickConnectDeviceInfo struct {
-	deviceName string
-	platform   string
-	appVersion string
-}
-
 // Lookup returns the pending device's metadata without binding or consuming
 // the code, so the approving user can see what they are approving. ok is
 // false for unknown, expired, or already-approved codes — exactly the
@@ -134,11 +124,7 @@ func (b *QuickConnectBroker) Lookup(code string) (quickConnectDeviceInfo, bool) 
 		return quickConnectDeviceInfo{}, false
 	}
 
-	return quickConnectDeviceInfo{
-		deviceName: entry.deviceName,
-		platform:   entry.platform,
-		appVersion: entry.appVersion,
-	}, true
+	return entry.quickConnectDeviceInfo, true
 }
 
 type redeemStatus int
@@ -150,11 +136,9 @@ const (
 )
 
 type redeemResult struct {
-	status     redeemStatus
-	userID     int64
-	deviceName string
-	platform   string
-	appVersion string
+	quickConnectDeviceInfo
+	status redeemStatus
+	userID int64
 }
 
 // Redeem checks a code+secret pair. Approved entries are NOT consumed here:
@@ -180,11 +164,9 @@ func (b *QuickConnectBroker) Redeem(code, secret string) redeemResult {
 	}
 
 	return redeemResult{
-		status:     redeemApproved,
-		userID:     entry.approvedUserID,
-		deviceName: entry.deviceName,
-		platform:   entry.platform,
-		appVersion: entry.appVersion,
+		quickConnectDeviceInfo: entry.quickConnectDeviceInfo,
+		status:                 redeemApproved,
+		userID:                 entry.approvedUserID,
 	}
 }
 
@@ -208,7 +190,7 @@ func (b *QuickConnectBroker) purgeExpiredLocked() {
 	}
 }
 
-func generateQuickConnectCode() (string, error) {
+func generateQuickConnectCode() string {
 	// 256 is not a multiple of the alphabet length, so plain modulo would make
 	// the first 256%len symbols more likely. Bytes at or above the largest
 	// whole multiple are rejected instead, which keeps every symbol equally
@@ -219,11 +201,7 @@ func generateQuickConnectCode() (string, error) {
 	buf := make([]byte, quickConnectCodeLength)
 
 	for len(code) < quickConnectCodeLength {
-		_, err := rand.Read(buf)
-		if err != nil {
-			return "", err
-		}
-
+		rand.Read(buf)
 		for _, v := range buf {
 			if int(v) >= unbiasedLimit {
 				continue
@@ -236,5 +214,5 @@ func generateQuickConnectCode() (string, error) {
 		}
 	}
 
-	return string(code), nil
+	return string(code)
 }

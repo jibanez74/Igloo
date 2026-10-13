@@ -12,7 +12,7 @@ import (
 	spotifylib "github.com/zmb3/spotify/v2"
 )
 
-type spotifyAlbumSearchRequest struct {
+type spotifySearchRequest struct {
 	Title string `json:"title"`
 }
 
@@ -30,35 +30,40 @@ type spotifyAlbumSearchResult struct {
 }
 
 func (app *Application) GetSpotifyStatus(w http.ResponseWriter, r *http.Request) {
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Data: map[string]any{
-			"available": app.Spotify != nil,
-		},
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"available": app.Spotify != nil}})
 }
 
-func (app *Application) SearchSpotifyAlbums(w http.ResponseWriter, r *http.Request) {
+// readSpotifySearchTitle reads the title a Spotify search names, answering 503
+// when Spotify is not configured and 400 for a bad body or a blank title.
+func (app *Application) readSpotifySearchTitle(w http.ResponseWriter, r *http.Request) (string, bool) {
 	if !app.ensureSpotifyAvailable(w) {
-		return
+		return "", false
 	}
 
-	var payload spotifyAlbumSearchRequest
-
+	var payload spotifySearchRequest
 	err := helpers.ReadJSON(w, r, &payload)
 	if err != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
-		return
+		return "", false
 	}
 
-	payload.Title = strings.TrimSpace(payload.Title)
-	if payload.Title == "" {
+	title := strings.TrimSpace(payload.Title)
+	if title == "" {
 		helpers.ErrorJSON(w, errors.New("title is required"), http.StatusBadRequest)
+		return "", false
+	}
+	return title, true
+}
+
+func (app *Application) SearchSpotifyAlbums(w http.ResponseWriter, r *http.Request) {
+	title, ok := app.readSpotifySearchTitle(w, r)
+	if !ok {
 		return
 	}
 
-	albums, err := app.Spotify.SearchAlbums(r.Context(), payload.Title)
+	albums, err := app.Spotify.SearchAlbums(r.Context(), title)
 	if err != nil {
-		app.Logger.Error("spotify album search failed", "error", err, "title", payload.Title)
+		app.Logger.Error("spotify album search failed", "error", err, "title", title)
 		helpers.ErrorJSON(w, errors.New("Spotify album search failed"), http.StatusBadGateway)
 		return
 	}
@@ -69,15 +74,7 @@ func (app *Application) SearchSpotifyAlbums(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Data: map[string]any{
-			"results": results,
-		},
-	})
-}
-
-type spotifyTrackSearchRequest struct {
-	Title string `json:"title"`
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"results": results}})
 }
 
 type spotifyTrackSearchResult struct {
@@ -95,38 +92,21 @@ type spotifyTrackSearchResult struct {
 // have no spotify_id in the library, so results omit an "already in library"
 // flag.
 func (app *Application) SearchSpotifyTracks(w http.ResponseWriter, r *http.Request) {
-	if !app.ensureSpotifyAvailable(w) {
+	title, ok := app.readSpotifySearchTitle(w, r)
+	if !ok {
 		return
 	}
 
-	var payload spotifyTrackSearchRequest
-
-	err := helpers.ReadJSON(w, r, &payload)
+	tracks, err := app.Spotify.SearchTracks(r.Context(), title)
 	if err != nil {
-		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
-		return
-	}
-
-	payload.Title = strings.TrimSpace(payload.Title)
-	if payload.Title == "" {
-		helpers.ErrorJSON(w, errors.New("title is required"), http.StatusBadRequest)
-		return
-	}
-
-	tracks, err := app.Spotify.SearchTracks(r.Context(), payload.Title)
-	if err != nil {
-		app.Logger.Error("spotify track search failed", "error", err, "title", payload.Title)
+		app.Logger.Error("spotify track search failed", "error", err, "title", title)
 		helpers.ErrorJSON(w, errors.New("Spotify track search failed"), http.StatusBadGateway)
 		return
 	}
 
 	results := mapSpotifyTrackSearchResults(tracks)
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Data: map[string]any{
-			"results": results,
-		},
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"results": results}})
 }
 
 func mapSpotifyTrackSearchResults(tracks []spotifylib.FullTrack) []spotifyTrackSearchResult {

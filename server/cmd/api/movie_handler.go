@@ -137,11 +137,7 @@ func (app *Application) GetMovieGenresList(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Data: map[string]any{
-			"genres": rows,
-		},
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"genres": rows}})
 }
 
 func (app *Application) GetMoviesByGenreLibrary(w http.ResponseWriter, r *http.Request) {
@@ -231,11 +227,7 @@ func (app *Application) GetMovieLikeStatus(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Data: map[string]any{
-			"is_liked": isLiked,
-		},
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"is_liked": isLiked}})
 }
 
 // toggleLike flips a like in one transaction without a read-then-write race:

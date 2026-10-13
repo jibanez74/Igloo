@@ -279,11 +279,7 @@ func (app *Application) GetShowGenresList(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Data: map[string]any{
-			"genres": rows,
-		},
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"genres": rows}})
 }
 
 func (app *Application) GetShowsByGenreLibrary(w http.ResponseWriter, r *http.Request) {

@@ -10,34 +10,6 @@ import (
 	"igloo/cmd/internal/helpers"
 )
 
-type adminUserSummary struct {
-	ID        int64   `json:"id"`
-	Name      string  `json:"name"`
-	Email     string  `json:"email"`
-	IsAdmin   bool    `json:"is_admin"`
-	Avatar    *string `json:"avatar"`
-	HasPin    bool    `json:"has_pin"`
-	CreatedAt string  `json:"created_at"`
-	UpdatedAt string  `json:"updated_at"`
-}
-
-func adminUserRow(id int64, name, email string, isAdmin bool, avatar sql.NullString, hasPin bool, createdAt, updatedAt string) adminUserSummary {
-	var av *string
-	if avatar.Valid {
-		av = &avatar.String
-	}
-	return adminUserSummary{
-		ID:        id,
-		Name:      name,
-		Email:     email,
-		IsAdmin:   isAdmin,
-		Avatar:    av,
-		HasPin:    hasPin,
-		CreatedAt: createdAt,
-		UpdatedAt: updatedAt,
-	}
-}
-
 func (app *Application) AdminGetUsers(w http.ResponseWriter, r *http.Request) {
 	rows, err := app.Queries.GetAllUsers(r.Context())
 	if err != nil {
@@ -45,9 +17,9 @@ func (app *Application) AdminGetUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	users := make([]adminUserSummary, 0, len(rows))
+	users := make([]userResponse, 0, len(rows))
 	for _, row := range rows {
-		users = append(users, adminUserRow(
+		users = append(users, newUserResponse(
 			row.ID, row.Name, row.Email, row.IsAdmin,
 			row.Avatar, row.HasPin, row.CreatedAt, row.UpdatedAt,
 		))
@@ -73,11 +45,6 @@ func (app *Application) AdminCreateUser(w http.ResponseWriter, r *http.Request) 
 
 	req.Name = strings.TrimSpace(req.Name)
 	req.Email = strings.TrimSpace(req.Email)
-
-	if req.Name == "" {
-		helpers.ErrorJSON(w, errors.New(nameRequiredMessage), http.StatusBadRequest)
-		return
-	}
 
 	if err := validateUserName(req.Name); err != nil {
 		helpers.ErrorJSON(w, err, http.StatusBadRequest)
@@ -110,7 +77,6 @@ func (app *Application) AdminCreateUser(w http.ResponseWriter, r *http.Request) 
 		Email:    req.Email,
 		Password: hashedPassword,
 		IsAdmin:  *req.IsAdmin,
-		Avatar:   sql.NullString{},
 	})
 	if err != nil {
 		if strings.Contains(err.Error(), uniqueConstraintErrorFragment) {
@@ -125,7 +91,7 @@ func (app *Application) AdminCreateUser(w http.ResponseWriter, r *http.Request) 
 
 	helpers.WriteJSON(w, http.StatusCreated, helpers.JSONResponse{
 		Data: map[string]any{
-			"user": adminUserRow(
+			"user": newUserResponse(
 				user.ID, user.Name, user.Email, user.IsAdmin,
 				user.Avatar, user.Pin.Valid, user.CreatedAt, user.UpdatedAt,
 			),
@@ -153,11 +119,6 @@ func (app *Application) AdminUpdateUser(w http.ResponseWriter, r *http.Request) 
 
 	req.Name = strings.TrimSpace(req.Name)
 	req.Email = strings.TrimSpace(req.Email)
-
-	if req.Name == "" {
-		helpers.ErrorJSON(w, errors.New(nameRequiredMessage), http.StatusBadRequest)
-		return
-	}
 
 	if err := validateUserName(req.Name); err != nil {
 		helpers.ErrorJSON(w, err, http.StatusBadRequest)
@@ -190,11 +151,12 @@ func (app *Application) AdminUpdateUser(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	defer func() { _ = tx.Rollback() }()
+
 	qtx := app.Queries.WithTx(tx)
 
 	existing, err := qtx.GetUser(r.Context(), targetID)
 	if err != nil {
-		_ = tx.Rollback()
 		if errors.Is(err, sql.ErrNoRows) {
 			helpers.ErrorJSON(w, errors.New(userNotFoundMessage), http.StatusNotFound)
 			return
@@ -207,14 +169,12 @@ func (app *Application) AdminUpdateUser(w http.ResponseWriter, r *http.Request) 
 	if !isAdmin && existing.IsAdmin {
 		count, err := qtx.CountAdmins(r.Context())
 		if err != nil {
-			_ = tx.Rollback()
 			app.serverError(w, err, "admin: failed to count admins during update", internalServerErrorMessage,
 				"target_id", targetID)
 			return
 		}
 
 		if count <= 1 {
-			_ = tx.Rollback()
 			helpers.ErrorJSON(w, errors.New("cannot remove admin status from the last admin account"), http.StatusForbidden)
 			return
 		}
@@ -227,7 +187,6 @@ func (app *Application) AdminUpdateUser(w http.ResponseWriter, r *http.Request) 
 		ID:      targetID,
 	})
 	if err != nil {
-		_ = tx.Rollback()
 		if strings.Contains(err.Error(), uniqueConstraintErrorFragment) {
 			helpers.ErrorJSON(w, errors.New("a user with that email already exists"), http.StatusConflict)
 			return
@@ -247,7 +206,7 @@ func (app *Application) AdminUpdateUser(w http.ResponseWriter, r *http.Request) 
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
-			"user": adminUserRow(
+			"user": newUserResponse(
 				user.ID, user.Name, user.Email, user.IsAdmin,
 				user.Avatar, user.Pin.Valid, user.CreatedAt, user.UpdatedAt,
 			),
@@ -274,11 +233,12 @@ func (app *Application) AdminDeleteUser(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	defer func() { _ = tx.Rollback() }()
+
 	qtx := app.Queries.WithTx(tx)
 
 	user, err := qtx.GetUser(r.Context(), targetID)
 	if err != nil {
-		_ = tx.Rollback()
 		if errors.Is(err, sql.ErrNoRows) {
 			helpers.ErrorJSON(w, errors.New(userNotFoundMessage), http.StatusNotFound)
 			return
@@ -291,14 +251,12 @@ func (app *Application) AdminDeleteUser(w http.ResponseWriter, r *http.Request) 
 	if user.IsAdmin {
 		count, err := qtx.CountAdmins(r.Context())
 		if err != nil {
-			_ = tx.Rollback()
 			app.serverError(w, err, "admin: failed to count admins during deletion", internalServerErrorMessage,
 				"target_id", targetID)
 			return
 		}
 
 		if count <= 1 {
-			_ = tx.Rollback()
 			helpers.ErrorJSON(w, errors.New("cannot delete the last admin account"), http.StatusForbidden)
 			return
 		}
@@ -306,14 +264,12 @@ func (app *Application) AdminDeleteUser(w http.ResponseWriter, r *http.Request) 
 
 	roomIDs, err := qtx.ListWatchRoomIDsByOwnerID(r.Context(), targetID)
 	if err != nil {
-		_ = tx.Rollback()
 		app.serverError(w, err, "admin: failed to list the user's watch rooms", internalServerErrorMessage, "target_id", targetID)
 		return
 	}
 
 	err = qtx.DeleteUser(r.Context(), targetID)
 	if err != nil {
-		_ = tx.Rollback()
 		app.serverError(w, err, "admin: failed to delete user", internalServerErrorMessage, "target_id", targetID)
 		return
 	}

@@ -31,28 +31,6 @@ type CreateNotificationRequest struct {
 	Message string `json:"message"`
 }
 
-// notificationResponse is the client-facing shape of a notification. It
-// exposes the creator's display name and the viewer's read state.
-type notificationResponse struct {
-	ID            int64  `json:"id"`
-	Title         string `json:"title"`
-	Message       string `json:"message"`
-	IsRead        bool   `json:"is_read"`
-	CreatedByName string `json:"created_by_name"`
-	CreatedAt     string `json:"created_at"`
-}
-
-func newNotificationResponse(row database.ListNotificationsForUserRow) notificationResponse {
-	return notificationResponse{
-		ID:            row.ID,
-		Title:         row.Title,
-		Message:       row.Message,
-		IsRead:        row.IsRead,
-		CreatedByName: row.CreatedByName,
-		CreatedAt:     row.CreatedAt,
-	}
-}
-
 // writeNotificationViewerError answers a failed viewer lookup. No user row means
 // the session outlived its user, which is a stale session (401) rather than a
 // server fault.
@@ -158,7 +136,7 @@ func (app *Application) ListNotifications(w http.ResponseWriter, r *http.Request
 	if !badge.IsAdmin {
 		helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 			Data: map[string]any{
-				"notifications": []notificationResponse{},
+				"notifications": []database.ListNotificationsForUserRow{},
 				"unread_count":  int64(0),
 			},
 		})
@@ -174,14 +152,9 @@ func (app *Application) ListNotifications(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	notifications := make([]notificationResponse, 0, len(rows))
-	for _, row := range rows {
-		notifications = append(notifications, newNotificationResponse(row))
-	}
-
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
-			"notifications": notifications,
+			"notifications": rows,
 			"unread_count":  badge.UnreadCount,
 		},
 	})
@@ -200,11 +173,7 @@ func (app *Application) GetUnreadNotificationCount(w http.ResponseWriter, r *htt
 		return
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Data: map[string]any{
-			"unread_count": badge.UnreadCount,
-		},
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"unread_count": badge.UnreadCount}})
 }
 
 // MarkNotificationRead records that the current user has read a single

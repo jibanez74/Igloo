@@ -19,11 +19,7 @@ func (app *Application) GetMoviePlaylists(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Data: map[string]any{
-			"playlists": playlists,
-		},
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"playlists": playlists}})
 }
 
 type CreateMoviePlaylistRequest struct {
@@ -69,9 +65,7 @@ func (app *Application) CreateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 
 	helpers.WriteJSON(w, http.StatusCreated, helpers.JSONResponse{
 		Message: "Playlist created successfully",
-		Data: map[string]any{
-			"playlist": playlist,
-		},
+		Data:    map[string]any{"playlist": playlist},
 	})
 }
 
@@ -181,9 +175,7 @@ func (app *Application) UpdateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Message: "Playlist updated successfully",
-		Data: map[string]any{
-			"playlist": playlist,
-		},
+		Data:    map[string]any{"playlist": playlist},
 	})
 }
 

@@ -18,11 +18,7 @@ func (app *Application) GetPlaylists(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Data: map[string]any{
-			"playlists": playlists,
-		},
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"playlists": playlists}})
 }
 
 func (app *Application) GetPlaylist(w http.ResponseWriter, r *http.Request) {
@@ -151,9 +147,7 @@ func (app *Application) CreatePlaylist(w http.ResponseWriter, r *http.Request) {
 
 	helpers.WriteJSON(w, http.StatusCreated, helpers.JSONResponse{
 		Message: "Playlist created successfully",
-		Data: map[string]any{
-			"playlist": playlist,
-		},
+		Data:    map[string]any{"playlist": playlist},
 	})
 }
 
@@ -206,9 +200,7 @@ func (app *Application) UpdatePlaylist(w http.ResponseWriter, r *http.Request) {
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Message: "Playlist updated successfully",
-		Data: map[string]any{
-			"playlist": playlist,
-		},
+		Data:    map[string]any{"playlist": playlist},
 	})
 }
 
@@ -438,11 +430,7 @@ func (app *Application) getPlaylistCollaborators(
 		return
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Data: map[string]any{
-			"collaborators": collaborators,
-		},
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"collaborators": collaborators}})
 }
 
 func (app *Application) AddCollaborator(w http.ResponseWriter, r *http.Request) {
@@ -521,9 +509,7 @@ func (app *Application) addCollaborator(
 
 	helpers.WriteJSON(w, http.StatusCreated, helpers.JSONResponse{
 		Message: "Collaborator added successfully",
-		Data: map[string]any{
-			"collaborator": collaborator,
-		},
+		Data:    map[string]any{"collaborator": collaborator},
 	})
 }
 

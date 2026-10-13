@@ -47,11 +47,7 @@ func (app *Application) GetLatestAlbums(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Data: map[string]any{
-			"albums": albums,
-		},
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"albums": albums}})
 }
 
 // Use a read-only transaction so album details come from one snapshot.

@@ -25,14 +25,7 @@ func (app *Application) GetDevices(w http.ResponseWriter, r *http.Request) {
 
 	devices := make([]map[string]any, 0, len(rows))
 	for _, row := range rows {
-		devices = append(devices, deviceResponseMap(
-			row.ID,
-			row.Name,
-			row.Platform,
-			row.AppVersion,
-			row.CreatedAt,
-			row.LastUsedAt,
-		))
+		devices = append(devices, deviceResponseMap(row))
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"devices": devices}})
