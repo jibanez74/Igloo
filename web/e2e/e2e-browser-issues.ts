@@ -6,10 +6,13 @@ function isIgnorableFailedRequest(request: Request) {
     return false;
   }
 
+  // React Query aborts a query's GET once nothing observes it any more: a
+  // page left mid-load, a superseded search, or StrictMode's first mount in
+  // the dev server.
   const url = new URL(request.url());
   if (
     request.method() === "GET" &&
-    url.pathname === "/api/auth/user" &&
+    url.pathname.startsWith("/api/") &&
     request.resourceType() === "fetch"
   ) {
     return true;

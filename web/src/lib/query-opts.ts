@@ -175,7 +175,7 @@ import {
 export function authUserQueryOpts(options?: { revalidate?: boolean }) {
   return queryOptions({
     queryKey: [AUTH_USER_KEY],
-    queryFn: getAuthUser,
+    queryFn: ({ signal }) => getAuthUser(signal),
     staleTime: options?.revalidate ? 0 : freshFor(STALE_1M),
   });
 }
@@ -209,7 +209,7 @@ export function setSignedInUser(queryClient: QueryClient, user: AuthUser) {
 export function userPinQueryOpts() {
   return queryOptions({
     queryKey: [USER_PIN_KEY],
-    queryFn: getUserPin,
+    queryFn: ({ signal }) => getUserPin(signal),
     staleTime: 0,
     gcTime: 0,
   });
@@ -218,7 +218,7 @@ export function userPinQueryOpts() {
 export function trailerPreferencesQueryOpts() {
   return queryOptions({
     queryKey: [TRAILER_PREFERENCES_KEY],
-    queryFn: getTrailerPreferences,
+    queryFn: ({ signal }) => getTrailerPreferences(signal),
     staleTime: freshFor(STALE_CATALOG),
     gcTime: GC_LONG,
   });
@@ -231,7 +231,7 @@ export function trailerPreferencesQueryOpts() {
 export function devicesQueryOpts() {
   return queryOptions({
     queryKey: [DEVICES_KEY],
-    queryFn: getDevices,
+    queryFn: ({ signal }) => getDevices(signal),
     staleTime: freshFor(STALE_30S),
   });
 }
@@ -243,7 +243,7 @@ export function devicesQueryOpts() {
 export function notificationsQueryOpts() {
   return queryOptions({
     queryKey: [NOTIFICATIONS_KEY],
-    queryFn: getNotifications,
+    queryFn: ({ signal }) => getNotifications(signal),
     staleTime: 0,
   });
 }
@@ -261,7 +261,7 @@ export function invalidateNotifications(queryClient: QueryClient) {
 export function unreadNotificationCountQueryOpts() {
   return queryOptions({
     queryKey: [NOTIFICATIONS_UNREAD_COUNT_KEY],
-    queryFn: getUnreadNotificationCount,
+    queryFn: ({ signal }) => getUnreadNotificationCount(signal),
     staleTime: freshFor(STALE_30S),
     // Poll so the bell badge reflects new requests without a manual refresh.
     refetchInterval: 30_000,
@@ -275,7 +275,7 @@ export function unreadNotificationCountQueryOpts() {
 export function latestMoviesQueryOpts() {
   return queryOptions({
     queryKey: [LATEST_MOVIES_KEY],
-    queryFn: getLatestMovies,
+    queryFn: ({ signal }) => getLatestMovies(signal),
     staleTime: freshFor(STALE_CATALOG),
     gcTime: GC_LONG,
   });
@@ -284,7 +284,7 @@ export function latestMoviesQueryOpts() {
 export function latestShowsQueryOpts() {
   return queryOptions({
     queryKey: [LATEST_SHOWS_KEY],
-    queryFn: getLatestShows,
+    queryFn: ({ signal }) => getLatestShows(signal),
     staleTime: freshFor(STALE_CATALOG),
     gcTime: GC_LONG,
   });
@@ -293,7 +293,7 @@ export function latestShowsQueryOpts() {
 export function latestAlbumsQueryOpts() {
   return queryOptions({
     queryKey: [LATEST_ALBUMS_KEY],
-    queryFn: getLatestAlbums,
+    queryFn: ({ signal }) => getLatestAlbums(signal),
     staleTime: freshFor(STALE_CATALOG),
     gcTime: GC_LONG,
   });
@@ -305,7 +305,7 @@ export function latestAlbumsQueryOpts() {
 export function continueWatchingQueryOpts() {
   return queryOptions({
     queryKey: [CONTINUE_WATCHING_KEY],
-    queryFn: getContinueWatching,
+    queryFn: ({ signal }) => getContinueWatching(signal),
     staleTime: freshFor(STALE_30S),
   });
 }
@@ -313,7 +313,7 @@ export function continueWatchingQueryOpts() {
 export function inTheatersQueryOpts() {
   return queryOptions({
     queryKey: [MOVIES_IN_THEATERS_KEY],
-    queryFn: getMoviesInTheaters,
+    queryFn: ({ signal }) => getMoviesInTheaters(signal),
     staleTime: freshFor(STALE_THEATERS),
     gcTime: GC_LONG,
   });
@@ -324,7 +324,7 @@ export function inTheatersQueryOpts() {
 export function movieDetailsQueryOpts(id: number) {
   return queryOptions({
     queryKey: [MOVIE_DETAILS_KEY, id],
-    queryFn: () => getMovieInTheaterDetails(id),
+    queryFn: ({ signal }) => getMovieInTheaterDetails(id, signal),
     enabled: id > 0,
     staleTime: freshFor(STALE_CATALOG),
     gcTime: GC_LONG,
@@ -334,7 +334,7 @@ export function movieDetailsQueryOpts(id: number) {
 export function tmdbStatusQueryOpts() {
   return queryOptions({
     queryKey: [TMDB_STATUS_KEY],
-    queryFn: getTmdbStatus,
+    queryFn: ({ signal }) => getTmdbStatus(signal),
     staleTime: freshFor(STALE_CATALOG),
   });
 }
@@ -342,7 +342,7 @@ export function tmdbStatusQueryOpts() {
 export function spotifyStatusQueryOpts() {
   return queryOptions({
     queryKey: [SPOTIFY_STATUS_KEY],
-    queryFn: getSpotifyStatus,
+    queryFn: ({ signal }) => getSpotifyStatus(signal),
     staleTime: freshFor(STALE_CATALOG),
   });
 }
@@ -354,7 +354,7 @@ export function spotifyStatusQueryOpts() {
 export function libraryMovieDetailsQueryOpts(id: number) {
   return queryOptions({
     queryKey: [LIBRARY_MOVIE_DETAILS_KEY, id],
-    queryFn: () => getMovieDetails(id),
+    queryFn: ({ signal }) => getMovieDetails(id, signal),
     enabled: id > 0,
     staleTime: freshFor(STALE_LIST),
   });
@@ -363,7 +363,7 @@ export function libraryMovieDetailsQueryOpts(id: number) {
 export function movieTechnicalDetailsQueryOpts(id: number) {
   return queryOptions({
     queryKey: [MOVIE_TECHNICAL_DETAILS_KEY, id],
-    queryFn: () => getMovieTechnicalDetails(id),
+    queryFn: ({ signal }) => getMovieTechnicalDetails(id, signal),
     enabled: id > 0,
     staleTime: freshFor(STALE_TECH),
     gcTime: GC_LONG,
@@ -377,7 +377,7 @@ export function moviesLibraryQueryOpts(
 ) {
   return queryOptions({
     queryKey: [MOVIES_LIBRARY_KEY, page, perPage, sort],
-    queryFn: () => getMoviesLibrary(page, perPage, sort),
+    queryFn: ({ signal }) => getMoviesLibrary(page, perPage, sort, signal),
     staleTime: freshFor(STALE_LIST),
   });
 }
@@ -385,7 +385,7 @@ export function moviesLibraryQueryOpts(
 export function moviesGenresQueryOpts() {
   return queryOptions({
     queryKey: [MOVIES_GENRES_KEY],
-    queryFn: getMovieGenresWithCounts,
+    queryFn: ({ signal }) => getMovieGenresWithCounts(signal),
     staleTime: freshFor(STALE_LIST),
   });
 }
@@ -398,7 +398,8 @@ export function moviesByGenreQueryOpts(
 ) {
   return queryOptions({
     queryKey: [MOVIES_BY_GENRE_KEY, genreId, page, perPage, sort],
-    queryFn: () => getMoviesByGenre(genreId, page, perPage, sort),
+    queryFn: ({ signal }) =>
+      getMoviesByGenre(genreId, page, perPage, sort, signal),
     enabled: genreId > 0,
     staleTime: freshFor(STALE_LIST),
   });
@@ -407,7 +408,7 @@ export function moviesByGenreQueryOpts(
 export function moviesStatsQueryOpts() {
   return queryOptions({
     queryKey: [MOVIES_STATS_KEY],
-    queryFn: getMoviesStats,
+    queryFn: ({ signal }) => getMoviesStats(signal),
     staleTime: freshFor(STALE_LIST),
   });
 }
@@ -419,7 +420,7 @@ export function likedMoviesQueryOpts(
 ) {
   return queryOptions({
     queryKey: [MOVIES_LIKED_KEY, page, perPage, sort],
-    queryFn: () => getLikedMovies(page, perPage, sort),
+    queryFn: ({ signal }) => getLikedMovies(page, perPage, sort, signal),
     staleTime: freshFor(STALE_1M),
   });
 }
@@ -427,7 +428,7 @@ export function likedMoviesQueryOpts(
 export function movieLikeStatusQueryOpts(movieId: number) {
   return queryOptions({
     queryKey: [MOVIE_LIKE_STATUS_KEY, movieId],
-    queryFn: () => getMovieLikeStatus(movieId),
+    queryFn: ({ signal }) => getMovieLikeStatus(movieId, signal),
     enabled: movieId > 0,
     staleTime: freshFor(STALE_1M),
   });
@@ -443,6 +444,9 @@ export function movieLikeStatusQueryOpts(movieId: number) {
 export function moviePrerollQueryOpts(movieId: number) {
   return queryOptions({
     queryKey: [MOVIE_PREROLL_KEY, movieId],
+    // Its own timeout, not the query's signal: joining the two needs
+    // AbortSignal.any (a newer browser floor), and with gcTime 0 a result
+    // nobody waits for is dropped anyway.
     queryFn: () =>
       getMoviePreroll(movieId, AbortSignal.timeout(PREROLL_FETCH_TIMEOUT_MS)),
     enabled: movieId > 0,
@@ -459,7 +463,7 @@ export function moviePrerollQueryOpts(movieId: number) {
 export function showDetailsQueryOpts(id: number) {
   return queryOptions({
     queryKey: [SHOW_DETAILS_KEY, id],
-    queryFn: () => getShowDetails(id),
+    queryFn: ({ signal }) => getShowDetails(id, signal),
     enabled: id > 0,
     staleTime: freshFor(STALE_LIST),
   });
@@ -475,7 +479,8 @@ export function showSeasonEpisodesQueryOpts(
 ) {
   return queryOptions({
     queryKey: [SHOW_SEASON_EPISODES_KEY, showId, seasonNumber],
-    queryFn: () => getShowSeasonEpisodes(showId, seasonNumber),
+    queryFn: ({ signal }) =>
+      getShowSeasonEpisodes(showId, seasonNumber, signal),
     enabled: showId > 0 && seasonNumber >= 0,
     staleTime: freshFor(STALE_LIST),
   });
@@ -488,7 +493,7 @@ export function showsLibraryQueryOpts(
 ) {
   return queryOptions({
     queryKey: [SHOWS_LIBRARY_KEY, page, perPage, sort],
-    queryFn: () => getShowsLibrary(page, perPage, sort),
+    queryFn: ({ signal }) => getShowsLibrary(page, perPage, sort, signal),
     staleTime: freshFor(STALE_LIST),
   });
 }
@@ -496,7 +501,7 @@ export function showsLibraryQueryOpts(
 export function showsGenresQueryOpts() {
   return queryOptions({
     queryKey: [SHOWS_GENRES_KEY],
-    queryFn: getShowGenresWithCounts,
+    queryFn: ({ signal }) => getShowGenresWithCounts(signal),
     staleTime: freshFor(STALE_LIST),
   });
 }
@@ -509,7 +514,8 @@ export function showsByGenreQueryOpts(
 ) {
   return queryOptions({
     queryKey: [SHOWS_BY_GENRE_KEY, genreId, page, perPage, sort],
-    queryFn: () => getShowsByGenre(genreId, page, perPage, sort),
+    queryFn: ({ signal }) =>
+      getShowsByGenre(genreId, page, perPage, sort, signal),
     enabled: genreId > 0,
     staleTime: freshFor(STALE_LIST),
   });
@@ -518,7 +524,7 @@ export function showsByGenreQueryOpts(
 export function showsStatsQueryOpts() {
   return queryOptions({
     queryKey: [SHOWS_STATS_KEY],
-    queryFn: getShowsStats,
+    queryFn: ({ signal }) => getShowsStats(signal),
     staleTime: freshFor(STALE_LIST),
   });
 }
@@ -526,7 +532,7 @@ export function showsStatsQueryOpts() {
 export function showEpisodeQueryOpts(episodeId: number) {
   return queryOptions({
     queryKey: [EPISODE_KEY, episodeId],
-    queryFn: () => getShowEpisode(episodeId),
+    queryFn: ({ signal }) => getShowEpisode(episodeId, signal),
     enabled: episodeId > 0,
     staleTime: freshFor(STALE_LIST),
   });
@@ -560,10 +566,10 @@ export function mediaTechnicalDetailsQueryOpts(media: PlaybackMediaRef) {
       media.kind === "movie"
         ? [MOVIE_TECHNICAL_DETAILS_KEY, media.id]
         : [EPISODE_TECHNICAL_DETAILS_KEY, media.id],
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       media.kind === "movie"
-        ? getMovieTechnicalDetails(media.id)
-        : getShowEpisodeTechnicalDetails(media.id),
+        ? getMovieTechnicalDetails(media.id, signal)
+        : getShowEpisodeTechnicalDetails(media.id, signal),
     enabled: media.id > 0,
     staleTime: freshFor(STALE_TECH),
     gcTime: GC_LONG,
@@ -575,7 +581,7 @@ export function mediaTechnicalDetailsQueryOpts(media: PlaybackMediaRef) {
 export function mediaWatchProgressQueryOpts(media: PlaybackMediaRef) {
   return queryOptions<ApiResponseType<WatchProgressType>>({
     queryKey: mediaWatchProgressQueryKey(media),
-    queryFn: () => getMediaWatchProgress(media),
+    queryFn: ({ signal }) => getMediaWatchProgress(media, signal),
     enabled: media.id > 0,
     staleTime: freshFor(STALE_30S),
   });
@@ -598,7 +604,7 @@ export function movieWatchProgressQueryOpts(id: number) {
 export function albumDetailsQueryOpts(id: number) {
   return queryOptions({
     queryKey: [ALBUM_DETAILS_KEY, id],
-    queryFn: () => getAlbumDetails(id),
+    queryFn: ({ signal }) => getAlbumDetails(id, signal),
     enabled: id > 0,
     staleTime: freshFor(STALE_LIST),
   });
@@ -610,7 +616,7 @@ export function albumsPaginatedQueryOpts(
 ) {
   return queryOptions({
     queryKey: [ALBUMS_PAGINATED_KEY, page, perPage],
-    queryFn: () => getAlbumsPaginated(page, perPage),
+    queryFn: ({ signal }) => getAlbumsPaginated(page, perPage, signal),
     staleTime: freshFor(STALE_LIST),
   });
 }
@@ -630,8 +636,8 @@ const INFINITE_LIST_CACHE = {
 export function tracksInfiniteQueryOpts(pageSize = TRACKS_INFINITE_PAGE_SIZE) {
   return infiniteQueryOptions({
     queryKey: [TRACKS_INFINITE_KEY, pageSize],
-    queryFn: async ({ pageParam }) =>
-      unwrapApiData(await getTracksPaginated(pageSize, pageParam)),
+    queryFn: async ({ pageParam, signal }) =>
+      unwrapApiData(await getTracksPaginated(pageSize, pageParam, signal)),
     initialPageParam: 0,
     getNextPageParam: lastPage =>
       lastPage.has_more ? lastPage.offset + lastPage.limit : undefined,
@@ -642,7 +648,7 @@ export function tracksInfiniteQueryOpts(pageSize = TRACKS_INFINITE_PAGE_SIZE) {
 export function likedTrackIdsQueryOpts() {
   return queryOptions({
     queryKey: [LIKED_TRACK_IDS_KEY],
-    queryFn: getLikedTrackIds,
+    queryFn: ({ signal }) => getLikedTrackIds(signal),
     staleTime: freshFor(STALE_1M),
   });
 }
@@ -653,7 +659,7 @@ export function likedTracksQueryOpts(
 ) {
   return queryOptions({
     queryKey: [LIKED_TRACKS_KEY, page, perPage],
-    queryFn: () => getLikedTracks(page, perPage),
+    queryFn: ({ signal }) => getLikedTracks(page, perPage, signal),
     staleTime: freshFor(STALE_1M),
   });
 }
@@ -664,7 +670,7 @@ export function musiciansPaginatedQueryOpts(
 ) {
   return queryOptions({
     queryKey: [MUSICIANS_PAGINATED_KEY, page, perPage],
-    queryFn: () => getMusiciansPaginated(page, perPage),
+    queryFn: ({ signal }) => getMusiciansPaginated(page, perPage, signal),
     staleTime: freshFor(STALE_LIST),
   });
 }
@@ -672,7 +678,7 @@ export function musiciansPaginatedQueryOpts(
 export function musicianDetailsQueryOpts(id: number) {
   return queryOptions({
     queryKey: [MUSICIAN_DETAILS_KEY, id],
-    queryFn: () => getMusicianDetails(id),
+    queryFn: ({ signal }) => getMusicianDetails(id, signal),
     enabled: id > 0,
     staleTime: freshFor(STALE_LIST),
   });
@@ -681,7 +687,7 @@ export function musicianDetailsQueryOpts(id: number) {
 export function musicStatsQueryOpts() {
   return queryOptions({
     queryKey: [MUSIC_STATS_KEY],
-    queryFn: getMusicStats,
+    queryFn: ({ signal }) => getMusicStats(signal),
     staleTime: freshFor(STALE_LIST),
   });
 }
@@ -693,7 +699,7 @@ export function musicStatsQueryOpts() {
 export function playlistsQueryOpts() {
   return queryOptions({
     queryKey: [PLAYLISTS_KEY],
-    queryFn: getPlaylists,
+    queryFn: ({ signal }) => getPlaylists(signal),
     staleTime: freshFor(STALE_LIST),
   });
 }
@@ -701,7 +707,7 @@ export function playlistsQueryOpts() {
 export function playlistDetailsQueryOpts(id: number) {
   return queryOptions({
     queryKey: [PLAYLIST_DETAILS_KEY, id],
-    queryFn: () => getPlaylistDetails(id),
+    queryFn: ({ signal }) => getPlaylistDetails(id, signal),
     enabled: id > 0,
     staleTime: freshFor(STALE_LIST),
   });
@@ -713,8 +719,10 @@ export function playlistTracksInfiniteQueryOpts(
 ) {
   return infiniteQueryOptions({
     queryKey: [PLAYLIST_TRACKS_KEY, playlistId, pageSize],
-    queryFn: async ({ pageParam }) =>
-      unwrapApiData(await getPlaylistTracks(playlistId, pageSize, pageParam)),
+    queryFn: async ({ pageParam, signal }) =>
+      unwrapApiData(
+        await getPlaylistTracks(playlistId, pageSize, pageParam, signal),
+      ),
     initialPageParam: 0,
     getNextPageParam: lastPage =>
       lastPage.has_more ? lastPage.next_offset : undefined,
@@ -726,7 +734,7 @@ export function playlistTracksInfiniteQueryOpts(
 export function moviePlaylistsQueryOpts() {
   return queryOptions({
     queryKey: [MOVIE_PLAYLISTS_KEY],
-    queryFn: getMoviePlaylists,
+    queryFn: ({ signal }) => getMoviePlaylists(signal),
     staleTime: freshFor(STALE_LIST),
   });
 }
@@ -739,10 +747,13 @@ export function moviePlaylistsQueryOpts() {
 export function playlistPickerQueryOpts(kind: PlaylistKind) {
   return queryOptions({
     queryKey: [kind === "music" ? PLAYLISTS_KEY : MOVIE_PLAYLISTS_KEY],
-    queryFn: (): Promise<
+    queryFn: ({
+      signal,
+    }): Promise<
       | ApiResponseType<PlaylistsListResponseType>
       | ApiResponseType<MoviePlaylistsListResponseType>
-    > => (kind === "music" ? getPlaylists() : getMoviePlaylists()),
+    > =>
+      kind === "music" ? getPlaylists(signal) : getMoviePlaylists(signal),
     select: (data): PlaylistPickerRow[] | null =>
       data.error ? null : data.data.playlists.map(toPlaylistPickerRow),
     staleTime: freshFor(STALE_LIST),
@@ -764,7 +775,7 @@ function toPlaylistPickerRow(
 export function moviePlaylistDetailsQueryOpts(id: number) {
   return queryOptions({
     queryKey: [MOVIE_PLAYLIST_DETAILS_KEY, id],
-    queryFn: () => getMoviePlaylistDetails(id),
+    queryFn: ({ signal }) => getMoviePlaylistDetails(id, signal),
     enabled: id > 0,
     staleTime: freshFor(STALE_LIST),
   });
@@ -778,7 +789,8 @@ export function moviePlaylistMoviesQueryOpts(
 ) {
   return queryOptions({
     queryKey: [MOVIE_PLAYLIST_MOVIES_KEY, playlistId, page, perPage, sort],
-    queryFn: () => getMoviePlaylistMovies(playlistId, page, perPage, sort),
+    queryFn: ({ signal }) =>
+      getMoviePlaylistMovies(playlistId, page, perPage, sort, signal),
     enabled: playlistId > 0,
     staleTime: freshFor(STALE_LIST),
   });
@@ -791,7 +803,7 @@ export function moviePlaylistMoviesQueryOpts(
 export function settingsQueryOpts() {
   return queryOptions({
     queryKey: [SETTINGS_KEY],
-    queryFn: getSettings,
+    queryFn: ({ signal }) => getSettings(signal),
     staleTime: freshFor(STALE_CATALOG),
     gcTime: GC_LONG,
   });
@@ -800,7 +812,7 @@ export function settingsQueryOpts() {
 export function generalSettingsQueryOpts() {
   return queryOptions({
     queryKey: [GENERAL_SETTINGS_KEY],
-    queryFn: getGeneralSettings,
+    queryFn: ({ signal }) => getGeneralSettings(signal),
     staleTime: freshFor(STALE_LIST),
   });
 }
@@ -810,7 +822,7 @@ export function generalSettingsQueryOpts() {
 export function playbackSettingsQueryOpts() {
   return queryOptions({
     queryKey: [PLAYBACK_SETTINGS_KEY],
-    queryFn: getPlaybackSettings,
+    queryFn: ({ signal }) => getPlaybackSettings(signal),
     staleTime: freshFor(STALE_CATALOG),
     gcTime: GC_LONG,
   });
@@ -830,7 +842,7 @@ export function playbackSettingsFromResponse(
 export function adminUsersQueryOpts() {
   return queryOptions({
     queryKey: [ADMIN_USERS_KEY],
-    queryFn: adminGetUsers,
+    queryFn: ({ signal }) => adminGetUsers(signal),
     staleTime: freshFor(STALE_LIST),
   });
 }
@@ -844,7 +856,7 @@ export function searchAllQueryOpts(q: string) {
   const trimmed = q.trim();
   return queryOptions({
     queryKey: [SEARCH_ALL_KEY, trimmed],
-    queryFn: () => searchAll(trimmed),
+    queryFn: ({ signal }) => searchAll(trimmed, signal),
     enabled: trimmed.length > 0,
     staleTime: freshFor(STALE_LIST),
   });
@@ -859,7 +871,8 @@ export function searchCategoryQueryOpts<K extends PagedSearchTab>(
   const trimmed = q.trim();
   return queryOptions({
     queryKey: [SEARCH_CATEGORY_KEYS[kind], trimmed, page, perPage],
-    queryFn: () => searchCategory(kind, trimmed, page, perPage),
+    queryFn: ({ signal }) =>
+      searchCategory(kind, trimmed, page, perPage, signal),
     enabled: trimmed.length > 0,
     staleTime: freshFor(STALE_LIST),
   });
@@ -872,7 +885,7 @@ export function searchCategoryQueryOpts<K extends PagedSearchTab>(
 export function watchRoomsQueryOpts() {
   return queryOptions({
     queryKey: [WATCH_ROOMS_KEY],
-    queryFn: getWatchRooms,
+    queryFn: ({ signal }) => getWatchRooms(signal),
     staleTime: freshFor(STALE_30S),
   });
 }
@@ -880,7 +893,7 @@ export function watchRoomsQueryOpts() {
 export function watchRoomQueryOpts(id: number) {
   return queryOptions({
     queryKey: [WATCH_ROOM_KEY, id],
-    queryFn: () => getWatchRoom(id),
+    queryFn: ({ signal }) => getWatchRoom(id, signal),
     enabled: id > 0,
     staleTime: freshFor(STALE_30S),
   });
@@ -924,7 +937,7 @@ export async function forgetWatchRoom(
 export function watchRoomInviteUsersQueryOpts(enabled: boolean = true) {
   return queryOptions({
     queryKey: [WATCH_ROOM_INVITE_USERS_KEY],
-    queryFn: getWatchRoomInviteUsers,
+    queryFn: ({ signal }) => getWatchRoomInviteUsers(signal),
     enabled,
     staleTime: freshFor(STALE_30S),
   });
@@ -937,12 +950,12 @@ export function watchRoomInviteUsersQueryOpts(enabled: boolean = true) {
 
 const scanStatusQueryOpts = <T extends Record<string, unknown>,>(
   key: string,
-  fetchStatus: () => Promise<ApiResponseType<T>>,
+  fetchStatus: (signal?: AbortSignal) => Promise<ApiResponseType<T>>,
   unavailableMessage: string,
 ) => queryOptions({
   queryKey: [key],
-  queryFn: async () => {
-    const response = await fetchStatus();
+  queryFn: async ({ signal }) => {
+    const response = await fetchStatus(signal);
     if (response.error) {
       throw new Error(response.message || unavailableMessage);
     }
