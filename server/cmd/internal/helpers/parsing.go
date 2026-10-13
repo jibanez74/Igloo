@@ -21,10 +21,6 @@ func normalizeCodec(codec string) string {
 // infinite rates: strconv.ParseFloat accepts "Inf" and "NaN", and callers already
 // read 0 as an unknown rate rather than carrying a value they cannot compute with.
 func ParseFrameRate(s string) float64 {
-	if s == "" {
-		return 0
-	}
-
 	numerator, denominator, isFraction := strings.Cut(s, "/")
 	if !isFraction {
 		parsed, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
@@ -56,10 +52,6 @@ func finiteFrameRate(rate float64) float64 {
 // infinite input: strconv.ParseFloat accepts "Inf" and "NaN", and a duration of
 // either is not something any caller can store or compute with.
 func ParseDurationSeconds(s string) (float64, bool) {
-	if s == "" {
-		return 0, false
-	}
-
 	seconds, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
 	if err != nil {
 		return 0, false
@@ -86,10 +78,6 @@ func ParseDurationMs(s string) (int64, error) {
 // ParseSlashNumber parses a "1/12" format string and returns the first number.
 // Used for parsing track numbers and disc numbers from metadata.
 func ParseSlashNumber(s string) (int64, error) {
-	if s == "" {
-		return 0, fmt.Errorf("empty string")
-	}
-
 	parts := strings.Split(s, "/")
 	if parts[0] == "" {
 		return 0, fmt.Errorf("invalid format: %s", s)
@@ -100,9 +88,6 @@ func ParseSlashNumber(s string) (int64, error) {
 
 // ParseBitRate returns 0 if parsing fails or the input is empty.
 func ParseBitRate(bitRateStr string) int64 {
-	if bitRateStr == "" {
-		return 0
-	}
 	parsed, err := strconv.ParseInt(bitRateStr, 10, 64)
 	if err != nil {
 		return 0
@@ -110,23 +95,8 @@ func ParseBitRate(bitRateStr string) int64 {
 	return parsed
 }
 
-// ClampFloat64 returns v limited to [lo, hi]. If lo > hi, the bounds are swapped.
-// If v, lo, or hi is NaN, the result follows IEEE 754 (NaN propagates); callers that
-// require finite values should validate before calling. It lives beside the parsers as
-// the range guard applied to the values they produce.
-func ClampFloat64(v, lo, hi float64) float64 {
-	if lo > hi {
-		lo, hi = hi, lo
-	}
-	return min(max(v, lo), hi)
-}
-
 // ParseDate attempts common audio metadata date formats.
 func ParseDate(s string) (time.Time, error) {
-	if s == "" {
-		return time.Time{}, fmt.Errorf("empty string")
-	}
-
 	// Common date formats in audio metadata. A timestamp keeps the calendar
 	// date it was written with: iTunes stores release dates as UTC instants
 	// such as 2019-01-04T08:00:00Z, and callers format in the parsed zone.

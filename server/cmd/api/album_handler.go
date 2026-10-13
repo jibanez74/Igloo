@@ -6,20 +6,16 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"net/http"
-	"strconv"
-
-	"github.com/go-chi/chi/v5"
 )
 
 func (app *Application) GetAlbumsAlphabetical(w http.ResponseWriter, r *http.Request) {
-	page, perPage := parsePageAndPerPage(r)
+	page, perPage := parsePageAndPerPage(r, libraryDefaultPerPage, libraryMaxPerPage)
 
 	offset := (page - 1) * perPage
 
 	total, err := app.Queries.GetAlbumsCount(r.Context())
 	if err != nil {
-		app.Logger.Error("failed to get albums count", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch albums count"))
+		app.serverError(w, err, "failed to get albums count", "failed to fetch albums count")
 		return
 	}
 
@@ -29,54 +25,35 @@ func (app *Application) GetAlbumsAlphabetical(w http.ResponseWriter, r *http.Req
 	})
 
 	if err != nil {
-		app.Logger.Error("failed to get albums", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch albums"))
+		app.serverError(w, err, "failed to get albums", "failed to fetch albums")
 		return
 	}
 
-	totalPages := total / perPage
-	if total%perPage > 0 {
-		totalPages++
-	}
-
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"albums":      albums,
 			"total":       total,
 			"page":        page,
 			"per_page":    perPage,
-			"total_pages": totalPages,
+			"total_pages": totalPages(total, perPage),
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 func (app *Application) GetLatestAlbums(w http.ResponseWriter, r *http.Request) {
 	albums, err := app.Queries.GetLatestAlbums(r.Context())
 	if err != nil {
-		app.Logger.Error("failed to get latest albums", "error", err)
-		helpers.ErrorJSON(w, errors.New("fail to fetch latest albums from server"))
+		app.serverError(w, err, "failed to get latest albums", "fail to fetch latest albums from server")
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
-		Data: map[string]any{
-			"albums": albums,
-		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"albums": albums}})
 }
 
 // Use a read-only transaction so album details come from one snapshot.
 func (app *Application) GetAlbumDetails(w http.ResponseWriter, r *http.Request) {
-	idParam := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid album id"), http.StatusBadRequest)
+	id, ok := parseIDParam(w, r, "id", "invalid album id")
+	if !ok {
 		return
 	}
 
@@ -84,8 +61,7 @@ func (app *Application) GetAlbumDetails(w http.ResponseWriter, r *http.Request) 
 
 	tx, err := app.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
-		app.Logger.Error(beginTransactionLogMessage, "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch album from server"))
+		app.serverError(w, err, beginTransactionLogMessage, "failed to fetch album from server")
 		return
 	}
 	defer tx.Rollback()
@@ -99,8 +75,7 @@ func (app *Application) GetAlbumDetails(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 
-		app.Logger.Error("failed to get album", "error", err, "id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch album from server"))
+		app.serverError(w, err, "failed to get album", "failed to fetch album from server", "id", id)
 		return
 	}
 
@@ -108,29 +83,25 @@ func (app *Application) GetAlbumDetails(w http.ResponseWriter, r *http.Request) 
 	// helpers.NullInt64 would turn an id of 0 into a NULL scan matching nothing.
 	tracks, err := qtx.GetTracksByAlbumID(ctx, sql.NullInt64{Int64: id, Valid: true})
 	if err != nil {
-		app.Logger.Error("failed to get tracks for album", "error", err, "album_id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch album tracks from server"))
+		app.serverError(w, err, "failed to get tracks for album", "failed to fetch album tracks from server", "album_id", id)
 		return
 	}
 
 	artists, err := qtx.GetMusiciansByAlbumID(ctx, id)
 	if err != nil {
-		app.Logger.Error("failed to get artists for album", "error", err, "album_id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch album artists from server"))
+		app.serverError(w, err, "failed to get artists for album", "failed to fetch album artists from server", "album_id", id)
 		return
 	}
 
 	trackGenres, err := qtx.GetGenresByAlbumID(ctx, sql.NullInt64{Int64: id, Valid: true})
 	if err != nil {
-		app.Logger.Error("failed to get genres for album", "error", err, "album_id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch album genres from server"))
+		app.serverError(w, err, "failed to get genres for album", "failed to fetch album genres from server", "album_id", id)
 		return
 	}
 
 	albumGenres, err := qtx.GetAlbumGenres(ctx, id)
 	if err != nil {
-		app.Logger.Error("failed to get album-level genres", "error", err, "album_id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch album genres from server"))
+		app.serverError(w, err, "failed to get album-level genres", "failed to fetch album genres from server", "album_id", id)
 		return
 	}
 
@@ -140,8 +111,7 @@ func (app *Application) GetAlbumDetails(w http.ResponseWriter, r *http.Request) 
 		totalDuration += track.Duration
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"album":          album,
 			"tracks":         tracks,
@@ -150,17 +120,13 @@ func (app *Application) GetAlbumDetails(w http.ResponseWriter, r *http.Request) 
 			"album_genres":   albumGenres,
 			"total_duration": totalDuration,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 // Track and join rows are cascade-deleted by the database.
 func (app *Application) DeleteAlbum(w http.ResponseWriter, r *http.Request) {
-	idParam := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid album id"), http.StatusBadRequest)
+	id, ok := parseIDParam(w, r, "id", "invalid album id")
+	if !ok {
 		return
 	}
 
@@ -172,8 +138,7 @@ func (app *Application) DeleteAlbum(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		app.Logger.Error("failed to delete album", "error", err, "id", id)
-		helpers.ErrorJSON(w, errors.New("failed to delete album"))
+		app.serverError(w, err, "failed to delete album", "failed to delete album", "id", id)
 		return
 	}
 
@@ -184,10 +149,5 @@ func (app *Application) DeleteAlbum(w http.ResponseWriter, r *http.Request) {
 
 	app.Logger.Info("album deleted successfully", "id", id, "title", title)
 
-	res := helpers.JSONResponse{
-		Error:   false,
-		Message: "Album deleted successfully",
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "Album deleted successfully"})
 }

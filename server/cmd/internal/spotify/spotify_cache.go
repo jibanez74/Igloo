@@ -14,15 +14,9 @@ const (
 )
 
 func (c *spotifyClient) getArtist(key string) (*spotify.FullArtist, bool) {
-	v, found := c.artistCache.Get(key)
-	if !found {
-		return nil, false
-	}
+	v, _ := c.artistCache.Get(key)
 	artist, ok := v.(*spotify.FullArtist)
-	if !ok {
-		return nil, false
-	}
-	return artist, true
+	return artist, ok
 }
 
 func (c *spotifyClient) setArtist(key string, artist *spotify.FullArtist) {
@@ -30,15 +24,9 @@ func (c *spotifyClient) setArtist(key string, artist *spotify.FullArtist) {
 }
 
 func (c *spotifyClient) getAlbum(key string) (*spotify.FullAlbum, bool) {
-	v, found := c.albumCache.Get(key)
-	if !found {
-		return nil, false
-	}
+	v, _ := c.albumCache.Get(key)
 	album, ok := v.(*spotify.FullAlbum)
-	if !ok {
-		return nil, false
-	}
-	return album, true
+	return album, ok
 }
 
 func (c *spotifyClient) setAlbum(key string, album *spotify.FullAlbum) {

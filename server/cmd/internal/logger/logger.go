@@ -17,8 +17,6 @@ type LoggerInterface interface {
 	Error(msg string, args ...any)
 }
 
-var _ LoggerInterface = (*slog.Logger)(nil)
-
 type LoggerConfig struct {
 	Debug   bool
 	Stdout  bool
@@ -26,18 +24,14 @@ type LoggerConfig struct {
 	LogFile string
 }
 
-// New creates a configured logger and cleanup function.
-// Debug selects the level; Stdout selects the sink. They are independent, so
-// an explicit LOG_TO_STDOUT=false keeps file logging even with DEBUG=true --
-// which is what .env.example documents, and the only way a debug-level record
-// ever survives the process that wrote it. Production file logging requires an
-// existing LogDir.
+// New creates a configured logger and cleanup function. Debug selects the
+// level and Stdout the sink, independently, so LOG_TO_STDOUT=false keeps
+// debug records in the file (as .env.example documents). File logging requires
+// an existing LogDir.
 func New(cfg *LoggerConfig) (LoggerInterface, func() error, error) {
 	if cfg == nil {
 		return nil, nil, fmt.Errorf("logger config is required")
 	}
-
-	closer := func() error { return nil }
 
 	level := slog.LevelInfo
 	if cfg.Debug {
@@ -54,7 +48,7 @@ func New(cfg *LoggerConfig) (LoggerInterface, func() error, error) {
 			handler = slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level})
 		}
 
-		return slog.New(handler), closer, nil
+		return slog.New(handler), func() error { return nil }, nil
 	}
 
 	logFile := cfg.LogFile
@@ -86,9 +80,7 @@ func New(cfg *LoggerConfig) (LoggerInterface, func() error, error) {
 		return nil, nil, fmt.Errorf("failed to open log file: %w", err)
 	}
 
-	closer = rw.Close
-
-	return slog.New(newFileHandler(rw, level)), closer, nil
+	return slog.New(newFileHandler(rw, level)), rw.Close, nil
 }
 
 // newFileHandler writes JSON records to rw and flushes it after severe ones.

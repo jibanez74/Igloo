@@ -43,7 +43,6 @@ func (app *Application) ServeStaticFiles(w http.ResponseWriter, r *http.Request)
 
 	staticDir := app.CurrentSettings().StaticDir
 	fullPath := filepath.Join(staticDir, requestedPath)
-	fullPath = filepath.Clean(fullPath)
 
 	if !strings.HasPrefix(fullPath, filepath.Clean(staticDir)) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
@@ -103,7 +102,9 @@ type frontendAsset struct {
 func loadFrontendAssets(fsys fs.FS) map[string]*frontendAsset {
 	assets := make(map[string]*frontendAsset)
 
-	walkErr := fs.WalkDir(fsys, "webdist", func(path string, d fs.DirEntry, err error) error {
+	// A missing or unreadable webdist degrades to the same "frontend not found"
+	// responses the per-request reads produced, so the walk error is dropped.
+	_ = fs.WalkDir(fsys, "webdist", func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
 		}
@@ -123,11 +124,6 @@ func loadFrontendAssets(fsys fs.FS) map[string]*frontendAsset {
 		}
 		return nil
 	})
-	if walkErr != nil {
-		// A missing or unreadable webdist degrades to the same "frontend not
-		// found" responses the per-request reads produced.
-		return assets
-	}
 
 	return assets
 }

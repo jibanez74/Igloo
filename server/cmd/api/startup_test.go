@@ -79,9 +79,7 @@ func TestInitDB(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
 
-	t.Setenv(envDBPath, dbPath)
-
-	app := &Application{}
+	app := &Application{Config: RuntimeConfig{DBPath: dbPath}}
 	setupTestLogger(t, app)
 
 	err := app.InitDB()
@@ -188,10 +186,14 @@ func TestInitDB_DefaultPath(t *testing.T) {
 
 	dbFile := filepath.Join(tmpDir, defaultDBPath)
 
-	app := &Application{}
+	config, err := NewRuntimeConfig()
+	if err != nil {
+		t.Fatalf("NewRuntimeConfig failed: %v", err)
+	}
+	app := &Application{Config: config}
 	setupTestLogger(t, app)
 
-	err := app.InitDB()
+	err = app.InitDB()
 	if err != nil {
 		t.Fatalf("InitDB failed: %v", err)
 	}
@@ -215,9 +217,7 @@ func TestInitDB_ReturnsPathForUnwritableDirectory(t *testing.T) {
 	defer os.Chmod(dbDir, 0o700)
 
 	dbFile := filepath.Join(dbDir, "igloo.db")
-	t.Setenv("DB_PATH", dbFile)
-
-	app := &Application{}
+	app := &Application{Config: RuntimeConfig{DBPath: dbFile}}
 	setupTestLogger(t, app)
 
 	err := app.InitDB()

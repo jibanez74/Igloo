@@ -33,26 +33,6 @@ func (s *Scanner) attemptEnrichment(report *scanReport, name string, err error) 
 	return err
 }
 
-// providerBreaker stops enrichment dispatch after an authentication failure
-// or a run of transient provider failures; pending entities retry on a later
-// scan. Only errors returned by the TMDB client are observed.
-type providerBreaker struct {
-	consecutive int
-	stopped     bool
-}
-
-func (b *providerBreaker) observe(err error) {
-	authentication, transient := tmdb.ProviderFailure(err)
-	if transient {
-		b.consecutive++
-	} else {
-		b.consecutive = 0
-	}
-	if authentication || b.consecutive >= scanner.MaxConsecutiveProviderFailures {
-		b.stopped = true
-	}
-}
-
 // pendingShow is one show with enrichment work this run may do: a lookup when
 // it has no identity or a retry marker, plus the pending seasons and episodes
 // among those the local phase touched.
@@ -143,9 +123,9 @@ func (s *Scanner) enrich(ctx context.Context, report *scanReport) error {
 	}
 	report.status.EnrichmentTotal = total
 	s.publish(report)
-	breaker := &providerBreaker{}
+	breaker := &scanner.ProviderBreaker{}
 	for _, item := range pending {
-		if breaker.stopped {
+		if breaker.Stopped {
 			break
 		}
 		err = s.enrichShow(ctx, report, breaker, item)
@@ -157,7 +137,7 @@ func (s *Scanner) enrich(ctx context.Context, report *scanReport) error {
 			s.Logger.Warn("show enrichment pending", "show_id", item.show.ID, "error", err)
 		}
 	}
-	if breaker.stopped {
+	if breaker.Stopped {
 		report.Issue("", scanner.PhaseEnrichment, reasonStopped)
 		s.publish(report)
 	}
@@ -167,7 +147,7 @@ func (s *Scanner) enrich(ctx context.Context, report *scanReport) error {
 // enrichShow resolves the show first; its seasons and episodes are attempted
 // only once it has an identity. A show that cannot be resolved this run drops
 // its descendants from the total rather than counting them as failures.
-func (s *Scanner) enrichShow(ctx context.Context, report *scanReport, breaker *providerBreaker, item pendingShow) error {
+func (s *Scanner) enrichShow(ctx context.Context, report *scanReport, breaker *scanner.ProviderBreaker, item pendingShow) error {
 	show := item.show
 	if item.lookup {
 		remote, err := s.lookupShow(ctx, breaker, show)
@@ -197,7 +177,7 @@ func (s *Scanner) enrichShow(ctx context.Context, report *scanReport, breaker *p
 		show.TmdbID = helpers.NullInt64(int64(remote.ID))
 	}
 	for _, season := range item.seasons {
-		if breaker.stopped {
+		if breaker.Stopped {
 			return nil
 		}
 		err := s.enrichSeason(ctx, report, breaker, show, season, item)
@@ -212,7 +192,7 @@ func (s *Scanner) enrichShow(ctx context.Context, report *scanReport, breaker *p
 	return nil
 }
 
-func (s *Scanner) enrichSeason(ctx context.Context, report *scanReport, breaker *providerBreaker, show database.Show, season database.ShowSeason, item pendingShow) error {
+func (s *Scanner) enrichSeason(ctx context.Context, report *scanReport, breaker *scanner.ProviderBreaker, show database.Show, season database.ShowSeason, item pendingShow) error {
 	pending := item.seasonPending[season.ID]
 	episodes, err := s.Queries.GetShowEpisodes(ctx, season.ID)
 	if err != nil {
@@ -238,7 +218,7 @@ func (s *Scanner) enrichSeason(ctx context.Context, report *scanReport, breaker 
 	if contextErr != nil {
 		return contextErr
 	}
-	breaker.observe(err)
+	breaker.Observe(err)
 	if err == nil {
 		validIdentity := remote != nil && remote.ID > 0 && remote.SeasonNumber == int(season.SeasonNumber)
 		if !validIdentity {
@@ -345,7 +325,7 @@ func (s *Scanner) commitMetadata(ctx context.Context, show database.Show, season
 // lookupShow resolves a show's TMDB identity within one lookup budget. It
 // returns (nil, nil) for a definitive no-match and the provider error when a
 // search or the details fetch failed.
-func (s *Scanner) lookupShow(ctx context.Context, breaker *providerBreaker, show database.Show) (*tmdb.TVShow, error) {
+func (s *Scanner) lookupShow(ctx context.Context, breaker *scanner.ProviderBreaker, show database.Show) (*tmdb.TVShow, error) {
 	lookupCtx, cancel := context.WithTimeout(ctx, scanner.TmdbLookupTimeout)
 	defer cancel()
 	id := int(show.TmdbID.Int64)
@@ -366,10 +346,10 @@ func (s *Scanner) lookupShow(ctx context.Context, breaker *providerBreaker, show
 			noMatch := errors.Is(err, tmdb.ErrNoShowsFound)
 			if noMatch {
 				// A definitive answer from the provider is a healthy response.
-				breaker.observe(nil)
+				breaker.Observe(nil)
 				continue
 			}
-			breaker.observe(err)
+			breaker.Observe(err)
 			if err != nil {
 				authentication, _ := tmdb.ProviderFailure(err)
 				if authentication {
@@ -398,7 +378,7 @@ func (s *Scanner) lookupShow(ctx context.Context, breaker *providerBreaker, show
 	if contextErr != nil {
 		return nil, contextErr
 	}
-	breaker.observe(err)
+	breaker.Observe(err)
 	if err != nil {
 		return nil, err
 	}

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -46,15 +47,13 @@ func deviceInactivityCutoff(now time.Time) string {
 
 // generateDeviceToken returns a new bearer token and the hex-encoded SHA-256
 // hash that is stored in the database. The plaintext token is never persisted.
-func generateDeviceToken() (string, string, error) {
+// crypto/rand.Read never returns an error; it crashes the program instead.
+func generateDeviceToken() (string, string) {
 	buf := make([]byte, 32)
-	_, err := rand.Read(buf)
-	if err != nil {
-		return "", "", err
-	}
+	rand.Read(buf)
 
 	token := deviceTokenPrefix + base64.RawURLEncoding.EncodeToString(buf)
-	return token, hashDeviceToken(token), nil
+	return token, hashDeviceToken(token)
 }
 
 func hashDeviceToken(token string) string {
@@ -62,9 +61,12 @@ func hashDeviceToken(token string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// validateDeviceMetadata caps the platform and app_version a client reports
-// about itself, in bytes like the device name.
-func validateDeviceMetadata(platform, appVersion string) error {
+// validateDeviceInfo checks what a signing-in client reports about itself: a
+// required name and the platform and app_version, all capped in bytes.
+func validateDeviceInfo(name, platform, appVersion string) error {
+	if name == "" || len(name) > maxDeviceNameLength {
+		return errors.New("device_name is required and must be at most 100 characters")
+	}
 	if len(platform) > maxDeviceMetadataLength {
 		return fmt.Errorf("platform must be at most %d bytes", maxDeviceMetadataLength)
 	}

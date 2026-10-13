@@ -51,10 +51,8 @@ func WriteJSON(w http.ResponseWriter, status int, data any, headers ...http.Head
 	return err
 }
 
-// maxRequestBytes is the body limit ReadJSON applies to every request. It is a
-// ceiling on one JSON request body, not a payload size any endpoint is expected
-// to approach. No handler has ever needed a different limit, so ReadJSON does
-// not take one.
+// maxRequestBytes is the body limit ReadJSON applies to every request, a
+// ceiling no endpoint is expected to approach.
 const maxRequestBytes int64 = 1024 * 1024
 
 // ReadJSON decodes JSON from the request body into data.

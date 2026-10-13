@@ -85,8 +85,7 @@ func (app *Application) requireCurrentCookieSession(w http.ResponseWriter, r *ht
 		return true
 	}
 	if err != nil && !errors.Is(err, errSessionUserGone) {
-		app.Logger.Error("failed to read session version", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to read session version", internalServerErrorMessage, "user_id", userID)
 		return false
 	}
 

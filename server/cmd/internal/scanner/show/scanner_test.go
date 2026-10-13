@@ -472,7 +472,7 @@ func TestShowRankingAmbiguousYearAndDeterministicTies(t *testing.T) {
 		return []tmdb.TVShow{{ID: 30, Name: "Space Adventures", FirstAirDate: "1999-01-01"}, {ID: 20, Name: "Space 1999", FirstAirDate: "1975-01-01"}, {ID: 10, Name: "Space 1999", FirstAirDate: "1975-01-01"}}, nil
 	}
 	s.Tmdb = client
-	result, err := s.lookupShow(context.Background(), &providerBreaker{}, database.Show{DirectoryPath: "/tv/Space 1999"})
+	result, err := s.lookupShow(context.Background(), &scanner.ProviderBreaker{}, database.Show{DirectoryPath: "/tv/Space 1999"})
 	if err != nil || result.ID != 10 || client.searchCalls != 2 {
 		t.Fatal("ambiguous ranking", result, err, client.searchCalls)
 	}

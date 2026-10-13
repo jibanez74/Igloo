@@ -19,27 +19,16 @@ func (app *Application) GetDevices(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := app.Queries.GetDevicesByUser(r.Context(), userID)
 	if err != nil {
-		app.Logger.Error("failed to list devices", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to list devices", internalServerErrorMessage, "user_id", userID)
 		return
 	}
 
 	devices := make([]map[string]any, 0, len(rows))
 	for _, row := range rows {
-		devices = append(devices, deviceResponseMap(
-			row.ID,
-			row.Name,
-			row.Platform,
-			row.AppVersion,
-			row.CreatedAt,
-			row.LastUsedAt,
-		))
+		devices = append(devices, deviceResponseMap(row))
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
-		Data:  map[string]any{"devices": devices},
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"devices": devices}})
 }
 
 type RenameDeviceRequest struct {
@@ -77,8 +66,7 @@ func (app *Application) RenameDevice(w http.ResponseWriter, r *http.Request) {
 		UserID: userID,
 	})
 	if err != nil {
-		app.Logger.Error("failed to rename device", "error", err, "user_id", userID, "device_id", deviceID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to rename device", internalServerErrorMessage, "user_id", userID, "device_id", deviceID)
 		return
 	}
 
@@ -87,10 +75,7 @@ func (app *Application) RenameDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error:   false,
-		Message: "Device renamed",
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "Device renamed"})
 }
 
 func (app *Application) RevokeDevice(w http.ResponseWriter, r *http.Request) {
@@ -109,8 +94,7 @@ func (app *Application) RevokeDevice(w http.ResponseWriter, r *http.Request) {
 		UserID: userID,
 	})
 	if err != nil {
-		app.Logger.Error("failed to revoke device", "error", err, "user_id", userID, "device_id", deviceID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to revoke device", internalServerErrorMessage, "user_id", userID, "device_id", deviceID)
 		return
 	}
 
@@ -123,10 +107,7 @@ func (app *Application) RevokeDevice(w http.ResponseWriter, r *http.Request) {
 
 	app.Logger.Info("device revoked", "user_id", userID, "device_id", deviceID)
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error:   false,
-		Message: "Device revoked",
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "Device revoked"})
 }
 
 func parseDeviceID(w http.ResponseWriter, r *http.Request) (int64, bool) {

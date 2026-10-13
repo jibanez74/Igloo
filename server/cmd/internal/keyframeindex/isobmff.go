@@ -48,7 +48,7 @@ func extractISOBMFF(ctx context.Context, r io.ReaderAt, size int64) (Index, erro
 func readMoovPayload(ctx context.Context, r io.ReaderAt, size int64) ([]byte, error) {
 	offset := int64(0)
 	for offset < size {
-		if err := checkContext(ctx); err != nil {
+		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
 
@@ -169,30 +169,29 @@ func parseMvhd(moov []byte) (uint64, float64) {
 		return 0, 0
 	}
 
-	payload := moov[mvhd.PayloadStart:mvhd.End]
-	if len(payload) < 4 {
-		return 0, 0
-	}
+	timescale, durationSec, _ := decodeTimescaleDuration(moov[mvhd.PayloadStart:mvhd.End])
+	return timescale, durationSec
+}
 
-	var timescale uint64
+// decodeTimescaleDuration reads the timescale and duration mvhd and mdhd both
+// carry at version-dependent offsets. ok is false for a short payload or a zero
+// timescale.
+func decodeTimescaleDuration(payload []byte) (timescale uint64, durationSec float64, ok bool) {
 	var duration uint64
-	if payload[0] == 1 {
-		if len(payload) < 4+8+8+4+8 {
-			return 0, 0
-		}
+	switch {
+	case len(payload) >= 4+8+8+4+8 && payload[0] == 1:
 		timescale = uint64(binary.BigEndian.Uint32(payload[20:24]))
 		duration = binary.BigEndian.Uint64(payload[24:32])
-	} else {
-		if len(payload) < 4+4+4+4+4 {
-			return 0, 0
-		}
+	case len(payload) >= 4+4+4+4+4 && payload[0] != 1:
 		timescale = uint64(binary.BigEndian.Uint32(payload[12:16]))
 		duration = uint64(binary.BigEndian.Uint32(payload[16:20]))
+	default:
+		return 0, 0, false
 	}
 	if timescale == 0 {
-		return 0, 0
+		return 0, 0, false
 	}
-	return timescale, float64(duration) / float64(timescale)
+	return timescale, float64(duration) / float64(timescale), true
 }
 
 func findVideoTrak(moov []byte) (isoBox, bool, error) {
@@ -289,10 +288,7 @@ func parseVideoTrakKeyframes(moov []byte, trak isoBox, movieTimescale uint64) ([
 			}
 		}
 		pts := float64(cts)/float64(mediaTimescale) + ptsShiftSec
-		if pts < 0 {
-			pts = 0
-		}
-		keyframes = append(keyframes, pts)
+		keyframes = append(keyframes, max(0, pts))
 	}
 
 	return keyframes, mediaDurationSec, nil
@@ -307,31 +303,11 @@ func parseMdhd(moov []byte, mdia isoBox) (uint64, float64, error) {
 		return 0, 0, fmt.Errorf("missing mdhd box")
 	}
 
-	payload := moov[mdhd.PayloadStart:mdhd.End]
-	if len(payload) < 4 {
-		return 0, 0, fmt.Errorf("invalid mdhd payload")
+	timescale, durationSec, ok := decodeTimescaleDuration(moov[mdhd.PayloadStart:mdhd.End])
+	if !ok {
+		return 0, 0, fmt.Errorf("invalid mdhd payload or zero timescale")
 	}
-
-	var timescale uint64
-	var duration uint64
-	if payload[0] == 1 {
-		if len(payload) < 4+8+8+4+8 {
-			return 0, 0, fmt.Errorf("invalid mdhd payload")
-		}
-		timescale = uint64(binary.BigEndian.Uint32(payload[20:24]))
-		duration = binary.BigEndian.Uint64(payload[24:32])
-	} else {
-		if len(payload) < 4+4+4+4+4 {
-			return 0, 0, fmt.Errorf("invalid mdhd payload")
-		}
-		timescale = uint64(binary.BigEndian.Uint32(payload[12:16]))
-		duration = uint64(binary.BigEndian.Uint32(payload[16:20]))
-	}
-	if timescale == 0 {
-		return 0, 0, fmt.Errorf("mdhd timescale is zero")
-	}
-
-	return timescale, float64(duration) / float64(timescale), nil
+	return timescale, durationSec, nil
 }
 
 func parseStts(moov []byte, stbl isoBox) (*runLengthTable, uint64, error) {
@@ -440,8 +416,6 @@ func parseStss(moov []byte, stbl isoBox, totalSamples uint64) ([]uint64, error) 
 		return nil, fmt.Errorf("invalid stss payload")
 	}
 	entryCount := int(binary.BigEndian.Uint32(payload[4:8]))
-	// entryCount < 0 needs a 32-bit int, so it cannot fire on the supported
-	// platforms; it keeps the size arithmetic below sound regardless.
 	if entryCount < 0 || len(payload) < 8+entryCount*4 {
 		return nil, fmt.Errorf("truncated stss table")
 	}
@@ -496,8 +470,6 @@ func parseElstShift(moov []byte, trak isoBox, mediaTimescale, movieTimescale uin
 	if version == 1 {
 		entrySize = 20
 	}
-	// entryCount < 0 needs a 32-bit int, so it cannot fire on the supported
-	// platforms; it keeps the size arithmetic below sound regardless.
 	if entryCount < 0 || len(payload) < 8+entryCount*entrySize {
 		return 0, fmt.Errorf("truncated elst table")
 	}

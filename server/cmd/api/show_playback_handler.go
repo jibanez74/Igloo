@@ -30,8 +30,7 @@ func (app *Application) GetShowEpisode(w http.ResponseWriter, r *http.Request) {
 			helpers.ErrorJSON(w, errors.New(media.notFoundMessage()), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error("failed to get episode", "error", err, "media", media.String())
-		helpers.ErrorJSON(w, errors.New("failed to fetch episode from server"))
+		app.serverError(w, err, "failed to get episode", "failed to fetch episode from server", "media", media.String())
 		return
 	}
 
@@ -44,8 +43,7 @@ func (app *Application) GetShowEpisode(w http.ResponseWriter, r *http.Request) {
 		EpisodeID: media.ID,
 	})
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		app.Logger.Error("failed to get next episode", "error", err, "media", media.String())
-		helpers.ErrorJSON(w, errors.New("failed to fetch episode from server"))
+		app.serverError(w, err, "failed to get next episode", "failed to fetch episode from server", "media", media.String())
 		return
 	}
 	if err == nil {
@@ -53,7 +51,6 @@ func (app *Application) GetShowEpisode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
 		Data: map[string]any{
 			"show": map[string]any{
 				"id":            row.ShowID,
@@ -105,8 +102,7 @@ func (app *Application) GetShowEpisodeTechnicalDetails(w http.ResponseWriter, r 
 
 	tx, err := app.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
-		app.Logger.Error(beginTransactionLogMessage, "error", err)
-		helpers.ErrorJSON(w, errors.New(fetchTechnicalDetailsMessage))
+		app.serverError(w, err, beginTransactionLogMessage, fetchTechnicalDetailsMessage)
 		return
 	}
 	defer tx.Rollback()
@@ -119,36 +115,33 @@ func (app *Application) GetShowEpisodeTechnicalDetails(w http.ResponseWriter, r 
 			helpers.ErrorJSON(w, errors.New(media.notFoundMessage()), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error("failed to get episode file", "error", err, "media", media.String())
-		helpers.ErrorJSON(w, errors.New(fetchTechnicalDetailsMessage))
+		app.serverError(w, err, "failed to get episode file", fetchTechnicalDetailsMessage, "media", media.String())
 		return
 	}
 
 	videoStreams, err := qtx.GetShowVideoStreamsByFileID(ctx, file.ID)
 	if err != nil {
-		app.Logger.Error("failed to get video streams", "error", err, "media", media.String(), "file_id", file.ID)
-		helpers.ErrorJSON(w, errors.New("failed to fetch video streams"))
+		app.serverError(w, err, "failed to get video streams", "failed to fetch video streams",
+			"media", media.String(), "file_id", file.ID)
 		return
 	}
 
 	audioStreams, err := qtx.GetShowAudioStreamsByFileID(ctx, file.ID)
 	if err != nil {
-		app.Logger.Error("failed to get audio streams", "error", err, "media", media.String(), "file_id", file.ID)
-		helpers.ErrorJSON(w, errors.New("failed to fetch audio streams"))
+		app.serverError(w, err, "failed to get audio streams", "failed to fetch audio streams",
+			"media", media.String(), "file_id", file.ID)
 		return
 	}
 
 	subtitles, err := qtx.GetShowSubtitlesByFileID(ctx, file.ID)
 	if err != nil {
-		app.Logger.Error(getSubtitlesLogMessage, "error", err, "media", media.String(), "file_id", file.ID)
-		helpers.ErrorJSON(w, errors.New(fetchSubtitlesMessage))
+		app.serverError(w, err, getSubtitlesLogMessage, fetchSubtitlesMessage, "media", media.String(), "file_id", file.ID)
 		return
 	}
 
 	chapters, err := qtx.GetShowChaptersByFileID(ctx, file.ID)
 	if err != nil {
-		app.Logger.Error("failed to get chapters", "error", err, "media", media.String(), "file_id", file.ID)
-		helpers.ErrorJSON(w, errors.New("failed to fetch chapters"))
+		app.serverError(w, err, "failed to get chapters", "failed to fetch chapters", "media", media.String(), "file_id", file.ID)
 		return
 	}
 
@@ -167,7 +160,6 @@ func (app *Application) GetShowEpisodeTechnicalDetails(w http.ResponseWriter, r 
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
 		Data: map[string]any{
 			"file": map[string]any{
 				"file_name": file.FileName,

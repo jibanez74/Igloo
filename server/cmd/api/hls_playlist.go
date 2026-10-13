@@ -73,8 +73,8 @@ func startLivePlaylistAtBeginning(playlist string) string {
 	return strings.Replace(playlist, "#EXTM3U", "#EXTM3U\n"+hlsStartAtBeginningTag, 1)
 }
 
-// rewritePlaylistURLs prepends baseURL and appends the audio_track query
-// parameter to every segment and init-map URI in a finalized playlist.
+// rewritePlaylistURLs prepends baseURL and appends the asset query suffix to
+// every segment and init-map URI in a finalized playlist.
 func rewritePlaylistURLs(playlist, baseURL, querySuffix string) string {
 	var b strings.Builder
 	for _, line := range strings.Split(playlist, "\n") {
@@ -95,26 +95,12 @@ func rewritePlaylistURLs(playlist, baseURL, querySuffix string) string {
 	return b.String()
 }
 
-// generateVODPlaylist builds a complete HLS VOD M3U8 playlist from the known
-// total duration. All segments are listed upfront with #EXT-X-ENDLIST so
-// hls.js treats it as on-demand (starts from 0, shows full duration, allows seeking).
-// Only transcode sessions use it: their -force_key_frames boundaries make the
-// arithmetic exact, while copy-video sessions serve FFmpeg's own playlist.
-//
-// The segment count comes from ffmpeg.HLSSegmentCount rather than from the
-// duration alone: FFmpeg opens a segment only for a video frame at or past
-// its boundary, so a container that outlasts its last frame by a few
-// milliseconds would otherwise be listed with one segment more than FFmpeg
-// writes, and every client treats that trailing 404 as a lost session. The
-// tail past the last full boundary is folded into the final segment, which
-// can therefore run slightly longer than the nominal segment time.
-//
-// independentSegments comes from ffmpeg.HLSSegmentsAreIndependent, the same
-// predicate that decides whether FFmpeg writes the tag into its own playlist,
-// so a session's two playlist flavors never disagree.
-//
-// FFmpeg produces the actual segment files in the background; the segment
-// handler waits for each file to appear on disk before serving.
+// generateVODPlaylist builds a complete VOD playlist for a transcode session,
+// whose -force_key_frames boundaries make the arithmetic exact; copy-video
+// sessions serve FFmpeg's own playlist. Every segment is listed upfront with
+// #EXT-X-ENDLIST so players treat it as on-demand. ffmpeg.HLSSegmentCount sizes
+// it (the tail past the last boundary folds into the final segment), and
+// independentSegments comes from ffmpeg.HLSSegmentsAreIndependent.
 func generateVODPlaylist(totalDurationSec float64, frameRate float64, baseURL, querySuffix string, independentSegments bool) string {
 	segDur := float64(helpers.HLS_SEGMENT_TIME_SEC)
 	segCount := ffmpeg.HLSSegmentCount(totalDurationSec, frameRate)
@@ -144,7 +130,7 @@ func generateVODPlaylist(totalDurationSec float64, frameRate float64, baseURL, q
 			dur = 0.001
 		}
 		b.WriteString(fmt.Sprintf("#EXTINF:%.6f,\n", dur))
-		b.WriteString(fmt.Sprintf("%s%s%d%s%s\n", baseURL, helpers.HLS_SEGMENT_FILENAME_PREFIX, i, helpers.HLS_SEGMENT_FILENAME_SUFFIX, querySuffix))
+		b.WriteString(baseURL + hlsSegmentFilename(i) + querySuffix + "\n")
 	}
 
 	b.WriteString("#EXT-X-ENDLIST\n")

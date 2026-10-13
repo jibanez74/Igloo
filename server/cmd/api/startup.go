@@ -22,7 +22,7 @@ import (
 )
 
 func (app *Application) InitDB() error {
-	dbPath := app.Config.effectiveDBPath()
+	dbPath := app.Config.DBPath
 
 	dir := filepath.Dir(dbPath)
 	_, err := helpers.GetOrCreateDir(dir)
@@ -36,7 +36,6 @@ func (app *Application) InitDB() error {
 	} else if os.IsNotExist(err) {
 		app.Logger.Info("creating new database", "path", dbPath)
 	} else {
-
 		return fmt.Errorf("failed to stat database path %s: %w", dbPath, err)
 	}
 
@@ -65,16 +64,10 @@ func (app *Application) InitDB() error {
 		return fmt.Errorf("failed to enable WAL journal mode for database %s: %w", dbPath, err)
 	}
 
-	// These are connection-scoped, which is safe because the pool is pinned to a
-	// single connection above.
-	//
-	// synchronous=NORMAL is the standard pairing with WAL: a commit no longer waits
-	// on an fsync, and the scanners commit once per movie or track. WAL still
-	// guarantees the database survives a process crash; only an OS-level crash can
-	// lose the most recent commits.
-	//
-	// temp_store=MEMORY keeps the sorters and materialized subqueries the library
-	// listings build off the disk.
+	// Connection-scoped, which is safe because the pool is pinned to a single
+	// connection. synchronous=NORMAL pairs with WAL so a commit skips the fsync
+	// (only an OS-level crash can lose the latest commits), and temp_store=MEMORY
+	// keeps the listings' sorters off the disk.
 	pragmas := []string{
 		"PRAGMA synchronous=NORMAL;",
 		"PRAGMA temp_store=MEMORY;",
@@ -152,11 +145,7 @@ func (app *Application) RefreshQueryPlannerStats() error {
 	// Returned unwrapped: both callers already name this operation in their own
 	// error or log message, so wrapping here would repeat the same prefix twice.
 	_, err := app.DB.Exec("PRAGMA analysis_limit=400; PRAGMA optimize;")
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 func (app *Application) InitSettings(ctx context.Context) error {
@@ -207,8 +196,8 @@ func (app *Application) InitSettings(ctx context.Context) error {
 		MoviesDir:                  helpers.NullString(app.Config.MoviesDir),
 		ShowsDir:                   helpers.NullString(app.Config.ShowsDir),
 		MusicDir:                   helpers.NullString(app.Config.MusicDir),
-		StaticDir:                  app.Config.effectiveStaticDir(),
-		TranscodeDir:               app.Config.effectiveTranscodeDir(),
+		StaticDir:                  app.Config.StaticDir,
+		TranscodeDir:               app.Config.TranscodeDir,
 	}
 
 	settings, err = app.Queries.CreateSettings(ctx, params)
@@ -257,11 +246,8 @@ func (app *Application) InitDirs() error {
 }
 
 func (app *Application) validateMediaDir(mediaType string, dir *sql.NullString) {
-	if dir == nil || !dir.Valid || strings.TrimSpace(dir.String) == "" {
-		if dir != nil {
-			*dir = sql.NullString{}
-		}
-
+	if !dir.Valid || strings.TrimSpace(dir.String) == "" {
+		*dir = sql.NullString{}
 		return
 	}
 
@@ -277,7 +263,7 @@ func (app *Application) InitLogger() error {
 	debug := app.Config.Debug
 	logToStdout := app.Config.LogToStdout
 
-	logsDir := app.Config.effectiveLogsDir()
+	logsDir := app.Config.LogsDir
 
 	if !logToStdout {
 		_, err := helpers.GetOrCreateDir(logsDir)

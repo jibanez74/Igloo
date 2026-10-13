@@ -150,7 +150,6 @@ func (app *Application) registerSpotifyRoutes(r chi.Router) {
 }
 
 func (app *Application) registerSearchRoutes(r chi.Router) {
-	r.Get("/search", app.SearchAll)
 	r.Route("/search", func(r chi.Router) {
 		r.Get("/", app.SearchAll)
 		r.Get("/movies", app.SearchMovies)

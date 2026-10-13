@@ -17,9 +17,8 @@ const yearMatchScore = 20.0
 
 // Match is one scored TMDB candidate.
 type Match struct {
-	Movie      *tmdb.TmdbMovie
-	Score      float64
-	Confidence float64
+	Movie *tmdb.TmdbMovie
+	Score float64
 }
 
 // Interpretation is one reading of a filename or folder name: the title to
@@ -82,10 +81,6 @@ func Compare(a, b *Match) int {
 
 // ReleaseYear extracts the year from a TMDB release or first-air date.
 func ReleaseYear(releaseDate string) int {
-	if releaseDate == "" {
-		return 0
-	}
-
 	parsed, err := helpers.ParseDate(releaseDate)
 	if err != nil {
 		return 0
@@ -96,10 +91,6 @@ func ReleaseYear(releaseDate string) int {
 
 // Rank orders TMDB results by the scanner's title and year score.
 func Rank(results []tmdb.TmdbMovie, targetTitle string, targetYear int) []*Match {
-	if len(results) == 0 {
-		return nil
-	}
-
 	normalizedTarget := normalizeComparableTitle(targetTitle)
 	targetSequel := sequelIndicator(normalizedTarget)
 
@@ -107,11 +98,7 @@ func Rank(results []tmdb.TmdbMovie, targetTitle string, targetYear int) []*Match
 	for i := range results {
 		movie := &results[i]
 		score := scoreCandidate(normalizedTarget, targetSequel, targetYear, movie)
-		scoredMatches = append(scoredMatches, &Match{
-			Movie:      movie,
-			Score:      score,
-			Confidence: helpers.ClampFloat64(score, 0, 100),
-		})
+		scoredMatches = append(scoredMatches, &Match{Movie: movie, Score: score})
 	}
 
 	slices.SortFunc(scoredMatches, Compare)
@@ -233,10 +220,6 @@ func isTechnicalToken(token string) bool {
 }
 
 func tokenOverlapScore(a, b string) float64 {
-	if a == "" || b == "" {
-		return 0
-	}
-
 	aTokens := strings.Fields(a)
 	bTokens := strings.Fields(b)
 	if len(aTokens) == 0 || len(bTokens) == 0 {

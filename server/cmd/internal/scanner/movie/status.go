@@ -7,20 +7,8 @@ import (
 // Status is the current or latest run. The counters mirror docs/openapi.json.
 type Status struct {
 	scanner.Progress
-	Total               int `json:"total"`
-	Processed           int `json:"processed"`
-	Imported            int `json:"imported"`
-	Updated             int `json:"updated"`
-	Unchanged           int `json:"unchanged"`
-	Failed              int `json:"failed"`
-	Deferred            int `json:"deferred"`
-	Deleted             int `json:"deleted"`
-	EnrichmentTotal     int `json:"enrichment_total"`
-	EnrichmentProcessed int `json:"enrichment_processed"`
-	Enriched            int `json:"enriched"`
-	EnrichmentFailed    int `json:"enrichment_failed"`
-	EnrichmentUnmatched int `json:"enrichment_unmatched"`
-	PendingEnrichment   int `json:"pending_enrichment"`
+	scanner.Counts
+	PendingEnrichment int `json:"pending_enrichment"`
 }
 
 // scanReport is owned by the scan goroutine. The enrichment counters are not

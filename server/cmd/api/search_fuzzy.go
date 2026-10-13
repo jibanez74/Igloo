@@ -135,9 +135,7 @@ func damerauLevenshtein(a, b string, maxDist int) int {
 				d = min(d, prev2[j-2]+1)
 			}
 			cur[j] = d
-			if d < rowMin {
-				rowMin = d
-			}
+			rowMin = min(rowMin, d)
 		}
 		if rowMin > maxDist {
 			return maxDist + 1

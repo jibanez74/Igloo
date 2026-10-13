@@ -18,26 +18,41 @@ import (
 	"igloo/cmd/internal/helpers"
 )
 
-// userResponseMap is the canonical JSON shape for the authenticated user object
-// returned by the auth and user endpoints. It takes explicit fields because the
-// sqlc row types (GetUserRow, UpdateUserNameRow, ...) differ per query. The
-// plaintext PIN is never included — only whether one is set.
-func userResponseMap(id int64, name, email string, isAdmin bool, avatar sql.NullString, hasPin bool, createdAt, updatedAt string) map[string]any {
-	var avatarValue any
-	if avatar.Valid {
-		avatarValue = avatar.String
-	}
+// userResponse is the JSON shape of a user for the auth, user and admin
+// endpoints. It takes explicit fields because the sqlc row types differ per
+// query. The plaintext PIN is never included — only whether one is set.
+type userResponse struct {
+	ID        int64   `json:"id"`
+	Name      string  `json:"name"`
+	Email     string  `json:"email"`
+	IsAdmin   bool    `json:"is_admin"`
+	Avatar    *string `json:"avatar"`
+	HasPin    bool    `json:"has_pin"`
+	CreatedAt string  `json:"created_at"`
+	UpdatedAt string  `json:"updated_at"`
+}
 
-	return map[string]any{
-		"id":         id,
-		"name":       name,
-		"email":      email,
-		"is_admin":   isAdmin,
-		"avatar":     avatarValue,
-		"has_pin":    hasPin,
-		"created_at": createdAt,
-		"updated_at": updatedAt,
+func newUserResponse(id int64, name, email string, isAdmin bool, avatar sql.NullString, hasPin bool, createdAt, updatedAt string) userResponse {
+	return userResponse{
+		ID:        id,
+		Name:      name,
+		Email:     email,
+		IsAdmin:   isAdmin,
+		Avatar:    helpers.StringPtrFromNull(avatar),
+		HasPin:    hasPin,
+		CreatedAt: createdAt,
+		UpdatedAt: updatedAt,
 	}
+}
+
+// userLookupFailed answers a failed lookup of the signed-in user: no row means
+// the session outlived its user (401), anything else is a 500.
+func (app *Application) userLookupFailed(w http.ResponseWriter, err error, logMessage string, userID int64) {
+	if errors.Is(err, sql.ErrNoRows) {
+		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
+		return
+	}
+	app.serverError(w, err, logMessage, internalServerErrorMessage, "user_id", userID)
 }
 
 // validatePassword enforces the shared password length bounds. label is the noun
@@ -71,9 +86,12 @@ const (
 	uniqueConstraintErrorFragment = "UNIQUE constraint"
 )
 
-// validateUserName enforces the shared name length bound in characters
-// (runes), matching the web client's validation.
+// validateUserName requires a name within the shared length bound in
+// characters (runes), matching the web client's validation.
 func validateUserName(name string) error {
+	if name == "" {
+		return errors.New(nameRequiredMessage)
+	}
 	if utf8.RuneCountInString(name) > userNameMaxLength {
 		return fmt.Errorf("name must be %d characters or less", userNameMaxLength)
 	}
@@ -98,19 +116,11 @@ type UpdateUserNameRequest struct {
 }
 
 func (app *Application) UpdateUserName(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	var req UpdateUserNameRequest
 	if err := helpers.ReadJSON(w, r, &req); err != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
-		return
-	}
-
-	if req.Name == "" {
-		helpers.ErrorJSON(w, errors.New(nameRequiredMessage), http.StatusBadRequest)
 		return
 	}
 
@@ -124,19 +134,15 @@ func (app *Application) UpdateUserName(w http.ResponseWriter, r *http.Request) {
 		ID:   userID,
 	})
 	if err != nil {
-		app.Logger.Error("failed to update user name", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to update user name", internalServerErrorMessage, "user_id", userID)
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
-			"user": userResponseMap(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.Pin.Valid, user.CreatedAt, user.UpdatedAt),
+			"user": newUserResponse(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.Pin.Valid, user.CreatedAt, user.UpdatedAt),
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 type UpdateUserEmailRequest struct {
@@ -173,19 +179,15 @@ func (app *Application) UpdateUserEmail(w http.ResponseWriter, r *http.Request) 
 			helpers.ErrorJSON(w, errors.New("that email address is already in use"), http.StatusConflict)
 			return
 		}
-		app.Logger.Error("failed to update user email", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to update user email", internalServerErrorMessage, "user_id", userID)
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
-			"user": userResponseMap(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.Pin.Valid, user.CreatedAt, user.UpdatedAt),
+			"user": newUserResponse(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.Pin.Valid, user.CreatedAt, user.UpdatedAt),
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 type UpdateUserPasswordRequest struct {
@@ -219,12 +221,7 @@ func (app *Application) UpdateUserPassword(w http.ResponseWriter, r *http.Reques
 
 	user, err := app.Queries.GetUser(r.Context(), userID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
-		} else {
-			app.Logger.Error("failed to fetch user for password update", "error", err, "user_id", userID)
-			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
-		}
+		app.userLookupFailed(w, err, "failed to fetch user for password update", userID)
 		return
 	}
 
@@ -237,8 +234,7 @@ func (app *Application) UpdateUserPassword(w http.ResponseWriter, r *http.Reques
 
 	match, err := helpers.PasswordMatches(req.CurrentPassword, user.Password)
 	if err != nil {
-		app.Logger.Error(comparePasswordHashLogMessage, "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, comparePasswordHashLogMessage, internalServerErrorMessage, "user_id", userID)
 		return
 	}
 
@@ -249,27 +245,20 @@ func (app *Application) UpdateUserPassword(w http.ResponseWriter, r *http.Reques
 
 	hashedPassword, err := helpers.HashPassword(req.NewPassword)
 	if err != nil {
-		app.Logger.Error("failed to hash new password", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to hash new password", internalServerErrorMessage, "user_id", userID)
 		return
 	}
 
 	version, err := app.changePassword(r.Context(), userID, hashedPassword)
 	if err != nil {
-		app.Logger.Error("failed to update user password", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to update user password", internalServerErrorMessage, "user_id", userID)
 		return
 	}
 	app.keepSessionAfterPasswordChange(r, userID, version)
 
 	app.Logger.Info("user password updated successfully", "user_id", userID)
 
-	res := helpers.JSONResponse{
-		Error:   false,
-		Message: "Password updated successfully",
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "Password updated successfully"})
 }
 
 type UpdateUserAvatarRequest struct {
@@ -278,10 +267,7 @@ type UpdateUserAvatarRequest struct {
 }
 
 func (app *Application) UpdateUserAvatar(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	var req UpdateUserAvatarRequest
 	if err := helpers.ReadJSON(w, r, &req); err != nil {
@@ -302,15 +288,9 @@ func (app *Application) UpdateUserAvatar(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	var avatarValue sql.NullString
-	if avatar != "" {
-		avatarValue = sql.NullString{String: avatar, Valid: true}
-	}
-
-	user, replaced, err := app.replaceUserAvatar(r.Context(), userID, avatarValue)
+	user, replaced, err := app.replaceUserAvatar(r.Context(), userID, helpers.NullString(avatar))
 	if err != nil {
-		app.Logger.Error("failed to update user avatar", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to update user avatar", internalServerErrorMessage, "user_id", userID)
 		return
 	}
 
@@ -319,14 +299,11 @@ func (app *Application) UpdateUserAvatar(w http.ResponseWriter, r *http.Request)
 		app.deleteUploadedAvatar(userID, replaced.String)
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
-			"user": userResponseMap(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.Pin.Valid, user.CreatedAt, user.UpdatedAt),
+			"user": newUserResponse(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.Pin.Valid, user.CreatedAt, user.UpdatedAt),
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 // uploadedAvatarURLPrefix is the URL UploadUserAvatar publishes an avatar
@@ -343,10 +320,7 @@ var allowedAvatarMimeTypes = map[string]string{
 const maxAvatarSize = 20 << 20
 
 func (app *Application) UploadUserAvatar(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxAvatarSize)
 
@@ -389,8 +363,7 @@ func (app *Application) UploadUserAvatar(w http.ResponseWriter, r *http.Request)
 	avatarsDir := filepath.Join(app.CurrentSettings().StaticDir, "avatars")
 	_, err = helpers.GetOrCreateDir(avatarsDir)
 	if err != nil {
-		app.Logger.Error("failed to create avatars directory", "error", err, "path", avatarsDir)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to create avatars directory", internalServerErrorMessage, "path", avatarsDir)
 		return
 	}
 
@@ -405,8 +378,7 @@ func (app *Application) UploadUserAvatar(w http.ResponseWriter, r *http.Request)
 	// the new name.
 	err = writeAvatarFile(avatarsDir, filePath, file)
 	if err != nil {
-		app.Logger.Error("failed to write avatar file", "error", err, "path", filePath)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to write avatar file", internalServerErrorMessage, "path", filePath)
 		return
 	}
 
@@ -431,15 +403,12 @@ func (app *Application) UploadUserAvatar(w http.ResponseWriter, r *http.Request)
 		"content_type", contentType,
 	)
 
-	res := helpers.JSONResponse{
-		Error:   false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Message: "Avatar uploaded successfully",
 		Data: map[string]any{
-			"user": userResponseMap(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.Pin.Valid, user.CreatedAt, user.UpdatedAt),
+			"user": newUserResponse(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.Pin.Valid, user.CreatedAt, user.UpdatedAt),
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 // replaceUserAvatar points the account at avatar and returns the value it
@@ -554,12 +523,7 @@ func (app *Application) DeleteUserAccount(w http.ResponseWriter, r *http.Request
 
 	user, err := app.Queries.GetUser(r.Context(), userID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
-		} else {
-			app.Logger.Error("failed to fetch user for deletion", "error", err, "user_id", userID)
-			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
-		}
+		app.userLookupFailed(w, err, "failed to fetch user for deletion", userID)
 		return
 	}
 
@@ -570,8 +534,7 @@ func (app *Application) DeleteUserAccount(w http.ResponseWriter, r *http.Request
 
 	roomIDs, err := app.deleteUserWithRooms(r.Context(), userID)
 	if err != nil {
-		app.Logger.Error("failed to delete user", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to delete user", internalServerErrorMessage, "user_id", userID)
 		return
 	}
 
@@ -590,12 +553,7 @@ func (app *Application) DeleteUserAccount(w http.ResponseWriter, r *http.Request
 
 	app.Logger.Info("user account deleted", "user_id", userID, "email", user.Email)
 
-	res := helpers.JSONResponse{
-		Error:   false,
-		Message: "Account deleted successfully",
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "Account deleted successfully"})
 }
 
 // deleteUserWithRooms deletes the user and returns the ids of the watch rooms

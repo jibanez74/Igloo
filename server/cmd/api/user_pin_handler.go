@@ -1,7 +1,6 @@
 package main
 
 import (
-	"database/sql"
 	"errors"
 	"net/http"
 	"strconv"
@@ -12,10 +11,9 @@ import (
 )
 
 const (
-	userPinLength              = 4
-	pinAttemptLimit            = 5
-	pinAttemptWindow           = time.Minute
-	currentPinIncorrectMessage = "current PIN is incorrect"
+	userPinLength    = 4
+	pinAttemptLimit  = 5
+	pinAttemptWindow = time.Minute
 )
 
 // validatePin enforces exactly 4 ASCII digits. Byte-wise comparison rejects
@@ -50,10 +48,7 @@ type UpdateUserPinRequest struct {
 // a TV client can set the PIN on first sign-in, but changing or removing an
 // existing PIN requires the current PIN.
 func (app *Application) UpdateUserPin(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	var req UpdateUserPinRequest
 	if err := helpers.ReadJSON(w, r, &req); err != nil {
@@ -77,12 +72,7 @@ func (app *Application) UpdateUserPin(w http.ResponseWriter, r *http.Request) {
 
 	currentPin, err := app.Queries.GetUserPin(r.Context(), userID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
-		} else {
-			app.Logger.Error("failed to fetch user for pin update", "error", err, "user_id", userID)
-			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
-		}
+		app.userLookupFailed(w, err, "failed to fetch user for pin update", userID)
 		return
 	}
 
@@ -98,20 +88,17 @@ func (app *Application) UpdateUserPin(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if req.CurrentPin != currentPin.String {
-			helpers.ErrorJSON(w, errors.New(currentPinIncorrectMessage), http.StatusUnauthorized)
+			helpers.ErrorJSON(w, errors.New("current PIN is incorrect"), http.StatusUnauthorized)
 			return
 		}
 	}
 
-	pinValue := sql.NullString{String: newPin, Valid: !removing}
-
 	user, err := app.Queries.UpdateUserPin(r.Context(), database.UpdateUserPinParams{
-		Pin: pinValue,
+		Pin: helpers.NullString(newPin),
 		ID:  userID,
 	})
 	if err != nil {
-		app.Logger.Error("failed to update user pin", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to update user pin", internalServerErrorMessage, "user_id", userID)
 		return
 	}
 
@@ -123,10 +110,9 @@ func (app *Application) UpdateUserPin(w http.ResponseWriter, r *http.Request) {
 	app.Logger.Info("user pin updated", "user_id", userID, "removed", removing)
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error:   false,
 		Message: message,
 		Data: map[string]any{
-			"user": userResponseMap(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.Pin.Valid, user.CreatedAt, user.UpdatedAt),
+			"user": newUserResponse(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.Pin.Valid, user.CreatedAt, user.UpdatedAt),
 		},
 	})
 }
@@ -141,21 +127,13 @@ func (app *Application) GetUserPin(w http.ResponseWriter, r *http.Request) {
 
 	pin, err := app.Queries.GetUserPin(r.Context(), userID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
-		} else {
-			app.Logger.Error("failed to fetch user for pin read", "error", err, "user_id", userID)
-			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
-		}
+		app.userLookupFailed(w, err, "failed to fetch user for pin read", userID)
 		return
 	}
 
 	w.Header().Set("Cache-Control", "private, no-store")
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
-		Data: map[string]any{
-			"pin": helpers.StringPtrFromNull(pin),
-		},
+		Data: map[string]any{"pin": helpers.StringPtrFromNull(pin)},
 	})
 }
 
@@ -167,10 +145,7 @@ type VerifyUserPinRequest struct {
 // an expected domain outcome, so both match and mismatch return 200 with
 // data.valid — 401 stays reserved for missing/revoked credentials.
 func (app *Application) VerifyUserPin(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	var req VerifyUserPinRequest
 	if err := helpers.ReadJSON(w, r, &req); err != nil {
@@ -185,12 +160,7 @@ func (app *Application) VerifyUserPin(w http.ResponseWriter, r *http.Request) {
 
 	pin, err := app.Queries.GetUserPin(r.Context(), userID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
-		} else {
-			app.Logger.Error("failed to fetch user for pin verification", "error", err, "user_id", userID)
-			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
-		}
+		app.userLookupFailed(w, err, "failed to fetch user for pin verification", userID)
 		return
 	}
 
@@ -206,10 +176,5 @@ func (app *Application) VerifyUserPin(w http.ResponseWriter, r *http.Request) {
 
 	valid := req.Pin == pin.String
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
-		Data: map[string]any{
-			"valid": valid,
-		},
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"valid": valid}})
 }

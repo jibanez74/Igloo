@@ -107,27 +107,15 @@ func (c Capabilities) SupportsCLIOption(name string) bool {
 }
 
 func (c Capabilities) SupportsFilterOption(filter, option string) bool {
-	options := c.FilterOptions[normalizeCapabilityName(filter)]
-	if options == nil {
-		return false
-	}
-	return options[normalizeCapabilityName(option)]
+	return c.FilterOptions[normalizeCapabilityName(filter)][normalizeCapabilityName(option)]
 }
 
 func (c Capabilities) SupportsEncoderOption(encoder, option string) bool {
-	options := c.EncoderOptions[normalizeCapabilityName(encoder)]
-	if options == nil {
-		return false
-	}
-	return options[normalizeCapabilityName(option)]
+	return c.EncoderOptions[normalizeCapabilityName(encoder)][normalizeCapabilityName(option)]
 }
 
 func (c Capabilities) SupportsMuxerFlag(muxer, flag string) bool {
-	flags := c.MuxerFlags[normalizeCapabilityName(muxer)]
-	if flags == nil {
-		return false
-	}
-	return flags[normalizeCapabilityName(flag)]
+	return c.MuxerFlags[normalizeCapabilityName(muxer)][normalizeCapabilityName(flag)]
 }
 
 func (c Capabilities) SupportsNvidiaCUDAFilters(tonemap bool) bool {
@@ -253,15 +241,11 @@ func probeCapabilities(bin string, versionOutput string) Capabilities {
 	caps.recordCLIOptions(bin, []string{"readrate", "readrate_initial_burst"})
 
 	caps.recordFilterOptions(bin, "scale_cuda", []string{"format"})
-	caps.recordFilterOptions(bin, "tonemap_cuda", []string{"format", "p", "t", "m", "tonemap", "desat"})
+	caps.recordFilterOptions(bin, "tonemap_cuda", tonemapCUDAOptions)
 	caps.recordFilterOptions(bin, "scale_qsv", []string{"format"})
 	caps.recordEncoderOptions(bin, "h264_qsv", []string{"look_ahead", "forced_idr", "preset"})
-	// NVENC spells the option with a hyphen while QSV uses an underscore. Both
-	// default to false, which turns a forced keyframe into a non-IDR I-frame.
+	// NVENC spells the option with a hyphen while QSV uses an underscore.
 	caps.recordEncoderOptions(bin, "h264_nvenc", []string{"forced-idr"})
-	// temp_file makes the hls muxer write each segment to a .tmp name and
-	// rename it on close, which is what lets segment readiness be judged by
-	// the final name's existence alone.
 	caps.recordMuxerFlags(bin, "hls", []string{"temp_file"})
 
 	if caps.SupportsEncoder("h264_nvenc") {
@@ -292,8 +276,11 @@ func probeCapabilities(bin string, versionOutput string) Capabilities {
 	return caps
 }
 
+// tonemapCUDAOptions are the tonemap_cuda options the HDR transcode passes.
+var tonemapCUDAOptions = []string{"format", "p", "t", "m", "tonemap", "desat"}
+
 func (c Capabilities) SupportsNvidiaCUDATonemapOptions() bool {
-	for _, option := range []string{"format", "p", "t", "m", "tonemap", "desat"} {
+	for _, option := range tonemapCUDAOptions {
 		if !c.SupportsFilterOption("tonemap_cuda", option) {
 			return false
 		}
@@ -301,11 +288,6 @@ func (c Capabilities) SupportsNvidiaCUDATonemapOptions() bool {
 	return true
 }
 
-// The four recorders below lazily create their map before writing to it. That
-// branch is unreachable from probeCapabilities, which pre-builds every map
-// except MuxerFlags, so a dead-code sweep will keep flagging it: it is kept
-// because tests build a partial Capabilities by hand and call the recorders
-// directly, and because a nil map here panics rather than degrading.
 func (c *Capabilities) recordCLIOptions(bin string, options []string) {
 	output, err := runFFmpegProbe(bin, "-hide_banner", "-h", "long")
 	if err != nil {
@@ -328,17 +310,7 @@ func (c *Capabilities) recordFilterOptions(bin string, filter string, options []
 	if err != nil {
 		return
 	}
-	if c.FilterOptions == nil {
-		c.FilterOptions = map[string]map[string]bool{}
-	}
-	key := normalizeCapabilityName(filter)
-	if c.FilterOptions[key] == nil {
-		c.FilterOptions[key] = map[string]bool{}
-	}
-	for _, option := range options {
-		option = normalizeCapabilityName(option)
-		c.FilterOptions[key][option] = ffmpegHelpHasOption(output, option)
-	}
+	recordNestedOptions(&c.FilterOptions, filter, output, options)
 }
 
 func (c *Capabilities) recordEncoderOptions(bin string, encoder string, options []string) {
@@ -349,17 +321,7 @@ func (c *Capabilities) recordEncoderOptions(bin string, encoder string, options 
 	if err != nil {
 		return
 	}
-	if c.EncoderOptions == nil {
-		c.EncoderOptions = map[string]map[string]bool{}
-	}
-	key := normalizeCapabilityName(encoder)
-	if c.EncoderOptions[key] == nil {
-		c.EncoderOptions[key] = map[string]bool{}
-	}
-	for _, option := range options {
-		option = normalizeCapabilityName(option)
-		c.EncoderOptions[key][option] = ffmpegHelpHasOption(output, option)
-	}
+	recordNestedOptions(&c.EncoderOptions, encoder, output, options)
 }
 
 func (c *Capabilities) recordMuxerFlags(bin string, muxer string, flags []string) {
@@ -367,16 +329,23 @@ func (c *Capabilities) recordMuxerFlags(bin string, muxer string, flags []string
 	if err != nil {
 		return
 	}
-	if c.MuxerFlags == nil {
-		c.MuxerFlags = map[string]map[string]bool{}
+	recordNestedOptions(&c.MuxerFlags, muxer, output, flags)
+}
+
+// recordNestedOptions stores which of names the help output lists under key.
+// The maps are created lazily, unlike in probeCapabilities, because tests
+// build a partial Capabilities and call the recorders directly.
+func recordNestedOptions(target *map[string]map[string]bool, key, output string, names []string) {
+	if *target == nil {
+		*target = map[string]map[string]bool{}
 	}
-	key := normalizeCapabilityName(muxer)
-	if c.MuxerFlags[key] == nil {
-		c.MuxerFlags[key] = map[string]bool{}
+	key = normalizeCapabilityName(key)
+	if (*target)[key] == nil {
+		(*target)[key] = map[string]bool{}
 	}
-	for _, flag := range flags {
-		flag = normalizeCapabilityName(flag)
-		c.MuxerFlags[key][flag] = ffmpegHelpHasOption(output, flag)
+	for _, name := range names {
+		name = normalizeCapabilityName(name)
+		(*target)[key][name] = ffmpegHelpHasOption(output, name)
 	}
 }
 
@@ -440,10 +409,7 @@ func probeNvidiaCUDAScale(bin string) bool {
 		"-f", "null",
 		"-",
 	)
-	if err != nil {
-		return false
-	}
-	return true
+	return err == nil
 }
 
 // tonemap_cuda refuses a frame whose transfer characteristic is not PQ or HLG
@@ -465,10 +431,7 @@ func probeNvidiaCUDATonemap(bin string) bool {
 		"-f", "null",
 		"-",
 	)
-	if err != nil {
-		return false
-	}
-	return true
+	return err == nil
 }
 
 func probeH264QSV(bin string) (bool, string) {
@@ -503,10 +466,7 @@ func probeQSVScale(bin string) bool {
 		"-f", "null",
 		"-",
 	)
-	if err != nil {
-		return false
-	}
-	return true
+	return err == nil
 }
 
 func runFFmpegProbe(bin string, args ...string) (string, error) {

@@ -62,12 +62,7 @@ func ValidateRemuxSafety(outDir string, segmentCount int) (RemuxValidationSummar
 
 	summary := RemuxValidationSummary{}
 	for i := 0; i < segmentCount; i++ {
-		name := fmt.Sprintf(
-			"%s%d%s",
-			helpers.HLS_SEGMENT_FILENAME_PREFIX,
-			i,
-			helpers.HLS_SEGMENT_FILENAME_SUFFIX,
-		)
+		name := fmt.Sprintf("%s%d%s", helpers.HLS_SEGMENT_FILENAME_PREFIX, i, helpers.HLS_SEGMENT_FILENAME_SUFFIX)
 		segmentData, readErr := os.ReadFile(filepath.Join(outDir, name))
 		if readErr != nil {
 			return summary, fmt.Errorf("read segment %d: %w", i, readErr)
@@ -472,10 +467,6 @@ func parseTFHD(data []byte, moof mp4Box, tfhd mp4Box) (trackFragment, error) {
 
 	flags := readFullBoxFlags(payload)
 	offset := 4
-	if len(payload) < offset+4 {
-		return trackFragment{}, fmt.Errorf("invalid tfhd payload")
-	}
-
 	fragment := trackFragment{
 		TrackID: binary.BigEndian.Uint32(payload[offset : offset+4]),
 	}
@@ -542,10 +533,6 @@ func parseTRUN(
 
 	flags := readFullBoxFlags(payload)
 	offset := 4
-
-	if len(payload) < offset+4 {
-		return trackRun{}, fmt.Errorf("invalid trun payload")
-	}
 	sampleCountValue := binary.BigEndian.Uint32(payload[offset : offset+4])
 	offset += 4
 

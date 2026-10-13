@@ -232,10 +232,10 @@ func (s *Scanner) loadScanIndex(ctx context.Context) (map[string]showScanEntry, 
 	return index, catalog, nil
 }
 
+// probeJob is one walked file; a zero baseline.ID means it is not cataloged yet.
 type probeJob struct {
 	file     scanner.ScanFile
 	baseline showScanEntry
-	exists   bool
 }
 
 // probeResult carries a worker's parse, inspection, and probe. info is set
@@ -286,8 +286,7 @@ func (s *Scanner) prepareFile(ctx context.Context, root string, job probeJob) pr
 func (s *Scanner) processLocal(ctx context.Context, scan *showScanContext, report *scanReport, root string, files []scanner.ScanFile) {
 	jobs := make([]probeJob, 0, len(files))
 	for _, file := range files {
-		baseline, exists := scan.index[file.Path]
-		jobs = append(jobs, probeJob{file: file, baseline: baseline, exists: exists})
+		jobs = append(jobs, probeJob{file: file, baseline: scan.index[file.Path]})
 	}
 	scanner.RunWorkers(ctx, scanWorkers, jobs, func() bool { return true },
 		func(ctx context.Context, job probeJob) probeResult { return s.prepareFile(ctx, root, job) },
@@ -307,11 +306,9 @@ func (s *Scanner) processLocal(ctx context.Context, scan *showScanContext, repor
 					s.recordLocal(report, scan, result)
 				}
 			}
-			if result.inspection != nil {
-				closeErr := result.inspection.Close()
-				if closeErr != nil {
-					s.Logger.Warn("close show inspection", "path", result.job.file.Path, "error", closeErr)
-				}
+			closeErr := result.inspection.Close()
+			if closeErr != nil {
+				s.Logger.Warn("close show inspection", "path", result.job.file.Path, "error", closeErr)
 			}
 			s.publish(report)
 		})
@@ -326,7 +323,7 @@ func (s *Scanner) recordLocal(report *scanReport, scan *showScanContext, result 
 	deferred := errors.As(result.err, &deferral)
 	if !deferred && result.err == nil && result.inspection.Outcome == scanner.FileDeferred {
 		deferred = true
-		deferral = &scanner.FileDeferral{Reason: result.inspection.Reason, EligibleAt: result.inspection.EligibleAt}
+		deferral = &scanner.FileDeferral{Reason: result.inspection.Reason}
 	}
 	switch {
 	case deferred:
@@ -341,7 +338,7 @@ func (s *Scanner) recordLocal(report *scanReport, scan *showScanContext, result 
 	case result.inspection.Outcome == scanner.FileUnchanged:
 		report.status.Unchanged++
 		scan.touch(result.job.baseline.SeasonID, result.job.baseline.Episodes)
-	case result.job.exists:
+	case result.job.baseline.ID != 0:
 		report.status.Updated++
 	default:
 		report.status.Imported++
@@ -373,11 +370,8 @@ func (s *Scanner) persistFile(ctx context.Context, scan *showScanContext, result
 		if current.ID != 0 && current.SeasonID != season.ID {
 			return errors.New("file season ownership changed")
 		}
-		var duration sql.NullFloat64
-		seconds, validDuration := helpers.ParseDurationSeconds(info.Format.Duration)
-		if validDuration && seconds > 0 {
-			duration = helpers.NullFloat64(seconds)
-		}
+		seconds, _ := helpers.ParseDurationSeconds(info.Format.Duration)
+		duration := helpers.NullFloat64(seconds)
 		stored, err := q.UpsertShowFile(ctx, database.UpsertShowFileParams{SeasonID: season.ID, FilePath: file.Path, FileName: filepath.Base(file.Path), Size: inspection.Fingerprint.Size, Container: file.Ext, MimeType: helpers.VideoMimeTypes[file.Ext], Duration: duration})
 		if err != nil {
 			return err
@@ -457,19 +451,14 @@ func (s *Scanner) persistFile(ctx context.Context, scan *showScanContext, result
 	return nil
 }
 
+// cleanup deletes what the walk did not see; DeleteUnseen validates the root
+// first and reports a cancellation.
 func (s *Scanner) cleanup(ctx context.Context, r *scanner.Reconciliation, report *scanReport) error {
-	err := r.ValidateRoot(ctx)
-	if err != nil {
-		return err
-	}
 	deleted, err := r.DeleteUnseen(ctx, func(file scanner.CatalogFile) (bool, error) {
 		return s.deleteMissing(ctx, r, file)
 	})
 	report.status.Deleted += deleted
-	if err != nil {
-		return err
-	}
-	return ctx.Err()
+	return err
 }
 
 // deleteMissing removes one catalog file and prunes only what it could have

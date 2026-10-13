@@ -1,8 +1,9 @@
 package spotify
 
 import (
-	"errors"
 	"fmt"
+	"math"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -122,15 +123,6 @@ func (e *MatchError) Unwrap() error {
 	return e.Err
 }
 
-func AsMatchError(err error) (*MatchError, bool) {
-	var matchErr *MatchError
-	if errors.As(err, &matchErr) {
-		return matchErr, true
-	}
-
-	return nil, false
-}
-
 func newMatchError(info MatchDebugInfo, err error) error {
 	return &MatchError{
 		Info: info,
@@ -180,10 +172,6 @@ func tokenizeComparisonText(value string, stopWords map[string]struct{}) []strin
 	}
 
 	fields := strings.Fields(normalized)
-	if len(fields) == 0 {
-		return nil
-	}
-
 	tokens := make([]string, 0, len(fields))
 	for _, field := range fields {
 		if _, skip := stopWords[field]; skip {
@@ -193,20 +181,6 @@ func tokenizeComparisonText(value string, stopWords map[string]struct{}) []strin
 	}
 
 	return tokens
-}
-
-func tokensEqual(left, right []string) bool {
-	if len(left) != len(right) {
-		return false
-	}
-
-	for index := range left {
-		if left[index] != right[index] {
-			return false
-		}
-	}
-
-	return true
 }
 
 func tokensContainedInOrder(queryTokens, candidateTokens []string) bool {
@@ -230,10 +204,6 @@ func tokensContainedInOrder(queryTokens, candidateTokens []string) bool {
 }
 
 func countMatchedTokens(queryTokens, candidateTokens []string) int {
-	if len(queryTokens) == 0 || len(candidateTokens) == 0 {
-		return 0
-	}
-
 	counts := make(map[string]int, len(candidateTokens))
 	for _, token := range candidateTokens {
 		counts[token]++
@@ -269,7 +239,7 @@ func scoreArtistName(query, candidate string) int {
 		return 0
 	}
 
-	if tokensEqual(queryTokens, candidateTokens) {
+	if slices.Equal(queryTokens, candidateTokens) {
 		return 98
 	}
 
@@ -320,7 +290,7 @@ func scoreAlbumTitle(query, candidate string) int {
 	bestScore := scoreTokenSequence(fullQueryTokens, fullCandidateTokens)
 	bestScore = max(bestScore, scoreTokenSequence(baseQueryTokens, baseCandidateTokens))
 
-	if len(baseQueryTokens) > 0 && len(baseCandidateTokens) > 0 && tokensEqual(baseQueryTokens, baseCandidateTokens) {
+	if len(baseQueryTokens) > 0 && len(baseCandidateTokens) > 0 && slices.Equal(baseQueryTokens, baseCandidateTokens) {
 		bestScore = max(bestScore, 98)
 	}
 
@@ -332,7 +302,7 @@ func scoreTokenSequence(queryTokens, candidateTokens []string) int {
 		return 0
 	}
 
-	if tokensEqual(queryTokens, candidateTokens) {
+	if slices.Equal(queryTokens, candidateTokens) {
 		return 98
 	}
 
@@ -453,32 +423,21 @@ func selectBestAlbumMatch(title, artist string, albums []spotifylib.SimpleAlbum,
 		return nil, info
 	}
 
-	titleScore := scoreAlbumTitle(title, albums[0].Name)
-	artistScore, candidateArtistName := scoreAlbumArtist(artist, albums[0].Artists)
-	bestScore := (titleScore*3 + artistScore) / 4
-	if strings.TrimSpace(artist) != "" && artistScore < 60 {
-		bestScore -= 12
-	}
-
-	bestIndex := 0
-	bestArtistName := candidateArtistName
-
-	for index := 1; index < len(albums); index++ {
-		titleScore = scoreAlbumTitle(title, albums[index].Name)
-		artistScore, candidateArtistName = scoreAlbumArtist(artist, albums[index].Artists)
-		score := (titleScore*3 + artistScore) / 4
-		if strings.TrimSpace(artist) != "" && artistScore < 60 {
+	// Later results pay one point per rank, so a tie keeps Spotify's order.
+	hasArtist := strings.TrimSpace(artist) != ""
+	bestScore, bestIndex, bestArtistName := math.MinInt, 0, ""
+	for index, album := range albums {
+		titleScore := scoreAlbumTitle(title, album.Name)
+		artistScore, candidateArtistName := scoreAlbumArtist(artist, album.Artists)
+		score := (titleScore*3+artistScore)/4 - index
+		if hasArtist && artistScore < 60 {
 			score -= 12
 		}
-		score -= index
-
 		if score <= bestScore {
 			continue
 		}
 
-		bestScore = score
-		bestIndex = index
-		bestArtistName = candidateArtistName
+		bestScore, bestIndex, bestArtistName = score, index, candidateArtistName
 	}
 
 	info.CandidateName = albums[bestIndex].Name

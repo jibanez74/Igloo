@@ -71,9 +71,6 @@ func (s *Scanner) logSlow(message string, started time.Time, args ...any) {
 }
 
 func (s *Scanner) closeInspection(inspection *scanner.FileInspection, path string) {
-	if inspection == nil {
-		return
-	}
 	err := inspection.Close()
 	if err != nil {
 		s.logger.Warn("close movie inspection", "path", path, "error", err)
@@ -246,7 +243,7 @@ func (s *Scanner) recordLocal(report *scanReport, file *localFile, result probeR
 	isDeferred := errors.As(result.err, &deferred)
 	switch {
 	case isDeferred:
-		file.state, file.eligible = fileDeferred, deferred.EligibleAt
+		file.state, file.eligible = fileDeferred, time.Time{}
 	case result.err != nil:
 		file.state = fileFailed
 		report.status.Failed++

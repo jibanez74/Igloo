@@ -11,14 +11,14 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 // BatchSize is how many files a library scan buffers before flushing them to
 // the database.
 const BatchSize = 54
 
-// ScanFile is a media file queued for processing during a library scan. It is
-// shared by the movie and music scanners.
+// ScanFile is a media file queued for processing during a library scan.
 type ScanFile struct {
 	Path string
 	Ext  string
@@ -26,8 +26,7 @@ type ScanFile struct {
 }
 
 // NormalizedScanCacheKey builds a stable, case-insensitive cache key from the
-// given parts. It is shared by the movie and music scanners to key their
-// in-scan lookup caches (genre tags, musician/album identities, etc.).
+// given parts, for the scanners' in-scan lookup caches.
 func NormalizedScanCacheKey(parts ...string) string {
 	normalized := make([]string, 0, len(parts))
 	for _, part := range parts {
@@ -37,15 +36,10 @@ func NormalizedScanCacheKey(parts ...string) string {
 	return strings.Join(normalized, "\x00")
 }
 
-// ScanCache is a two-level map: transaction-local entries over an optional
-// read-only base layer. The scan-lifetime cache uses just the local layer; the
-// per-item overlay created by Overlay starts empty and reads through to the
-// scan layer. Discarding the overlay after a rolled-back transaction discards
-// its entries, which would otherwise require cloning every map per item --
-// O(items x library) -- and now costs only the new entries.
-//
-// It is shared by the movie and music scanners to memoize entity ids and
-// already-written join rows within a scan.
+// ScanCache memoizes entity ids and written join rows within a scan, as
+// transaction-local entries over an optional read-only base layer. The
+// per-item Overlay reads through to the scan layer, so discarding it after a
+// rolled-back transaction drops only its new entries without cloning maps.
 type ScanCache[K comparable, V any] struct {
 	local map[K]V
 	base  map[K]V // nil on the scan-lifetime cache
@@ -89,34 +83,6 @@ func (c ScanCache[K, V]) MergeFrom(other ScanCache[K, V]) {
 	maps.Copy(c.local, other.local)
 }
 
-// ScanGuard is a single-flight guard ensuring only one scan of a given kind runs
-// at a time. The zero value is ready to use.
-type ScanGuard struct {
-	mu      sync.Mutex
-	running bool
-}
-
-// TryBegin marks the guard as running and returns true, or returns false if a
-// scan is already in progress.
-func (g *ScanGuard) TryBegin() bool {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-
-	if g.running {
-		return false
-	}
-
-	g.running = true
-	return true
-}
-
-// Finish clears the running flag so a subsequent TryBegin can succeed.
-func (g *ScanGuard) Finish() {
-	g.mu.Lock()
-	g.running = false
-	g.mu.Unlock()
-}
-
 // StartStatus describes whether a scan goroutine was launched.
 type StartStatus int
 
@@ -136,11 +102,10 @@ type StartResult struct {
 }
 
 // Launcher admits one scan goroutine at a time and tracks it in the shutdown
-// wait group. It is shared by the movie and music scanners so the start
-// lifecycle exists once.
+// wait group, so every scanner shares one start lifecycle.
 type Launcher struct {
-	Wait  *sync.WaitGroup
-	guard ScanGuard
+	Wait    *sync.WaitGroup
+	running atomic.Bool
 }
 
 // Launch runs run(directory) on a new goroutine when directory is configured
@@ -152,7 +117,7 @@ func (l *Launcher) Launch(directory sql.NullString, begin func(), run func(direc
 		result.Status = StartNotConfigured
 		return result
 	}
-	if !l.guard.TryBegin() {
+	if !l.running.CompareAndSwap(false, true) {
 		result.Status = StartAlreadyRunning
 		return result
 	}
@@ -160,7 +125,7 @@ func (l *Launcher) Launch(directory sql.NullString, begin func(), run func(direc
 	l.Wait.Add(1)
 	go func() {
 		defer l.Wait.Done()
-		defer l.guard.Finish()
+		defer l.running.Store(false)
 		run(directory.String)
 	}()
 	return result

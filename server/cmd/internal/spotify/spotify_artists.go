@@ -40,18 +40,12 @@ func (s *spotifyClient) SearchArtistByName(ctx context.Context, artistName strin
 		}, err)
 	}
 
-	if results.Artists == nil {
-		return nil, newMatchError(MatchDebugInfo{
-			Lookup:      lookupArtist,
-			Input:       artistName,
-			SearchQuery: artistName,
-			Strategy:    strategyArtistSearch,
-			Reason:      MatchReasonNoResults,
-			Threshold:   spotifyArtistThreshold,
-		}, nil)
+	// No artists page reads as no results, which selectBestArtistMatch reports.
+	var artists []spotify.FullArtist
+	if results.Artists != nil {
+		artists = results.Artists.Artists
 	}
-
-	returned, info := selectBestArtistMatch(artistName, results.Artists.Artists, strategyArtistSearch)
+	returned, info := selectBestArtistMatch(artistName, artists, strategyArtistSearch)
 	if returned == nil {
 		return nil, newMatchError(info, nil)
 	}

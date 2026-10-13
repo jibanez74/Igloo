@@ -32,31 +32,6 @@ func TestParseFrameRate(t *testing.T) {
 	}
 }
 
-func TestClampFloat64(t *testing.T) {
-	tests := []struct {
-		name     string
-		v        float64
-		min      float64
-		max      float64
-		expected float64
-	}{
-		{"within range", 5.0, 0.0, 10.0, 5.0},
-		{"below minimum", -5.0, 0.0, 10.0, 0.0},
-		{"above maximum", 15.0, 0.0, 10.0, 10.0},
-		{"inverted bounds clamp high", 7.0, 10.0, 5.0, 7.0},
-		{"inverted bounds clamp low", 3.0, 10.0, 5.0, 5.0},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := ClampFloat64(tt.v, tt.min, tt.max)
-			if got != tt.expected {
-				t.Errorf("ClampFloat64(%f, %f, %f) = %f, want %f",
-					tt.v, tt.min, tt.max, got, tt.expected)
-			}
-		})
-	}
-}
-
 // ParseBitRate deliberately does not trim: ffprobe never pads bit_rate, so a
 // padded value did not come from where the caller believes (see
 // docs/deferred-cleanups.md).

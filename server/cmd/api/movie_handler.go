@@ -8,7 +8,6 @@ import (
 	"igloo/cmd/internal/helpers"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -50,46 +49,34 @@ type moviesStatsData struct {
 	TotalMovies int64 `json:"total_movies"`
 }
 
-func libraryRowsFromDesc(rows []database.GetMoviesLibraryDescRow) []database.GetMoviesLibraryAscRow {
+// movieLibraryRow is every generated movie listing row. Each has exactly
+// GetMoviesLibraryAscRow's fields, so it converts to that type directly.
+type movieLibraryRow interface {
+	database.GetMoviesLibraryDescRow |
+		database.GetMoviesByGenreAscRow | database.GetMoviesByGenreDescRow |
+		database.GetLikedMoviesForUserAscRow | database.GetLikedMoviesForUserDescRow |
+		database.GetPlaylistMoviesPaginatedAscRow | database.GetPlaylistMoviesPaginatedDescRow
+}
+
+func movieLibraryRows[T movieLibraryRow](rows []T) []database.GetMoviesLibraryAscRow {
 	out := make([]database.GetMoviesLibraryAscRow, len(rows))
-	for i, r := range rows {
-		out[i] = database.GetMoviesLibraryAscRow{
-			ID:            r.ID,
-			Title:         r.Title,
-			PosterPath:    r.PosterPath,
-			Year:          r.Year,
-			Certification: r.Certification,
-		}
+	for i, row := range rows {
+		out[i] = database.GetMoviesLibraryAscRow(row)
 	}
 	return out
 }
 
-func libraryRowsFromLikedAsc(rows []database.GetLikedMoviesForUserAscRow) []database.GetMoviesLibraryAscRow {
-	out := make([]database.GetMoviesLibraryAscRow, len(rows))
-	for i, r := range rows {
-		out[i] = database.GetMoviesLibraryAscRow{
-			ID:            r.ID,
-			Title:         r.Title,
-			PosterPath:    r.PosterPath,
-			Year:          r.Year,
-			Certification: r.Certification,
-		}
-	}
-	return out
-}
-
-func libraryRowsFromLikedDesc(rows []database.GetLikedMoviesForUserDescRow) []database.GetMoviesLibraryAscRow {
-	out := make([]database.GetMoviesLibraryAscRow, len(rows))
-	for i, r := range rows {
-		out[i] = database.GetMoviesLibraryAscRow{
-			ID:            r.ID,
-			Title:         r.Title,
-			PosterPath:    r.PosterPath,
-			Year:          r.Year,
-			Certification: r.Certification,
-		}
-	}
-	return out
+func writeMoviesLibrary(w http.ResponseWriter, movies []database.GetMoviesLibraryAscRow, total, page, perPage int64, sort string) {
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
+		Data: moviesLibraryData{
+			Movies:     movies,
+			Total:      total,
+			Page:       page,
+			PerPage:    perPage,
+			TotalPages: totalPages(total, perPage),
+			Sort:       sort,
+		},
+	})
 }
 
 func (app *Application) logNormalizedChapterStartTimes(
@@ -97,15 +84,7 @@ func (app *Application) logNormalizedChapterStartTimes(
 	original []database.Chapter,
 	normalized []database.Chapter,
 ) {
-	if app.Logger == nil {
-		return
-	}
-
-	count := len(original)
-	if len(normalized) < count {
-		count = len(normalized)
-	}
-
+	count := min(len(original), len(normalized))
 	for i := 0; i < count; i++ {
 		if original[i].StartTime == normalized[i].StartTime {
 			continue
@@ -123,141 +102,42 @@ func (app *Application) logNormalizedChapterStartTimes(
 	}
 }
 
-// parsePageAndPerPage reads the page and per_page query parameters every
-// paginated listing shares. Missing, unparseable and nonpositive values fall
-// back to the defaults rather than failing the request, and per_page above the
-// cap is clamped; docs/openapi.json documents that on PerPageQuery.
-func parsePageAndPerPage(r *http.Request) (page, perPage int64) {
-	page = 1
-	if p := r.URL.Query().Get("page"); p != "" {
-		parsed, err := strconv.ParseInt(p, 10, 64)
-		if err == nil && parsed > 0 {
-			page = parsed
-		}
-	}
-
-	perPage = int64(libraryDefaultPerPage)
-	if pp := r.URL.Query().Get("per_page"); pp != "" {
-		parsed, err := strconv.ParseInt(pp, 10, 64)
-		if err == nil && parsed > 0 {
-			perPage = parsed
-		}
-	}
-	if perPage > libraryMaxPerPage {
-		perPage = libraryMaxPerPage
-	}
-	return page, perPage
-}
-
-func parseLibraryQuery(r *http.Request) (page, perPage int64, sort string) {
-	page, perPage = parsePageAndPerPage(r)
-
-	sort = strings.ToLower(strings.TrimSpace(r.URL.Query().Get("sort")))
-	if sort != "desc" {
-		sort = "asc"
-	}
-	return page, perPage, sort
-}
-
 func (app *Application) GetMoviesLibrary(w http.ResponseWriter, r *http.Request) {
 	page, perPage, sortParam := parseLibraryQuery(r)
-
-	offset := (page - 1) * perPage
 	ctx := r.Context()
 
 	total, err := app.Queries.GetMoviesCount(ctx)
 	if err != nil {
-		app.Logger.Error("failed to get movies count", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch movies count"))
+		app.serverError(w, err, "failed to get movies count", "failed to fetch movies count")
 		return
 	}
 
-	pag := database.GetMoviesLibraryAscParams{Limit: perPage, Offset: offset}
+	params := database.GetMoviesLibraryAscParams{Limit: perPage, Offset: (page - 1) * perPage}
 
 	var movies []database.GetMoviesLibraryAscRow
 	if sortParam == "desc" {
-		descRows, err := app.Queries.GetMoviesLibraryDesc(ctx, database.GetMoviesLibraryDescParams{
-			Limit:  pag.Limit,
-			Offset: pag.Offset,
-		})
-		if err != nil {
-			app.Logger.Error("failed to get movies library", "error", err)
-			helpers.ErrorJSON(w, errors.New("failed to fetch movies"))
-			return
-		}
-		movies = libraryRowsFromDesc(descRows)
+		var rows []database.GetMoviesLibraryDescRow
+		rows, err = app.Queries.GetMoviesLibraryDesc(ctx, database.GetMoviesLibraryDescParams(params))
+		movies = movieLibraryRows(rows)
 	} else {
-		movies, err = app.Queries.GetMoviesLibraryAsc(ctx, pag)
-		if err != nil {
-			app.Logger.Error("failed to get movies library", "error", err)
-			helpers.ErrorJSON(w, errors.New("failed to fetch movies"))
-			return
-		}
+		movies, err = app.Queries.GetMoviesLibraryAsc(ctx, params)
+	}
+	if err != nil {
+		app.serverError(w, err, "failed to get movies library", "failed to fetch movies")
+		return
 	}
 
-	totalPages := total / perPage
-	if total%perPage > 0 {
-		totalPages++
-	}
-
-	res := helpers.JSONResponse{
-		Error: false,
-		Data: moviesLibraryData{
-			Movies:     movies,
-			Total:      total,
-			Page:       page,
-			PerPage:    perPage,
-			TotalPages: totalPages,
-			Sort:       sortParam,
-		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
-}
-
-func libraryRowsFromGenreAsc(rows []database.GetMoviesByGenreAscRow) []database.GetMoviesLibraryAscRow {
-	out := make([]database.GetMoviesLibraryAscRow, len(rows))
-	for i, r := range rows {
-		out[i] = database.GetMoviesLibraryAscRow{
-			ID:            r.ID,
-			Title:         r.Title,
-			PosterPath:    r.PosterPath,
-			Year:          r.Year,
-			Certification: r.Certification,
-		}
-	}
-	return out
-}
-
-func libraryRowsFromGenreDesc(rows []database.GetMoviesByGenreDescRow) []database.GetMoviesLibraryAscRow {
-	out := make([]database.GetMoviesLibraryAscRow, len(rows))
-	for i, r := range rows {
-		out[i] = database.GetMoviesLibraryAscRow{
-			ID:            r.ID,
-			Title:         r.Title,
-			PosterPath:    r.PosterPath,
-			Year:          r.Year,
-			Certification: r.Certification,
-		}
-	}
-	return out
+	writeMoviesLibrary(w, movies, total, page, perPage, sortParam)
 }
 
 func (app *Application) GetMovieGenresList(w http.ResponseWriter, r *http.Request) {
 	rows, err := app.Queries.GetMovieGenresWithCounts(r.Context())
 	if err != nil {
-		app.Logger.Error("failed to get movie genres with counts", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch genres"))
+		app.serverError(w, err, "failed to get movie genres with counts", "failed to fetch genres")
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
-		Data: map[string]any{
-			"genres": rows,
-		},
-	}
-	helpers.WriteJSON(w, http.StatusOK, res)
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"genres": rows}})
 }
 
 func (app *Application) GetMoviesByGenreLibrary(w http.ResponseWriter, r *http.Request) {
@@ -269,120 +149,64 @@ func (app *Application) GetMoviesByGenreLibrary(w http.ResponseWriter, r *http.R
 	}
 
 	page, perPage, sortParam := parseLibraryQuery(r)
-	offset := (page - 1) * perPage
 	ctx := r.Context()
 
 	total, err := app.Queries.CountMoviesForGenre(ctx, genreID)
 	if err != nil {
-		app.Logger.Error("failed to count movies for genre", "error", err, "genre_id", genreID)
-		helpers.ErrorJSON(w, errors.New("failed to fetch movies count for genre"))
+		app.serverError(w, err, "failed to count movies for genre", "failed to fetch movies count for genre", "genre_id", genreID)
 		return
 	}
 
-	paramsAsc := database.GetMoviesByGenreAscParams{GenreID: genreID, Limit: perPage, Offset: offset}
+	params := database.GetMoviesByGenreAscParams{GenreID: genreID, Limit: perPage, Offset: (page - 1) * perPage}
 
 	var movies []database.GetMoviesLibraryAscRow
 	if sortParam == "desc" {
-		descRows, err := app.Queries.GetMoviesByGenreDesc(ctx, database.GetMoviesByGenreDescParams{
-			GenreID: paramsAsc.GenreID,
-			Limit:   paramsAsc.Limit,
-			Offset:  paramsAsc.Offset,
-		})
-		if err != nil {
-			app.Logger.Error("failed to get movies by genre", "error", err, "genre_id", genreID)
-			helpers.ErrorJSON(w, errors.New("failed to fetch movies"))
-			return
-		}
-		movies = libraryRowsFromGenreDesc(descRows)
+		var rows []database.GetMoviesByGenreDescRow
+		rows, err = app.Queries.GetMoviesByGenreDesc(ctx, database.GetMoviesByGenreDescParams(params))
+		movies = movieLibraryRows(rows)
 	} else {
-		ascRows, err := app.Queries.GetMoviesByGenreAsc(ctx, paramsAsc)
-		if err != nil {
-			app.Logger.Error("failed to get movies by genre", "error", err, "genre_id", genreID)
-			helpers.ErrorJSON(w, errors.New("failed to fetch movies"))
-			return
-		}
-		movies = libraryRowsFromGenreAsc(ascRows)
+		var rows []database.GetMoviesByGenreAscRow
+		rows, err = app.Queries.GetMoviesByGenreAsc(ctx, params)
+		movies = movieLibraryRows(rows)
 	}
-
-	totalPages := total / perPage
-	if total%perPage > 0 {
-		totalPages++
-	}
-
-	res := helpers.JSONResponse{
-		Error: false,
-		Data: moviesLibraryData{
-			Movies:     movies,
-			Total:      total,
-			Page:       page,
-			PerPage:    perPage,
-			TotalPages: totalPages,
-			Sort:       sortParam,
-		},
-	}
-	helpers.WriteJSON(w, http.StatusOK, res)
-}
-
-func (app *Application) GetLikedMovies(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
+	if err != nil {
+		app.serverError(w, err, "failed to get movies by genre", "failed to fetch movies", "genre_id", genreID)
 		return
 	}
 
+	writeMoviesLibrary(w, movies, total, page, perPage, sortParam)
+}
+
+func (app *Application) GetLikedMovies(w http.ResponseWriter, r *http.Request) {
+	userID := app.userIDFromRequest(r)
+
 	page, perPage, sortParam := parseLibraryQuery(r)
-	offset := (page - 1) * perPage
 	ctx := r.Context()
 
 	total, err := app.Queries.CountUserLikedMovies(ctx, userID)
 	if err != nil {
-		app.Logger.Error("failed to count liked movies", "error", err, "userID", userID)
-		helpers.ErrorJSON(w, errors.New("failed to fetch liked movies count"))
+		app.serverError(w, err, "failed to count liked movies", "failed to fetch liked movies count", "userID", userID)
 		return
 	}
 
-	paramsAsc := database.GetLikedMoviesForUserAscParams{UserID: userID, Limit: perPage, Offset: offset}
+	params := database.GetLikedMoviesForUserAscParams{UserID: userID, Limit: perPage, Offset: (page - 1) * perPage}
 
 	var movies []database.GetMoviesLibraryAscRow
 	if sortParam == "desc" {
-		descRows, err := app.Queries.GetLikedMoviesForUserDesc(ctx, database.GetLikedMoviesForUserDescParams{
-			UserID: paramsAsc.UserID,
-			Limit:  paramsAsc.Limit,
-			Offset: paramsAsc.Offset,
-		})
-		if err != nil {
-			app.Logger.Error("failed to get liked movies", "error", err, "userID", userID)
-			helpers.ErrorJSON(w, errors.New("failed to fetch liked movies"))
-			return
-		}
-		movies = libraryRowsFromLikedDesc(descRows)
+		var rows []database.GetLikedMoviesForUserDescRow
+		rows, err = app.Queries.GetLikedMoviesForUserDesc(ctx, database.GetLikedMoviesForUserDescParams(params))
+		movies = movieLibraryRows(rows)
 	} else {
-		ascRows, err := app.Queries.GetLikedMoviesForUserAsc(ctx, paramsAsc)
-		if err != nil {
-			app.Logger.Error("failed to get liked movies", "error", err, "userID", userID)
-			helpers.ErrorJSON(w, errors.New("failed to fetch liked movies"))
-			return
-		}
-		movies = libraryRowsFromLikedAsc(ascRows)
+		var rows []database.GetLikedMoviesForUserAscRow
+		rows, err = app.Queries.GetLikedMoviesForUserAsc(ctx, params)
+		movies = movieLibraryRows(rows)
+	}
+	if err != nil {
+		app.serverError(w, err, "failed to get liked movies", "failed to fetch liked movies", "userID", userID)
+		return
 	}
 
-	totalPages := total / perPage
-	if total%perPage > 0 {
-		totalPages++
-	}
-
-	res := helpers.JSONResponse{
-		Error: false,
-		Data: moviesLibraryData{
-			Movies:     movies,
-			Total:      total,
-			Page:       page,
-			PerPage:    perPage,
-			TotalPages: totalPages,
-			Sort:       sortParam,
-		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	writeMoviesLibrary(w, movies, total, page, perPage, sortParam)
 }
 
 func (app *Application) GetMovieLikeStatus(w http.ResponseWriter, r *http.Request) {
@@ -394,38 +218,26 @@ func (app *Application) GetMovieLikeStatus(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if userID == 0 {
-		helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-			Error: false,
-			Data: map[string]any{
-				"is_liked": false,
-			},
-		})
-		return
-	}
-
 	isLiked, err := app.Queries.IsMovieLiked(r.Context(), database.IsMovieLikedParams{
 		UserID:  userID,
 		MovieID: movieID,
 	})
 	if err != nil {
-		app.Logger.Error("failed to check movie like status", "error", err, "movie_id", movieID)
-		helpers.ErrorJSON(w, errors.New("failed to check like status"))
+		app.serverError(w, err, "failed to check movie like status", "failed to check like status", "movie_id", movieID)
 		return
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
-		Data: map[string]any{
-			"is_liked": isLiked,
-		},
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"is_liked": isLiked}})
 }
 
-// toggleMovieLike flips like state in a single DB transaction without IsMovieLiked (avoids read-then-write races).
-// It DELETEs the row; if a row was removed, the new state is unliked; otherwise it INSERTs (LikeMovie is
-// idempotent via ON CONFLICT DO NOTHING).
-func (app *Application) toggleMovieLike(ctx context.Context, userID, movieID int64) (isLiked bool, err error) {
+// toggleLike flips a like in one transaction without a read-then-write race:
+// unlike deletes the row, and only when nothing was removed does like insert it
+// (the like queries are idempotent via ON CONFLICT DO NOTHING).
+func (app *Application) toggleLike(
+	ctx context.Context,
+	unlike func(*database.Queries) (int64, error),
+	like func(*database.Queries) error,
+) (isLiked bool, err error) {
 	tx, err := app.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return false, err
@@ -433,37 +245,29 @@ func (app *Application) toggleMovieLike(ctx context.Context, userID, movieID int
 	defer func() { _ = tx.Rollback() }()
 
 	qtx := app.Queries.WithTx(tx)
-
-	removed, err := qtx.UnlikeMovie(ctx, database.UnlikeMovieParams{UserID: userID, MovieID: movieID})
+	removed, err := unlike(qtx)
 	if err != nil {
 		return false, err
 	}
-	if removed > 0 {
-		if err := tx.Commit(); err != nil {
+	if removed == 0 {
+		err = like(qtx)
+		if err != nil {
 			return false, err
 		}
-		return false, nil
 	}
 
-	if err := qtx.LikeMovie(ctx, database.LikeMovieParams{UserID: userID, MovieID: movieID}); err != nil {
+	err = tx.Commit()
+	if err != nil {
 		return false, err
 	}
-	if err := tx.Commit(); err != nil {
-		return false, err
-	}
-	return true, nil
+	return removed == 0, nil
 }
 
 func (app *Application) ToggleLikeMovie(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
-	idParam := chi.URLParam(r, "id")
-	movieID, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New(invalidMovieIDMessage), http.StatusBadRequest)
+	movieID, ok := parseIDParam(w, r, "id", invalidMovieIDMessage)
+	if !ok {
 		return
 	}
 
@@ -471,8 +275,7 @@ func (app *Application) ToggleLikeMovie(w http.ResponseWriter, r *http.Request) 
 
 	movieOK, err := app.Queries.MovieExists(ctx, movieID)
 	if err != nil {
-		app.Logger.Error("failed to get movie for like toggle", "error", err, "id", movieID)
-		helpers.ErrorJSON(w, errors.New("failed to verify movie exists"))
+		app.serverError(w, err, "failed to get movie for like toggle", "failed to verify movie exists", "id", movieID)
 		return
 	}
 	if !movieOK {
@@ -480,64 +283,55 @@ func (app *Application) ToggleLikeMovie(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	isLiked, err := app.toggleMovieLike(ctx, userID, movieID)
+	isLiked, err := app.toggleLike(ctx,
+		func(q *database.Queries) (int64, error) {
+			return q.UnlikeMovie(ctx, database.UnlikeMovieParams{UserID: userID, MovieID: movieID})
+		},
+		func(q *database.Queries) error {
+			return q.LikeMovie(ctx, database.LikeMovieParams{UserID: userID, MovieID: movieID})
+		},
+	)
 	if err != nil {
-		app.Logger.Error("failed to toggle movie like", "error", err, "movieID", movieID, "userID", userID)
-		helpers.ErrorJSON(w, errors.New("failed to update like"))
+		app.serverError(w, err, "failed to toggle movie like", "failed to update like", "movieID", movieID, "userID", userID)
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"movie_id": movieID,
 			"is_liked": isLiked,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 func (app *Application) GetMoviesStats(w http.ResponseWriter, r *http.Request) {
 	total, err := app.Queries.GetMoviesCount(r.Context())
 	if err != nil {
-		app.Logger.Error("failed to get movies count", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch movies stats"))
+		app.serverError(w, err, "failed to get movies count", "failed to fetch movies stats")
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: moviesStatsData{
 			TotalMovies: total,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 func (app *Application) GetLatestMovies(w http.ResponseWriter, r *http.Request) {
 	movies, err := app.Queries.GetLatestMovies(r.Context())
 	if err != nil {
-		app.Logger.Error("failed to get latest movies", "error", err)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to get latest movies", internalServerErrorMessage)
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
-		Data:  map[string]any{"movies": movies},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"movies": movies}})
 }
 
 // Read-only transaction keeps related movie data in one snapshot.
 func (app *Application) GetMovieDetails(w http.ResponseWriter, r *http.Request) {
-	idParam := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New(invalidMovieIDMessage), http.StatusBadRequest)
+	id, ok := parseIDParam(w, r, "id", invalidMovieIDMessage)
+	if !ok {
 		return
 	}
 
@@ -545,8 +339,7 @@ func (app *Application) GetMovieDetails(w http.ResponseWriter, r *http.Request) 
 
 	tx, err := app.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
-		app.Logger.Error(beginTransactionLogMessage, "error", err)
-		helpers.ErrorJSON(w, errors.New(fetchMovieMessage))
+		app.serverError(w, err, beginTransactionLogMessage, fetchMovieMessage)
 		return
 	}
 	defer tx.Rollback()
@@ -560,48 +353,43 @@ func (app *Application) GetMovieDetails(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 
-		app.Logger.Error(getMovieLogMessage, "error", err, "id", id)
-		helpers.ErrorJSON(w, errors.New(fetchMovieMessage))
+		app.serverError(w, err, getMovieLogMessage, fetchMovieMessage, "id", id)
 		return
 	}
 
 	cast, err := qtx.GetCastByMovieID(ctx, id)
 	if err != nil {
-		app.Logger.Error("failed to get cast for movie", "error", err, "movie_id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch movie cast from server"))
+		app.serverError(w, err, "failed to get cast for movie", "failed to fetch movie cast from server", "movie_id", id)
 		return
 	}
 
 	crew, err := qtx.GetCrewByMovieID(ctx, id)
 	if err != nil {
-		app.Logger.Error("failed to get crew for movie", "error", err, "movie_id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch movie crew from server"))
+		app.serverError(w, err, "failed to get crew for movie", "failed to fetch movie crew from server", "movie_id", id)
 		return
 	}
 
 	genres, err := qtx.GetGenresByMovieID(ctx, id)
 	if err != nil {
-		app.Logger.Error("failed to get genres for movie", "error", err, "movie_id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch movie genres from server"))
+		app.serverError(w, err, "failed to get genres for movie", "failed to fetch movie genres from server", "movie_id", id)
 		return
 	}
 
 	productionCompanies, err := qtx.GetProductionCompaniesByMovieID(ctx, id)
 	if err != nil {
-		app.Logger.Error("failed to get production companies for movie", "error", err, "movie_id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch movie production companies from server"))
+		app.serverError(w, err, "failed to get production companies for movie", "failed to fetch movie production companies from server",
+			"movie_id", id)
 		return
 	}
 
 	extraVideos, err := qtx.GetMovieExtraVideos(ctx, id)
 	if err != nil {
-		app.Logger.Error("failed to get extra videos for movie", "error", err, "movie_id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch movie extra videos from server"))
+		app.serverError(w, err, "failed to get extra videos for movie", "failed to fetch movie extra videos from server",
+			"movie_id", id)
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"movie":                movie,
 			"cast":                 cast,
@@ -610,16 +398,12 @@ func (app *Application) GetMovieDetails(w http.ResponseWriter, r *http.Request) 
 			"production_companies": productionCompanies,
 			"extra_videos":         extraVideos,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 func (app *Application) GetMovieTechnicalDetails(w http.ResponseWriter, r *http.Request) {
-	idParam := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New(invalidMovieIDMessage), http.StatusBadRequest)
+	id, ok := parseIDParam(w, r, "id", invalidMovieIDMessage)
+	if !ok {
 		return
 	}
 
@@ -627,8 +411,7 @@ func (app *Application) GetMovieTechnicalDetails(w http.ResponseWriter, r *http.
 
 	tx, err := app.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
-		app.Logger.Error(beginTransactionLogMessage, "error", err)
-		helpers.ErrorJSON(w, errors.New(fetchTechnicalDetailsMessage))
+		app.serverError(w, err, beginTransactionLogMessage, fetchTechnicalDetailsMessage)
 		return
 	}
 	defer tx.Rollback()
@@ -641,49 +424,39 @@ func (app *Application) GetMovieTechnicalDetails(w http.ResponseWriter, r *http.
 			helpers.ErrorJSON(w, errors.New(movieNotFoundMessage), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error(getMovieLogMessage, "error", err, "id", id)
-		helpers.ErrorJSON(w, errors.New(fetchTechnicalDetailsMessage))
+		app.serverError(w, err, getMovieLogMessage, fetchTechnicalDetailsMessage, "id", id)
 		return
 	}
 
 	videoStreams, err := qtx.GetVideoStreamsByMovieID(ctx, id)
 	if err != nil {
-		app.Logger.Error("failed to get video streams", "error", err, "movie_id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch video streams"))
+		app.serverError(w, err, "failed to get video streams", "failed to fetch video streams", "movie_id", id)
 		return
 	}
 
 	audioStreams, err := qtx.GetAudioStreamsByMovieID(ctx, id)
 	if err != nil {
-		app.Logger.Error("failed to get audio streams", "error", err, "movie_id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch audio streams"))
+		app.serverError(w, err, "failed to get audio streams", "failed to fetch audio streams", "movie_id", id)
 		return
 	}
 
 	subtitles, err := qtx.GetSubtitlesByMovieID(ctx, id)
 	if err != nil {
-		app.Logger.Error(getSubtitlesLogMessage, "error", err, "movie_id", id)
-		helpers.ErrorJSON(w, errors.New(fetchSubtitlesMessage))
+		app.serverError(w, err, getSubtitlesLogMessage, fetchSubtitlesMessage, "movie_id", id)
 		return
 	}
 
 	chapters, err := qtx.GetChaptersByMovieID(ctx, id)
 	if err != nil {
-		app.Logger.Error("failed to get chapters", "error", err, "movie_id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch chapters"))
+		app.serverError(w, err, "failed to get chapters", "failed to fetch chapters", "movie_id", id)
 		return
 	}
 
-	durationSec := 0.0
-	if movie.Duration.Valid {
-		durationSec = movie.Duration.Float64
-	}
-	normalizedChapters := normalizeChaptersStartTimes(chapters, durationSec)
+	normalizedChapters := normalizeChaptersStartTimes(chapters, movie.Duration.Float64)
 	app.logNormalizedChapterStartTimes(movie, chapters, normalizedChapters)
 	chapters = normalizedChapters
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"movie": map[string]any{
 				"file_name": movie.FileName,
@@ -700,9 +473,7 @@ func (app *Application) GetMovieTechnicalDetails(w http.ResponseWriter, r *http.
 			"subtitles":     subtitles,
 			"chapters":      chapters,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 func (app *Application) StreamMovie(w http.ResponseWriter, r *http.Request) {

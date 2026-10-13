@@ -62,7 +62,6 @@ func (s *Scanner) persistResolvedTrackTx(ctx context.Context, qtx *database.Quer
 	if err != nil {
 		return 0, err
 	}
-	params.MusicianID = sql.NullInt64{}
 	if len(musicianIDs) > 0 {
 		params.MusicianID = sql.NullInt64{Int64: musicianIDs[0], Valid: true}
 	}

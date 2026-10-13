@@ -9,21 +9,9 @@ import (
 // seasons, and episodes), which is why they do not add up to the file totals.
 type Status struct {
 	scanner.Progress
-	Total               int `json:"total"`
-	Processed           int `json:"processed"`
-	Imported            int `json:"imported"`
-	Updated             int `json:"updated"`
-	Unchanged           int `json:"unchanged"`
-	Failed              int `json:"failed"`
-	Deferred            int `json:"deferred"`
-	Deleted             int `json:"deleted"`
-	Episodes            int `json:"episodes"`
-	EnrichmentTotal     int `json:"enrichment_total"`
-	EnrichmentProcessed int `json:"enrichment_processed"`
-	Enriched            int `json:"enriched"`
-	EnrichmentFailed    int `json:"enrichment_failed"`
-	EnrichmentUnmatched int `json:"enrichment_unmatched"`
-	PendingEnrichment   int `json:"pending_enrichment"`
+	scanner.Counts
+	Episodes          int `json:"episodes"`
+	PendingEnrichment int `json:"pending_enrichment"`
 }
 
 // showScanEntry is one catalog file as the scan index saw it: identity,

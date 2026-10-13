@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"igloo/cmd/internal/helpers"
 	"net/http"
 )
@@ -9,15 +8,9 @@ import (
 func (app *Application) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	err := app.DB.PingContext(r.Context())
 	if err != nil {
-		app.Logger.Error("health check database ping failed", "error", err)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "health check database ping failed", internalServerErrorMessage)
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error:   false,
-		Message: "server is healthy",
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "server is healthy"})
 }

@@ -277,14 +277,6 @@ func searchRankArgs(raw string) (exact, prefix string) {
 	return exact, prefix
 }
 
-func totalPages(total, perPage int64) int64 {
-	pages := total / perPage
-	if total%perPage > 0 {
-		pages++
-	}
-	return pages
-}
-
 func normalizeSearchPage(page, total, perPage int64) (int64, int64) {
 	pages := totalPages(total, perPage)
 	if pages == 0 {
@@ -362,41 +354,35 @@ func (app *Application) SearchAll(w http.ResponseWriter, r *http.Request) {
 
 	movies, err := searchEntityTopN(ctx, app, movieSearchEntity, q, limit)
 	if err != nil {
-		app.Logger.Error("search failed", "entity", movieSearchEntity.name, "error", err)
-		helpers.ErrorJSON(w, errors.New("search failed"))
+		app.serverError(w, err, "search failed", "search failed", "entity", movieSearchEntity.name)
 		return
 	}
 
 	shows, err := searchEntityTopN(ctx, app, showSearchEntity, q, limit)
 	if err != nil {
-		app.Logger.Error("search failed", "entity", showSearchEntity.name, "error", err)
-		helpers.ErrorJSON(w, errors.New("search failed"))
+		app.serverError(w, err, "search failed", "search failed", "entity", showSearchEntity.name)
 		return
 	}
 
 	albums, err := searchEntityTopN(ctx, app, albumSearchEntity, q, limit)
 	if err != nil {
-		app.Logger.Error("search failed", "entity", albumSearchEntity.name, "error", err)
-		helpers.ErrorJSON(w, errors.New("search failed"))
+		app.serverError(w, err, "search failed", "search failed", "entity", albumSearchEntity.name)
 		return
 	}
 
 	musicians, err := searchEntityTopN(ctx, app, musicianSearchEntity, q, limit)
 	if err != nil {
-		app.Logger.Error("search failed", "entity", musicianSearchEntity.name, "error", err)
-		helpers.ErrorJSON(w, errors.New("search failed"))
+		app.serverError(w, err, "search failed", "search failed", "entity", musicianSearchEntity.name)
 		return
 	}
 
 	tracks, err := searchEntityTopN(ctx, app, trackSearchEntity, q, limit)
 	if err != nil {
-		app.Logger.Error("search failed", "entity", trackSearchEntity.name, "error", err)
-		helpers.ErrorJSON(w, errors.New("search failed"))
+		app.serverError(w, err, "search failed", "search failed", "entity", trackSearchEntity.name)
 		return
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
 		Data: searchAllData{
 			Query:     q,
 			Movies:    movies,
@@ -413,18 +399,16 @@ func (app *Application) SearchAll(w http.ResponseWriter, r *http.Request) {
 // OpenAPI coverage keep stable handler names.
 func handleSearchCategory[T any](app *Application, e searchEntity[T], w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
-	page, perPage := parsePageAndPerPage(r)
+	page, perPage := parsePageAndPerPage(r, libraryDefaultPerPage, libraryMaxPerPage)
 	ctx := r.Context()
 
 	match, total, ok, err := app.resolveSearchMatch(ctx, e.countSQL, e.vocabTable, q)
 	if err != nil {
-		app.Logger.Error("search failed", "entity", e.name, "error", err)
-		helpers.ErrorJSON(w, errors.New("search failed"))
+		app.serverError(w, err, "search failed", "search failed", "entity", e.name)
 		return
 	}
 	if !ok {
 		helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-			Error: false,
 			Data: searchCategoryData[T]{
 				Query:   q,
 				Results: []T{},
@@ -442,14 +426,12 @@ func handleSearchCategory[T any](app *Application, e searchEntity[T], w http.Res
 		offset := (page - 1) * perPage
 		results, err = searchEntityPage(ctx, app, e, q, match, perPage, offset)
 		if err != nil {
-			app.Logger.Error("search failed", "entity", e.name, "error", err)
-			helpers.ErrorJSON(w, errors.New("search failed"))
+			app.serverError(w, err, "search failed", "search failed", "entity", e.name)
 			return
 		}
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
 		Data: searchCategoryData[T]{
 			Query:      q,
 			Results:    results,

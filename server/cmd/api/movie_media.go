@@ -10,16 +10,11 @@ import (
 // against it.
 const mp4ContentType = "video/mp4"
 
-// videoContentType resolves the single MIME type a video file is described by:
-// served as Content-Type on the direct stream endpoints, reported to the web
-// client by the technical-details endpoints, and compared against
-// mp4ContentType when a watch room asks for direct playback. Every caller must
-// use this function — the client's direct-play decision and the server's
-// validation of it are only in agreement while they read the same string.
-//
-// The pinned container map wins so the answer stays correct for rows scanned
-// before the map existed (audit D1); the stored mime_type is the fallback for
-// containers the map does not cover.
+// videoContentType resolves the single MIME type a video file is described by,
+// for the direct stream endpoints, the technical details and the watch-room
+// direct-play check alike: the client's direct-play decision and the server's
+// validation only agree while they read the same string. The container map
+// wins; the stored mime_type covers containers it lacks.
 func videoContentType(container string, storedMimeType string) string {
 	contentType := helpers.VideoMimeTypes[container]
 	if contentType == "" {

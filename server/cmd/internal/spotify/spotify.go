@@ -22,8 +22,6 @@ type SpotifyInterface interface {
 	ClearAllCaches()
 }
 
-var _ SpotifyInterface = (*spotifyClient)(nil)
-
 type spotifyClient struct {
 	client      *spotify.Client
 	artistCache *cache.Cache

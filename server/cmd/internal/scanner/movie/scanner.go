@@ -56,9 +56,7 @@ type Scanner struct {
 }
 
 // New constructs a scanner, defaulting the optional dependencies so the rest
-// of the package can use them unconditionally. The required ones are left
-// as-is: startup keeps the same failure behavior as the previous
-// application-owned implementation.
+// of the package can use them unconditionally.
 func New(deps Dependencies) *Scanner {
 	if deps.Now == nil {
 		deps.Now = time.Now

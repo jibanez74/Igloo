@@ -37,9 +37,6 @@ const (
 	// so the first request for one waits for FFmpeg to publish a segment.
 	hlsLivePlaylistWait    = 30 * time.Second
 	hlsPlaylistContentType = "application/vnd.apple.mpegurl"
-	// fMP4 segments and init segments are MP4 containers, so they are served
-	// as the same type an MP4 file is, named once in movie_media.go.
-	hlsSegmentHTTPContentType = mp4ContentType
 	// The extension FFmpeg's hls muxer appends while writing a file under
 	// -hls_flags temp_file, before the rename to the final name.
 	hlsTempFileSuffix               = ".tmp"
@@ -119,19 +116,15 @@ func (app *Application) serveHLSManifest(w http.ResponseWriter, r *http.Request,
 	// Set before anything can answer, so error responses inherit it too.
 	w.Header().Set("Cache-Control", "no-store")
 
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	params, ok := parseHLSParams(w, r, kind)
 	if !ok {
 		return
 	}
 
-	// A keepalive ping must not recreate an evicted session: that would start
-	// it again at the window start, which after a long sleep can be far behind
-	// the playhead. The 404 tells the client to rebase where it is instead.
+	// A keepalive ping must not recreate an evicted session (see
+	// RefreshHLSSession); the 404 tells the client to rebase instead.
 	refreshOnly := r.URL.Query().Get(hlsKeepaliveQueryParam) == "1"
 	getSession := app.GetOrCreateHLSSession
 	if refreshOnly {
@@ -196,7 +189,6 @@ func (app *Application) serveHLSManifest(w http.ResponseWriter, r *http.Request,
 	}
 
 	writeHLSPlaylistHeaders(w, session)
-	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(playlist))
 }
 
@@ -207,12 +199,6 @@ func (app *Application) serveHLSManifest(w http.ResponseWriter, r *http.Request,
 // offset rather than at the offset itself.
 func writeHLSPlaylistHeaders(w http.ResponseWriter, session *HLSSession) {
 	w.Header().Set("Content-Type", hlsPlaylistContentType)
-	w.Header().Set("Cache-Control", "no-store")
-
-	if session == nil {
-		return
-	}
-
 	if session.EffectiveProfile != "" {
 		w.Header().Set(hlsEffectiveProfileHeader, session.EffectiveProfile)
 	}
@@ -250,10 +236,7 @@ func (app *Application) EpisodeHLSSegment(w http.ResponseWriter, r *http.Request
 func (app *Application) serveHLSSegment(w http.ResponseWriter, r *http.Request, kind mediaKind) {
 	w.Header().Set("Cache-Control", "no-store")
 
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	params, ok := parseHLSParams(w, r, kind)
 	if !ok {
@@ -278,12 +261,8 @@ func (app *Application) serveHLSSegment(w http.ResponseWriter, r *http.Request, 
 		helpers.ErrorJSON(w, errors.New(hlsSessionNotFoundMessage), http.StatusNotFound)
 		return
 	}
-	if !canAccessPersonalHLSSession(session, params.Media, userID) {
-		helpers.ErrorJSON(w, errors.New(hlsSessionNotFoundMessage), http.StatusNotFound)
-		return
-	}
-	refreshed := app.RefreshHLSSessionTTL(key, session)
-	if !refreshed {
+	available := canAccessPersonalHLSSession(session, params.Media, userID) && app.RefreshHLSSessionTTL(key, session)
+	if !available {
 		helpers.ErrorJSON(w, errors.New(hlsSessionNotFoundMessage), http.StatusNotFound)
 		return
 	}
@@ -291,16 +270,11 @@ func (app *Application) serveHLSSegment(w http.ResponseWriter, r *http.Request, 
 	serveReadyHLSSegment(w, r, session, filename)
 }
 
-// readLiveHLSPlaylist returns the playlist FFmpeg is currently writing. FFmpeg
-// renames a temporary file into place, so a successful read is never torn, and
-// it appends a segment only once that segment is closed.
-//
-// A playlist is only usable once it describes real media. A session that seeks
-// past the end of a stream still exits cleanly, having written one empty
-// segment declared as `#EXTINF:0.000000` under `#EXT-X-TARGETDURATION:0` —
-// which is not a valid playlist and is not playable. Serving that would trade
-// one bad manifest for another, so it is rejected here and the caller reports
-// the session as having produced nothing.
+// readLiveHLSPlaylist returns the playlist FFmpeg is currently writing; FFmpeg
+// renames it into place, so a read is never torn. A session that seeks past the
+// end still exits cleanly with one empty `#EXTINF:0.000000` segment under
+// `#EXT-X-TARGETDURATION:0`, which is not playable, so that is rejected and the
+// caller reports the session as having produced nothing.
 func readLiveHLSPlaylist(tempDir string) (string, error) {
 	raw, err := os.ReadFile(filepath.Join(tempDir, helpers.HLS_PLAYLIST_FILENAME))
 	if err != nil {
@@ -345,13 +319,10 @@ func hasPlayableSegment(playlist string) bool {
 // durations FFmpeg never produces and segments that will never exist. They are
 // read back from FFmpeg instead, and the request waits for the first one.
 //
-// Neither flavor is answered before FFmpeg has produced something. A
-// synthesized playlist describes output FFmpeg has not produced yet, which is
-// correct while it is running and a lie once it is not: a transcode whose
-// encoder died during startup used to be handed a complete playlist and then
-// 500s on init.mp4, which no client recovers from. Waiting for the init
-// segment turns that into the failed-session error below, and costs nothing a
-// client would not have waited for on its first asset request anyway.
+// Neither flavor is answered before FFmpeg has produced something: a
+// synthesized playlist for an encoder that died at startup would lead the
+// client to an unrecoverable 500 on init.mp4, while waiting for the init
+// segment turns that into the failed-session error below.
 func buildHLSPlaylistBody(
 	ctx context.Context,
 	session *HLSSession,
@@ -385,12 +356,10 @@ func buildHLSPlaylistBody(
 			return rewritePlaylistURLs(finalPlaylist, baseURL, querySuffix), nil
 		}
 
-		// Exit status is checked before the live file because the live file
-		// outlives the process that was appending to it. onExit publishes
-		// FinalPlaylist for every exit it can read one from, so reaching here
-		// with Exited set means there is nothing publishable — serving the live
-		// file instead would hand the client an EVENT playlist with no
-		// ENDLIST, which it reloads forever while playback sits stalled.
+		// Exit status is checked before the live file, which outlives its
+		// process: onExit publishes FinalPlaylist whenever it can, so an exit
+		// here means nothing is publishable, and the live EVENT playlist would
+		// be reloaded forever.
 		exited, exitErr := session.exitStatus()
 		if exited {
 			// A stop Igloo asked for (an explicit stop, eviction, a superseded
@@ -511,7 +480,7 @@ func serveReadyHLSSegment(w http.ResponseWriter, r *http.Request, session *HLSSe
 func serveOpenedHLSAsset(w http.ResponseWriter, r *http.Request, filename string, file *os.File, info os.FileInfo) {
 	defer file.Close()
 
-	w.Header().Set("Content-Type", hlsSegmentHTTPContentType)
+	w.Header().Set("Content-Type", mp4ContentType)
 	w.Header().Set("Cache-Control", "no-store")
 	http.ServeContent(w, r, filename, info.ModTime(), file)
 }
@@ -619,21 +588,10 @@ func writeHLSSessionError(w http.ResponseWriter, err error) {
 	}
 
 	var capacityErr *hlsTranscodeCapacityError
-	if errors.As(err, &capacityErr) {
-		w.Header().Set("Retry-After", strconv.Itoa(hlsTranscodeBusyRetryAfterSec))
-		helpers.ErrorJSON(w, err, http.StatusServiceUnavailable)
-		return
-	}
-
 	var personalCapacityErr *hlsPersonalSessionCapacityError
-	if errors.As(err, &personalCapacityErr) {
-		w.Header().Set("Retry-After", strconv.Itoa(hlsTranscodeBusyRetryAfterSec))
-		helpers.ErrorJSON(w, err, http.StatusServiceUnavailable)
-		return
-	}
-
 	var storageErr *hlsStorageCapacityError
-	if errors.As(err, &storageErr) {
+	atCapacity := errors.As(err, &capacityErr) || errors.As(err, &personalCapacityErr) || errors.As(err, &storageErr)
+	if atCapacity {
 		w.Header().Set("Retry-After", strconv.Itoa(hlsTranscodeBusyRetryAfterSec))
 		helpers.ErrorJSON(w, err, http.StatusServiceUnavailable)
 		return
@@ -664,10 +622,7 @@ func (app *Application) StopEpisodeHLSSession(w http.ResponseWriter, r *http.Req
 func (app *Application) stopPersonalHLSSession(w http.ResponseWriter, r *http.Request, kind mediaKind) {
 	w.Header().Set("Cache-Control", "no-store")
 
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	media, err := parseMediaID(chi.URLParam(r, "id"), kind)
 	if err != nil {
@@ -682,7 +637,7 @@ func (app *Application) stopPersonalHLSSession(w http.ResponseWriter, r *http.Re
 	}
 
 	app.cleanupPersonalHLSSessionsForOwner(media, userID, playbackSession, "")
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Error: false})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{})
 }
 
 func parseHLSParams(w http.ResponseWriter, r *http.Request, kind mediaKind) (hlsRequestParams, bool) {
@@ -796,7 +751,7 @@ func segmentReady(session *HLSSession, filename string) bool {
 		}
 		segmentZero := filepath.Join(
 			dir,
-			helpers.HLS_SEGMENT_FILENAME_PREFIX+"0"+helpers.HLS_SEGMENT_FILENAME_SUFFIX,
+			hlsSegmentFilename(0),
 		)
 		if fileExists(segmentZero) || fileExists(segmentZero+hlsTempFileSuffix) {
 			return true
@@ -804,9 +759,7 @@ func segmentReady(session *HLSSession, filename string) bool {
 		// A session that died right after writing init.mp4 never opens
 		// segment_0; its init file is final because nothing can be appended
 		// to a dead session's output.
-		session.ExitMu.Lock()
-		exited := session.Exited
-		session.ExitMu.Unlock()
+		exited, _ := session.exitStatus()
 		return exited
 	}
 
@@ -821,44 +774,31 @@ func fileExists(path string) bool {
 	return err == nil
 }
 
-// segmentComplete returns true when FFmpeg has finished writing the file. It
-// is the readiness fallback for muxers without temp_file; segmentReady is
-// the production path.
-//
-// A file is complete when the file FFmpeg writes after it exists (meaning
-// FFmpeg has moved on) or when FFmpeg has exited, since nothing can be
-// appended to a dead session's output. This prevents serving partially-written
-// files that would cause hls.js decode errors and infinite retries.
-//
-// Both branches need the exit tail. Without it on init.mp4, a session that
-// dies after writing the init segment but before closing segment_0 leaves the
-// request polling until the segment deadline and answering 503, even though
-// init.mp4 is on disk and final.
+// segmentComplete is the readiness fallback for muxers without temp_file;
+// segmentReady is the production path. A file is complete once its successor
+// exists (FFmpeg moved on) or FFmpeg has exited, since nothing can be appended
+// to a dead session's output; init.mp4 needs that exit tail too, or a session
+// that died before segment_0 would poll until the deadline.
 func segmentComplete(session *HLSSession, filename string) bool {
 	dir := session.TempDir
 	prefix := helpers.HLS_SEGMENT_FILENAME_PREFIX
 	suffix := helpers.HLS_SEGMENT_FILENAME_SUFFIX
 
-	successor := ""
-	if filename == helpers.HLS_INIT_FILENAME {
-		successor = fmt.Sprintf("%s%d%s", prefix, 0, suffix)
-	} else {
+	successor := hlsSegmentFilename(0)
+	if filename != helpers.HLS_INIT_FILENAME {
 		rest := strings.TrimSuffix(strings.TrimPrefix(filename, prefix), suffix)
-		n, err := strconv.ParseInt(rest, 10, 64)
+		n, err := strconv.Atoi(rest)
 		if err != nil || n < 0 {
 			return false
 		}
-		successor = fmt.Sprintf("%s%d%s", prefix, n+1, suffix)
+		successor = hlsSegmentFilename(n + 1)
 	}
 
 	if fileReady(filepath.Join(dir, successor)) {
 		return true
 	}
 
-	session.ExitMu.Lock()
-	exited := session.Exited
-	session.ExitMu.Unlock()
-
+	exited, _ := session.exitStatus()
 	return exited && fileReady(filepath.Join(dir, filename))
 }
 

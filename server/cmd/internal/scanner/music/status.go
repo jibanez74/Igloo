@@ -10,19 +10,7 @@ import (
 // per scan, across inline resolution and the retry phase.
 type Status struct {
 	scanner.Progress
-	Total               int `json:"total"`
-	Processed           int `json:"processed"`
-	Imported            int `json:"imported"`
-	Updated             int `json:"updated"`
-	Unchanged           int `json:"unchanged"`
-	Failed              int `json:"failed"`
-	Deferred            int `json:"deferred"`
-	Deleted             int `json:"deleted"`
-	EnrichmentTotal     int `json:"enrichment_total"`
-	EnrichmentProcessed int `json:"enrichment_processed"`
-	Enriched            int `json:"enriched"`
-	EnrichmentFailed    int `json:"enrichment_failed"`
-	EnrichmentUnmatched int `json:"enrichment_unmatched"`
+	scanner.Counts
 }
 
 // scanReport is owned by the scan goroutine. The Spotify tallies are not kept

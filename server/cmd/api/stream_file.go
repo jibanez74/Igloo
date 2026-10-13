@@ -79,14 +79,6 @@ func (app *Application) episodeStreamFile(ctx context.Context, episodeID int64) 
 	})
 }
 
-// videoStreamFile resolves the cached file behind a movie or an episode.
-func (app *Application) videoStreamFile(ctx context.Context, media mediaRef) (streamFile, error) {
-	if media.Kind == mediaKindEpisode {
-		return app.episodeStreamFile(ctx, media.ID)
-	}
-	return app.movieStreamFile(ctx, media.ID)
-}
-
 // serveStreamFile is the direct-play handler body shared by movies and
 // episodes: resolve the cached file for the media id, map a missing row to
 // 404, and hand the bytes to serveMediaFile.
@@ -97,15 +89,19 @@ func (app *Application) serveStreamFile(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	file, err := app.videoStreamFile(r.Context(), media)
+	streamFileFor := app.movieStreamFile
+	if media.Kind == mediaKindEpisode {
+		streamFileFor = app.episodeStreamFile
+	}
+	file, err := streamFileFor(r.Context(), media.ID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			helpers.ErrorJSON(w, errors.New(media.notFoundMessage()), http.StatusNotFound)
 			return
 		}
 
-		app.Logger.Error("failed to resolve media for streaming", "error", err, "media", media.String())
-		helpers.ErrorJSON(w, errors.New("failed to fetch media from server"))
+		app.serverError(w, err, "failed to resolve media for streaming", "failed to fetch media from server",
+			"media", media.String())
 		return
 	}
 

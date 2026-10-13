@@ -37,6 +37,32 @@ func (app *Application) allowLoginAttempt(r *http.Request) bool {
 	return app.AuthLimiter.Allow("login:"+clientIP(r), loginAttemptLimit, loginAttemptWindow)
 }
 
+// verifyCredentials loads the user an email and password sign in as, answering
+// 401 for an unknown email or a wrong password and 500 for a failed lookup.
+func (app *Application) verifyCredentials(w http.ResponseWriter, r *http.Request, email, password string) (database.User, bool) {
+	user, err := app.Queries.GetUserByEmail(r.Context(), email)
+	if errors.Is(err, sql.ErrNoRows) {
+		helpers.ErrorJSON(w, errors.New(invalidCredentialsMessage), http.StatusUnauthorized)
+		return user, false
+	}
+	if err != nil {
+		app.serverError(w, err, "failed to fetch user from database for login", internalServerErrorMessage)
+		return user, false
+	}
+
+	match, err := helpers.PasswordMatches(password, user.Password)
+	if err != nil {
+		app.serverError(w, err, comparePasswordHashLogMessage, internalServerErrorMessage, "email", email)
+		return user, false
+	}
+	if !match {
+		helpers.ErrorJSON(w, errors.New(invalidCredentialsMessage), http.StatusUnauthorized)
+		return user, false
+	}
+
+	return user, true
+}
+
 func (app *Application) AuthenticateUser(w http.ResponseWriter, r *http.Request) {
 	if !app.allowLoginAttempt(r) {
 		helpers.ErrorJSON(w, errors.New(tooManyAttemptsMessage), http.StatusTooManyRequests)
@@ -57,34 +83,14 @@ func (app *Application) AuthenticateUser(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	user, err := app.Queries.GetUserByEmail(r.Context(), request.Email)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New(invalidCredentialsMessage), http.StatusUnauthorized)
-		} else {
-			app.Logger.Error("failed to fetch user from database for login", "error", err)
-			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
-		}
-
-		return
-	}
-
-	match, err := helpers.PasswordMatches(request.Password, user.Password)
-	if err != nil {
-		app.Logger.Error(comparePasswordHashLogMessage, "error", err, "email", request.Email)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
-		return
-	}
-
-	if !match {
-		helpers.ErrorJSON(w, errors.New(invalidCredentialsMessage), http.StatusUnauthorized)
+	user, ok := app.verifyCredentials(w, r, request.Email, request.Password)
+	if !ok {
 		return
 	}
 
 	err = app.SessionManager.RenewToken(r.Context())
 	if err != nil {
-		app.Logger.Error("failed to renew session token", "error", err, "user", user.Name)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to renew session token", internalServerErrorMessage, "user", user.Name)
 		return
 	}
 
@@ -93,7 +99,6 @@ func (app *Application) AuthenticateUser(w http.ResponseWriter, r *http.Request)
 	app.rememberSessionVersion(user.ID, user.SessionVersion)
 
 	res := helpers.JSONResponse{
-		Error:   false,
 		Message: fmt.Sprintf("Hello %s, welcome to your media library!", user.Name),
 	}
 
@@ -133,37 +138,14 @@ func (app *Application) AuthenticateDevice(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if request.DeviceName == "" || len(request.DeviceName) > maxDeviceNameLength {
-		helpers.ErrorJSON(w, errors.New("device_name is required and must be at most 100 characters"), http.StatusBadRequest)
-		return
-	}
-
-	if err := validateDeviceMetadata(request.Platform, request.AppVersion); err != nil {
+	err = validateDeviceInfo(request.DeviceName, request.Platform, request.AppVersion)
+	if err != nil {
 		helpers.ErrorJSON(w, err, http.StatusBadRequest)
 		return
 	}
 
-	user, err := app.Queries.GetUserByEmail(r.Context(), request.Email)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New(invalidCredentialsMessage), http.StatusUnauthorized)
-		} else {
-			app.Logger.Error("failed to fetch user from database for device login", "error", err)
-			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
-		}
-
-		return
-	}
-
-	match, err := helpers.PasswordMatches(request.Password, user.Password)
-	if err != nil {
-		app.Logger.Error(comparePasswordHashLogMessage, "error", err, "email", request.Email)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
-		return
-	}
-
-	if !match {
-		helpers.ErrorJSON(w, errors.New(invalidCredentialsMessage), http.StatusUnauthorized)
+	user, ok := app.verifyCredentials(w, r, request.Email, request.Password)
+	if !ok {
 		return
 	}
 
@@ -173,78 +155,51 @@ func (app *Application) AuthenticateDevice(w http.ResponseWriter, r *http.Reques
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error:   false,
 		Message: fmt.Sprintf("Hello %s, welcome to your media library!", user.Name),
 		Data: map[string]any{
 			"token":  token,
-			"device": deviceResponseMap(device.ID, device.Name, device.Platform, device.AppVersion, device.CreatedAt, device.LastUsedAt),
+			"device": deviceResponseMap(database.GetDevicesByUserRow(device)),
 		},
 	})
 }
 
 func (app *Application) GetCurrentAuthUser(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	user, err := app.Queries.GetUser(r.Context(), userID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
-		} else {
-			app.Logger.Error("failed to fetch user from database", "error", err, "id", userID)
-			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
-		}
-
+		app.userLookupFailed(w, err, "failed to fetch user from database", userID)
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
-			"user": userResponseMap(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.Pin.Valid, user.CreatedAt, user.UpdatedAt),
+			"user": newUserResponse(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.Pin.Valid, user.CreatedAt, user.UpdatedAt),
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 func (app *Application) DestroySession(w http.ResponseWriter, r *http.Request) {
-	if auth := deviceAuthFrom(r.Context()); auth != nil {
+	auth := deviceAuthFrom(r.Context())
+	if auth != nil {
 		_, err := app.Queries.DeleteDeviceForUser(r.Context(), database.DeleteDeviceForUserParams{
 			ID:     auth.DeviceID,
 			UserID: auth.UserID,
 		})
 		if err != nil {
-			app.Logger.Error("failed to revoke device during logout", "error", err)
-			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+			app.serverError(w, err, "failed to revoke device during logout", internalServerErrorMessage)
 			return
 		}
 
 		app.forgetDevice(auth.DeviceID)
-
 		app.Logger.Info("device revoked via logout", "user_id", auth.UserID, "device_id", auth.DeviceID)
-
-		helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-			Error:   false,
-			Message: "You have been logged out successfully",
-		})
-
-		return
+	} else {
+		err := app.SessionManager.Destroy(r.Context())
+		if err != nil {
+			app.serverError(w, err, "failed to destroy session during logout", internalServerErrorMessage)
+			return
+		}
 	}
 
-	err := app.SessionManager.Destroy(r.Context())
-	if err != nil {
-		app.Logger.Error("failed to destroy session during logout", "error", err)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
-		return
-	}
-
-	res := helpers.JSONResponse{
-		Error:   false,
-		Message: "You have been logged out successfully",
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "You have been logged out successfully"})
 }

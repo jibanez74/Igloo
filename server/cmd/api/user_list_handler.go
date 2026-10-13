@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"net/http"
 	"strings"
 
@@ -17,10 +16,7 @@ type userListSummary struct {
 }
 
 func (app *Application) GetUsers(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 
@@ -29,27 +25,19 @@ func (app *Application) GetUsers(w http.ResponseWriter, r *http.Request) {
 		Search:     q,
 	})
 	if err != nil {
-		app.Logger.Error("failed to fetch users", "error", err)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to fetch users", internalServerErrorMessage)
 		return
 	}
 
 	users := make([]userListSummary, 0, len(rows))
 	for _, row := range rows {
-		var avatar *string
-		if row.Avatar.Valid {
-			avatar = &row.Avatar.String
-		}
 		users = append(users, userListSummary{
 			ID:     row.ID,
 			Name:   row.Name,
 			Email:  row.Email,
-			Avatar: avatar,
+			Avatar: helpers.StringPtrFromNull(row.Avatar),
 		})
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
-		Data:  map[string]any{"users": users},
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"users": users}})
 }

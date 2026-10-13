@@ -10,8 +10,7 @@ import (
 )
 
 // TxRunner serializes scanner writes on the shared scanner mutex and runs
-// each unit of work in one transaction. It is shared by the movie and music
-// scanners so the lock/begin/rollback/commit shell exists once.
+// each unit of work in one transaction.
 type TxRunner struct {
 	DB      *sql.DB
 	Mu      *sync.Mutex

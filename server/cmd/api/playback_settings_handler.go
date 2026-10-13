@@ -75,17 +75,13 @@ func playbackProfileCatalog() []playbackProfileResponse {
 
 		out = append(out, playbackProfileResponse{
 			ID:        cfg.ID,
-			Label:     formatProfileLabel(cfg.Height, cfg.VideoMbps),
+			Label:     strconv.Itoa(cfg.Height) + "p · " + strconv.Itoa(cfg.VideoMbps) + " Mbps",
 			Height:    cfg.Height,
 			VideoMbps: cfg.VideoMbps,
 		})
 	}
 
 	return out
-}
-
-func formatProfileLabel(height, videoMbps int) string {
-	return strconv.Itoa(height) + "p · " + strconv.Itoa(videoMbps) + " Mbps"
 }
 
 func (app *Application) mapPlaybackSettingsResponse(settings database.Setting) playbackSettingsResponse {
@@ -103,10 +99,7 @@ func (app *Application) mapPlaybackSettingsResponse(settings database.Setting) p
 
 func (app *Application) GetPlaybackSettings(w http.ResponseWriter, r *http.Request) {
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
-		Data: map[string]any{
-			"settings": app.mapPlaybackSettingsResponse(*app.CurrentSettings()),
-		},
+		Data: map[string]any{"settings": app.mapPlaybackSettingsResponse(*app.CurrentSettings())},
 	})
 }
 
@@ -117,11 +110,7 @@ func (app *Application) GetPlaybackSettings(w http.ResponseWriter, r *http.Reque
 func (app *Application) UpdatePlaybackSettings(w http.ResponseWriter, r *http.Request) {
 	var rawFields map[string]json.RawMessage
 	err := helpers.ReadJSON(w, r, &rawFields)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
-		return
-	}
-	if rawFields == nil {
+	if err != nil || rawFields == nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
 	}
@@ -175,7 +164,7 @@ func (app *Application) UpdatePlaybackSettings(w http.ResponseWriter, r *http.Re
 	// The query writes both columns, so the omitted one has to be carried over
 	// from the current row. Doing that under the write lock is what keeps two
 	// concurrent partial updates from each restoring the other's stale value.
-	updated, err := app.withSettingsWrite(r.Context(), func(current database.Setting) (database.Setting, error) {
+	updated, err := app.withSettingsWrite(func(current database.Setting) (database.Setting, error) {
 		params := database.UpdatePlaybackServerSettingsParams{
 			ServerUploadMbps:           current.ServerUploadMbps,
 			HardwareAccelerationDevice: helpers.NullString(hardwareAccelerationDeviceOrDefault(current)),
@@ -190,16 +179,12 @@ func (app *Application) UpdatePlaybackSettings(w http.ResponseWriter, r *http.Re
 		return app.Queries.UpdatePlaybackServerSettings(r.Context(), params)
 	})
 	if err != nil {
-		app.Logger.Error("failed to update playback server settings", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to update playback settings"))
+		app.serverError(w, err, "failed to update playback server settings", "failed to update playback settings")
 		return
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error:   false,
 		Message: "Playback settings updated",
-		Data: map[string]any{
-			"settings": app.mapPlaybackSettingsResponse(updated),
-		},
+		Data:    map[string]any{"settings": app.mapPlaybackSettingsResponse(updated)},
 	})
 }

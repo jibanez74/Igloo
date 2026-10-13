@@ -14,7 +14,7 @@ import (
 func main() {
 	log.Println("igloo server starting up...")
 
-	envFile, loadedEnvFile, err := LoadRuntimeEnvFile()
+	loadedEnvFile, err := LoadRuntimeEnvFile()
 	if err != nil {
 		log.Printf("warning: %v", err)
 	}
@@ -64,7 +64,7 @@ func main() {
 		// run cleanup rather than exit bare.
 		app.Logger.Error("server failed to start", "error", err)
 		app.DeviceExpiryCancel()
-		app.cancelScans()
+		app.ScanCancel()
 		app.Wait.Wait()
 		app.cleanupStartupResources()
 		os.Exit(1)

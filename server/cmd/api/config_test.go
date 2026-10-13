@@ -128,13 +128,13 @@ func TestLoadRuntimeEnvFile_LoadsWorkingDirectoryEnvFile(t *testing.T) {
 	t.Setenv(key, "")
 	os.Unsetenv(key)
 
-	envFile, loaded, err := LoadRuntimeEnvFile()
+	loaded, err := LoadRuntimeEnvFile()
 	if err != nil {
 		t.Fatalf("LoadRuntimeEnvFile failed: %v", err)
 	}
 
-	if !loaded || envFile != ".env" {
-		t.Fatalf("expected .env to be loaded, got file=%q loaded=%t", envFile, loaded)
+	if !loaded {
+		t.Fatal("expected .env to be loaded")
 	}
 	if got := os.Getenv(key); got != "loaded" {
 		t.Fatalf("expected env file value to load, got %q", got)
@@ -144,12 +144,12 @@ func TestLoadRuntimeEnvFile_LoadsWorkingDirectoryEnvFile(t *testing.T) {
 func TestLoadRuntimeEnvFile_MissingEnvFileIsIgnored(t *testing.T) {
 	changeWorkingDirectory(t, t.TempDir())
 
-	envFile, loaded, err := LoadRuntimeEnvFile()
+	loaded, err := LoadRuntimeEnvFile()
 	if err != nil {
 		t.Fatalf("LoadRuntimeEnvFile failed: %v", err)
 	}
-	if loaded || envFile != "" {
-		t.Fatalf("expected missing .env to be ignored, got file=%q loaded=%t", envFile, loaded)
+	if loaded {
+		t.Fatal("expected missing .env to be ignored")
 	}
 }
 

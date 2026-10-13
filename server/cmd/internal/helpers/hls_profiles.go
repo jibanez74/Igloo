@@ -73,9 +73,7 @@ func HLSMaxTranscodeHeight(effectiveDevice string) int {
 
 	tallest := 0
 	for _, cfg := range HLSProfileConfigs {
-		if cfg.Height > tallest {
-			tallest = cfg.Height
-		}
+		tallest = max(tallest, cfg.Height)
 	}
 
 	return tallest
@@ -120,22 +118,11 @@ func ConstrainHLSProfile(profileID string, maxHeight int, maxVideoMbps float64) 
 }
 
 // BestFitHLSFallbackProfile picks the transcode profile a session falls back
-// to when remux is refused. Selection runs in two stages.
-//
-// The height stage is unchanged: the tallest configured profile that fits
-// within the source height wins, and a source shorter than every profile gets
-// 720p_3mbps so remux-unsafe sources still have a reliable playback option.
-//
-// The bitrate stage then chooses within that height. Three profiles target
-// 1080 and the ordered list alone could only ever reach the first of them, so
-// the highest profile bitrate that does not exceed the source bitrate wins.
-// Spending more bits than the source carries buys nothing, and a 1080p source
-// that failed remux prevalidation on a constrained server is exactly where the
-// cheaper profiles help.
-//
-// Bitrate never changes the height: a low-bitrate 4K source still transcodes
-// at 2160p. A source bitrate of 0 means unknown — ffprobe often omits it — and
-// keeps the tallest profile at that height.
+// to when remux is refused. The tallest configured height that fits the source
+// wins (720p_3mbps for a source shorter than every profile); within it, the
+// highest bitrate not above the source's wins, since extra bits buy nothing.
+// Bitrate never changes the height, and a bitrate of 0 (unknown, which ffprobe
+// often reports) keeps the richest profile at that height.
 func BestFitHLSFallbackProfile(sourceHeight, sourceBitRate int64) string {
 	tier := hlsFallbackTier(sourceHeight)
 	if len(tier) == 0 {
@@ -166,12 +153,8 @@ func hlsFallbackTier(sourceHeight int64) []HLSProfileConfig {
 	var tier []HLSProfileConfig
 
 	for _, profileID := range HLSAllowedProfiles {
-		if profileID == HLS_PROFILE_REMUX {
-			continue
-		}
-
-		// A profile id with no configured height would otherwise match every
-		// source, because the zero value satisfies `sourceHeight >= 0`.
+		// Remux has no config, and a profile with no configured height would
+		// otherwise match every source.
 		cfg, ok := HLSProfileConfigs[profileID]
 		if !ok || cfg.Height <= 0 {
 			continue

@@ -35,10 +35,7 @@ func (f *ffprobe) KeyframeAtOrBefore(
 		return 0, fmt.Errorf("target must be greater than zero")
 	}
 
-	from := targetSec - keyframeLookbackSec
-	if from < 0 {
-		from = 0
-	}
+	from := max(0, targetSec-keyframeLookbackSec)
 
 	// Read from the lookback point up to one second past the target: the
 	// keyframe we want is the last one at or before it.

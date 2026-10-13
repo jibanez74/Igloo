@@ -14,8 +14,6 @@ import (
 
 const watchRoomAuthCacheTTL = 30 * time.Second
 
-type watchRoomAuthLookup func(context.Context, int64, int64) (database.WatchRoom, error)
-
 type watchRoomAuthKey struct {
 	roomID int64
 	userID int64
@@ -61,7 +59,7 @@ func (auth *watchRoomAuthCache) purgeExpiredLocked(now time.Time) {
 func (auth *watchRoomAuthCache) load(
 	ctx context.Context,
 	roomID, userID int64,
-	lookup watchRoomAuthLookup,
+	lookup func(context.Context, int64, int64) (database.WatchRoom, error),
 ) (database.WatchRoom, error) {
 	key := watchRoomAuthKey{roomID: roomID, userID: userID}
 
@@ -129,10 +127,7 @@ func (app *Application) loadAuthorizedWatchRoom(ctx context.Context, roomID, use
 }
 
 func (app *Application) loadAuthorizedWatchRoomForRequest(w http.ResponseWriter, r *http.Request) (database.WatchRoom, int64, bool) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return database.WatchRoom{}, 0, false
-	}
+	userID := app.userIDFromRequest(r)
 
 	roomID, err := parseRoomID(r)
 	if err != nil {
@@ -146,8 +141,8 @@ func (app *Application) loadAuthorizedWatchRoomForRequest(w http.ResponseWriter,
 			helpers.ErrorJSON(w, errors.New(accessDeniedMessage), http.StatusForbidden)
 			return database.WatchRoom{}, 0, false
 		}
-		app.Logger.Error("failed to authorize watch room", "error", err, "room_id", roomID, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to authorize watch room", internalServerErrorMessage,
+			"room_id", roomID, "user_id", userID)
 		return database.WatchRoom{}, 0, false
 	}
 

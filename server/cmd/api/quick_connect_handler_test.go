@@ -460,10 +460,7 @@ func TestGenerateQuickConnectCode_UsesAlphabetAndLength(t *testing.T) {
 	seen := make(map[rune]bool, len(quickConnectCodeAlphabet))
 
 	for i := 0; i < samples; i++ {
-		code, err := generateQuickConnectCode()
-		if err != nil {
-			t.Fatalf("generate #%d: %v", i+1, err)
-		}
+		code := generateQuickConnectCode()
 
 		if len(code) != quickConnectCodeLength {
 			t.Fatalf("code %q length = %d, want %d", code, len(code), quickConnectCodeLength)

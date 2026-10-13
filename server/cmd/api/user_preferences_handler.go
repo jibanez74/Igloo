@@ -27,10 +27,6 @@ type trailerPreferencesResponse struct {
 	Source  string `json:"source"`
 }
 
-func trailerPreferencesPayload(prefs preroll.Preferences) trailerPreferencesResponse {
-	return trailerPreferencesResponse{Enabled: prefs.Enabled, Count: prefs.Count, Source: prefs.Source}
-}
-
 // loadTrailerPreferences returns the stored preferences, or the defaults when
 // the user has never saved any.
 func (app *Application) loadTrailerPreferences(ctx context.Context, userID int64) (preroll.Preferences, error) {
@@ -49,26 +45,19 @@ func (app *Application) loadTrailerPreferences(ctx context.Context, userID int64
 }
 
 func (app *Application) GetTrailerPreferences(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	prefs, err := app.loadTrailerPreferences(r.Context(), userID)
 	if err != nil {
-		app.Logger.Error("failed to load trailer preferences", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to load trailer preferences", internalServerErrorMessage, "user_id", userID)
 		return
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Error: false, Data: trailerPreferencesPayload(prefs)})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: trailerPreferencesResponse(prefs)})
 }
 
 func (app *Application) UpdateTrailerPreferences(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	var req trailerPreferencesRequest
 	err := helpers.ReadJSON(w, r, &req)
@@ -96,11 +85,10 @@ func (app *Application) UpdateTrailerPreferences(w http.ResponseWriter, r *http.
 		TrailersSource:  prefs.Source,
 	})
 	if err != nil {
-		app.Logger.Error("failed to save trailer preferences", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to save trailer preferences", internalServerErrorMessage, "user_id", userID)
 		return
 	}
 
 	stored := preroll.Preferences{Enabled: row.TrailersEnabled, Count: int(row.TrailersCount), Source: row.TrailersSource}
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Error: false, Data: trailerPreferencesPayload(stored)})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: trailerPreferencesResponse(stored)})
 }

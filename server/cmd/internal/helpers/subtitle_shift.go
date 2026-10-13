@@ -1,6 +1,7 @@
 package helpers
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -72,10 +73,7 @@ func ShiftWebVTT(raw []byte, offsetSec float64) []byte {
 			continue
 		}
 
-		newStart := startSec - offsetSec
-		if newStart < 0 {
-			newStart = 0
-		}
+		newStart := max(startSec-offsetSec, 0)
 
 		droppingCue = false
 		shifted = append(shifted, fmt.Sprintf(
@@ -112,38 +110,22 @@ func dropTrailingCueIdentifier(lines []string) []string {
 	return lines[:len(lines)-1]
 }
 
+// parseWebVTTTimestamp reads mm:ss.ttt or hh:mm:ss.ttt.
 func parseWebVTTTimestamp(value string) (float64, error) {
 	parts := strings.Split(value, ":")
-
-	var hours, minutes int
-	var seconds float64
-	var err error
-
-	switch len(parts) {
-	case 2:
-		minutes, err = strconv.Atoi(parts[0])
-		if err != nil {
-			return 0, err
-		}
-		seconds, err = strconv.ParseFloat(parts[1], 64)
-		if err != nil {
-			return 0, err
-		}
-	case 3:
-		hours, err = strconv.Atoi(parts[0])
-		if err != nil {
-			return 0, err
-		}
-		minutes, err = strconv.Atoi(parts[1])
-		if err != nil {
-			return 0, err
-		}
-		seconds, err = strconv.ParseFloat(parts[2], 64)
-		if err != nil {
-			return 0, err
-		}
-	default:
+	if len(parts) == 2 {
+		parts = append([]string{"0"}, parts...)
+	}
+	if len(parts) != 3 {
 		return 0, fmt.Errorf("invalid WebVTT timestamp %q", value)
+	}
+
+	hours, hoursErr := strconv.Atoi(parts[0])
+	minutes, minutesErr := strconv.Atoi(parts[1])
+	seconds, secondsErr := strconv.ParseFloat(parts[2], 64)
+	err := errors.Join(hoursErr, minutesErr, secondsErr)
+	if err != nil {
+		return 0, err
 	}
 
 	return float64(hours)*3600 + float64(minutes)*60 + seconds, nil

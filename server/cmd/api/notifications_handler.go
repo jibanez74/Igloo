@@ -31,28 +31,6 @@ type CreateNotificationRequest struct {
 	Message string `json:"message"`
 }
 
-// notificationResponse is the client-facing shape of a notification. It
-// exposes the creator's display name and the viewer's read state.
-type notificationResponse struct {
-	ID            int64  `json:"id"`
-	Title         string `json:"title"`
-	Message       string `json:"message"`
-	IsRead        bool   `json:"is_read"`
-	CreatedByName string `json:"created_by_name"`
-	CreatedAt     string `json:"created_at"`
-}
-
-func newNotificationResponse(row database.ListNotificationsForUserRow) notificationResponse {
-	return notificationResponse{
-		ID:            row.ID,
-		Title:         row.Title,
-		Message:       row.Message,
-		IsRead:        row.IsRead,
-		CreatedByName: row.CreatedByName,
-		CreatedAt:     row.CreatedAt,
-	}
-}
-
 // writeNotificationViewerError answers a failed viewer lookup. No user row means
 // the session outlived its user, which is a stale session (401) rather than a
 // server fault.
@@ -66,8 +44,7 @@ func (app *Application) writeNotificationViewerError(w http.ResponseWriter, r *h
 		return
 	}
 
-	app.Logger.Error("failed to load user for notifications", "error", err, "user_id", userID)
-	helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+	app.serverError(w, err, "failed to load user for notifications", internalServerErrorMessage, "user_id", userID)
 }
 
 // notificationViewerIsAdmin reports whether the current user is an admin, which
@@ -115,10 +92,7 @@ func (app *Application) CreateNotification(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	err = app.Queries.CreateNotification(r.Context(), database.CreateNotificationParams{
 		CreatedByUserID: userID,
@@ -127,14 +101,11 @@ func (app *Application) CreateNotification(w http.ResponseWriter, r *http.Reques
 	})
 
 	if err != nil {
-		app.Logger.Error("failed to create notification", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to create notification", internalServerErrorMessage, "user_id", userID)
 		return
 	}
 
-	helpers.WriteJSON(w, http.StatusCreated, helpers.JSONResponse{
-		Error: false,
-	})
+	helpers.WriteJSON(w, http.StatusCreated, helpers.JSONResponse{})
 }
 
 func isValidNotificationTitle(title string) bool {
@@ -153,10 +124,7 @@ func isValidNotificationTitle(title string) bool {
 // the unread count. Non-admins see an empty queue without touching the
 // notifications table.
 func (app *Application) ListNotifications(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	// One statement answers both the admin check and the unread count.
 	badge, err := app.Queries.GetNotificationBadgeForUser(r.Context(), userID)
@@ -167,9 +135,8 @@ func (app *Application) ListNotifications(w http.ResponseWriter, r *http.Request
 
 	if !badge.IsAdmin {
 		helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-			Error: false,
 			Data: map[string]any{
-				"notifications": []notificationResponse{},
+				"notifications": []database.ListNotificationsForUserRow{},
 				"unread_count":  int64(0),
 			},
 		})
@@ -181,20 +148,13 @@ func (app *Application) ListNotifications(w http.ResponseWriter, r *http.Request
 		RowLimit: notificationListLimit,
 	})
 	if err != nil {
-		app.Logger.Error("failed to list notifications", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to list notifications", internalServerErrorMessage, "user_id", userID)
 		return
 	}
 
-	notifications := make([]notificationResponse, 0, len(rows))
-	for _, row := range rows {
-		notifications = append(notifications, newNotificationResponse(row))
-	}
-
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
 		Data: map[string]any{
-			"notifications": notifications,
+			"notifications": rows,
 			"unread_count":  badge.UnreadCount,
 		},
 	})
@@ -205,10 +165,7 @@ func (app *Application) ListNotifications(w http.ResponseWriter, r *http.Request
 // GetNotificationBadgeForUser folds the admin check and the count into a single
 // statement, so a poll costs one round trip on the shared connection.
 func (app *Application) GetUnreadNotificationCount(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	badge, err := app.Queries.GetNotificationBadgeForUser(r.Context(), userID)
 	if err != nil {
@@ -216,22 +173,14 @@ func (app *Application) GetUnreadNotificationCount(w http.ResponseWriter, r *htt
 		return
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
-		Data: map[string]any{
-			"unread_count": badge.UnreadCount,
-		},
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"unread_count": badge.UnreadCount}})
 }
 
 // MarkNotificationRead records that the current user has read a single
 // notification. It is idempotent, so marking an already-read or nonexistent
 // notification is a harmless no-op.
 func (app *Application) MarkNotificationRead(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	notificationID, ok := parseNotificationID(w, r)
 	if !ok {
@@ -249,25 +198,19 @@ func (app *Application) MarkNotificationRead(w http.ResponseWriter, r *http.Requ
 			NotificationID: notificationID,
 		})
 		if err != nil {
-			app.Logger.Error("failed to mark notification read", "error", err, "user_id", userID, "notification_id", notificationID)
-			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+			app.serverError(w, err, "failed to mark notification read", internalServerErrorMessage,
+				"user_id", userID, "notification_id", notificationID)
 			return
 		}
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error:   false,
-		Message: "Notification marked as read",
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "Notification marked as read"})
 }
 
 // MarkAllNotificationsRead marks every notification currently visible to the
 // user as read.
 func (app *Application) MarkAllNotificationsRead(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	isAdmin, ok := app.notificationViewerIsAdmin(w, r, userID)
 	if !ok {
@@ -277,26 +220,19 @@ func (app *Application) MarkAllNotificationsRead(w http.ResponseWriter, r *http.
 	if isAdmin {
 		err := app.Queries.MarkAllNotificationsReadForUser(r.Context(), userID)
 		if err != nil {
-			app.Logger.Error("failed to mark all notifications read", "error", err, "user_id", userID)
-			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+			app.serverError(w, err, "failed to mark all notifications read", internalServerErrorMessage, "user_id", userID)
 			return
 		}
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error:   false,
-		Message: "All notifications marked as read",
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "All notifications marked as read"})
 }
 
 // DeleteNotification removes a notification the current user can see. Deleting a
 // shared admin-queue notification clears it for all admins, which is the
 // intended "request handled" behavior.
 func (app *Application) DeleteNotification(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	notificationID, ok := parseNotificationID(w, r)
 	if !ok {
@@ -315,8 +251,8 @@ func (app *Application) DeleteNotification(w http.ResponseWriter, r *http.Reques
 		var err error
 		rowsAffected, err = app.Queries.DeleteNotificationForUser(r.Context(), notificationID)
 		if err != nil {
-			app.Logger.Error("failed to delete notification", "error", err, "user_id", userID, "notification_id", notificationID)
-			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+			app.serverError(w, err, "failed to delete notification", internalServerErrorMessage,
+				"user_id", userID, "notification_id", notificationID)
 			return
 		}
 	}
@@ -326,8 +262,5 @@ func (app *Application) DeleteNotification(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error:   false,
-		Message: "Notification deleted",
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "Notification deleted"})
 }

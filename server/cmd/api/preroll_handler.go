@@ -55,10 +55,7 @@ func prerollTrailerPayload(trailer preroll.Trailer) prerollTrailerResponse {
 // built from the caller's saved preferences. Trailers stream from YouTube;
 // the server only hands out keys it already holds.
 func (app *Application) GetMoviePreroll(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	media, err := parseMediaID(chi.URLParam(r, "id"), mediaKindMovie)
 	if err != nil {
@@ -73,15 +70,13 @@ func (app *Application) GetMoviePreroll(w http.ResponseWriter, r *http.Request) 
 			helpers.ErrorJSON(w, errors.New(movieNotFoundMessage), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error("failed to load movie for preroll", "error", err, "movie_id", media.ID)
-		helpers.ErrorJSON(w, errors.New(prerollQueueFailedMessage))
+		app.serverError(w, err, "failed to load movie for preroll", prerollQueueFailedMessage, "movie_id", media.ID)
 		return
 	}
 
 	prefs, err := app.loadTrailerPreferences(ctx, userID)
 	if err != nil {
-		app.Logger.Error("failed to load trailer preferences for preroll", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(prerollQueueFailedMessage))
+		app.serverError(w, err, "failed to load trailer preferences for preroll", prerollQueueFailedMessage, "user_id", userID)
 		return
 	}
 
@@ -89,8 +84,7 @@ func (app *Application) GetMoviePreroll(w http.ResponseWriter, r *http.Request) 
 	if prefs.Enabled {
 		queue, err := app.buildPrerollQueue(ctx, prefs, movie)
 		if err != nil {
-			app.Logger.Error("failed to build preroll queue", "error", err, "movie_id", media.ID)
-			helpers.ErrorJSON(w, errors.New(prerollQueueFailedMessage))
+			app.serverError(w, err, "failed to build preroll queue", prerollQueueFailedMessage, "movie_id", media.ID)
 			return
 		}
 		for _, trailer := range queue {
@@ -98,7 +92,7 @@ func (app *Application) GetMoviePreroll(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Error: false, Data: map[string]any{"trailers": trailers}})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"trailers": trailers}})
 }
 
 // buildPrerollQueue loads the library pool first, so a library preference the

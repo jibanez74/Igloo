@@ -1,15 +1,14 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"errors"
 	"igloo/cmd/internal/helpers"
 	"igloo/cmd/internal/scanner/tmdbmatch"
 	"igloo/cmd/internal/tmdb"
-	"io"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 
@@ -95,109 +94,23 @@ func (app *Application) SearchTmdbMovies(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
-		Data:  map[string]any{"results": results},
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"results": results}})
 }
 
 func (app *Application) GetTmdbStatus(w http.ResponseWriter, r *http.Request) {
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
-		Data: map[string]any{
-			"available": app.Tmdb != nil,
-		},
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"available": app.Tmdb != nil}})
 }
 
 func (app *Application) ProxyTmdbImage(w http.ResponseWriter, r *http.Request) {
 	size := chi.URLParam(r, "size")
 	file := chi.URLParam(r, "file")
-	if !supportedTmdbImageSizes[size] || !isSafeTmdbImageFile(file) {
+	if !supportedTmdbImageSizes[size] || !isPlainPathSegment(file, ".") || strings.Contains(file, "..") {
 		helpers.ErrorJSON(w, errors.New("invalid TMDB image path"), http.StatusBadRequest)
 		return
 	}
 
-	baseURL := strings.TrimRight(app.TmdbImageBaseURL, "/")
-	if baseURL == "" {
-		baseURL = tmdbImageBaseURL
-	}
-
-	imageURL, err := url.JoinPath(baseURL, size, file)
-	if err != nil {
-		app.Logger.Error("failed to build TMDB image proxy URL", "error", err, "base_url", baseURL)
-		helpers.ErrorJSON(w, errors.New("failed to fetch TMDB image"), http.StatusBadGateway)
-		return
-	}
-
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, imageURL, nil)
-	if err != nil {
-		app.Logger.Error("failed to build TMDB image proxy request", "error", err, "url", imageURL)
-		helpers.ErrorJSON(w, errors.New("failed to fetch TMDB image"), http.StatusBadGateway)
-		return
-	}
-
-	client := app.TmdbImageHTTPClient
-	if client == nil {
-		client = &http.Client{Timeout: helpers.PROVIDER_HTTP_TIMEOUT}
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		app.Logger.Error("failed to fetch TMDB image", "error", err, "url", imageURL)
-		helpers.ErrorJSON(w, errors.New("failed to fetch TMDB image"), http.StatusBadGateway)
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		app.Logger.Error("TMDB image upstream returned an error", "status", resp.StatusCode, "url", imageURL)
-		helpers.ErrorJSON(w, errors.New("failed to fetch TMDB image"), http.StatusBadGateway)
-		return
-	}
-
-	for _, header := range []string{"Content-Type", "Cache-Control", "ETag", "Last-Modified"} {
-		value := resp.Header.Get(header)
-		if value != "" {
-			w.Header().Set(header, value)
-		}
-	}
-	if w.Header().Get("Content-Type") == "" {
-		w.Header().Set("Content-Type", "application/octet-stream")
-	}
-	if resp.ContentLength >= 0 {
-		w.Header().Set("Content-Length", strconv.FormatInt(resp.ContentLength, 10))
-	}
-	w.WriteHeader(http.StatusOK)
-
-	_, err = io.Copy(w, resp.Body)
-	if err != nil {
-		app.Logger.Error("failed to stream TMDB image response", "error", err, "url", imageURL)
-	}
-}
-
-func isSafeTmdbImageFile(file string) bool {
-	if file == "" || strings.Contains(file, "..") {
-		return false
-	}
-
-	for _, char := range file {
-		if char >= 'a' && char <= 'z' {
-			continue
-		}
-		if char >= 'A' && char <= 'Z' {
-			continue
-		}
-		if char >= '0' && char <= '9' {
-			continue
-		}
-		if char == '.' || char == '_' || char == '-' {
-			continue
-		}
-		return false
-	}
-
-	return true
+	baseURL := cmp.Or(strings.TrimRight(app.TmdbImageBaseURL, "/"), tmdbImageBaseURL)
+	app.proxyImage(w, r, app.TmdbImageHTTPClient, "TMDB image", baseURL, size, file)
 }
 
 func (app *Application) searchTmdbMovies(ctx context.Context, payload tmdbSearchRequest) ([]tmdbSearchResult, error) {
@@ -254,8 +167,7 @@ func (app *Application) GetMoviesInTheaters(w http.ResponseWriter, r *http.Reque
 
 	movies, err := app.Tmdb.GetMoviesInTheaters(r.Context())
 	if err != nil {
-		app.Logger.Error("failed to get movies in theaters", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch movies in theaters"))
+		app.serverError(w, err, "failed to get movies in theaters", "failed to fetch movies in theaters")
 		return
 	}
 
@@ -291,14 +203,7 @@ func (app *Application) GetMoviesInTheaters(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
-		Data: map[string]any{
-			"movies": mapped,
-		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"movies": mapped}})
 }
 
 func (app *Application) GetMovieByTmdbID(w http.ResponseWriter, r *http.Request) {
@@ -322,19 +227,11 @@ func (app *Application) GetMovieByTmdbID(w http.ResponseWriter, r *http.Request)
 			helpers.ErrorJSON(w, errors.New("movie not found on tmdb"), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error("failed to get movie from tmdb", "error", err, "tmdb_id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch movie from tmdb"))
+		app.serverError(w, err, "failed to get movie from tmdb", "failed to fetch movie from tmdb", "tmdb_id", id)
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
-		Data: map[string]any{
-			"movie": movie,
-		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"movie": movie}})
 }
 
 func (app *Application) ensureTmdbAvailable(w http.ResponseWriter) bool {

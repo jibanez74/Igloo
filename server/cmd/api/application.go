@@ -31,15 +31,10 @@ type Application struct {
 	DB      *sql.DB
 	Queries *database.Queries
 
-	// settings is the in-memory copy of the single settings row, read by
-	// request handlers, scanners and HLS sessions concurrently and replaced by
-	// the admin settings writers. Never touch it directly outside startup:
-	// go through CurrentSettings/SetSettings, or withSettingsWrite for a
-	// read-modify-write.
-	//
-	// InitSettings runs in NewApplication before anything serves and fails the
-	// boot if it cannot load or create the row, so this is never nil once the
-	// application exists. Readers dereference it without a nil check.
+	// settings is the in-memory copy of the settings row, read concurrently and
+	// replaced by the admin writers. Outside startup go through
+	// CurrentSettings/SetSettings, or withSettingsWrite for a read-modify-write.
+	// InitSettings fails the boot without a row, so it is never nil.
 	settingsMu sync.RWMutex
 	settings   *database.Setting
 
@@ -342,14 +337,9 @@ func (app *Application) initRuntimeCaches() {
 	app.HLSMaxPersonalSessionsPerUser = configuredHLSMaxPersonalSessionsPerUser()
 	app.PersonalHLSReservations = make(map[int64]int)
 
-	// Eviction callback removes generated files when an HLS session ages out.
-	// It must not make an expiration sweep wait for FFmpeg teardown. Explicit
-	// removals also clean up synchronously after releasing their owner lock;
-	// CleanupOnce safely deduplicates the two paths. Teardown goroutines are
-	// tracked in app.Wait so shutdown drains in-flight FFmpeg kills instead of
-	// exiting mid-teardown and orphaning the process.
-	// The default TTL only applies to SetDefault, which this cache never uses;
-	// personal and room sessions pick their TTL explicitly on every Set.
+	// Eviction tears an aged-out session down off the sweep goroutine, tracked in
+	// app.Wait so shutdown drains in-flight FFmpeg kills; CleanupOnce dedupes it
+	// with explicit removals. The default TTL is unused: every Set picks its own.
 	hlsCache := cache.New(hlsRoomSessionTTL, hlsSessionCacheSweep)
 	hlsCache.OnEvicted(func(_ string, val interface{}) {
 		session, ok := val.(*HLSSession)
