@@ -64,13 +64,10 @@ func (s *cachedSessionStore) Commit(token string, b []byte, expiry time.Time) er
 
 	// scs treats the store as the sole authority on expiry, so a cached entry
 	// must never outlive the session it belongs to.
-	ttl := time.Until(expiry)
+	ttl := min(time.Until(expiry), sessionStoreCacheTTL)
 	if ttl <= 0 {
 		s.cache.Delete(token)
 		return nil
-	}
-	if ttl > sessionStoreCacheTTL {
-		ttl = sessionStoreCacheTTL
 	}
 
 	s.cache.Set(token, b, ttl)

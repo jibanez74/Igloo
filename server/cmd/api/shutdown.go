@@ -60,75 +60,44 @@ func (app *Application) ListenForShutdown(quit chan os.Signal) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	app.shutdownHTTPServer(ctx)
+	err := app.Server.Shutdown(ctx)
+	if err != nil {
+		app.Logger.Error("failed to shutdown server", "error", err)
+	}
 
 	app.Logger.Info("running clean up tasks...")
 
-	app.shutdownWatchRoomHub()
+	app.WatchRoomHub.Shutdown()
 	app.cleanupHLSSessions()
-	if app.DeviceExpiryCancel != nil {
-		app.DeviceExpiryCancel()
-	}
-	app.cancelScans()
+	app.DeviceExpiryCancel()
+	app.ScanCancel()
 
 	// Background tasks may still need database and logger access.
 	app.Wait.Wait()
 
-	app.flushRuntimeCaches()
+	app.SubtitleVTTCache.Flush()
+	app.RoomHLSTombstone.Flush()
 	app.clearMediaClientCaches()
 	app.cleanupMediaBinaries()
 	app.closeDatabase()
 	app.closeLogger()
 }
 
-func (app *Application) cancelScans() {
-	if app.ScanCancel != nil {
-		app.ScanCancel()
-	}
-}
-
-func (app *Application) shutdownHTTPServer(ctx context.Context) {
-	if app.Server == nil {
-		return
-	}
-
-	err := app.Server.Shutdown(ctx)
-	if err != nil {
-		app.Logger.Error("failed to shutdown server", "error", err)
-	}
-}
-
-func (app *Application) shutdownWatchRoomHub() {
-	if app.WatchRoomHub != nil {
-		app.WatchRoomHub.Shutdown()
-	}
-}
-
+// cleanupHLSSessions stops the FFmpeg sessions, which must happen before the
+// FFmpeg binary is cleaned up.
 func (app *Application) cleanupHLSSessions() {
-	// Stop FFmpeg sessions before cleaning up the FFmpeg binary.
-	if app.HLSSessionCache != nil {
-		count := 0
-		for _, item := range app.HLSSessionCache.Items() {
-			session, ok := item.Object.(*HLSSession)
-			if ok {
-				cleanupHLSSession(session)
-				count++
-			}
+	count := 0
+	for _, item := range app.HLSSessionCache.Items() {
+		session, ok := item.Object.(*HLSSession)
+		if ok {
+			cleanupHLSSession(session)
+			count++
 		}
-		if count > 0 {
-			app.Logger.Info("cleaned up HLS sessions", "count", count)
-		}
-		app.HLSSessionCache.Flush()
 	}
-}
-
-func (app *Application) flushRuntimeCaches() {
-	if app.SubtitleVTTCache != nil {
-		app.SubtitleVTTCache.Flush()
+	if count > 0 {
+		app.Logger.Info("cleaned up HLS sessions", "count", count)
 	}
-	if app.RoomHLSTombstone != nil {
-		app.RoomHLSTombstone.Flush()
-	}
+	app.HLSSessionCache.Flush()
 }
 
 func (app *Application) clearMediaClientCaches() {
@@ -162,29 +131,29 @@ func (app *Application) cleanupStartupResources() {
 }
 
 func (app *Application) closeDatabase() {
+	if app.DB == nil {
+		return
+	}
+
 	// Fold this run's accumulated statistics back into sqlite_stat1 so the next
 	// startup plans against them. Best effort: a failure here must not block
 	// shutdown.
-	if app.DB != nil {
-		err := app.RefreshQueryPlannerStats()
-		if err != nil {
-			app.Logger.Error("failed to refresh query planner statistics", "error", err)
-		}
+	err := app.RefreshQueryPlannerStats()
+	if err != nil {
+		app.Logger.Error("failed to refresh query planner statistics", "error", err)
 	}
 
 	// Close prepared statements before the connection that owns them.
 	if app.Queries != nil {
-		err := app.Queries.Close()
+		err = app.Queries.Close()
 		if err != nil {
 			app.Logger.Error("failed to close prepared statements", "error", err)
 		}
 	}
 
-	if app.DB != nil {
-		err := app.DB.Close()
-		if err != nil {
-			app.Logger.Error("failed to close database", "error", err)
-		}
+	err = app.DB.Close()
+	if err != nil {
+		app.Logger.Error("failed to close database", "error", err)
 	}
 }
 

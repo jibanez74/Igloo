@@ -966,7 +966,7 @@ func (app *Application) hlsTranscodeRoot() string {
 	if strings.TrimSpace(settings.TranscodeDir) != "" {
 		return settings.TranscodeDir
 	}
-	return app.Config.effectiveTranscodeDir()
+	return app.Config.TranscodeDir
 }
 
 func waitForHLSSessionExit(session *HLSSession, timeout time.Duration) bool {

@@ -202,9 +202,7 @@ func (index *searchVocabIndex) corrections(token string, maxDist, visitLimit int
 		}
 		return candidates[i].term < candidates[j].term
 	})
-	if len(candidates) > searchVocabMaxCorrections {
-		candidates = candidates[:searchVocabMaxCorrections]
-	}
+	candidates = candidates[:min(len(candidates), searchVocabMaxCorrections)]
 
 	corrections := make([]string, len(candidates))
 	for i, candidate := range candidates {
@@ -246,13 +244,11 @@ func searchVocabSelectSQL(vocabTable string) (string, error) {
 	}
 }
 
+const searchVocabGenerationSQL = "SELECT generation FROM search_vocab_generations WHERE vocab_table = ?"
+
 func (app *Application) searchVocabIndex(ctx context.Context, vocabTable string) (*searchVocabIndex, error) {
 	var generation int64
-	err := app.DB.QueryRowContext(ctx, `
-		SELECT generation
-		FROM search_vocab_generations
-		WHERE vocab_table = ?
-	`, vocabTable).Scan(&generation)
+	err := app.DB.QueryRowContext(ctx, searchVocabGenerationSQL, vocabTable).Scan(&generation)
 	if err != nil {
 		return nil, err
 	}
@@ -269,11 +265,7 @@ func (app *Application) searchVocabIndex(ctx context.Context, vocabTable string)
 	}
 	defer tx.Rollback()
 
-	err = tx.QueryRowContext(ctx, `
-		SELECT generation
-		FROM search_vocab_generations
-		WHERE vocab_table = ?
-	`, vocabTable).Scan(&generation)
+	err = tx.QueryRowContext(ctx, searchVocabGenerationSQL, vocabTable).Scan(&generation)
 	if err != nil {
 		return nil, err
 	}
@@ -330,7 +322,7 @@ func (app *Application) searchVocabIndex(ctx context.Context, vocabTable string)
 	}
 	app.SearchVocab.set(vocabTable, generation, index)
 
-	if truncated && app.Logger != nil {
+	if truncated {
 		app.Logger.Warn("search vocabulary cache reached term limit", "vocab_table", vocabTable, "limit", searchVocabMaxTerms)
 	}
 	return index, nil

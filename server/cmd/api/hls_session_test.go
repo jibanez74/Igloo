@@ -962,8 +962,8 @@ func TestHLSTranscodeRoot(t *testing.T) {
 	// the only way the runtime config is used.
 	t.Run("a blank transcode dir falls back to the runtime config", func(t *testing.T) {
 		app.SetSettings(&database.Setting{TranscodeDir: "   "})
-		if got := app.hlsTranscodeRoot(); got != app.Config.effectiveTranscodeDir() {
-			t.Fatalf("hlsTranscodeRoot() = %q, want %q", got, app.Config.effectiveTranscodeDir())
+		if got := app.hlsTranscodeRoot(); got != app.Config.TranscodeDir {
+			t.Fatalf("hlsTranscodeRoot() = %q, want %q", got, app.Config.TranscodeDir)
 		}
 	})
 }

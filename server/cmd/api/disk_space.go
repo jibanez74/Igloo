@@ -5,10 +5,7 @@ package main
 import "syscall"
 
 // freeDiskBytes reports the space available at path to an unprivileged writer.
-//
-// Statfs_t types the block size differently on the two supported platforms
-// (int64 on Linux, uint32 on Darwin), but the conversion below compiles on
-// both, so this needs no per-platform variant.
+// The conversion compiles for Statfs_t's block size on Linux and Darwin alike.
 func freeDiskBytes(path string) (uint64, error) {
 	var stat syscall.Statfs_t
 

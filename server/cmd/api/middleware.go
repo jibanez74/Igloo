@@ -22,25 +22,16 @@ type deviceAuth struct {
 }
 
 func deviceAuthFrom(ctx context.Context) *deviceAuth {
-	auth, ok := ctx.Value(deviceAuthKey).(*deviceAuth)
-	if !ok {
-		return nil
-	}
+	auth, _ := ctx.Value(deviceAuthKey).(*deviceAuth)
 	return auth
 }
 
-// DeviceTokenAuth resolves "Authorization: Bearer igd_..." device tokens.
-// It is attached only to routes where device auth is part of the contract
-// (protected API routes, the watch-room WebSocket, and /api/auth/user), so
-// public pairing and login routes stay reachable with a stale token.
-// Requests without such a header pass through untouched; an invalid or
-// revoked token is rejected immediately rather than falling back to cookies.
-// The session is never written to, so bearer requests do not create session
-// rows.
-//
-// Resolved tokens are cached because a TV client re-authenticates on every HLS
-// segment, and the database runs on a single shared connection. Revocation
-// evicts the entry so a revoked token stops working immediately.
+// DeviceTokenAuth resolves "Authorization: Bearer igd_..." device tokens on the
+// routes where device auth is part of the contract, so public pairing and login
+// routes stay reachable with a stale token. Requests without such a header pass
+// through; an invalid or revoked token is rejected rather than falling back to
+// cookies, and the session is never written. Resolutions are cached because a
+// TV re-authenticates on every HLS segment; revocation evicts them.
 func (app *Application) DeviceTokenAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		header := r.Header.Get("Authorization")
@@ -74,10 +65,7 @@ func (app *Application) DeviceTokenAuth(next http.Handler) http.Handler {
 				return
 			}
 
-			if app.Logger != nil {
-				app.Logger.Error("failed to look up device token", "error", err)
-			}
-			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+			app.serverError(w, err, "failed to look up device token", internalServerErrorMessage)
 			return
 		}
 
@@ -85,7 +73,7 @@ func (app *Application) DeviceTokenAuth(next http.Handler) http.Handler {
 		// the spot; it must pair again (public pairing routes stay reachable).
 		if device.LastUsedAt < deviceInactivityCutoff(time.Now()) {
 			err = app.Queries.DeleteDevice(r.Context(), device.ID)
-			if err != nil && app.Logger != nil {
+			if err != nil {
 				app.Logger.Error("failed to delete stale device", "error", err, "device_id", device.ID)
 			}
 			app.forgetDevice(device.ID)
@@ -159,10 +147,7 @@ func (app *Application) LoadSessionReadOnly(next http.Handler) http.Handler {
 
 		ctx, err := app.SessionManager.Load(r.Context(), token)
 		if err != nil {
-			if app.Logger != nil {
-				app.Logger.Error("failed to load read-only session", "error", err)
-			}
-			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+			app.serverError(w, err, "failed to load read-only session", internalServerErrorMessage)
 			return
 		}
 
@@ -228,9 +213,7 @@ func (app *Application) touchDeviceLastUsed(ctx context.Context, deviceID int64)
 
 	err := app.Queries.UpdateDeviceLastUsed(ctx, deviceID)
 	if err != nil {
-		if app.Logger != nil {
-			app.Logger.Error("failed to update device last_used_at", "error", err)
-		}
+		app.Logger.Error("failed to update device last_used_at", "error", err)
 		return
 	}
 

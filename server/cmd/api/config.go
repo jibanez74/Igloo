@@ -88,17 +88,16 @@ type RuntimeConfig struct {
 // envFile is the optional startup seed file, read from the working directory.
 const envFile = ".env"
 
-func LoadRuntimeEnvFile() (string, bool, error) {
+// LoadRuntimeEnvFile reports whether envFile was found and loaded.
+func LoadRuntimeEnvFile() (bool, error) {
 	err := helpers.LoadEnvFile(envFile)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return "", false, nil
-		}
-
-		return "", false, fmt.Errorf("failed to load %s: %w", envFile, err)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
 	}
-
-	return envFile, true, nil
+	if err != nil {
+		return false, fmt.Errorf("failed to load %s: %w", envFile, err)
+	}
+	return true, nil
 }
 
 // viteDevServerURL returns the configured Vite dev server origin, trimmed and
@@ -119,6 +118,10 @@ func NewRuntimeConfig() (RuntimeConfig, error) {
 	}
 
 	config := RuntimeConfig{
+		DBPath:                     envString(envDBPath, defaultDBPath),
+		StaticDir:                  envString(envStaticDir, defaultStaticDir),
+		LogsDir:                    envString(envLogsDir, defaultLogsDir),
+		TranscodeDir:               envString(envTranscodeDir, defaultTranscodeDir),
 		Port:                       port,
 		Debug:                      debug,
 		LogToStdout:                envBool(envLogToStdout, debug),
@@ -137,60 +140,7 @@ func NewRuntimeConfig() (RuntimeConfig, error) {
 		ShowsDir:                   strings.TrimSpace(os.Getenv(envShowsDir)),
 		MusicDir:                   strings.TrimSpace(os.Getenv(envMusicDir)),
 	}
-	config.DBPath = config.effectiveDBPath()
-	config.StaticDir = config.effectiveStaticDir()
-	config.LogsDir = config.effectiveLogsDir()
-	config.TranscodeDir = config.effectiveTranscodeDir()
-
 	return config, nil
-}
-
-func (config RuntimeConfig) effectiveDBPath() string {
-	value := strings.TrimSpace(config.DBPath)
-	if value == "" {
-		return configuredDBPath()
-	}
-	return value
-}
-
-func (config RuntimeConfig) effectiveStaticDir() string {
-	value := strings.TrimSpace(config.StaticDir)
-	if value == "" {
-		return configuredStaticDir()
-	}
-	return value
-}
-
-func (config RuntimeConfig) effectiveLogsDir() string {
-	value := strings.TrimSpace(config.LogsDir)
-	if value == "" {
-		return configuredLogsDir()
-	}
-	return value
-}
-
-func (config RuntimeConfig) effectiveTranscodeDir() string {
-	value := strings.TrimSpace(config.TranscodeDir)
-	if value == "" {
-		return configuredTranscodeDir()
-	}
-	return value
-}
-
-func configuredDBPath() string {
-	return envString(envDBPath, defaultDBPath)
-}
-
-func configuredStaticDir() string {
-	return envString(envStaticDir, defaultStaticDir)
-}
-
-func configuredLogsDir() string {
-	return envString(envLogsDir, defaultLogsDir)
-}
-
-func configuredTranscodeDir() string {
-	return envString(envTranscodeDir, defaultTranscodeDir)
 }
 
 func configuredPort() (int, error) {
@@ -218,12 +168,12 @@ func envString(name string, fallback string) string {
 }
 
 func envBool(name string, fallback bool) bool {
-	value, ok := os.LookupEnv(name)
-	if !ok || strings.TrimSpace(value) == "" {
+	value := strings.TrimSpace(os.Getenv(name))
+	if value == "" {
 		return fallback
 	}
 
-	parsed, err := strconv.ParseBool(strings.TrimSpace(value))
+	parsed, err := strconv.ParseBool(value)
 	if err != nil {
 		slog.Warn("invalid boolean value for env var, using fallback", "env", name, "value", value, "fallback", fallback)
 		return fallback
