@@ -44,21 +44,17 @@ type tmdbClient struct {
 	movieCache     *cache.Cache
 }
 
-var _ TmdbInterface = (*tmdbClient)(nil)
-
 func New(apiKey string) (TmdbInterface, error) {
 	if apiKey == "" {
 		return nil, errors.New("TMDB_API_KEY environment variable is not set")
 	}
 
-	client := tmdbClient{
+	return &tmdbClient{
 		key:            apiKey,
 		baseURL:        tmdbBaseAPIURL,
 		httpClient:     &http.Client{Timeout: helpers.PROVIDER_HTTP_TIMEOUT},
 		maxRetries:     tmdbHTTPMaxRetries,
 		retryBaseDelay: tmdbHTTPRetryBaseDelay,
 		movieCache:     cache.New(tmdbMovieCacheTTL, tmdbMovieCacheCleanup),
-	}
-
-	return &client, nil
+	}, nil
 }

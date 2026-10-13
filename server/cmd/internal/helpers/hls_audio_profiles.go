@@ -24,12 +24,9 @@ const (
 	HLS_EXPLICIT_AUDIO_SAMPLE_RATE = 48000
 
 	// The HLS_LEGACY_AUDIO_* values describe the legacy stereo AAC fallback
-	// output. FFmpeg is driven from them in ffmpeg_hls.go and the
-	// X-Igloo-Effective-Audio-* headers are built from them in the API, so the
-	// two descriptions of the same output cannot drift apart. They are the
-	// output's own values, not the request ceilings above: changing what
-	// audio_channels accepts must not silently restyle this fallback. The
-	// bitrate is deliberately not part of the explicit bitrate table below.
+	// output, for both the FFmpeg arguments and the X-Igloo-Effective-Audio-*
+	// headers. They are the output's own values, independent of the request
+	// ceilings above and of the explicit bitrate table below.
 	HLS_LEGACY_AUDIO_ENCODER  = string(HLSAudioCodecAAC)
 	HLS_LEGACY_AUDIO_CHANNELS = 2
 	HLS_LEGACY_AUDIO_BITRATE  = "320k"
@@ -134,21 +131,16 @@ func HLSDefaultChannelLayoutName(channels int) string {
 // ResolveHLSAudioProfile turns a validated explicit request plus the selected
 // source stream's stored channel metadata into the profile FFmpeg runs.
 //
-// MaxChannels is a ceiling, never a target: a mono or stereo source is never
-// upmixed, a source within the ceiling keeps its channel count and stored
-// layout, and a source above it is downmixed to standard stereo or 5.1.
-// FFmpeg's -ac conversion rematrixes through libswresample, so center,
-// surround, and LFE content participate in every downmix rather than channels
-// being dropped. The caller must have verified sourceChannels > 0.
+// MaxChannels is a ceiling, never a target: a source within it keeps its
+// channel count and layout, and one above it is downmixed (FFmpeg's -ac
+// rematrixes every channel) to standard stereo or 5.1. The caller must have
+// verified sourceChannels > 0.
 func ResolveHLSAudioProfile(
 	request HLSAudioProfileRequest,
 	sourceChannels int,
 	sourceChannelLayout string,
 ) HLSResolvedAudioProfile {
-	channels := sourceChannels
-	if channels > request.MaxChannels {
-		channels = request.MaxChannels
-	}
+	channels := min(sourceChannels, request.MaxChannels)
 
 	layout := strings.TrimSpace(sourceChannelLayout)
 	downmixed := channels != sourceChannels

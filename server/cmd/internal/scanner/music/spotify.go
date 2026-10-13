@@ -3,6 +3,7 @@ package music
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -54,7 +55,7 @@ func (s *Scanner) upsertMusicSpotifyMatchAndCacheID(
 
 func resolvedSpotifyMatchFromError(err error) resolvedSpotifyMatch {
 	match := resolvedSpotifyMatch{status: musicSpotifyStatusFailed}
-	matchErr, ok := spotifyapi.AsMatchError(err)
+	matchErr, ok := errors.AsType[*spotifyapi.MatchError](err)
 	if !ok {
 		return match
 	}

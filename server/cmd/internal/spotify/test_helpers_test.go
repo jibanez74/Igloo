@@ -2,6 +2,7 @@ package spotify
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -69,7 +70,7 @@ func assertMatchReason(t *testing.T, err error, reason string) *MatchError {
 	if err == nil {
 		t.Fatalf("expected a %s match error, got nil", reason)
 	}
-	matchErr, ok := AsMatchError(err)
+	matchErr, ok := errors.AsType[*MatchError](err)
 	if !ok {
 		t.Fatalf("expected MatchError, got %T: %v", err, err)
 	}

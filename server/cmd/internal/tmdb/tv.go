@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -155,11 +156,8 @@ func (t *tmdbClient) getTV(ctx context.Context, path string, params url.Values, 
 	}
 	if body == nil {
 		var status int
-		requestParams := make(url.Values, len(params)+1)
-		for key, values := range params {
-			requestParams[key] = values
-		}
-		body, status, err = t.getJSON(ctx, t.requestURL(path, requestParams))
+		// requestURL adds the API key, which must stay out of the cache key.
+		body, status, err = t.getJSON(ctx, t.requestURL(path, maps.Clone(params)))
 		if err != nil {
 			return err
 		}

@@ -120,15 +120,10 @@ func (w *rotatingWriter) Write(p []byte) (int, error) {
 }
 
 // rotate renames the live file to its ".1" sibling (replacing any previous
-// one) and starts a fresh live file, so rotation cost is O(1) instead of
-// rewriting retained lines.
-//
-// No failed step may leave the writer over a closed file or a bufio.Writer
-// holding a sticky error, or one failed rotation would end logging for the
-// rest of the process. The live file is reopened for append instead and the
-// size counter starts over, so the entry that triggered the rotation (and,
-// after a failed flush, whatever was still buffered) is lost, and the next
-// attempt comes after another maxBytes of output.
+// one) and starts a fresh live file, an O(1) rotation. A failed step must not
+// leave the writer over a closed file or a sticky bufio error, which would end
+// logging for good: the live file is reopened for append and the size counter
+// restarts, losing only the triggering entry (and any unflushed buffer).
 func (w *rotatingWriter) rotate() error {
 	err := w.buf.Flush()
 	if err != nil {

@@ -17,15 +17,9 @@ func movieCacheKey(id int) string {
 }
 
 func (t *tmdbClient) getMovie(id int) (*TmdbMovie, bool) {
-	v, found := t.movieCache.Get(movieCacheKey(id))
-	if !found {
-		return nil, false
-	}
-	val, ok := v.(*TmdbMovie)
-	if !ok {
-		return nil, false
-	}
-	return val, true
+	v, _ := t.movieCache.Get(movieCacheKey(id))
+	movie, ok := v.(*TmdbMovie)
+	return movie, ok
 }
 
 func (t *tmdbClient) setMovie(id int, movie *TmdbMovie) {

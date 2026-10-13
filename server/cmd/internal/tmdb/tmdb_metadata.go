@@ -127,27 +127,20 @@ type TmdbMovie struct {
 // Certification returns the parental rating (e.g. PG-13, R) from TMDB release_dates.
 // Prefers US certification; otherwise returns the first non-empty certification from any country.
 func (m *TmdbMovie) Certification() string {
-	var usCert, firstCert string
+	firstCert := ""
 	for _, r := range m.ReleaseDates.Results {
 		for _, rd := range r.ReleaseDates {
 			c := strings.TrimSpace(rd.Certification)
 			if c == "" {
 				continue
 			}
+			if r.ISO3166_1 == tmdbCertificationCountry {
+				return c
+			}
 			if firstCert == "" {
 				firstCert = c
 			}
-			if r.ISO3166_1 == tmdbCertificationCountry {
-				usCert = c
-				break
-			}
 		}
-		if usCert != "" {
-			break
-		}
-	}
-	if usCert != "" {
-		return usCert
 	}
 	return firstCert
 }
@@ -162,8 +155,7 @@ func (t *tmdbClient) GetTmdbMovieByID(ctx context.Context, movie *TmdbMovie) err
 		return nil
 	}
 
-	params := url.Values{}
-	params.Add("append_to_response", "credits,videos,release_dates")
+	params := url.Values{"append_to_response": {"credits,videos,release_dates"}}
 
 	requestURL := t.requestURL(fmt.Sprintf("/movie/%d", movie.TmdbID), params)
 
@@ -191,9 +183,7 @@ func (t *tmdbClient) SearchMoviesByTitleAndYear(ctx context.Context, title strin
 		return nil, errors.New("movie title is required")
 	}
 
-	params := url.Values{}
-	params.Add("query", title)
-	params.Add("include_adult", "false")
+	params := url.Values{"query": {title}, "include_adult": {"false"}}
 
 	hasYear := len(year) > 0 && year[0] > 0
 	if hasYear {
@@ -222,17 +212,18 @@ func (t *tmdbClient) SearchMoviesByTitleAndYear(ctx context.Context, title strin
 }
 
 func (t *tmdbClient) GetMoviesInTheaters(ctx context.Context) ([]*TmdbMovie, error) {
-	params := url.Values{}
-	params.Add("language", tmdbRequestLanguage)
-	params.Add("page", "1")
-	params.Add("region", tmdbRequestRegion)
+	params := url.Values{"language": {tmdbRequestLanguage}, "page": {"1"}, "region": {tmdbRequestRegion}}
 
 	results, err := t.getMovieList(ctx, "/movie/now_playing", params, "unable to get movies in theaters from tmdb")
 	if err != nil {
 		return nil, err
 	}
 
-	return tmdbMoviePointers(results), nil
+	pointers := make([]*TmdbMovie, len(results))
+	for i := range results {
+		pointers[i] = &results[i]
+	}
+	return pointers, nil
 }
 
 func (t *tmdbClient) requestURL(path string, params url.Values) string {
@@ -262,22 +253,9 @@ func (t *tmdbClient) getMovieList(ctx context.Context, path string, params url.V
 	return response.Results, nil
 }
 
-func tmdbMoviePointers(movies []TmdbMovie) []*TmdbMovie {
-	ptrs := make([]*TmdbMovie, len(movies))
-	for i := range movies {
-		ptrs[i] = &movies[i]
-	}
-
-	return ptrs
-}
-
 func (t *tmdbClient) getJSON(ctx context.Context, requestURL string) ([]byte, int, error) {
-	maxAttempts := t.maxRetries
-	if maxAttempts < 1 {
-		maxAttempts = 1
-	}
-
-	for attempt := 0; attempt < maxAttempts; attempt++ {
+	maxAttempts := max(t.maxRetries, 1)
+	for attempt := 0; ; attempt++ {
 		err := ctx.Err()
 		if err != nil {
 			return nil, 0, err
@@ -291,45 +269,30 @@ func (t *tmdbClient) getJSON(ctx context.Context, requestURL string) ([]byte, in
 		req.Header.Add("Accept", "application/json")
 		req.Header.Add("Content-Type", "application/json")
 
+		// A transport or read failure, and a retryable status, are retried
+		// until the last attempt, which returns whatever it got.
+		var header http.Header
+		var bodyBytes []byte
 		resp, err := t.httpClient.Do(req)
+		if err == nil {
+			header = resp.Header
+			bodyBytes, err = io.ReadAll(resp.Body)
+			resp.Body.Close()
+		}
+
+		lastAttempt := attempt == maxAttempts-1
+		if err != nil && lastAttempt {
+			return nil, 0, err
+		}
+		if err == nil && (lastAttempt || !retryableTmdbStatus(resp.StatusCode)) {
+			return bodyBytes, resp.StatusCode, nil
+		}
+
+		err = sleepWithContext(ctx, t.retryDelay(header, attempt))
 		if err != nil {
-			if attempt == maxAttempts-1 {
-				return nil, 0, err
-			}
-			err = sleepWithContext(ctx, t.retryDelay(nil, attempt))
-			if err != nil {
-				return nil, 0, err
-			}
-			continue
+			return nil, 0, err
 		}
-
-		bodyBytes, readErr := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		if readErr != nil {
-			if attempt == maxAttempts-1 {
-				return nil, 0, readErr
-			}
-			err = sleepWithContext(ctx, t.retryDelay(resp.Header, attempt))
-			if err != nil {
-				return nil, 0, err
-			}
-			continue
-		}
-
-		if retryableTmdbStatus(resp.StatusCode) && attempt < maxAttempts-1 {
-			err = sleepWithContext(ctx, t.retryDelay(resp.Header, attempt))
-			if err != nil {
-				return nil, 0, err
-			}
-			continue
-		}
-
-		return bodyBytes, resp.StatusCode, nil
 	}
-
-	// Every path on the final attempt returns, so this is unreachable; Go still
-	// needs a terminating statement.
-	return nil, 0, errors.New("tmdb request failed")
 }
 
 func sleepWithContext(ctx context.Context, delay time.Duration) error {
@@ -388,29 +351,17 @@ func tmdbStatusError(statusCode int, fallback string) error {
 	return &StatusError{StatusCode: statusCode, Message: fallback}
 }
 
+// retryDelay honors a Retry-After header (seconds or an HTTP date, capped);
+// headers is nil after a transport failure, which Get reads as empty.
 func (t *tmdbClient) retryDelay(headers http.Header, attempt int) time.Duration {
-	if headers != nil {
-		retryAfter := strings.TrimSpace(headers.Get("Retry-After"))
-		if retryAfter != "" {
-			if seconds, err := strconv.Atoi(retryAfter); err == nil && seconds > 0 {
-				delay := time.Duration(seconds) * time.Second
-				if delay > tmdbHTTPRetryMaxDelay {
-					return tmdbHTTPRetryMaxDelay
-				}
-				return delay
-			}
-
-			if retryTime, err := http.ParseTime(retryAfter); err == nil {
-				delay := time.Until(retryTime)
-				if delay < 0 {
-					delay = 0
-				}
-				if delay > tmdbHTTPRetryMaxDelay {
-					return tmdbHTTPRetryMaxDelay
-				}
-				return delay
-			}
-		}
+	retryAfter := strings.TrimSpace(headers.Get("Retry-After"))
+	seconds, secondsErr := strconv.Atoi(retryAfter)
+	if secondsErr == nil && seconds > 0 {
+		return min(time.Duration(seconds)*time.Second, tmdbHTTPRetryMaxDelay)
+	}
+	retryTime, timeErr := http.ParseTime(retryAfter)
+	if timeErr == nil {
+		return min(max(time.Until(retryTime), 0), tmdbHTTPRetryMaxDelay)
 	}
 
 	delay := t.retryBaseDelay

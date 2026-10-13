@@ -1,6 +1,7 @@
 package music
 
 import (
+	"errors"
 	"strings"
 
 	"igloo/cmd/internal/scanner"
@@ -83,7 +84,7 @@ func shouldSplitCompoundArtistCreditsLocally(credits compoundArtistCredits) bool
 }
 
 func shouldSplitCompoundArtistCredits(err error) bool {
-	matchErr, ok := spotifyapi.AsMatchError(err)
+	matchErr, ok := errors.AsType[*spotifyapi.MatchError](err)
 	if !ok {
 		return false
 	}

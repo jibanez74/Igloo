@@ -59,17 +59,17 @@ func TestAsMatchError(t *testing.T) {
 	base := newMatchError(MatchDebugInfo{Lookup: "artist", Input: "Q", Reason: "no_results"}, nil)
 	wrapped := fmt.Errorf("scan artist failed: %w", base)
 
-	matchErr, ok := AsMatchError(wrapped)
+	matchErr, ok := errors.AsType[*MatchError](wrapped)
 	if !ok {
-		t.Fatalf("expected AsMatchError to find MatchError in %v", wrapped)
+		t.Fatalf("expected errors.AsType to find MatchError in %v", wrapped)
 	}
 	if matchErr.Info.Reason != "no_results" {
 		t.Fatalf("reason = %q, want no_results", matchErr.Info.Reason)
 	}
 
-	_, ok = AsMatchError(errors.New("plain error"))
+	_, ok = errors.AsType[*MatchError](errors.New("plain error"))
 	if ok {
-		t.Fatal("expected AsMatchError to reject a plain error")
+		t.Fatal("expected errors.AsType to reject a plain error")
 	}
 }
 
