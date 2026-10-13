@@ -33,6 +33,11 @@ export const Route = createFileRoute("/_auth")({
   // full-screen splash; the routes inside the shell pend in its content area.
   pendingComponent: AppLoadingScreen,
   errorComponent: AppLoadError,
+  // Only the layout is split off. The error card must render when the server
+  // cannot be reached, so it cannot wait on a chunk from that server: a
+  // failed chunk makes the router reload the page onto the browser's offline
+  // screen.
+  codeSplitGroupings: [["component"]],
   component: AuthLayout,
 });
 
