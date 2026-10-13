@@ -47,15 +47,12 @@ const SETTINGS_HEAD = routeHead(
 export const Route = createFileRoute("/_auth/settings")({
   head: () => SETTINGS_HEAD,
   beforeLoad: async ({ context, location }) => {
+    // The shell's guard has just revalidated this entry and stops on any
+    // failure, so an error cannot reach here.
     const authData = await context.queryClient.fetchQuery(
       authUserQueryOpts(),
     );
-    if (authData.error) {
-      throw redirect({
-        to: "/login",
-        search: { redirect: location.href },
-      });
-    }
+    if (authData.error) return;
 
     const { redirectTo } = computeSettingsLayoutState({
       isAdmin: authData.data.user.is_admin,

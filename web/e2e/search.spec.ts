@@ -122,7 +122,6 @@ async function mockSearchApi(page: Page) {
 
       const results = resultsByPath[url.pathname];
       if (results) {
-        requestedSearchRequests.push(`${url.pathname}${url.search}`);
         await fulfillJSON(route, results);
         return true;
       }
@@ -134,6 +133,15 @@ async function mockSearchApi(page: Page) {
 
       return false;
     },
+  });
+
+  // Counted once answered: under the dev server's StrictMode every observer
+  // mounts twice, and the query aborts the request the first mount started.
+  page.on("requestfinished", request => {
+    const url = new URL(request.url());
+    if (resultsByPath[url.pathname]) {
+      requestedSearchRequests.push(`${url.pathname}${url.search}`);
+    }
   });
 
   return {

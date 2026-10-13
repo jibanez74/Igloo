@@ -597,7 +597,9 @@ collapse, while the mobile trigger controls the sheet.
   `lib/input-styles.ts` (an allowlisted raw-color exception, §1.2).
 - Content: `px-4 py-6 sm:px-6 lg:px-8`; when the mini audio player is visible
   the shell adds `MINI_PLAYER_CLEARANCE_PADDING_CLASS` (`pb-28 sm:pb-24`) so
-  content never hides behind it. **Scrolling happens on the window** — virtual
+  content never hides behind it. The desktop sidebar column takes the same
+  class, so its footer (Logout) sits above the full-width bar instead of under
+  it; the mobile sheet opens above the bar and needs none. **Scrolling happens on the window** — virtual
   lists must use `useWindowVirtualizer` (§3.4), never a nested scroll
   container. For the same reason the content column clips with
   `overflow-x-clip`, not `overflow-x-hidden`/`auto`: those create a scroll
@@ -1045,6 +1047,20 @@ is unknown or empty.
     failure), Try again inside that alert only when the caller passes
     `onRetry`, and a **required** "Back to Movies/TV Shows/Music/Home"
     outline link, so the page never dead-ends.
+  - The shell's own auth check gets no answer (offline, the server down, a
+    proxy error) → `AppLoadError` (`components/app/AppLoadingScreen.tsx`),
+    the `_auth` layout's `errorComponent`: `AppLoadingScreen`'s frame with an
+    `h1` "Igloo", a `role="alert"` "Couldn’t load Igloo." and the shared
+    `RetryButton`, which re-runs the check (`router.invalidate()`). Only a
+    401 means signed out, so a failure never sends a signed-in reader to log
+    in. No route inside the shell has its own boundary, so the same card
+    catches a page that fails to render ("Couldn’t load this page.").
+  - The session ends mid-visit (expired, revoked, the user deleted) → a 401
+    from any request whose caller does not answer one itself
+    (`handlesUnauthorized`: login, logout, the current password or PIN)
+    signs the reader out through `useEndSession`: playback stops, an info
+    toast says "You've been signed out.", and the login page returns to the
+    page they were on.
   - A mutation → **toast** via `toast-helpers.ts`, never inline.
   - **The UI owns the words for failures it can name.** `apiRequest` stamps the
     HTTP `status` on every failure envelope it returns, and a surface maps the
@@ -1247,7 +1263,9 @@ require the full playback test pass.
   description through `apiErrorMessage`, so only a server-worded 4xx reaches
   the reader and a 5xx constant or the client's canned 404/network string
   never does. Inline error text and load-error cards make the same choice
-  with `apiErrorMessage(res, fallback)`.
+  with `apiErrorMessage(res, fallback)`. `showInfo` carries neutral news
+  that no action of the reader's caused; the session-expiry sign-out (§3.4)
+  is its app-wide use.
 - **NotificationBell** (header): ghost icon button with a glacier unread
   badge pill ("99+" cap; count also in the `aria-label`), opening a `w-80
   bg-card` popover — header row with "Mark all read", `max-h-96` scroll body

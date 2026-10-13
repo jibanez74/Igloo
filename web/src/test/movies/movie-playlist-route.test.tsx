@@ -68,20 +68,22 @@ function mockPlaylistsFetch(playlists: Record<number, MockPlaylist>) {
     }
 
     const list = url.match(
-      /^\/api\/movies\/playlists\/(\d+)\/movies\?page=1&per_page=\d+&sort=(asc|desc)$/,
+      /^\/api\/movies\/playlists\/(\d+)\/movies\?page=(\d+)&per_page=(\d+)&sort=(asc|desc)$/,
     );
     const listed = list ? playlists[Number(list[1])] : undefined;
     if (list && listed) {
-      const movies =
-        list[2] === "asc" ? listed.movies : [...listed.movies].reverse();
+      const page = Number(list[2]);
+      const perPage = Number(list[3]);
+      const sorted =
+        list[4] === "asc" ? listed.movies : [...listed.movies].reverse();
       return jsonResponse({
         error: false,
         data: {
-          movies,
-          total: movies.length,
-          page: 1,
-          per_page: MOVIES_PER_PAGE,
-          total_pages: 1,
+          movies: sorted.slice((page - 1) * perPage, page * perPage),
+          total: sorted.length,
+          page,
+          per_page: perPage,
+          total_pages: Math.max(1, Math.ceil(sorted.length / perPage)),
         },
       });
     }
@@ -384,5 +386,67 @@ describe("movie playlist route", () => {
     expect(listRequests).toEqual([
       `/api/movies/playlists/12/movies?page=1&per_page=${MOVIES_PER_PAGE}&sort=asc`,
     ]);
+  });
+  describe("page and sort in the URL", () => {
+    // Two pages: MOVIES_PER_PAGE on the first, six on the second.
+    const manyMovies = Array.from({ length: MOVIES_PER_PAGE + 6 }, (_, index) =>
+      movie(index + 1, `Movie ${String(index + 1).padStart(2, "0")}`, 2000),
+    );
+
+    const listRequests = (fetchMock: ReturnType<typeof mockPlaylistFetch>) =>
+      fetchMock.mock.calls
+        .map(([input]) => requestURL(input as RequestInfo | URL))
+        .filter(url => url.startsWith("/api/movies/playlists/11/movies"));
+
+    it("opens on the page and sort the link names", async () => {
+      const fetchMock = mockPlaylistFetch(manyMovies);
+
+      await renderRoute("/movies/playlist/11?page=2&sort=desc");
+
+      // Descending, the second page holds the six lowest titles.
+      expect(await screen.findByText("Movie 06")).toBeInTheDocument();
+      expect(screen.queryByText("Movie 07")).not.toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Sorted Z to A, click to sort A to Z" }),
+      ).toBeInTheDocument();
+      expect(listRequests(fetchMock)).toEqual([
+        `/api/movies/playlists/11/movies?page=2&per_page=${MOVIES_PER_PAGE}&sort=desc`,
+      ]);
+    });
+
+    it("writes a page change and a sort change to the URL", async () => {
+      mockPlaylistFetch(manyMovies);
+      const user = userEvent.setup();
+
+      const { router } = await renderRoute("/movies/playlist/11");
+
+      expect(router.state.location.search).toEqual({});
+      await user.click(await screen.findByRole("button", { name: "Go to page 2" }));
+      await waitFor(() => {
+        expect(router.state.location.search).toEqual({ page: 2 });
+      });
+      expect(await screen.findByText("Movie 30")).toBeInTheDocument();
+
+      // Re-sorting starts over on the first page, which the URL leaves out.
+      await user.click(
+        screen.getByRole("button", { name: "Sorted A to Z, click to sort Z to A" }),
+      );
+      await waitFor(() => {
+        expect(router.state.location.search).toEqual({ sort: "desc" });
+      });
+      expect(await screen.findByText("Movie 07")).toBeInTheDocument();
+      expect(screen.queryByText("Movie 06")).not.toBeInTheDocument();
+    });
+
+    it("walks an out-of-range page back to the last real page", async () => {
+      mockPlaylistFetch(manyMovies);
+
+      const { router } = await renderRoute("/movies/playlist/11?page=9");
+
+      await waitFor(() => {
+        expect(router.state.location.search).toEqual({ page: 2 });
+      });
+      expect(await screen.findByText("Movie 30")).toBeInTheDocument();
+    });
   });
 });

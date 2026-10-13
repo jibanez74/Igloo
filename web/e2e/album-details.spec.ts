@@ -119,6 +119,31 @@ test("audio player like button toggles the current track's liked state", async (
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
+// The mini bar spans the full width over the fixed sidebar, whose footer
+// holds Logout; a pointer must still reach it while music plays.
+test("the sidebar's Logout stays clickable above the mini bar", async ({ page }) => {
+  const browserIssues = trackBrowserIssues(page);
+  const unexpectedApiRequests = await mockAlbumDetailsApi(page);
+
+  await page.setViewportSize(VIEWPORTS.desktop);
+  await page.goto(`/music/album/${GLACIER_SESSIONS_ID}`);
+  await expect(page.getByRole("heading", { level: 1, name: "Glacier Sessions" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Play Northern Drift" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Minimize player (Escape)" }).click();
+  const miniBar = page.getByRole("region", { name: "Audio player" });
+  await expect(miniBar).toBeVisible();
+
+  const logout = page.getByRole("button", { name: "Logout" });
+  // A trial click runs Playwright's hit-target check without logging out.
+  await logout.click({ trial: true, timeout: 5_000 });
+  const logoutBox = await logout.boundingBox();
+  const barBox = await miniBar.boundingBox();
+  expect(logoutBox && barBox && logoutBox.y + logoutBox.height <= barBox.y).toBe(true);
+
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
+});
+
 test("artist links navigate to the musician details page", async ({ page }) => {
   const browserIssues = trackBrowserIssues(page);
   const unexpectedApiRequests = await mockAlbumDetailsApi(page);
@@ -186,6 +211,32 @@ test("a slow auth re-check on navigation keeps the shell and the current page", 
   await expect(page.getByRole("heading", { level: 1, name: "Aurora Pines" })).toBeVisible();
 
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);
+});
+
+// With the server gone, nothing it serves can load: neither the auth check
+// nor a route chunk. The shell's error card must not depend on one (in the
+// production build a failed chunk makes the router reload the page onto the
+// browser's offline screen).
+test("an unreachable server on navigation shows the shell's load error, and Try again recovers", async ({ page }) => {
+  await mockAlbumDetailsApi(page);
+
+  await page.setViewportSize(VIEWPORTS.desktop);
+  await page.goto(`/music/album/${GLACIER_SESSIONS_ID}`);
+  await expect(page.getByRole("heading", { level: 1, name: "Glacier Sessions" })).toBeVisible();
+
+  // Registered last, so it answers before the API mock.
+  await page.route("**/*", route => route.abort("connectionrefused"));
+  // A route this visit has not loaded, so its chunk is missing too.
+  await page.getByRole("link", { name: "TV Shows" }).first().click();
+
+  await expect(page.getByRole("alert")).toHaveText("Couldn’t load Igloo.");
+  await expect(page).toHaveURL(/\/tv-shows/);
+
+  await page.unroute("**/*");
+  await page.getByRole("button", { name: "Try again" }).click();
+
+  await expect(page.getByRole("button", { name: "Logout" })).toBeVisible();
+  await expect(page.getByText("Couldn’t load Igloo.")).toHaveCount(0);
 });
 
 test("album details holds its layout at every breakpoint", async ({ page }) => {

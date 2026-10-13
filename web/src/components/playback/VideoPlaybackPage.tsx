@@ -37,6 +37,7 @@ import {
   toMediaPlaybackTime,
 } from "@/lib/video-playback";
 import {
+  markNextEpisodesStale,
   refreshWatchQueries,
   staysOnCurrentPlayback,
   synchronizePlaybackExit,
@@ -780,6 +781,7 @@ export default function VideoPlaybackPage({
     queryClient.removeQueries({
       queryKey: mediaWatchProgressQueryKey(media),
     });
+    void markNextEpisodesStale(queryClient, media);
     dismissResumeDecision();
   };
 

@@ -8,7 +8,7 @@ import {
   SEARCH_PER_PAGE,
 } from "@/lib/constants";
 import { runContentFadeTransitionTimeout } from "../helpers/content-fade-transition";
-import { jsonResponse } from "../helpers/api";
+import { jsonResponse, requestURL } from "../helpers/api";
 import { readDocumentHead, renderRoute } from "../helpers/render-route";
 import { restoreMatchMedia, setReducedMotionPreference } from "../helpers/dom";
 
@@ -246,6 +246,49 @@ describe("search route", () => {
         page: 3,
       });
     });
+  });
+
+  // The query a new search leaves behind has no observer, so its request is
+  // aborted instead of finishing for nobody.
+  it("aborts a search that a newer one replaces before it answers", async () => {
+    const { router } = await renderSearchRoute("/search/?q=Casino&tab=all");
+    await screen.findByText("Casino Royale");
+
+    let slowSignal: AbortSignal | null | undefined;
+    const emptyCategory = { results: [], total: 0 };
+    const suiteFetch = globalThis.fetch;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = requestURL(input);
+        if (url === "/api/search?q=Slow") {
+          slowSignal = init?.signal;
+          return new Promise<Response>(() => {});
+        }
+        if (url !== "/api/search?q=Fast") {
+          return suiteFetch(input, init);
+        }
+        return jsonResponse({
+          error: false,
+          data: {
+            query: "Fast",
+            movies: emptyCategory,
+            shows: emptyCategory,
+            albums: emptyCategory,
+            musicians: emptyCategory,
+            tracks: emptyCategory,
+          },
+        });
+      }),
+    );
+
+    await router.navigate({ to: "/search", search: { q: "Slow", tab: "all" } });
+    await waitFor(() => expect(slowSignal).toBeInstanceOf(AbortSignal));
+    expect(slowSignal?.aborted).toBe(false);
+
+    await router.navigate({ to: "/search", search: { q: "Fast", tab: "all" } });
+
+    await waitFor(() => expect(slowSignal?.aborted).toBe(true));
   });
 
   it("links show results to the show details route", async () => {

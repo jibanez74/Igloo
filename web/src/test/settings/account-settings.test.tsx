@@ -12,6 +12,7 @@ const showValidationErrorMock = vi.fn();
 const showActionFailedMock = vi.fn();
 const showSuccessMock = vi.fn();
 const showErrorMock = vi.fn();
+const showInfoMock = vi.fn();
 
 vi.mock("@/components/app/AppShell", () => ({
   default: ({ children }: { children: React.ReactNode }) => (
@@ -25,6 +26,7 @@ vi.mock("@/lib/toast-helpers", () => ({
   showActionFailed: (...args: unknown[]) => showActionFailedMock(...args),
   showSuccess: (...args: unknown[]) => showSuccessMock(...args),
   showError: (...args: unknown[]) => showErrorMock(...args),
+  showInfo: (...args: unknown[]) => showInfoMock(...args),
 }));
 
 type CapturedRequest = {
@@ -61,11 +63,13 @@ type AccountFetchOptions = {
   avatarResponse?: Promise<Response>;
   /** Saves a name change; by default the server refuses it as taken. */
   acceptName?: boolean;
+  /** Answers a password change as the server does a wrong current password. */
+  rejectPassword?: boolean;
 };
 
 function setupAccountFetch(
   user: AuthUser = testUser(),
-  { avatarResponse, acceptName = false }: AccountFetchOptions = {},
+  { avatarResponse, acceptName = false, rejectPassword = false }: AccountFetchOptions = {},
 ) {
   const requests: CapturedRequest[] = [];
   let currentUser: AuthUser | null = user;
@@ -96,6 +100,12 @@ function setupAccountFetch(
     }
 
     if (url === "/api/user/password" && method === "PUT") {
+      if (rejectPassword) {
+        return jsonResponse(
+          { error: true, message: "current password is incorrect" },
+          401,
+        );
+      }
       return jsonResponse({
         error: false,
         message: "Password updated successfully",
@@ -319,6 +329,28 @@ describe("Account settings", () => {
     }
   });
 
+  // The server answers a wrong current password with a 401, which here is
+  // about the password, not the session.
+  it("keeps a wrong current password on the form instead of signing out", async () => {
+    const user = userEvent.setup();
+    const { router } = await renderAccountRoute(testUser(), { rejectPassword: true });
+
+    await user.type(screen.getByLabelText("Current password"), "WrongPass123");
+    await user.type(screen.getByLabelText("New password"), "NewPass12345");
+    await user.type(screen.getByLabelText("Confirm new password"), "NewPass12345");
+    await user.click(screen.getByRole("button", { name: "Update Password" }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Current password")).toHaveAttribute(
+        "aria-invalid",
+        "true",
+      );
+    });
+    expect(screen.getByRole("alert")).toHaveTextContent("current password is incorrect");
+    expect(router.state.location.pathname).toBe("/settings/account");
+    expect(showInfoMock).not.toHaveBeenCalled();
+  });
+
   it("keeps the hidden username autocomplete helper labeled for password managers", async () => {
     await renderAccountRoute();
 
@@ -453,6 +485,8 @@ describe("Account settings", () => {
     );
     expect(requestsFor(requests, "DELETE", "/api/user")).toHaveLength(1);
     expect(requestsFor(requests, "DELETE", "/api/auth/logout")).toHaveLength(0);
+    // The reader ended this session on purpose; it is no expiry to announce.
+    expect(showInfoMock).not.toHaveBeenCalled();
     // The login guard knows the session is gone, so nothing asks for the
     // user again (that 401 used to land in the cache under the old page),
     // and nothing the deleted account loaded stays cached.

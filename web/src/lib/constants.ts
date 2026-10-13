@@ -145,7 +145,7 @@ export const LIBRARY_NOUNS = {
   track: { singular: "track", plural: "tracks" },
 } as const;
 
-// Route search defaults: what each index route's schema fills in when the URL
+// Route search defaults: what each paged route's schema fills in when the URL
 // says nothing, and what its `stripSearchParams` middleware removes again on
 // navigation, so a URL spells out only what differs from the default. Links
 // and loaders read the same objects, and test/lib/route-search.test.ts pins
@@ -156,6 +156,11 @@ export const MOVIES_INDEX_DEFAULT_SEARCH = {
   sort: "asc" as const,
   genresPage: 1,
   playlistsPage: 1,
+};
+
+export const MOVIE_PLAYLIST_DEFAULT_SEARCH = {
+  page: 1,
+  sort: "asc" as const,
 };
 
 /** Search when opening /movies on the Playlists tab (e.g. back link from a movie playlist). */
@@ -763,7 +768,8 @@ export const LIBRARY_TAB_TRIGGER_CLASS = "min-h-10 min-w-0 p-2 sm:px-4";
 /**
  * Clearance for the fixed audio mini player (AudioPlayer.tsx). Both values
  * encode the same player-bar height and must change together: the shell pads
- * its content so pages scroll clear of the bar, and in-page sticky bottom
+ * its content so pages scroll clear of the bar, the desktop sidebar pads its
+ * column so the footer's Logout sits above it, and in-page sticky bottom
  * elements offset above it.
  */
 export const MINI_PLAYER_CLEARANCE_PADDING_CLASS = "pb-28 sm:pb-24";

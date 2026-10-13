@@ -117,9 +117,47 @@ type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 type ApiRequestOptions = {
   method?: HttpMethod;
   body?: unknown;
-  /** Aborting resolves the usual network-failure envelope; it never throws. */
+  /**
+   * Aborting resolves the usual network-failure envelope; it never throws.
+   * Each query factory passes its query's signal through the GET helpers, so
+   * a request nobody observes any more is aborted, and React Query, which has
+   * already settled that query, discards the envelope.
+   */
   signal?: AbortSignal;
+  /**
+   * The caller answers a 401 itself: the credentials the request carried
+   * were wrong (login, the current password or PIN), or, for logout, the
+   * session had already ended. Any other 401 means the server ended the
+   * session, which onSessionExpired reports.
+   */
+  handlesUnauthorized?: boolean;
 };
+
+const sessionExpiredListeners = new Set<() => void>();
+
+/**
+ * Calls `listener` whenever the server answers a request with a 401 the
+ * caller does not handle itself: the session has expired, was revoked, or
+ * its user is gone. Returns the unsubscribe function.
+ */
+export function onSessionExpired(listener: () => void) {
+  sessionExpiredListeners.add(listener);
+  return () => {
+    sessionExpiredListeners.delete(listener);
+  };
+}
+
+function notifySessionExpired() {
+  for (const listener of sessionExpiredListeners) {
+    listener();
+  }
+}
+
+function warnUnlessAborted(endpoint: string, err: unknown) {
+  if (!(err instanceof DOMException && err.name === "AbortError")) {
+    console.warn(`apiRequest failed: ${endpoint}`, err);
+  }
+}
 
 function withQuery(path: string, params: Record<string, string | number | boolean>) {
   const query = new URLSearchParams();
@@ -136,7 +174,7 @@ function getPage<T extends Record<string, unknown>>(
   path: string,
   page: number,
   perPage: number,
-  sort?: SortOrder,
+  { sort, signal }: { sort?: SortOrder; signal?: AbortSignal } = {},
 ) {
   return apiRequest<T>(
     withQuery(path, {
@@ -144,6 +182,7 @@ function getPage<T extends Record<string, unknown>>(
       per_page: perPage,
       ...(sort === undefined ? {} : { sort }),
     }),
+    { signal },
   );
 }
 
@@ -155,30 +194,41 @@ async function apiRequest<T extends Record<string, unknown>>(
   endpoint: string,
   options: ApiRequestOptions = {},
 ): Promise<ApiResponseType<T>> {
-  const { method = "GET", body, signal } = options;
+  const { method = "GET", body, signal, handlesUnauthorized = false } = options;
 
+  let res: Response;
   try {
-    const res = await fetch(endpoint, {
+    res = await fetch(endpoint, {
       method,
       credentials: "include",
       headers: body ? { "Content-Type": "application/json" } : undefined,
       body: body ? JSON.stringify(body) : undefined,
       signal,
     });
+  } catch (err) {
+    warnUnlessAborted(endpoint, err);
+    return NETWORK_ERROR;
+  }
 
-    if (res.status === 404) {
-      return ERROR_NOTFOUND;
-    }
+  // Before the body is read, so a 401 a proxy answered without JSON still
+  // counts, and outside the try, so a listener's own failure is not reported
+  // as a network error.
+  if (res.status === 401 && !handlesUnauthorized) {
+    notifySessionExpired();
+  }
 
+  if (res.status === 404) {
+    return ERROR_NOTFOUND;
+  }
+
+  try {
     const data = (await res.json()) as ApiResponseType<T>;
     // Stamp the status so a surface can word a failure by what happened
     // (401 on login, 403 on a room) while keeping the server's message as its
     // fallback.
     return data.error ? { ...data, status: res.status } : data;
   } catch (err) {
-    if (!(err instanceof DOMException && err.name === "AbortError")) {
-      console.warn(`apiRequest failed: ${endpoint}`, err);
-    }
+    warnUnlessAborted(endpoint, err);
     return NETWORK_ERROR;
   }
 }
@@ -191,15 +241,17 @@ export const login = (email: string, password: string) =>
   apiRequest("/api/auth/login", {
     method: "POST",
     body: { email, password },
+    handlesUnauthorized: true,
   });
 
 export const logout = () =>
   apiRequest("/api/auth/logout", {
     method: "DELETE",
+    handlesUnauthorized: true,
   });
 
-export const getAuthUser = () =>
-  apiRequest<{ user: AuthUser }>("/api/auth/user");
+export const getAuthUser = (signal?: AbortSignal) =>
+  apiRequest<{ user: AuthUser }>("/api/auth/user", { signal });
 
 // ============================================================================
 // Devices (Quick Connect)
@@ -217,8 +269,8 @@ export const approveQuickConnect = (code: string) =>
     body: { code },
   });
 
-export const getDevices = () =>
-  apiRequest<DevicesListResponseType>("/api/devices");
+export const getDevices = (signal?: AbortSignal) =>
+  apiRequest<DevicesListResponseType>("/api/devices", { signal });
 
 export const renameDevice = (id: number, name: string) =>
   apiRequest(`/api/devices/${id}`, {
@@ -254,16 +306,18 @@ export const updateUserPassword = (
   apiRequest("/api/user/password", {
     method: "PUT",
     body: { current_password: currentPassword, new_password: newPassword },
+    handlesUnauthorized: true,
   });
 
-export const getUserPin = () =>
-  apiRequest<{ pin: string | null }>("/api/user/pin");
+export const getUserPin = (signal?: AbortSignal) =>
+  apiRequest<{ pin: string | null }>("/api/user/pin", { signal });
 
 export const updateUserPin = (pin: string, currentPin?: string) =>
   apiRequest<{ user: AuthUser }>("/api/user/pin", {
     method: "PUT",
     body:
       currentPin === undefined ? { pin } : { pin, current_pin: currentPin },
+    handlesUnauthorized: true,
   });
 
 export const updateUserAvatar = (avatar: string) =>
@@ -286,6 +340,10 @@ export const uploadUserAvatar = async (
       body: formData,
       credentials: "include",
     });
+
+    if (response.status === 401) {
+      notifySessionExpired();
+    }
 
     if (response.status === 404) {
       return ERROR_NOTFOUND;
@@ -335,12 +393,13 @@ export const createNotification = (body: CreateNotificationRequest): Promise<Cre
     body,
   });
 
-export const getNotifications = () =>
-  apiRequest<NotificationsListResponseType>("/api/notifications");
+export const getNotifications = (signal?: AbortSignal) =>
+  apiRequest<NotificationsListResponseType>("/api/notifications", { signal });
 
-export const getUnreadNotificationCount = () =>
+export const getUnreadNotificationCount = (signal?: AbortSignal) =>
   apiRequest<UnreadNotificationCountResponseType>(
     "/api/notifications/unread-count",
+    { signal },
   );
 
 export const markNotificationRead = (id: number) =>
@@ -356,70 +415,93 @@ export const deleteNotification = (id: number) =>
 // Home / catalog + external metadata (TMDB / Spotify)
 // ============================================================================
 
-export const getLatestAlbums = () =>
-  apiRequest<LatestAlbumsResponseType>("/api/music/albums/latest");
+export const getLatestAlbums = (signal?: AbortSignal) =>
+  apiRequest<LatestAlbumsResponseType>("/api/music/albums/latest", { signal });
 
-export const getLatestMovies = () =>
-  apiRequest<{ movies: LatestMovieType[] }>("/api/movies/latest");
+export const getLatestMovies = (signal?: AbortSignal) =>
+  apiRequest<{ movies: LatestMovieType[] }>("/api/movies/latest", { signal });
 
-export const getLatestShows = () =>
-  apiRequest<LatestShowsDataType>("/api/shows/latest");
+export const getLatestShows = (signal?: AbortSignal) =>
+  apiRequest<LatestShowsDataType>("/api/shows/latest", { signal });
 
-export const getShowDetails = (id: number) =>
-  apiRequest<ShowDetailsDataType>(`/api/shows/details/${id}`);
+export const getShowDetails = (id: number, signal?: AbortSignal) =>
+  apiRequest<ShowDetailsDataType>(`/api/shows/details/${id}`, { signal });
 
-export const getShowSeasonEpisodes = (showId: number, seasonNumber: number) =>
+export const getShowSeasonEpisodes = (
+  showId: number,
+  seasonNumber: number,
+  signal?: AbortSignal,
+) =>
   apiRequest<ShowSeasonEpisodesDataType>(
     `/api/shows/${showId}/seasons/${seasonNumber}/episodes`,
+    { signal },
   );
 
-export const getShowEpisode = (episodeId: number) =>
-  apiRequest<ShowEpisodePlaybackDataType>(`/api/shows/episodes/${episodeId}`);
+export const getShowEpisode = (episodeId: number, signal?: AbortSignal) =>
+  apiRequest<ShowEpisodePlaybackDataType>(
+    `/api/shows/episodes/${episodeId}`,
+    { signal },
+  );
 
-export const getShowEpisodeTechnicalDetails = (episodeId: number) =>
+export const getShowEpisodeTechnicalDetails = (
+  episodeId: number,
+  signal?: AbortSignal,
+) =>
   apiRequest<ShowEpisodeTechnicalDetailsDataType>(
     `/api/shows/episodes/${episodeId}/technical-details`,
+    { signal },
   );
 
 export const getShowsLibrary = (
   page: number,
   perPage: number = SHOWS_PER_PAGE,
   sort: SortOrder = "asc",
-) => getPage<ShowsLibraryDataType>("/api/shows/library", page, perPage, sort);
+  signal?: AbortSignal,
+) =>
+  getPage<ShowsLibraryDataType>(
+    "/api/shows/library",
+    page,
+    perPage,
+    { sort, signal },
+  );
 
-export const getShowGenresWithCounts = () =>
-  apiRequest<ShowGenresDataType>("/api/shows/genres");
+export const getShowGenresWithCounts = (signal?: AbortSignal) =>
+  apiRequest<ShowGenresDataType>("/api/shows/genres", { signal });
 
 export const getShowsByGenre = (
   genreId: number,
   page: number,
   perPage: number = SHOWS_PER_PAGE,
   sort: SortOrder = "asc",
+  signal?: AbortSignal,
 ) =>
   getPage<ShowsLibraryDataType>(
     `/api/shows/genres/${genreId}/shows`,
     page,
     perPage,
-    sort,
+    { sort, signal },
   );
 
-export const getShowsStats = () =>
-  apiRequest<ShowsStatsDataType>("/api/shows/stats");
+export const getShowsStats = (signal?: AbortSignal) =>
+  apiRequest<ShowsStatsDataType>("/api/shows/stats", { signal });
 
-export const getContinueWatching = () =>
-  apiRequest<ContinueWatchingDataType>("/api/continue-watching");
+export const getContinueWatching = (signal?: AbortSignal) =>
+  apiRequest<ContinueWatchingDataType>("/api/continue-watching", { signal });
 
-export const getMoviesInTheaters = () =>
-  apiRequest<{ movies: TheaterMovieType[] }>("/api/tmdb/movies/in-theaters");
+export const getMoviesInTheaters = (signal?: AbortSignal) =>
+  apiRequest<{ movies: TheaterMovieType[] }>(
+    "/api/tmdb/movies/in-theaters",
+    { signal },
+  );
 
-export const getMovieInTheaterDetails = (id: number) =>
-  apiRequest<{ movie: MovieDetailsType }>(`/api/tmdb/movies/${id}`);
+export const getMovieInTheaterDetails = (id: number, signal?: AbortSignal) =>
+  apiRequest<{ movie: MovieDetailsType }>(`/api/tmdb/movies/${id}`, { signal });
 
-export const getTmdbStatus = () =>
-  apiRequest<TmdbStatusType>("/api/tmdb/status");
+export const getTmdbStatus = (signal?: AbortSignal) =>
+  apiRequest<TmdbStatusType>("/api/tmdb/status", { signal });
 
-export const getSpotifyStatus = () =>
-  apiRequest<SpotifyStatusType>("/api/spotify/status");
+export const getSpotifyStatus = (signal?: AbortSignal) =>
+  apiRequest<SpotifyStatusType>("/api/spotify/status", { signal });
 
 export const searchTmdbMovies = (body: TmdbSearchMoviesRequest) =>
   apiRequest<{ results: TmdbSearchResultType[] }>("/api/tmdb/movies/search", {
@@ -449,12 +531,16 @@ export const searchSpotifyTracks = (body: SpotifyTrackSearchRequest) =>
 // Movies library (details, metadata editing, browsing, likes, watch progress)
 // ============================================================================
 
-export const getMovieDetails = (id: number) =>
-  apiRequest<LibraryMovieDetailsResponse>(`/api/movies/details/${id}`);
+export const getMovieDetails = (id: number, signal?: AbortSignal) =>
+  apiRequest<LibraryMovieDetailsResponse>(
+    `/api/movies/details/${id}`,
+    { signal },
+  );
 
-export const getMovieTechnicalDetails = (id: number) =>
+export const getMovieTechnicalDetails = (id: number, signal?: AbortSignal) =>
   apiRequest<MovieTechnicalDetailsResponse>(
     `/api/movies/${id}/technical-details`,
+    { signal },
   );
 
 export const identifyMovie = (movieId: number, tmdbId: number) =>
@@ -482,47 +568,56 @@ export const getMoviesLibrary = (
   page: number,
   perPage: number = MOVIES_PER_PAGE,
   sort: SortOrder = "asc",
+  signal?: AbortSignal,
 ) =>
   getPage<MoviesLibraryPaginatedDataType>(
     "/api/movies/library",
     page,
     perPage,
-    sort,
+    { sort, signal },
   );
 
-export const getMovieGenresWithCounts = () =>
-  apiRequest<{ genres: MovieGenreWithCountType[] }>("/api/movies/genres");
+export const getMovieGenresWithCounts = (signal?: AbortSignal) =>
+  apiRequest<{ genres: MovieGenreWithCountType[] }>(
+    "/api/movies/genres",
+    { signal },
+  );
 
 export const getMoviesByGenre = (
   genreId: number,
   page: number,
   perPage: number = MOVIES_PER_PAGE,
   sort: SortOrder = "asc",
+  signal?: AbortSignal,
 ) =>
   getPage<MoviesLibraryPaginatedDataType>(
     `/api/movies/genres/${genreId}/movies`,
     page,
     perPage,
-    sort,
+    { sort, signal },
   );
 
-export const getMoviesStats = () =>
-  apiRequest<MoviesStatsDataType>("/api/movies/stats");
+export const getMoviesStats = (signal?: AbortSignal) =>
+  apiRequest<MoviesStatsDataType>("/api/movies/stats", { signal });
 
 export const getLikedMovies = (
   page: number,
   perPage: number = MOVIES_PER_PAGE,
   sort: SortOrder = "asc",
+  signal?: AbortSignal,
 ) =>
   getPage<MoviesLibraryPaginatedDataType>(
     "/api/movies/liked",
     page,
     perPage,
-    sort,
+    { sort, signal },
   );
 
-export const getMovieLikeStatus = (movieId: number) =>
-  apiRequest<{ is_liked: boolean }>(`/api/movies/${movieId}/like-status`);
+export const getMovieLikeStatus = (movieId: number, signal?: AbortSignal) =>
+  apiRequest<{ is_liked: boolean }>(
+    `/api/movies/${movieId}/like-status`,
+    { signal },
+  );
 
 export const toggleLikeMovie = (movieId: number) =>
   apiRequest<{ movie_id: number; is_liked: boolean }>(
@@ -534,8 +629,14 @@ export const toggleLikeMovie = (movieId: number) =>
 // prefix differs (see mediaApiBasePath). The movie-named wrappers below keep
 // the movie call sites readable.
 
-export const getMediaWatchProgress = (media: PlaybackMediaRef) =>
-  apiRequest<WatchProgressType>(`${mediaApiBasePath(media)}/watch-progress`);
+export const getMediaWatchProgress = (
+  media: PlaybackMediaRef,
+  signal?: AbortSignal,
+) =>
+  apiRequest<WatchProgressType>(
+    `${mediaApiBasePath(media)}/watch-progress`,
+    { signal },
+  );
 
 export const updateMediaWatchProgress = (
   media: PlaybackMediaRef,
@@ -579,8 +680,11 @@ export const setMovieWatched = (movieId: number, watched: boolean) =>
 // Music (albums, tracks, musicians, stats, play events)
 // ============================================================================
 
-export const getAlbumDetails = (id: number) =>
-  apiRequest<AlbumDetailsResponseType>(`/api/music/albums/details/${id}`);
+export const getAlbumDetails = (id: number, signal?: AbortSignal) =>
+  apiRequest<AlbumDetailsResponseType>(
+    `/api/music/albums/details/${id}`,
+    { signal },
+  );
 
 export const deleteAlbum = (id: number) =>
   apiRequest<Record<string, never>>(`/api/music/albums/${id}`, {
@@ -590,11 +694,23 @@ export const deleteAlbum = (id: number) =>
 export const getAlbumsPaginated = (
   page: number,
   perPage: number = ALBUMS_PER_PAGE,
-) => getPage<AlbumsListResponseType>("/api/music/albums", page, perPage);
+  signal?: AbortSignal,
+) =>
+  getPage<AlbumsListResponseType>(
+    "/api/music/albums",
+    page,
+    perPage,
+    { signal },
+  );
 
-export const getTracksPaginated = (limit: number, offset: number) =>
+export const getTracksPaginated = (
+  limit: number,
+  offset: number,
+  signal?: AbortSignal,
+) =>
   apiRequest<TracksListResponseType>(
     withQuery("/api/music/tracks", { limit, offset }),
+    { signal },
   );
 
 // excludeTrackIds tells the server what the caller already holds so the random
@@ -622,22 +738,41 @@ export const toggleLikeTrack = (trackId: number) =>
 export const getLikedTracks = (
   page: number,
   perPage: number = LIKED_TRACKS_PER_PAGE,
-) => getPage<LikedTracksResponseType>("/api/music/tracks/liked", page, perPage);
+  signal?: AbortSignal,
+) =>
+  getPage<LikedTracksResponseType>(
+    "/api/music/tracks/liked",
+    page,
+    perPage,
+    { signal },
+  );
 
-export const getLikedTrackIds = () =>
-  apiRequest<LikedTrackIdsResponseType>("/api/music/tracks/liked-ids");
+export const getLikedTrackIds = (signal?: AbortSignal) =>
+  apiRequest<LikedTrackIdsResponseType>(
+    "/api/music/tracks/liked-ids",
+    { signal },
+  );
 
 export const getMusiciansPaginated = (
   page: number,
   perPage: number = MUSICIANS_PER_PAGE,
+  signal?: AbortSignal,
 ) =>
-  getPage<MusiciansListResponseType>("/api/music/musicians", page, perPage);
+  getPage<MusiciansListResponseType>(
+    "/api/music/musicians",
+    page,
+    perPage,
+    { signal },
+  );
 
-export const getMusicianDetails = (id: number) =>
-  apiRequest<MusicianDetailsResponseType>(`/api/music/musicians/${id}`);
+export const getMusicianDetails = (id: number, signal?: AbortSignal) =>
+  apiRequest<MusicianDetailsResponseType>(
+    `/api/music/musicians/${id}`,
+    { signal },
+  );
 
-export const getMusicStats = () =>
-  apiRequest<MusicStatsType>("/api/music/stats");
+export const getMusicStats = (signal?: AbortSignal) =>
+  apiRequest<MusicStatsType>("/api/music/stats", { signal });
 
 export const recordPlayEvent = (
   trackId: number,
@@ -657,15 +792,24 @@ export const recordPlayEvent = (
 // Playlists (music + movie)
 // ============================================================================
 
-export const getPlaylists = () =>
-  apiRequest<PlaylistsListResponseType>("/api/music/playlists");
+export const getPlaylists = (signal?: AbortSignal) =>
+  apiRequest<PlaylistsListResponseType>("/api/music/playlists", { signal });
 
-export const getPlaylistDetails = (id: number) =>
-  apiRequest<PlaylistDetailResponseType>(`/api/music/playlists/${id}`);
+export const getPlaylistDetails = (id: number, signal?: AbortSignal) =>
+  apiRequest<PlaylistDetailResponseType>(
+    `/api/music/playlists/${id}`,
+    { signal },
+  );
 
-export const getPlaylistTracks = (id: number, limit: number, offset: number) =>
+export const getPlaylistTracks = (
+  id: number,
+  limit: number,
+  offset: number,
+  signal?: AbortSignal,
+) =>
   apiRequest<PlaylistTracksResponseType>(
     withQuery(`/api/music/playlists/${id}/tracks`, { limit, offset }),
+    { signal },
   );
 
 export const createPlaylist = (data: CreatePlaylistRequest) =>
@@ -712,23 +856,30 @@ export const reorderPlaylistTracks = (playlistId: number, trackIds: number[]) =>
     },
   );
 
-export const getMoviePlaylists = () =>
-  apiRequest<MoviePlaylistsListResponseType>("/api/movies/playlists");
+export const getMoviePlaylists = (signal?: AbortSignal) =>
+  apiRequest<MoviePlaylistsListResponseType>(
+    "/api/movies/playlists",
+    { signal },
+  );
 
-export const getMoviePlaylistDetails = (id: number) =>
-  apiRequest<MoviePlaylistDetailResponseType>(`/api/movies/playlists/${id}`);
+export const getMoviePlaylistDetails = (id: number, signal?: AbortSignal) =>
+  apiRequest<MoviePlaylistDetailResponseType>(
+    `/api/movies/playlists/${id}`,
+    { signal },
+  );
 
 export const getMoviePlaylistMovies = (
   playlistId: number,
   page: number,
   perPage: number = MOVIES_PER_PAGE,
   sort: SortOrder = "asc",
+  signal?: AbortSignal,
 ) =>
   getPage<MoviesLibraryPaginatedDataType>(
     `/api/movies/playlists/${playlistId}/movies`,
     page,
     perPage,
-    sort,
+    { sort, signal },
   );
 
 export const createMoviePlaylist = (data: CreateMoviePlaylistRequest) =>
@@ -776,10 +927,11 @@ export const removeMovieFromMoviePlaylist = (
 // Settings
 // ============================================================================
 
-export const getSettings = () => apiRequest<SettingsType>("/api/settings");
+export const getSettings = (signal?: AbortSignal) =>
+  apiRequest<SettingsType>("/api/settings", { signal });
 
-export const getGeneralSettings = () =>
-  apiRequest<GeneralSettingsResponseType>("/api/settings/general");
+export const getGeneralSettings = (signal?: AbortSignal) =>
+  apiRequest<GeneralSettingsResponseType>("/api/settings/general", { signal });
 
 export const updateGeneralSettings = (data: UpdateGeneralSettingsRequest) =>
   apiRequest<UpdateGeneralSettingsResponseType>("/api/settings/general", {
@@ -793,8 +945,11 @@ export const updateLibrarySettings = (data: UpdateLibrarySettingsRequest) =>
     body: data,
   });
 
-export const getPlaybackSettings = () =>
-  apiRequest<PlaybackSettingsResponseType>("/api/settings/playback");
+export const getPlaybackSettings = (signal?: AbortSignal) =>
+  apiRequest<PlaybackSettingsResponseType>(
+    "/api/settings/playback",
+    { signal },
+  );
 
 export const updatePlaybackSettings = (data: UpdatePlaybackSettingsRequest) =>
   apiRequest<PlaybackSettingsResponseType>("/api/settings/playback", {
@@ -806,8 +961,11 @@ export const updatePlaybackSettings = (data: UpdatePlaybackSettingsRequest) =>
 // Trailer pre-roll
 // ============================================================================
 
-export const getTrailerPreferences = () =>
-  apiRequest<TrailerPreferencesData>("/api/user/preferences/trailers");
+export const getTrailerPreferences = (signal?: AbortSignal) =>
+  apiRequest<TrailerPreferencesData>(
+    "/api/user/preferences/trailers",
+    { signal },
+  );
 
 export const updateTrailerPreferences = (data: UpdateTrailerPreferencesRequest) =>
   apiRequest<TrailerPreferencesData>("/api/user/preferences/trailers", {
@@ -823,11 +981,11 @@ export const triggerMusicScan = () =>
     method: "POST",
   });
 
-export const getMusicScanStatus = () =>
-  apiRequest<MusicScanStatus>("/api/settings/scan/music");
+export const getMusicScanStatus = (signal?: AbortSignal) =>
+  apiRequest<MusicScanStatus>("/api/settings/scan/music", { signal });
 
-export const getMovieScanStatus = () =>
-  apiRequest<MovieScanStatus>("/api/settings/scan/movies");
+export const getMovieScanStatus = (signal?: AbortSignal) =>
+  apiRequest<MovieScanStatus>("/api/settings/scan/movies", { signal });
 
 export const triggerMovieScan = () =>
   apiRequest<{ message: string }>("/api/settings/scan/movies", {
@@ -839,15 +997,15 @@ export const triggerShowScan = () =>
     method: "POST",
   });
 
-export const getShowScanStatus = () =>
-  apiRequest<ShowScanStatus>("/api/settings/scan/shows");
+export const getShowScanStatus = (signal?: AbortSignal) =>
+  apiRequest<ShowScanStatus>("/api/settings/scan/shows", { signal });
 
 // ============================================================================
 // Admin user management
 // ============================================================================
 
-export const adminGetUsers = () =>
-  apiRequest<{ users: AdminUserType[] }>("/api/admin/users");
+export const adminGetUsers = (signal?: AbortSignal) =>
+  apiRequest<{ users: AdminUserType[] }>("/api/admin/users", { signal });
 
 export const adminCreateUser = (data: {
   name: string;
@@ -885,9 +1043,10 @@ export const adminResetUserPassword = (id: number, password: string) =>
 // tracks)
 // ============================================================================
 
-export const searchAll = (q: string) =>
+export const searchAll = (q: string, signal?: AbortSignal) =>
   apiRequest<SearchAllResponseType>(
     withQuery("/api/search", { q }),
+    { signal },
   );
 
 export const searchCategory = <K extends PagedSearchTab>(
@@ -895,6 +1054,7 @@ export const searchCategory = <K extends PagedSearchTab>(
   q: string,
   page: number,
   perPage: number = SEARCH_PER_PAGE,
+  signal?: AbortSignal,
 ) =>
   apiRequest<SearchCategoryData[K]>(
     withQuery(`/api/search/${kind}`, {
@@ -902,14 +1062,15 @@ export const searchCategory = <K extends PagedSearchTab>(
       page,
       per_page: perPage,
     }),
+    { signal },
   );
 
 // ============================================================================
 // Watch rooms
 // ============================================================================
 
-export const getWatchRoomInviteUsers = () =>
-  apiRequest<WatchRoomInviteUsersResponseType>("/api/users");
+export const getWatchRoomInviteUsers = (signal?: AbortSignal) =>
+  apiRequest<WatchRoomInviteUsersResponseType>("/api/users", { signal });
 
 export const createWatchRoom = (
   body: CreateWatchRoomRequestType,
@@ -919,8 +1080,8 @@ export const createWatchRoom = (
     body,
   });
 
-export const getWatchRoom = (id: number) =>
-  apiRequest<WatchRoomResponseType>(`/api/watch-rooms/${id}`);
+export const getWatchRoom = (id: number, signal?: AbortSignal) =>
+  apiRequest<WatchRoomResponseType>(`/api/watch-rooms/${id}`, { signal });
 
 export const joinWatchRoom = (id: number) =>
   apiRequest<JoinWatchRoomResponseType>(
@@ -928,8 +1089,8 @@ export const joinWatchRoom = (id: number) =>
     { method: "POST" },
   );
 
-export const getWatchRooms = () =>
-  apiRequest<{ rooms: WatchRoomType[] }>("/api/watch-rooms");
+export const getWatchRooms = (signal?: AbortSignal) =>
+  apiRequest<{ rooms: WatchRoomType[] }>("/api/watch-rooms", { signal });
 
 export const deleteWatchRoom = (id: number) =>
   apiRequest(`/api/watch-rooms/${id}`, { method: "DELETE" });

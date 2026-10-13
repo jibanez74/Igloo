@@ -1,13 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { QueryClient } from "@tanstack/react-query";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import {
   CONTINUE_WATCHING_KEY,
+  EPISODE_KEY,
   EPISODE_WATCH_PROGRESS_KEY,
   PLAYBACK_EXIT_SYNC_TIMEOUT_MS,
   MOVIE_WATCH_PROGRESS_KEY,
   SHOW_SEASON_EPISODES_KEY,
 } from "@/lib/constants";
 import {
+  markNextEpisodesStale,
   refreshWatchQueries,
   staysOnCurrentPlayback,
   synchronizePlaybackExit,
@@ -199,6 +201,53 @@ describe("playback exit synchronization", () => {
       queryClient.getQueryState([EPISODE_WATCH_PROGRESS_KEY, episodeId])
         ?.isInvalidated,
     ).toBe(true);
+
+    queryClient.clear();
+  });
+
+  // The entry holding an episode's progress as up next belongs to the
+  // episode before it, so every cached episode goes stale; none refetches,
+  // including the one on screen.
+  it("marks every cached episode stale without refetching it", async () => {
+    const queryClient = new QueryClient();
+    for (const episodeId of [8, 9]) {
+      await queryClient.prefetchQuery({
+        queryKey: [EPISODE_KEY, episodeId],
+        queryFn: () => Promise.resolve(`episode-${episodeId}`),
+      });
+    }
+    const observer = new QueryObserver(queryClient, {
+      queryKey: [EPISODE_KEY, 9],
+      queryFn: () => Promise.resolve("episode-9-refetched"),
+      staleTime: Infinity,
+    });
+    const unsubscribe = observer.subscribe(() => {});
+
+    await refreshWatchQueries(queryClient, episodeMediaRef(9), {
+      refetchType: "active",
+    });
+
+    for (const episodeId of [8, 9]) {
+      const state = queryClient.getQueryState([EPISODE_KEY, episodeId]);
+      expect(state?.isInvalidated).toBe(true);
+      expect(state?.dataUpdateCount).toBe(1);
+    }
+
+    unsubscribe();
+    queryClient.clear();
+  });
+
+  it("leaves cached episodes alone after a movie", async () => {
+    const queryClient = new QueryClient();
+    await queryClient.prefetchQuery({
+      queryKey: [EPISODE_KEY, 8],
+      queryFn: () => Promise.resolve("episode-8"),
+    });
+
+    await refreshWatchQueries(queryClient, movieMediaRef(7));
+    await markNextEpisodesStale(queryClient, movieMediaRef(7));
+
+    expect(queryClient.getQueryState([EPISODE_KEY, 8])?.isInvalidated).toBe(false);
 
     queryClient.clear();
   });

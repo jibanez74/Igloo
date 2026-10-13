@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { PLAYLIST_TRACKS_PAGE_SIZE } from "../src/lib/constants";
 import { assertMockSuiteClean, trackBrowserIssues } from "./e2e-browser-issues";
 import { apiResponse, fulfillJSON, gateRoute, nullableInt64, nullableString } from "./e2e-api";
+import { VIEWPORTS } from "./e2e-layout";
 import { mockApi } from "./e2e-mock-api";
 import { playlist, playlistDetail, playlistTrack } from "./fixtures/music";
 
@@ -274,4 +275,107 @@ test("renaming the playlist retitles the tab", async ({ page }) => {
   await expect(page).toHaveTitle("Night Drive - Igloo");
 
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);
+});
+
+test.describe("dragging a track", () => {
+  const SHORT_PLAYLIST_ID = 56;
+  // Few enough rows, all on one page, that an owner gets the draggable list.
+  const shortTracks = Array.from({ length: 6 }, (_, index) => longHaulTrack(index + 1));
+  const shortDetails = playlistDetail({
+    playlist: playlist({ id: SHORT_PLAYLIST_ID, name: "Short Hop" }),
+    track_count: shortTracks.length,
+    duration: shortTracks.length * 200_000,
+  });
+
+  async function mockShortPlaylistApi(page: Page) {
+    const reorders: number[][] = [];
+
+    const { unexpectedApiRequests } = await mockApi(page, {
+      handle: async ({ route, url, method }) => {
+        const base = `/api/music/playlists/${SHORT_PLAYLIST_ID}`;
+
+        if (url.pathname === base && method === "GET") {
+          await fulfillJSON(route, apiResponse(shortDetails));
+          return true;
+        }
+
+        if (url.pathname === `${base}/tracks` && method === "GET") {
+          await fulfillJSON(route, apiResponse({
+            tracks: shortTracks,
+            total: shortTracks.length,
+            has_more: false,
+            next_offset: shortTracks.length,
+          }));
+          return true;
+        }
+
+        if (url.pathname === `${base}/tracks/reorder` && method === "PUT") {
+          const body = route.request().postDataJSON() as { track_ids: number[] };
+          reorders.push(body.track_ids);
+          await fulfillJSON(route, { error: false, message: "Playlist reordered" });
+          return true;
+        }
+
+        if (url.pathname === "/api/music/tracks/liked-ids" && method === "GET") {
+          await fulfillJSON(route, apiResponse({ liked_track_ids: [] }));
+          return true;
+        }
+
+        return false;
+      },
+    });
+
+    return { unexpectedApiRequests, reorders };
+  }
+
+  // Presses a row's handle and lets go over another row, the way a mouse
+  // does: past the sensor's 8px activation distance first, then in steps.
+  async function dragRow(page: Page, from: number, to: number) {
+    const handles = page.getByRole("button", { name: "Drag to reorder" });
+    const start = await handles.nth(from).boundingBox();
+    const end = await handles.nth(to).boundingBox();
+    if (!start || !end) throw new Error("drag handle not laid out");
+
+    const x = start.x + start.width / 2;
+    const startY = start.y + start.height / 2;
+    await page.mouse.move(x, startY);
+    await page.mouse.down();
+    await page.mouse.move(x, startY + (end.y > start.y ? 12 : -12), { steps: 4 });
+    await page.mouse.move(x, end.y + end.height / 2, { steps: 12 });
+    await page.mouse.up();
+  }
+
+  test("a track dropped further down lands on the row under the pointer", async ({ page }) => {
+    const browserIssues = trackBrowserIssues(page);
+    const { unexpectedApiRequests, reorders } = await mockShortPlaylistApi(page);
+
+    // Tall enough that every row's handle is on screen without scrolling.
+    await page.setViewportSize(VIEWPORTS.desktop);
+    await page.goto(`/music/playlist/${SHORT_PLAYLIST_ID}`);
+    await expect(page.getByRole("heading", { level: 1, name: "Short Hop" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Drag to reorder" })).toHaveCount(6);
+
+    await dragRow(page, 0, 2);
+
+    await expect.poll(() => reorders).toEqual([[1002, 1003, 1001, 1004, 1005, 1006]]);
+
+    assertMockSuiteClean(browserIssues, unexpectedApiRequests);
+  });
+
+  test("a track dropped further up lands on the row under the pointer", async ({ page }) => {
+    const browserIssues = trackBrowserIssues(page);
+    const { unexpectedApiRequests, reorders } = await mockShortPlaylistApi(page);
+
+    // Tall enough that every row's handle is on screen without scrolling.
+    await page.setViewportSize(VIEWPORTS.desktop);
+    await page.goto(`/music/playlist/${SHORT_PLAYLIST_ID}`);
+    await expect(page.getByRole("heading", { level: 1, name: "Short Hop" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Drag to reorder" })).toHaveCount(6);
+
+    await dragRow(page, 4, 1);
+
+    await expect.poll(() => reorders).toEqual([[1001, 1005, 1002, 1003, 1004, 1006]]);
+
+    assertMockSuiteClean(browserIssues, unexpectedApiRequests);
+  });
 });
