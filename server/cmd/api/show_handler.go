@@ -137,13 +137,7 @@ func (app *Application) GetShowSeasonEpisodes(w http.ResponseWriter, r *http.Req
 
 	seasonParam := chi.URLParam(r, "seasonNumber")
 	seasonNumber, err := strconv.ParseInt(seasonParam, 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid season number"), http.StatusBadRequest)
-		return
-	}
-
-	isNegativeSeason := seasonNumber < 0
-	if isNegativeSeason {
+	if err != nil || seasonNumber < 0 {
 		helpers.ErrorJSON(w, errors.New("invalid season number"), http.StatusBadRequest)
 		return
 	}
@@ -211,52 +205,35 @@ type showsStatsData struct {
 	TotalEpisodes int64 `json:"total_episodes"`
 }
 
-func showLibraryRowsFromDesc(rows []database.GetShowsLibraryDescRow) []database.GetShowsLibraryAscRow {
+// showLibraryRow is every generated show listing row. Each has exactly
+// GetShowsLibraryAscRow's fields, so it converts to that type directly.
+type showLibraryRow interface {
+	database.GetShowsLibraryDescRow | database.GetShowsByGenreAscRow | database.GetShowsByGenreDescRow
+}
+
+func showLibraryRows[T showLibraryRow](rows []T) []database.GetShowsLibraryAscRow {
 	out := make([]database.GetShowsLibraryAscRow, len(rows))
-	for i, r := range rows {
-		out[i] = database.GetShowsLibraryAscRow{
-			ID:            r.ID,
-			Name:          r.Name,
-			PosterPath:    r.PosterPath,
-			PremiereYear:  r.PremiereYear,
-			Certification: r.Certification,
-		}
+	for i, row := range rows {
+		out[i] = database.GetShowsLibraryAscRow(row)
 	}
 	return out
 }
 
-func showLibraryRowsFromGenreAsc(rows []database.GetShowsByGenreAscRow) []database.GetShowsLibraryAscRow {
-	out := make([]database.GetShowsLibraryAscRow, len(rows))
-	for i, r := range rows {
-		out[i] = database.GetShowsLibraryAscRow{
-			ID:            r.ID,
-			Name:          r.Name,
-			PosterPath:    r.PosterPath,
-			PremiereYear:  r.PremiereYear,
-			Certification: r.Certification,
-		}
-	}
-	return out
-}
-
-func showLibraryRowsFromGenreDesc(rows []database.GetShowsByGenreDescRow) []database.GetShowsLibraryAscRow {
-	out := make([]database.GetShowsLibraryAscRow, len(rows))
-	for i, r := range rows {
-		out[i] = database.GetShowsLibraryAscRow{
-			ID:            r.ID,
-			Name:          r.Name,
-			PosterPath:    r.PosterPath,
-			PremiereYear:  r.PremiereYear,
-			Certification: r.Certification,
-		}
-	}
-	return out
+func writeShowsLibrary(w http.ResponseWriter, shows []database.GetShowsLibraryAscRow, total, page, perPage int64, sort string) {
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
+		Data: showsLibraryData{
+			Shows:      shows,
+			Total:      total,
+			Page:       page,
+			PerPage:    perPage,
+			TotalPages: totalPages(total, perPage),
+			Sort:       sort,
+		},
+	})
 }
 
 func (app *Application) GetShowsLibrary(w http.ResponseWriter, r *http.Request) {
 	page, perPage, sortParam := parseLibraryQuery(r)
-
-	offset := (page - 1) * perPage
 	ctx := r.Context()
 
 	total, err := app.Queries.GetShowsCount(ctx)
@@ -265,43 +242,22 @@ func (app *Application) GetShowsLibrary(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	params := database.GetShowsLibraryAscParams{Limit: perPage, Offset: (page - 1) * perPage}
+
 	var shows []database.GetShowsLibraryAscRow
 	if sortParam == "desc" {
-		descRows, err := app.Queries.GetShowsLibraryDesc(ctx, database.GetShowsLibraryDescParams{
-			Limit:  perPage,
-			Offset: offset,
-		})
-		if err != nil {
-			app.serverError(w, err, "failed to get shows library", "failed to fetch shows")
-			return
-		}
-		shows = showLibraryRowsFromDesc(descRows)
+		var rows []database.GetShowsLibraryDescRow
+		rows, err = app.Queries.GetShowsLibraryDesc(ctx, database.GetShowsLibraryDescParams(params))
+		shows = showLibraryRows(rows)
 	} else {
-		shows, err = app.Queries.GetShowsLibraryAsc(ctx, database.GetShowsLibraryAscParams{
-			Limit:  perPage,
-			Offset: offset,
-		})
-		if err != nil {
-			app.serverError(w, err, "failed to get shows library", "failed to fetch shows")
-			return
-		}
+		shows, err = app.Queries.GetShowsLibraryAsc(ctx, params)
+	}
+	if err != nil {
+		app.serverError(w, err, "failed to get shows library", "failed to fetch shows")
+		return
 	}
 
-	totalPages := total / perPage
-	if total%perPage > 0 {
-		totalPages++
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Data: showsLibraryData{
-			Shows:      shows,
-			Total:      total,
-			Page:       page,
-			PerPage:    perPage,
-			TotalPages: totalPages,
-			Sort:       sortParam,
-		},
-	})
+	writeShowsLibrary(w, shows, total, page, perPage, sortParam)
 }
 
 func (app *Application) GetShowsStats(w http.ResponseWriter, r *http.Request) {
@@ -342,7 +298,6 @@ func (app *Application) GetShowsByGenreLibrary(w http.ResponseWriter, r *http.Re
 	}
 
 	page, perPage, sortParam := parseLibraryQuery(r)
-	offset := (page - 1) * perPage
 	ctx := r.Context()
 
 	total, err := app.Queries.CountShowsForGenre(ctx, genreID)
@@ -351,44 +306,22 @@ func (app *Application) GetShowsByGenreLibrary(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	params := database.GetShowsByGenreAscParams{GenreID: genreID, Limit: perPage, Offset: (page - 1) * perPage}
+
 	var shows []database.GetShowsLibraryAscRow
 	if sortParam == "desc" {
-		descRows, err := app.Queries.GetShowsByGenreDesc(ctx, database.GetShowsByGenreDescParams{
-			GenreID: genreID,
-			Limit:   perPage,
-			Offset:  offset,
-		})
-		if err != nil {
-			app.serverError(w, err, "failed to get shows by genre", "failed to fetch shows", "genre_id", genreID)
-			return
-		}
-		shows = showLibraryRowsFromGenreDesc(descRows)
+		var rows []database.GetShowsByGenreDescRow
+		rows, err = app.Queries.GetShowsByGenreDesc(ctx, database.GetShowsByGenreDescParams(params))
+		shows = showLibraryRows(rows)
 	} else {
-		ascRows, err := app.Queries.GetShowsByGenreAsc(ctx, database.GetShowsByGenreAscParams{
-			GenreID: genreID,
-			Limit:   perPage,
-			Offset:  offset,
-		})
-		if err != nil {
-			app.serverError(w, err, "failed to get shows by genre", "failed to fetch shows", "genre_id", genreID)
-			return
-		}
-		shows = showLibraryRowsFromGenreAsc(ascRows)
+		var rows []database.GetShowsByGenreAscRow
+		rows, err = app.Queries.GetShowsByGenreAsc(ctx, params)
+		shows = showLibraryRows(rows)
+	}
+	if err != nil {
+		app.serverError(w, err, "failed to get shows by genre", "failed to fetch shows", "genre_id", genreID)
+		return
 	}
 
-	totalPages := total / perPage
-	if total%perPage > 0 {
-		totalPages++
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Data: showsLibraryData{
-			Shows:      shows,
-			Total:      total,
-			Page:       page,
-			PerPage:    perPage,
-			TotalPages: totalPages,
-			Sort:       sortParam,
-		},
-	})
+	writeShowsLibrary(w, shows, total, page, perPage, sortParam)
 }

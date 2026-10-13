@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -36,7 +35,14 @@ func (app *Application) ToggleLikeTrack(w http.ResponseWriter, r *http.Request) 
 	// user_liked_tracks.track_id rejects an unknown track, so the happy path is
 	// the toggle transaction alone; only a failure pays the TrackExists probe
 	// that tells "no such track" (404) from a real error (500).
-	isLiked, err := app.toggleTrackLike(ctx, userID, trackID)
+	isLiked, err := app.toggleLike(ctx,
+		func(q *database.Queries) (int64, error) {
+			return q.UnlikeTrack(ctx, database.UnlikeTrackParams{UserID: userID, TrackID: trackID})
+		},
+		func(q *database.Queries) error {
+			return q.LikeTrack(ctx, database.LikeTrackParams{UserID: userID, TrackID: trackID})
+		},
+	)
 	if err != nil {
 		trackOK, existsErr := app.Queries.TrackExists(ctx, trackID)
 		if existsErr == nil && !trackOK {
@@ -53,45 +59,6 @@ func (app *Application) ToggleLikeTrack(w http.ResponseWriter, r *http.Request) 
 			"is_liked": isLiked,
 		},
 	})
-}
-
-// toggleTrackLike flips like state in a single DB transaction, mirroring
-// toggleMovieLike: DELETE first, and only when nothing was removed INSERT
-// (LikeTrack is idempotent via ON CONFLICT DO NOTHING). No read-then-write
-// race.
-func (app *Application) toggleTrackLike(ctx context.Context, userID, trackID int64) (isLiked bool, err error) {
-	tx, err := app.DB.BeginTx(ctx, nil)
-	if err != nil {
-		return false, err
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	qtx := app.Queries.WithTx(tx)
-
-	removed, err := qtx.UnlikeTrack(ctx, database.UnlikeTrackParams{
-		UserID:  userID,
-		TrackID: trackID,
-	})
-	if err != nil {
-		return false, err
-	}
-	if removed > 0 {
-		if err := tx.Commit(); err != nil {
-			return false, err
-		}
-		return false, nil
-	}
-
-	if err := qtx.LikeTrack(ctx, database.LikeTrackParams{
-		UserID:  userID,
-		TrackID: trackID,
-	}); err != nil {
-		return false, err
-	}
-	if err := tx.Commit(); err != nil {
-		return false, err
-	}
-	return true, nil
 }
 
 // GetLikedTrackIDsForUser returns the IDs of every track the authenticated user has liked.
@@ -117,25 +84,7 @@ func (app *Application) GetLikedTrackIDsForUser(w http.ResponseWriter, r *http.R
 func (app *Application) GetLikedTracks(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 
-	page := int64(1)
-	if p := r.URL.Query().Get("page"); p != "" {
-		parsed, err := strconv.ParseInt(p, 10, 64)
-		if err == nil && parsed > 0 {
-			page = parsed
-		}
-	}
-
-	perPage := int64(50)
-	if pp := r.URL.Query().Get("per_page"); pp != "" {
-		parsed, err := strconv.ParseInt(pp, 10, 64)
-		if err == nil && parsed > 0 {
-			perPage = parsed
-		}
-	}
-	if perPage > 100 {
-		perPage = 100
-	}
-
+	page, perPage := parsePageAndPerPage(r, 50, 100)
 	offset := (page - 1) * perPage
 	ctx := r.Context()
 
@@ -155,19 +104,15 @@ func (app *Application) GetLikedTracks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	totalPages := total / perPage
-	if total%perPage > 0 {
-		totalPages++
-	}
-
+	pages := totalPages(total, perPage)
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"tracks":      tracks,
 			"total":       total,
 			"page":        page,
 			"per_page":    perPage,
-			"total_pages": totalPages,
-			"has_more":    page < totalPages,
+			"total_pages": pages,
+			"has_more":    page < pages,
 		},
 	})
 }
@@ -279,10 +224,11 @@ func parseShuffleExcludeIDs(values []string) string {
 	seen := make(map[int64]struct{}, capacity)
 	scanned := 0
 
+collect:
 	for _, value := range values {
 		for field := range strings.SplitSeq(value, ",") {
-			if scanned == maxShuffleExcludeFields {
-				break
+			if scanned == maxShuffleExcludeFields || len(ids) == maxShuffleExcludeIDs {
+				break collect
 			}
 			scanned++
 
@@ -301,18 +247,6 @@ func parseShuffleExcludeIDs(values []string) string {
 
 			seen[id] = struct{}{}
 			ids = append(ids, id)
-
-			if len(ids) == maxShuffleExcludeIDs {
-				encoded, err := json.Marshal(ids)
-				if err != nil {
-					return "[]"
-				}
-				return string(encoded)
-			}
-		}
-
-		if scanned == maxShuffleExcludeFields {
-			break
 		}
 	}
 
@@ -327,16 +261,7 @@ func parseShuffleExcludeIDs(values []string) string {
 func (app *Application) GetShuffleTracks(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 
-	limit := int64(50)
-	if l := query.Get("limit"); l != "" {
-		parsed, err := strconv.ParseInt(l, 10, 64)
-		if err == nil && parsed > 0 {
-			limit = parsed
-		}
-	}
-	if limit > 200 {
-		limit = 200
-	}
+	limit := min(positiveQueryInt(r, "limit", 50), 200)
 
 	tracks, err := app.Queries.GetRandomTracks(r.Context(), database.GetRandomTracksParams{
 		ExcludeIds: parseShuffleExcludeIDs(query["exclude"]),

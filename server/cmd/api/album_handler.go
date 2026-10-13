@@ -12,7 +12,7 @@ import (
 )
 
 func (app *Application) GetAlbumsAlphabetical(w http.ResponseWriter, r *http.Request) {
-	page, perPage := parsePageAndPerPage(r)
+	page, perPage := parsePageAndPerPage(r, libraryDefaultPerPage, libraryMaxPerPage)
 
 	offset := (page - 1) * perPage
 
@@ -32,18 +32,13 @@ func (app *Application) GetAlbumsAlphabetical(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	totalPages := total / perPage
-	if total%perPage > 0 {
-		totalPages++
-	}
-
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"albums":      albums,
 			"total":       total,
 			"page":        page,
 			"per_page":    perPage,
-			"total_pages": totalPages,
+			"total_pages": totalPages(total, perPage),
 		},
 	})
 }

@@ -12,34 +12,6 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func libraryRowsFromPlaylistAsc(rows []database.GetPlaylistMoviesPaginatedAscRow) []database.GetMoviesLibraryAscRow {
-	out := make([]database.GetMoviesLibraryAscRow, len(rows))
-	for i, r := range rows {
-		out[i] = database.GetMoviesLibraryAscRow{
-			ID:            r.ID,
-			Title:         r.Title,
-			PosterPath:    r.PosterPath,
-			Year:          r.Year,
-			Certification: r.Certification,
-		}
-	}
-	return out
-}
-
-func libraryRowsFromPlaylistDesc(rows []database.GetPlaylistMoviesPaginatedDescRow) []database.GetMoviesLibraryAscRow {
-	out := make([]database.GetMoviesLibraryAscRow, len(rows))
-	for i, r := range rows {
-		out[i] = database.GetMoviesLibraryAscRow{
-			ID:            r.ID,
-			Title:         r.Title,
-			PosterPath:    r.PosterPath,
-			Year:          r.Year,
-			Certification: r.Certification,
-		}
-	}
-	return out
-}
-
 func (app *Application) GetMoviePlaylists(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 
@@ -344,7 +316,6 @@ func (app *Application) GetMoviePlaylistMovies(w http.ResponseWriter, r *http.Re
 	}
 
 	page, perPage, sortParam := parseLibraryQuery(r)
-	offset := (page - 1) * perPage
 	ctx := r.Context()
 
 	total, err := app.Queries.CountPlaylistMovies(ctx, playlistID)
@@ -353,46 +324,24 @@ func (app *Application) GetMoviePlaylistMovies(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	params := database.GetPlaylistMoviesPaginatedAscParams{PlaylistID: playlistID, Limit: perPage, Offset: (page - 1) * perPage}
+
 	var movies []database.GetMoviesLibraryAscRow
 	if sortParam == "desc" {
-		descRows, err := app.Queries.GetPlaylistMoviesPaginatedDesc(ctx, database.GetPlaylistMoviesPaginatedDescParams{
-			PlaylistID: playlistID,
-			Limit:      perPage,
-			Offset:     offset,
-		})
-		if err != nil {
-			app.serverError(w, err, "failed to get playlist movies", "failed to fetch playlist movies")
-			return
-		}
-		movies = libraryRowsFromPlaylistDesc(descRows)
+		var rows []database.GetPlaylistMoviesPaginatedDescRow
+		rows, err = app.Queries.GetPlaylistMoviesPaginatedDesc(ctx, database.GetPlaylistMoviesPaginatedDescParams(params))
+		movies = movieLibraryRows(rows)
 	} else {
-		ascRows, err := app.Queries.GetPlaylistMoviesPaginatedAsc(ctx, database.GetPlaylistMoviesPaginatedAscParams{
-			PlaylistID: playlistID,
-			Limit:      perPage,
-			Offset:     offset,
-		})
-		if err != nil {
-			app.serverError(w, err, "failed to get playlist movies", "failed to fetch playlist movies")
-			return
-		}
-		movies = libraryRowsFromPlaylistAsc(ascRows)
+		var rows []database.GetPlaylistMoviesPaginatedAscRow
+		rows, err = app.Queries.GetPlaylistMoviesPaginatedAsc(ctx, params)
+		movies = movieLibraryRows(rows)
+	}
+	if err != nil {
+		app.serverError(w, err, "failed to get playlist movies", "failed to fetch playlist movies")
+		return
 	}
 
-	totalPages := total / perPage
-	if total%perPage > 0 {
-		totalPages++
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Data: moviesLibraryData{
-			Movies:     movies,
-			Total:      total,
-			Page:       page,
-			PerPage:    perPage,
-			TotalPages: totalPages,
-			Sort:       sortParam,
-		},
-	})
+	writeMoviesLibrary(w, movies, total, page, perPage, sortParam)
 }
 
 type AddMoviesRequest struct {

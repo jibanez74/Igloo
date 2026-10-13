@@ -160,15 +160,7 @@ func (app *Application) GetUserTopMusicians(w http.ResponseWriter, r *http.Reque
 func (app *Application) GetUserTopGenres(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 
-	limit := int64(10)
-	if l := r.URL.Query().Get("limit"); l != "" {
-		if parsed, err := strconv.ParseInt(l, 10, 64); err == nil && parsed > 0 {
-			limit = parsed
-		}
-	}
-	if limit > 20 {
-		limit = 20
-	}
+	limit := min(positiveQueryInt(r, "limit", 10), 20)
 
 	genres, err := app.Queries.GetUserTopGenres(r.Context(), database.GetUserTopGenresParams{
 		UserID: userID,
@@ -239,22 +231,11 @@ func (app *Application) GetUserRecentlyPlayed(w http.ResponseWriter, r *http.Req
 // nonpositive limit uses defaultLimit and a larger one is clamped to maxLimit;
 // an invalid offset is 0.
 func parseLimitOffsetParams(r *http.Request, defaultLimit, maxLimit int64) (int64, int64) {
-	limit := defaultLimit
-	if l := r.URL.Query().Get("limit"); l != "" {
-		if parsed, err := strconv.ParseInt(l, 10, 64); err == nil && parsed > 0 {
-			limit = parsed
-		}
-	}
-	if limit > maxLimit {
-		limit = maxLimit
-	}
+	limit := min(positiveQueryInt(r, "limit", defaultLimit), maxLimit)
 
-	offset := int64(0)
-	if o := r.URL.Query().Get("offset"); o != "" {
-		if parsed, err := strconv.ParseInt(o, 10, 64); err == nil && parsed >= 0 {
-			offset = parsed
-		}
+	offset, err := strconv.ParseInt(r.URL.Query().Get("offset"), 10, 64)
+	if err != nil || offset < 0 {
+		offset = 0
 	}
-
 	return limit, offset
 }

@@ -407,7 +407,7 @@ func (app *Application) SearchAll(w http.ResponseWriter, r *http.Request) {
 // OpenAPI coverage keep stable handler names.
 func handleSearchCategory[T any](app *Application, e searchEntity[T], w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
-	page, perPage := parsePageAndPerPage(r)
+	page, perPage := parsePageAndPerPage(r, libraryDefaultPerPage, libraryMaxPerPage)
 	ctx := r.Context()
 
 	match, total, ok, err := app.resolveSearchMatch(ctx, e.countSQL, e.vocabTable, q)
