@@ -5,12 +5,9 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
-	"strconv"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
-
-	"github.com/go-chi/chi/v5"
 )
 
 func (app *Application) GetMoviePlaylists(w http.ResponseWriter, r *http.Request) {
@@ -81,10 +78,8 @@ func (app *Application) CreateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 func (app *Application) GetMoviePlaylist(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 
-	idParam := chi.URLParam(r, "id")
-	playlistID, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New(invalidPlaylistIDMessage), http.StatusBadRequest)
+	playlistID, ok := parseIDParam(w, r, "id", invalidPlaylistIDMessage)
+	if !ok {
 		return
 	}
 
@@ -137,10 +132,8 @@ type UpdateMoviePlaylistRequest struct {
 func (app *Application) UpdateMoviePlaylist(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 
-	idParam := chi.URLParam(r, "id")
-	playlistID, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New(invalidPlaylistIDMessage), http.StatusBadRequest)
+	playlistID, ok := parseIDParam(w, r, "id", invalidPlaylistIDMessage)
+	if !ok {
 		return
 	}
 
@@ -197,14 +190,12 @@ func (app *Application) UpdateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 func (app *Application) GetMoviePlaylistMovies(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 
-	idParam := chi.URLParam(r, "id")
-	playlistID, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New(invalidPlaylistIDMessage), http.StatusBadRequest)
+	playlistID, ok := parseIDParam(w, r, "id", invalidPlaylistIDMessage)
+	if !ok {
 		return
 	}
 
-	_, _, ok := app.authorizePlaylist(w, r, playlistID, userID, playlistContentTypeMovie, PermissionView, accessDeniedMessage, fetchPlaylistMessage)
+	_, _, ok = app.authorizePlaylist(w, r, playlistID, userID, playlistContentTypeMovie, PermissionView, accessDeniedMessage, fetchPlaylistMessage)
 	if !ok {
 		return
 	}
@@ -265,14 +256,12 @@ type AddMoviesRequest struct {
 func (app *Application) AddMoviesToMoviePlaylist(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 
-	idParam := chi.URLParam(r, "id")
-	playlistID, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New(invalidPlaylistIDMessage), http.StatusBadRequest)
+	playlistID, ok := parseIDParam(w, r, "id", invalidPlaylistIDMessage)
+	if !ok {
 		return
 	}
 
-	_, _, ok := app.authorizePlaylist(w, r, playlistID, userID, playlistContentTypeMovie, PermissionEdit, "you don't have permission to edit this playlist", "failed to add movies")
+	_, _, ok = app.authorizePlaylist(w, r, playlistID, userID, playlistContentTypeMovie, PermissionEdit, "you don't have permission to edit this playlist", "failed to add movies")
 	if !ok {
 		return
 	}
@@ -318,24 +307,22 @@ func (app *Application) AddMoviesToMoviePlaylist(w http.ResponseWriter, r *http.
 func (app *Application) RemoveMovieFromMoviePlaylist(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 
-	playlistID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New(invalidPlaylistIDMessage), http.StatusBadRequest)
-		return
-	}
-
-	movieID, err := strconv.ParseInt(chi.URLParam(r, "movieId"), 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New(invalidMovieIDMessage), http.StatusBadRequest)
-		return
-	}
-
-	_, _, ok := app.authorizePlaylist(w, r, playlistID, userID, playlistContentTypeMovie, PermissionEdit, "you don't have permission to edit this playlist", "failed to remove movie")
+	playlistID, ok := parseIDParam(w, r, "id", invalidPlaylistIDMessage)
 	if !ok {
 		return
 	}
 
-	err = app.removeFromPlaylist(r.Context(), playlistID, func(qtx *database.Queries) error {
+	movieID, ok := parseIDParam(w, r, "movieId", invalidMovieIDMessage)
+	if !ok {
+		return
+	}
+
+	_, _, ok = app.authorizePlaylist(w, r, playlistID, userID, playlistContentTypeMovie, PermissionEdit, "you don't have permission to edit this playlist", "failed to remove movie")
+	if !ok {
+		return
+	}
+
+	err := app.removeFromPlaylist(r.Context(), playlistID, func(qtx *database.Queries) error {
 		return qtx.RemoveMovieFromPlaylist(r.Context(), database.RemoveMovieFromPlaylistParams{
 			PlaylistID: playlistID,
 			MovieID:    movieID,

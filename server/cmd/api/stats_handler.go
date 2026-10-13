@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"strconv"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
@@ -225,17 +224,4 @@ func (app *Application) GetUserRecentlyPlayed(w http.ResponseWriter, r *http.Req
 			"offset": offset,
 		},
 	})
-}
-
-// parseLimitOffsetParams reads limit and offset. A missing, non-integer or
-// nonpositive limit uses defaultLimit and a larger one is clamped to maxLimit;
-// an invalid offset is 0.
-func parseLimitOffsetParams(r *http.Request, defaultLimit, maxLimit int64) (int64, int64) {
-	limit := min(positiveQueryInt(r, "limit", defaultLimit), maxLimit)
-
-	offset, err := strconv.ParseInt(r.URL.Query().Get("offset"), 10, 64)
-	if err != nil || offset < 0 {
-		offset = 0
-	}
-	return limit, offset
 }

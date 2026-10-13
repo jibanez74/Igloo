@@ -10,8 +10,6 @@ import (
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
-
-	"github.com/go-chi/chi/v5"
 )
 
 // Said by every handler that resolves a track by id.
@@ -23,10 +21,8 @@ const (
 func (app *Application) ToggleLikeTrack(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 
-	idParam := chi.URLParam(r, "id")
-	trackID, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New(invalidTrackIDMessage), http.StatusBadRequest)
+	trackID, ok := parseIDParam(w, r, "id", invalidTrackIDMessage)
+	if !ok {
 		return
 	}
 
@@ -118,10 +114,8 @@ func (app *Application) GetLikedTracks(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *Application) GetTrackByID(w http.ResponseWriter, r *http.Request) {
-	idParam := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New(invalidTrackIDMessage), http.StatusBadRequest)
+	id, ok := parseIDParam(w, r, "id", invalidTrackIDMessage)
+	if !ok {
 		return
 	}
 
@@ -149,10 +143,8 @@ func (app *Application) GetTrackByID(w http.ResponseWriter, r *http.Request) {
 //   - If-Modified-Since / If-None-Match headers (caching, via the ETag set below)
 //   - Content-Type and Content-Length headers
 func (app *Application) StreamTrack(w http.ResponseWriter, r *http.Request) {
-	idParam := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New(invalidTrackIDMessage), http.StatusBadRequest)
+	id, ok := parseIDParam(w, r, "id", invalidTrackIDMessage)
+	if !ok {
 		return
 	}
 

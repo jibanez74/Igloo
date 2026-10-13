@@ -8,7 +8,6 @@ import (
 	"igloo/cmd/internal/helpers"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -101,35 +100,6 @@ func (app *Application) logNormalizedChapterStartTimes(
 			"normalized_start_time", normalized[i].StartTime,
 		)
 	}
-}
-
-// positiveQueryInt reads a positive integer query parameter. Missing,
-// unparseable and nonpositive values fall back rather than failing the request.
-func positiveQueryInt(r *http.Request, name string, fallback int64) int64 {
-	parsed, err := strconv.ParseInt(r.URL.Query().Get(name), 10, 64)
-	if err != nil || parsed <= 0 {
-		return fallback
-	}
-	return parsed
-}
-
-// parsePageAndPerPage reads the page and per_page query parameters every
-// paginated listing shares, clamping per_page to maxPerPage; docs/openapi.json
-// documents that on PerPageQuery.
-func parsePageAndPerPage(r *http.Request, defaultPerPage, maxPerPage int64) (page, perPage int64) {
-	page = positiveQueryInt(r, "page", 1)
-	perPage = min(positiveQueryInt(r, "per_page", defaultPerPage), maxPerPage)
-	return page, perPage
-}
-
-func parseLibraryQuery(r *http.Request) (page, perPage int64, sort string) {
-	page, perPage = parsePageAndPerPage(r, libraryDefaultPerPage, libraryMaxPerPage)
-
-	sort = strings.ToLower(strings.TrimSpace(r.URL.Query().Get("sort")))
-	if sort != "desc" {
-		sort = "asc"
-	}
-	return page, perPage, sort
 }
 
 func (app *Application) GetMoviesLibrary(w http.ResponseWriter, r *http.Request) {
@@ -304,10 +274,8 @@ func (app *Application) toggleLike(
 func (app *Application) ToggleLikeMovie(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 
-	idParam := chi.URLParam(r, "id")
-	movieID, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New(invalidMovieIDMessage), http.StatusBadRequest)
+	movieID, ok := parseIDParam(w, r, "id", invalidMovieIDMessage)
+	if !ok {
 		return
 	}
 
@@ -370,10 +338,8 @@ func (app *Application) GetLatestMovies(w http.ResponseWriter, r *http.Request) 
 
 // Read-only transaction keeps related movie data in one snapshot.
 func (app *Application) GetMovieDetails(w http.ResponseWriter, r *http.Request) {
-	idParam := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New(invalidMovieIDMessage), http.StatusBadRequest)
+	id, ok := parseIDParam(w, r, "id", invalidMovieIDMessage)
+	if !ok {
 		return
 	}
 
@@ -444,10 +410,8 @@ func (app *Application) GetMovieDetails(w http.ResponseWriter, r *http.Request) 
 }
 
 func (app *Application) GetMovieTechnicalDetails(w http.ResponseWriter, r *http.Request) {
-	idParam := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New(invalidMovieIDMessage), http.StatusBadRequest)
+	id, ok := parseIDParam(w, r, "id", invalidMovieIDMessage)
+	if !ok {
 		return
 	}
 

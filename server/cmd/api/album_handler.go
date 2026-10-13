@@ -6,9 +6,6 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"net/http"
-	"strconv"
-
-	"github.com/go-chi/chi/v5"
 )
 
 func (app *Application) GetAlbumsAlphabetical(w http.ResponseWriter, r *http.Request) {
@@ -59,10 +56,8 @@ func (app *Application) GetLatestAlbums(w http.ResponseWriter, r *http.Request) 
 
 // Use a read-only transaction so album details come from one snapshot.
 func (app *Application) GetAlbumDetails(w http.ResponseWriter, r *http.Request) {
-	idParam := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid album id"), http.StatusBadRequest)
+	id, ok := parseIDParam(w, r, "id", "invalid album id")
+	if !ok {
 		return
 	}
 
@@ -134,10 +129,8 @@ func (app *Application) GetAlbumDetails(w http.ResponseWriter, r *http.Request) 
 
 // Track and join rows are cascade-deleted by the database.
 func (app *Application) DeleteAlbum(w http.ResponseWriter, r *http.Request) {
-	idParam := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid album id"), http.StatusBadRequest)
+	id, ok := parseIDParam(w, r, "id", "invalid album id")
+	if !ok {
 		return
 	}
 

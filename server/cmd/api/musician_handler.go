@@ -6,9 +6,6 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"net/http"
-	"strconv"
-
-	"github.com/go-chi/chi/v5"
 )
 
 func (app *Application) GetMusiciansAlphabetical(w http.ResponseWriter, r *http.Request) {
@@ -44,10 +41,8 @@ func (app *Application) GetMusiciansAlphabetical(w http.ResponseWriter, r *http.
 }
 
 func (app *Application) GetMusicianDetails(w http.ResponseWriter, r *http.Request) {
-	idParam := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid musician id"), http.StatusBadRequest)
+	id, ok := parseIDParam(w, r, "id", "invalid musician id")
+	if !ok {
 		return
 	}
 

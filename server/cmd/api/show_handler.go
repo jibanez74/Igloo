@@ -27,10 +27,8 @@ func (app *Application) GetLatestShows(w http.ResponseWriter, r *http.Request) {
 // by GetShowSeasonEpisodes, because a long-running show holds hundreds of
 // episodes with overview text and the page renders one season at a time.
 func (app *Application) GetShowDetails(w http.ResponseWriter, r *http.Request) {
-	idParam := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid show id"), http.StatusBadRequest)
+	id, ok := parseIDParam(w, r, "id", "invalid show id")
+	if !ok {
 		return
 	}
 
@@ -128,10 +126,8 @@ func (app *Application) GetShowDetails(w http.ResponseWriter, r *http.Request) {
 func (app *Application) GetShowSeasonEpisodes(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 
-	idParam := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid show id"), http.StatusBadRequest)
+	id, ok := parseIDParam(w, r, "id", "invalid show id")
+	if !ok {
 		return
 	}
 

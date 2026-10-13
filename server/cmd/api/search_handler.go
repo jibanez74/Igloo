@@ -277,14 +277,6 @@ func searchRankArgs(raw string) (exact, prefix string) {
 	return exact, prefix
 }
 
-func totalPages(total, perPage int64) int64 {
-	pages := total / perPage
-	if total%perPage > 0 {
-		pages++
-	}
-	return pages
-}
-
 func normalizeSearchPage(page, total, perPage int64) (int64, int64) {
 	pages := totalPages(total, perPage)
 	if pages == 0 {

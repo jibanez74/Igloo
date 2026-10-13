@@ -10,15 +10,11 @@ import (
 	"igloo/cmd/internal/tmdb"
 	"net/http"
 	"os"
-	"strconv"
-
-	"github.com/go-chi/chi/v5"
 )
 
 func (app *Application) IdentifyMovie(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New(invalidMovieIDMessage), http.StatusBadRequest)
+	id, ok := parseIDParam(w, r, "id", invalidMovieIDMessage)
+	if !ok {
 		return
 	}
 
@@ -101,9 +97,8 @@ func (app *Application) IdentifyMovie(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *Application) UpdateMovieMetadata(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New(invalidMovieIDMessage), http.StatusBadRequest)
+	id, ok := parseIDParam(w, r, "id", invalidMovieIDMessage)
+	if !ok {
 		return
 	}
 
@@ -214,9 +209,8 @@ func (app *Application) UpdateMovieMetadata(w http.ResponseWriter, r *http.Reque
 }
 
 func (app *Application) DeleteMovie(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New(invalidMovieIDMessage), http.StatusBadRequest)
+	id, ok := parseIDParam(w, r, "id", invalidMovieIDMessage)
+	if !ok {
 		return
 	}
 

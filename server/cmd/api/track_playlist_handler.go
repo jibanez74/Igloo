@@ -3,13 +3,10 @@ package main
 import (
 	"errors"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
-
-	"github.com/go-chi/chi/v5"
 )
 
 func (app *Application) GetPlaylists(w http.ResponseWriter, r *http.Request) {
@@ -31,10 +28,8 @@ func (app *Application) GetPlaylists(w http.ResponseWriter, r *http.Request) {
 func (app *Application) GetPlaylist(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 
-	idParam := chi.URLParam(r, "id")
-	playlistId, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New(invalidPlaylistIDMessage), http.StatusBadRequest)
+	playlistId, ok := parseIDParam(w, r, "id", invalidPlaylistIDMessage)
+	if !ok {
 		return
 	}
 
@@ -80,14 +75,12 @@ func (app *Application) GetPlaylist(w http.ResponseWriter, r *http.Request) {
 func (app *Application) GetPlaylistTracks(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 
-	idParam := chi.URLParam(r, "id")
-	playlistId, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New(invalidPlaylistIDMessage), http.StatusBadRequest)
+	playlistId, ok := parseIDParam(w, r, "id", invalidPlaylistIDMessage)
+	if !ok {
 		return
 	}
 
-	_, _, ok := app.authorizePlaylist(w, r, playlistId, userID, playlistContentTypeTrack, PermissionView, accessDeniedMessage, fetchPlaylistMessage)
+	_, _, ok = app.authorizePlaylist(w, r, playlistId, userID, playlistContentTypeTrack, PermissionView, accessDeniedMessage, fetchPlaylistMessage)
 	if !ok {
 		return
 	}
@@ -174,14 +167,12 @@ type UpdatePlaylistRequest struct {
 func (app *Application) UpdatePlaylist(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 
-	idParam := chi.URLParam(r, "id")
-	playlistId, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New(invalidPlaylistIDMessage), http.StatusBadRequest)
+	playlistId, ok := parseIDParam(w, r, "id", invalidPlaylistIDMessage)
+	if !ok {
 		return
 	}
 
-	_, _, ok := app.authorizePlaylist(w, r, playlistId, userID, playlistContentTypeTrack, PermissionOwner, "only the playlist owner can update metadata", updatePlaylistMessage)
+	_, _, ok = app.authorizePlaylist(w, r, playlistId, userID, playlistContentTypeTrack, PermissionOwner, "only the playlist owner can update metadata", updatePlaylistMessage)
 	if !ok {
 		return
 	}
@@ -232,10 +223,8 @@ func (app *Application) DeleteMoviePlaylist(w http.ResponseWriter, r *http.Reque
 func (app *Application) deletePlaylist(w http.ResponseWriter, r *http.Request, contentType string) {
 	userID := app.userIDFromRequest(r)
 
-	idParam := chi.URLParam(r, "id")
-	playlistId, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New(invalidPlaylistIDMessage), http.StatusBadRequest)
+	playlistId, ok := parseIDParam(w, r, "id", invalidPlaylistIDMessage)
+	if !ok {
 		return
 	}
 
@@ -244,7 +233,7 @@ func (app *Application) deletePlaylist(w http.ResponseWriter, r *http.Request, c
 		return
 	}
 
-	err = app.Queries.DeletePlaylist(r.Context(), database.DeletePlaylistParams{
+	err := app.Queries.DeletePlaylist(r.Context(), database.DeletePlaylistParams{
 		ID:     playlistId,
 		UserID: userID,
 	})
@@ -265,14 +254,12 @@ type AddTracksRequest struct {
 func (app *Application) AddTracksToPlaylist(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 
-	idParam := chi.URLParam(r, "id")
-	playlistId, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New(invalidPlaylistIDMessage), http.StatusBadRequest)
+	playlistId, ok := parseIDParam(w, r, "id", invalidPlaylistIDMessage)
+	if !ok {
 		return
 	}
 
-	_, _, ok := app.authorizePlaylist(w, r, playlistId, userID, playlistContentTypeTrack, PermissionEdit, "you don't have permission to add tracks to this playlist", "failed to add tracks")
+	_, _, ok = app.authorizePlaylist(w, r, playlistId, userID, playlistContentTypeTrack, PermissionEdit, "you don't have permission to add tracks to this playlist", "failed to add tracks")
 	if !ok {
 		return
 	}
@@ -318,26 +305,22 @@ func (app *Application) AddTracksToPlaylist(w http.ResponseWriter, r *http.Reque
 func (app *Application) RemoveTrackFromPlaylist(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 
-	playlistIdParam := chi.URLParam(r, "id")
-	playlistId, err := strconv.ParseInt(playlistIdParam, 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New(invalidPlaylistIDMessage), http.StatusBadRequest)
-		return
-	}
-
-	trackIdParam := chi.URLParam(r, "trackId")
-	trackId, err := strconv.ParseInt(trackIdParam, 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New(invalidTrackIDMessage), http.StatusBadRequest)
-		return
-	}
-
-	_, _, ok := app.authorizePlaylist(w, r, playlistId, userID, playlistContentTypeTrack, PermissionEdit, "you don't have permission to remove tracks from this playlist", "failed to remove track")
+	playlistId, ok := parseIDParam(w, r, "id", invalidPlaylistIDMessage)
 	if !ok {
 		return
 	}
 
-	err = app.removeFromPlaylist(r.Context(), playlistId, func(qtx *database.Queries) error {
+	trackId, ok := parseIDParam(w, r, "trackId", invalidTrackIDMessage)
+	if !ok {
+		return
+	}
+
+	_, _, ok = app.authorizePlaylist(w, r, playlistId, userID, playlistContentTypeTrack, PermissionEdit, "you don't have permission to remove tracks from this playlist", "failed to remove track")
+	if !ok {
+		return
+	}
+
+	err := app.removeFromPlaylist(r.Context(), playlistId, func(qtx *database.Queries) error {
 		return qtx.RemoveTrackFromPlaylist(r.Context(), database.RemoveTrackFromPlaylistParams{
 			PlaylistID: playlistId,
 			TrackID:    trackId,
@@ -361,14 +344,12 @@ type ReorderTracksRequest struct {
 func (app *Application) ReorderPlaylistTracks(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 
-	idParam := chi.URLParam(r, "id")
-	playlistId, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New(invalidPlaylistIDMessage), http.StatusBadRequest)
+	playlistId, ok := parseIDParam(w, r, "id", invalidPlaylistIDMessage)
+	if !ok {
 		return
 	}
 
-	_, _, ok := app.authorizePlaylist(w, r, playlistId, userID, playlistContentTypeTrack, PermissionEdit, "you don't have permission to reorder tracks in this playlist", "failed to reorder tracks")
+	_, _, ok = app.authorizePlaylist(w, r, playlistId, userID, playlistContentTypeTrack, PermissionEdit, "you don't have permission to reorder tracks in this playlist", "failed to reorder tracks")
 	if !ok {
 		return
 	}
@@ -441,14 +422,12 @@ func (app *Application) getPlaylistCollaborators(
 ) {
 	userID := app.userIDFromRequest(r)
 
-	idParam := chi.URLParam(r, "id")
-	playlistId, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New(invalidPlaylistIDMessage), http.StatusBadRequest)
+	playlistId, ok := parseIDParam(w, r, "id", invalidPlaylistIDMessage)
+	if !ok {
 		return
 	}
 
-	_, _, ok := app.authorizePlaylist(w, r, playlistId, userID, contentType, PermissionOwner, "only the playlist owner can view collaborators", "failed to fetch collaborators")
+	_, _, ok = app.authorizePlaylist(w, r, playlistId, userID, contentType, PermissionOwner, "only the playlist owner can view collaborators", "failed to fetch collaborators")
 	if !ok {
 		return
 	}
@@ -486,14 +465,12 @@ func (app *Application) addCollaborator(
 ) {
 	userID := app.userIDFromRequest(r)
 
-	idParam := chi.URLParam(r, "id")
-	playlistId, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New(invalidPlaylistIDMessage), http.StatusBadRequest)
+	playlistId, ok := parseIDParam(w, r, "id", invalidPlaylistIDMessage)
+	if !ok {
 		return
 	}
 
-	_, _, ok := app.authorizePlaylist(w, r, playlistId, userID, contentType, PermissionOwner, "only the playlist owner can add collaborators", "failed to add collaborator")
+	_, _, ok = app.authorizePlaylist(w, r, playlistId, userID, contentType, PermissionOwner, "only the playlist owner can add collaborators", "failed to add collaborator")
 	if !ok {
 		return
 	}
@@ -565,26 +542,22 @@ func (app *Application) removeCollaborator(
 ) {
 	userID := app.userIDFromRequest(r)
 
-	playlistIdParam := chi.URLParam(r, "id")
-	playlistId, err := strconv.ParseInt(playlistIdParam, 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New(invalidPlaylistIDMessage), http.StatusBadRequest)
-		return
-	}
-
-	collaboratorIdParam := chi.URLParam(r, "userId")
-	collaboratorId, err := strconv.ParseInt(collaboratorIdParam, 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid user id"), http.StatusBadRequest)
-		return
-	}
-
-	_, _, ok := app.authorizePlaylist(w, r, playlistId, userID, contentType, PermissionOwner, "only the playlist owner can remove collaborators", "failed to remove collaborator")
+	playlistId, ok := parseIDParam(w, r, "id", invalidPlaylistIDMessage)
 	if !ok {
 		return
 	}
 
-	err = app.Queries.RemoveCollaborator(r.Context(), database.RemoveCollaboratorParams{
+	collaboratorId, ok := parseIDParam(w, r, "userId", "invalid user id")
+	if !ok {
+		return
+	}
+
+	_, _, ok = app.authorizePlaylist(w, r, playlistId, userID, contentType, PermissionOwner, "only the playlist owner can remove collaborators", "failed to remove collaborator")
+	if !ok {
+		return
+	}
+
+	err := app.Queries.RemoveCollaborator(r.Context(), database.RemoveCollaboratorParams{
 		PlaylistID: playlistId,
 		UserID:     collaboratorId,
 	})

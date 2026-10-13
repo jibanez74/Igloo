@@ -4,13 +4,10 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
-
-	"github.com/go-chi/chi/v5"
 )
 
 type adminUserSummary struct {
@@ -143,10 +140,8 @@ type AdminUpdateUserRequest struct {
 }
 
 func (app *Application) AdminUpdateUser(w http.ResponseWriter, r *http.Request) {
-	idParam := chi.URLParam(r, "id")
-	targetID, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid user ID"), http.StatusBadRequest)
+	targetID, ok := parseIDParam(w, r, "id", "invalid user ID")
+	if !ok {
 		return
 	}
 
@@ -261,10 +256,8 @@ func (app *Application) AdminUpdateUser(w http.ResponseWriter, r *http.Request) 
 }
 
 func (app *Application) AdminDeleteUser(w http.ResponseWriter, r *http.Request) {
-	idParam := chi.URLParam(r, "id")
-	targetID, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid user ID"), http.StatusBadRequest)
+	targetID, ok := parseIDParam(w, r, "id", "invalid user ID")
+	if !ok {
 		return
 	}
 
@@ -350,10 +343,8 @@ type AdminResetUserPasswordRequest struct {
 }
 
 func (app *Application) AdminResetUserPassword(w http.ResponseWriter, r *http.Request) {
-	idParam := chi.URLParam(r, "id")
-	targetID, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid user ID"), http.StatusBadRequest)
+	targetID, ok := parseIDParam(w, r, "id", "invalid user ID")
+	if !ok {
 		return
 	}
 
