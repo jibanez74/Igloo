@@ -66,8 +66,7 @@ func (app *Application) writeNotificationViewerError(w http.ResponseWriter, r *h
 		return
 	}
 
-	app.Logger.Error("failed to load user for notifications", "error", err, "user_id", userID)
-	helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+	app.serverError(w, err, "failed to load user for notifications", internalServerErrorMessage, "user_id", userID)
 }
 
 // notificationViewerIsAdmin reports whether the current user is an admin, which
@@ -127,8 +126,7 @@ func (app *Application) CreateNotification(w http.ResponseWriter, r *http.Reques
 	})
 
 	if err != nil {
-		app.Logger.Error("failed to create notification", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to create notification", internalServerErrorMessage, "user_id", userID)
 		return
 	}
 
@@ -178,8 +176,7 @@ func (app *Application) ListNotifications(w http.ResponseWriter, r *http.Request
 		RowLimit: notificationListLimit,
 	})
 	if err != nil {
-		app.Logger.Error("failed to list notifications", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to list notifications", internalServerErrorMessage, "user_id", userID)
 		return
 	}
 
@@ -244,8 +241,8 @@ func (app *Application) MarkNotificationRead(w http.ResponseWriter, r *http.Requ
 			NotificationID: notificationID,
 		})
 		if err != nil {
-			app.Logger.Error("failed to mark notification read", "error", err, "user_id", userID, "notification_id", notificationID)
-			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+			app.serverError(w, err, "failed to mark notification read", internalServerErrorMessage,
+				"user_id", userID, "notification_id", notificationID)
 			return
 		}
 	}
@@ -269,8 +266,7 @@ func (app *Application) MarkAllNotificationsRead(w http.ResponseWriter, r *http.
 	if isAdmin {
 		err := app.Queries.MarkAllNotificationsReadForUser(r.Context(), userID)
 		if err != nil {
-			app.Logger.Error("failed to mark all notifications read", "error", err, "user_id", userID)
-			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+			app.serverError(w, err, "failed to mark all notifications read", internalServerErrorMessage, "user_id", userID)
 			return
 		}
 	}
@@ -304,8 +300,8 @@ func (app *Application) DeleteNotification(w http.ResponseWriter, r *http.Reques
 		var err error
 		rowsAffected, err = app.Queries.DeleteNotificationForUser(r.Context(), notificationID)
 		if err != nil {
-			app.Logger.Error("failed to delete notification", "error", err, "user_id", userID, "notification_id", notificationID)
-			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+			app.serverError(w, err, "failed to delete notification", internalServerErrorMessage,
+				"user_id", userID, "notification_id", notificationID)
 			return
 		}
 	}

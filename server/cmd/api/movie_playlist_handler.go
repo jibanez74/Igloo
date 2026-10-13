@@ -48,8 +48,7 @@ func (app *Application) GetMoviePlaylists(w http.ResponseWriter, r *http.Request
 
 	playlists, err := app.Queries.GetMoviePlaylistsWithCollaboratorAccess(r.Context(), userID)
 	if err != nil {
-		app.Logger.Error("failed to get movie playlists", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch playlists"))
+		app.serverError(w, err, "failed to get movie playlists", "failed to fetch playlists")
 		return
 	}
 
@@ -91,8 +90,7 @@ func (app *Application) CreateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 	if req.MovieID != nil {
 		movieOK, err := app.Queries.MovieExists(ctx, *req.MovieID)
 		if err != nil {
-			app.Logger.Error("failed to verify movie for playlist", "error", err)
-			helpers.ErrorJSON(w, errors.New("failed to verify movie"))
+			app.serverError(w, err, "failed to verify movie for playlist", "failed to verify movie")
 			return
 		}
 		if !movieOK {
@@ -114,8 +112,7 @@ func (app *Application) CreateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 		MovieID:     movieID,
 	})
 	if err != nil {
-		app.Logger.Error("failed to create movie playlist", "error", err)
-		helpers.ErrorJSON(w, errors.New(createPlaylistMessage))
+		app.serverError(w, err, "failed to create movie playlist", createPlaylistMessage)
 		return
 	}
 
@@ -146,8 +143,7 @@ func (app *Application) GetMoviePlaylist(w http.ResponseWriter, r *http.Request)
 			helpers.ErrorJSON(w, errors.New(playlistNotFoundMessage), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error(playlistPermissionLogMessage, "error", err)
-		helpers.ErrorJSON(w, errors.New(fetchPlaylistMessage))
+		app.serverError(w, err, playlistPermissionLogMessage, fetchPlaylistMessage)
 		return
 	}
 
@@ -162,15 +158,13 @@ func (app *Application) GetMoviePlaylist(w http.ResponseWriter, r *http.Request)
 
 	owner, err := app.getPlaylistOwner(r.Context(), playlist.UserID)
 	if err != nil {
-		app.Logger.Error(getPlaylistOwnerLogMessage, "error", err)
-		helpers.ErrorJSON(w, errors.New(fetchPlaylistMessage))
+		app.serverError(w, err, getPlaylistOwnerLogMessage, fetchPlaylistMessage)
 		return
 	}
 
 	movieCount, err := app.Queries.CountPlaylistMovies(r.Context(), playlistID)
 	if err != nil {
-		app.Logger.Error("failed to count playlist movies", "error", err, "playlist_id", playlistID)
-		helpers.ErrorJSON(w, errors.New(fetchPlaylistMessage))
+		app.serverError(w, err, "failed to count playlist movies", fetchPlaylistMessage, "playlist_id", playlistID)
 		return
 	}
 
@@ -178,8 +172,7 @@ func (app *Application) GetMoviePlaylist(w http.ResponseWriter, r *http.Request)
 	if permission == PermissionOwner {
 		collaborators, err = app.Queries.GetPlaylistCollaborators(r.Context(), playlistID)
 		if err != nil {
-			app.Logger.Error("failed to get playlist collaborators", "error", err, "playlist_id", playlistID)
-			helpers.ErrorJSON(w, errors.New(fetchPlaylistMessage))
+			app.serverError(w, err, "failed to get playlist collaborators", fetchPlaylistMessage, "playlist_id", playlistID)
 			return
 		}
 	}
@@ -223,8 +216,7 @@ func (app *Application) UpdateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 			helpers.ErrorJSON(w, errors.New(playlistNotFoundMessage), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error(playlistPermissionLogMessage, "error", err)
-		helpers.ErrorJSON(w, errors.New(updatePlaylistMessage))
+		app.serverError(w, err, playlistPermissionLogMessage, updatePlaylistMessage)
 		return
 	}
 
@@ -255,8 +247,7 @@ func (app *Application) UpdateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 	if req.MovieID != nil {
 		movieOK, err := app.Queries.MovieExists(ctx, *req.MovieID)
 		if err != nil {
-			app.Logger.Error("failed to verify movie for playlist", "error", err)
-			helpers.ErrorJSON(w, errors.New("failed to verify movie"))
+			app.serverError(w, err, "failed to verify movie for playlist", "failed to verify movie")
 			return
 		}
 		if !movieOK {
@@ -282,8 +273,7 @@ func (app *Application) UpdateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 			helpers.ErrorJSON(w, errors.New(playlistNotFoundMessage), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error("failed to update movie playlist", "error", err)
-		helpers.ErrorJSON(w, errors.New(updatePlaylistMessage))
+		app.serverError(w, err, "failed to update movie playlist", updatePlaylistMessage)
 		return
 	}
 
@@ -314,8 +304,7 @@ func (app *Application) DeleteMoviePlaylist(w http.ResponseWriter, r *http.Reque
 			helpers.ErrorJSON(w, errors.New(playlistNotFoundMessage), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error(getPlaylistLogMessage, "error", err)
-		helpers.ErrorJSON(w, errors.New(deletePlaylistMessage))
+		app.serverError(w, err, getPlaylistLogMessage, deletePlaylistMessage)
 		return
 	}
 
@@ -333,8 +322,7 @@ func (app *Application) DeleteMoviePlaylist(w http.ResponseWriter, r *http.Reque
 		UserID: userID,
 	})
 	if err != nil {
-		app.Logger.Error("failed to delete movie playlist", "error", err)
-		helpers.ErrorJSON(w, errors.New(deletePlaylistMessage))
+		app.serverError(w, err, "failed to delete movie playlist", deletePlaylistMessage)
 		return
 	}
 
@@ -360,8 +348,7 @@ func (app *Application) GetMoviePlaylistMovies(w http.ResponseWriter, r *http.Re
 			helpers.ErrorJSON(w, errors.New(playlistNotFoundMessage), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error(playlistPermissionLogMessage, "error", err)
-		helpers.ErrorJSON(w, errors.New(fetchPlaylistMessage))
+		app.serverError(w, err, playlistPermissionLogMessage, fetchPlaylistMessage)
 		return
 	}
 
@@ -380,8 +367,7 @@ func (app *Application) GetMoviePlaylistMovies(w http.ResponseWriter, r *http.Re
 
 	total, err := app.Queries.CountPlaylistMovies(ctx, playlistID)
 	if err != nil {
-		app.Logger.Error("failed to count playlist movies", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch playlist items"))
+		app.serverError(w, err, "failed to count playlist movies", "failed to fetch playlist items")
 		return
 	}
 
@@ -393,8 +379,7 @@ func (app *Application) GetMoviePlaylistMovies(w http.ResponseWriter, r *http.Re
 			Offset:     offset,
 		})
 		if err != nil {
-			app.Logger.Error("failed to get playlist movies", "error", err)
-			helpers.ErrorJSON(w, errors.New("failed to fetch playlist movies"))
+			app.serverError(w, err, "failed to get playlist movies", "failed to fetch playlist movies")
 			return
 		}
 		movies = libraryRowsFromPlaylistDesc(descRows)
@@ -405,8 +390,7 @@ func (app *Application) GetMoviePlaylistMovies(w http.ResponseWriter, r *http.Re
 			Offset:     offset,
 		})
 		if err != nil {
-			app.Logger.Error("failed to get playlist movies", "error", err)
-			helpers.ErrorJSON(w, errors.New("failed to fetch playlist movies"))
+			app.serverError(w, err, "failed to get playlist movies", "failed to fetch playlist movies")
 			return
 		}
 		movies = libraryRowsFromPlaylistAsc(ascRows)
@@ -452,8 +436,7 @@ func (app *Application) AddMoviesToMoviePlaylist(w http.ResponseWriter, r *http.
 			helpers.ErrorJSON(w, errors.New(playlistNotFoundMessage), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error(playlistPermissionLogMessage, "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to add movies"))
+		app.serverError(w, err, playlistPermissionLogMessage, "failed to add movies")
 		return
 	}
 
@@ -486,8 +469,8 @@ func (app *Application) AddMoviesToMoviePlaylist(w http.ResponseWriter, r *http.
 	// and is counted as skipped, exactly as before.
 	tx, err := app.DB.BeginTx(ctx, nil)
 	if err != nil {
-		app.Logger.Error("failed to begin add-movies transaction", "error", err, "playlist_id", playlistID)
-		helpers.ErrorJSON(w, errors.New("failed to add movies to playlist"), http.StatusInternalServerError)
+		app.serverError(w, err, "failed to begin add-movies transaction", "failed to add movies to playlist",
+			"playlist_id", playlistID)
 		return
 	}
 	defer func() { _ = tx.Rollback() }()
@@ -516,8 +499,8 @@ func (app *Application) AddMoviesToMoviePlaylist(w http.ResponseWriter, r *http.
 				app.Logger.Warn("skip unknown movie id for playlist", "movie_id", movieID)
 				continue
 			}
-			app.Logger.Error("failed to add movie to playlist", "error", err, "movie_id", movieID, "playlist_id", playlistID)
-			helpers.ErrorJSON(w, errors.New("failed to add movies to playlist"), http.StatusInternalServerError)
+			app.serverError(w, err, "failed to add movie to playlist", "failed to add movies to playlist",
+				"movie_id", movieID, "playlist_id", playlistID)
 			return
 		}
 		if rowsAffected == 0 {
@@ -530,16 +513,16 @@ func (app *Application) AddMoviesToMoviePlaylist(w http.ResponseWriter, r *http.
 	if addedCount > 0 {
 		timestampErr := qtx.UpdatePlaylistTimestamp(ctx, playlistID)
 		if timestampErr != nil {
-			app.Logger.Error(updatePlaylistTimestampLogMessage, "error", timestampErr, "playlist_id", playlistID)
-			helpers.ErrorJSON(w, errors.New(finalizePlaylistUpdateMessage), http.StatusInternalServerError)
+			app.serverError(w, timestampErr, updatePlaylistTimestampLogMessage, finalizePlaylistUpdateMessage,
+				"playlist_id", playlistID)
 			return
 		}
 	}
 
 	err = tx.Commit()
 	if err != nil {
-		app.Logger.Error("failed to commit add-movies transaction", "error", err, "playlist_id", playlistID)
-		helpers.ErrorJSON(w, errors.New("failed to add movies to playlist"), http.StatusInternalServerError)
+		app.serverError(w, err, "failed to commit add-movies transaction", "failed to add movies to playlist",
+			"playlist_id", playlistID)
 		return
 	}
 
@@ -576,8 +559,7 @@ func (app *Application) RemoveMovieFromMoviePlaylist(w http.ResponseWriter, r *h
 			helpers.ErrorJSON(w, errors.New(playlistNotFoundMessage), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error(playlistPermissionLogMessage, "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to remove movie"))
+		app.serverError(w, err, playlistPermissionLogMessage, "failed to remove movie")
 		return
 	}
 
@@ -597,8 +579,8 @@ func (app *Application) RemoveMovieFromMoviePlaylist(w http.ResponseWriter, r *h
 		})
 	})
 	if err != nil {
-		app.Logger.Error("failed to remove movie from playlist", "error", err, "playlist_id", playlistID, "movie_id", movieID)
-		helpers.ErrorJSON(w, errors.New("failed to remove movie"))
+		app.serverError(w, err, "failed to remove movie from playlist", "failed to remove movie",
+			"playlist_id", playlistID, "movie_id", movieID)
 		return
 	}
 

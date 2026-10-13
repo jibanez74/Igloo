@@ -167,8 +167,7 @@ func (app *Application) GetMoviesLibrary(w http.ResponseWriter, r *http.Request)
 
 	total, err := app.Queries.GetMoviesCount(ctx)
 	if err != nil {
-		app.Logger.Error("failed to get movies count", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch movies count"))
+		app.serverError(w, err, "failed to get movies count", "failed to fetch movies count")
 		return
 	}
 
@@ -181,16 +180,14 @@ func (app *Application) GetMoviesLibrary(w http.ResponseWriter, r *http.Request)
 			Offset: pag.Offset,
 		})
 		if err != nil {
-			app.Logger.Error("failed to get movies library", "error", err)
-			helpers.ErrorJSON(w, errors.New("failed to fetch movies"))
+			app.serverError(w, err, "failed to get movies library", "failed to fetch movies")
 			return
 		}
 		movies = libraryRowsFromDesc(descRows)
 	} else {
 		movies, err = app.Queries.GetMoviesLibraryAsc(ctx, pag)
 		if err != nil {
-			app.Logger.Error("failed to get movies library", "error", err)
-			helpers.ErrorJSON(w, errors.New("failed to fetch movies"))
+			app.serverError(w, err, "failed to get movies library", "failed to fetch movies")
 			return
 		}
 	}
@@ -243,8 +240,7 @@ func libraryRowsFromGenreDesc(rows []database.GetMoviesByGenreDescRow) []databas
 func (app *Application) GetMovieGenresList(w http.ResponseWriter, r *http.Request) {
 	rows, err := app.Queries.GetMovieGenresWithCounts(r.Context())
 	if err != nil {
-		app.Logger.Error("failed to get movie genres with counts", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch genres"))
+		app.serverError(w, err, "failed to get movie genres with counts", "failed to fetch genres")
 		return
 	}
 
@@ -269,8 +265,7 @@ func (app *Application) GetMoviesByGenreLibrary(w http.ResponseWriter, r *http.R
 
 	total, err := app.Queries.CountMoviesForGenre(ctx, genreID)
 	if err != nil {
-		app.Logger.Error("failed to count movies for genre", "error", err, "genre_id", genreID)
-		helpers.ErrorJSON(w, errors.New("failed to fetch movies count for genre"))
+		app.serverError(w, err, "failed to count movies for genre", "failed to fetch movies count for genre", "genre_id", genreID)
 		return
 	}
 
@@ -284,16 +279,14 @@ func (app *Application) GetMoviesByGenreLibrary(w http.ResponseWriter, r *http.R
 			Offset:  paramsAsc.Offset,
 		})
 		if err != nil {
-			app.Logger.Error("failed to get movies by genre", "error", err, "genre_id", genreID)
-			helpers.ErrorJSON(w, errors.New("failed to fetch movies"))
+			app.serverError(w, err, "failed to get movies by genre", "failed to fetch movies", "genre_id", genreID)
 			return
 		}
 		movies = libraryRowsFromGenreDesc(descRows)
 	} else {
 		ascRows, err := app.Queries.GetMoviesByGenreAsc(ctx, paramsAsc)
 		if err != nil {
-			app.Logger.Error("failed to get movies by genre", "error", err, "genre_id", genreID)
-			helpers.ErrorJSON(w, errors.New("failed to fetch movies"))
+			app.serverError(w, err, "failed to get movies by genre", "failed to fetch movies", "genre_id", genreID)
 			return
 		}
 		movies = libraryRowsFromGenreAsc(ascRows)
@@ -328,8 +321,7 @@ func (app *Application) GetLikedMovies(w http.ResponseWriter, r *http.Request) {
 
 	total, err := app.Queries.CountUserLikedMovies(ctx, userID)
 	if err != nil {
-		app.Logger.Error("failed to count liked movies", "error", err, "userID", userID)
-		helpers.ErrorJSON(w, errors.New("failed to fetch liked movies count"))
+		app.serverError(w, err, "failed to count liked movies", "failed to fetch liked movies count", "userID", userID)
 		return
 	}
 
@@ -343,16 +335,14 @@ func (app *Application) GetLikedMovies(w http.ResponseWriter, r *http.Request) {
 			Offset: paramsAsc.Offset,
 		})
 		if err != nil {
-			app.Logger.Error("failed to get liked movies", "error", err, "userID", userID)
-			helpers.ErrorJSON(w, errors.New("failed to fetch liked movies"))
+			app.serverError(w, err, "failed to get liked movies", "failed to fetch liked movies", "userID", userID)
 			return
 		}
 		movies = libraryRowsFromLikedDesc(descRows)
 	} else {
 		ascRows, err := app.Queries.GetLikedMoviesForUserAsc(ctx, paramsAsc)
 		if err != nil {
-			app.Logger.Error("failed to get liked movies", "error", err, "userID", userID)
-			helpers.ErrorJSON(w, errors.New("failed to fetch liked movies"))
+			app.serverError(w, err, "failed to get liked movies", "failed to fetch liked movies", "userID", userID)
 			return
 		}
 		movies = libraryRowsFromLikedAsc(ascRows)
@@ -398,8 +388,7 @@ func (app *Application) GetMovieLikeStatus(w http.ResponseWriter, r *http.Reques
 		MovieID: movieID,
 	})
 	if err != nil {
-		app.Logger.Error("failed to check movie like status", "error", err, "movie_id", movieID)
-		helpers.ErrorJSON(w, errors.New("failed to check like status"))
+		app.serverError(w, err, "failed to check movie like status", "failed to check like status", "movie_id", movieID)
 		return
 	}
 
@@ -459,8 +448,7 @@ func (app *Application) ToggleLikeMovie(w http.ResponseWriter, r *http.Request) 
 
 	movieOK, err := app.Queries.MovieExists(ctx, movieID)
 	if err != nil {
-		app.Logger.Error("failed to get movie for like toggle", "error", err, "id", movieID)
-		helpers.ErrorJSON(w, errors.New("failed to verify movie exists"))
+		app.serverError(w, err, "failed to get movie for like toggle", "failed to verify movie exists", "id", movieID)
 		return
 	}
 	if !movieOK {
@@ -470,8 +458,7 @@ func (app *Application) ToggleLikeMovie(w http.ResponseWriter, r *http.Request) 
 
 	isLiked, err := app.toggleMovieLike(ctx, userID, movieID)
 	if err != nil {
-		app.Logger.Error("failed to toggle movie like", "error", err, "movieID", movieID, "userID", userID)
-		helpers.ErrorJSON(w, errors.New("failed to update like"))
+		app.serverError(w, err, "failed to toggle movie like", "failed to update like", "movieID", movieID, "userID", userID)
 		return
 	}
 
@@ -486,8 +473,7 @@ func (app *Application) ToggleLikeMovie(w http.ResponseWriter, r *http.Request) 
 func (app *Application) GetMoviesStats(w http.ResponseWriter, r *http.Request) {
 	total, err := app.Queries.GetMoviesCount(r.Context())
 	if err != nil {
-		app.Logger.Error("failed to get movies count", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch movies stats"))
+		app.serverError(w, err, "failed to get movies count", "failed to fetch movies stats")
 		return
 	}
 
@@ -501,8 +487,7 @@ func (app *Application) GetMoviesStats(w http.ResponseWriter, r *http.Request) {
 func (app *Application) GetLatestMovies(w http.ResponseWriter, r *http.Request) {
 	movies, err := app.Queries.GetLatestMovies(r.Context())
 	if err != nil {
-		app.Logger.Error("failed to get latest movies", "error", err)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to get latest movies", internalServerErrorMessage)
 		return
 	}
 
@@ -522,8 +507,7 @@ func (app *Application) GetMovieDetails(w http.ResponseWriter, r *http.Request) 
 
 	tx, err := app.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
-		app.Logger.Error(beginTransactionLogMessage, "error", err)
-		helpers.ErrorJSON(w, errors.New(fetchMovieMessage))
+		app.serverError(w, err, beginTransactionLogMessage, fetchMovieMessage)
 		return
 	}
 	defer tx.Rollback()
@@ -537,43 +521,39 @@ func (app *Application) GetMovieDetails(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 
-		app.Logger.Error(getMovieLogMessage, "error", err, "id", id)
-		helpers.ErrorJSON(w, errors.New(fetchMovieMessage))
+		app.serverError(w, err, getMovieLogMessage, fetchMovieMessage, "id", id)
 		return
 	}
 
 	cast, err := qtx.GetCastByMovieID(ctx, id)
 	if err != nil {
-		app.Logger.Error("failed to get cast for movie", "error", err, "movie_id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch movie cast from server"))
+		app.serverError(w, err, "failed to get cast for movie", "failed to fetch movie cast from server", "movie_id", id)
 		return
 	}
 
 	crew, err := qtx.GetCrewByMovieID(ctx, id)
 	if err != nil {
-		app.Logger.Error("failed to get crew for movie", "error", err, "movie_id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch movie crew from server"))
+		app.serverError(w, err, "failed to get crew for movie", "failed to fetch movie crew from server", "movie_id", id)
 		return
 	}
 
 	genres, err := qtx.GetGenresByMovieID(ctx, id)
 	if err != nil {
-		app.Logger.Error("failed to get genres for movie", "error", err, "movie_id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch movie genres from server"))
+		app.serverError(w, err, "failed to get genres for movie", "failed to fetch movie genres from server", "movie_id", id)
 		return
 	}
 
 	productionCompanies, err := qtx.GetProductionCompaniesByMovieID(ctx, id)
 	if err != nil {
-		app.Logger.Error("failed to get production companies for movie", "error", err, "movie_id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch movie production companies from server"))
+		app.serverError(w, err, "failed to get production companies for movie", "failed to fetch movie production companies from server",
+			"movie_id", id)
 		return
 	}
 
 	extraVideos, err := qtx.GetMovieExtraVideos(ctx, id)
 	if err != nil {
-		app.Logger.Error("failed to get extra videos for movie", "error", err, "movie_id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch movie extra videos from server"))
+		app.serverError(w, err, "failed to get extra videos for movie", "failed to fetch movie extra videos from server",
+			"movie_id", id)
 		return
 	}
 
@@ -601,8 +581,7 @@ func (app *Application) GetMovieTechnicalDetails(w http.ResponseWriter, r *http.
 
 	tx, err := app.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
-		app.Logger.Error(beginTransactionLogMessage, "error", err)
-		helpers.ErrorJSON(w, errors.New(fetchTechnicalDetailsMessage))
+		app.serverError(w, err, beginTransactionLogMessage, fetchTechnicalDetailsMessage)
 		return
 	}
 	defer tx.Rollback()
@@ -615,36 +594,31 @@ func (app *Application) GetMovieTechnicalDetails(w http.ResponseWriter, r *http.
 			helpers.ErrorJSON(w, errors.New(movieNotFoundMessage), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error(getMovieLogMessage, "error", err, "id", id)
-		helpers.ErrorJSON(w, errors.New(fetchTechnicalDetailsMessage))
+		app.serverError(w, err, getMovieLogMessage, fetchTechnicalDetailsMessage, "id", id)
 		return
 	}
 
 	videoStreams, err := qtx.GetVideoStreamsByMovieID(ctx, id)
 	if err != nil {
-		app.Logger.Error("failed to get video streams", "error", err, "movie_id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch video streams"))
+		app.serverError(w, err, "failed to get video streams", "failed to fetch video streams", "movie_id", id)
 		return
 	}
 
 	audioStreams, err := qtx.GetAudioStreamsByMovieID(ctx, id)
 	if err != nil {
-		app.Logger.Error("failed to get audio streams", "error", err, "movie_id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch audio streams"))
+		app.serverError(w, err, "failed to get audio streams", "failed to fetch audio streams", "movie_id", id)
 		return
 	}
 
 	subtitles, err := qtx.GetSubtitlesByMovieID(ctx, id)
 	if err != nil {
-		app.Logger.Error(getSubtitlesLogMessage, "error", err, "movie_id", id)
-		helpers.ErrorJSON(w, errors.New(fetchSubtitlesMessage))
+		app.serverError(w, err, getSubtitlesLogMessage, fetchSubtitlesMessage, "movie_id", id)
 		return
 	}
 
 	chapters, err := qtx.GetChaptersByMovieID(ctx, id)
 	if err != nil {
-		app.Logger.Error("failed to get chapters", "error", err, "movie_id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch chapters"))
+		app.serverError(w, err, "failed to get chapters", "failed to fetch chapters", "movie_id", id)
 		return
 	}
 

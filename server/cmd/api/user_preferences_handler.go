@@ -56,8 +56,7 @@ func (app *Application) GetTrailerPreferences(w http.ResponseWriter, r *http.Req
 
 	prefs, err := app.loadTrailerPreferences(r.Context(), userID)
 	if err != nil {
-		app.Logger.Error("failed to load trailer preferences", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to load trailer preferences", internalServerErrorMessage, "user_id", userID)
 		return
 	}
 
@@ -96,8 +95,7 @@ func (app *Application) UpdateTrailerPreferences(w http.ResponseWriter, r *http.
 		TrailersSource:  prefs.Source,
 	})
 	if err != nil {
-		app.Logger.Error("failed to save trailer preferences", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to save trailer preferences", internalServerErrorMessage, "user_id", userID)
 		return
 	}
 

@@ -104,8 +104,8 @@ func (app *Application) serveStreamFile(w http.ResponseWriter, r *http.Request, 
 			return
 		}
 
-		app.Logger.Error("failed to resolve media for streaming", "error", err, "media", media.String())
-		helpers.ErrorJSON(w, errors.New("failed to fetch media from server"))
+		app.serverError(w, err, "failed to resolve media for streaming", "failed to fetch media from server",
+			"media", media.String())
 		return
 	}
 

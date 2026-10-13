@@ -95,8 +95,8 @@ func (app *Application) rejectDriftedWatchRoom(w http.ResponseWriter, room datab
 		return true
 	}
 	if err != nil {
-		app.Logger.Error("failed to verify watch room stream pins", "error", err, "room_id", room.ID, "movie_id", room.MovieID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to verify watch room stream pins", internalServerErrorMessage,
+			"room_id", room.ID, "movie_id", room.MovieID)
 		return true
 	}
 	return false
@@ -168,8 +168,7 @@ func (app *Application) WatchRoomHLSSegment(w http.ResponseWriter, r *http.Reque
 	key := RoomHLSSessionKey(room.ID)
 	session, found, err := app.getActiveRoomHLSSession(room.ID, key)
 	if err != nil {
-		app.Logger.Error("watch room hls session fetch failed", "error", err, "room_id", room.ID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage), http.StatusInternalServerError)
+		app.serverError(w, err, "watch room hls session fetch failed", internalServerErrorMessage, "room_id", room.ID)
 		return
 	}
 	if !found {
@@ -202,8 +201,8 @@ func (app *Application) StreamWatchRoomMovie(w http.ResponseWriter, r *http.Requ
 			return
 		}
 
-		app.Logger.Error("failed to get watch room movie for streaming", "error", err, "room_id", room.ID, "movie_id", room.MovieID)
-		helpers.ErrorJSON(w, errors.New(fetchMovieMessage))
+		app.serverError(w, err, "failed to get watch room movie for streaming", fetchMovieMessage,
+			"room_id", room.ID, "movie_id", room.MovieID)
 		return
 	}
 

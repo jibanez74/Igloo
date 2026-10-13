@@ -172,8 +172,7 @@ func (app *Application) rejectWatchProgressWrite(w http.ResponseWriter, r *http.
 		return
 	}
 
-	app.Logger.Error(logMessage, "error", writeErr, "media", media.String())
-	helpers.ErrorJSON(w, errors.New(userMessage))
+	app.serverError(w, writeErr, logMessage, userMessage, "media", media.String())
 }
 
 func emptyWatchProgressResponse() watchProgressResponse {
@@ -225,8 +224,8 @@ func (app *Application) getWatchProgress(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
-		app.Logger.Error("failed to get watch progress", "error", err, "media", media.String(), "user_id", userID)
-		helpers.ErrorJSON(w, errors.New("failed to fetch watch progress"))
+		app.serverError(w, err, "failed to get watch progress", "failed to fetch watch progress",
+			"media", media.String(), "user_id", userID)
 		return
 	}
 
@@ -236,8 +235,8 @@ func (app *Application) getWatchProgress(w http.ResponseWriter, r *http.Request,
 			helpers.ErrorJSON(w, errors.New(media.notFoundMessage()), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error("failed to verify media exists for watch progress", "error", err, "media", media.String())
-		helpers.ErrorJSON(w, errors.New("failed to fetch watch progress"))
+		app.serverError(w, err, "failed to verify media exists for watch progress", "failed to fetch watch progress",
+			"media", media.String())
 		return
 	}
 
@@ -284,8 +283,7 @@ func (app *Application) GetContinueWatching(w http.ResponseWriter, r *http.Reque
 		Limit:  continueWatchingLimit,
 	})
 	if err != nil {
-		app.Logger.Error("failed to get continue watching movies", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New("failed to fetch continue watching"))
+		app.serverError(w, err, "failed to get continue watching movies", "failed to fetch continue watching", "user_id", userID)
 		return
 	}
 
@@ -294,8 +292,8 @@ func (app *Application) GetContinueWatching(w http.ResponseWriter, r *http.Reque
 		Limit:  continueWatchingLimit,
 	})
 	if err != nil {
-		app.Logger.Error("failed to get continue watching episodes", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New("failed to fetch continue watching"))
+		app.serverError(w, err, "failed to get continue watching episodes", "failed to fetch continue watching",
+			"user_id", userID)
 		return
 	}
 
@@ -483,15 +481,15 @@ func (app *Application) deleteWatchProgress(w http.ResponseWriter, r *http.Reque
 			helpers.ErrorJSON(w, errors.New(media.notFoundMessage()), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error("failed to verify media exists for watch progress delete", "error", err, "media", media.String())
-		helpers.ErrorJSON(w, errors.New("failed to clear watch progress"))
+		app.serverError(w, err, "failed to verify media exists for watch progress delete", "failed to clear watch progress",
+			"media", media.String())
 		return
 	}
 
 	err = store.remove(r.Context(), userID, media.ID)
 	if err != nil {
-		app.Logger.Error("failed to delete watch progress", "error", err, "media", media.String(), "user_id", userID)
-		helpers.ErrorJSON(w, errors.New("failed to clear watch progress"))
+		app.serverError(w, err, "failed to delete watch progress", "failed to clear watch progress",
+			"media", media.String(), "user_id", userID)
 		return
 	}
 

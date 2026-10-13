@@ -232,8 +232,7 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 		return updated, nil
 	})
 	if err != nil {
-		app.Logger.Error("failed to update general settings", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to update settings"))
+		app.serverError(w, err, "failed to update general settings", "failed to update settings")
 		return
 	}
 
@@ -299,8 +298,7 @@ func (app *Application) UpdateLibrarySettings(w http.ResponseWriter, r *http.Req
 		})
 	})
 	if err != nil {
-		app.Logger.Error("failed to update library settings", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to update library settings"))
+		app.serverError(w, err, "failed to update library settings", "failed to update library settings")
 		return
 	}
 

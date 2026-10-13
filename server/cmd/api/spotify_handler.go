@@ -65,8 +65,7 @@ func (app *Application) SearchSpotifyAlbums(w http.ResponseWriter, r *http.Reque
 
 	results, err := app.mapSpotifyAlbumSearchResults(r, albums)
 	if err != nil {
-		app.Logger.Error("failed to map spotify album search results", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to map Spotify album search results"), http.StatusInternalServerError)
+		app.serverError(w, err, "failed to map spotify album search results", "failed to map Spotify album search results")
 		return
 	}
 

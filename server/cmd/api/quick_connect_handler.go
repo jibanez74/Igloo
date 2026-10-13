@@ -56,8 +56,7 @@ func (app *Application) InitiateQuickConnect(w http.ResponseWriter, r *http.Requ
 			return
 		}
 
-		app.Logger.Error("failed to initiate quick connect", "error", err)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to initiate quick connect", internalServerErrorMessage)
 		return
 	}
 
@@ -203,8 +202,7 @@ func (app *Application) ApproveQuickConnect(w http.ResponseWriter, r *http.Reque
 func (app *Application) issueDeviceToken(w http.ResponseWriter, r *http.Request, userID int64, deviceName, platform, appVersion string) (string, database.CreateDeviceRow, bool) {
 	token, tokenHash, err := generateDeviceToken()
 	if err != nil {
-		app.Logger.Error("failed to generate device token", "error", err)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to generate device token", internalServerErrorMessage)
 		return "", database.CreateDeviceRow{}, false
 	}
 
@@ -216,8 +214,7 @@ func (app *Application) issueDeviceToken(w http.ResponseWriter, r *http.Request,
 		TokenHash:  tokenHash,
 	})
 	if err != nil {
-		app.Logger.Error("failed to create device", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to create device", internalServerErrorMessage, "user_id", userID)
 		return "", database.CreateDeviceRow{}, false
 	}
 

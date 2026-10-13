@@ -41,8 +41,7 @@ func (app *Application) IdentifyMovie(w http.ResponseWriter, r *http.Request) {
 	// transaction below looks the movie up again for a concurrent delete.
 	exists, err := app.Queries.MovieExists(ctx, id)
 	if err != nil {
-		app.Logger.Error(getMovieLogMessage, "error", err, "id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch movie"))
+		app.serverError(w, err, getMovieLogMessage, "failed to fetch movie", "id", id)
 		return
 	}
 	if !exists {
@@ -58,8 +57,7 @@ func (app *Application) IdentifyMovie(w http.ResponseWriter, r *http.Request) {
 			helpers.ErrorJSON(w, errors.New("tmdb_id not found on TMDB"), http.StatusBadRequest)
 			return
 		}
-		app.Logger.Error("tmdb get by id failed", "error", err, "tmdb_id", payload.TmdbID)
-		helpers.ErrorJSON(w, errors.New("failed to fetch movie from TMDB"))
+		app.serverError(w, err, "tmdb get by id failed", "failed to fetch movie from TMDB", "tmdb_id", payload.TmdbID)
 		return
 	}
 
@@ -68,8 +66,7 @@ func (app *Application) IdentifyMovie(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := app.DB.BeginTx(ctx, nil)
 	if err != nil {
-		app.Logger.Error(beginTransactionLogMessage, "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to process request"))
+		app.serverError(w, err, beginTransactionLogMessage, "failed to process request")
 		return
 	}
 	defer tx.Rollback()
@@ -82,8 +79,7 @@ func (app *Application) IdentifyMovie(w http.ResponseWriter, r *http.Request) {
 			helpers.ErrorJSON(w, errors.New(movieNotFoundMessage), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error(getMovieLogMessage, "error", err, "id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch movie"))
+		app.serverError(w, err, getMovieLogMessage, "failed to fetch movie", "id", id)
 		return
 	}
 
@@ -92,14 +88,12 @@ func (app *Application) IdentifyMovie(w http.ResponseWriter, r *http.Request) {
 	// names the step that failed.
 	err = moviescanner.ApplyTmdbMetadata(ctx, qtx, movie.ID, tmdbMovie)
 	if err != nil {
-		app.Logger.Error("failed to apply tmdb metadata", "error", err, "movie_id", movie.ID)
-		helpers.ErrorJSON(w, errors.New("failed to update movie metadata"))
+		app.serverError(w, err, "failed to apply tmdb metadata", "failed to update movie metadata", "movie_id", movie.ID)
 		return
 	}
 
 	if err = tx.Commit(); err != nil {
-		app.Logger.Error("failed to commit identify transaction", "error", err, "movie_id", movie.ID)
-		helpers.ErrorJSON(w, errors.New("failed to save changes"))
+		app.serverError(w, err, "failed to commit identify transaction", "failed to save changes", "movie_id", movie.ID)
 		return
 	}
 
@@ -134,8 +128,7 @@ func (app *Application) UpdateMovieMetadata(w http.ResponseWriter, r *http.Reque
 
 	tx, err := app.DB.BeginTx(ctx, nil)
 	if err != nil {
-		app.Logger.Error(beginTransactionLogMessage, "error", err, "id", id)
-		helpers.ErrorJSON(w, errors.New("failed to update movie"))
+		app.serverError(w, err, beginTransactionLogMessage, "failed to update movie", "id", id)
 		return
 	}
 	defer tx.Rollback()
@@ -148,8 +141,7 @@ func (app *Application) UpdateMovieMetadata(w http.ResponseWriter, r *http.Reque
 			helpers.ErrorJSON(w, errors.New(movieNotFoundMessage), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error(getMovieLogMessage, "error", err, "id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch movie"))
+		app.serverError(w, err, getMovieLogMessage, "failed to fetch movie", "id", id)
 		return
 	}
 
@@ -208,15 +200,13 @@ func (app *Application) UpdateMovieMetadata(w http.ResponseWriter, r *http.Reque
 		err = sql.ErrNoRows
 	}
 	if err != nil {
-		app.Logger.Error("failed to update movie metadata", "error", err, "id", id)
-		helpers.ErrorJSON(w, errors.New("failed to update movie"))
+		app.serverError(w, err, "failed to update movie metadata", "failed to update movie", "id", id)
 		return
 	}
 
 	err = tx.Commit()
 	if err != nil {
-		app.Logger.Error("failed to commit movie metadata update", "error", err, "id", id)
-		helpers.ErrorJSON(w, errors.New("failed to update movie"))
+		app.serverError(w, err, "failed to commit movie metadata update", "failed to update movie", "id", id)
 		return
 	}
 
@@ -244,8 +234,7 @@ func (app *Application) DeleteMovie(w http.ResponseWriter, r *http.Request) {
 			helpers.ErrorJSON(w, errors.New(movieNotFoundMessage), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error("failed to get movie for deletion", "error", err, "id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch movie"))
+		app.serverError(w, err, "failed to get movie for deletion", "failed to fetch movie", "id", id)
 		return
 	}
 
@@ -267,8 +256,7 @@ func (app *Application) DeleteMovie(w http.ResponseWriter, r *http.Request) {
 		app.invalidateCommittedMovie(id)
 	})
 	if err != nil {
-		app.Logger.Error("failed to delete movie", "error", err, "id", id)
-		helpers.ErrorJSON(w, errors.New("failed to delete movie"))
+		app.serverError(w, err, "failed to delete movie", "failed to delete movie", "id", id)
 		return
 	}
 

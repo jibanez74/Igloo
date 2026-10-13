@@ -1,5 +1,12 @@
 package main
 
+import (
+	"errors"
+	"net/http"
+
+	"igloo/cmd/internal/helpers"
+)
+
 // Messages said by more than one handler file. A handler that needs to say
 // something different keeps its own local constant, and a message owned by a
 // single feature lives in that feature's file instead.
@@ -16,3 +23,10 @@ const (
 
 // Log lines repeated across handlers that share no feature file.
 const beginTransactionLogMessage = "failed to begin transaction"
+
+// serverError logs err under logMessage, with any extra attrs, and answers 500
+// with clientMessage; the client never sees err itself.
+func (app *Application) serverError(w http.ResponseWriter, err error, logMessage, clientMessage string, attrs ...any) {
+	app.Logger.Error(logMessage, append([]any{"error", err}, attrs...)...)
+	helpers.ErrorJSON(w, errors.New(clientMessage))
+}

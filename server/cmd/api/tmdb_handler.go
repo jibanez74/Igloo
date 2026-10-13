@@ -250,8 +250,7 @@ func (app *Application) GetMoviesInTheaters(w http.ResponseWriter, r *http.Reque
 
 	movies, err := app.Tmdb.GetMoviesInTheaters(r.Context())
 	if err != nil {
-		app.Logger.Error("failed to get movies in theaters", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch movies in theaters"))
+		app.serverError(w, err, "failed to get movies in theaters", "failed to fetch movies in theaters")
 		return
 	}
 
@@ -315,8 +314,7 @@ func (app *Application) GetMovieByTmdbID(w http.ResponseWriter, r *http.Request)
 			helpers.ErrorJSON(w, errors.New("movie not found on tmdb"), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error("failed to get movie from tmdb", "error", err, "tmdb_id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch movie from tmdb"))
+		app.serverError(w, err, "failed to get movie from tmdb", "failed to fetch movie from tmdb", "tmdb_id", id)
 		return
 	}
 

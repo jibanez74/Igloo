@@ -62,8 +62,7 @@ func (app *Application) AuthenticateUser(w http.ResponseWriter, r *http.Request)
 		if errors.Is(err, sql.ErrNoRows) {
 			helpers.ErrorJSON(w, errors.New(invalidCredentialsMessage), http.StatusUnauthorized)
 		} else {
-			app.Logger.Error("failed to fetch user from database for login", "error", err)
-			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+			app.serverError(w, err, "failed to fetch user from database for login", internalServerErrorMessage)
 		}
 
 		return
@@ -71,8 +70,7 @@ func (app *Application) AuthenticateUser(w http.ResponseWriter, r *http.Request)
 
 	match, err := helpers.PasswordMatches(request.Password, user.Password)
 	if err != nil {
-		app.Logger.Error(comparePasswordHashLogMessage, "error", err, "email", request.Email)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, comparePasswordHashLogMessage, internalServerErrorMessage, "email", request.Email)
 		return
 	}
 
@@ -83,8 +81,7 @@ func (app *Application) AuthenticateUser(w http.ResponseWriter, r *http.Request)
 
 	err = app.SessionManager.RenewToken(r.Context())
 	if err != nil {
-		app.Logger.Error("failed to renew session token", "error", err, "user", user.Name)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to renew session token", internalServerErrorMessage, "user", user.Name)
 		return
 	}
 
@@ -147,8 +144,7 @@ func (app *Application) AuthenticateDevice(w http.ResponseWriter, r *http.Reques
 		if errors.Is(err, sql.ErrNoRows) {
 			helpers.ErrorJSON(w, errors.New(invalidCredentialsMessage), http.StatusUnauthorized)
 		} else {
-			app.Logger.Error("failed to fetch user from database for device login", "error", err)
-			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+			app.serverError(w, err, "failed to fetch user from database for device login", internalServerErrorMessage)
 		}
 
 		return
@@ -156,8 +152,7 @@ func (app *Application) AuthenticateDevice(w http.ResponseWriter, r *http.Reques
 
 	match, err := helpers.PasswordMatches(request.Password, user.Password)
 	if err != nil {
-		app.Logger.Error(comparePasswordHashLogMessage, "error", err, "email", request.Email)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, comparePasswordHashLogMessage, internalServerErrorMessage, "email", request.Email)
 		return
 	}
 
@@ -191,8 +186,7 @@ func (app *Application) GetCurrentAuthUser(w http.ResponseWriter, r *http.Reques
 		if errors.Is(err, sql.ErrNoRows) {
 			helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		} else {
-			app.Logger.Error("failed to fetch user from database", "error", err, "id", userID)
-			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+			app.serverError(w, err, "failed to fetch user from database", internalServerErrorMessage, "id", userID)
 		}
 
 		return
@@ -212,8 +206,7 @@ func (app *Application) DestroySession(w http.ResponseWriter, r *http.Request) {
 			UserID: auth.UserID,
 		})
 		if err != nil {
-			app.Logger.Error("failed to revoke device during logout", "error", err)
-			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+			app.serverError(w, err, "failed to revoke device during logout", internalServerErrorMessage)
 			return
 		}
 
@@ -228,8 +221,7 @@ func (app *Application) DestroySession(w http.ResponseWriter, r *http.Request) {
 
 	err := app.SessionManager.Destroy(r.Context())
 	if err != nil {
-		app.Logger.Error("failed to destroy session during logout", "error", err)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to destroy session during logout", internalServerErrorMessage)
 		return
 	}
 

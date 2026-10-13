@@ -189,8 +189,7 @@ func (app *Application) UpdatePlaybackSettings(w http.ResponseWriter, r *http.Re
 		return app.Queries.UpdatePlaybackServerSettings(r.Context(), params)
 	})
 	if err != nil {
-		app.Logger.Error("failed to update playback server settings", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to update playback settings"))
+		app.serverError(w, err, "failed to update playback server settings", "failed to update playback settings")
 		return
 	}
 

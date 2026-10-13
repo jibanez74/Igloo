@@ -296,8 +296,7 @@ func (app *Application) RequireAdmin(next http.Handler) http.Handler {
 			return
 		}
 		if err != nil {
-			app.Logger.Error("failed to check admin status", "error", err, "user_id", userID)
-			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+			app.serverError(w, err, "failed to check admin status", internalServerErrorMessage, "user_id", userID)
 			return
 		}
 

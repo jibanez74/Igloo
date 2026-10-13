@@ -18,8 +18,7 @@ func (app *Application) GetAlbumsAlphabetical(w http.ResponseWriter, r *http.Req
 
 	total, err := app.Queries.GetAlbumsCount(r.Context())
 	if err != nil {
-		app.Logger.Error("failed to get albums count", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch albums count"))
+		app.serverError(w, err, "failed to get albums count", "failed to fetch albums count")
 		return
 	}
 
@@ -29,8 +28,7 @@ func (app *Application) GetAlbumsAlphabetical(w http.ResponseWriter, r *http.Req
 	})
 
 	if err != nil {
-		app.Logger.Error("failed to get albums", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch albums"))
+		app.serverError(w, err, "failed to get albums", "failed to fetch albums")
 		return
 	}
 
@@ -53,8 +51,7 @@ func (app *Application) GetAlbumsAlphabetical(w http.ResponseWriter, r *http.Req
 func (app *Application) GetLatestAlbums(w http.ResponseWriter, r *http.Request) {
 	albums, err := app.Queries.GetLatestAlbums(r.Context())
 	if err != nil {
-		app.Logger.Error("failed to get latest albums", "error", err)
-		helpers.ErrorJSON(w, errors.New("fail to fetch latest albums from server"))
+		app.serverError(w, err, "failed to get latest albums", "fail to fetch latest albums from server")
 		return
 	}
 
@@ -78,8 +75,7 @@ func (app *Application) GetAlbumDetails(w http.ResponseWriter, r *http.Request) 
 
 	tx, err := app.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
-		app.Logger.Error(beginTransactionLogMessage, "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch album from server"))
+		app.serverError(w, err, beginTransactionLogMessage, "failed to fetch album from server")
 		return
 	}
 	defer tx.Rollback()
@@ -93,8 +89,7 @@ func (app *Application) GetAlbumDetails(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 
-		app.Logger.Error("failed to get album", "error", err, "id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch album from server"))
+		app.serverError(w, err, "failed to get album", "failed to fetch album from server", "id", id)
 		return
 	}
 
@@ -102,29 +97,25 @@ func (app *Application) GetAlbumDetails(w http.ResponseWriter, r *http.Request) 
 	// helpers.NullInt64 would turn an id of 0 into a NULL scan matching nothing.
 	tracks, err := qtx.GetTracksByAlbumID(ctx, sql.NullInt64{Int64: id, Valid: true})
 	if err != nil {
-		app.Logger.Error("failed to get tracks for album", "error", err, "album_id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch album tracks from server"))
+		app.serverError(w, err, "failed to get tracks for album", "failed to fetch album tracks from server", "album_id", id)
 		return
 	}
 
 	artists, err := qtx.GetMusiciansByAlbumID(ctx, id)
 	if err != nil {
-		app.Logger.Error("failed to get artists for album", "error", err, "album_id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch album artists from server"))
+		app.serverError(w, err, "failed to get artists for album", "failed to fetch album artists from server", "album_id", id)
 		return
 	}
 
 	trackGenres, err := qtx.GetGenresByAlbumID(ctx, sql.NullInt64{Int64: id, Valid: true})
 	if err != nil {
-		app.Logger.Error("failed to get genres for album", "error", err, "album_id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch album genres from server"))
+		app.serverError(w, err, "failed to get genres for album", "failed to fetch album genres from server", "album_id", id)
 		return
 	}
 
 	albumGenres, err := qtx.GetAlbumGenres(ctx, id)
 	if err != nil {
-		app.Logger.Error("failed to get album-level genres", "error", err, "album_id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch album genres from server"))
+		app.serverError(w, err, "failed to get album-level genres", "failed to fetch album genres from server", "album_id", id)
 		return
 	}
 
@@ -163,8 +154,7 @@ func (app *Application) DeleteAlbum(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		app.Logger.Error("failed to delete album", "error", err, "id", id)
-		helpers.ErrorJSON(w, errors.New("failed to delete album"))
+		app.serverError(w, err, "failed to delete album", "failed to delete album", "id", id)
 		return
 	}
 

@@ -19,8 +19,7 @@ func (app *Application) GetDevices(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := app.Queries.GetDevicesByUser(r.Context(), userID)
 	if err != nil {
-		app.Logger.Error("failed to list devices", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to list devices", internalServerErrorMessage, "user_id", userID)
 		return
 	}
 
@@ -74,8 +73,7 @@ func (app *Application) RenameDevice(w http.ResponseWriter, r *http.Request) {
 		UserID: userID,
 	})
 	if err != nil {
-		app.Logger.Error("failed to rename device", "error", err, "user_id", userID, "device_id", deviceID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to rename device", internalServerErrorMessage, "user_id", userID, "device_id", deviceID)
 		return
 	}
 
@@ -103,8 +101,7 @@ func (app *Application) RevokeDevice(w http.ResponseWriter, r *http.Request) {
 		UserID: userID,
 	})
 	if err != nil {
-		app.Logger.Error("failed to revoke device", "error", err, "user_id", userID, "device_id", deviceID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to revoke device", internalServerErrorMessage, "user_id", userID, "device_id", deviceID)
 		return
 	}
 

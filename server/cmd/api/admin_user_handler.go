@@ -44,8 +44,7 @@ func adminUserRow(id int64, name, email string, isAdmin bool, avatar sql.NullStr
 func (app *Application) AdminGetUsers(w http.ResponseWriter, r *http.Request) {
 	rows, err := app.Queries.GetAllUsers(r.Context())
 	if err != nil {
-		app.Logger.Error("admin: failed to fetch users", "error", err)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "admin: failed to fetch users", internalServerErrorMessage)
 		return
 	}
 
@@ -105,8 +104,7 @@ func (app *Application) AdminCreateUser(w http.ResponseWriter, r *http.Request) 
 
 	hashedPassword, err := helpers.HashPassword(req.Password)
 	if err != nil {
-		app.Logger.Error("admin: failed to hash password for new user", "error", err)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "admin: failed to hash password for new user", internalServerErrorMessage)
 		return
 	}
 
@@ -122,8 +120,7 @@ func (app *Application) AdminCreateUser(w http.ResponseWriter, r *http.Request) 
 			helpers.ErrorJSON(w, errors.New("a user with that email already exists"), http.StatusConflict)
 			return
 		}
-		app.Logger.Error("admin: failed to create user", "error", err)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "admin: failed to create user", internalServerErrorMessage)
 		return
 	}
 
@@ -193,8 +190,8 @@ func (app *Application) AdminUpdateUser(w http.ResponseWriter, r *http.Request) 
 
 	tx, err := app.DB.BeginTx(r.Context(), nil)
 	if err != nil {
-		app.Logger.Error("admin: failed to begin user update transaction", "error", err, "target_id", targetID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "admin: failed to begin user update transaction", internalServerErrorMessage,
+			"target_id", targetID)
 		return
 	}
 
@@ -207,8 +204,7 @@ func (app *Application) AdminUpdateUser(w http.ResponseWriter, r *http.Request) 
 			helpers.ErrorJSON(w, errors.New(userNotFoundMessage), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error("admin: failed to fetch user for update", "error", err, "target_id", targetID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "admin: failed to fetch user for update", internalServerErrorMessage, "target_id", targetID)
 		return
 	}
 
@@ -217,8 +213,8 @@ func (app *Application) AdminUpdateUser(w http.ResponseWriter, r *http.Request) 
 		count, err := qtx.CountAdmins(r.Context())
 		if err != nil {
 			_ = tx.Rollback()
-			app.Logger.Error("admin: failed to count admins during update", "error", err, "target_id", targetID)
-			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+			app.serverError(w, err, "admin: failed to count admins during update", internalServerErrorMessage,
+				"target_id", targetID)
 			return
 		}
 
@@ -241,15 +237,14 @@ func (app *Application) AdminUpdateUser(w http.ResponseWriter, r *http.Request) 
 			helpers.ErrorJSON(w, errors.New("a user with that email already exists"), http.StatusConflict)
 			return
 		}
-		app.Logger.Error("admin: failed to update user", "error", err, "target_id", targetID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "admin: failed to update user", internalServerErrorMessage, "target_id", targetID)
 		return
 	}
 
 	err = tx.Commit()
 	if err != nil {
-		app.Logger.Error("admin: failed to commit user update transaction", "error", err, "target_id", targetID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "admin: failed to commit user update transaction", internalServerErrorMessage,
+			"target_id", targetID)
 		return
 	}
 
@@ -281,8 +276,8 @@ func (app *Application) AdminDeleteUser(w http.ResponseWriter, r *http.Request) 
 
 	tx, err := app.DB.BeginTx(r.Context(), nil)
 	if err != nil {
-		app.Logger.Error("admin: failed to begin user deletion transaction", "error", err, "target_id", targetID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "admin: failed to begin user deletion transaction", internalServerErrorMessage,
+			"target_id", targetID)
 		return
 	}
 
@@ -295,8 +290,7 @@ func (app *Application) AdminDeleteUser(w http.ResponseWriter, r *http.Request) 
 			helpers.ErrorJSON(w, errors.New(userNotFoundMessage), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error("admin: failed to fetch user for deletion", "error", err, "target_id", targetID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "admin: failed to fetch user for deletion", internalServerErrorMessage, "target_id", targetID)
 		return
 	}
 
@@ -305,8 +299,8 @@ func (app *Application) AdminDeleteUser(w http.ResponseWriter, r *http.Request) 
 		count, err := qtx.CountAdmins(r.Context())
 		if err != nil {
 			_ = tx.Rollback()
-			app.Logger.Error("admin: failed to count admins during deletion", "error", err, "target_id", targetID)
-			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+			app.serverError(w, err, "admin: failed to count admins during deletion", internalServerErrorMessage,
+				"target_id", targetID)
 			return
 		}
 
@@ -320,23 +314,21 @@ func (app *Application) AdminDeleteUser(w http.ResponseWriter, r *http.Request) 
 	roomIDs, err := qtx.ListWatchRoomIDsByOwnerID(r.Context(), targetID)
 	if err != nil {
 		_ = tx.Rollback()
-		app.Logger.Error("admin: failed to list the user's watch rooms", "error", err, "target_id", targetID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "admin: failed to list the user's watch rooms", internalServerErrorMessage, "target_id", targetID)
 		return
 	}
 
 	err = qtx.DeleteUser(r.Context(), targetID)
 	if err != nil {
 		_ = tx.Rollback()
-		app.Logger.Error("admin: failed to delete user", "error", err, "target_id", targetID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "admin: failed to delete user", internalServerErrorMessage, "target_id", targetID)
 		return
 	}
 
 	err = tx.Commit()
 	if err != nil {
-		app.Logger.Error("admin: failed to commit user deletion transaction", "error", err, "target_id", targetID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "admin: failed to commit user deletion transaction", internalServerErrorMessage,
+			"target_id", targetID)
 		return
 	}
 
@@ -378,8 +370,8 @@ func (app *Application) AdminResetUserPassword(w http.ResponseWriter, r *http.Re
 
 	exists, err := app.Queries.UserExists(r.Context(), targetID)
 	if err != nil {
-		app.Logger.Error("admin: failed to check user for password reset", "error", err, "target_id", targetID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "admin: failed to check user for password reset", internalServerErrorMessage,
+			"target_id", targetID)
 		return
 	}
 	if !exists {
@@ -389,15 +381,13 @@ func (app *Application) AdminResetUserPassword(w http.ResponseWriter, r *http.Re
 
 	hashedPassword, err := helpers.HashPassword(req.Password)
 	if err != nil {
-		app.Logger.Error("admin: failed to hash password for reset", "error", err)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "admin: failed to hash password for reset", internalServerErrorMessage)
 		return
 	}
 
 	version, err := app.changePassword(r.Context(), targetID, hashedPassword)
 	if err != nil {
-		app.Logger.Error("admin: failed to reset user password", "error", err, "target_id", targetID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "admin: failed to reset user password", internalServerErrorMessage, "target_id", targetID)
 		return
 	}
 	// An admin resetting their own password from a browser keeps that session.

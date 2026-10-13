@@ -73,15 +73,13 @@ func (app *Application) GetMoviePreroll(w http.ResponseWriter, r *http.Request) 
 			helpers.ErrorJSON(w, errors.New(movieNotFoundMessage), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error("failed to load movie for preroll", "error", err, "movie_id", media.ID)
-		helpers.ErrorJSON(w, errors.New(prerollQueueFailedMessage))
+		app.serverError(w, err, "failed to load movie for preroll", prerollQueueFailedMessage, "movie_id", media.ID)
 		return
 	}
 
 	prefs, err := app.loadTrailerPreferences(ctx, userID)
 	if err != nil {
-		app.Logger.Error("failed to load trailer preferences for preroll", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(prerollQueueFailedMessage))
+		app.serverError(w, err, "failed to load trailer preferences for preroll", prerollQueueFailedMessage, "user_id", userID)
 		return
 	}
 
@@ -89,8 +87,7 @@ func (app *Application) GetMoviePreroll(w http.ResponseWriter, r *http.Request) 
 	if prefs.Enabled {
 		queue, err := app.buildPrerollQueue(ctx, prefs, movie)
 		if err != nil {
-			app.Logger.Error("failed to build preroll queue", "error", err, "movie_id", media.ID)
-			helpers.ErrorJSON(w, errors.New(prerollQueueFailedMessage))
+			app.serverError(w, err, "failed to build preroll queue", prerollQueueFailedMessage, "movie_id", media.ID)
 			return
 		}
 		for _, trailer := range queue {

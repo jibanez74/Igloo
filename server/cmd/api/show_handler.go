@@ -15,8 +15,7 @@ import (
 func (app *Application) GetLatestShows(w http.ResponseWriter, r *http.Request) {
 	shows, err := app.Queries.GetLatestShows(r.Context())
 	if err != nil {
-		app.Logger.Error("failed to get latest shows", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch latest shows"))
+		app.serverError(w, err, "failed to get latest shows", "failed to fetch latest shows")
 		return
 	}
 
@@ -39,8 +38,7 @@ func (app *Application) GetShowDetails(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := app.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
-		app.Logger.Error(beginTransactionLogMessage, "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch show from server"))
+		app.serverError(w, err, beginTransactionLogMessage, "failed to fetch show from server")
 		return
 	}
 	defer tx.Rollback()
@@ -54,64 +52,57 @@ func (app *Application) GetShowDetails(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		app.Logger.Error("failed to get show", "error", err, "id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch show from server"))
+		app.serverError(w, err, "failed to get show", "failed to fetch show from server", "id", id)
 		return
 	}
 
 	seasons, err := qtx.GetShowSeasonSummaries(ctx, id)
 	if err != nil {
-		app.Logger.Error("failed to get seasons for show", "error", err, "show_id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch show seasons from server"))
+		app.serverError(w, err, "failed to get seasons for show", "failed to fetch show seasons from server", "show_id", id)
 		return
 	}
 
 	cast, err := qtx.GetCastByShowID(ctx, id)
 	if err != nil {
-		app.Logger.Error("failed to get cast for show", "error", err, "show_id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch show cast from server"))
+		app.serverError(w, err, "failed to get cast for show", "failed to fetch show cast from server", "show_id", id)
 		return
 	}
 
 	crew, err := qtx.GetCrewByShowID(ctx, id)
 	if err != nil {
-		app.Logger.Error("failed to get crew for show", "error", err, "show_id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch show crew from server"))
+		app.serverError(w, err, "failed to get crew for show", "failed to fetch show crew from server", "show_id", id)
 		return
 	}
 
 	creators, err := qtx.GetCreatorsByShowID(ctx, id)
 	if err != nil {
-		app.Logger.Error("failed to get creators for show", "error", err, "show_id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch show creators from server"))
+		app.serverError(w, err, "failed to get creators for show", "failed to fetch show creators from server", "show_id", id)
 		return
 	}
 
 	genres, err := qtx.GetGenresByShowID(ctx, id)
 	if err != nil {
-		app.Logger.Error("failed to get genres for show", "error", err, "show_id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch show genres from server"))
+		app.serverError(w, err, "failed to get genres for show", "failed to fetch show genres from server", "show_id", id)
 		return
 	}
 
 	networks, err := qtx.GetNetworksByShowID(ctx, id)
 	if err != nil {
-		app.Logger.Error("failed to get networks for show", "error", err, "show_id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch show networks from server"))
+		app.serverError(w, err, "failed to get networks for show", "failed to fetch show networks from server", "show_id", id)
 		return
 	}
 
 	productionCompanies, err := qtx.GetProductionCompaniesByShowID(ctx, id)
 	if err != nil {
-		app.Logger.Error("failed to get production companies for show", "error", err, "show_id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch show production companies from server"))
+		app.serverError(w, err, "failed to get production companies for show", "failed to fetch show production companies from server",
+			"show_id", id)
 		return
 	}
 
 	extraVideos, err := qtx.GetShowExtraVideos(ctx, id)
 	if err != nil {
-		app.Logger.Error("failed to get extra videos for show", "error", err, "show_id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch show extra videos from server"))
+		app.serverError(w, err, "failed to get extra videos for show", "failed to fetch show extra videos from server",
+			"show_id", id)
 		return
 	}
 
@@ -164,8 +155,7 @@ func (app *Application) GetShowSeasonEpisodes(w http.ResponseWriter, r *http.Req
 
 	tx, err := app.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
-		app.Logger.Error(beginTransactionLogMessage, "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch season from server"))
+		app.serverError(w, err, beginTransactionLogMessage, "failed to fetch season from server")
 		return
 	}
 	defer tx.Rollback()
@@ -182,8 +172,8 @@ func (app *Application) GetShowSeasonEpisodes(w http.ResponseWriter, r *http.Req
 			return
 		}
 
-		app.Logger.Error("failed to get season", "error", err, "show_id", id, "season_number", seasonNumber)
-		helpers.ErrorJSON(w, errors.New("failed to fetch season from server"))
+		app.serverError(w, err, "failed to get season", "failed to fetch season from server",
+			"show_id", id, "season_number", seasonNumber)
 		return
 	}
 
@@ -193,8 +183,8 @@ func (app *Application) GetShowSeasonEpisodes(w http.ResponseWriter, r *http.Req
 		SeasonNumber: seasonNumber,
 	})
 	if err != nil {
-		app.Logger.Error("failed to get episodes for season", "error", err, "show_id", id, "season_number", seasonNumber)
-		helpers.ErrorJSON(w, errors.New("failed to fetch season episodes from server"))
+		app.serverError(w, err, "failed to get episodes for season", "failed to fetch season episodes from server",
+			"show_id", id, "season_number", seasonNumber)
 		return
 	}
 
@@ -274,8 +264,7 @@ func (app *Application) GetShowsLibrary(w http.ResponseWriter, r *http.Request) 
 
 	total, err := app.Queries.GetShowsCount(ctx)
 	if err != nil {
-		app.Logger.Error("failed to get shows count", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch shows count"))
+		app.serverError(w, err, "failed to get shows count", "failed to fetch shows count")
 		return
 	}
 
@@ -286,8 +275,7 @@ func (app *Application) GetShowsLibrary(w http.ResponseWriter, r *http.Request) 
 			Offset: offset,
 		})
 		if err != nil {
-			app.Logger.Error("failed to get shows library", "error", err)
-			helpers.ErrorJSON(w, errors.New("failed to fetch shows"))
+			app.serverError(w, err, "failed to get shows library", "failed to fetch shows")
 			return
 		}
 		shows = showLibraryRowsFromDesc(descRows)
@@ -297,8 +285,7 @@ func (app *Application) GetShowsLibrary(w http.ResponseWriter, r *http.Request) 
 			Offset: offset,
 		})
 		if err != nil {
-			app.Logger.Error("failed to get shows library", "error", err)
-			helpers.ErrorJSON(w, errors.New("failed to fetch shows"))
+			app.serverError(w, err, "failed to get shows library", "failed to fetch shows")
 			return
 		}
 	}
@@ -323,8 +310,7 @@ func (app *Application) GetShowsLibrary(w http.ResponseWriter, r *http.Request) 
 func (app *Application) GetShowsStats(w http.ResponseWriter, r *http.Request) {
 	counts, err := app.Queries.GetShowsLibraryCounts(r.Context())
 	if err != nil {
-		app.Logger.Error("failed to get shows library counts", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch shows stats"))
+		app.serverError(w, err, "failed to get shows library counts", "failed to fetch shows stats")
 		return
 	}
 
@@ -340,8 +326,7 @@ func (app *Application) GetShowsStats(w http.ResponseWriter, r *http.Request) {
 func (app *Application) GetShowGenresList(w http.ResponseWriter, r *http.Request) {
 	rows, err := app.Queries.GetShowGenresWithCounts(r.Context())
 	if err != nil {
-		app.Logger.Error("failed to get show genres with counts", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch genres"))
+		app.serverError(w, err, "failed to get show genres with counts", "failed to fetch genres")
 		return
 	}
 
@@ -365,8 +350,7 @@ func (app *Application) GetShowsByGenreLibrary(w http.ResponseWriter, r *http.Re
 
 	total, err := app.Queries.CountShowsForGenre(ctx, genreID)
 	if err != nil {
-		app.Logger.Error("failed to count shows for genre", "error", err, "genre_id", genreID)
-		helpers.ErrorJSON(w, errors.New("failed to fetch shows count for genre"))
+		app.serverError(w, err, "failed to count shows for genre", "failed to fetch shows count for genre", "genre_id", genreID)
 		return
 	}
 
@@ -378,8 +362,7 @@ func (app *Application) GetShowsByGenreLibrary(w http.ResponseWriter, r *http.Re
 			Offset:  offset,
 		})
 		if err != nil {
-			app.Logger.Error("failed to get shows by genre", "error", err, "genre_id", genreID)
-			helpers.ErrorJSON(w, errors.New("failed to fetch shows"))
+			app.serverError(w, err, "failed to get shows by genre", "failed to fetch shows", "genre_id", genreID)
 			return
 		}
 		shows = showLibraryRowsFromGenreDesc(descRows)
@@ -390,8 +373,7 @@ func (app *Application) GetShowsByGenreLibrary(w http.ResponseWriter, r *http.Re
 			Offset:  offset,
 		})
 		if err != nil {
-			app.Logger.Error("failed to get shows by genre", "error", err, "genre_id", genreID)
-			helpers.ErrorJSON(w, errors.New("failed to fetch shows"))
+			app.serverError(w, err, "failed to get shows by genre", "failed to fetch shows", "genre_id", genreID)
 			return
 		}
 		shows = showLibraryRowsFromGenreAsc(ascRows)

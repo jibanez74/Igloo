@@ -52,8 +52,8 @@ func (app *Application) RecordPlayEvent(w http.ResponseWriter, r *http.Request) 
 			helpers.ErrorJSON(w, errors.New(trackNotFoundMessage), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error("failed to record play event", "error", err, "track_id", req.TrackID, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New("failed to record play event"))
+		app.serverError(w, err, "failed to record play event", "failed to record play event",
+			"track_id", req.TrackID, "user_id", userID)
 		return
 	}
 
@@ -101,8 +101,7 @@ func (app *Application) GetUserListeningStats(w http.ResponseWriter, r *http.Req
 
 	stats, err := app.Queries.GetUserListeningStats(r.Context(), userID)
 	if err != nil {
-		app.Logger.Error("failed to get listening stats", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch listening stats"))
+		app.serverError(w, err, "failed to get listening stats", "failed to fetch listening stats")
 		return
 	}
 
@@ -130,8 +129,7 @@ func (app *Application) GetUserTopTracks(w http.ResponseWriter, r *http.Request)
 		Offset: offset,
 	})
 	if err != nil {
-		app.Logger.Error("failed to get top tracks", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch top tracks"))
+		app.serverError(w, err, "failed to get top tracks", "failed to fetch top tracks")
 		return
 	}
 
@@ -158,8 +156,7 @@ func (app *Application) GetUserTopMusicians(w http.ResponseWriter, r *http.Reque
 		Offset: offset,
 	})
 	if err != nil {
-		app.Logger.Error("failed to get top musicians", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch top musicians"))
+		app.serverError(w, err, "failed to get top musicians", "failed to fetch top musicians")
 		return
 	}
 
@@ -193,8 +190,7 @@ func (app *Application) GetUserTopGenres(w http.ResponseWriter, r *http.Request)
 		Limit:  limit,
 	})
 	if err != nil {
-		app.Logger.Error("failed to get top genres", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch top genres"))
+		app.serverError(w, err, "failed to get top genres", "failed to fetch top genres")
 		return
 	}
 
@@ -220,8 +216,7 @@ func (app *Application) GetUserTopAlbums(w http.ResponseWriter, r *http.Request)
 		Offset: offset,
 	})
 	if err != nil {
-		app.Logger.Error("failed to get top albums", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch top albums"))
+		app.serverError(w, err, "failed to get top albums", "failed to fetch top albums")
 		return
 	}
 
@@ -248,8 +243,7 @@ func (app *Application) GetUserRecentlyPlayed(w http.ResponseWriter, r *http.Req
 		Offset: offset,
 	})
 	if err != nil {
-		app.Logger.Error("failed to get recently played", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch recently played"))
+		app.serverError(w, err, "failed to get recently played", "failed to fetch recently played")
 		return
 	}
 

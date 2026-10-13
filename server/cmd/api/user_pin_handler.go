@@ -80,8 +80,7 @@ func (app *Application) UpdateUserPin(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, sql.ErrNoRows) {
 			helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		} else {
-			app.Logger.Error("failed to fetch user for pin update", "error", err, "user_id", userID)
-			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+			app.serverError(w, err, "failed to fetch user for pin update", internalServerErrorMessage, "user_id", userID)
 		}
 		return
 	}
@@ -110,8 +109,7 @@ func (app *Application) UpdateUserPin(w http.ResponseWriter, r *http.Request) {
 		ID:  userID,
 	})
 	if err != nil {
-		app.Logger.Error("failed to update user pin", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to update user pin", internalServerErrorMessage, "user_id", userID)
 		return
 	}
 
@@ -143,8 +141,7 @@ func (app *Application) GetUserPin(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, sql.ErrNoRows) {
 			helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		} else {
-			app.Logger.Error("failed to fetch user for pin read", "error", err, "user_id", userID)
-			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+			app.serverError(w, err, "failed to fetch user for pin read", internalServerErrorMessage, "user_id", userID)
 		}
 		return
 	}
@@ -186,8 +183,7 @@ func (app *Application) VerifyUserPin(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, sql.ErrNoRows) {
 			helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		} else {
-			app.Logger.Error("failed to fetch user for pin verification", "error", err, "user_id", userID)
-			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+			app.serverError(w, err, "failed to fetch user for pin verification", internalServerErrorMessage, "user_id", userID)
 		}
 		return
 	}

@@ -146,8 +146,8 @@ func (app *Application) loadAuthorizedWatchRoomForRequest(w http.ResponseWriter,
 			helpers.ErrorJSON(w, errors.New(accessDeniedMessage), http.StatusForbidden)
 			return database.WatchRoom{}, 0, false
 		}
-		app.Logger.Error("failed to authorize watch room", "error", err, "room_id", roomID, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to authorize watch room", internalServerErrorMessage,
+			"room_id", roomID, "user_id", userID)
 		return database.WatchRoom{}, 0, false
 	}
 

@@ -567,8 +567,8 @@ func (app *Application) WatchRoomWebSocket(w http.ResponseWriter, r *http.Reques
 			helpers.ErrorJSON(w, errors.New(accessDeniedMessage), http.StatusForbidden)
 			return
 		}
-		app.Logger.Error("failed to authorize watch room websocket", "error", err, "room_id", roomID, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to authorize watch room websocket", internalServerErrorMessage,
+			"room_id", roomID, "user_id", userID)
 		return
 	}
 

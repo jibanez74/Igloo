@@ -145,8 +145,7 @@ func (app *Application) GetWatchRooms(w http.ResponseWriter, r *http.Request) {
 
 	rooms, err := app.Queries.GetWatchRoomsForUser(r.Context(), userID)
 	if err != nil {
-		app.Logger.Error("failed to fetch watch rooms", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to fetch watch rooms", internalServerErrorMessage, "user_id", userID)
 		return
 	}
 
@@ -157,8 +156,7 @@ func (app *Application) GetWatchRooms(w http.ResponseWriter, r *http.Request) {
 
 	memberRows, err := app.Queries.GetWatchRoomMembersByRoomIDs(r.Context(), roomIDs)
 	if err != nil {
-		app.Logger.Error("failed to fetch members for watch rooms", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to fetch members for watch rooms", internalServerErrorMessage, "user_id", userID)
 		return
 	}
 
@@ -216,15 +214,14 @@ func (app *Application) GetWatchRoom(w http.ResponseWriter, r *http.Request) {
 
 	movie, err := app.Queries.GetMovieByID(r.Context(), room.MovieID)
 	if err != nil {
-		app.Logger.Error("failed to fetch movie for watch room", "error", err, "room_id", roomID, "movie_id", room.MovieID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to fetch movie for watch room", internalServerErrorMessage,
+			"room_id", roomID, "movie_id", room.MovieID)
 		return
 	}
 
 	members, err := app.loadRoomMembers(r.Context(), roomID)
 	if err != nil {
-		app.Logger.Error("failed to fetch members for watch room", "error", err, "room_id", roomID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to fetch members for watch room", internalServerErrorMessage, "room_id", roomID)
 		return
 	}
 
@@ -300,8 +297,7 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 			helpers.ErrorJSON(w, errors.New(movieNotFoundMessage), http.StatusBadRequest)
 			return
 		}
-		app.Logger.Error("failed to verify movie for watch room", "error", err, "movie_id", req.MovieID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to verify movie for watch room", internalServerErrorMessage, "movie_id", req.MovieID)
 		return
 	}
 
@@ -310,8 +306,8 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 	// invited before playback fails on the first manifest request.
 	audioStreams, err := app.Queries.GetAudioStreamsByMovieID(r.Context(), req.MovieID)
 	if err != nil {
-		app.Logger.Error("failed to load audio streams for watch room", "error", err, "movie_id", req.MovieID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to load audio streams for watch room", internalServerErrorMessage,
+			"movie_id", req.MovieID)
 		return
 	}
 
@@ -333,8 +329,8 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 	if req.SubtitleTrack != nil {
 		subtitleStreams, err = app.Queries.GetSubtitlesByMovieID(r.Context(), req.MovieID)
 		if err != nil {
-			app.Logger.Error("failed to load subtitles for watch room", "error", err, "movie_id", req.MovieID)
-			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+			app.serverError(w, err, "failed to load subtitles for watch room", internalServerErrorMessage,
+				"movie_id", req.MovieID)
 			return
 		}
 		if len(subtitleStreams) == 0 {
@@ -374,8 +370,8 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 
 		videoStreams, err := app.Queries.GetVideoStreamsByMovieID(r.Context(), req.MovieID)
 		if err != nil {
-			app.Logger.Error("failed to load video streams for watch room", "error", err, "movie_id", req.MovieID)
-			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+			app.serverError(w, err, "failed to load video streams for watch room", internalServerErrorMessage,
+				"movie_id", req.MovieID)
 			return
 		}
 		// Zero streams means the scan found no playable video, not "unknown" —
@@ -398,8 +394,7 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 	if len(invitedIDs) > 0 {
 		count, err := app.Queries.CountUsersByIDs(r.Context(), invitedIDs)
 		if err != nil {
-			app.Logger.Error("failed to validate invited user IDs", "error", err)
-			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+			app.serverError(w, err, "failed to validate invited user IDs", internalServerErrorMessage)
 			return
 		}
 		if count != int64(len(invitedIDs)) {
@@ -437,8 +432,7 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 
 	tx, err := app.DB.BeginTx(r.Context(), nil)
 	if err != nil {
-		app.Logger.Error("failed to begin transaction for watch room creation", "error", err)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to begin transaction for watch room creation", internalServerErrorMessage)
 		return
 	}
 
@@ -457,8 +451,7 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 	})
 	if err != nil {
 		_ = tx.Rollback()
-		app.Logger.Error("failed to create watch room", "error", err)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to create watch room", internalServerErrorMessage)
 		return
 	}
 
@@ -468,8 +461,7 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 	})
 	if err != nil {
 		_ = tx.Rollback()
-		app.Logger.Error("failed to add owner as room member", "error", err, "room_id", room.ID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to add owner as room member", internalServerErrorMessage, "room_id", room.ID)
 		return
 	}
 
@@ -480,15 +472,14 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 		})
 		if err != nil {
 			_ = tx.Rollback()
-			app.Logger.Error("failed to add invited user as room member", "error", err, "room_id", room.ID, "user_id", invitedID)
-			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+			app.serverError(w, err, "failed to add invited user as room member", internalServerErrorMessage,
+				"room_id", room.ID, "user_id", invitedID)
 			return
 		}
 	}
 
 	if err = tx.Commit(); err != nil {
-		app.Logger.Error("failed to commit watch room transaction", "error", err)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to commit watch room transaction", internalServerErrorMessage)
 		return
 	}
 
@@ -534,8 +525,7 @@ func (app *Application) JoinWatchRoom(w http.ResponseWriter, r *http.Request) {
 			helpers.ErrorJSON(w, errors.New("room not found"), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error("failed to fetch watch room for join", "error", err, "room_id", roomID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to fetch watch room for join", internalServerErrorMessage, "room_id", roomID)
 		return
 	}
 
@@ -544,8 +534,8 @@ func (app *Application) JoinWatchRoom(w http.ResponseWriter, r *http.Request) {
 		UserID: userID,
 	})
 	if err != nil {
-		app.Logger.Error("failed to check room membership for join", "error", err, "room_id", roomID, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to check room membership for join", internalServerErrorMessage,
+			"room_id", roomID, "user_id", userID)
 		return
 	}
 	if !isMember {
@@ -574,8 +564,7 @@ func (app *Application) DeleteWatchRoom(w http.ResponseWriter, r *http.Request) 
 			helpers.ErrorJSON(w, errors.New("room not found"), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error("failed to fetch watch room for delete", "error", err, "room_id", roomID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to fetch watch room for delete", internalServerErrorMessage, "room_id", roomID)
 		return
 	}
 
@@ -587,8 +576,7 @@ func (app *Application) DeleteWatchRoom(w http.ResponseWriter, r *http.Request) 
 
 	err = app.deleteWatchRoom(r.Context(), roomID)
 	if err != nil {
-		app.Logger.Error("failed to delete watch room", "error", err, "room_id", roomID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to delete watch room", internalServerErrorMessage, "room_id", roomID)
 		return
 	}
 

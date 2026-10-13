@@ -83,15 +83,13 @@ func (app *Application) serveSubtitleWebVTT(w http.ResponseWriter, r *http.Reque
 			helpers.ErrorJSON(w, errors.New(media.notFoundMessage()), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error("failed to resolve media file", "error", err, "media", media.String())
-		helpers.ErrorJSON(w, errors.New("failed to fetch media"))
+		app.serverError(w, err, "failed to resolve media file", "failed to fetch media", "media", media.String())
 		return
 	}
 
 	subtitles, err := loadPlaybackSubtitles(r.Context(), app.Queries, source)
 	if err != nil {
-		app.Logger.Error(getSubtitlesLogMessage, "error", err, "media", media.String())
-		helpers.ErrorJSON(w, errors.New(fetchSubtitlesMessage))
+		app.serverError(w, err, getSubtitlesLogMessage, fetchSubtitlesMessage, "media", media.String())
 		return
 	}
 
@@ -144,13 +142,8 @@ func (app *Application) serveSubtitleWebVTT(w http.ResponseWriter, r *http.Reque
 		return out, nil
 	})
 	if err != nil {
-		app.Logger.Error("subtitle extraction failed",
-			"error", err,
-			"media", media.String(),
-			"stream_index", sub.StreamIndex,
-			"codec", sub.Codec,
-		)
-		helpers.ErrorJSON(w, errors.New("failed to extract subtitle track"))
+		app.serverError(w, err, "subtitle extraction failed", "failed to extract subtitle track",
+			"media", media.String(), "stream_index", sub.StreamIndex, "codec", sub.Codec)
 		return
 	}
 

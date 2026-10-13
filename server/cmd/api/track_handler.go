@@ -46,8 +46,7 @@ func (app *Application) ToggleLikeTrack(w http.ResponseWriter, r *http.Request) 
 			helpers.ErrorJSON(w, errors.New(trackNotFoundMessage), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error("failed to toggle track like", "error", err, "trackID", trackID, "userID", userID)
-		helpers.ErrorJSON(w, errors.New("failed to update like"))
+		app.serverError(w, err, "failed to toggle track like", "failed to update like", "trackID", trackID, "userID", userID)
 		return
 	}
 
@@ -108,8 +107,7 @@ func (app *Application) GetLikedTrackIDsForUser(w http.ResponseWriter, r *http.R
 
 	trackIDs, err := app.Queries.GetLikedTrackIDsByUserID(r.Context(), userID)
 	if err != nil {
-		app.Logger.Error("failed to get liked track IDs", "error", err, "userID", userID)
-		helpers.ErrorJSON(w, errors.New("failed to fetch liked tracks"))
+		app.serverError(w, err, "failed to get liked track IDs", "failed to fetch liked tracks", "userID", userID)
 		return
 	}
 
@@ -152,8 +150,7 @@ func (app *Application) GetLikedTracks(w http.ResponseWriter, r *http.Request) {
 
 	total, err := app.Queries.CountUserLikedTracks(ctx, userID)
 	if err != nil {
-		app.Logger.Error("failed to count liked tracks", "error", err, "userID", userID)
-		helpers.ErrorJSON(w, errors.New("failed to fetch liked tracks count"))
+		app.serverError(w, err, "failed to count liked tracks", "failed to fetch liked tracks count", "userID", userID)
 		return
 	}
 
@@ -163,8 +160,7 @@ func (app *Application) GetLikedTracks(w http.ResponseWriter, r *http.Request) {
 		Offset: offset,
 	})
 	if err != nil {
-		app.Logger.Error("failed to get liked tracks", "error", err, "userID", userID)
-		helpers.ErrorJSON(w, errors.New("failed to fetch liked tracks"))
+		app.serverError(w, err, "failed to get liked tracks", "failed to fetch liked tracks", "userID", userID)
 		return
 	}
 
@@ -200,8 +196,7 @@ func (app *Application) GetTrackByID(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		app.Logger.Error("failed to get track", "error", err, "id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch track from server"))
+		app.serverError(w, err, "failed to get track", "failed to fetch track from server", "id", id)
 		return
 	}
 
@@ -232,8 +227,7 @@ func (app *Application) StreamTrack(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		app.Logger.Error("failed to get track for streaming", "error", err, "id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch track from server"))
+		app.serverError(w, err, "failed to get track for streaming", "failed to fetch track from server", "id", id)
 		return
 	}
 
@@ -248,8 +242,7 @@ func (app *Application) GetTracksAlphabetical(w http.ResponseWriter, r *http.Req
 
 	total, err := app.Queries.GetTracksCount(r.Context())
 	if err != nil {
-		app.Logger.Error("failed to get tracks count", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch tracks count"))
+		app.serverError(w, err, "failed to get tracks count", "failed to fetch tracks count")
 		return
 	}
 
@@ -258,8 +251,7 @@ func (app *Application) GetTracksAlphabetical(w http.ResponseWriter, r *http.Req
 		Offset: offset,
 	})
 	if err != nil {
-		app.Logger.Error("failed to get tracks", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch tracks"))
+		app.serverError(w, err, "failed to get tracks", "failed to fetch tracks")
 		return
 	}
 
@@ -360,8 +352,7 @@ func (app *Application) GetShuffleTracks(w http.ResponseWriter, r *http.Request)
 		RowLimit:   limit,
 	})
 	if err != nil {
-		app.Logger.Error("failed to get random tracks", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch random tracks"))
+		app.serverError(w, err, "failed to get random tracks", "failed to fetch random tracks")
 		return
 	}
 
@@ -375,8 +366,7 @@ func (app *Application) GetShuffleTracks(w http.ResponseWriter, r *http.Request)
 func (app *Application) GetMusicStats(w http.ResponseWriter, r *http.Request) {
 	counts, err := app.Queries.GetMusicLibraryCounts(r.Context())
 	if err != nil {
-		app.Logger.Error("failed to get music library counts", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch music stats"))
+		app.serverError(w, err, "failed to get music library counts", "failed to fetch music stats")
 		return
 	}
 

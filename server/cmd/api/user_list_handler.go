@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"net/http"
 	"strings"
 
@@ -29,8 +28,7 @@ func (app *Application) GetUsers(w http.ResponseWriter, r *http.Request) {
 		Search:     q,
 	})
 	if err != nil {
-		app.Logger.Error("failed to fetch users", "error", err)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.serverError(w, err, "failed to fetch users", internalServerErrorMessage)
 		return
 	}
 
