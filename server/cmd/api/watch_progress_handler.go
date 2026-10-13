@@ -221,10 +221,7 @@ func (app *Application) getWatchProgress(w http.ResponseWriter, r *http.Request,
 	// an unknown id (404) from media the user has not started (empty progress).
 	row, err := store.get(r.Context(), userID, media.ID)
 	if err == nil {
-		helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-			Error: false,
-			Data:  watchProgressToResponse(row),
-		})
+		helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: watchProgressToResponse(row)})
 		return
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
@@ -244,10 +241,7 @@ func (app *Application) getWatchProgress(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
-		Data:  emptyWatchProgressResponse(),
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: emptyWatchProgressResponse()})
 }
 
 // continueWatchingLimit caps the merged row, and is also the limit handed to
@@ -358,7 +352,6 @@ func (app *Application) GetContinueWatching(w http.ResponseWriter, r *http.Reque
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
 		Data: map[string]any{
 			"items": items,
 		},
@@ -445,7 +438,6 @@ func (app *Application) updateWatchProgress(w http.ResponseWriter, r *http.Reque
 		}
 
 		helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-			Error: false,
 			Data: map[string]any{
 				"watched": true,
 			},
@@ -461,7 +453,6 @@ func (app *Application) updateWatchProgress(w http.ResponseWriter, r *http.Reque
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
 		Data: map[string]any{
 			"watched": false,
 		},
@@ -505,7 +496,6 @@ func (app *Application) deleteWatchProgress(w http.ResponseWriter, r *http.Reque
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
 		Data: map[string]any{
 			"cleared": true,
 		},
@@ -561,7 +551,6 @@ func (app *Application) setWatched(w http.ResponseWriter, r *http.Request, kind 
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
 		Data: map[string]any{
 			watchedIDField(kind): media.ID,
 			"watched":            watched,

@@ -396,7 +396,6 @@ func (app *Application) SearchAll(w http.ResponseWriter, r *http.Request) {
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
 		Data: searchAllData{
 			Query:     q,
 			Movies:    movies,
@@ -424,7 +423,6 @@ func handleSearchCategory[T any](app *Application, e searchEntity[T], w http.Res
 	}
 	if !ok {
 		helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-			Error: false,
 			Data: searchCategoryData[T]{
 				Query:   q,
 				Results: []T{},
@@ -449,7 +447,6 @@ func handleSearchCategory[T any](app *Application, e searchEntity[T], w http.Res
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
 		Data: searchCategoryData[T]{
 			Query:      q,
 			Results:    results,

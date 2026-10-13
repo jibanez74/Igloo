@@ -14,10 +14,5 @@ func (app *Application) HealthCheck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error:   false,
-		Message: "server is healthy",
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "server is healthy"})
 }

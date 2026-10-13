@@ -198,10 +198,7 @@ func (app *Application) GetWatchRooms(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
-		Data:  map[string]any{"rooms": items},
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"rooms": items}})
 }
 
 // One joined query authorizes the member and returns the room, the same way
@@ -257,10 +254,7 @@ func (app *Application) GetWatchRoom(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:     room.CreatedAt,
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
-		Data:  map[string]any{"room": detail},
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"room": detail}})
 }
 
 func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) {
@@ -519,10 +513,7 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	helpers.WriteJSON(w, http.StatusCreated, helpers.JSONResponse{
-		Error: false,
-		Data:  map[string]any{"room_id": room.ID},
-	})
+	helpers.WriteJSON(w, http.StatusCreated, helpers.JSONResponse{Data: map[string]any{"room_id": room.ID}})
 }
 
 func (app *Application) JoinWatchRoom(w http.ResponseWriter, r *http.Request) {
@@ -562,10 +553,7 @@ func (app *Application) JoinWatchRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
-		Data:  map[string]any{"room_id": roomID, "joined": true},
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"room_id": roomID, "joined": true}})
 }
 
 func (app *Application) DeleteWatchRoom(w http.ResponseWriter, r *http.Request) {
@@ -608,8 +596,5 @@ func (app *Application) DeleteWatchRoom(w http.ResponseWriter, r *http.Request) 
 	app.CleanupRoomHLSSession(roomID)
 	app.WatchRoomHub.deleteRoom(roomID)
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
-		Data:  map[string]any{"deleted": true},
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"deleted": true}})
 }

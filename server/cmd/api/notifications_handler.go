@@ -132,9 +132,7 @@ func (app *Application) CreateNotification(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	helpers.WriteJSON(w, http.StatusCreated, helpers.JSONResponse{
-		Error: false,
-	})
+	helpers.WriteJSON(w, http.StatusCreated, helpers.JSONResponse{})
 }
 
 func isValidNotificationTitle(title string) bool {
@@ -167,7 +165,6 @@ func (app *Application) ListNotifications(w http.ResponseWriter, r *http.Request
 
 	if !badge.IsAdmin {
 		helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-			Error: false,
 			Data: map[string]any{
 				"notifications": []notificationResponse{},
 				"unread_count":  int64(0),
@@ -192,7 +189,6 @@ func (app *Application) ListNotifications(w http.ResponseWriter, r *http.Request
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
 		Data: map[string]any{
 			"notifications": notifications,
 			"unread_count":  badge.UnreadCount,
@@ -217,7 +213,6 @@ func (app *Application) GetUnreadNotificationCount(w http.ResponseWriter, r *htt
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
 		Data: map[string]any{
 			"unread_count": badge.UnreadCount,
 		},
@@ -255,10 +250,7 @@ func (app *Application) MarkNotificationRead(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error:   false,
-		Message: "Notification marked as read",
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "Notification marked as read"})
 }
 
 // MarkAllNotificationsRead marks every notification currently visible to the
@@ -283,10 +275,7 @@ func (app *Application) MarkAllNotificationsRead(w http.ResponseWriter, r *http.
 		}
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error:   false,
-		Message: "All notifications marked as read",
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "All notifications marked as read"})
 }
 
 // DeleteNotification removes a notification the current user can see. Deleting a
@@ -326,8 +315,5 @@ func (app *Application) DeleteNotification(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error:   false,
-		Message: "Notification deleted",
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "Notification deleted"})
 }

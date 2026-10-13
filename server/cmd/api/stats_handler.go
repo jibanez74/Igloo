@@ -57,11 +57,7 @@ func (app *Application) RecordPlayEvent(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
-		Data:  map[string]any{"recorded": true},
-	}
-	helpers.WriteJSON(w, http.StatusOK, res)
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"recorded": true}})
 }
 
 // recordTrackPlay writes the play event and the rolled-up per-track stats in
@@ -110,16 +106,14 @@ func (app *Application) GetUserListeningStats(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"total_plays":          stats.TotalPlays,
 			"total_time_listened":  stats.TotalTimeListened,
 			"unique_tracks_played": stats.UniqueTracksPlayed,
 			"liked_tracks_count":   stats.LikedTracksCount,
 		},
-	}
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 func (app *Application) GetUserTopTracks(w http.ResponseWriter, r *http.Request) {
@@ -141,15 +135,13 @@ func (app *Application) GetUserTopTracks(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"tracks": tracks,
 			"limit":  limit,
 			"offset": offset,
 		},
-	}
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 func (app *Application) GetUserTopMusicians(w http.ResponseWriter, r *http.Request) {
@@ -171,15 +163,13 @@ func (app *Application) GetUserTopMusicians(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"musicians": musicians,
 			"limit":     limit,
 			"offset":    offset,
 		},
-	}
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 func (app *Application) GetUserTopGenres(w http.ResponseWriter, r *http.Request) {
@@ -208,14 +198,12 @@ func (app *Application) GetUserTopGenres(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"genres": genres,
 			"limit":  limit,
 		},
-	}
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 func (app *Application) GetUserTopAlbums(w http.ResponseWriter, r *http.Request) {
@@ -237,15 +225,13 @@ func (app *Application) GetUserTopAlbums(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"albums": albums,
 			"limit":  limit,
 			"offset": offset,
 		},
-	}
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 func (app *Application) GetUserRecentlyPlayed(w http.ResponseWriter, r *http.Request) {
@@ -267,15 +253,13 @@ func (app *Application) GetUserRecentlyPlayed(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"tracks": tracks,
 			"limit":  limit,
 			"offset": offset,
 		},
-	}
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 // parseLimitOffsetParams reads limit and offset. A missing, non-integer or

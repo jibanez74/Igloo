@@ -20,12 +20,7 @@ func (app *Application) GetLatestShows(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
-		Data:  map[string]any{"shows": shows},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"shows": shows}})
 }
 
 // Read-only transaction keeps related show data in one snapshot. Seasons carry
@@ -120,8 +115,7 @@ func (app *Application) GetShowDetails(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"show":                 show,
 			"seasons":              seasons,
@@ -133,9 +127,7 @@ func (app *Application) GetShowDetails(w http.ResponseWriter, r *http.Request) {
 			"production_companies": productionCompanies,
 			"extra_videos":         extraVideos,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 // One season of a show, addressed by season number rather than by the internal
@@ -206,15 +198,12 @@ func (app *Application) GetShowSeasonEpisodes(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"season":   season,
 			"episodes": episodes,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 // showsLibraryData is the JSON shape of helpers.JSONResponse.Data for GET /api/shows/library
@@ -319,8 +308,7 @@ func (app *Application) GetShowsLibrary(w http.ResponseWriter, r *http.Request) 
 		totalPages++
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: showsLibraryData{
 			Shows:      shows,
 			Total:      total,
@@ -329,9 +317,7 @@ func (app *Application) GetShowsLibrary(w http.ResponseWriter, r *http.Request) 
 			TotalPages: totalPages,
 			Sort:       sortParam,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 func (app *Application) GetShowsStats(w http.ResponseWriter, r *http.Request) {
@@ -342,16 +328,13 @@ func (app *Application) GetShowsStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: showsStatsData{
 			TotalShows:    counts.ShowsCount,
 			TotalSeasons:  counts.SeasonsCount,
 			TotalEpisodes: counts.EpisodesCount,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 func (app *Application) GetShowGenresList(w http.ResponseWriter, r *http.Request) {
@@ -362,13 +345,11 @@ func (app *Application) GetShowGenresList(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"genres": rows,
 		},
-	}
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 func (app *Application) GetShowsByGenreLibrary(w http.ResponseWriter, r *http.Request) {
@@ -421,8 +402,7 @@ func (app *Application) GetShowsByGenreLibrary(w http.ResponseWriter, r *http.Re
 		totalPages++
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: showsLibraryData{
 			Shows:      shows,
 			Total:      total,
@@ -431,6 +411,5 @@ func (app *Application) GetShowsByGenreLibrary(w http.ResponseWriter, r *http.Re
 			TotalPages: totalPages,
 			Sort:       sortParam,
 		},
-	}
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }

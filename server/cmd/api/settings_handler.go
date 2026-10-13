@@ -141,19 +141,13 @@ func (app *Application) withSettingsWrite(
 func (app *Application) GetSettings(w http.ResponseWriter, _ *http.Request) {
 	settings := *app.CurrentSettings()
 
-	res := helpers.JSONResponse{
-		Error: false,
-		Data:  mapLibrarySettingsResponse(settings),
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: mapLibrarySettingsResponse(settings)})
 }
 
 func (app *Application) GetGeneralSettings(w http.ResponseWriter, _ *http.Request) {
 	settings := *app.CurrentSettings()
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
 		Data: map[string]any{
 			"settings": mapGeneralSettingsResponse(settings),
 		},
@@ -244,7 +238,6 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error:   false,
 		Message: "Settings updated",
 		Data: map[string]any{
 			"settings":         mapGeneralSettingsResponse(updatedSettings),
@@ -312,7 +305,6 @@ func (app *Application) UpdateLibrarySettings(w http.ResponseWriter, r *http.Req
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error:   false,
 		Message: "Library settings updated",
 		Data: map[string]any{
 			"settings": mapLibrarySettingsResponse(updatedSettings),
@@ -378,20 +370,17 @@ func (app *Application) triggerScan(w http.ResponseWriter, library scanLibrary, 
 
 	app.Logger.Info(library.name+" library scan triggered via API", "path", result.Directory)
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error:   false,
-		Message: library.title + " library scan started",
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: library.title + " library scan started"})
 }
 
 func (app *Application) GetMovieScanStatus(w http.ResponseWriter, r *http.Request) {
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Error: false, Data: app.MovieScanner.Status()})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: app.MovieScanner.Status()})
 }
 
 func (app *Application) GetShowScanStatus(w http.ResponseWriter, r *http.Request) {
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Error: false, Data: app.ShowScanner.Status()})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: app.ShowScanner.Status()})
 }
 
 func (app *Application) GetMusicScanStatus(w http.ResponseWriter, r *http.Request) {
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Error: false, Data: app.MusicScanner.Status()})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: app.MusicScanner.Status()})
 }

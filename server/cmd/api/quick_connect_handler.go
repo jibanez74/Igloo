@@ -62,7 +62,6 @@ func (app *Application) InitiateQuickConnect(w http.ResponseWriter, r *http.Requ
 	}
 
 	helpers.WriteJSON(w, http.StatusCreated, helpers.JSONResponse{
-		Error: false,
 		Data: map[string]any{
 			"code":                  code,
 			"secret":                secret,
@@ -95,10 +94,7 @@ func (app *Application) RedeemQuickConnect(w http.ResponseWriter, r *http.Reques
 	result := app.QuickConnect.Redeem(code, request.Secret)
 	switch result.status {
 	case redeemPending:
-		helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-			Error: false,
-			Data:  map[string]any{"status": "pending"},
-		})
+		helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"status": "pending"}})
 	case redeemApproved:
 		token, device, ok := app.issueDeviceToken(w, r, result.userID, result.deviceName, result.platform, result.appVersion)
 		if !ok {
@@ -108,7 +104,6 @@ func (app *Application) RedeemQuickConnect(w http.ResponseWriter, r *http.Reques
 		app.QuickConnect.Consume(code)
 
 		helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-			Error: false,
 			Data: map[string]any{
 				"status": "approved",
 				"token":  token,
@@ -158,7 +153,6 @@ func (app *Application) LookupQuickConnect(w http.ResponseWriter, r *http.Reques
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
 		Data: map[string]any{
 			"device_name": info.deviceName,
 			"platform":    info.platform,
@@ -199,7 +193,6 @@ func (app *Application) ApproveQuickConnect(w http.ResponseWriter, r *http.Reque
 	app.Logger.Info("quick connect code approved", "user_id", userID)
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error:   false,
 		Message: "Device approved. It will finish signing in shortly.",
 	})
 }

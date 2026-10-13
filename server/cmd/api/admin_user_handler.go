@@ -57,10 +57,7 @@ func (app *Application) AdminGetUsers(w http.ResponseWriter, r *http.Request) {
 		))
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
-		Data:  map[string]any{"users": users},
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"users": users}})
 }
 
 type AdminCreateUserRequest struct {
@@ -133,7 +130,6 @@ func (app *Application) AdminCreateUser(w http.ResponseWriter, r *http.Request) 
 	app.Logger.Info("admin: user created", "user_id", user.ID, "email", user.Email)
 
 	helpers.WriteJSON(w, http.StatusCreated, helpers.JSONResponse{
-		Error: false,
 		Data: map[string]any{
 			"user": adminUserRow(
 				user.ID, user.Name, user.Email, user.IsAdmin,
@@ -260,7 +256,6 @@ func (app *Application) AdminUpdateUser(w http.ResponseWriter, r *http.Request) 
 	app.Logger.Info("admin: user updated", "user_id", user.ID)
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
 		Data: map[string]any{
 			"user": adminUserRow(
 				user.ID, user.Name, user.Email, user.IsAdmin,
@@ -355,10 +350,7 @@ func (app *Application) AdminDeleteUser(w http.ResponseWriter, r *http.Request) 
 
 	app.Logger.Info("admin: user deleted", "user_id", targetID, "email", user.Email)
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error:   false,
-		Message: "User deleted successfully",
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "User deleted successfully"})
 }
 
 type AdminResetUserPasswordRequest struct {
@@ -415,8 +407,5 @@ func (app *Application) AdminResetUserPassword(w http.ResponseWriter, r *http.Re
 
 	app.Logger.Info("admin: user password reset", "user_id", targetID)
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error:   false,
-		Message: "Password reset successfully",
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "Password reset successfully"})
 }

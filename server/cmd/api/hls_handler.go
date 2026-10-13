@@ -682,7 +682,7 @@ func (app *Application) stopPersonalHLSSession(w http.ResponseWriter, r *http.Re
 	}
 
 	app.cleanupPersonalHLSSessionsForOwner(media, userID, playbackSession, "")
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Error: false})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{})
 }
 
 func parseHLSParams(w http.ResponseWriter, r *http.Request, kind mediaKind) (hlsRequestParams, bool) {

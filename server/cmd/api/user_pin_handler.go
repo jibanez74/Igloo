@@ -123,7 +123,6 @@ func (app *Application) UpdateUserPin(w http.ResponseWriter, r *http.Request) {
 	app.Logger.Info("user pin updated", "user_id", userID, "removed", removing)
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error:   false,
 		Message: message,
 		Data: map[string]any{
 			"user": userResponseMap(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.Pin.Valid, user.CreatedAt, user.UpdatedAt),
@@ -152,7 +151,6 @@ func (app *Application) GetUserPin(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Cache-Control", "private, no-store")
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
 		Data: map[string]any{
 			"pin": helpers.StringPtrFromNull(pin),
 		},
@@ -207,7 +205,6 @@ func (app *Application) VerifyUserPin(w http.ResponseWriter, r *http.Request) {
 	valid := req.Pin == pin.String
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
 		Data: map[string]any{
 			"valid": valid,
 		},

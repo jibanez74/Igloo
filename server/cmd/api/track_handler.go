@@ -51,15 +51,12 @@ func (app *Application) ToggleLikeTrack(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"track_id": trackID,
 			"is_liked": isLiked,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 // toggleTrackLike flips like state in a single DB transaction, mirroring
@@ -116,14 +113,11 @@ func (app *Application) GetLikedTrackIDsForUser(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"liked_track_ids": trackIDs,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 // GetLikedTracks returns the current user's liked tracks as a paginated list,
@@ -179,8 +173,7 @@ func (app *Application) GetLikedTracks(w http.ResponseWriter, r *http.Request) {
 		totalPages++
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"tracks":      tracks,
 			"total":       total,
@@ -189,9 +182,7 @@ func (app *Application) GetLikedTracks(w http.ResponseWriter, r *http.Request) {
 			"total_pages": totalPages,
 			"has_more":    page < totalPages,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 func (app *Application) GetTrackByID(w http.ResponseWriter, r *http.Request) {
@@ -214,14 +205,11 @@ func (app *Application) GetTrackByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"track": track,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 // StreamTrack streams the audio file for playback.
@@ -277,8 +265,7 @@ func (app *Application) GetTracksAlphabetical(w http.ResponseWriter, r *http.Req
 
 	hasMore := offset+limit < total
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"tracks":   tracks,
 			"total":    total,
@@ -286,9 +273,7 @@ func (app *Application) GetTracksAlphabetical(w http.ResponseWriter, r *http.Req
 			"limit":    limit,
 			"has_more": hasMore,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 // A shuffle client sends back what it already holds so a refill does not hand
@@ -380,14 +365,11 @@ func (app *Application) GetShuffleTracks(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"tracks": tracks,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 func (app *Application) GetMusicStats(w http.ResponseWriter, r *http.Request) {
@@ -398,14 +380,11 @@ func (app *Application) GetMusicStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"total_albums":    counts.AlbumsCount,
 			"total_tracks":    counts.TracksCount,
 			"total_musicians": counts.MusiciansCount,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }

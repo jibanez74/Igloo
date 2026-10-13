@@ -93,7 +93,6 @@ func (app *Application) AuthenticateUser(w http.ResponseWriter, r *http.Request)
 	app.rememberSessionVersion(user.ID, user.SessionVersion)
 
 	res := helpers.JSONResponse{
-		Error:   false,
 		Message: fmt.Sprintf("Hello %s, welcome to your media library!", user.Name),
 	}
 
@@ -173,7 +172,6 @@ func (app *Application) AuthenticateDevice(w http.ResponseWriter, r *http.Reques
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error:   false,
 		Message: fmt.Sprintf("Hello %s, welcome to your media library!", user.Name),
 		Data: map[string]any{
 			"token":  token,
@@ -200,14 +198,11 @@ func (app *Application) GetCurrentAuthUser(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"user": userResponseMap(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.Pin.Valid, user.CreatedAt, user.UpdatedAt),
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 func (app *Application) DestroySession(w http.ResponseWriter, r *http.Request) {
@@ -226,10 +221,7 @@ func (app *Application) DestroySession(w http.ResponseWriter, r *http.Request) {
 
 		app.Logger.Info("device revoked via logout", "user_id", auth.UserID, "device_id", auth.DeviceID)
 
-		helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-			Error:   false,
-			Message: "You have been logged out successfully",
-		})
+		helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "You have been logged out successfully"})
 
 		return
 	}
@@ -241,10 +233,5 @@ func (app *Application) DestroySession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error:   false,
-		Message: "You have been logged out successfully",
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "You have been logged out successfully"})
 }

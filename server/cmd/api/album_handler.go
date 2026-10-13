@@ -39,8 +39,7 @@ func (app *Application) GetAlbumsAlphabetical(w http.ResponseWriter, r *http.Req
 		totalPages++
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"albums":      albums,
 			"total":       total,
@@ -48,9 +47,7 @@ func (app *Application) GetAlbumsAlphabetical(w http.ResponseWriter, r *http.Req
 			"per_page":    perPage,
 			"total_pages": totalPages,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 func (app *Application) GetLatestAlbums(w http.ResponseWriter, r *http.Request) {
@@ -61,14 +58,11 @@ func (app *Application) GetLatestAlbums(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"albums": albums,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 // Use a read-only transaction so album details come from one snapshot.
@@ -140,8 +134,7 @@ func (app *Application) GetAlbumDetails(w http.ResponseWriter, r *http.Request) 
 		totalDuration += track.Duration
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"album":          album,
 			"tracks":         tracks,
@@ -150,9 +143,7 @@ func (app *Application) GetAlbumDetails(w http.ResponseWriter, r *http.Request) 
 			"album_genres":   albumGenres,
 			"total_duration": totalDuration,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 // Track and join rows are cascade-deleted by the database.
@@ -184,10 +175,5 @@ func (app *Application) DeleteAlbum(w http.ResponseWriter, r *http.Request) {
 
 	app.Logger.Info("album deleted successfully", "id", id, "title", title)
 
-	res := helpers.JSONResponse{
-		Error:   false,
-		Message: "Album deleted successfully",
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "Album deleted successfully"})
 }

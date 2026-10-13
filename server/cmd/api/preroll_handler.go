@@ -98,7 +98,7 @@ func (app *Application) GetMoviePreroll(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Error: false, Data: map[string]any{"trailers": trailers}})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"trailers": trailers}})
 }
 
 // buildPrerollQueue loads the library pool first, so a library preference the

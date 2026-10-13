@@ -48,8 +48,5 @@ func (app *Application) GetUsers(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
-		Data:  map[string]any{"users": users},
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"users": users}})
 }

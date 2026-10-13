@@ -36,10 +36,7 @@ func (app *Application) GetDevices(w http.ResponseWriter, r *http.Request) {
 		))
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
-		Data:  map[string]any{"devices": devices},
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"devices": devices}})
 }
 
 type RenameDeviceRequest struct {
@@ -87,10 +84,7 @@ func (app *Application) RenameDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error:   false,
-		Message: "Device renamed",
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "Device renamed"})
 }
 
 func (app *Application) RevokeDevice(w http.ResponseWriter, r *http.Request) {
@@ -123,10 +117,7 @@ func (app *Application) RevokeDevice(w http.ResponseWriter, r *http.Request) {
 
 	app.Logger.Info("device revoked", "user_id", userID, "device_id", deviceID)
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error:   false,
-		Message: "Device revoked",
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "Device revoked"})
 }
 
 func parseDeviceID(w http.ResponseWriter, r *http.Request) (int64, bool) {

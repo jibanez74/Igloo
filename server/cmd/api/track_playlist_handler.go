@@ -26,14 +26,11 @@ func (app *Application) GetPlaylists(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"playlists": playlists,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 func (app *Application) GetPlaylist(w http.ResponseWriter, r *http.Request) {
@@ -93,8 +90,7 @@ func (app *Application) GetPlaylist(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"playlist":      playlist,
 			"track_count":   summary.TrackCount,
@@ -104,9 +100,7 @@ func (app *Application) GetPlaylist(w http.ResponseWriter, r *http.Request) {
 			"owner":         owner,
 			"collaborators": collaborators,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 func (app *Application) GetPlaylistTracks(w http.ResponseWriter, r *http.Request) {
@@ -163,17 +157,14 @@ func (app *Application) GetPlaylistTracks(w http.ResponseWriter, r *http.Request
 	}
 	hasMore := offset+int64(len(tracks)) < total
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"tracks":      tracks,
 			"total":       total,
 			"has_more":    hasMore,
 			"next_offset": offset + int64(len(tracks)),
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 type CreatePlaylistRequest struct {
@@ -216,15 +207,12 @@ func (app *Application) CreatePlaylist(w http.ResponseWriter, r *http.Request) {
 
 	app.Logger.Info("playlist created", "id", playlist.ID, "name", playlist.Name, "user_id", userID)
 
-	res := helpers.JSONResponse{
-		Error:   false,
+	helpers.WriteJSON(w, http.StatusCreated, helpers.JSONResponse{
 		Message: "Playlist created successfully",
 		Data: map[string]any{
 			"playlist": playlist,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusCreated, res)
+	})
 }
 
 type UpdatePlaylistRequest struct {
@@ -295,15 +283,12 @@ func (app *Application) UpdatePlaylist(w http.ResponseWriter, r *http.Request) {
 
 	app.Logger.Info("playlist updated", "id", playlist.ID, "name", playlist.Name)
 
-	res := helpers.JSONResponse{
-		Error:   false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Message: "Playlist updated successfully",
 		Data: map[string]any{
 			"playlist": playlist,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 func (app *Application) DeletePlaylist(w http.ResponseWriter, r *http.Request) {
@@ -351,12 +336,7 @@ func (app *Application) DeletePlaylist(w http.ResponseWriter, r *http.Request) {
 
 	app.Logger.Info("playlist deleted", "id", playlistId, "name", playlist.Name)
 
-	res := helpers.JSONResponse{
-		Error:   false,
-		Message: "Playlist deleted successfully",
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "Playlist deleted successfully"})
 }
 
 type AddTracksRequest struct {
@@ -468,16 +448,13 @@ func (app *Application) AddTracksToPlaylist(w http.ResponseWriter, r *http.Reque
 
 	app.Logger.Info("tracks added to playlist", "playlist_id", playlistId, "added", addedCount, "skipped", skippedCount)
 
-	res := helpers.JSONResponse{
-		Error:   false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Message: "Tracks added successfully",
 		Data: map[string]any{
 			"added":   addedCount,
 			"skipped": skippedCount,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 func (app *Application) RemoveTrackFromPlaylist(w http.ResponseWriter, r *http.Request) {
@@ -534,12 +511,7 @@ func (app *Application) RemoveTrackFromPlaylist(w http.ResponseWriter, r *http.R
 
 	app.Logger.Info("track removed from playlist", "playlist_id", playlistId, "track_id", trackId)
 
-	res := helpers.JSONResponse{
-		Error:   false,
-		Message: "Track removed successfully",
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "Track removed successfully"})
 }
 
 type ReorderTracksRequest struct {
@@ -632,12 +604,7 @@ func (app *Application) ReorderPlaylistTracks(w http.ResponseWriter, r *http.Req
 
 	app.Logger.Info("playlist tracks reordered", "playlist_id", playlistId)
 
-	res := helpers.JSONResponse{
-		Error:   false,
-		Message: "Tracks reordered successfully",
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "Tracks reordered successfully"})
 }
 
 func (app *Application) GetPlaylistCollaborators(w http.ResponseWriter, r *http.Request) {
@@ -692,14 +659,11 @@ func (app *Application) getPlaylistCollaborators(
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"collaborators": collaborators,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 func (app *Application) AddCollaborator(w http.ResponseWriter, r *http.Request) {
@@ -798,15 +762,12 @@ func (app *Application) addCollaborator(
 
 	app.Logger.Info("collaborator added", "playlist_id", playlistId, "user_id", req.UserId)
 
-	res := helpers.JSONResponse{
-		Error:   false,
+	helpers.WriteJSON(w, http.StatusCreated, helpers.JSONResponse{
 		Message: "Collaborator added successfully",
 		Data: map[string]any{
 			"collaborator": collaborator,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusCreated, res)
+	})
 }
 
 func (app *Application) RemoveCollaborator(w http.ResponseWriter, r *http.Request) {
@@ -873,10 +834,5 @@ func (app *Application) removeCollaborator(
 
 	app.Logger.Info("collaborator removed", "playlist_id", playlistId, "user_id", collaboratorId)
 
-	res := helpers.JSONResponse{
-		Error:   false,
-		Message: "Collaborator removed successfully",
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "Collaborator removed successfully"})
 }

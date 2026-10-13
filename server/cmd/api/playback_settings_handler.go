@@ -103,7 +103,6 @@ func (app *Application) mapPlaybackSettingsResponse(settings database.Setting) p
 
 func (app *Application) GetPlaybackSettings(w http.ResponseWriter, r *http.Request) {
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
 		Data: map[string]any{
 			"settings": app.mapPlaybackSettingsResponse(*app.CurrentSettings()),
 		},
@@ -196,7 +195,6 @@ func (app *Application) UpdatePlaybackSettings(w http.ResponseWriter, r *http.Re
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error:   false,
 		Message: "Playback settings updated",
 		Data: map[string]any{
 			"settings": app.mapPlaybackSettingsResponse(updated),

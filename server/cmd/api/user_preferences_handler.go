@@ -61,7 +61,7 @@ func (app *Application) GetTrailerPreferences(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Error: false, Data: trailerPreferencesPayload(prefs)})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: trailerPreferencesPayload(prefs)})
 }
 
 func (app *Application) UpdateTrailerPreferences(w http.ResponseWriter, r *http.Request) {
@@ -102,5 +102,5 @@ func (app *Application) UpdateTrailerPreferences(w http.ResponseWriter, r *http.
 	}
 
 	stored := preroll.Preferences{Enabled: row.TrailersEnabled, Count: int(row.TrailersCount), Source: row.TrailersSource}
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Error: false, Data: trailerPreferencesPayload(stored)})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: trailerPreferencesPayload(stored)})
 }

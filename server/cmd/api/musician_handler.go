@@ -39,8 +39,7 @@ func (app *Application) GetMusiciansAlphabetical(w http.ResponseWriter, r *http.
 		totalPages++
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"musicians":   musicians,
 			"total":       total,
@@ -48,9 +47,7 @@ func (app *Application) GetMusiciansAlphabetical(w http.ResponseWriter, r *http.
 			"per_page":    perPage,
 			"total_pages": totalPages,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 func (app *Application) GetMusicianDetails(w http.ResponseWriter, r *http.Request) {
@@ -102,8 +99,7 @@ func (app *Application) GetMusicianDetails(w http.ResponseWriter, r *http.Reques
 		totalDuration += track.Duration
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"musician":       musician,
 			"albums":         albums,
@@ -111,7 +107,5 @@ func (app *Application) GetMusicianDetails(w http.ResponseWriter, r *http.Reques
 			"genres":         genres,
 			"total_duration": totalDuration,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }

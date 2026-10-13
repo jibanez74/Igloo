@@ -53,14 +53,11 @@ func (app *Application) GetMoviePlaylists(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"playlists": playlists,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 type CreateMoviePlaylistRequest struct {
@@ -122,15 +119,12 @@ func (app *Application) CreateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error:   false,
+	helpers.WriteJSON(w, http.StatusCreated, helpers.JSONResponse{
 		Message: "Playlist created successfully",
 		Data: map[string]any{
 			"playlist": playlist,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusCreated, res)
+	})
 }
 
 func (app *Application) GetMoviePlaylist(w http.ResponseWriter, r *http.Request) {
@@ -190,8 +184,7 @@ func (app *Application) GetMoviePlaylist(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"playlist":      playlist,
 			"movie_count":   movieCount,
@@ -200,9 +193,7 @@ func (app *Application) GetMoviePlaylist(w http.ResponseWriter, r *http.Request)
 			"owner":         owner,
 			"collaborators": collaborators,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 type UpdateMoviePlaylistRequest struct {
@@ -296,15 +287,12 @@ func (app *Application) UpdateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error:   false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Message: "Playlist updated successfully",
 		Data: map[string]any{
 			"playlist": playlist,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 func (app *Application) DeleteMoviePlaylist(w http.ResponseWriter, r *http.Request) {
@@ -350,12 +338,7 @@ func (app *Application) DeleteMoviePlaylist(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error:   false,
-		Message: "Playlist deleted successfully",
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "Playlist deleted successfully"})
 }
 
 func (app *Application) GetMoviePlaylistMovies(w http.ResponseWriter, r *http.Request) {
@@ -434,8 +417,7 @@ func (app *Application) GetMoviePlaylistMovies(w http.ResponseWriter, r *http.Re
 		totalPages++
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: moviesLibraryData{
 			Movies:     movies,
 			Total:      total,
@@ -444,9 +426,7 @@ func (app *Application) GetMoviePlaylistMovies(w http.ResponseWriter, r *http.Re
 			TotalPages: totalPages,
 			Sort:       sortParam,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 type AddMoviesRequest struct {
@@ -563,16 +543,13 @@ func (app *Application) AddMoviesToMoviePlaylist(w http.ResponseWriter, r *http.
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error:   false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Message: "Movies processed",
 		Data: map[string]any{
 			"added":   addedCount,
 			"skipped": skippedCount,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 func (app *Application) RemoveMovieFromMoviePlaylist(w http.ResponseWriter, r *http.Request) {
@@ -625,10 +602,5 @@ func (app *Application) RemoveMovieFromMoviePlaylist(w http.ResponseWriter, r *h
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error:   false,
-		Message: "Movie removed from playlist",
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "Movie removed from playlist"})
 }

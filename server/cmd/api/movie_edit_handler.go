@@ -103,10 +103,7 @@ func (app *Application) IdentifyMovie(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error:   false,
-		Message: "movie identified successfully",
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "movie identified successfully"})
 }
 
 func (app *Application) UpdateMovieMetadata(w http.ResponseWriter, r *http.Request) {
@@ -223,10 +220,7 @@ func (app *Application) UpdateMovieMetadata(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error:   false,
-		Message: "movie updated successfully",
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "movie updated successfully"})
 }
 
 func (app *Application) DeleteMovie(w http.ResponseWriter, r *http.Request) {
@@ -284,8 +278,5 @@ func (app *Application) DeleteMovie(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error:   false,
-		Message: "movie deleted successfully",
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "movie deleted successfully"})
 }

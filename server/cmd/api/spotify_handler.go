@@ -31,7 +31,6 @@ type spotifyAlbumSearchResult struct {
 
 func (app *Application) GetSpotifyStatus(w http.ResponseWriter, r *http.Request) {
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
 		Data: map[string]any{
 			"available": app.Spotify != nil,
 		},
@@ -72,7 +71,6 @@ func (app *Application) SearchSpotifyAlbums(w http.ResponseWriter, r *http.Reque
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
 		Data: map[string]any{
 			"results": results,
 		},
@@ -126,7 +124,6 @@ func (app *Application) SearchSpotifyTracks(w http.ResponseWriter, r *http.Reque
 	results := mapSpotifyTrackSearchResults(tracks)
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
 		Data: map[string]any{
 			"results": results,
 		},

@@ -129,14 +129,11 @@ func (app *Application) UpdateUserName(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"user": userResponseMap(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.Pin.Valid, user.CreatedAt, user.UpdatedAt),
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 type UpdateUserEmailRequest struct {
@@ -178,14 +175,11 @@ func (app *Application) UpdateUserEmail(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"user": userResponseMap(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.Pin.Valid, user.CreatedAt, user.UpdatedAt),
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 type UpdateUserPasswordRequest struct {
@@ -264,12 +258,7 @@ func (app *Application) UpdateUserPassword(w http.ResponseWriter, r *http.Reques
 
 	app.Logger.Info("user password updated successfully", "user_id", userID)
 
-	res := helpers.JSONResponse{
-		Error:   false,
-		Message: "Password updated successfully",
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "Password updated successfully"})
 }
 
 type UpdateUserAvatarRequest struct {
@@ -319,14 +308,11 @@ func (app *Application) UpdateUserAvatar(w http.ResponseWriter, r *http.Request)
 		app.deleteUploadedAvatar(userID, replaced.String)
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"user": userResponseMap(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.Pin.Valid, user.CreatedAt, user.UpdatedAt),
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 // uploadedAvatarURLPrefix is the URL UploadUserAvatar publishes an avatar
@@ -431,15 +417,12 @@ func (app *Application) UploadUserAvatar(w http.ResponseWriter, r *http.Request)
 		"content_type", contentType,
 	)
 
-	res := helpers.JSONResponse{
-		Error:   false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Message: "Avatar uploaded successfully",
 		Data: map[string]any{
 			"user": userResponseMap(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.Pin.Valid, user.CreatedAt, user.UpdatedAt),
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 // replaceUserAvatar points the account at avatar and returns the value it
@@ -590,12 +573,7 @@ func (app *Application) DeleteUserAccount(w http.ResponseWriter, r *http.Request
 
 	app.Logger.Info("user account deleted", "user_id", userID, "email", user.Email)
 
-	res := helpers.JSONResponse{
-		Error:   false,
-		Message: "Account deleted successfully",
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "Account deleted successfully"})
 }
 
 // deleteUserWithRooms deletes the user and returns the ids of the watch rooms

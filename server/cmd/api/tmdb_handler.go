@@ -95,15 +95,11 @@ func (app *Application) SearchTmdbMovies(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
-		Data:  map[string]any{"results": results},
-	})
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"results": results}})
 }
 
 func (app *Application) GetTmdbStatus(w http.ResponseWriter, r *http.Request) {
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
 		Data: map[string]any{
 			"available": app.Tmdb != nil,
 		},
@@ -291,14 +287,11 @@ func (app *Application) GetMoviesInTheaters(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"movies": mapped,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 func (app *Application) GetMovieByTmdbID(w http.ResponseWriter, r *http.Request) {
@@ -327,14 +320,11 @@ func (app *Application) GetMovieByTmdbID(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"movie": movie,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 func (app *Application) ensureTmdbAvailable(w http.ResponseWriter) bool {

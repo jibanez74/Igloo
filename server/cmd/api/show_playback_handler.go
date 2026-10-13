@@ -53,7 +53,6 @@ func (app *Application) GetShowEpisode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
 		Data: map[string]any{
 			"show": map[string]any{
 				"id":            row.ShowID,
@@ -167,7 +166,6 @@ func (app *Application) GetShowEpisodeTechnicalDetails(w http.ResponseWriter, r 
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
 		Data: map[string]any{
 			"file": map[string]any{
 				"file_name": file.FileName,

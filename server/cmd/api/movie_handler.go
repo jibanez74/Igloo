@@ -200,8 +200,7 @@ func (app *Application) GetMoviesLibrary(w http.ResponseWriter, r *http.Request)
 		totalPages++
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: moviesLibraryData{
 			Movies:     movies,
 			Total:      total,
@@ -210,9 +209,7 @@ func (app *Application) GetMoviesLibrary(w http.ResponseWriter, r *http.Request)
 			TotalPages: totalPages,
 			Sort:       sortParam,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 func libraryRowsFromGenreAsc(rows []database.GetMoviesByGenreAscRow) []database.GetMoviesLibraryAscRow {
@@ -251,13 +248,11 @@ func (app *Application) GetMovieGenresList(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"genres": rows,
 		},
-	}
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 func (app *Application) GetMoviesByGenreLibrary(w http.ResponseWriter, r *http.Request) {
@@ -309,8 +304,7 @@ func (app *Application) GetMoviesByGenreLibrary(w http.ResponseWriter, r *http.R
 		totalPages++
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: moviesLibraryData{
 			Movies:     movies,
 			Total:      total,
@@ -319,8 +313,7 @@ func (app *Application) GetMoviesByGenreLibrary(w http.ResponseWriter, r *http.R
 			TotalPages: totalPages,
 			Sort:       sortParam,
 		},
-	}
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 func (app *Application) GetLikedMovies(w http.ResponseWriter, r *http.Request) {
@@ -370,8 +363,7 @@ func (app *Application) GetLikedMovies(w http.ResponseWriter, r *http.Request) {
 		totalPages++
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: moviesLibraryData{
 			Movies:     movies,
 			Total:      total,
@@ -380,9 +372,7 @@ func (app *Application) GetLikedMovies(w http.ResponseWriter, r *http.Request) {
 			TotalPages: totalPages,
 			Sort:       sortParam,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 func (app *Application) GetMovieLikeStatus(w http.ResponseWriter, r *http.Request) {
@@ -396,7 +386,6 @@ func (app *Application) GetMovieLikeStatus(w http.ResponseWriter, r *http.Reques
 
 	if userID == 0 {
 		helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-			Error: false,
 			Data: map[string]any{
 				"is_liked": false,
 			},
@@ -415,7 +404,6 @@ func (app *Application) GetMovieLikeStatus(w http.ResponseWriter, r *http.Reques
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-		Error: false,
 		Data: map[string]any{
 			"is_liked": isLiked,
 		},
@@ -487,15 +475,12 @@ func (app *Application) ToggleLikeMovie(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"movie_id": movieID,
 			"is_liked": isLiked,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 func (app *Application) GetMoviesStats(w http.ResponseWriter, r *http.Request) {
@@ -506,14 +491,11 @@ func (app *Application) GetMoviesStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: moviesStatsData{
 			TotalMovies: total,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 func (app *Application) GetLatestMovies(w http.ResponseWriter, r *http.Request) {
@@ -524,12 +506,7 @@ func (app *Application) GetLatestMovies(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
-		Data:  map[string]any{"movies": movies},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"movies": movies}})
 }
 
 // Read-only transaction keeps related movie data in one snapshot.
@@ -600,8 +577,7 @@ func (app *Application) GetMovieDetails(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"movie":                movie,
 			"cast":                 cast,
@@ -610,9 +586,7 @@ func (app *Application) GetMovieDetails(w http.ResponseWriter, r *http.Request) 
 			"production_companies": productionCompanies,
 			"extra_videos":         extraVideos,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 func (app *Application) GetMovieTechnicalDetails(w http.ResponseWriter, r *http.Request) {
@@ -682,8 +656,7 @@ func (app *Application) GetMovieTechnicalDetails(w http.ResponseWriter, r *http.
 	app.logNormalizedChapterStartTimes(movie, chapters, normalizedChapters)
 	chapters = normalizedChapters
 
-	res := helpers.JSONResponse{
-		Error: false,
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
 			"movie": map[string]any{
 				"file_name": movie.FileName,
@@ -700,9 +673,7 @@ func (app *Application) GetMovieTechnicalDetails(w http.ResponseWriter, r *http.
 			"subtitles":     subtitles,
 			"chapters":      chapters,
 		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	})
 }
 
 func (app *Application) StreamMovie(w http.ResponseWriter, r *http.Request) {
