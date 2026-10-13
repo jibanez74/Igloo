@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"net/http"
@@ -52,28 +53,15 @@ func (app *Application) CreateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 	}
 
 	ctx := r.Context()
-	var movieID sql.NullInt64
-	if req.MovieID != nil {
-		movieOK, err := app.Queries.MovieExists(ctx, *req.MovieID)
-		if err != nil {
-			app.serverError(w, err, "failed to verify movie for playlist", "failed to verify movie")
-			return
-		}
-		if !movieOK {
-			helpers.ErrorJSON(w, errors.New(movieNotFoundMessage), http.StatusBadRequest)
-			return
-		}
-		// The request separates an absent movie_id from a present one, which is
-		// what the nil check above tests. helpers.NullInt64 tests for 0 instead
-		// and cannot express that distinction.
-		movieID = sql.NullInt64{Int64: *req.MovieID, Valid: true}
+	movieID, ok := app.resolvePlaylistMovieID(w, ctx, req.MovieID, sql.NullInt64{})
+	if !ok {
+		return
 	}
 
 	playlist, err := app.Queries.CreateMoviePlaylist(ctx, database.CreateMoviePlaylistParams{
 		UserID:      userID,
 		Name:        req.Name,
 		Description: helpers.NullString(req.Description),
-		CoverImage:  sql.NullString{Valid: false},
 		IsPublic:    req.IsPublic,
 		MovieID:     movieID,
 	})
@@ -100,22 +88,8 @@ func (app *Application) GetMoviePlaylist(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	playlist, permission, err := app.getPlaylistAccess(r.Context(), playlistID, userID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New(playlistNotFoundMessage), http.StatusNotFound)
-			return
-		}
-		app.serverError(w, err, playlistPermissionLogMessage, fetchPlaylistMessage)
-		return
-	}
-
-	if permission == PermissionNone {
-		helpers.ErrorJSON(w, errors.New(accessDeniedMessage), http.StatusForbidden)
-		return
-	}
-
-	if !app.mustBeMoviePlaylist(w, playlist) {
+	playlist, permission, ok := app.authorizePlaylist(w, r, playlistID, userID, playlistContentTypeMovie, PermissionView, accessDeniedMessage, fetchPlaylistMessage)
+	if !ok {
 		return
 	}
 
@@ -170,22 +144,8 @@ func (app *Application) UpdateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	existing, permission, err := app.getPlaylistAccess(r.Context(), playlistID, userID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New(playlistNotFoundMessage), http.StatusNotFound)
-			return
-		}
-		app.serverError(w, err, playlistPermissionLogMessage, updatePlaylistMessage)
-		return
-	}
-
-	if permission != PermissionOwner {
-		helpers.ErrorJSON(w, errors.New("only the playlist owner can update metadata"), http.StatusForbidden)
-		return
-	}
-
-	if !app.mustBeMoviePlaylist(w, existing) {
+	existing, _, ok := app.authorizePlaylist(w, r, playlistID, userID, playlistContentTypeMovie, PermissionOwner, "only the playlist owner can update metadata", updatePlaylistMessage)
+	if !ok {
 		return
 	}
 
@@ -203,20 +163,9 @@ func (app *Application) UpdateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 	}
 
 	ctx := r.Context()
-	var movieID sql.NullInt64
-	if req.MovieID != nil {
-		movieOK, err := app.Queries.MovieExists(ctx, *req.MovieID)
-		if err != nil {
-			app.serverError(w, err, "failed to verify movie for playlist", "failed to verify movie")
-			return
-		}
-		if !movieOK {
-			helpers.ErrorJSON(w, errors.New(movieNotFoundMessage), http.StatusBadRequest)
-			return
-		}
-		movieID = sql.NullInt64{Int64: *req.MovieID, Valid: true}
-	} else {
-		movieID = existing.MovieID
+	movieID, ok := app.resolvePlaylistMovieID(w, ctx, req.MovieID, existing.MovieID)
+	if !ok {
+		return
 	}
 
 	playlist, err := app.Queries.UpdateMoviePlaylist(ctx, database.UpdateMoviePlaylistParams{
@@ -245,47 +194,6 @@ func (app *Application) UpdateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 	})
 }
 
-func (app *Application) DeleteMoviePlaylist(w http.ResponseWriter, r *http.Request) {
-	userID := app.userIDFromRequest(r)
-
-	idParam := chi.URLParam(r, "id")
-	playlistID, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New(invalidPlaylistIDMessage), http.StatusBadRequest)
-		return
-	}
-
-	playlist, permission, err := app.getPlaylistAccess(r.Context(), playlistID, userID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New(playlistNotFoundMessage), http.StatusNotFound)
-			return
-		}
-		app.serverError(w, err, getPlaylistLogMessage, deletePlaylistMessage)
-		return
-	}
-
-	if permission != PermissionOwner {
-		helpers.ErrorJSON(w, errors.New("only the playlist owner can delete it"), http.StatusForbidden)
-		return
-	}
-
-	if !app.mustBeMoviePlaylist(w, playlist) {
-		return
-	}
-
-	err = app.Queries.DeletePlaylist(r.Context(), database.DeletePlaylistParams{
-		ID:     playlistID,
-		UserID: userID,
-	})
-	if err != nil {
-		app.serverError(w, err, "failed to delete movie playlist", deletePlaylistMessage)
-		return
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "Playlist deleted successfully"})
-}
-
 func (app *Application) GetMoviePlaylistMovies(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 
@@ -296,22 +204,8 @@ func (app *Application) GetMoviePlaylistMovies(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	playlist, permission, err := app.getPlaylistAccess(r.Context(), playlistID, userID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New(playlistNotFoundMessage), http.StatusNotFound)
-			return
-		}
-		app.serverError(w, err, playlistPermissionLogMessage, fetchPlaylistMessage)
-		return
-	}
-
-	if permission == PermissionNone {
-		helpers.ErrorJSON(w, errors.New(accessDeniedMessage), http.StatusForbidden)
-		return
-	}
-
-	if !app.mustBeMoviePlaylist(w, playlist) {
+	_, _, ok := app.authorizePlaylist(w, r, playlistID, userID, playlistContentTypeMovie, PermissionView, accessDeniedMessage, fetchPlaylistMessage)
+	if !ok {
 		return
 	}
 
@@ -344,6 +238,26 @@ func (app *Application) GetMoviePlaylistMovies(w http.ResponseWriter, r *http.Re
 	writeMoviesLibrary(w, movies, total, page, perPage, sortParam)
 }
 
+// resolvePlaylistMovieID answers 400 when the requested movie does not exist.
+// A nil request keeps current: the request separates an absent movie_id from a
+// present one, which helpers.NullInt64 (testing for 0) cannot express.
+func (app *Application) resolvePlaylistMovieID(w http.ResponseWriter, ctx context.Context, requested *int64, current sql.NullInt64) (sql.NullInt64, bool) {
+	if requested == nil {
+		return current, true
+	}
+
+	movieOK, err := app.Queries.MovieExists(ctx, *requested)
+	if err != nil {
+		app.serverError(w, err, "failed to verify movie for playlist", "failed to verify movie")
+		return current, false
+	}
+	if !movieOK {
+		helpers.ErrorJSON(w, errors.New(movieNotFoundMessage), http.StatusBadRequest)
+		return current, false
+	}
+	return sql.NullInt64{Int64: *requested, Valid: true}, true
+}
+
 type AddMoviesRequest struct {
 	MovieIds []int64 `json:"movie_ids"`
 }
@@ -358,22 +272,8 @@ func (app *Application) AddMoviesToMoviePlaylist(w http.ResponseWriter, r *http.
 		return
 	}
 
-	playlist, permission, err := app.getPlaylistAccess(r.Context(), playlistID, userID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New(playlistNotFoundMessage), http.StatusNotFound)
-			return
-		}
-		app.serverError(w, err, playlistPermissionLogMessage, "failed to add movies")
-		return
-	}
-
-	if permission < PermissionEdit {
-		helpers.ErrorJSON(w, errors.New("you don't have permission to edit this playlist"), http.StatusForbidden)
-		return
-	}
-
-	if !app.mustBeMoviePlaylist(w, playlist) {
+	_, _, ok := app.authorizePlaylist(w, r, playlistID, userID, playlistContentTypeMovie, PermissionEdit, "you don't have permission to edit this playlist", "failed to add movies")
+	if !ok {
 		return
 	}
 
@@ -391,74 +291,26 @@ func (app *Application) AddMoviesToMoviePlaylist(w http.ResponseWriter, r *http.
 
 	ctx := r.Context()
 
-	// One transaction for the whole batch. ON CONFLICT DO NOTHING replaces the
-	// per-movie membership pre-check, and the movie_id foreign key replaces the
-	// per-movie existence lookup -- an unknown id surfaces as an FK violation
-	// and is counted as skipped, exactly as before.
-	tx, err := app.DB.BeginTx(ctx, nil)
+	added, skipped, err := app.addToPlaylist(ctx, playlistID, req.MovieIds,
+		func(q *database.Queries, id int64) (int64, error) {
+			return q.AddMovieToPlaylist(ctx, database.AddMovieToPlaylistParams{
+				PlaylistID: playlistID,
+				MovieID:    id,
+				AddedBy:    helpers.NullInt64(userID),
+			})
+		},
+		(*database.Queries).MovieExists,
+	)
 	if err != nil {
-		app.serverError(w, err, "failed to begin add-movies transaction", "failed to add movies to playlist",
-			"playlist_id", playlistID)
-		return
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	qtx := app.Queries.WithTx(tx)
-
-	addedCount := 0
-	skippedCount := 0
-
-	for _, movieID := range req.MovieIds {
-		rowsAffected, err := qtx.AddMovieToPlaylist(ctx, database.AddMovieToPlaylistParams{
-			PlaylistID: playlistID,
-			MovieID:    movieID,
-			AddedBy:    sql.NullInt64{Int64: userID, Valid: true},
-		})
-		if err != nil {
-			// An unknown movie id fails the movie_id foreign key. Confirm that is
-			// what happened instead of matching the driver's error text:
-			// playlist_movies also has foreign keys on playlist_id and added_by, so
-			// a playlist or user deleted mid-request must surface as an error
-			// rather than a silent skip. A constraint violation aborts only the
-			// failed statement, so the transaction is still usable for this probe.
-			movieOK, existsErr := qtx.MovieExists(ctx, movieID)
-			if existsErr == nil && !movieOK {
-				skippedCount++
-				app.Logger.Warn("skip unknown movie id for playlist", "movie_id", movieID)
-				continue
-			}
-			app.serverError(w, err, "failed to add movie to playlist", "failed to add movies to playlist",
-				"movie_id", movieID, "playlist_id", playlistID)
-			return
-		}
-		if rowsAffected == 0 {
-			skippedCount++
-			continue
-		}
-		addedCount++
-	}
-
-	if addedCount > 0 {
-		timestampErr := qtx.UpdatePlaylistTimestamp(ctx, playlistID)
-		if timestampErr != nil {
-			app.serverError(w, timestampErr, updatePlaylistTimestampLogMessage, finalizePlaylistUpdateMessage,
-				"playlist_id", playlistID)
-			return
-		}
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		app.serverError(w, err, "failed to commit add-movies transaction", "failed to add movies to playlist",
-			"playlist_id", playlistID)
+		app.serverError(w, err, "failed to add movies to playlist", "failed to add movies to playlist", "playlist_id", playlistID)
 		return
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Message: "Movies processed",
 		Data: map[string]any{
-			"added":   addedCount,
-			"skipped": skippedCount,
+			"added":   added,
+			"skipped": skipped,
 		},
 	})
 }
@@ -478,22 +330,8 @@ func (app *Application) RemoveMovieFromMoviePlaylist(w http.ResponseWriter, r *h
 		return
 	}
 
-	playlist, permission, err := app.getPlaylistAccess(r.Context(), playlistID, userID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New(playlistNotFoundMessage), http.StatusNotFound)
-			return
-		}
-		app.serverError(w, err, playlistPermissionLogMessage, "failed to remove movie")
-		return
-	}
-
-	if permission < PermissionEdit {
-		helpers.ErrorJSON(w, errors.New("you don't have permission to edit this playlist"), http.StatusForbidden)
-		return
-	}
-
-	if !app.mustBeMoviePlaylist(w, playlist) {
+	_, _, ok := app.authorizePlaylist(w, r, playlistID, userID, playlistContentTypeMovie, PermissionEdit, "you don't have permission to edit this playlist", "failed to remove movie")
+	if !ok {
 		return
 	}
 

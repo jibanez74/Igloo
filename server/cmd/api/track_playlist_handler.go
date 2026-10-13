@@ -1,7 +1,6 @@
 package main
 
 import (
-	"database/sql"
 	"errors"
 	"net/http"
 	"strconv"
@@ -39,22 +38,8 @@ func (app *Application) GetPlaylist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	playlist, permission, err := app.getPlaylistAccess(r.Context(), playlistId, userID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New(playlistNotFoundMessage), http.StatusNotFound)
-			return
-		}
-		app.serverError(w, err, playlistPermissionLogMessage, fetchPlaylistMessage)
-		return
-	}
-
-	if permission == PermissionNone {
-		helpers.ErrorJSON(w, errors.New(accessDeniedMessage), http.StatusForbidden)
-		return
-	}
-
-	if !app.mustBeTrackPlaylist(w, playlist) {
+	playlist, permission, ok := app.authorizePlaylist(w, r, playlistId, userID, playlistContentTypeTrack, PermissionView, accessDeniedMessage, fetchPlaylistMessage)
+	if !ok {
 		return
 	}
 
@@ -102,22 +87,8 @@ func (app *Application) GetPlaylistTracks(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	playlist, permission, err := app.getPlaylistAccess(r.Context(), playlistId, userID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New(playlistNotFoundMessage), http.StatusNotFound)
-			return
-		}
-		app.serverError(w, err, playlistPermissionLogMessage, fetchPlaylistMessage)
-		return
-	}
-
-	if permission == PermissionNone {
-		helpers.ErrorJSON(w, errors.New(accessDeniedMessage), http.StatusForbidden)
-		return
-	}
-
-	if !app.mustBeTrackPlaylist(w, playlist) {
+	_, _, ok := app.authorizePlaylist(w, r, playlistId, userID, playlistContentTypeTrack, PermissionView, accessDeniedMessage, fetchPlaylistMessage)
+	if !ok {
 		return
 	}
 
@@ -176,7 +147,6 @@ func (app *Application) CreatePlaylist(w http.ResponseWriter, r *http.Request) {
 		UserID:      userID,
 		Name:        req.Name,
 		Description: helpers.NullString(req.Description),
-		CoverImage:  sql.NullString{Valid: false},
 		IsPublic:    req.IsPublic,
 	})
 	if err != nil {
@@ -211,22 +181,8 @@ func (app *Application) UpdatePlaylist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	existing, permission, err := app.getPlaylistAccess(r.Context(), playlistId, userID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New(playlistNotFoundMessage), http.StatusNotFound)
-			return
-		}
-		app.serverError(w, err, playlistPermissionLogMessage, updatePlaylistMessage)
-		return
-	}
-
-	if permission != PermissionOwner {
-		helpers.ErrorJSON(w, errors.New("only the playlist owner can update metadata"), http.StatusForbidden)
-		return
-	}
-
-	if !app.mustBeTrackPlaylist(w, existing) {
+	_, _, ok := app.authorizePlaylist(w, r, playlistId, userID, playlistContentTypeTrack, PermissionOwner, "only the playlist owner can update metadata", updatePlaylistMessage)
+	if !ok {
 		return
 	}
 
@@ -266,6 +222,14 @@ func (app *Application) UpdatePlaylist(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *Application) DeletePlaylist(w http.ResponseWriter, r *http.Request) {
+	app.deletePlaylist(w, r, playlistContentTypeTrack)
+}
+
+func (app *Application) DeleteMoviePlaylist(w http.ResponseWriter, r *http.Request) {
+	app.deletePlaylist(w, r, playlistContentTypeMovie)
+}
+
+func (app *Application) deletePlaylist(w http.ResponseWriter, r *http.Request, contentType string) {
 	userID := app.userIDFromRequest(r)
 
 	idParam := chi.URLParam(r, "id")
@@ -275,22 +239,8 @@ func (app *Application) DeletePlaylist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	playlist, permission, err := app.getPlaylistAccess(r.Context(), playlistId, userID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New(playlistNotFoundMessage), http.StatusNotFound)
-			return
-		}
-		app.serverError(w, err, getPlaylistLogMessage, deletePlaylistMessage)
-		return
-	}
-
-	if permission != PermissionOwner {
-		helpers.ErrorJSON(w, errors.New("only the playlist owner can delete it"), http.StatusForbidden)
-		return
-	}
-
-	if !app.mustBeTrackPlaylist(w, playlist) {
+	playlist, _, ok := app.authorizePlaylist(w, r, playlistId, userID, contentType, PermissionOwner, "only the playlist owner can delete it", deletePlaylistMessage)
+	if !ok {
 		return
 	}
 
@@ -322,22 +272,8 @@ func (app *Application) AddTracksToPlaylist(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	playlist, permission, err := app.getPlaylistAccess(r.Context(), playlistId, userID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New(playlistNotFoundMessage), http.StatusNotFound)
-			return
-		}
-		app.serverError(w, err, playlistPermissionLogMessage, "failed to add tracks")
-		return
-	}
-
-	if permission < PermissionEdit {
-		helpers.ErrorJSON(w, errors.New("you don't have permission to add tracks to this playlist"), http.StatusForbidden)
-		return
-	}
-
-	if !app.mustBeTrackPlaylist(w, playlist) {
+	_, _, ok := app.authorizePlaylist(w, r, playlistId, userID, playlistContentTypeTrack, PermissionEdit, "you don't have permission to add tracks to this playlist", "failed to add tracks")
+	if !ok {
 		return
 	}
 
@@ -353,68 +289,28 @@ func (app *Application) AddTracksToPlaylist(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// One transaction for the whole batch: the inserts commit together instead
-	// of once per track, and ON CONFLICT DO NOTHING replaces the per-track
-	// membership pre-check (zero rows affected means it was already there).
-	tx, err := app.DB.BeginTx(r.Context(), nil)
+	added, skipped, err := app.addToPlaylist(r.Context(), playlistId, req.TrackIds,
+		func(q *database.Queries, id int64) (int64, error) {
+			return q.AddTrackToPlaylist(r.Context(), database.AddTrackToPlaylistParams{
+				PlaylistID: playlistId,
+				TrackID:    id,
+				AddedBy:    helpers.NullInt64(userID),
+			})
+		},
+		(*database.Queries).TrackExists,
+	)
 	if err != nil {
-		app.serverError(w, err, "failed to begin add-tracks transaction", "failed to add tracks", "playlist_id", playlistId)
-		return
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	qtx := app.Queries.WithTx(tx)
-
-	addedCount := 0
-	skippedCount := 0
-
-	for _, trackId := range req.TrackIds {
-		rowsAffected, err := qtx.AddTrackToPlaylist(r.Context(), database.AddTrackToPlaylistParams{
-			PlaylistID: playlistId,
-			TrackID:    trackId,
-			AddedBy:    sql.NullInt64{Int64: userID, Valid: true},
-		})
-		if err != nil {
-			// An unknown track id fails the track_id foreign key and is skipped,
-			// as AddMoviesToMoviePlaylist does; any other failure aborts the batch.
-			trackOK, existsErr := qtx.TrackExists(r.Context(), trackId)
-			if existsErr == nil && !trackOK {
-				skippedCount++
-				app.Logger.Warn("skip unknown track id for playlist", "track_id", trackId)
-				continue
-			}
-			app.serverError(w, err, "failed to add track to playlist", "failed to add tracks",
-				"track_id", trackId, "playlist_id", playlistId)
-			return
-		}
-		if rowsAffected == 0 {
-			skippedCount++
-			continue
-		}
-		addedCount++
-	}
-
-	if addedCount > 0 {
-		timestampErr := qtx.UpdatePlaylistTimestamp(r.Context(), playlistId)
-		if timestampErr != nil {
-			app.serverError(w, timestampErr, updatePlaylistTimestampLogMessage, "failed to add tracks", "playlist_id", playlistId)
-			return
-		}
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		app.serverError(w, err, "failed to commit add-tracks transaction", "failed to add tracks", "playlist_id", playlistId)
+		app.serverError(w, err, "failed to add tracks to playlist", "failed to add tracks", "playlist_id", playlistId)
 		return
 	}
 
-	app.Logger.Info("tracks added to playlist", "playlist_id", playlistId, "added", addedCount, "skipped", skippedCount)
+	app.Logger.Info("tracks added to playlist", "playlist_id", playlistId, "added", added, "skipped", skipped)
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Message: "Tracks added successfully",
 		Data: map[string]any{
-			"added":   addedCount,
-			"skipped": skippedCount,
+			"added":   added,
+			"skipped": skipped,
 		},
 	})
 }
@@ -436,22 +332,8 @@ func (app *Application) RemoveTrackFromPlaylist(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	playlist, permission, err := app.getPlaylistAccess(r.Context(), playlistId, userID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New(playlistNotFoundMessage), http.StatusNotFound)
-			return
-		}
-		app.serverError(w, err, playlistPermissionLogMessage, "failed to remove track")
-		return
-	}
-
-	if permission < PermissionEdit {
-		helpers.ErrorJSON(w, errors.New("you don't have permission to remove tracks from this playlist"), http.StatusForbidden)
-		return
-	}
-
-	if !app.mustBeTrackPlaylist(w, playlist) {
+	_, _, ok := app.authorizePlaylist(w, r, playlistId, userID, playlistContentTypeTrack, PermissionEdit, "you don't have permission to remove tracks from this playlist", "failed to remove track")
+	if !ok {
 		return
 	}
 
@@ -486,22 +368,8 @@ func (app *Application) ReorderPlaylistTracks(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	playlist, permission, err := app.getPlaylistAccess(r.Context(), playlistId, userID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New(playlistNotFoundMessage), http.StatusNotFound)
-			return
-		}
-		app.serverError(w, err, playlistPermissionLogMessage, "failed to reorder tracks")
-		return
-	}
-
-	if permission < PermissionEdit {
-		helpers.ErrorJSON(w, errors.New("you don't have permission to reorder tracks in this playlist"), http.StatusForbidden)
-		return
-	}
-
-	if !app.mustBeTrackPlaylist(w, playlist) {
+	_, _, ok := app.authorizePlaylist(w, r, playlistId, userID, playlistContentTypeTrack, PermissionEdit, "you don't have permission to reorder tracks in this playlist", "failed to reorder tracks")
+	if !ok {
 		return
 	}
 
@@ -543,7 +411,7 @@ func (app *Application) ReorderPlaylistTracks(w http.ResponseWriter, r *http.Req
 
 	timestampErr := qtx.UpdatePlaylistTimestamp(r.Context(), playlistId)
 	if timestampErr != nil {
-		app.serverError(w, timestampErr, updatePlaylistTimestampLogMessage, "failed to reorder tracks", "playlist_id", playlistId)
+		app.serverError(w, timestampErr, "failed to update playlist timestamp", "failed to reorder tracks", "playlist_id", playlistId)
 		return
 	}
 
@@ -559,17 +427,17 @@ func (app *Application) ReorderPlaylistTracks(w http.ResponseWriter, r *http.Req
 }
 
 func (app *Application) GetPlaylistCollaborators(w http.ResponseWriter, r *http.Request) {
-	app.getPlaylistCollaborators(w, r, app.mustBeTrackPlaylist)
+	app.getPlaylistCollaborators(w, r, playlistContentTypeTrack)
 }
 
 func (app *Application) GetMoviePlaylistCollaborators(w http.ResponseWriter, r *http.Request) {
-	app.getPlaylistCollaborators(w, r, app.mustBeMoviePlaylist)
+	app.getPlaylistCollaborators(w, r, playlistContentTypeMovie)
 }
 
 func (app *Application) getPlaylistCollaborators(
 	w http.ResponseWriter,
 	r *http.Request,
-	mustBePlaylistType func(http.ResponseWriter, database.Playlist) bool,
+	contentType string,
 ) {
 	userID := app.userIDFromRequest(r)
 
@@ -580,22 +448,8 @@ func (app *Application) getPlaylistCollaborators(
 		return
 	}
 
-	playlist, permission, err := app.getPlaylistAccess(r.Context(), playlistId, userID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New(playlistNotFoundMessage), http.StatusNotFound)
-			return
-		}
-		app.serverError(w, err, playlistPermissionLogMessage, "failed to fetch collaborators")
-		return
-	}
-
-	if permission != PermissionOwner {
-		helpers.ErrorJSON(w, errors.New("only the playlist owner can view collaborators"), http.StatusForbidden)
-		return
-	}
-
-	if !mustBePlaylistType(w, playlist) {
+	_, _, ok := app.authorizePlaylist(w, r, playlistId, userID, contentType, PermissionOwner, "only the playlist owner can view collaborators", "failed to fetch collaborators")
+	if !ok {
 		return
 	}
 
@@ -613,11 +467,11 @@ func (app *Application) getPlaylistCollaborators(
 }
 
 func (app *Application) AddCollaborator(w http.ResponseWriter, r *http.Request) {
-	app.addCollaborator(w, r, app.mustBeTrackPlaylist)
+	app.addCollaborator(w, r, playlistContentTypeTrack)
 }
 
 func (app *Application) AddMoviePlaylistCollaborator(w http.ResponseWriter, r *http.Request) {
-	app.addCollaborator(w, r, app.mustBeMoviePlaylist)
+	app.addCollaborator(w, r, playlistContentTypeMovie)
 }
 
 type AddCollaboratorRequest struct {
@@ -628,7 +482,7 @@ type AddCollaboratorRequest struct {
 func (app *Application) addCollaborator(
 	w http.ResponseWriter,
 	r *http.Request,
-	mustBePlaylistType func(http.ResponseWriter, database.Playlist) bool,
+	contentType string,
 ) {
 	userID := app.userIDFromRequest(r)
 
@@ -639,22 +493,8 @@ func (app *Application) addCollaborator(
 		return
 	}
 
-	playlist, permission, err := app.getPlaylistAccess(r.Context(), playlistId, userID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New(playlistNotFoundMessage), http.StatusNotFound)
-			return
-		}
-		app.serverError(w, err, getPlaylistLogMessage, "failed to add collaborator")
-		return
-	}
-
-	if permission != PermissionOwner {
-		helpers.ErrorJSON(w, errors.New("only the playlist owner can add collaborators"), http.StatusForbidden)
-		return
-	}
-
-	if !mustBePlaylistType(w, playlist) {
+	_, _, ok := app.authorizePlaylist(w, r, playlistId, userID, contentType, PermissionOwner, "only the playlist owner can add collaborators", "failed to add collaborator")
+	if !ok {
 		return
 	}
 
@@ -711,17 +551,17 @@ func (app *Application) addCollaborator(
 }
 
 func (app *Application) RemoveCollaborator(w http.ResponseWriter, r *http.Request) {
-	app.removeCollaborator(w, r, app.mustBeTrackPlaylist)
+	app.removeCollaborator(w, r, playlistContentTypeTrack)
 }
 
 func (app *Application) RemoveMoviePlaylistCollaborator(w http.ResponseWriter, r *http.Request) {
-	app.removeCollaborator(w, r, app.mustBeMoviePlaylist)
+	app.removeCollaborator(w, r, playlistContentTypeMovie)
 }
 
 func (app *Application) removeCollaborator(
 	w http.ResponseWriter,
 	r *http.Request,
-	mustBePlaylistType func(http.ResponseWriter, database.Playlist) bool,
+	contentType string,
 ) {
 	userID := app.userIDFromRequest(r)
 
@@ -739,22 +579,8 @@ func (app *Application) removeCollaborator(
 		return
 	}
 
-	playlist, permission, err := app.getPlaylistAccess(r.Context(), playlistId, userID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New(playlistNotFoundMessage), http.StatusNotFound)
-			return
-		}
-		app.serverError(w, err, getPlaylistLogMessage, "failed to remove collaborator")
-		return
-	}
-
-	if permission != PermissionOwner {
-		helpers.ErrorJSON(w, errors.New("only the playlist owner can remove collaborators"), http.StatusForbidden)
-		return
-	}
-
-	if !mustBePlaylistType(w, playlist) {
+	_, _, ok := app.authorizePlaylist(w, r, playlistId, userID, contentType, PermissionOwner, "only the playlist owner can remove collaborators", "failed to remove collaborator")
+	if !ok {
 		return
 	}
 
