@@ -107,18 +107,12 @@ func (app *Application) serveSubtitleWebVTT(w http.ResponseWriter, r *http.Reque
 
 	cacheKey := helpers.SubtitleCacheKey(string(kind), source.FileID, sub.StreamIndex)
 
-	if cached, found := app.SubtitleVTTCache.Get(cacheKey); found {
-		vtt, ok := cached.([]byte)
-		if !ok {
-			app.Logger.Warn("subtitle VTT cache type mismatch",
-				"key", cacheKey,
-				"got_type", fmt.Sprintf("%T", cached),
-			)
-			app.SubtitleVTTCache.Delete(cacheKey)
-		} else {
-			writeSubtitleWebVTT(w, vtt, startSec)
-			return
-		}
+	// Only []byte is ever stored under a subtitle key.
+	cached, _ := app.SubtitleVTTCache.Get(cacheKey)
+	vtt, isVTT := cached.([]byte)
+	if isVTT {
+		writeSubtitleWebVTT(w, vtt, startSec)
+		return
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), subtitleExtractTimeout)
@@ -147,17 +141,8 @@ func (app *Application) serveSubtitleWebVTT(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	out, ok := v.([]byte)
-	if !ok {
-		app.Logger.Error("subtitle extraction returned unexpected type",
-			"got_type", fmt.Sprintf("%T", v),
-			"media", media.String(),
-			"stream_index", sub.StreamIndex,
-		)
-		helpers.ErrorJSON(w, errors.New("failed to extract subtitle track"))
-		return
-	}
-
+	// The flight returns []byte whenever it succeeds.
+	out, _ := v.([]byte)
 	writeSubtitleWebVTT(w, out, startSec)
 }
 
@@ -193,6 +178,5 @@ func parseSubtitleStartSec(r *http.Request) (float64, error) {
 func writeSubtitleWebVTT(w http.ResponseWriter, vtt []byte, startSec float64) {
 	w.Header().Set("Content-Type", subtitleWebVTTContentType)
 	w.Header().Set("Cache-Control", "no-cache")
-	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(helpers.ShiftWebVTT(vtt, startSec))
 }

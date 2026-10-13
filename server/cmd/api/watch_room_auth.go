@@ -14,8 +14,6 @@ import (
 
 const watchRoomAuthCacheTTL = 30 * time.Second
 
-type watchRoomAuthLookup func(context.Context, int64, int64) (database.WatchRoom, error)
-
 type watchRoomAuthKey struct {
 	roomID int64
 	userID int64
@@ -61,7 +59,7 @@ func (auth *watchRoomAuthCache) purgeExpiredLocked(now time.Time) {
 func (auth *watchRoomAuthCache) load(
 	ctx context.Context,
 	roomID, userID int64,
-	lookup watchRoomAuthLookup,
+	lookup func(context.Context, int64, int64) (database.WatchRoom, error),
 ) (database.WatchRoom, error) {
 	key := watchRoomAuthKey{roomID: roomID, userID: userID}
 

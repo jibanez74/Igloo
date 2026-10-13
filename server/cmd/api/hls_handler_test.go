@@ -783,8 +783,8 @@ func TestServeReadyHLSSegment(t *testing.T) {
 		if w.Code != http.StatusOK {
 			t.Fatalf("status = %d, want 200: %s", w.Code, w.Body.String())
 		}
-		if got := w.Header().Get("Content-Type"); got != hlsSegmentHTTPContentType {
-			t.Fatalf("Content-Type = %q, want %q", got, hlsSegmentHTTPContentType)
+		if got := w.Header().Get("Content-Type"); got != mp4ContentType {
+			t.Fatalf("Content-Type = %q, want %q", got, mp4ContentType)
 		}
 		if got := w.Header().Get("Cache-Control"); got != "no-store" {
 			t.Fatalf("Cache-Control = %q, want no-store", got)

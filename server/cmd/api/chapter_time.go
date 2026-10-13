@@ -15,16 +15,12 @@ func normalizeChapterStartTimeSeconds(startTime int64, durationSec float64) int6
 		return startTime
 	}
 
+	// The guard also catches +Inf, whose int64 conversion is negative.
 	limit := int64(math.Ceil(durationSec))
 	if limit <= 0 {
 		return startTime
 	}
-
-	if startTime > limit {
-		return limit
-	}
-
-	return startTime
+	return min(startTime, limit)
 }
 
 func normalizeChaptersStartTimes(

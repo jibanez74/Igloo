@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"os"
 	"strings"
@@ -127,7 +128,7 @@ func TestGetOrCreateRoomHLSSession_RejectsDeletedRoomCacheHit(t *testing.T) {
 	app.HLSSessionCache.SetDefault(key, sentinel)
 	app.CleanupRoomHLSSession(roomID)
 
-	session, err := app.GetOrCreateRoomHLSSession(background, roomID, 999, "720p_3mbps", 0, nil, nil)
+	session, err := app.GetOrCreateRoomHLSSession(context.Background(), roomID, 999, "720p_3mbps", 0, nil, nil)
 	if err == nil {
 		t.Fatal("expected deleted room cache hit to fail")
 	}
@@ -151,7 +152,7 @@ func TestWarmUpRoomHLSSession_FailsWhenMovieHasNoVideoStream(t *testing.T) {
 		t.Fatalf("set movie duration: %v", err)
 	}
 
-	err = app.WarmUpRoomHLSSession(background, 1, movieID, "720p_3mbps", 0, nil, nil)
+	_, err = app.GetOrCreateRoomHLSSession(context.Background(), 1, movieID, "720p_3mbps", 0, nil, nil)
 	if err == nil {
 		t.Fatal("expected error from warm-up when movie has no video streams")
 	}
@@ -174,7 +175,7 @@ func TestWarmUpRoomHLSSession_IdempotentWhenAlreadyCached(t *testing.T) {
 	sentinel := &HLSSession{TempDir: "sentinel"}
 	app.HLSSessionCache.SetDefault(key, sentinel)
 
-	err := app.WarmUpRoomHLSSession(background, roomID, 999, "1080p_8mbps", 0, nil, nil)
+	_, err := app.GetOrCreateRoomHLSSession(context.Background(), roomID, 999, "1080p_8mbps", 0, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error on second warm-up call: %v", err)
 	}
@@ -203,7 +204,7 @@ func TestGetOrCreateRoomHLSSession_RemuxUnsafeFallsBackAndCachesRoomKey(t *testi
 	roomID := int64(77)
 
 	session, err := app.GetOrCreateRoomHLSSession(
-		background,
+		context.Background(),
 		roomID,
 		movieID,
 		helpers.HLS_PROFILE_REMUX,
@@ -254,11 +255,11 @@ func TestGetOrCreateRoomHLSSession_UsesPreloadedMovieAndAudioStreams(t *testing.
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
 	insertTestSecondaryAudioStream(t, app, movieID, "ac3", 448000, 6, "")
 
-	movie, err := app.Queries.GetMovieByID(background, movieID)
+	movie, err := app.Queries.GetMovieByID(context.Background(), movieID)
 	if err != nil {
 		t.Fatalf("load movie: %v", err)
 	}
-	audioStreams, err := app.Queries.GetAudioStreamsByMovieID(background, movieID)
+	audioStreams, err := app.Queries.GetAudioStreamsByMovieID(context.Background(), movieID)
 	if err != nil {
 		t.Fatalf("load audio streams: %v", err)
 	}
@@ -271,7 +272,7 @@ func TestGetOrCreateRoomHLSSession_UsesPreloadedMovieAndAudioStreams(t *testing.
 	}
 
 	session, err := app.GetOrCreateRoomHLSSession(
-		background,
+		context.Background(),
 		91,
 		movieID,
 		helpers.HLS_PROFILE_720P_3MBPS,
@@ -359,7 +360,7 @@ func TestGetOrCreateRoomHLSSession_ReplacesFailedSession(t *testing.T) {
 		t.Fatalf("segment lookup = (%p, %v, %v), want the failed session", segmentSession, found, err)
 	}
 
-	session, err := app.GetOrCreateRoomHLSSession(background, roomID, movieID, helpers.HLS_PROFILE_720P_3MBPS, 0, nil, nil)
+	session, err := app.GetOrCreateRoomHLSSession(context.Background(), roomID, movieID, helpers.HLS_PROFILE_720P_3MBPS, 0, nil, nil)
 	if err != nil {
 		t.Fatalf("GetOrCreateRoomHLSSession error: %v", err)
 	}

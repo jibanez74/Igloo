@@ -18,12 +18,9 @@ type remuxSafetyVerdict struct {
 }
 
 // sourceStreamFingerprintBase captures file identity for one video stream:
-// file, stream, size, and update timestamp. UpdatedAt bumps on scanner
-// metadata upserts for re-processed files too, which re-pays one computation
-// per file — acceptable, since re-processing implies the file's size or path
-// changed. Shared by every per-stream persistence fingerprint. The file id is
-// the movie id or show_files.id; the two kinds persist to separate tables, so
-// the format needs no kind and stays byte-identical to what movie rows carry.
+// file, stream, size, and update timestamp, shared by every per-stream
+// persistence fingerprint. The kinds persist to separate tables, so the format
+// carries no kind.
 func sourceStreamFingerprintBase(source playbackSource, streamIndex int64) string {
 	return fmt.Sprintf("%d:%d:%d:%s", source.FileID, streamIndex, source.Size, source.UpdatedAt)
 }
@@ -38,11 +35,9 @@ const remuxVerdictProducerRevision = 1
 // (isBrowserSafeH264RemuxCandidate), so a rescan that changes stream rows
 // without touching the file invalidates the verdict.
 //
-// A verdict validates FFmpeg-generated fMP4 output, not just the source, so the
-// producer is part of the key too: ffmpegVersion covers an upgraded embedded
-// payload or a swapped PATH binary, and remuxVerdictProducerRevision covers our
-// own argument and validator changes. A mismatch fails open into a fresh
-// preflight, which costs one re-validation per file.
+// A verdict validates FFmpeg's fMP4 output, so the producer is keyed too:
+// ffmpegVersion for the binary and remuxVerdictProducerRevision for our own
+// arguments and validator. A mismatch fails open into one fresh preflight.
 func remuxSafetyFingerprint(
 	source playbackSource,
 	video *database.VideoStream,
@@ -61,9 +56,6 @@ func remuxSafetyFingerprint(
 	)
 }
 
-// getRemuxSafetyVerdict reads the persisted verdict for one video stream. Any
-// miss — no row, stale fingerprint, or a read error — fails open into a fresh
-// preflight, which rewrites the row with a current verdict.
 // persistedRemuxVerdict is the stored row shape shared by the movie and show
 // tables.
 type persistedRemuxVerdict struct {
@@ -116,6 +108,9 @@ func (app *Application) writeRemuxVerdictRow(ctx context.Context, source playbac
 	})
 }
 
+// getRemuxSafetyVerdict reads the persisted verdict for one video stream. Any
+// miss (no row, stale fingerprint, read error) fails open into a fresh
+// preflight, which rewrites the row.
 func (app *Application) getRemuxSafetyVerdict(
 	ctx context.Context,
 	source playbackSource,
@@ -188,10 +183,7 @@ func waitForRemuxPreflight(session *HLSSession, segmentCount int, timeout time.D
 			}
 		}
 
-		session.ExitMu.Lock()
-		exited := session.Exited
-		exitErr := session.ExitErr
-		session.ExitMu.Unlock()
+		exited, exitErr := session.exitStatus()
 
 		if exited {
 			if !fileReady(initPath) {

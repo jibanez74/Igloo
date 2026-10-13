@@ -9,13 +9,9 @@ import (
 )
 
 const (
-	// The watch-room pin checks run on the two hottest media paths there are:
-	// once per byte-range request for a direct-play room, and once per manifest
-	// refresh (which doubles as the keepalive) for an HLS room. Re-reading the
-	// movie's stream rows on every one of them puts playback behind the scanner
-	// on the single shared connection, exactly as resolving the file path did
-	// before streamFileCache. Rescans and movie deletes evict explicitly; the
-	// TTL is the backstop for every other way a row can change.
+	// The watch-room pin checks run on every direct-play byte range and every
+	// HLS manifest refresh, which must not queue behind the scanner on the
+	// single connection. Rescans and deletes evict; the TTL is a backstop.
 	movieStreamsCacheTTL   = time.Minute
 	movieStreamsCacheSweep = 2 * time.Minute
 )

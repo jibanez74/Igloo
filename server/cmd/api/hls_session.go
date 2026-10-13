@@ -80,10 +80,8 @@ type HLSSession struct {
 	// effective session configuration and remains the source of truth for
 	// permit ownership and idle reclaim.
 	TranscodePool hlsTranscodePool
-	// IndependentSegments is true when every segment is guaranteed to start on
-	// an IDR frame, which is the only case where the playlist may carry
-	// #EXT-X-INDEPENDENT-SEGMENTS. FFmpeg's own playlist is gated on the same
-	// value inside buildHLSArgs, so both playlist flavors agree per session.
+	// IndependentSegments gates #EXT-X-INDEPENDENT-SEGMENTS in both playlist
+	// flavors (see ffmpeg.HLSSegmentsAreIndependent).
 	IndependentSegments bool
 	// EffectiveProfile is the profile FFmpeg actually ran, which differs from
 	// the requested one whenever the remux safety gate forced a transcode.
@@ -91,32 +89,20 @@ type HLSSession struct {
 	// RequestedAudioProfile is the validated audio_codec/audio_channels query
 	// pair; nil means legacy audio behavior.
 	RequestedAudioProfile *helpers.HLSAudioProfileRequest
-	// EffectiveAudioProfile describes the audio the session actually produces:
-	// the resolved explicit encode, the copied source values, or the legacy
-	// stereo AAC fallback. Nil for video-only sessions. Set once at
-	// construction and read-only afterwards.
+	// EffectiveAudioProfile is the audio the session actually produces; nil for
+	// video-only sessions. Read-only after construction.
 	EffectiveAudioProfile *helpers.HLSResolvedAudioProfile
-	// TempFileSegments is true when FFmpeg runs with -hls_flags temp_file, so
-	// a segment's final name existing on disk means it is complete. False
-	// only for a swapped binary whose hls muxer lacks the flag; readiness
-	// then falls back to the successor-file heuristic.
+	// TempFileSegments records ffmpeg.HLSUsesTempFile for segment readiness.
 	TempFileSegments bool
-	// ActualStartSec is where the session's media really begins. Input seeking
-	// is frame-accurate when re-encoding but can only land on a source keyframe
-	// when copying video, so a copy-video session can start before StartSec.
-	// Negative means unknown; callers then fall back to StartSec. Guarded by
-	// ExitMu along with the exit fields above.
+	// ActualStartSec is where the media really begins, which a copy-video
+	// session's keyframe seek can put before StartSec (see
+	// resolveHLSActualStart). Negative means unknown. Guarded by ExitMu.
 	ActualStartSec float64
 	// SourceFrameRate sizes the synthesized transcode playlist (see
-	// ffmpeg.HLSSegmentCount). It is the lower of the primary video stream's
-	// nominal and average rates (hlsPlaylistFrameRate), not the nominal rate
-	// the encoder's GOP is sized from. Zero means unknown. Set once at
-	// construction and read-only afterwards.
+	// hlsPlaylistFrameRate). Zero means unknown. Read-only after construction.
 	SourceFrameRate float64
-	// StartedAt anchors the cold time-to-first-segment measurement at the top
-	// of startHLSSession, before any directory, limiter, or FFmpeg work. Set
-	// once at construction and read-only afterwards; zero in bare test
-	// sessions, which suppresses the first-serve metric.
+	// StartedAt anchors the cold time-to-first-segment metric; zero in bare
+	// test sessions, which suppresses it. Read-only after construction.
 	StartedAt time.Time
 	// FirstServeOnce guards the one-time "hls first segment served" log.
 	FirstServeOnce sync.Once
@@ -233,34 +219,27 @@ type hlsSessionStartParams struct {
 	EffectiveProfile string
 	AudioTrack       *int
 	// RequestedAudioProfile is the validated query pair (nil = legacy) and
-	// ResolvedAudioProfile its channel/bitrate resolution against the selected
-	// audio row. Both ride on the params so the remux-safety fallback restart,
-	// which copies this struct, keeps the explicit audio profile in force.
+	// ResolvedAudioProfile its resolution against the selected audio row. The
+	// params are copied by the remux-safety fallback, which keeps both.
 	RequestedAudioProfile *helpers.HLSAudioProfileRequest
 	ResolvedAudioProfile  *helpers.HLSResolvedAudioProfile
 	PlaybackSession       string
 	StartSec              int
-	DurationSec           float64
 	IsRoom                bool
 	// Device is resolved once at plan time, so the height cap the plan applied
 	// and the encoder the session runs on agree, even when a capacity retry
 	// reruns the plan after the stored device has changed.
 	Device ffmpeg.HLSDeviceDecision
 
-	// AcquireWait is how long the start may park for a transcode permit
-	// before giving up with a capacity error; zero means do not park. It rides
-	// on the params rather than the signature so the remux-safety fallback
-	// restarts, which copy this struct and switch to a transcoding profile,
-	// inherit the same budget.
+	// AcquireWait is how long the start may park for a transcode permit; zero
+	// means do not park. It rides on the params so the remux-safety fallback,
+	// which copies this struct, inherits the same budget.
 	AcquireWait time.Duration
 }
 
 // isHDRStream returns true when the stream's color_transfer indicates HDR content
 // (HDR10/PQ or HLG). These sources require tone-mapping when transcoded to SDR profiles.
 func isHDRStream(stream *database.VideoStream) bool {
-	if !stream.ColorTransfer.Valid {
-		return false
-	}
 	ct := strings.ToLower(strings.TrimSpace(stream.ColorTransfer.String))
 	return ct == hdrTransferPQ || ct == hdrTransferHLG
 }
@@ -271,9 +250,6 @@ func isHDRStream(stream *database.VideoStream) bool {
 // streams, the scanner stores that as NULL, and an unknown order must not cost
 // a stream its remux or add a deinterlace pass to its transcode.
 func isInterlacedStream(stream *database.VideoStream) bool {
-	if !stream.FieldOrder.Valid {
-		return false
-	}
 	switch strings.ToLower(strings.TrimSpace(stream.FieldOrder.String)) {
 	case "tt", "bb", "tb", "bt":
 		return true
@@ -300,15 +276,11 @@ func isVFRStream(stream *database.VideoStream) bool {
 }
 
 // hlsPlaylistFrameRate is the frame rate that sizes a synthesized transcode
-// playlist (ffmpeg.HLSSegmentCount): the lower of the stream's nominal and
-// average rates. ffprobe's r_frame_rate is the lowest rate at which every
-// timestamp is representable, which Matroska muxers routinely inflate (1000/1
-// for millisecond-jittered timestamps), while avg_frame_rate is frames over
-// duration. The count tolerates an underestimate, which can only drop a
-// sub-frame real tail, but an overestimate places the "last frame" later and
-// re-advertises the phantom final segment the count exists to remove. Zero
-// means unknown; the encoder's GOP size keeps using the nominal rate because
-// -force_key_frames pins the boundaries regardless.
+// playlist (ffmpeg.HLSSegmentCount): the lower of the nominal and average
+// rates. Matroska muxers inflate r_frame_rate (1000/1 for jittered timestamps),
+// and an overestimate re-advertises the phantom final segment the count exists
+// to remove, while an underestimate can only drop a sub-frame tail. Zero means
+// unknown. The GOP keeps the nominal rate; -force_key_frames pins boundaries.
 func hlsPlaylistFrameRate(stream *database.VideoStream) float64 {
 	nominal := stream.FrameRate
 	avg := 0.0
@@ -327,22 +299,12 @@ func hlsPlaylistFrameRate(stream *database.VideoStream) float64 {
 }
 
 // isCopySafeAACStream returns true when the audio stream is AAC with a
-// confirmed LC profile. HE-AAC and xHE-AAC (SBR/PS) support inside fMP4 HLS
-// is spotty across browsers, and an unknown profile cannot prove safety, so
-// anything but a confirmed "LC" falls back to the stereo AAC transcode.
-//
-// Channel count is deliberately not part of the gate. Every browser that
-// decodes AAC-LC in fMP4 decodes it multichannel and downmixes at the output
-// device, so copying a 5.1 or 7.1 track keeps surround for the listeners who
-// can use it instead of re-encoding everyone to stereo.
+// confirmed LC profile; HE-AAC support in fMP4 HLS is spotty and an unknown
+// profile cannot prove safety. Channel count is deliberately not gated: every
+// browser that decodes AAC-LC in fMP4 downmixes multichannel itself.
 func isCopySafeAACStream(stream *database.AudioStream) bool {
-	if !strings.EqualFold(strings.TrimSpace(stream.Codec), "aac") {
-		return false
-	}
-	if !stream.CodecProfile.Valid {
-		return false
-	}
-	return strings.EqualFold(strings.TrimSpace(stream.CodecProfile.String), "LC")
+	return strings.EqualFold(strings.TrimSpace(stream.Codec), "aac") &&
+		strings.EqualFold(strings.TrimSpace(stream.CodecProfile.String), "LC")
 }
 
 // legacyEffectiveHLSAudio describes legacy audio output for diagnostics
@@ -401,10 +363,6 @@ func isBrowserSafeH264RemuxCandidate(stream *database.VideoStream) (bool, string
 
 func isNonBrowserH264Profile(profile string) bool {
 	profile = strings.ToLower(strings.TrimSpace(profile))
-	if profile == "" {
-		return false
-	}
-
 	unsupportedMarkers := []string{
 		"10",
 		"4:2:2",
@@ -515,12 +473,9 @@ func (app *Application) removePersonalHLSSession(key string) {
 // cachedPersonalHLSSession returns the owner's live session under key and
 // refreshes its TTL. A nil session with a nil error means create one.
 //
-// A session whose FFmpeg failed is dropped here rather than served. Left in
-// place it answered every retry of the same URL with the same failure, and
-// each retry refreshed its TTL, so it never expired while a client was still
-// trying; it also kept a per-user slot and its temp dir. Only manifest
-// requests come through here, so segment requests keep serving what the
-// session wrote before it failed.
+// A session whose FFmpeg failed is dropped rather than served: every retry
+// would refresh its TTL and get the same failure while it held a per-user slot.
+// Only manifests come through here, so segments keep serving what was written.
 func (app *Application) cachedPersonalHLSSession(key string, media mediaRef, ownerUserID int64) (*HLSSession, error) {
 	raw, ok := app.HLSSessionCache.Get(key)
 	if !ok {
@@ -644,13 +599,9 @@ func (app *Application) invalidateHLSSessionsForFile(kind mediaKind, fileID int6
 	app.RoomHLSMu.Unlock()
 
 	for _, session := range removed {
-		if app.Wait != nil {
-			app.Wait.Add(1)
-		}
+		app.Wait.Add(1)
 		go func(target *HLSSession) {
-			if app.Wait != nil {
-				defer app.Wait.Done()
-			}
+			defer app.Wait.Done()
 			cleanupHLSSession(target)
 		}(session)
 	}
@@ -747,9 +698,8 @@ func (app *Application) reservePersonalHLSSession(
 	limit := app.hlsMaxPersonalSessionsPerUser()
 	entries := app.personalHLSSessionsForOwnerLocked(ownerUserID)
 	reserved := app.PersonalHLSReservations[ownerUserID]
-	// Evicting cached sessions can only make room when the in-flight
-	// reservations leave some: with reserved >= limit the loop used to kill
-	// every cached session the owner had and then refuse the request anyway.
+	// Evicting cached sessions only makes room when the in-flight reservations
+	// leave some; otherwise it would kill them all and still refuse.
 	for reserved < limit && len(entries)+reserved >= limit && len(entries) > 0 {
 		victim := entries[0]
 		entries = entries[1:]
@@ -768,9 +718,6 @@ func (app *Application) reservePersonalHLSSession(
 		return nil, &hlsPersonalSessionCapacityError{MaxActive: limit}
 	}
 
-	if app.PersonalHLSReservations == nil {
-		app.PersonalHLSReservations = make(map[int64]int)
-	}
 	app.PersonalHLSReservations[ownerUserID] = reserved + 1
 	reservation := &hlsPersonalSessionReservation{
 		app:         app,
@@ -800,9 +747,7 @@ func (app *Application) reclaimIdlePersonalHLSSessionForOwner(ownerUserID int64,
 			continue
 		}
 
-		entry.session.ExitMu.Lock()
-		exited := entry.session.Exited
-		entry.session.ExitMu.Unlock()
+		exited, _ := entry.session.exitStatus()
 		if exited {
 			continue
 		}
@@ -878,10 +823,6 @@ func (app *Application) getActiveRoomHLSSession(roomID int64, key string) (*HLSS
 	if !ok {
 		return nil, false, nil
 	}
-	if raw == nil {
-		return nil, false, fmt.Errorf("cached HLS session %q is nil", key)
-	}
-
 	session, typeOK := raw.(*HLSSession)
 	if !typeOK {
 		return nil, false, fmt.Errorf("cached HLS session %q has unexpected type %T", key, raw)
@@ -893,11 +834,8 @@ func (app *Application) getActiveRoomHLSSession(roomID int64, key string) (*HLSS
 
 // liveRoomHLSSession is getActiveRoomHLSSession for the manifest path: a room
 // session whose FFmpeg failed is dropped and reported missing so the caller
-// starts a new one. A room has one session for every member and its TTL is
-// refreshed by each of their requests, so a failed one otherwise stays until
-// someone deletes the room. The segment path keeps using
-// getActiveRoomHLSSession, which still serves what was written before the
-// failure.
+// starts a new one; every member's requests refresh its TTL, so it would never
+// expire. Segments keep using getActiveRoomHLSSession.
 func (app *Application) liveRoomHLSSession(roomID int64, key string) (*HLSSession, bool, error) {
 	session, found, err := app.getActiveRoomHLSSession(roomID, key)
 	if err != nil || !found || !session.failed() {
@@ -972,18 +910,14 @@ func (app *Application) hlsTranscodeRoot() string {
 func waitForHLSSessionExit(session *HLSSession, timeout time.Duration) bool {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
-		session.ExitMu.Lock()
-		exited := session.Exited
-		session.ExitMu.Unlock()
+		exited, _ := session.exitStatus()
 		if exited {
 			return true
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
 
-	session.ExitMu.Lock()
-	exited := session.Exited
-	session.ExitMu.Unlock()
+	exited, _ := session.exitStatus()
 	return exited
 }
 
@@ -992,11 +926,7 @@ func normalizedHLSStartSec(startSec int, durationSec float64) int {
 		return startSec
 	}
 
-	clampedStart := int(durationSec) - hlsStartClampTailSec
-	if clampedStart < 0 {
-		return 0
-	}
-	return clampedStart
+	return max(0, int(durationSec)-hlsStartClampTailSec)
 }
 
 // checkHLSTranscodeSpace refuses a new session when the transcode filesystem is
@@ -1103,13 +1033,6 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 	startSegment := int64(startSec / float64(helpers.HLS_SEGMENT_TIME_SEC))
 	videoStreamIndex := int(params.PrimaryVideo.StreamIndex)
 
-	// The FFmpeg wrapper only ever receives the resolved explicit profile;
-	// legacy sessions pass nil and keep the CopyAudio/AAC-stereo arguments.
-	var runAudioProfile *helpers.HLSResolvedAudioProfile
-	if explicitAudio {
-		runAudioProfile = params.ResolvedAudioProfile
-	}
-
 	hlsRunParams := ffmpeg.HLSParams{
 		SourcePath:       params.Source.FilePath,
 		OutDir:           tempDir,
@@ -1119,7 +1042,7 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 		HWDevice:         deviceDecision.Effective,
 		CopyVideo:        copyVideo,
 		CopyAudio:        copyAudio,
-		AudioProfile:     runAudioProfile,
+		AudioProfile:     params.ResolvedAudioProfile, // nil keeps legacy sessions on CopyAudio/AAC stereo
 		StartSec:         startSec,
 		TonemapHDR:       tonemapHDR,
 		Deinterlace:      deinterlace,
@@ -1135,7 +1058,7 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 		TempDir:               tempDir,
 		Cancel:                cancel,
 		Logger:                app.Logger,
-		DurationSec:           params.DurationSec,
+		DurationSec:           params.Source.Duration.Float64,
 		StartSec:              startSec,
 		IsRoom:                params.IsRoom,
 		CopyVideo:             copyVideo,
@@ -1158,7 +1081,7 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 	// miss extracts the index in the background, falling back to the bounded
 	// ffprobe probe for files without a usable container index. Misses launch
 	// even at start 0 to prefetch the index for later seeks.
-	if copyVideo && app.Wait != nil {
+	if copyVideo {
 		fingerprint := keyframeIndexFingerprint(params.Source, params.PrimaryVideo)
 		idx, hit := app.getKeyframeIndex(runCtx, params.Source, params.PrimaryVideo.StreamIndex, fingerprint)
 		switch {
@@ -1176,12 +1099,9 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 				session.setActualStartSec(hlsUnknownActualStart)
 			}
 			app.Wait.Add(1)
-			// Not runCtx: the extracted index is persisted and reused by every
-			// later session, so it must not die with the session that happened
-			// to trigger it. Seeking again tears this session down within
-			// milliseconds, which is exactly when a first-play extraction is
-			// still running — on a network mount that meant the index was
-			// almost never written and every play re-extracted.
+			// Not runCtx: the extracted index is persisted for every later
+			// session, and a seek tears this one down while a first-play
+			// extraction is often still running.
 			go app.resolveHLSActualStart(context.Background(), hlsActualStartParams{
 				Session:           session,
 				Source:            params.Source,
@@ -1303,35 +1223,7 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 		// cold-start scale this log is used to measure.
 		elapsed := time.Since(startedAt).Round(time.Millisecond)
 
-		if exitErr != nil {
-			if expectedStop {
-				app.Logger.Info("hls session stopped",
-					"session_dir", filepath.Base(tempDir),
-					"media", params.Source.Ref.String(),
-					"requested_profile", params.RequestedProfile,
-					"effective_profile", params.EffectiveProfile,
-					"effective_audio_codec", exitAudioCodec,
-					"effective_audio_channels", exitAudioChannels,
-					"elapsed", elapsed.String(),
-				)
-				return
-			}
-
-			app.Logger.Error("hls session failed",
-				"session_dir", filepath.Base(tempDir),
-				"media", params.Source.Ref.String(),
-				"requested_profile", params.RequestedProfile,
-				"effective_profile", params.EffectiveProfile,
-				"effective_audio_codec", exitAudioCodec,
-				"effective_audio_channels", exitAudioChannels,
-				"elapsed", elapsed.String(),
-				"error", exitErr.Error(),
-				"ffmpeg_tail", strings.Join(stderrTail, "\n"),
-			)
-			return
-		}
-
-		app.Logger.Info("hls session finished",
+		exitLogAttrs := []any{
 			"session_dir", filepath.Base(tempDir),
 			"media", params.Source.Ref.String(),
 			"requested_profile", params.RequestedProfile,
@@ -1339,7 +1231,18 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 			"effective_audio_codec", exitAudioCodec,
 			"effective_audio_channels", exitAudioChannels,
 			"elapsed", elapsed.String(),
-		)
+		}
+		switch {
+		case exitErr == nil:
+			app.Logger.Info("hls session finished", exitLogAttrs...)
+		case expectedStop:
+			app.Logger.Info("hls session stopped", exitLogAttrs...)
+		default:
+			app.Logger.Error("hls session failed", append(exitLogAttrs,
+				"error", exitErr.Error(),
+				"ffmpeg_tail", strings.Join(stderrTail, "\n"),
+			)...)
+		}
 	}
 
 	cmd, err := app.FFmpeg.RunHLS(runCtx, hlsRunParams, onExit)
@@ -1561,31 +1464,10 @@ func (app *Application) doHLSSessionFlight(
 	return value, err
 }
 
-// WarmUpRoomHLSSession starts an HLS session for a watch room immediately after creation.
-// It uses RoomHLSSessionKey so the session is isolated from personal playback sessions.
-// If a session for this room already exists in the cache, it is a no-op.
-// Always warms up from startSec=0 so participants start from the beginning.
-// preloaded, when non-nil, is a movie row the caller already fetched; it is
-// validated the same way loadHLSSourceForSession would and saves the re-fetch.
-// preloadedAudio, when non-nil, is the movie's audio streams the caller
-// already fetched and saves that re-fetch the same way.
-func (app *Application) WarmUpRoomHLSSession(
-	ctx context.Context,
-	roomID int64,
-	movieID int64,
-	profile string,
-	audioTrack int,
-	preloaded *database.Movie,
-	preloadedAudio []database.AudioStream,
-) error {
-	_, err := app.GetOrCreateRoomHLSSession(ctx, roomID, movieID, profile, audioTrack, preloaded, preloadedAudio)
-	return err
-}
-
 // GetOrCreateRoomHLSSession returns a cached room-scoped HLS session or
-// creates a new one using the room-specific cache key. preloaded, when
-// non-nil, skips the movie fetch on a cache miss; nil loads it as before.
-// preloadedAudio does the same for the movie's audio streams.
+// creates a new one, always from 0 so members start at the beginning; room
+// creation calls it to warm the session up. preloaded and preloadedAudio, when
+// non-nil, are rows the caller already fetched and skip the re-fetch on a miss.
 func (app *Application) GetOrCreateRoomHLSSession(
 	ctx context.Context,
 	roomID int64,
@@ -1658,13 +1540,9 @@ func (app *Application) GetOrCreateRoomHLSSession(
 	return session, nil
 }
 
-// CleanupRoomHLSSession stops and removes the HLS session for a watch room.
-// It is a no-op if no session exists for the room.
-//
-// Teardown runs after RoomHLSMu is released, for the reason
-// invalidateHLSSessionsForFile documents: cleanupHLSSession waits seconds for
-// FFmpeg to exit, and holding the lock across it stalls every room manifest
-// and segment request behind a process that is already being killed.
+// CleanupRoomHLSSession stops and removes the HLS session for a watch room, if
+// any. Teardown runs after RoomHLSMu is released, because cleanupHLSSession
+// waits seconds for FFmpeg and would stall every room request behind it.
 func (app *Application) CleanupRoomHLSSession(roomID int64) {
 	key := RoomHLSSessionKey(roomID)
 
@@ -1734,15 +1612,10 @@ type hlsSessionPlan struct {
 	needsRemuxPreflight bool
 }
 
-// createHLSSession loads stream metadata from the database (audio streams may
-// be preloaded by the caller), creates a temp dir, and starts FFmpeg. No
-// runtime ffprobe call is made. The source must come from
-// loadHLSSourceForSession, and startSec must already be normalized by it.
-// It plans and runs the session in one step, for callers that never retry on
-// capacity: rooms and the tests.
-//
-// FFmpeg runs on context.Background() so the process outlives the originating
-// HTTP request. The session cache (with TTL + eviction) owns the lifecycle.
+// createHLSSession plans and runs a session in one step, for callers that never
+// retry on capacity: rooms and the tests. The source and startSec must come
+// from loadHLSSourceForSession. FFmpeg runs on context.Background() so it
+// outlives the request; the session cache owns its lifecycle.
 func (app *Application) createHLSSession(
 	ctx context.Context,
 	source *playbackSource,
@@ -1807,7 +1680,6 @@ func (app *Application) planHLSSession(
 	isRoom bool,
 ) (*hlsSessionPlan, error) {
 	media := source.Ref
-	durationSec := source.Duration.Float64
 
 	videoStreams, err := loadPlaybackVideoStreams(ctx, app.Queries, *source)
 	if err != nil {
@@ -1865,11 +1737,8 @@ func (app *Application) planHLSSession(
 		selectedAudio = &audioStreams[*audioTrack]
 	}
 
-	// Explicit audio requests are resolved against the selected audio row and
-	// gated on encoder availability here, before any temp directory is created
-	// or a transcode permit acquired inside startHLSSession. The resolved
-	// profile rides on the start params, so a remux-safety fallback restart
-	// keeps it in force.
+	// Explicit audio requests are resolved and gated on encoder availability
+	// here, before startHLSSession creates a temp dir or takes a permit.
 	var resolvedAudio *helpers.HLSResolvedAudioProfile
 	if audioProfile != nil && selectedAudio != nil {
 		if selectedAudio.Channels <= 0 {
@@ -1973,7 +1842,6 @@ func (app *Application) planHLSSession(
 			ResolvedAudioProfile:  resolvedAudio,
 			PlaybackSession:       playbackSession,
 			StartSec:              startSec,
-			DurationSec:           durationSec,
 			IsRoom:                isRoom,
 			Device:                device,
 		},

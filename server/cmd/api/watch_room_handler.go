@@ -16,10 +16,6 @@ import (
 
 const watchRoomPlaybackModeDirect = "direct"
 
-// background is a package-level background context used for operations that must
-// outlive the originating HTTP request (e.g. HLS warm-up after room creation).
-var background = context.Background()
-
 type watchRoomListItem struct {
 	ID           int64         `json:"id"`
 	MovieID      int64         `json:"movie_id"`
@@ -115,15 +111,7 @@ func (app *Application) loadRoomMembers(ctx context.Context, roomID int64) ([]us
 	}
 	members := make([]userSummary, len(rows))
 	for i, row := range rows {
-		var avatar *string
-		if row.Avatar.Valid {
-			avatar = &row.Avatar.String
-		}
-		members[i] = userSummary{
-			ID:     row.ID,
-			Name:   row.Name,
-			Avatar: avatar,
-		}
+		members[i] = userSummary{ID: row.ID, Name: row.Name, Avatar: helpers.StringPtrFromNull(row.Avatar)}
 	}
 	return members, nil
 }
@@ -159,14 +147,10 @@ func (app *Application) GetWatchRooms(w http.ResponseWriter, r *http.Request) {
 
 	membersByRoomID := make(map[int64][]userSummary, len(roomIDs))
 	for _, row := range memberRows {
-		var avatar *string
-		if row.Avatar.Valid {
-			avatar = &row.Avatar.String
-		}
 		membersByRoomID[row.RoomID] = append(membersByRoomID[row.RoomID], userSummary{
 			ID:     row.ID,
 			Name:   row.Name,
-			Avatar: avatar,
+			Avatar: helpers.StringPtrFromNull(row.Avatar),
 		})
 	}
 
@@ -175,16 +159,11 @@ func (app *Application) GetWatchRooms(w http.ResponseWriter, r *http.Request) {
 		members := membersByRoomID[room.ID]
 		owner, _ := findMemberByID(members, room.OwnerUserID)
 
-		var moviePoster *string
-		if room.MoviePosterPath.Valid {
-			moviePoster = &room.MoviePosterPath.String
-		}
-
 		items = append(items, watchRoomListItem{
 			ID:           room.ID,
 			MovieID:      room.MovieID,
 			MovieTitle:   room.MovieTitle,
-			MoviePoster:  moviePoster,
+			MoviePoster:  helpers.StringPtrFromNull(room.MoviePosterPath),
 			Owner:        owner,
 			Members:      members,
 			PlaybackMode: room.PlaybackMode,
@@ -224,11 +203,6 @@ func (app *Application) GetWatchRoom(w http.ResponseWriter, r *http.Request) {
 
 	owner, _ := findMemberByID(members, room.OwnerUserID)
 
-	var moviePoster *string
-	if movie.PosterPath.Valid {
-		moviePoster = &movie.PosterPath.String
-	}
-
 	var subtitleTrack *int64
 	if room.SubtitleTrack.Valid {
 		subtitleTrack = &room.SubtitleTrack.Int64
@@ -238,7 +212,7 @@ func (app *Application) GetWatchRoom(w http.ResponseWriter, r *http.Request) {
 		ID:            room.ID,
 		MovieID:       room.MovieID,
 		MovieTitle:    movie.Title,
-		MoviePoster:   moviePoster,
+		MoviePoster:   helpers.StringPtrFromNull(movie.PosterPath),
 		Owner:         owner,
 		Members:       members,
 		PlaybackMode:  room.PlaybackMode,
@@ -338,25 +312,21 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Direct playback serves the raw container, so every member hears its first
-	// audio track no matter what the room stores.
-	directWithNonFirstAudio := req.Mode == watchRoomPlaybackModeDirect && req.AudioTrack != 0
-	if directWithNonFirstAudio {
-		helpers.ErrorJSON(w, errors.New("direct playback always uses the first audio track; choose another playback mode to pick a different one"), http.StatusBadRequest)
-		return
-	}
-
-	directWithAmbiguousAudio := req.Mode == watchRoomPlaybackModeDirect &&
-		!directPlayAudioSelectionUnambiguous(audioStreams)
-	if directWithAmbiguousAudio {
-		helpers.ErrorJSON(w, errors.New("direct playback cannot guarantee which audio track this movie plays; choose another playback mode"), http.StatusBadRequest)
-		return
-	}
-
-	// Mirror the web client's remaining static direct-play rules so a room can
-	// never be created in a mode the members' browsers cannot play: browsers
-	// only direct-play MP4 containers, and 10-bit / 4:2:2 / 4:4:4 H.264 does
-	// not decode even though the codec name passes.
+	// audio track no matter what the room stores. The remaining checks mirror
+	// the web client's static direct-play rules: browsers only direct-play MP4,
+	// and 10-bit / 4:2:2 / 4:4:4 H.264 does not decode even though the codec
+	// name passes.
 	if req.Mode == watchRoomPlaybackModeDirect {
+		if req.AudioTrack != 0 {
+			helpers.ErrorJSON(w, errors.New("direct playback always uses the first audio track; choose another playback mode to pick a different one"), http.StatusBadRequest)
+			return
+		}
+
+		if !directPlayAudioSelectionUnambiguous(audioStreams) {
+			helpers.ErrorJSON(w, errors.New("direct playback cannot guarantee which audio track this movie plays; choose another playback mode"), http.StatusBadRequest)
+			return
+		}
+
 		if videoContentType(movie.Container, movie.MimeType) != mp4ContentType {
 			helpers.ErrorJSON(w, errors.New("direct playback is only available for MP4 movies; choose another playback mode"), http.StatusBadRequest)
 			return
@@ -430,6 +400,8 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	defer func() { _ = tx.Rollback() }()
+
 	qtx := app.Queries.WithTx(tx)
 
 	room, err := qtx.CreateWatchRoom(r.Context(), database.CreateWatchRoomParams{
@@ -444,30 +416,19 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 		SubtitleLanguage:    subtitleLanguage,
 	})
 	if err != nil {
-		_ = tx.Rollback()
 		app.serverError(w, err, "failed to create watch room", internalServerErrorMessage)
 		return
 	}
 
-	err = qtx.AddWatchRoomMember(r.Context(), database.AddWatchRoomMemberParams{
-		RoomID: room.ID,
-		UserID: userID,
-	})
-	if err != nil {
-		_ = tx.Rollback()
-		app.serverError(w, err, "failed to add owner as room member", internalServerErrorMessage, "room_id", room.ID)
-		return
-	}
-
-	for _, invitedID := range invitedIDs {
+	// The owner is a member too.
+	for _, memberID := range append([]int64{userID}, invitedIDs...) {
 		err = qtx.AddWatchRoomMember(r.Context(), database.AddWatchRoomMemberParams{
 			RoomID: room.ID,
-			UserID: invitedID,
+			UserID: memberID,
 		})
 		if err != nil {
-			_ = tx.Rollback()
-			app.serverError(w, err, "failed to add invited user as room member", internalServerErrorMessage,
-				"room_id", room.ID, "user_id", invitedID)
+			app.serverError(w, err, "failed to add watch room member", internalServerErrorMessage,
+				"room_id", room.ID, "user_id", memberID)
 			return
 		}
 	}
@@ -479,9 +440,9 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 
 	// HLS rooms warm up immediately; failures roll back the room.
 	if req.Mode != watchRoomPlaybackModeDirect {
-		warmErr := app.WarmUpRoomHLSSession(background, room.ID, req.MovieID, req.Mode, int(req.AudioTrack), &movie, audioStreams)
+		_, warmErr := app.GetOrCreateRoomHLSSession(context.Background(), room.ID, req.MovieID, req.Mode, int(req.AudioTrack), &movie, audioStreams)
 		if warmErr != nil {
-			deleteErr := app.deleteWatchRoom(background, room.ID)
+			deleteErr := app.deleteWatchRoom(context.Background(), room.ID)
 			if deleteErr != nil {
 				app.Logger.Error(
 					"hls warm-up failed and watch room rollback delete failed",

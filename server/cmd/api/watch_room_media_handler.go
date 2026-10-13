@@ -21,15 +21,9 @@ var errWatchRoomStreamDrift = errors.New("this room's movie file was replaced an
 
 // verifyWatchRoomAudioPin re-resolves the room's stored audio ordinal against
 // the movie's current streams and compares it with the identity pinned at
-// creation. A NULL pin (a movie without audio) skips the check.
-//
-// It returns the audio streams it loaded so the caller can hand them to
-// GetOrCreateRoomHLSSession as preloadedAudio; on a session miss that branch
-// would otherwise re-run this exact query. A nil slice (pin check skipped)
-// simply degrades to the fetch inside createHLSSession.
-//
-// The streams come from MovieStreamsCache because this runs on every manifest
-// refresh; a rescan invalidates it, so drift is still caught.
+// creation; a NULL pin (no audio) skips the check. It returns the streams it
+// loaded, from MovieStreamsCache since this runs on every manifest refresh, so
+// the caller can pass them on as preloadedAudio.
 func (app *Application) verifyWatchRoomAudioPin(ctx context.Context, room database.WatchRoom) ([]database.AudioStream, error) {
 	if !room.AudioStreamIndex.Valid {
 		return nil, nil
@@ -147,7 +141,6 @@ func (app *Application) WatchRoomHLSManifest(w http.ResponseWriter, r *http.Requ
 	}
 
 	writeHLSPlaylistHeaders(w, session)
-	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(playlist))
 }
 

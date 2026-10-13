@@ -130,11 +130,9 @@ func (app *Application) getKeyframeIndex(
 	return idx, true
 }
 
-// setKeyframeIndex persists an extracted index. It runs on
-// context.Background() because the index just cost a read of the source file
-// and must not be lost to a client disconnect (FFmpeg itself already runs on
-// a background context for the same reason). A write failure only means the
-// index is re-extracted on the next play.
+// setKeyframeIndex persists an extracted index on context.Background(), so an
+// index that cost a read of the source is not lost to a client disconnect. A
+// write failure only means the index is re-extracted on the next play.
 func (app *Application) setKeyframeIndex(
 	source playbackSource,
 	streamIndex int64,
@@ -190,23 +188,13 @@ type hlsActualStartParams struct {
 }
 
 // resolveHLSActualStart records where a copy-video session's media actually
-// begins. Stream copy cannot discard frames, so FFmpeg's input seek lands on
-// the source keyframe at or before the requested offset and the session
-// starts early by up to one GOP. Without this the client maps session time to
-// absolute movie time using the requested offset, so the clock and every
-// watch-progress write run ahead of the picture.
-//
-// The primary source is the container's own seek index, extracted once and
-// persisted; FFmpeg's -ss consults the same structures, so the answer matches
-// where it actually lands. Files without a usable index (avi, missing Cues)
-// fall back to the bounded ffprobe packet probe. It runs alongside FFmpeg
-// rather than before it so it adds no startup latency, and it is advisory: on
-// failure the start stays unknown and the session reports nothing, leaving
-// the client on its previous fallback.
-//
-// parentCtx is deliberately not the session's context — see the call site in
-// startHLSSession. The index outlives the session that extracted it, so the
-// two stages here are bounded by their own timeouts instead.
+// begins: stream copy lands FFmpeg's input seek on the keyframe at or before
+// the requested offset, and without this the client's clock and progress
+// writes would run up to one GOP ahead of the picture. It reads the container's
+// persisted seek index (which -ss consults too) and falls back to a bounded
+// ffprobe probe. It runs alongside FFmpeg, is advisory (a failure leaves the
+// start unknown), and its parentCtx is deliberately not the session's; see the
+// call site in startHLSSession.
 func (app *Application) resolveHLSActualStart(parentCtx context.Context, p hlsActualStartParams) {
 	defer app.Wait.Done()
 
