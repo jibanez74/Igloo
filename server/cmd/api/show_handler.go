@@ -126,10 +126,7 @@ func (app *Application) GetShowDetails(w http.ResponseWriter, r *http.Request) {
 // does not parse or is negative. Each episode carries the caller's own watch
 // progress, so the page needs no per-row query for resume or watched state.
 func (app *Application) GetShowSeasonEpisodes(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	idParam := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idParam, 10, 64)

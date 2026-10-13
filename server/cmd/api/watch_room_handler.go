@@ -138,10 +138,7 @@ func findMemberByID(members []userSummary, id int64) (userSummary, bool) {
 }
 
 func (app *Application) GetWatchRooms(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	rooms, err := app.Queries.GetWatchRoomsForUser(r.Context(), userID)
 	if err != nil {
@@ -255,10 +252,7 @@ func (app *Application) GetWatchRoom(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	var req createWatchRoomRequest
 	if err := helpers.ReadJSON(w, r, &req); err != nil {
@@ -508,10 +502,7 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 }
 
 func (app *Application) JoinWatchRoom(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	roomID, err := parseRoomID(r)
 	if err != nil {
@@ -547,10 +538,7 @@ func (app *Application) JoinWatchRoom(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *Application) DeleteWatchRoom(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	roomID, err := parseRoomID(r)
 	if err != nil {

@@ -14,10 +14,7 @@ import (
 )
 
 func (app *Application) GetPlaylists(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	playlists, err := app.Queries.GetPlaylistsWithCollaboratorAccess(r.Context(), userID)
 	if err != nil {
@@ -33,10 +30,7 @@ func (app *Application) GetPlaylists(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *Application) GetPlaylist(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	idParam := chi.URLParam(r, "id")
 	playlistId, err := strconv.ParseInt(idParam, 10, 64)
@@ -99,10 +93,7 @@ func (app *Application) GetPlaylist(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *Application) GetPlaylistTracks(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	idParam := chi.URLParam(r, "id")
 	playlistId, err := strconv.ParseInt(idParam, 10, 64)
@@ -166,10 +157,7 @@ type CreatePlaylistRequest struct {
 }
 
 func (app *Application) CreatePlaylist(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	var req CreatePlaylistRequest
 	readErr := helpers.ReadJSON(w, r, &req)
@@ -214,10 +202,7 @@ type UpdatePlaylistRequest struct {
 }
 
 func (app *Application) UpdatePlaylist(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	idParam := chi.URLParam(r, "id")
 	playlistId, err := strconv.ParseInt(idParam, 10, 64)
@@ -281,10 +266,7 @@ func (app *Application) UpdatePlaylist(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *Application) DeletePlaylist(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	idParam := chi.URLParam(r, "id")
 	playlistId, err := strconv.ParseInt(idParam, 10, 64)
@@ -331,10 +313,7 @@ type AddTracksRequest struct {
 }
 
 func (app *Application) AddTracksToPlaylist(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	idParam := chi.URLParam(r, "id")
 	playlistId, err := strconv.ParseInt(idParam, 10, 64)
@@ -441,10 +420,7 @@ func (app *Application) AddTracksToPlaylist(w http.ResponseWriter, r *http.Reque
 }
 
 func (app *Application) RemoveTrackFromPlaylist(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	playlistIdParam := chi.URLParam(r, "id")
 	playlistId, err := strconv.ParseInt(playlistIdParam, 10, 64)
@@ -501,10 +477,7 @@ type ReorderTracksRequest struct {
 }
 
 func (app *Application) ReorderPlaylistTracks(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	idParam := chi.URLParam(r, "id")
 	playlistId, err := strconv.ParseInt(idParam, 10, 64)
@@ -598,10 +571,7 @@ func (app *Application) getPlaylistCollaborators(
 	r *http.Request,
 	mustBePlaylistType func(http.ResponseWriter, database.Playlist) bool,
 ) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	idParam := chi.URLParam(r, "id")
 	playlistId, err := strconv.ParseInt(idParam, 10, 64)
@@ -660,10 +630,7 @@ func (app *Application) addCollaborator(
 	r *http.Request,
 	mustBePlaylistType func(http.ResponseWriter, database.Playlist) bool,
 ) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	idParam := chi.URLParam(r, "id")
 	playlistId, err := strconv.ParseInt(idParam, 10, 64)
@@ -756,10 +723,7 @@ func (app *Application) removeCollaborator(
 	r *http.Request,
 	mustBePlaylistType func(http.ResponseWriter, database.Playlist) bool,
 ) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	playlistIdParam := chi.URLParam(r, "id")
 	playlistId, err := strconv.ParseInt(playlistIdParam, 10, 64)

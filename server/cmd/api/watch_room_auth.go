@@ -129,10 +129,7 @@ func (app *Application) loadAuthorizedWatchRoom(ctx context.Context, roomID, use
 }
 
 func (app *Application) loadAuthorizedWatchRoomForRequest(w http.ResponseWriter, r *http.Request) (database.WatchRoom, int64, bool) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return database.WatchRoom{}, 0, false
-	}
+	userID := app.userIDFromRequest(r)
 
 	roomID, err := parseRoomID(r)
 	if err != nil {

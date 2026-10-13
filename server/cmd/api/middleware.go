@@ -193,23 +193,15 @@ func (app *Application) IsAuth(next http.Handler) http.Handler {
 	})
 }
 
-// userIDFromRequest resolves the authenticated user from either a device
-// token (context) or the session cookie. Returns 0 when unauthenticated.
+// userIDFromRequest resolves the user from either a device token (context) or
+// the session cookie. It returns 0 when unauthenticated, which IsAuth already
+// rejects, so handlers registered behind IsAuth use it without a check.
 func (app *Application) userIDFromRequest(r *http.Request) int64 {
 	auth := deviceAuthFrom(r.Context())
 	if auth != nil {
 		return auth.UserID
 	}
 	return app.SessionManager.GetInt64(r.Context(), cookieUserID)
-}
-
-func (app *Application) currentUserID(w http.ResponseWriter, r *http.Request) (int64, bool) {
-	userID := app.userIDFromRequest(r)
-	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
-		return 0, false
-	}
-	return userID, true
 }
 
 // requireSessionUserID resolves the user from the session cookie only.
@@ -222,13 +214,7 @@ func (app *Application) requireSessionUserID(w http.ResponseWriter, r *http.Requ
 		return 0, false
 	}
 
-	userID := app.SessionManager.GetInt64(r.Context(), cookieUserID)
-	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
-		return 0, false
-	}
-
-	return userID, true
+	return app.SessionManager.GetInt64(r.Context(), cookieUserID), true
 }
 
 // touchDeviceLastUsed updates devices.last_used_at, throttled through the
@@ -284,10 +270,7 @@ func (app *Application) forgetUserDevices(userID int64) {
 // RequireAdmin rejects requests from non-admin users with 403.
 func (app *Application) RequireAdmin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := app.currentUserID(w, r)
-		if !ok {
-			return
-		}
+		userID := app.userIDFromRequest(r)
 
 		isAdmin, err := app.Queries.GetUserIsAdmin(r.Context(), userID)
 		if errors.Is(err, sql.ErrNoRows) {

@@ -50,10 +50,7 @@ type UpdateUserPinRequest struct {
 // a TV client can set the PIN on first sign-in, but changing or removing an
 // existing PIN requires the current PIN.
 func (app *Application) UpdateUserPin(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	var req UpdateUserPinRequest
 	if err := helpers.ReadJSON(w, r, &req); err != nil {
@@ -162,10 +159,7 @@ type VerifyUserPinRequest struct {
 // an expected domain outcome, so both match and mismatch return 200 with
 // data.valid — 401 stays reserved for missing/revoked credentials.
 func (app *Application) VerifyUserPin(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	var req VerifyUserPinRequest
 	if err := helpers.ReadJSON(w, r, &req); err != nil {

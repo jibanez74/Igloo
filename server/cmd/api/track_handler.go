@@ -22,10 +22,7 @@ const (
 )
 
 func (app *Application) ToggleLikeTrack(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	idParam := chi.URLParam(r, "id")
 	trackID, err := strconv.ParseInt(idParam, 10, 64)
@@ -100,10 +97,7 @@ func (app *Application) toggleTrackLike(ctx context.Context, userID, trackID int
 // GetLikedTrackIDsForUser returns the IDs of every track the authenticated user has liked.
 // Used by the frontend to initialize liked-heart state on page load without a paginated fetch.
 func (app *Application) GetLikedTrackIDsForUser(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	trackIDs, err := app.Queries.GetLikedTrackIDsByUserID(r.Context(), userID)
 	if err != nil {
@@ -121,10 +115,7 @@ func (app *Application) GetLikedTrackIDsForUser(w http.ResponseWriter, r *http.R
 // GetLikedTracks returns the current user's liked tracks as a paginated list,
 // ordered by most recently liked first. Query params: page (default 1), per_page (default 50, max 100).
 func (app *Application) GetLikedTracks(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	page := int64(1)
 	if p := r.URL.Query().Get("page"); p != "" {

@@ -176,10 +176,7 @@ func (app *Application) AuthenticateDevice(w http.ResponseWriter, r *http.Reques
 }
 
 func (app *Application) GetCurrentAuthUser(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	user, err := app.Queries.GetUser(r.Context(), userID)
 	if err != nil {

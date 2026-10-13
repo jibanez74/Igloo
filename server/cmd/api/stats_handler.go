@@ -18,10 +18,7 @@ type RecordPlayEventRequest struct {
 
 // The frontend records a play after its playback threshold is met.
 func (app *Application) RecordPlayEvent(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	var req RecordPlayEventRequest
 	if err := helpers.ReadJSON(w, r, &req); err != nil {
@@ -94,10 +91,7 @@ func (app *Application) recordTrackPlay(ctx context.Context, userID int64, req R
 }
 
 func (app *Application) GetUserListeningStats(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	stats, err := app.Queries.GetUserListeningStats(r.Context(), userID)
 	if err != nil {
@@ -116,10 +110,7 @@ func (app *Application) GetUserListeningStats(w http.ResponseWriter, r *http.Req
 }
 
 func (app *Application) GetUserTopTracks(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	limit, offset := parseLimitOffsetParams(r, 20, 100)
 
@@ -143,10 +134,7 @@ func (app *Application) GetUserTopTracks(w http.ResponseWriter, r *http.Request)
 }
 
 func (app *Application) GetUserTopMusicians(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	limit, offset := parseLimitOffsetParams(r, 10, 50)
 
@@ -170,10 +158,7 @@ func (app *Application) GetUserTopMusicians(w http.ResponseWriter, r *http.Reque
 }
 
 func (app *Application) GetUserTopGenres(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	limit := int64(10)
 	if l := r.URL.Query().Get("limit"); l != "" {
@@ -203,10 +188,7 @@ func (app *Application) GetUserTopGenres(w http.ResponseWriter, r *http.Request)
 }
 
 func (app *Application) GetUserTopAlbums(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	limit, offset := parseLimitOffsetParams(r, 10, 50)
 
@@ -230,10 +212,7 @@ func (app *Application) GetUserTopAlbums(w http.ResponseWriter, r *http.Request)
 }
 
 func (app *Application) GetUserRecentlyPlayed(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	limit, offset := parseLimitOffsetParams(r, 20, 50)
 

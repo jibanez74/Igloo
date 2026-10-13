@@ -41,10 +41,7 @@ func libraryRowsFromPlaylistDesc(rows []database.GetPlaylistMoviesPaginatedDescR
 }
 
 func (app *Application) GetMoviePlaylists(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	playlists, err := app.Queries.GetMoviePlaylistsWithCollaboratorAccess(r.Context(), userID)
 	if err != nil {
@@ -67,10 +64,7 @@ type CreateMoviePlaylistRequest struct {
 }
 
 func (app *Application) CreateMoviePlaylist(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	var req CreateMoviePlaylistRequest
 	readErr := helpers.ReadJSON(w, r, &req)
@@ -125,10 +119,7 @@ func (app *Application) CreateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 }
 
 func (app *Application) GetMoviePlaylist(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	idParam := chi.URLParam(r, "id")
 	playlistID, err := strconv.ParseInt(idParam, 10, 64)
@@ -198,10 +189,7 @@ type UpdateMoviePlaylistRequest struct {
 }
 
 func (app *Application) UpdateMoviePlaylist(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	idParam := chi.URLParam(r, "id")
 	playlistID, err := strconv.ParseInt(idParam, 10, 64)
@@ -286,10 +274,7 @@ func (app *Application) UpdateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 }
 
 func (app *Application) DeleteMoviePlaylist(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	idParam := chi.URLParam(r, "id")
 	playlistID, err := strconv.ParseInt(idParam, 10, 64)
@@ -330,10 +315,7 @@ func (app *Application) DeleteMoviePlaylist(w http.ResponseWriter, r *http.Reque
 }
 
 func (app *Application) GetMoviePlaylistMovies(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	idParam := chi.URLParam(r, "id")
 	playlistID, err := strconv.ParseInt(idParam, 10, 64)
@@ -418,10 +400,7 @@ type AddMoviesRequest struct {
 }
 
 func (app *Application) AddMoviesToMoviePlaylist(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	idParam := chi.URLParam(r, "id")
 	playlistID, err := strconv.ParseInt(idParam, 10, 64)
@@ -536,10 +515,7 @@ func (app *Application) AddMoviesToMoviePlaylist(w http.ResponseWriter, r *http.
 }
 
 func (app *Application) RemoveMovieFromMoviePlaylist(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	playlistID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {

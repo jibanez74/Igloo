@@ -16,10 +16,7 @@ type userListSummary struct {
 }
 
 func (app *Application) GetUsers(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 

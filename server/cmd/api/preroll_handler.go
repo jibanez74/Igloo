@@ -55,10 +55,7 @@ func prerollTrailerPayload(trailer preroll.Trailer) prerollTrailerResponse {
 // built from the caller's saved preferences. Trailers stream from YouTube;
 // the server only hands out keys it already holds.
 func (app *Application) GetMoviePreroll(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	media, err := parseMediaID(chi.URLParam(r, "id"), mediaKindMovie)
 	if err != nil {

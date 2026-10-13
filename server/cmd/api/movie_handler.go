@@ -310,10 +310,7 @@ func (app *Application) GetMoviesByGenreLibrary(w http.ResponseWriter, r *http.R
 }
 
 func (app *Application) GetLikedMovies(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	page, perPage, sortParam := parseLibraryQuery(r)
 	offset := (page - 1) * perPage
@@ -374,15 +371,6 @@ func (app *Application) GetMovieLikeStatus(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if userID == 0 {
-		helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-			Data: map[string]any{
-				"is_liked": false,
-			},
-		})
-		return
-	}
-
 	isLiked, err := app.Queries.IsMovieLiked(r.Context(), database.IsMovieLikedParams{
 		UserID:  userID,
 		MovieID: movieID,
@@ -432,10 +420,7 @@ func (app *Application) toggleMovieLike(ctx context.Context, userID, movieID int
 }
 
 func (app *Application) ToggleLikeMovie(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	idParam := chi.URLParam(r, "id")
 	movieID, err := strconv.ParseInt(idParam, 10, 64)

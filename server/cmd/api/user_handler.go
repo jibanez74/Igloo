@@ -98,10 +98,7 @@ type UpdateUserNameRequest struct {
 }
 
 func (app *Application) UpdateUserName(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	var req UpdateUserNameRequest
 	if err := helpers.ReadJSON(w, r, &req); err != nil {
@@ -261,10 +258,7 @@ type UpdateUserAvatarRequest struct {
 }
 
 func (app *Application) UpdateUserAvatar(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	var req UpdateUserAvatarRequest
 	if err := helpers.ReadJSON(w, r, &req); err != nil {
@@ -322,10 +316,7 @@ var allowedAvatarMimeTypes = map[string]string{
 const maxAvatarSize = 20 << 20
 
 func (app *Application) UploadUserAvatar(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxAvatarSize)
 

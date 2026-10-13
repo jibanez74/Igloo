@@ -114,10 +114,7 @@ func (app *Application) CreateNotification(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	err = app.Queries.CreateNotification(r.Context(), database.CreateNotificationParams{
 		CreatedByUserID: userID,
@@ -149,10 +146,7 @@ func isValidNotificationTitle(title string) bool {
 // the unread count. Non-admins see an empty queue without touching the
 // notifications table.
 func (app *Application) ListNotifications(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	// One statement answers both the admin check and the unread count.
 	badge, err := app.Queries.GetNotificationBadgeForUser(r.Context(), userID)
@@ -198,10 +192,7 @@ func (app *Application) ListNotifications(w http.ResponseWriter, r *http.Request
 // GetNotificationBadgeForUser folds the admin check and the count into a single
 // statement, so a poll costs one round trip on the shared connection.
 func (app *Application) GetUnreadNotificationCount(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	badge, err := app.Queries.GetNotificationBadgeForUser(r.Context(), userID)
 	if err != nil {
@@ -220,10 +211,7 @@ func (app *Application) GetUnreadNotificationCount(w http.ResponseWriter, r *htt
 // notification. It is idempotent, so marking an already-read or nonexistent
 // notification is a harmless no-op.
 func (app *Application) MarkNotificationRead(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	notificationID, ok := parseNotificationID(w, r)
 	if !ok {
@@ -253,10 +241,7 @@ func (app *Application) MarkNotificationRead(w http.ResponseWriter, r *http.Requ
 // MarkAllNotificationsRead marks every notification currently visible to the
 // user as read.
 func (app *Application) MarkAllNotificationsRead(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	isAdmin, ok := app.notificationViewerIsAdmin(w, r, userID)
 	if !ok {
@@ -278,10 +263,7 @@ func (app *Application) MarkAllNotificationsRead(w http.ResponseWriter, r *http.
 // shared admin-queue notification clears it for all admins, which is the
 // intended "request handled" behavior.
 func (app *Application) DeleteNotification(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	notificationID, ok := parseNotificationID(w, r)
 	if !ok {

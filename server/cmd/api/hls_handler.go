@@ -119,10 +119,7 @@ func (app *Application) serveHLSManifest(w http.ResponseWriter, r *http.Request,
 	// Set before anything can answer, so error responses inherit it too.
 	w.Header().Set("Cache-Control", "no-store")
 
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	params, ok := parseHLSParams(w, r, kind)
 	if !ok {
@@ -250,10 +247,7 @@ func (app *Application) EpisodeHLSSegment(w http.ResponseWriter, r *http.Request
 func (app *Application) serveHLSSegment(w http.ResponseWriter, r *http.Request, kind mediaKind) {
 	w.Header().Set("Cache-Control", "no-store")
 
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	params, ok := parseHLSParams(w, r, kind)
 	if !ok {
@@ -664,10 +658,7 @@ func (app *Application) StopEpisodeHLSSession(w http.ResponseWriter, r *http.Req
 func (app *Application) stopPersonalHLSSession(w http.ResponseWriter, r *http.Request, kind mediaKind) {
 	w.Header().Set("Cache-Control", "no-store")
 
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	media, err := parseMediaID(chi.URLParam(r, "id"), kind)
 	if err != nil {

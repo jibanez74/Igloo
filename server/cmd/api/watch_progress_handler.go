@@ -203,10 +203,7 @@ func (app *Application) GetMovieWatchProgress(w http.ResponseWriter, r *http.Req
 }
 
 func (app *Application) getWatchProgress(w http.ResponseWriter, r *http.Request, kind mediaKind) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	media, err := parseMediaID(chi.URLParam(r, "id"), kind)
 	if err != nil {
@@ -273,10 +270,7 @@ type continueWatchingItem struct {
 // GetContinueWatching lists what the current user has started and not finished,
 // movies and episodes together, most recently watched first.
 func (app *Application) GetContinueWatching(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	movies, err := app.Queries.GetContinueWatchingMovies(r.Context(), database.GetContinueWatchingMoviesParams{
 		UserID: userID,
@@ -362,10 +356,7 @@ func (app *Application) UpdateMovieWatchProgress(w http.ResponseWriter, r *http.
 }
 
 func (app *Application) updateWatchProgress(w http.ResponseWriter, r *http.Request, kind mediaKind) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	media, err := parseMediaID(chi.URLParam(r, "id"), kind)
 	if err != nil {
@@ -463,10 +454,7 @@ func (app *Application) DeleteMovieWatchProgress(w http.ResponseWriter, r *http.
 }
 
 func (app *Application) deleteWatchProgress(w http.ResponseWriter, r *http.Request, kind mediaKind) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	media, err := parseMediaID(chi.URLParam(r, "id"), kind)
 	if err != nil {
@@ -506,10 +494,7 @@ func (app *Application) SetMovieWatched(w http.ResponseWriter, r *http.Request) 
 }
 
 func (app *Application) setWatched(w http.ResponseWriter, r *http.Request, kind mediaKind) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	media, err := parseMediaID(chi.URLParam(r, "id"), kind)
 	if err != nil {

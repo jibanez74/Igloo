@@ -49,10 +49,7 @@ func (app *Application) loadTrailerPreferences(ctx context.Context, userID int64
 }
 
 func (app *Application) GetTrailerPreferences(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	prefs, err := app.loadTrailerPreferences(r.Context(), userID)
 	if err != nil {
@@ -64,10 +61,7 @@ func (app *Application) GetTrailerPreferences(w http.ResponseWriter, r *http.Req
 }
 
 func (app *Application) UpdateTrailerPreferences(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	var req trailerPreferencesRequest
 	err := helpers.ReadJSON(w, r, &req)

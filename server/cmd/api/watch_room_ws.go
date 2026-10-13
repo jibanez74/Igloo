@@ -547,10 +547,7 @@ var watchRoomUpgrader = websocket.Upgrader{
 // returns the presence summary the socket broadcasts; sql.ErrNoRows means "no
 // room or no access", same as the HTTP media paths.
 func (app *Application) WatchRoomWebSocket(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
+	userID := app.userIDFromRequest(r)
 
 	roomID, err := parseRoomID(r)
 	if err != nil {
