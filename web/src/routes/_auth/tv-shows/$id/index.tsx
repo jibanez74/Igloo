@@ -106,6 +106,7 @@ function showCastToCastSection(
   // artist several roles on the same show.
   return cast.map(c => ({
     key: c.credit_id,
+    personId: c.tmdb_id,
     name: c.artist_name,
     character: c.character,
     profilePath: unwrapString(c.artist_profile),

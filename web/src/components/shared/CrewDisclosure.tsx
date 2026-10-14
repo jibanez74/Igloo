@@ -1,9 +1,11 @@
+import PersonLink from "@/components/shared/PersonLink";
 import { useState } from "react";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export type CrewDisclosureCredit = {
   key: string;
+  personId: number;
   job: string;
   department: string | null;
   name: string;
@@ -58,9 +60,9 @@ export default function CrewDisclosure({ credits }: CrewDisclosureProps) {
                     </span>
                   ) : null}
                 </span>
-                <span className="font-semibold text-foreground">
+                <PersonLink personId={credit.personId} className="font-semibold text-foreground">
                   {credit.name}
-                </span>
+                </PersonLink>
               </p>
             </li>
           ))}

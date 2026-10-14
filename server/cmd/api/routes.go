@@ -126,6 +126,7 @@ func (app *Application) registerNotificationRoutes(r chi.Router) {
 }
 
 func (app *Application) registerTMDBRoutes(r chi.Router) {
+	r.Get("/people/{id}", app.GetPerson)
 	r.Route("/tmdb", func(r chi.Router) {
 		r.Get("/status", app.GetTmdbStatus)
 		r.Get("/images/{size}/{file}", app.ProxyTmdbImage)

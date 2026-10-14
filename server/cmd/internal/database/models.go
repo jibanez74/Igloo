@@ -23,6 +23,13 @@ type Album struct {
 	UpdatedAt         string          `json:"updated_at"`
 }
 
+type Artist struct {
+	ID      int64          `json:"id"`
+	Name    string         `json:"name"`
+	TmdbID  int64          `json:"tmdb_id"`
+	Profile sql.NullString `json:"profile"`
+}
+
 type AudioStream struct {
 	ID            int64          `json:"id"`
 	MovieID       int64          `json:"movie_id"`

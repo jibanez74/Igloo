@@ -153,6 +153,7 @@ type Querier interface {
 	// has_pin instead of the PIN itself: the admin listing only shows whether one
 	// is set, so the values never leave the database.
 	GetAllUsers(ctx context.Context) ([]GetAllUsersRow, error)
+	GetArtistByTmdbID(ctx context.Context, tmdbID int64) (Artist, error)
 	// Audio streams for a movie (for technical details and playback settings).
 	GetAudioStreamsByMovieID(ctx context.Context, movieID int64) ([]AudioStream, error)
 	// Cast for a movie with artist name and profile (for details view).
@@ -270,6 +271,9 @@ type Querier interface {
 	// small retry table outermost) instead of walking every season and episode of
 	// every show. The OR only builds them when a show has no show-level retry row.
 	GetPendingShows(ctx context.Context, afterID int64) ([]GetPendingShowsRow, error)
+	GetPersonLibraryMovies(ctx context.Context, tmdbIds []sql.NullInt64) ([]GetPersonLibraryMoviesRow, error)
+	GetPersonLibraryShows(ctx context.Context, tmdbIds []sql.NullInt64) ([]GetPersonLibraryShowsRow, error)
+	GetPersonLocalCredits(ctx context.Context, artistID int64) ([]GetPersonLocalCreditsRow, error)
 	GetPlaylistCollaborators(ctx context.Context, playlistID int64) ([]GetPlaylistCollaboratorsRow, error)
 	// Title order matches GET /api/movies/library sort=asc.
 	GetPlaylistMoviesPaginatedAsc(ctx context.Context, arg GetPlaylistMoviesPaginatedAscParams) ([]GetPlaylistMoviesPaginatedAscRow, error)

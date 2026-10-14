@@ -92,6 +92,7 @@ function movieDetailsResponse(
         id: id * 10,
         character: "Lead",
         cast_order: 0,
+        tmdb_id: 9001,
         artist_name: `${title} Lead`,
         artist_profile: nullableString(""),
       },
@@ -101,6 +102,7 @@ function movieDetailsResponse(
         id: id * 20,
         job: "Director",
         department: "Directing",
+        tmdb_id: 9001,
         artist_name: `${title} Director`,
       },
     ],
@@ -206,13 +208,14 @@ function signalFireDetails(): LibraryMovieDetailsResponse {
         id: 1,
         character: "Mara Voss",
         cast_order: 0,
+        tmdb_id: 9001,
         artist_name: "Alex Vega",
         artist_profile: nullableString("/alex-vega.jpg"),
       },
     ],
     crew: [
-      { id: 10, job: "Director", department: "Directing", artist_name: "Jordan Lee" },
-      { id: 11, job: "Writer", department: "Writing", artist_name: "Casey North" },
+      { tmdb_id: 9001, id: 10, job: "Director", department: "Directing", artist_name: "Jordan Lee" },
+      { tmdb_id: 9001, id: 11, job: "Writer", department: "Writing", artist_name: "Casey North" },
     ],
     production_companies: [{ id: 20, name: "Northwind Pictures" }],
     extra_videos: [
@@ -558,7 +561,7 @@ describe("movie details route content", () => {
     expect(screen.getByText("Jordan Lee")).toBeInTheDocument();
     expect(screen.getByText("Casey North")).toBeInTheDocument();
     expect(
-      screen.getByRole("article", { name: "Alex Vega as Mara Voss" }),
+      screen.getByRole("link", { name: "Alex Vega as Mara Voss" }),
     ).toBeInTheDocument();
     expect(
       await screen.findByRole("list", { name: "Chapters, 1 total" }),
@@ -663,5 +666,16 @@ describe("movie details route playback settings sync", () => {
     } finally {
       prefersCoarse.value = false;
     }
+  });
+});
+
+describe("movie person links", () => {
+  it("links cast, the director and writers by TMDB identity", async () => {
+    mockMovieDetailsFetch();
+    await renderRoute(`/movies/${SIGNAL_FIRE_ID}`);
+    const expected = `/people/9001?returnTo=${encodeURIComponent(`/movies/${SIGNAL_FIRE_ID}`)}`;
+    expect(await screen.findByRole("link", { name: "Alex Vega as Mara Voss" })).toHaveAttribute("href", expected);
+    expect(screen.getByRole("link", { name: "Jordan Lee" })).toHaveAttribute("href", expected);
+    expect(screen.getByRole("link", { name: "Casey North" })).toHaveAttribute("href", expected);
   });
 });

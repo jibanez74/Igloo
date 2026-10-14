@@ -473,6 +473,7 @@ SELECT
   sc.character,
   sc.cast_order,
   sc.episode_count,
+  a.tmdb_id,
   a.name AS artist_name,
   a.profile AS artist_profile
 FROM show_cast AS sc
@@ -491,6 +492,7 @@ type GetCastByShowIDRow struct {
 	Character     string         `json:"character"`
 	CastOrder     int64          `json:"cast_order"`
 	EpisodeCount  int64          `json:"episode_count"`
+	TmdbID        int64          `json:"tmdb_id"`
 	ArtistName    string         `json:"artist_name"`
 	ArtistProfile sql.NullString `json:"artist_profile"`
 }
@@ -518,6 +520,7 @@ func (q *Queries) GetCastByShowID(ctx context.Context, showID int64) ([]GetCastB
 			&i.Character,
 			&i.CastOrder,
 			&i.EpisodeCount,
+			&i.TmdbID,
 			&i.ArtistName,
 			&i.ArtistProfile,
 		); err != nil {
@@ -537,6 +540,7 @@ func (q *Queries) GetCastByShowID(ctx context.Context, showID int64) ([]GetCastB
 const getCreatorsByShowID = `-- name: GetCreatorsByShowID :many
 SELECT
   a.id,
+  a.tmdb_id,
   a.name,
   a.profile
 FROM artist AS a
@@ -548,6 +552,7 @@ ORDER BY a.name
 
 type GetCreatorsByShowIDRow struct {
 	ID      int64          `json:"id"`
+	TmdbID  int64          `json:"tmdb_id"`
 	Name    string         `json:"name"`
 	Profile sql.NullString `json:"profile"`
 }
@@ -562,7 +567,12 @@ func (q *Queries) GetCreatorsByShowID(ctx context.Context, showID int64) ([]GetC
 	items := []GetCreatorsByShowIDRow{}
 	for rows.Next() {
 		var i GetCreatorsByShowIDRow
-		if err := rows.Scan(&i.ID, &i.Name, &i.Profile); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.TmdbID,
+			&i.Name,
+			&i.Profile,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -583,6 +593,7 @@ SELECT
   sc.department,
   sc.job,
   sc.episode_count,
+  a.tmdb_id,
   a.name AS artist_name,
   a.profile AS artist_profile
 FROM show_crew AS sc
@@ -602,6 +613,7 @@ type GetCrewByShowIDRow struct {
 	Department    string         `json:"department"`
 	Job           string         `json:"job"`
 	EpisodeCount  int64          `json:"episode_count"`
+	TmdbID        int64          `json:"tmdb_id"`
 	ArtistName    string         `json:"artist_name"`
 	ArtistProfile sql.NullString `json:"artist_profile"`
 }
@@ -623,6 +635,7 @@ func (q *Queries) GetCrewByShowID(ctx context.Context, showID int64) ([]GetCrewB
 			&i.Department,
 			&i.Job,
 			&i.EpisodeCount,
+			&i.TmdbID,
 			&i.ArtistName,
 			&i.ArtistProfile,
 		); err != nil {

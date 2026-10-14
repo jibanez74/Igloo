@@ -184,9 +184,9 @@ func TestTVResponseErrors(t *testing.T) {
 		body    string
 		wantErr string
 	}{
-		{"not found", http.StatusNotFound, `{"status_message":"missing"}`, "tmdb status 404: unable to get TV metadata from tmdb"},
+		{"not found", http.StatusNotFound, `{"status_message":"missing"}`, "tmdb status 404: unable to get metadata from tmdb"},
 		{"malformed json", http.StatusOK, `{"id":`, "unexpected end of JSON input"},
-		{"required field null", http.StatusOK, `{"id":7,"name":"Example","aggregate_credits":null,"content_ratings":{},"external_ids":{},"videos":{}}`, "missing TMDB TV field aggregate_credits"},
+		{"required field null", http.StatusOK, `{"id":7,"name":"Example","aggregate_credits":null,"content_ratings":{},"external_ids":{},"videos":{}}`, "missing TMDB metadata field aggregate_credits"},
 		{"identity mismatch", http.StatusOK, `{"id":8,"name":"Example","aggregate_credits":{},"content_ratings":{},"external_ids":{},"videos":{}}`, "invalid TMDB show identity or name"},
 		{"blank name", http.StatusOK, `{"id":7,"name":" ","aggregate_credits":{},"content_ratings":{},"external_ids":{},"videos":{}}`, "invalid TMDB show identity or name"},
 	}

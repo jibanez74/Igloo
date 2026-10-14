@@ -1,3 +1,4 @@
+import PersonLink from "@/components/shared/PersonLink";
 import { User } from "lucide-react";
 import ScrollRail from "@/components/shared/ScrollRail";
 import {
@@ -18,6 +19,7 @@ import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
  */
 export type CastSectionItem = {
   key: string;
+  personId: number;
   name: string;
   character: string;
   profilePath: string | null;
@@ -74,18 +76,20 @@ export default function CastSection({ cast }: CastSectionProps) {
               key={actor.key}
               className={cn(
                 MOTION_MICRO_COLORS_CLASS,
-                "w-32 shrink-0 overflow-hidden rounded-lg border border-primary/20 bg-muted/50 hover:border-primary/40",
+                "w-32 shrink-0 rounded-lg border border-primary/20 bg-muted/50 hover:border-primary/40",
               )}
             >
-              <article
-                aria-label={
+              <PersonLink
+                personId={actor.personId}
+                className="block overflow-hidden rounded-lg"
+                label={
                   episodeLabel
                     ? `${actor.name} as ${actor.character}, ${episodeLabel}`
                     : `${actor.name} as ${actor.character}`
                 }
               >
                 {actor.profilePath ? (
-                  // The article already speaks the name; a named photo would
+                  // The link already speaks the name; a named photo would
                   // read it twice.
                   <img
                     src={buildTmdbImageUrl(actor.profilePath, TMDB_PROFILE_SIZE)}
@@ -109,7 +113,7 @@ export default function CastSection({ cast }: CastSectionProps) {
                   <p className="truncate text-sm font-semibold text-foreground">
                     {actor.name}
                   </p>
-                  {/* The article above already speaks name, role, and tally, so
+                  {/* The link above already speaks name, role, and tally, so
                       these lines are decorative to a screen reader. */}
                   <p
                     className="truncate text-xs text-muted-foreground"
@@ -126,7 +130,7 @@ export default function CastSection({ cast }: CastSectionProps) {
                     </p>
                   )}
                 </div>
-              </article>
+              </PersonLink>
             </li>
           );
         })}

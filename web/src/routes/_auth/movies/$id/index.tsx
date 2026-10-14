@@ -108,6 +108,7 @@ function libraryCastToCastSection(
 ): CastSectionItem[] {
   return cast.map(c => ({
     key: String(c.id),
+    personId: c.tmdb_id,
     name: c.artist_name,
     character: c.character,
     profilePath: unwrapString(c.artist_profile),

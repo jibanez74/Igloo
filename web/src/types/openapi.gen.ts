@@ -2630,6 +2630,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/people/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a person profile by TMDB person ID
+         * @description Fetches English TMDB person details, combined credits, external IDs and images on demand. Successful provider metadata is cached for 15 minutes. Credits are grouped by media type and TMDB title ID, with distinct acting and crew roles retained. Stored season/episode credits collapse to their show. Library matching selects the lowest local ID. Stored names, portraits and library credits yield a partial 200 response when enrichment is unconfigured, unavailable or not_found. Unavailable is recoverable by retry. Without a stored person, a provider 404 returns 404; missing configuration or other provider failures return 503. Database failures return 500.
+         */
+        get: operations["getPerson"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3106,6 +3126,11 @@ export interface components {
             episode_count: number;
             artist_name: string;
             artist_profile: components["schemas"]["SqlNullString"];
+            /**
+             * Format: int64
+             * @description TMDB person identity; distinct from local row and credit IDs.
+             */
+            tmdb_id: number;
         };
         ShowCrewCredit: {
             credit_id: string;
@@ -3117,12 +3142,22 @@ export interface components {
             episode_count: number;
             artist_name: string;
             artist_profile: components["schemas"]["SqlNullString"];
+            /**
+             * Format: int64
+             * @description TMDB person identity; distinct from local row and credit IDs.
+             */
+            tmdb_id: number;
         };
         ShowPerson: {
             /** Format: int64 */
             id: number;
             name: string;
             profile: components["schemas"]["SqlNullString"];
+            /**
+             * Format: int64
+             * @description TMDB person identity; distinct from local row and credit IDs.
+             */
+            tmdb_id: number;
         };
         ShowGenre: {
             /** Format: int64 */
@@ -3240,6 +3275,11 @@ export interface components {
             cast_order: number;
             artist_name: string;
             artist_profile: components["schemas"]["SqlNullString"];
+            /**
+             * Format: int64
+             * @description TMDB person identity; distinct from local row and credit IDs.
+             */
+            tmdb_id: number;
         };
         MovieCrewCredit: {
             /** Format: int64 */
@@ -3247,6 +3287,11 @@ export interface components {
             job: string;
             department: string;
             artist_name: string;
+            /**
+             * Format: int64
+             * @description TMDB person identity; distinct from local row and credit IDs.
+             */
+            tmdb_id: number;
         };
         MovieGenre: {
             /** Format: int64 */
@@ -4976,6 +5021,63 @@ export interface components {
         EpisodeWatchedEnvelope: components["schemas"]["JsonSuccess"] & {
             data: components["schemas"]["EpisodeWatchedData"];
         };
+        PersonExternalIDs: {
+            imdb_id: string;
+            facebook_id: string;
+            instagram_id: string;
+            twitter_id: string;
+            tiktok_id: string;
+            youtube_id: string;
+            wikidata_id: string;
+        };
+        Person: {
+            /** Format: int64 */
+            tmdb_id: number;
+            name: string;
+            biography: string;
+            known_for_department: string;
+            birthday: string;
+            deathday: string;
+            place_of_birth: string;
+            profile_path: string;
+            homepage: string;
+            gender: number;
+            also_known_as: string[];
+            external_ids: components["schemas"]["PersonExternalIDs"];
+        };
+        PersonRole: {
+            /** @enum {string} */
+            kind: "acting" | "crew";
+            role: string;
+            department: string;
+        };
+        PersonTitle: {
+            /**
+             * Format: int64
+             * @description Zero only for a stored library title without a TMDB identity.
+             */
+            tmdb_id: number;
+            /** @enum {string} */
+            media_type: "movie" | "tv";
+            title: string;
+            /** @description Release/first-air date or stored year; empty when undated. */
+            date: string;
+            poster_path: string;
+            popularity: number;
+            /** Format: int64 */
+            library_id: number | null;
+            roles: components["schemas"]["PersonRole"][];
+        };
+        PersonData: {
+            person: components["schemas"]["Person"];
+            filmography: components["schemas"]["PersonTitle"][];
+            photos: string[];
+            /** @enum {string} */
+            enrichment_status: "available" | "unconfigured" | "unavailable" | "not_found";
+        };
+        PersonEnvelope: components["schemas"]["JsonSuccess"] & {
+            data: components["schemas"]["PersonData"];
+        };
     };
     responses: {
         /** @description Successful JSON response. */
@@ -6160,6 +6262,15 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
+        /** @description Person profile, with grouped movie and TV credits. Arrays are always present; missing text is empty. */
+        PersonResponse: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["PersonEnvelope"];
             };
         };
     };
@@ -10039,6 +10150,25 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             500: components["responses"]["InternalServerError"];
+        };
+    };
+    getPerson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["PersonResponse"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
 }

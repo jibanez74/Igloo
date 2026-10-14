@@ -69,21 +69,10 @@ export type TheaterMovieType = components["schemas"]["TheaterMovie"];
 export type LibraryMovieDetailsMovieType = components["schemas"]["Movie"];
 
 // Library cast row (GET /api/movies/details/:id cast array)
-export type LibraryMovieCastType = {
-  id: number;
-  character: string;
-  cast_order: number;
-  artist_name: string;
-  artist_profile: NullableString;
-};
+export type LibraryMovieCastType = components["schemas"]["MovieCastCredit"];
 
 // Library crew row (GET /api/movies/details/:id crew array)
-export type LibraryMovieCrewType = {
-  id: number;
-  job: string;
-  department: string;
-  artist_name: string;
-};
+export type LibraryMovieCrewType = components["schemas"]["MovieCrewCredit"];
 
 // Library genre row (GET /api/movies/details/:id genres array)
 export type LibraryMovieGenreType = {

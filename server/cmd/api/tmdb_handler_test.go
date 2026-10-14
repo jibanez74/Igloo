@@ -31,6 +31,8 @@ func (failingRoundTripper) RoundTrip(*http.Request) (*http.Response, error) {
 }
 
 type stubTmdbClient struct {
+	person        *tmdb.Person
+	personErr     error
 	searchErr     error
 	theatersErr   error
 	searchResults []tmdb.TmdbMovie
@@ -1003,4 +1005,8 @@ func (*stubTmdbClient) GetShowDetails(context.Context, int) (*tmdb.TVShow, error
 }
 func (*stubTmdbClient) GetSeasonDetails(context.Context, int, int) (*tmdb.TVSeason, error) {
 	return nil, tmdb.ErrNoShowsFound
+}
+
+func (s *stubTmdbClient) GetPersonDetails(_ context.Context, _ int) (*tmdb.Person, error) {
+	return s.person, s.personErr
 }

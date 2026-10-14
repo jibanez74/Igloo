@@ -1,10 +1,16 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import CrewDisclosure from "@/components/shared/CrewDisclosure";
+
+vi.mock("@tanstack/react-router", async () => ({
+  ...await (await import("../helpers/router-link-mock")).routerWithAnchorLinks(),
+  useLocation: () => "/movies/711",
+}));
 
 const credits = Array.from({ length: 40 }, (_, i) => ({
   key: `credit-${i}`,
+  personId: 9001,
   job: i % 2 ? "Gaffer" : "Set Decorator",
   department: i % 3 ? "Art" : null,
   name: `Crew Member ${i}`,

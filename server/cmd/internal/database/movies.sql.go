@@ -274,6 +274,7 @@ SELECT
   c.id,
   c.character,
   c.cast_order,
+  a.tmdb_id,
   a.name AS artist_name,
   a.profile AS artist_profile
 FROM cast AS c
@@ -287,6 +288,7 @@ type GetCastByMovieIDRow struct {
 	ID            int64          `json:"id"`
 	Character     string         `json:"character"`
 	CastOrder     int64          `json:"cast_order"`
+	TmdbID        int64          `json:"tmdb_id"`
 	ArtistName    string         `json:"artist_name"`
 	ArtistProfile sql.NullString `json:"artist_profile"`
 }
@@ -305,6 +307,7 @@ func (q *Queries) GetCastByMovieID(ctx context.Context, movieID int64) ([]GetCas
 			&i.ID,
 			&i.Character,
 			&i.CastOrder,
+			&i.TmdbID,
 			&i.ArtistName,
 			&i.ArtistProfile,
 		); err != nil {
@@ -363,6 +366,7 @@ SELECT
   c.id,
   c.job,
   c.department,
+  a.tmdb_id,
   a.name AS artist_name
 FROM crew AS c
 INNER JOIN artist AS a
@@ -377,6 +381,7 @@ type GetCrewByMovieIDRow struct {
 	ID         int64  `json:"id"`
 	Job        string `json:"job"`
 	Department string `json:"department"`
+	TmdbID     int64  `json:"tmdb_id"`
 	ArtistName string `json:"artist_name"`
 }
 
@@ -394,6 +399,7 @@ func (q *Queries) GetCrewByMovieID(ctx context.Context, movieID int64) ([]GetCre
 			&i.ID,
 			&i.Job,
 			&i.Department,
+			&i.TmdbID,
 			&i.ArtistName,
 		); err != nil {
 			return nil, err

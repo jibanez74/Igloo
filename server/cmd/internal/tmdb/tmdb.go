@@ -26,6 +26,7 @@ const (
 )
 
 type TmdbInterface interface {
+	GetPersonDetails(ctx context.Context, id int) (*Person, error)
 	SearchShowsByTitleAndYear(ctx context.Context, title string, year ...int) ([]TVShow, error)
 	GetShowDetails(ctx context.Context, id int) (*TVShow, error)
 	GetSeasonDetails(ctx context.Context, id, season int) (*TVSeason, error)

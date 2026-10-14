@@ -661,6 +661,7 @@ SELECT
   sc.character,
   sc.cast_order,
   sc.episode_count,
+  a.tmdb_id,
   a.name AS artist_name,
   a.profile AS artist_profile
 FROM show_cast AS sc
@@ -681,6 +682,7 @@ SELECT
   sc.department,
   sc.job,
   sc.episode_count,
+  a.tmdb_id,
   a.name AS artist_name,
   a.profile AS artist_profile
 FROM show_crew AS sc
@@ -697,6 +699,7 @@ LIMIT 100;
 -- Series creators, billed ahead of the aggregate crew on the details page.
 SELECT
   a.id,
+  a.tmdb_id,
   a.name,
   a.profile
 FROM artist AS a

@@ -837,6 +837,36 @@ media type supplying only its own metadata chips, key-crew summary, and about
 rows.
 Adding a media type means supplying those three, not building a fourth page.
 
+Person profiles (`/people/$id`, using the TMDB person ID) have a portrait-led
+header: a rounded 2:3 portrait beside the name and biography at desktop widths,
+stacked on mobile. The main portrait uses the same-origin `original` image
+proxy; additional portraits use `w185` thumbnails in `ScrollRail`, with labelled
+links to full-size proxied images. All portraits have the shared image fallback.
+Biography paragraphs are preserved; text longer than 600 characters has an
+in-place “Read more / Show less” button with `aria-expanded` and `aria-controls`.
+Missing biographies have explicit copy; missing personal facts and photo rails
+are omitted. Personal facts use a description list, with calendar-based age or
+age at death when the dates are valid.
+
+Cast cards, key and expanded crew names, and series creators are typed person
+links. Credit row keys stay separate from person identity. A validated
+`returnTo` search parameter preserves the originating movie, in-theaters or TV
+show detail URL (including season selection); direct visits return to Home.
+Person pages share `MediaDetailGuard`, section skip links, focus and motion
+recipes, and a portrait/biography/credit-row skeleton for pending navigation.
+
+“Known for” shows up to eight shared poster cards, preferring the known-for
+department then popularity. Filmography groups all distinct roles per movie or
+show and uses chronological rows, newest first, undated last. Media, work and
+library filters live in the URL, reset pagination on change, and show 24 titles
+per page through `LibraryPagination`. Results changes are announced. Available
+titles have a textual “In your library” label and open their Igloo detail page;
+other titles open TMDB in a new tab. External profile and photo links name the
+destination and new-tab behavior. Stored names, portraits and library credits
+remain visible when TMDB is unconfigured, unavailable or no longer knows the
+person; the partial-data notice distinguishes those states and offers the
+shared retry control for a temporary failure.
+
 `DetailTitleHeading` keeps a text-node space between the title and the
 parenthesised year, since the two are flex items and would otherwise be read
 as one word. `CrewDisclosure` expands the full crew in place as a one-, two-

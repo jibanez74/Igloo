@@ -1,3 +1,4 @@
+import { personReturnTo } from "@/lib/person-profile";
 import { z } from "zod/mini";
 import { STREAM_MODE_IDS, SUBTITLE_OFF_VALUE } from "@/lib/constants";
 import { getSafeRedirect } from "@/lib/redirect-utils";
@@ -191,3 +192,11 @@ export function playbackSettingsToPlaySearch(
         : settings.subtitleTrack,
   };
 }
+
+export const personSearchSchema = z.object({
+  media: z._default(z.catch(z.enum(["all", "movie", "tv"]), "all"), "all"),
+  work: z._default(z.catch(z.enum(["all", "acting", "crew"]), "all"), "all"),
+  library: z._default(z.catch(z.enum(["all", "available", "unavailable"]), "all"), "all"),
+  page: z._default(z.catch(z.number().check(z.int(), z.positive(), z.maximum(Number.MAX_SAFE_INTEGER)), 1), 1),
+  returnTo: z._default(z.catch(z.pipe(z.string(), z.transform((value: string) => personReturnTo(value))), "/"), "/"),
+});

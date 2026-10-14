@@ -142,7 +142,7 @@ func (s *TVShow) Certification() string {
 
 // Decode a fresh value even on cache hits, so callers cannot mutate cached slices.
 // Required appended responses must be complete before the response is cached.
-func (t *tmdbClient) getTV(ctx context.Context, path string, params url.Values, result any, validate func() error, required ...string) error {
+func (t *tmdbClient) getMetadata(ctx context.Context, path string, params url.Values, result any, validate func() error, required ...string) error {
 	err := ctx.Err()
 	if err != nil {
 		return err
@@ -162,7 +162,7 @@ func (t *tmdbClient) getTV(ctx context.Context, path string, params url.Values, 
 			return err
 		}
 		if status != http.StatusOK {
-			return tmdbStatusError(status, "unable to get TV metadata from tmdb")
+			return tmdbStatusError(status, "unable to get metadata from tmdb")
 		}
 	}
 	var object map[string]json.RawMessage
@@ -173,7 +173,7 @@ func (t *tmdbClient) getTV(ctx context.Context, path string, params url.Values, 
 	for _, field := range required {
 		raw, exists := object[field]
 		if !exists || string(raw) == "null" {
-			return fmt.Errorf("missing TMDB TV field %s", field)
+			return fmt.Errorf("missing TMDB metadata field %s", field)
 		}
 		if len(raw) > 0 && raw[0] == '{' {
 			var status struct {
@@ -186,7 +186,7 @@ func (t *tmdbClient) getTV(ctx context.Context, path string, params url.Values, 
 			}
 			failed := status.Success != nil && !*status.Success
 			if failed || status.StatusCode != 0 {
-				return fmt.Errorf("TMDB TV %s failed", field)
+				return fmt.Errorf("TMDB metadata %s failed", field)
 			}
 		}
 	}
@@ -215,7 +215,7 @@ func (t *tmdbClient) SearchShowsByTitleAndYear(ctx context.Context, title string
 		Results []TVShow `json:"results"`
 	}
 	search := func() error {
-		return t.getTV(ctx, "/search/tv", params, &response, func() error {
+		return t.getMetadata(ctx, "/search/tv", params, &response, func() error {
 			if len(response.Results) == 0 {
 				return ErrNoShowsFound
 			}
@@ -241,7 +241,7 @@ func (t *tmdbClient) GetShowDetails(ctx context.Context, id int) (*TVShow, error
 		return nil, errors.New("show ID is required")
 	}
 	var result TVShow
-	err := t.getTV(ctx, fmt.Sprintf("/tv/%d", id), url.Values{"append_to_response": {"aggregate_credits,content_ratings,external_ids,videos"}}, &result, func() error {
+	err := t.getMetadata(ctx, fmt.Sprintf("/tv/%d", id), url.Values{"append_to_response": {"aggregate_credits,content_ratings,external_ids,videos"}}, &result, func() error {
 		validIdentity := result.ID == id && strings.TrimSpace(result.Name) != ""
 		if !validIdentity {
 			return errors.New("invalid TMDB show identity or name")
@@ -259,7 +259,7 @@ func (t *tmdbClient) GetSeasonDetails(ctx context.Context, id, season int) (*TVS
 		return nil, errors.New("invalid show ID or season")
 	}
 	var result TVSeason
-	err := t.getTV(ctx, fmt.Sprintf("/tv/%d/season/%d", id, season), url.Values{"append_to_response": {"aggregate_credits,videos"}}, &result, func() error {
+	err := t.getMetadata(ctx, fmt.Sprintf("/tv/%d/season/%d", id, season), url.Values{"append_to_response": {"aggregate_credits,videos"}}, &result, func() error {
 		if result.ID <= 0 || result.SeasonNumber != season {
 			return errors.New("invalid TMDB season identity or numbering")
 		}

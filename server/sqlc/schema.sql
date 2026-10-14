@@ -1502,9 +1502,8 @@ CREATE TABLE IF NOT EXISTS show_cast (
  episode_count INTEGER NOT NULL,
  PRIMARY KEY (show_id, artist_id, character, credit_id)
 );
--- Billing order for GetCastByShowID, so its 100-row cap can stop early. The
--- credit tables index no artist, company, network or extra-video column: those
--- parents are never deleted, so no cascade would use one (see schema_test.go).
+-- Billing order for GetCastByShowID, so its 100-row cap can stop early.
+-- Artist-first indexes below also support reverse person filmography queries.
 CREATE INDEX IF NOT EXISTS idx_show_cast_order ON show_cast (show_id, cast_order);
 CREATE TABLE IF NOT EXISTS show_crew (
  show_id INTEGER NOT NULL REFERENCES shows(id) ON DELETE CASCADE,
@@ -1583,3 +1582,15 @@ CREATE TABLE IF NOT EXISTS show_episode_guest_cast (
  episode_count INTEGER NOT NULL,
  PRIMARY KEY (episode_id, artist_id, character, credit_id)
 );
+
+-- Reverse person credits, including appearances below the aggregate show level.
+CREATE INDEX IF NOT EXISTS idx_cast_artist ON cast (artist_id, movie_id);
+CREATE INDEX IF NOT EXISTS idx_crew_artist ON crew (artist_id, movie_id);
+CREATE INDEX IF NOT EXISTS idx_show_cast_artist ON show_cast (artist_id, show_id);
+CREATE INDEX IF NOT EXISTS idx_show_crew_artist ON show_crew (artist_id, show_id);
+CREATE INDEX IF NOT EXISTS idx_show_creators_artist ON show_creators (artist_id, show_id);
+CREATE INDEX IF NOT EXISTS idx_show_season_cast_artist ON show_season_cast (artist_id, season_id);
+CREATE INDEX IF NOT EXISTS idx_show_season_crew_artist ON show_season_crew (artist_id, season_id);
+CREATE INDEX IF NOT EXISTS idx_show_episode_crew_artist ON show_episode_crew (artist_id, episode_id);
+CREATE INDEX IF NOT EXISTS idx_show_episode_guest_cast_artist ON show_episode_guest_cast (artist_id, episode_id);
+CREATE INDEX IF NOT EXISTS idx_shows_tmdb_id ON shows (tmdb_id);

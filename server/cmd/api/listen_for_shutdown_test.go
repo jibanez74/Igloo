@@ -472,3 +472,7 @@ func (*shutdownTestTmdb) GetShowDetails(context.Context, int) (*tmdbapi.TVShow, 
 func (*shutdownTestTmdb) GetSeasonDetails(context.Context, int, int) (*tmdbapi.TVSeason, error) {
 	return nil, tmdbapi.ErrNoShowsFound
 }
+
+func (*shutdownTestTmdb) GetPersonDetails(_ context.Context, _ int) (*tmdbapi.Person, error) {
+	return nil, nil
+}

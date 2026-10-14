@@ -304,6 +304,7 @@ SELECT
   c.id,
   c.character,
   c.cast_order,
+  a.tmdb_id,
   a.name AS artist_name,
   a.profile AS artist_profile
 FROM cast AS c
@@ -318,6 +319,7 @@ SELECT
   c.id,
   c.job,
   c.department,
+  a.tmdb_id,
   a.name AS artist_name
 FROM crew AS c
 INNER JOIN artist AS a

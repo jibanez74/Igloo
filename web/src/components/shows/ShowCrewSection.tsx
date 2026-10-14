@@ -1,3 +1,4 @@
+import PersonLink from "@/components/shared/PersonLink";
 import CrewDisclosure from "@/components/shared/CrewDisclosure";
 import { DETAIL_SECTION_HEADING_CLASS } from "@/lib/constants";
 import type { ShowCrewCreditType, ShowPersonType } from "@/types";
@@ -32,9 +33,9 @@ export default function ShowCrewSection({
               <span className="block text-sm text-muted-foreground">
                 Creator
               </span>
-              <span className="block font-semibold text-foreground">
+              <PersonLink personId={creator.tmdb_id} className="block font-semibold text-foreground">
                 {creator.name}
-              </span>
+              </PersonLink>
             </p>
           ))}
         </div>
@@ -43,6 +44,7 @@ export default function ShowCrewSection({
       <CrewDisclosure
         credits={crew.map(c => ({
           key: c.credit_id,
+          personId: c.tmdb_id,
           job: c.job,
           department: c.department,
           name: c.artist_name,

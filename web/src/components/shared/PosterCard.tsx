@@ -1,7 +1,8 @@
 import { Link, type LinkProps } from "@tanstack/react-router";
-import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { Play } from "lucide-react";
+import type { ReactNode } from "react";
+
 import WatchProgressBar from "@/components/shared/WatchProgressBar";
 import { usePosterFallback } from "@/hooks/usePosterFallback";
 import {
@@ -14,7 +15,6 @@ import {
   MOTION_LOADING_STATE_CLASS,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-
 
 // Shared by the card and its skeleton so the two never drift apart.
 const POSTER_SCRIM_CLASS =
@@ -42,7 +42,7 @@ type PosterCardPlayProps =
 
 type PosterCardProps = {
   /** Where the poster itself navigates - the media's details page. */
-  detailsLink: LinkProps;
+  detailsLink: LinkProps | { href: string };
   /** TMDB poster URL, or "" to show the fallback icon. */
   posterUrl: string;
   fallbackIcon: LucideIcon;
@@ -94,83 +94,108 @@ export default function PosterCard({
   const hasProgress =
     watchProgress !== undefined && watchProgress.durationSec > 0;
 
+  const posterContent = (
+    <>
+      {/* Poster with 2:3 aspect ratio (standard poster) */}
+      <div className="relative aspect-2/3 bg-muted">
+        {showPoster ? (
+          <img
+            src={posterUrl}
+            alt=""
+            width={500}
+            height={750}
+            loading="lazy"
+            decoding="async"
+            fetchPriority="low"
+            className={cn("size-full object-cover", CARD_MEDIA_HOVER_CLASS)}
+            onError={onError}
+          />
+        ) : (
+          <div className="flex size-full items-center justify-center">
+            <FallbackIcon
+              className="size-10 text-muted-foreground"
+              aria-hidden="true"
+            />
+          </div>
+        )}
+        {/* Overlay - appears on hover/focus behind the play action. A
+                card with nothing to play omits it rather than washing out on
+                hover for no reason. */}
+        {playLink && (
+          <div
+            className={cn(
+              CARD_OVERLAY_REVEAL_CLASS,
+              "absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100",
+            )}
+            aria-hidden="true"
+          />
+        )}
+        {badge}
+        {/* Scrim for the title block: starts near the middle of the card
+                and is near-opaque behind the text, so a two-line title never
+                lands on the poster's own lettering (design-system §3.2). */}
+        <div className={POSTER_SCRIM_CLASS} />
+        {/* Watch progress bar - percent is announced via the link label */}
+        {hasProgress && (
+          <WatchProgressBar
+            progressSec={watchProgress.progressSec}
+            durationSec={watchProgress.durationSec}
+            trackClassName="bg-white/25"
+            className="absolute inset-x-0 bottom-0 rounded-none"
+            fillClassName=""
+          />
+        )}
+      </div>
+      {/* Title block */}
+      <div className="absolute inset-x-0 bottom-0 p-3">
+        <h3 className="line-clamp-2 text-sm/tight font-semibold text-white drop-shadow-lg">
+          {title}
+        </h3>
+        {subtitle && (
+          <p className="mt-0.5 text-xs text-white/80 drop-shadow-lg">
+            {subtitle}
+          </p>
+        )}
+      </div>
+    </>
+  );
+
   return (
     <article
-      className={cn(CARD_SURFACE_CLASS, "min-w-0", CARD_FOCUS_WITHIN_RING_CLASS)}
+      className={cn(
+        CARD_SURFACE_CLASS,
+        "min-w-0",
+        CARD_FOCUS_WITHIN_RING_CLASS,
+      )}
       onMouseEnter={onPrefetch}
       onFocus={onPrefetch}
     >
       <div className="relative">
-        <Link
-          {...detailsLink}
-          className={cn(
-            "block rounded-xl outline-hidden",
-            FOCUS_VISIBLE_RING_CLASS,
-          )}
-          aria-label={detailsLabel}
-        >
-          {/* Poster with 2:3 aspect ratio (standard poster) */}
-          <div className="relative aspect-2/3 bg-muted">
-            {showPoster ? (
-              <img
-                src={posterUrl}
-                alt=""
-                width={500}
-                height={750}
-                loading="lazy"
-                decoding="async"
-                fetchPriority="low"
-                className={cn("size-full object-cover", CARD_MEDIA_HOVER_CLASS)}
-                onError={onError}
-              />
-            ) : (
-              <div className="flex size-full items-center justify-center">
-                <FallbackIcon
-                  className="size-10 text-muted-foreground"
-                  aria-hidden="true"
-                />
-              </div>
+        {"href" in detailsLink ? (
+          <a
+            href={detailsLink.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={cn(
+              "block rounded-xl outline-hidden",
+              FOCUS_VISIBLE_RING_CLASS,
             )}
-            {/* Overlay - appears on hover/focus behind the play action. A
-                card with nothing to play omits it rather than washing out on
-                hover for no reason. */}
-            {playLink && (
-              <div
-                className={cn(
-                  CARD_OVERLAY_REVEAL_CLASS,
-                  "absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100",
-                )}
-                aria-hidden="true"
-              />
+            aria-label={detailsLabel}
+          >
+            {posterContent}
+          </a>
+        ) : (
+          <Link
+            {...detailsLink}
+            className={cn(
+              "block rounded-xl outline-hidden",
+              FOCUS_VISIBLE_RING_CLASS,
             )}
-            {badge}
-            {/* Scrim for the title block: starts near the middle of the card
-                and is near-opaque behind the text, so a two-line title never
-                lands on the poster's own lettering (design-system §3.2). */}
-            <div className={POSTER_SCRIM_CLASS} />
-            {/* Watch progress bar - percent is announced via the link label */}
-            {hasProgress && (
-              <WatchProgressBar
-                progressSec={watchProgress.progressSec}
-                durationSec={watchProgress.durationSec}
-                trackClassName="bg-white/25"
-                className="absolute inset-x-0 bottom-0 rounded-none"
-                fillClassName=""
-              />
-            )}
-          </div>
-          {/* Title block */}
-          <div className="absolute inset-x-0 bottom-0 p-3">
-            <h3 className="line-clamp-2 text-sm/tight font-semibold text-white drop-shadow-lg">
-              {title}
-            </h3>
-            {subtitle && (
-              <p className="mt-0.5 text-xs text-white/80 drop-shadow-lg">
-                {subtitle}
-              </p>
-            )}
-          </div>
-        </Link>
+            aria-label={detailsLabel}
+          >
+            {posterContent}
+          </Link>
+        )}
       </div>
 
       {/* Play button - goes to the play page without opening details */}

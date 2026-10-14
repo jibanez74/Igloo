@@ -99,6 +99,10 @@
     {
       "name": "User Stats",
       "description": "Per-user listening statistics"
+    },
+    {
+      "name": "People",
+      "description": "Cast and crew profiles."
     }
   ],
   "paths": {
@@ -6161,6 +6165,41 @@
         },
         "description": "Ends every cached session the caller has for this media and playback_session, across profiles, audio selections, and start windows; a session still being created when the stop arrives is cached afterwards and ends on the idle timeout. Always returns 200, including when no session exists or the id is unknown; a malformed id or playback_session returns 400. Every response, errors included, carries Cache-Control: no-store, except a 401 from authentication."
       }
+    },
+    "/api/people/{id}": {
+      "get": {
+        "tags": [
+          "People"
+        ],
+        "summary": "Get a person profile by TMDB person ID",
+        "operationId": "getPerson",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          }
+        ],
+        "description": "Fetches English TMDB person details, combined credits, external IDs and images on demand. Successful provider metadata is cached for 15 minutes. Credits are grouped by media type and TMDB title ID, with distinct acting and crew roles retained. Stored season/episode credits collapse to their show. Library matching selects the lowest local ID. Stored names, portraits and library credits yield a partial 200 response when enrichment is unconfigured, unavailable or not_found. Unavailable is recoverable by retry. Without a stored person, a provider 404 returns 404; missing configuration or other provider failures return 503. Database failures return 500.",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/PersonResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -8635,6 +8674,16 @@
             }
           }
         }
+      },
+      "PersonResponse": {
+        "description": "Person profile, with grouped movie and TV credits. Arrays are always present; missing text is empty.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/PersonEnvelope"
+            }
+          }
+        }
       }
     },
     "schemas": {
@@ -10376,7 +10425,8 @@
           "cast_order",
           "episode_count",
           "artist_name",
-          "artist_profile"
+          "artist_profile",
+          "tmdb_id"
         ],
         "properties": {
           "credit_id": {
@@ -10402,6 +10452,12 @@
           },
           "artist_profile": {
             "$ref": "#/components/schemas/SqlNullString"
+          },
+          "tmdb_id": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "description": "TMDB person identity; distinct from local row and credit IDs."
           }
         },
         "additionalProperties": false
@@ -10415,7 +10471,8 @@
           "job",
           "episode_count",
           "artist_name",
-          "artist_profile"
+          "artist_profile",
+          "tmdb_id"
         ],
         "properties": {
           "credit_id": {
@@ -10440,6 +10497,12 @@
           },
           "artist_profile": {
             "$ref": "#/components/schemas/SqlNullString"
+          },
+          "tmdb_id": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "description": "TMDB person identity; distinct from local row and credit IDs."
           }
         },
         "additionalProperties": false
@@ -10449,7 +10512,8 @@
         "required": [
           "id",
           "name",
-          "profile"
+          "profile",
+          "tmdb_id"
         ],
         "properties": {
           "id": {
@@ -10461,6 +10525,12 @@
           },
           "profile": {
             "$ref": "#/components/schemas/SqlNullString"
+          },
+          "tmdb_id": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "description": "TMDB person identity; distinct from local row and credit IDs."
           }
         },
         "additionalProperties": false
@@ -10957,7 +11027,8 @@
           "character",
           "cast_order",
           "artist_name",
-          "artist_profile"
+          "artist_profile",
+          "tmdb_id"
         ],
         "properties": {
           "id": {
@@ -10976,6 +11047,12 @@
           },
           "artist_profile": {
             "$ref": "#/components/schemas/SqlNullString"
+          },
+          "tmdb_id": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "description": "TMDB person identity; distinct from local row and credit IDs."
           }
         },
         "additionalProperties": false
@@ -10986,7 +11063,8 @@
           "id",
           "job",
           "department",
-          "artist_name"
+          "artist_name",
+          "tmdb_id"
         ],
         "properties": {
           "id": {
@@ -11001,6 +11079,12 @@
           },
           "artist_name": {
             "type": "string"
+          },
+          "tmdb_id": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "description": "TMDB person identity; distinct from local row and credit IDs."
           }
         },
         "additionalProperties": false
@@ -17566,6 +17650,236 @@
             "properties": {
               "data": {
                 "$ref": "#/components/schemas/EpisodeWatchedData"
+              }
+            }
+          }
+        ]
+      },
+      "PersonExternalIDs": {
+        "type": "object",
+        "required": [
+          "imdb_id",
+          "facebook_id",
+          "instagram_id",
+          "twitter_id",
+          "tiktok_id",
+          "youtube_id",
+          "wikidata_id"
+        ],
+        "properties": {
+          "imdb_id": {
+            "type": "string"
+          },
+          "facebook_id": {
+            "type": "string"
+          },
+          "instagram_id": {
+            "type": "string"
+          },
+          "twitter_id": {
+            "type": "string"
+          },
+          "tiktok_id": {
+            "type": "string"
+          },
+          "youtube_id": {
+            "type": "string"
+          },
+          "wikidata_id": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Person": {
+        "type": "object",
+        "required": [
+          "tmdb_id",
+          "name",
+          "biography",
+          "known_for_department",
+          "birthday",
+          "deathday",
+          "place_of_birth",
+          "profile_path",
+          "homepage",
+          "gender",
+          "also_known_as",
+          "external_ids"
+        ],
+        "properties": {
+          "tmdb_id": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "name": {
+            "type": "string"
+          },
+          "biography": {
+            "type": "string"
+          },
+          "known_for_department": {
+            "type": "string"
+          },
+          "birthday": {
+            "type": "string"
+          },
+          "deathday": {
+            "type": "string"
+          },
+          "place_of_birth": {
+            "type": "string"
+          },
+          "profile_path": {
+            "type": "string"
+          },
+          "homepage": {
+            "type": "string"
+          },
+          "gender": {
+            "type": "integer"
+          },
+          "also_known_as": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "external_ids": {
+            "$ref": "#/components/schemas/PersonExternalIDs"
+          }
+        },
+        "additionalProperties": false
+      },
+      "PersonRole": {
+        "type": "object",
+        "required": [
+          "kind",
+          "role",
+          "department"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "acting",
+              "crew"
+            ]
+          },
+          "role": {
+            "type": "string"
+          },
+          "department": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "PersonTitle": {
+        "type": "object",
+        "required": [
+          "tmdb_id",
+          "media_type",
+          "title",
+          "date",
+          "poster_path",
+          "popularity",
+          "library_id",
+          "roles"
+        ],
+        "properties": {
+          "tmdb_id": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Zero only for a stored library title without a TMDB identity."
+          },
+          "media_type": {
+            "type": "string",
+            "enum": [
+              "movie",
+              "tv"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "description": "Release/first-air date or stored year; empty when undated."
+          },
+          "poster_path": {
+            "type": "string"
+          },
+          "popularity": {
+            "type": "number"
+          },
+          "library_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PersonRole"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "PersonData": {
+        "type": "object",
+        "required": [
+          "person",
+          "filmography",
+          "photos",
+          "enrichment_status"
+        ],
+        "properties": {
+          "person": {
+            "$ref": "#/components/schemas/Person"
+          },
+          "filmography": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PersonTitle"
+            }
+          },
+          "photos": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "enrichment_status": {
+            "type": "string",
+            "enum": [
+              "available",
+              "unconfigured",
+              "unavailable",
+              "not_found"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "PersonEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/JsonSuccess"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/PersonData"
               }
             }
           }

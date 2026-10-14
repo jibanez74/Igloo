@@ -1,3 +1,4 @@
+import PersonLink from "@/components/shared/PersonLink";
 import CrewDisclosure from "@/components/shared/CrewDisclosure";
 import { DETAIL_SECTION_HEADING_CLASS } from "@/lib/constants";
 import { sortLibraryCrewForDisplay } from "@/lib/format";
@@ -41,17 +42,17 @@ export default function MovieKeyCrewSection({ crew }: MovieKeyCrewSectionProps) 
           {director && (
             <p key={director.id} className="rounded-lg">
               <span className="block text-sm text-muted-foreground">Director</span>
-              <span className="block font-semibold text-foreground">
+              <PersonLink personId={director.tmdb_id} className="block font-semibold text-foreground">
                 {director.artist_name}
-              </span>
+              </PersonLink>
             </p>
           )}
           {writers.map(writer => (
             <p key={writer.id} className="rounded-lg">
               <span className="block text-sm text-muted-foreground">{writer.job}</span>
-              <span className="block font-semibold text-foreground">
+              <PersonLink personId={writer.tmdb_id} className="block font-semibold text-foreground">
                 {writer.artist_name}
-              </span>
+              </PersonLink>
             </p>
           ))}
         </div>
@@ -59,6 +60,7 @@ export default function MovieKeyCrewSection({ crew }: MovieKeyCrewSectionProps) 
       <CrewDisclosure
         credits={remainingCrew.map(c => ({
           key: String(c.id),
+          personId: c.tmdb_id,
           job: c.job,
           department: c.department,
           name: c.artist_name,

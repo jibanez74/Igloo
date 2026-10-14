@@ -22,6 +22,7 @@ import type { PlaylistKind, PlaylistPickerRow } from "@/lib/playlist-kinds";
 import {
   adminGetUsers,
   getAlbumDetails,
+  getPerson,
   getAlbumsPaginated,
   getAuthUser,
   getContinueWatching,
@@ -974,3 +975,12 @@ export const musicScanStatusQueryOpts = () =>
 
 export const showScanStatusQueryOpts = () =>
   scanStatusQueryOpts(SHOW_SCAN_STATUS_KEY, getShowScanStatus, "TV shows scan status is unavailable.");
+
+export function personQueryOpts(id: number) {
+  return queryOptions({
+    queryKey: ["person", id],
+    queryFn: ({ signal }) => getPerson(id, signal),
+    enabled: id > 0,
+    staleTime: freshFor(STALE_CATALOG),
+  });
+}

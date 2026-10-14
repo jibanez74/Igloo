@@ -67,8 +67,9 @@ export const Route = createFileRoute("/_auth/movies/in-theaters/$id")({
 function tmdbCrewToLibraryCrew(
   crew: CrewMemberType[],
 ): LibraryMovieCrewType[] {
-  return crew.map(c => ({
-    id: c.id,
+  return crew.map((c, index) => ({
+    id: index,
+    tmdb_id: c.id,
     job: c.job,
     department: c.department,
     artist_name: c.name,
@@ -159,8 +160,9 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
   const crewForSection = tmdbCrewToLibraryCrew(
     movie.credits?.crew ?? [],
   );
-  const castList = (movie.credits?.cast ?? []).map(c => ({
-    key: String(c.id),
+  const castList = (movie.credits?.cast ?? []).map((c, index) => ({
+    key: String(index),
+    personId: c.id,
     name: c.name,
     character: c.character,
     profilePath: c.profile_path ?? null,

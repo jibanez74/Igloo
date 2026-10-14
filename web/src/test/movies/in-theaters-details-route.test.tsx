@@ -85,3 +85,17 @@ describe("in-theaters details guards", () => {
     ).toBe(false);
   });
 });
+
+describe("in-theaters person links", () => {
+  it("links cast and every crew role by person identity while keeping role keys distinct", async () => {
+    mockInTheatersFetch({ id: 550, title: "Movie", credits: {
+      cast: [{ id: 7, name: "Actor", character: "Hero", profile_path: "", order: 0 }],
+      crew: [{ id: 8, name: "Filmmaker", job: "Director", department: "Directing" }, { id: 8, name: "Filmmaker", job: "Producer", department: "Production" }],
+    } });
+    await renderRoute("/movies/in-theaters/550");
+    expect(await screen.findByRole("link", { name: "Actor as Hero" })).toHaveAttribute("href", expect.stringContaining("/people/7?returnTo="));
+    expect(screen.getByRole("link", { name: "Filmmaker" })).toHaveAttribute("href", expect.stringContaining("/people/8?returnTo="));
+    await (await import("@testing-library/user-event")).default.click(screen.getByRole("button", { name: "Show all crew" }));
+    expect(screen.getAllByRole("link", { name: "Filmmaker" })).toHaveLength(2);
+  });
+});

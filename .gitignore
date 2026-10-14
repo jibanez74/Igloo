@@ -44,6 +44,7 @@
 /web/*.tsbuildinfo
 
 # Local Playwright/debug screenshots
+/output/playwright/
 /movies-*.png
 /settings-*.png
 

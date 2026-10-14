@@ -23,6 +23,18 @@ func TestInitTables_Indexes(t *testing.T) {
 		"idx_movie_watch_progress_user_updated_at",
 		"idx_settings_singleton",
 		"idx_devices_last_used_at",
+		// Reverse person credits and batched title matching.
+		"idx_cast_artist",
+		"idx_crew_artist",
+		"idx_show_cast_artist",
+		"idx_show_crew_artist",
+		"idx_show_creators_artist",
+		"idx_show_season_cast_artist",
+		"idx_show_season_crew_artist",
+		"idx_show_episode_crew_artist",
+		"idx_show_episode_guest_cast_artist",
+		"idx_shows_tmdb_id",
+
 		// Ordering indexes for the paginated library listings.
 		"idx_movies_title",
 		"idx_movies_created_at",
@@ -70,8 +82,6 @@ func TestInitTables_Indexes(t *testing.T) {
 		"idx_crew_department",
 		"idx_playlist_user",
 		"idx_playlist_content_type",
-		"idx_cast_artist",
-		"idx_crew_artist",
 		"idx_movie_production_companies_company",
 		"idx_movie_extra_videos_extra",
 		"idx_track_genres_genre",

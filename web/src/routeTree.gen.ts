@@ -26,6 +26,7 @@ import { Route as AuthSettingsUsersRouteImport } from './routes/_auth/settings/u
 import { Route as AuthSettingsPlaybackRouteImport } from './routes/_auth/settings/playback'
 import { Route as AuthSettingsLibrariesRouteImport } from './routes/_auth/settings/libraries'
 import { Route as AuthSettingsAccountRouteImport } from './routes/_auth/settings/account'
+import { Route as AuthPeopleIdRouteImport } from './routes/_auth/people/$id'
 import { Route as AuthTvShowsIdIndexRouteImport } from './routes/_auth/tv-shows/$id/index'
 import { Route as AuthMoviesIdIndexRouteImport } from './routes/_auth/movies/$id/index'
 import { Route as AuthMusicPlaylistIdRouteImport } from './routes/_auth/music/playlist.$id'
@@ -120,6 +121,11 @@ const AuthSettingsAccountRoute = AuthSettingsAccountRouteImport.update({
   path: '/account',
   getParentRoute: () => AuthSettingsRouteRoute,
 } as any)
+const AuthPeopleIdRoute = AuthPeopleIdRouteImport.update({
+  id: '/people/$id',
+  path: '/people/$id',
+  getParentRoute: () => AuthRouteRoute,
+} as any)
 const AuthTvShowsIdIndexRoute = AuthTvShowsIdIndexRouteImport.update({
   id: '/tv-shows/$id/',
   path: '/tv-shows/$id/',
@@ -173,6 +179,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthSettingsRouteRouteWithChildren
   '/$': typeof AuthSplatRoute
   '/trailer': typeof AuthTrailerRoute
+  '/people/$id': typeof AuthPeopleIdRoute
   '/settings/account': typeof AuthSettingsAccountRoute
   '/settings/libraries': typeof AuthSettingsLibrariesRoute
   '/settings/playback': typeof AuthSettingsPlaybackRoute
@@ -199,6 +206,7 @@ export interface FileRoutesByTo {
   '/$': typeof AuthSplatRoute
   '/trailer': typeof AuthTrailerRoute
   '/': typeof AuthIndexRoute
+  '/people/$id': typeof AuthPeopleIdRoute
   '/settings/account': typeof AuthSettingsAccountRoute
   '/settings/libraries': typeof AuthSettingsLibrariesRoute
   '/settings/playback': typeof AuthSettingsPlaybackRoute
@@ -228,6 +236,7 @@ export interface FileRoutesById {
   '/_auth/$': typeof AuthSplatRoute
   '/_auth/trailer': typeof AuthTrailerRoute
   '/_auth/': typeof AuthIndexRoute
+  '/_auth/people/$id': typeof AuthPeopleIdRoute
   '/_auth/settings/account': typeof AuthSettingsAccountRoute
   '/_auth/settings/libraries': typeof AuthSettingsLibrariesRoute
   '/_auth/settings/playback': typeof AuthSettingsPlaybackRoute
@@ -257,6 +266,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/$'
     | '/trailer'
+    | '/people/$id'
     | '/settings/account'
     | '/settings/libraries'
     | '/settings/playback'
@@ -283,6 +293,7 @@ export interface FileRouteTypes {
     | '/$'
     | '/trailer'
     | '/'
+    | '/people/$id'
     | '/settings/account'
     | '/settings/libraries'
     | '/settings/playback'
@@ -311,6 +322,7 @@ export interface FileRouteTypes {
     | '/_auth/$'
     | '/_auth/trailer'
     | '/_auth/'
+    | '/_auth/people/$id'
     | '/_auth/settings/account'
     | '/_auth/settings/libraries'
     | '/_auth/settings/playback'
@@ -459,6 +471,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthSettingsAccountRouteImport
       parentRoute: typeof AuthSettingsRouteRoute
     }
+    '/_auth/people/$id': {
+      id: '/_auth/people/$id'
+      path: '/people/$id'
+      fullPath: '/people/$id'
+      preLoaderRoute: typeof AuthPeopleIdRouteImport
+      parentRoute: typeof AuthRouteRoute
+    }
     '/_auth/tv-shows/$id/': {
       id: '/_auth/tv-shows/$id/'
       path: '/tv-shows/$id'
@@ -549,6 +568,7 @@ interface AuthRouteRouteChildren {
   AuthSplatRoute: typeof AuthSplatRoute
   AuthTrailerRoute: typeof AuthTrailerRoute
   AuthIndexRoute: typeof AuthIndexRoute
+  AuthPeopleIdRoute: typeof AuthPeopleIdRoute
   AuthWatchRoomsIdRoute: typeof AuthWatchRoomsIdRoute
   AuthMoviesIndexRoute: typeof AuthMoviesIndexRoute
   AuthMusicIndexRoute: typeof AuthMusicIndexRoute
@@ -571,6 +591,7 @@ const AuthRouteRouteChildren: AuthRouteRouteChildren = {
   AuthSplatRoute: AuthSplatRoute,
   AuthTrailerRoute: AuthTrailerRoute,
   AuthIndexRoute: AuthIndexRoute,
+  AuthPeopleIdRoute: AuthPeopleIdRoute,
   AuthWatchRoomsIdRoute: AuthWatchRoomsIdRoute,
   AuthMoviesIndexRoute: AuthMoviesIndexRoute,
   AuthMusicIndexRoute: AuthMusicIndexRoute,

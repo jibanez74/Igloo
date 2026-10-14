@@ -1,3 +1,4 @@
+import type { PersonData } from "@/types/people";
 import type { MovieScanStatus, MusicScanStatus, ShowScanStatus } from "@/types/settings";
 import { mediaApiBasePath, movieMediaRef } from "@/lib/media-ref";
 import type {
@@ -1094,3 +1095,6 @@ export const getWatchRooms = (signal?: AbortSignal) =>
 
 export const deleteWatchRoom = (id: number) =>
   apiRequest(`/api/watch-rooms/${id}`, { method: "DELETE" });
+
+export const getPerson = (id: number, signal?: AbortSignal) =>
+  apiRequest<PersonData>(`/api/people/${id}`, { signal });

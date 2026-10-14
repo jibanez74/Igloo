@@ -374,10 +374,10 @@ describe("show details route", () => {
     // Both roles of the same artist render, and React logs no duplicate-key
     // warning, because the rows are keyed on credit_id.
     expect(
-      screen.getByRole("article", { name: /Ada Contract as Captain, 10 episodes/ }),
+      screen.getByRole("link", { name: /Ada Contract as Captain, 10 episodes/ }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("article", {
+      screen.getByRole("link", {
         name: /Ada Contract as Captain's Double, 2 episodes/,
       }),
     ).toBeInTheDocument();
@@ -388,5 +388,18 @@ describe("show details route", () => {
     expect(duplicateKeyWarnings).toEqual([]);
 
     errorSpy.mockRestore();
+  });
+});
+
+describe("show person links", () => {
+  it("links cast, creators and expanded crew with season return state", async () => {
+    mockShowDetailsFetch();
+    await renderRoute(`/tv-shows/${SHOW_ID}?season=2`);
+    const actor = await screen.findByRole("link", { name: /Ada Contract as Captain, 10 episodes/ });
+    const expected = `/people/9001?returnTo=${encodeURIComponent(`/tv-shows/${SHOW_ID}?season=2`)}`;
+    expect(actor).toHaveAttribute("href", expected);
+    expect(screen.getByRole("link", { name: "Ada Contract" })).toHaveAttribute("href", expected);
+    await userEvent.click(screen.getByRole("button", { name: "Show all crew" }));
+    expect(screen.getByRole("link", { name: "Bo Contract" })).toHaveAttribute("href", expected);
   });
 });
