@@ -2,7 +2,9 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { DETAIL_PAGE_CONTENT_ENTER_CLASS } from "@/lib/constants";
-import { jsonResponse, requestURL } from "../helpers/api";
+import { showDetailsQueryOpts } from "@/lib/query-opts";
+import { countFetchRequests, jsonResponse, requestURL } from "../helpers/api";
+import { createTestQueryClient } from "../helpers/render";
 import { readDocumentHead, renderRoute } from "../helpers/render-route";
 import {
   getDetailMotionWrappers,
@@ -74,6 +76,30 @@ function mockShowDetailsFetch({ detailsStatus, detailsBody }: MockOptions = {}) 
 }
 
 describe("show details route", () => {
+  it("renders fresh prefetched details without requesting them again", async () => {
+    const fetchMock = mockShowDetailsFetch();
+    const queryClient = createTestQueryClient();
+    const detailsUrl = `/api/shows/details/${SHOW_ID}`;
+    const episodesUrl = `/api/shows/${SHOW_ID}/seasons/1/episodes`;
+
+    await queryClient.prefetchQuery(showDetailsQueryOpts(SHOW_ID));
+    expect(countFetchRequests(fetchMock, detailsUrl)).toBe(1);
+    expect(countFetchRequests(fetchMock, episodesUrl)).toBe(0);
+
+    await renderRoute(`/tv-shows/${SHOW_ID}`, { queryClient });
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: /Frost Harbor/ }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole("list", {
+        name: /Season 1 episodes, 2 in this library/,
+      }),
+    ).toBeInTheDocument();
+    expect(countFetchRequests(fetchMock, detailsUrl)).toBe(1);
+    expect(countFetchRequests(fetchMock, episodesUrl)).toBe(1);
+  });
+
   it("titles the page with the show's name, premiere year and overview", async () => {
     mockShowDetailsFetch();
 

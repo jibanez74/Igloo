@@ -2,9 +2,11 @@ import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DETAIL_PAGE_CONTENT_ENTER_CLASS } from "@/lib/constants";
+import { musicianDetailsQueryOpts } from "@/lib/query-opts";
 import type { MusicianDetailsResponseType, MusicianTrackType } from "@/types";
-import { jsonResponse, requestURL } from "../helpers/api";
+import { countFetchRequests, jsonResponse, requestURL } from "../helpers/api";
 import { nullableFloat64, nullableInt64, nullableString } from "../helpers/fixtures";
+import { createTestQueryClient } from "../helpers/render";
 import { readDocumentHead, renderRoute } from "../helpers/render-route";
 import {
   getDetailMotionWrappers,
@@ -199,6 +201,7 @@ function mockMusicianDetailsFetch() {
   });
 
   vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
 }
 
 async function renderMusicianDetailsRoute(initialEntry = "/music/musician/20") {
@@ -209,6 +212,32 @@ async function renderMusicianDetailsRoute(initialEntry = "/music/musician/20") {
 
 afterEach(() => {
   resetNowPlayingMock();
+});
+
+describe("musician details route prefetch", () => {
+  it("renders fresh prefetched details without requesting them again", async () => {
+    const fetchMock = mockMusicianDetailsFetch();
+    const queryClient = createTestQueryClient();
+    const detailsUrl = "/api/music/musicians/20";
+    const likedIdsUrl = "/api/music/tracks/liked-ids";
+
+    await queryClient.prefetchQuery(musicianDetailsQueryOpts(20));
+    expect(countFetchRequests(fetchMock, detailsUrl)).toBe(1);
+    expect(countFetchRequests(fetchMock, likedIdsUrl)).toBe(0);
+
+    await renderRoute("/music/musician/20", { queryClient });
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "The Band" }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", {
+        name: "Remove Borrowed Light from liked",
+      }),
+    ).toBeInTheDocument();
+    expect(countFetchRequests(fetchMock, detailsUrl)).toBe(1);
+    expect(countFetchRequests(fetchMock, likedIdsUrl)).toBe(1);
+  });
 });
 
 describe("musician details guards", () => {

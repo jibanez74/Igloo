@@ -4,8 +4,9 @@ import { describe, expect, it, vi } from "vitest";
 import { DETAIL_PAGE_CONTENT_ENTER_CLASS } from "@/lib/constants";
 import { albumDetailsQueryOpts } from "@/lib/query-opts";
 import type { AlbumDetailsResponseType, TrackType } from "@/types";
-import { jsonResponse, requestURL } from "../helpers/api";
+import { countFetchRequests, jsonResponse, requestURL } from "../helpers/api";
 import { nullableFloat64, nullableInt64, nullableString } from "../helpers/fixtures";
+import { createTestQueryClient } from "../helpers/render";
 import { readDocumentHead, renderRoute } from "../helpers/render-route";
 import {
   getDetailMotionWrappers,
@@ -179,6 +180,30 @@ async function renderAlbumDetailsRoute(
 
   return renderRoute(initialEntry);
 }
+
+describe("album details route prefetch", () => {
+  it("renders fresh prefetched details without requesting them again", async () => {
+    const fetchMock = mockAlbumDetailsFetch();
+    const queryClient = createTestQueryClient();
+    const detailsUrl = "/api/music/albums/details/42";
+    const likedIdsUrl = "/api/music/tracks/liked-ids";
+
+    await queryClient.prefetchQuery(albumDetailsQueryOpts(42));
+    expect(countFetchRequests(fetchMock, detailsUrl)).toBe(1);
+    expect(countFetchRequests(fetchMock, likedIdsUrl)).toBe(0);
+
+    await renderRoute("/music/album/42", { queryClient });
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: /Blue Record/i }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "Remove Alabaster from liked" }),
+    ).toBeInTheDocument();
+    expect(countFetchRequests(fetchMock, detailsUrl)).toBe(1);
+    expect(countFetchRequests(fetchMock, likedIdsUrl)).toBe(1);
+  });
+});
 
 describe("album details route motion", () => {
   it("renders the album detail page with the three-stage stagger contract", async () => {
