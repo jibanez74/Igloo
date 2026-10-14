@@ -17,7 +17,8 @@ import {
   resetDevicePlaybackPreferencesCache,
   setDevicePlaybackPreferences,
 } from "@/lib/playback-preferences";
-import { jsonResponse, requestURL } from "../helpers/api";
+import { libraryMovieDetailsQueryOpts } from "@/lib/query-opts";
+import { countFetchRequests, jsonResponse, requestURL } from "../helpers/api";
 import {
   authUserData,
   nullableFloat64,
@@ -382,6 +383,33 @@ function getPlayLinkMode() {
 
   return new URL(href ?? "", "http://localhost").searchParams.get("mode");
 }
+
+describe("movie details route prefetch", () => {
+  it("renders fresh prefetched details without requesting them again", async () => {
+    const fetchMock = mockMovieDetailsFetch();
+    const queryClient = createTestQueryClient();
+    const detailsUrl = "/api/movies/details/57";
+
+    await queryClient.prefetchQuery(libraryMovieDetailsQueryOpts(57));
+    expect(countFetchRequests(fetchMock, detailsUrl)).toBe(1);
+    expect(
+      countFetchRequests(fetchMock, "/api/movies/57/technical-details"),
+    ).toBe(0);
+
+    await renderRoute("/movies/57/", { queryClient });
+
+    expect(
+      await screen.findByRole("heading", { name: /Arrival/i, level: 1 }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Arrival overview for motion verification."),
+    ).toBeInTheDocument();
+    expect(countFetchRequests(fetchMock, detailsUrl)).toBe(1);
+    expect(
+      countFetchRequests(fetchMock, "/api/movies/57/technical-details"),
+    ).toBe(1);
+  });
+});
 
 describe("movie details route motion", () => {
   it("renders the library movie detail page with the three-stage stagger contract", async () => {
