@@ -227,6 +227,23 @@ describe("home section summaries", () => {
   });
 });
 
+describe("home section lists", () => {
+  it("names each row's card list after its heading", async () => {
+    await renderHomeRoute();
+
+    for (const rowName of [
+      "Watch Rooms",
+      "Continue Watching",
+      "Recently Added Movies",
+      "Recently Added Shows",
+    ]) {
+      const region = await screen.findByRole("region", { name: rowName });
+      const list = within(region).getByRole("list", { name: rowName });
+      expect(within(list).getAllByRole("listitem").length).toBeGreaterThan(0);
+    }
+  });
+});
+
 describe("home section errors", () => {
   it("words a failed section itself and recovers through Try again", async () => {
     const user = userEvent.setup();

@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
@@ -105,13 +105,15 @@ export default function HomeMediaSection<T>({
       ) : errorMessage ? (
         <SectionErrorAlert message={errorMessage} onRetry={onRetry} />
       ) : items.length > 0 ? (
-        <div className={gridClassName}>
+        // A list named by the heading: Orca names the row when focus tabs
+        // into its first card, which it does not do for the region alone.
+        <ul role="list" aria-labelledby={headingId} className={gridClassName}>
           {items.map((item, index) => (
-            <Fragment key={getKey(item, index)}>
+            <li key={getKey(item, index)} className="min-w-0">
               {renderItem(item, index)}
-            </Fragment>
+            </li>
           ))}
-        </div>
+        </ul>
       ) : (
         <EmptyState
           icon={EmptyIcon}
