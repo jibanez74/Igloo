@@ -95,11 +95,17 @@ export default function WatchRooms() {
           onRetry={() => void refetch()}
         />
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <ul
+          role="list"
+          aria-labelledby="watch-rooms-heading"
+          className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+        >
           {rooms.map((room) => (
-            <WatchRoomCard key={room.id} room={room} />
+            <li key={room.id} className="min-w-0">
+              <WatchRoomCard room={room} />
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </section>
   );

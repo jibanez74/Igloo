@@ -617,7 +617,10 @@ six sections in order — `WatchRooms`, `ContinueWatching`, `LatestMovies`,
 through the shared `HomeMediaSection` (heading + count pill + `sr-only`
 described-by summary + pending/error/empty/grid states), and the route loader `ensureQueryData`s
 every one of their queries, so the page arrives complete rather than popping in
-section by section. A new home row is a `HomeMediaSection` with one of the
+section by section. Each row's cards sit in a `<ul role="list">` named by the
+row's heading (`aria-labelledby`), one `<li>` per card, so a screen reader names
+the row when focus tabs into its first card — Orca + Firefox does not announce
+the labelled region alone. A new home row is a `HomeMediaSection` with one of the
 `HOME_*_GRID_CLASS` grids (§3.2) and its query added to the loader.
 
 ### 3.2 Media cards and library pages
