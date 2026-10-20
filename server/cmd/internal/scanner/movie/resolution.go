@@ -251,7 +251,7 @@ func ambiguousFullTitle(path string, year int) string {
 	base := filepath.Base(path)
 	full := tmdbmatch.NormalizeTitleForSearch(strings.TrimSuffix(base, filepath.Ext(base)))
 	count := 0
-	for _, token := range strings.Fields(full) {
+	for token := range strings.FieldsSeq(full) {
 		number, err := strconv.Atoi(token)
 		if err == nil && len(token) == 4 && helpers.IsReasonableYear(number) {
 			count++

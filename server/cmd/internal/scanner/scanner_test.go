@@ -47,16 +47,14 @@ func TestLauncherAdmitsOneScanAtATime(t *testing.T) {
 	started := 0
 	var callers sync.WaitGroup
 	for i := 0; i < 50; i++ {
-		callers.Add(1)
-		go func() {
-			defer callers.Done()
+		callers.Go(func() {
 			result := launcher.Launch(directory, func() {}, func(string) { <-release })
 			if result.Status == StartStarted {
 				mu.Lock()
 				started++
 				mu.Unlock()
 			}
-		}()
+		})
 	}
 	callers.Wait()
 	close(release)

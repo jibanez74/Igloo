@@ -41,8 +41,8 @@ func parseCompoundArtistCredits(artistTag string) compoundArtistCredits {
 	seen := make(map[string]struct{}, len(commaParts))
 
 	for _, commaPart := range commaParts {
-		ampersandParts := strings.Split(commaPart, " & ")
-		for _, rawPart := range ampersandParts {
+		ampersandParts := strings.SplitSeq(commaPart, " & ")
+		for rawPart := range ampersandParts {
 			part := strings.TrimSpace(rawPart)
 			if part == "" {
 				continue
@@ -117,7 +117,7 @@ func parseArtistSortCredits(value string, count int) []string {
 	}
 
 	commaParts := []string{}
-	for _, raw := range strings.Split(value, ",") {
+	for raw := range strings.SplitSeq(value, ",") {
 		part := strings.TrimSpace(raw)
 		isSuffix := isArtistSuffix(part)
 		if isSuffix && len(commaParts) > 0 {
@@ -129,7 +129,7 @@ func parseArtistSortCredits(value string, count int) []string {
 	}
 	parts = nil
 	for _, part := range commaParts {
-		for _, credit := range strings.Split(" "+part+" ", " & ") {
+		for credit := range strings.SplitSeq(" "+part+" ", " & ") {
 			parts = append(parts, strings.TrimSpace(credit))
 		}
 	}

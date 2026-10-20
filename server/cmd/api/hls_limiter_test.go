@@ -164,8 +164,8 @@ func TestHLSTranscodeLimiter(t *testing.T) {
 		}
 
 		_, err = limiter.tryAcquire()
-		var capacityErr *hlsTranscodeCapacityError
-		if !errors.As(err, &capacityErr) {
+		_, atCapacity := errors.AsType[*hlsTranscodeCapacityError](err)
+		if !atCapacity {
 			t.Fatalf("second tryAcquire error = %v, want the pool to be full again", err)
 		}
 	})
@@ -233,11 +233,9 @@ func TestHLSTranscodeLimiterAcquire(t *testing.T) {
 			release func()
 			waitErr error
 		)
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			release, waitErr = limiter.acquire(context.Background(), 5*time.Second)
-		}()
+		})
 
 		held()
 		wg.Wait()
@@ -274,16 +272,14 @@ func TestHLSTranscodeLimiterAcquire(t *testing.T) {
 		var wg sync.WaitGroup
 
 		for range waiters {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				release, acquireErr := limiter.acquire(context.Background(), 10*time.Second)
 				if acquireErr != nil {
 					return
 				}
 				admitted <- struct{}{}
 				release()
-			}()
+			})
 		}
 
 		held()
@@ -307,11 +303,9 @@ func TestHLSTranscodeLimiterAcquire(t *testing.T) {
 			wg      sync.WaitGroup
 			waitErr error
 		)
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			_, waitErr = limiter.acquire(ctx, time.Minute)
-		}()
+		})
 
 		cancel()
 		wg.Wait()
@@ -367,8 +361,8 @@ func TestHLSTranscodeLimiterAcquire(t *testing.T) {
 
 		started := time.Now()
 		_, err = limiter.acquire(context.Background(), 0)
-		var capacityErr *hlsTranscodeCapacityError
-		if !errors.As(err, &capacityErr) {
+		_, atCapacity := errors.AsType[*hlsTranscodeCapacityError](err)
+		if !atCapacity {
 			t.Fatalf("acquire error = %v, want hlsTranscodeCapacityError", err)
 		}
 		if elapsed := time.Since(started); elapsed > time.Second {

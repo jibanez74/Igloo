@@ -285,7 +285,7 @@ func TestGenerateVODPlaylist(t *testing.T) {
 			}
 
 			var extinf []string
-			for _, line := range strings.Split(got, "\n") {
+			for line := range strings.SplitSeq(got, "\n") {
 				if strings.HasPrefix(line, "#EXTINF:") {
 					extinf = append(extinf, line)
 				}

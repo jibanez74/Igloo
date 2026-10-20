@@ -173,11 +173,9 @@ func runListenForShutdownHelper(t *testing.T) {
 	app := setupTestApp(t)
 	deviceExpiryCtx, cancelDeviceExpiry := context.WithCancel(context.Background())
 	app.DeviceExpiryCancel = cancelDeviceExpiry
-	app.Wait.Add(1)
-	go func() {
-		defer app.Wait.Done()
+	app.Wait.Go(func() {
 		app.runDeviceExpirySweeper(deviceExpiryCtx)
-	}()
+	})
 	app.SubtitleVTTCache.SetDefault("shutdown-test-subtitle", []byte("subtitle"))
 	app.RoomHLSTombstone.SetDefault("room:shutdown-test", struct{}{})
 
@@ -332,9 +330,7 @@ func attachShutdownTestWatchRoomClient(app *Application, socketMarker string) er
 	session.connectedIDs[client.user.ID] = true
 	app.WatchRoomHub.mu.Unlock()
 
-	app.Wait.Add(1)
-	go func() {
-		defer app.Wait.Done()
+	app.Wait.Go(func() {
 		defer server.Close()
 		defer clientConn.Close()
 
@@ -351,7 +347,7 @@ func attachShutdownTestWatchRoomClient(app *Application, socketMarker string) er
 		}
 
 		_ = os.WriteFile(socketMarker, []byte(err.Error()+"\n"), 0o644)
-	}()
+	})
 
 	return nil
 }
@@ -379,17 +375,14 @@ func attachShutdownTestHLSSession(t *testing.T, app *Application) (*HLSSession, 
 	}
 
 	app.HLSSessionCache.SetDefault("shutdown-test-hls", session)
-	app.Wait.Add(1)
-	go func() {
-		defer app.Wait.Done()
-
+	app.Wait.Go(func() {
 		waitErr := cmd.Wait()
 
 		session.ExitMu.Lock()
 		session.Exited = true
 		session.ExitErr = waitErr
 		session.ExitMu.Unlock()
-	}()
+	})
 
 	return session, nil
 }
@@ -452,8 +445,8 @@ func isExpectedShutdownProcessExit(err error) bool {
 		return true
 	}
 
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
+	exitErr, isExitError := errors.AsType[*exec.ExitError](err)
+	if isExitError {
 		waitStatus, ok := exitErr.Sys().(syscall.WaitStatus)
 		if ok && waitStatus.Signaled() {
 			return true

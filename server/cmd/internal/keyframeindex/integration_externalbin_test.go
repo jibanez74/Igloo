@@ -131,7 +131,7 @@ func ffprobeKeyframes(t *testing.T, ffprobePath, sourcePath string) []float64 {
 	}
 
 	keyframes := make([]float64, 0, 16)
-	for _, line := range strings.Split(string(out), "\n") {
+	for line := range strings.SplitSeq(string(out), "\n") {
 		fields := strings.Split(strings.TrimSpace(line), ",")
 		if len(fields) < 2 || !strings.Contains(fields[1], "K") {
 			continue

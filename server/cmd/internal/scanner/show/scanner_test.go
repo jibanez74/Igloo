@@ -283,14 +283,12 @@ func TestConcurrentScannerWrites(t *testing.T) {
 		s    *Scanner
 		root string
 	}{{s, root}, {second, other}} {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			err := work.s.scan(work.root)
 			if err != nil {
 				t.Error(err)
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	if scannertest.CountRows(t, s.DB, "SELECT count(*) FROM shows") != 2 {

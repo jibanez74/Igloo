@@ -122,12 +122,10 @@ func (l *Launcher) Launch(directory sql.NullString, begin func(), run func(direc
 		return result
 	}
 	begin()
-	l.Wait.Add(1)
-	go func() {
-		defer l.Wait.Done()
+	l.Wait.Go(func() {
 		defer l.running.Store(false)
 		run(directory.String)
-	}()
+	})
 	return result
 }
 

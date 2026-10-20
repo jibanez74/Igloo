@@ -420,18 +420,14 @@ func TestRotatingWriter_ConcurrentWrites(t *testing.T) {
 	var wg sync.WaitGroup
 
 	for i := 0; i < goroutines; i++ {
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			for j := 0; j < perRoutine; j++ {
 				_, err := rw.Write([]byte(entry))
 				if err != nil {
 					errs <- err
 				}
 			}
-		}()
+		})
 	}
 
 	wg.Wait()

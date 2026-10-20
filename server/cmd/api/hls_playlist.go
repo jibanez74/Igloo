@@ -77,7 +77,7 @@ func startLivePlaylistAtBeginning(playlist string) string {
 // every segment and init-map URI in a finalized playlist.
 func rewritePlaylistURLs(playlist, baseURL, querySuffix string) string {
 	var b strings.Builder
-	for _, line := range strings.Split(playlist, "\n") {
+	for line := range strings.SplitSeq(playlist, "\n") {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "#EXT-X-MAP:") {
 			initName := helpers.HLS_INIT_FILENAME

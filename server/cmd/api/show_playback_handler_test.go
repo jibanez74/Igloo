@@ -720,8 +720,8 @@ func TestLoadHLSSourceForSession_Episode(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, _, err = app.loadHLSSourceForSession(ctx, episodeRef(fixture.Episode1), 0)
-	var metadataErr *hlsMediaMetadataError
-	if !errors.As(err, &metadataErr) {
+	_, isMediaMetadataError := errors.AsType[*hlsMediaMetadataError](err)
+	if !isMediaMetadataError {
 		t.Fatalf("missing duration error = %v, want hlsMediaMetadataError", err)
 	}
 }

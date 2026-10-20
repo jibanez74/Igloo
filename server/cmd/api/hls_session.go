@@ -1405,8 +1405,8 @@ func (app *Application) GetOrCreateHLSSession(
 			// resolve. Rerunning the plan rather than re-planning means a remux
 			// preflight that already failed is not paid again. Only a request
 			// that outlasts the budget falls through to 503 + Retry-After.
-			var capErr *hlsTranscodeCapacityError
-			if errors.As(createErr, &capErr) {
+			capErr, atCapacity := errors.AsType[*hlsTranscodeCapacityError](createErr)
+			if atCapacity {
 				if !app.reclaimIdlePersonalHLSSessionForOwner(ownerUserID, capErr.Pool) {
 					app.Logger.Info("hls limiter reclaim found no idle session",
 						"media", media.String(),

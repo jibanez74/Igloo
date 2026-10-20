@@ -196,8 +196,8 @@ func TestGetOrCreateHLSSession_ReservationsCapConcurrentRemuxStarts(t *testing.T
 			i*20,
 			userID,
 		)
-		var capacityErr *hlsPersonalSessionCapacityError
-		if !errors.As(err, &capacityErr) {
+		_, atPersonalCapacity := errors.AsType[*hlsPersonalSessionCapacityError](err)
+		if !atPersonalCapacity {
 			t.Fatalf("request %d error = %v, want personal-session capacity error", i, err)
 		}
 	}
@@ -599,8 +599,8 @@ func TestGetOrCreateHLSSession_DoesNotReclaimActiveSessionOnCapacity(t *testing.
 	app.HLSSessionCache.Set(activeKey, activeSession, hlsPersonalSessionTTL)
 
 	_, _, err := app.GetOrCreateHLSSession(context.Background(), movieRef(movieID), helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), nil, testPlaybackSessionID, 0, userID)
-	var capacityErr *hlsTranscodeCapacityError
-	if !errors.As(err, &capacityErr) {
+	_, atCapacity := errors.AsType[*hlsTranscodeCapacityError](err)
+	if !atCapacity {
 		t.Fatalf("expected hlsTranscodeCapacityError, got %v", err)
 	}
 	if _, ok := app.HLSSessionCache.Get(activeKey); !ok {
@@ -1163,8 +1163,8 @@ func TestReservePersonalHLSSession_ReservationsAtLimitKeepCachedSessions(t *test
 	app.PersonalHLSReservations[userID] = 2
 
 	_, err := app.reservePersonalHLSSession(movieRef(7), userID, "11111111-2222-3333-4444-555555555555")
-	var capacityErr *hlsPersonalSessionCapacityError
-	if !errors.As(err, &capacityErr) {
+	_, atPersonalCapacity := errors.AsType[*hlsPersonalSessionCapacityError](err)
+	if !atPersonalCapacity {
 		t.Fatalf("error = %v, want personal-session capacity error", err)
 	}
 

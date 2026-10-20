@@ -279,16 +279,14 @@ func TestUpdatePlaybackSettings_ConcurrentPartialUpdatesBothLand(t *testing.T) {
 	codes := make([]int, len(bodies))
 	start := make(chan struct{})
 	for i, body := range bodies {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			<-start
 			req := httptest.NewRequest(http.MethodPut, "/api/settings/playback", strings.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 			handler.ServeHTTP(w, req)
 			codes[i] = w.Code
-		}()
+		})
 	}
 	close(start)
 	wg.Wait()

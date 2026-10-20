@@ -25,13 +25,11 @@ func RunWorkers[J, R any](
 	results := make(chan R, workers)
 	var group sync.WaitGroup
 	for range workers {
-		group.Add(1)
-		go func() {
-			defer group.Done()
+		group.Go(func() {
 			for job := range queue {
 				results <- run(ctx, job)
 			}
-		}()
+		})
 	}
 	defer group.Wait()
 	next, active := 0, 0

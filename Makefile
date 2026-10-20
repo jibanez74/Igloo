@@ -14,7 +14,7 @@ PID_FILE := $(DIST_DIR)/$(BINARY_NAME).pid
 LOG_FILE := $(DIST_DIR)/$(BINARY_NAME).log
 
 # Pinned so a CI run cannot pick up a tool release that changes the analysis.
-DEADCODE_TOOL := golang.org/x/tools/cmd/deadcode@v0.49.0
+DEADCODE_TOOL := golang.org/x/tools/cmd/deadcode@v0.52.0
 DEADCODE_REPORT_REL := dist/deadcode.txt
 DEADCODE_REPORT := $(SERVER_DIR)/$(DEADCODE_REPORT_REL)
 DEADCODE_MAIN_REPORT_REL := dist/deadcode-main.txt

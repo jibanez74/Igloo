@@ -80,9 +80,7 @@ func TestSearchVocabIndexConcurrentLookups(t *testing.T) {
 
 	var wg sync.WaitGroup
 	for range 20 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for range 100 {
 				corrections, visited := index.corrections("lisence", 2, searchVocabMaxVisited)
 				if !slices.Contains(corrections, "licence") {
@@ -92,7 +90,7 @@ func TestSearchVocabIndexConcurrentLookups(t *testing.T) {
 					t.Errorf("visited = %d, limit = %d", visited, searchVocabMaxVisited)
 				}
 			}
-		}()
+		})
 	}
 	wg.Wait()
 }

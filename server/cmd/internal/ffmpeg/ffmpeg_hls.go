@@ -574,9 +574,7 @@ func (f *ffmpeg) RunHLS(
 	}
 
 	var stderrWg sync.WaitGroup
-	stderrWg.Add(1)
-	go func() {
-		defer stderrWg.Done()
+	stderrWg.Go(func() {
 		scanner := bufio.NewScanner(stderrPipe)
 		scanner.Buffer(make([]byte, hlsStderrScannerBufferSize), hlsStderrScannerMaxToken)
 		for scanner.Scan() {
@@ -590,7 +588,7 @@ func (f *ffmpeg) RunHLS(
 			appendTail(fmt.Sprintf("stderr scan error: %v", scanErr))
 			_, _ = io.Copy(io.Discard, stderrPipe)
 		}
-	}()
+	})
 
 	startErr := cmd.Start()
 	if startErr != nil {

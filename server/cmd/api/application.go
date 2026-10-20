@@ -344,11 +344,9 @@ func (app *Application) initRuntimeCaches() {
 	hlsCache.OnEvicted(func(_ string, val interface{}) {
 		session, ok := val.(*HLSSession)
 		if ok {
-			app.Wait.Add(1)
-			go func() {
-				defer app.Wait.Done()
+			app.Wait.Go(func() {
 				cleanupHLSSession(session)
-			}()
+			})
 		}
 	})
 	app.HLSSessionCache = hlsCache

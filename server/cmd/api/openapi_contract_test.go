@@ -294,7 +294,12 @@ func loadOpenAPIContractOnce() {
 	}
 	loader := openapi3.NewLoader()
 	loader.IsExternalRefsAllowed = false
-	document, err := loader.LoadFromFile(documentPath)
+	raw, err := os.ReadFile(documentPath)
+	if err != nil {
+		openAPIContractErr = fmt.Errorf("read OpenAPI document: %w", err)
+		return
+	}
+	document, err := loader.LoadFromData(raw)
 	if err != nil {
 		openAPIContractErr = fmt.Errorf("load OpenAPI document: %w", err)
 		return
@@ -306,6 +311,20 @@ func loadOpenAPIContractOnce() {
 		return
 	}
 
+	// kin-openapi 0.151 can leave nested component refs unresolved when its
+	// JSON Schema compiler grows $defs while ranging over that map. Inline
+	// schema refs in the validation copy, retaining all constraints and siblings.
+	validationJSON, err := inlineOpenAPISchemaRefs(raw)
+	if err != nil {
+		openAPIContractErr = fmt.Errorf("inline OpenAPI schemas: %w", err)
+		return
+	}
+	document, err = loader.LoadFromData(validationJSON)
+	if err != nil {
+		openAPIContractErr = fmt.Errorf("load OpenAPI validation copy: %w", err)
+		return
+	}
+
 	router, err := legacy.NewRouter(document)
 	if err != nil {
 		openAPIContractErr = fmt.Errorf("create OpenAPI router: %w", err)
@@ -314,6 +333,150 @@ func loadOpenAPIContractOnce() {
 
 	openAPIContractDoc = document
 	openAPIContractRouter = router
+}
+
+func inlineOpenAPISchemaRefs(raw []byte) ([]byte, error) {
+	var document struct {
+		Components struct {
+			Schemas map[string]json.RawMessage `json:"schemas"`
+		} `json:"components"`
+	}
+	err := json.Unmarshal(raw, &document)
+	if err != nil {
+		return nil, err
+	}
+	var value any
+	err = json.Unmarshal(raw, &value)
+	if err != nil {
+		return nil, err
+	}
+	active := make(map[string]bool)
+	var inline func(any) (any, error)
+	inline = func(value any) (any, error) {
+		switch node := value.(type) {
+		case map[string]any:
+			result := make(map[string]any, len(node))
+			for key, child := range node {
+				expanded, expandErr := inline(child)
+				if expandErr != nil {
+					return nil, expandErr
+				}
+				result[key] = expanded
+			}
+			ref, _ := node["$ref"].(string)
+			isSchemaRef := strings.HasPrefix(ref, "#/components/schemas/")
+			if !isSchemaRef {
+				return result, nil
+			}
+			recursive := active[ref]
+			if recursive {
+				return nil, fmt.Errorf("recursive schema reference %q cannot be inlined", ref)
+			}
+			name := strings.TrimPrefix(ref, "#/components/schemas/")
+			name = strings.ReplaceAll(strings.ReplaceAll(name, "~1", "/"), "~0", "~")
+			schema := document.Components.Schemas[name]
+			if schema == nil {
+				return nil, fmt.Errorf("unresolved schema reference %q", ref)
+			}
+			var target any
+			decodeErr := json.Unmarshal(schema, &target)
+			if decodeErr != nil {
+				return nil, decodeErr
+			}
+			active[ref] = true
+			expanded, expandErr := inline(target)
+			delete(active, ref)
+			if expandErr != nil {
+				return nil, expandErr
+			}
+			delete(result, "$ref")
+			if len(result) == 0 {
+				return expanded, nil
+			}
+			allOf, _ := result["allOf"].([]any)
+			result["allOf"] = append([]any{expanded}, allOf...)
+			return result, nil
+		case []any:
+			result := make([]any, len(node))
+			for index, child := range node {
+				expanded, expandErr := inline(child)
+				if expandErr != nil {
+					return nil, expandErr
+				}
+				result[index] = expanded
+			}
+			return result, nil
+		default:
+			return value, nil
+		}
+	}
+	value, err = inline(value)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(value)
+}
+
+func TestOpenAPIValidationCopyPreservesNestedConstraints(t *testing.T) {
+	loader := openapi3.NewLoader()
+	source := []byte(`{
+		"openapi":"3.1.2", "info":{"title":"test","version":"1"}, "paths":{},
+		"components":{"schemas":{
+			"Envelope":{"type":"object","required":["data"],"properties":{
+				"data":{"$ref":"#/components/schemas/Data","maxProperties":1,"unevaluatedProperties":false}
+			}},
+			"Data":{"type":"object","required":["item"],"properties":{
+				"item":{"$ref":"#/components/schemas/Item"}
+			}},
+			"Item":{"type":"object","required":["state","count"],"additionalProperties":false,"properties":{
+				"state":{"const":"ready"}, "count":{"type":"integer","minimum":1}
+			}}
+		}}
+	}`)
+	document, err := loader.LoadFromData(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = document.Validate(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := inlineOpenAPISchemaRefs(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	validationCopy, err := loader.LoadFromData(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema := validationCopy.Components.Schemas["Envelope"].Value
+	tests := []struct {
+		name  string
+		body  string
+		valid bool
+	}{
+		{"valid", `{"data":{"item":{"state":"ready","count":1}}}`, true},
+		{"nested required", `{"data":{"item":{"state":"ready"}}}`, false},
+		{"nested type", `{"data":{"item":{"state":"ready","count":"1"}}}`, false},
+		{"nested minimum", `{"data":{"item":{"state":"ready","count":0}}}`, false},
+		{"nested const", `{"data":{"item":{"state":"other","count":1}}}`, false},
+		{"nested extra property", `{"data":{"item":{"state":"ready","count":1,"extra":true}}}`, false},
+		{"reference sibling", `{"data":{"item":{"state":"ready","count":1},"extra":true}}`, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var body any
+			decodeErr := json.Unmarshal([]byte(tc.body), &body)
+			if decodeErr != nil {
+				t.Fatal(decodeErr)
+			}
+			validationErr := schema.VisitJSON(body, openapi3.EnableJSONSchema2020())
+			valid := validationErr == nil
+			if valid != tc.valid {
+				t.Fatalf("validation error = %v, want valid = %v", validationErr, tc.valid)
+			}
+		})
+	}
 }
 
 func TestHealthCheckConformsToOpenAPI(t *testing.T) {

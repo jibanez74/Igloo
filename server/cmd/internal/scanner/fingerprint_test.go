@@ -295,8 +295,8 @@ func TestStreamingHashFailuresAndCancellation(t *testing.T) {
 		t.Fatal(err)
 	}
 	err = r.Validate(context.Background())
-	var deferred *FileDeferral
-	if !errors.As(err, &deferred) {
+	_, isDeferred := errors.AsType[*FileDeferral](err)
+	if !isDeferred {
 		t.Fatalf("concurrent write: %v", err)
 	}
 }

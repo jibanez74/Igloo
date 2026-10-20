@@ -61,7 +61,7 @@ func (f *ffprobe) KeyframeAtOrBefore(
 	}
 
 	best := -1.0
-	for _, line := range strings.Split(string(out), "\n") {
+	for line := range strings.SplitSeq(string(out), "\n") {
 		ptsTime, isKeyframe, ok := parseKeyframePacket(line)
 		if !ok || !isKeyframe {
 			continue

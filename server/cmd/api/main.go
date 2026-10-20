@@ -45,11 +45,9 @@ func main() {
 
 	deviceExpiryCtx, cancelDeviceExpiry := context.WithCancel(context.Background())
 	app.DeviceExpiryCancel = cancelDeviceExpiry
-	app.Wait.Add(1)
-	go func() {
-		defer app.Wait.Done()
+	app.Wait.Go(func() {
 		app.runDeviceExpirySweeper(deviceExpiryCtx)
-	}()
+	})
 
 	startupSweepCtx, cancelStartupSweep := context.WithTimeout(deviceExpiryCtx, deviceExpirySweepTimeout)
 	app.sweepStaleDevices(startupSweepCtx)

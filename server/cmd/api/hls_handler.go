@@ -292,7 +292,7 @@ func readLiveHLSPlaylist(tempDir string) (string, error) {
 // hasPlayableSegment reports whether a playlist declares at least one segment
 // with a positive duration.
 func hasPlayableSegment(playlist string) bool {
-	for _, line := range strings.Split(playlist, "\n") {
+	for line := range strings.SplitSeq(playlist, "\n") {
 		trimmed := strings.TrimSpace(line)
 		if !strings.HasPrefix(trimmed, "#EXTINF:") {
 			continue
@@ -539,8 +539,8 @@ func sessionPlaylistDurationSec(session *HLSSession) float64 {
 }
 
 func writeHLSSessionError(w http.ResponseWriter, err error) {
-	var notFound *hlsMediaNotFoundError
-	if errors.As(err, &notFound) {
+	notFound, isNotFound := errors.AsType[*hlsMediaNotFoundError](err)
+	if isNotFound {
 		helpers.ErrorJSON(w, errors.New(notFound.Error()), http.StatusNotFound)
 		return
 	}
@@ -559,30 +559,30 @@ func writeHLSSessionError(w http.ResponseWriter, err error) {
 		return
 	}
 
-	var invalidAudioErr *hlsInvalidAudioSelectionError
-	if errors.As(err, &invalidAudioErr) {
+	invalidAudioErr, isInvalidAudio := errors.AsType[*hlsInvalidAudioSelectionError](err)
+	if isInvalidAudio {
 		helpers.ErrorJSON(w, errors.New(invalidAudioErr.PublicMessage), http.StatusBadRequest)
 		return
 	}
 
-	var mediaMetadataErr *hlsMediaMetadataError
-	if errors.As(err, &mediaMetadataErr) {
+	_, isMediaMetadataError := errors.AsType[*hlsMediaMetadataError](err)
+	if isMediaMetadataError {
 		helpers.ErrorJSON(w, errors.New("stored media metadata is unusable"), http.StatusUnprocessableEntity)
 		return
 	}
 
 	// A syntactically valid explicit request against a stream without enough
 	// stored channel metadata is a media-profile problem, not a bad query.
-	var audioMetadataErr *hlsAudioMetadataError
-	if errors.As(err, &audioMetadataErr) {
+	_, isAudioMetadataError := errors.AsType[*hlsAudioMetadataError](err)
+	if isAudioMetadataError {
 		helpers.ErrorJSON(w, errors.New("stored audio metadata is unusable for the requested profile"), http.StatusUnprocessableEntity)
 		return
 	}
 
 	// A missing AC-3/E-AC-3 encoder is a non-retryable server installation
 	// problem, so it must not share the retryable 503 contract below.
-	var encoderErr *hlsAudioEncoderUnavailableError
-	if errors.As(err, &encoderErr) {
+	_, isEncoderUnavailable := errors.AsType[*hlsAudioEncoderUnavailableError](err)
+	if isEncoderUnavailable {
 		helpers.ErrorJSON(w, errors.New("requested audio codec is unavailable on this server"), http.StatusInternalServerError)
 		return
 	}

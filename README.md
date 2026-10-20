@@ -22,7 +22,7 @@ The web app includes light and dark themes. The Go server serves it in a product
 
 ## Current limits
 
-- The server targets **Linux x64** and **macOS ARM64**. Windows, Docker deployment, and other Linux architectures are not supported at present.
+- The server targets **Linux x64** and **macOS 13 Ventura or newer on ARM64**. Windows, Docker deployment, and other Linux architectures are not supported at present.
 - HLS transcoding and decoding are still works in progress. What plays smoothly depends on the source file, browser, FFmpeg build, and host hardware. See the [media guide](docs/ffmpeg.md) for supported paths and troubleshooting.
 - Watch rooms support movies, not TV episodes.
 - Photos are a coming-soon page. The Jellyfin and Immich fields in Settings are stored, but those integrations do not run yet.
@@ -33,7 +33,7 @@ The web app includes light and dark themes. The Go server serves it in a product
 
 ### Prerequisites
 
-On a supported host, install Git, Make, [Go 1.26.2](server/go.mod), a C compiler for CGO/SQLite, `sqlc`, Bun, `ffmpeg`, and `ffprobe`. Put the command-line tools on your `PATH`. The development and backend test targets require host FFmpeg tools; production builds have [additional media payload requirements](#build-a-production-binary).
+On a supported host, install Git, Make, [Go 1.27.3](server/go.mod), a C compiler for CGO/SQLite, `sqlc`, Bun, `ffmpeg`, and `ffprobe`. Put the command-line tools on your `PATH`. The development and backend test targets require host FFmpeg tools; production builds have [additional media payload requirements](#build-a-production-binary).
 
 ### Set up the checkout
 
@@ -133,6 +133,8 @@ Useful commands from the repository root:
 - `make test-server`, `make test-web`, `make lint-web`, and `make build-web` run narrower checks.
 - `make test-openapi` and `make check-openapi` check route coverage and generated frontend API types. Use `make generate-openapi` after changing the API schema.
 - `make clean` stops the background app and removes build artifacts; it preserves `.env`, the database, and runtime media data.
+
+With `make dev-profile`, sign in as an administrator and open `/api/debug/pprof/goroutineleak?debug=1` to inspect goroutines the runtime identifies as permanently blocked. Go 1.27 provides this profile without an experimental flag. The existing `/api/debug/pprof/goroutine` profile remains useful for inspecting all goroutines.
 
 The SQLite schema is in [server/sqlc/schema.sql](server/sqlc/schema.sql), with queries in [server/sqlc/queries/](server/sqlc/queries/). Igloo currently changes the schema directly during pre-production rather than adding migrations. Do not edit generated database or OpenAPI types by hand.
 

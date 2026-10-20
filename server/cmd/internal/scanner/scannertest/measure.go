@@ -72,7 +72,7 @@ func ProcessMeasurement(path string) string {
 	}
 	if strings.HasSuffix(path, "/status") {
 		lines := make([]string, 0)
-		for _, line := range strings.Split(string(data), "\n") {
+		for line := range strings.SplitSeq(string(data), "\n") {
 			if strings.HasPrefix(line, "VmRSS:") || strings.HasPrefix(line, "VmHWM:") {
 				lines = append(lines, line)
 			}

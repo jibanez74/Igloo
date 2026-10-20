@@ -355,7 +355,7 @@ func ffmpegHelpHasOption(output string, option string) bool {
 		return false
 	}
 
-	for _, line := range strings.Split(output, "\n") {
+	for line := range strings.SplitSeq(output, "\n") {
 		fields := strings.Fields(strings.TrimSpace(line))
 		if len(fields) == 0 {
 			continue
@@ -492,7 +492,7 @@ func runFFmpegProbeContext(ctx context.Context, bin string, args ...string) (str
 // does not match that shape yields ffmpegUnknownVersion rather than a partial
 // string, so the value stays stable across probes of the same binary.
 func parseFFmpegVersion(output string) string {
-	for _, line := range strings.Split(output, "\n") {
+	for line := range strings.SplitSeq(output, "\n") {
 		fields := strings.Fields(line)
 		if len(fields) < 3 {
 			continue
@@ -507,7 +507,7 @@ func parseFFmpegVersion(output string) string {
 
 func parseFFmpegNamedRows(output string) map[string]bool {
 	found := map[string]bool{}
-	for _, line := range strings.Split(output, "\n") {
+	for line := range strings.SplitSeq(output, "\n") {
 		fields := strings.Fields(line)
 		if len(fields) < 2 {
 			continue
@@ -526,7 +526,7 @@ func parseFFmpegNamedRows(output string) map[string]bool {
 
 func parseFFmpegHWAccels(output string) map[string]bool {
 	found := map[string]bool{}
-	for _, line := range strings.Split(output, "\n") {
+	for line := range strings.SplitSeq(output, "\n") {
 		name := normalizeCapabilityName(line)
 		if name == "" || strings.Contains(name, "hardware acceleration") {
 			continue

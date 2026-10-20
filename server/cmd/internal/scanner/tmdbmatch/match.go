@@ -243,8 +243,8 @@ func tokenOverlapScore(a, b string) float64 {
 }
 
 func sequelIndicator(title string) string {
-	tokens := strings.Fields(title)
-	for _, token := range tokens {
+	tokens := strings.FieldsSeq(title)
+	for token := range tokens {
 		switch token {
 		case "2", "ii", "3", "iii", "4", "iv", "5", "v":
 			return token

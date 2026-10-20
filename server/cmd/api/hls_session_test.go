@@ -1373,8 +1373,8 @@ func TestCreateHLSSession_ExplicitAudioMissingChannelMetadata(t *testing.T) {
 		false,
 	)
 
-	var metadataErr *hlsAudioMetadataError
-	if !errors.As(err, &metadataErr) {
+	_, isAudioMetadataError := errors.AsType[*hlsAudioMetadataError](err)
+	if !isAudioMetadataError {
 		t.Fatalf("error = %v, want hlsAudioMetadataError", err)
 	}
 	if fake.CallCount() != 0 {
