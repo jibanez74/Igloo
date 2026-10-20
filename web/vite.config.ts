@@ -35,7 +35,7 @@ export default defineConfig(({ mode }) => {
         polyfill: false,
       },
       reportCompressedSize: true,
-      rollupOptions: {
+      rolldownOptions: {
         plugins: shouldAnalyze
           ? [
               visualizer({
