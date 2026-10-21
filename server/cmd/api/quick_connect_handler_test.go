@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -415,17 +416,28 @@ func TestQuickConnectBroker_RedeemLeavesEntryUntilConsumed(t *testing.T) {
 		t.Fatal("approve failed")
 	}
 
+	result := broker.Redeem(code, secret)
+	if result.status != redeemApproved {
+		t.Fatalf("redeem status = %d, want redeemApproved", result.status)
+	}
+
+	// The first redeem holds the claim while it issues the token, so a
+	// concurrent redeem must not issue a second one.
+	result = broker.Redeem(code, secret)
+	if result.status != redeemPending {
+		t.Fatalf("redeem while claimed status = %d, want redeemPending", result.status)
+	}
+
 	// A failed token issuance must leave the code redeemable on the next poll.
-	for i := 0; i < 2; i++ {
-		result := broker.Redeem(code, secret)
-		if result.status != redeemApproved {
-			t.Fatalf("redeem #%d status = %d, want redeemApproved", i+1, result.status)
-		}
+	broker.Release(code)
+	result = broker.Redeem(code, secret)
+	if result.status != redeemApproved {
+		t.Fatalf("redeem after release status = %d, want redeemApproved", result.status)
 	}
 
 	broker.Consume(code)
 
-	result := broker.Redeem(code, secret)
+	result = broker.Redeem(code, secret)
 	if result.status != redeemNotFound {
 		t.Fatalf("redeem after consume status = %d, want redeemNotFound", result.status)
 	}
@@ -507,5 +519,147 @@ func TestNormalizeQuickConnectCode(t *testing.T) {
 				t.Fatalf("normalizeQuickConnectCode(%q) = %q, want %q", test.input, got, test.want)
 			}
 		})
+	}
+}
+
+// Two redeems of one approved code used to both pass the broker's check and
+// each create a device before either consumed the code.
+func TestQuickConnect_ConcurrentRedeemIssuesOneToken(t *testing.T) {
+	app := setupSessionTestApp(t)
+	app.InitRouter()
+
+	user := createTestUser(t, app, "Approver", "concurrent-approver@example.com", false)
+	code, secret := initiateQuickConnectForTest(t, app)
+	w := approveQuickConnectForTest(t, app, code, newAuthSessionCookie(t, app, user.ID))
+	if w.Code != http.StatusOK {
+		t.Fatalf("approve status = %d, want 200: %s", w.Code, w.Body.String())
+	}
+
+	// The test pool holds a single connection, so taking it blocks the first
+	// redeem between the broker's claim and its device insert.
+	conn, err := app.DB.Conn(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	firstReq := newOpenAPIJSONRequest(http.MethodPost, "/api/quick-connect/redeem", fmt.Sprintf(`{"code":%q,"secret":%q}`, code, secret))
+	first := httptest.NewRecorder()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		app.Router.ServeHTTP(first, firstReq)
+	}()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		app.QuickConnect.mu.Lock()
+		claimed := app.QuickConnect.entries[code].issuing
+		app.QuickConnect.mu.Unlock()
+		if claimed {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("first redeem never claimed the code")
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	second := redeemQuickConnectForTest(t, app, code, secret)
+	if second.Code != http.StatusOK {
+		t.Fatalf("concurrent redeem status = %d, want 200: %s", second.Code, second.Body.String())
+	}
+	var pending quickConnectRedeemResponse
+	err = json.Unmarshal(second.Body.Bytes(), &pending)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pending.Data.Status != "pending" || pending.Data.Token != "" {
+		t.Fatalf("concurrent redeem = %+v, want pending without a token", pending.Data)
+	}
+
+	err = conn.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-done
+
+	if first.Code != http.StatusOK {
+		t.Fatalf("first redeem status = %d, want 200: %s", first.Code, first.Body.String())
+	}
+	assertOpenAPIExchange(t, "redeemQuickConnect", firstReq, first)
+	var approved quickConnectRedeemResponse
+	err = json.Unmarshal(first.Body.Bytes(), &approved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if approved.Data.Status != "approved" || !strings.HasPrefix(approved.Data.Token, deviceTokenPrefix) {
+		t.Fatalf("first redeem = %+v, want approved with a token", approved.Data)
+	}
+
+	w = redeemQuickConnectForTest(t, app, code, secret)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("redeem after consume status = %d, want 404", w.Code)
+	}
+
+	devices, err := app.Queries.GetDevicesByUser(context.Background(), user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(devices) != 1 {
+		t.Fatalf("devices = %d, want exactly one from a single approval", len(devices))
+	}
+}
+
+func TestQuickConnect_FailedIssuanceLeavesCodeRedeemable(t *testing.T) {
+	app := setupSessionTestApp(t)
+	app.InitRouter()
+
+	user := createTestUser(t, app, "Approver", "retry-approver@example.com", false)
+	code, secret := initiateQuickConnectForTest(t, app)
+	w := approveQuickConnectForTest(t, app, code, newAuthSessionCookie(t, app, user.ID))
+	if w.Code != http.StatusOK {
+		t.Fatalf("approve status = %d, want 200: %s", w.Code, w.Body.String())
+	}
+
+	_, err := app.DB.Exec(`CREATE TRIGGER fail_device_insert BEFORE INSERT ON devices BEGIN SELECT RAISE(FAIL, 'device storage failure'); END`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	w = redeemQuickConnectForTest(t, app, code, secret)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("failed issuance status = %d, want 500: %s", w.Code, w.Body.String())
+	}
+
+	_, err = app.DB.Exec(`DROP TRIGGER fail_device_insert`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The claim was released, so the device's next poll succeeds.
+	w = redeemQuickConnectForTest(t, app, code, secret)
+	if w.Code != http.StatusOK {
+		t.Fatalf("retry status = %d, want 200: %s", w.Code, w.Body.String())
+	}
+	var approved quickConnectRedeemResponse
+	err = json.Unmarshal(w.Body.Bytes(), &approved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if approved.Data.Status != "approved" {
+		t.Fatalf("retry status = %q, want approved", approved.Data.Status)
+	}
+
+	w = redeemQuickConnectForTest(t, app, code, secret)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("redeem after consume status = %d, want 404", w.Code)
+	}
+
+	devices, err := app.Queries.GetDevicesByUser(context.Background(), user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(devices) != 1 {
+		t.Fatalf("devices = %d, want one", len(devices))
 	}
 }
