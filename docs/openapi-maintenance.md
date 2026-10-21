@@ -40,8 +40,9 @@ Conventions:
 - Protected routes inherit the alternative `cookieAuth` and `bearerAuth` security
   requirements: either a session cookie or an `Authorization: Bearer igd_...`
   device token authenticates the request. Public routes set `security: []`.
-- Device management, quick-connect lookup and approval, and `GET /api/user/pin`
-  require a session cookie and override security with `cookieAuth` only.
+- Device management, quick-connect lookup and approval, `GET /api/user/pin`,
+  `PUT /api/user/email`, `PUT /api/user/password`, and `DELETE /api/user` require
+  a session cookie and override security with `cookieAuth` only.
   Authenticated device tokens are rejected on these routes, even with a cookie.
 - Admin-only routes accept either authentication method, include `403`, and
   state the admin requirement in the description.
