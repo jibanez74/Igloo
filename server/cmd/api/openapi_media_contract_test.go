@@ -277,6 +277,9 @@ func TestNonJSONRoutesMiddlewareErrorsConformToOpenAPI(t *testing.T) {
 				if response.Code != status || response.Header().Get("Content-Type") != "application/json" {
 					t.Fatalf("response = %d %v %s", response.Code, response.Header(), response.Body.String())
 				}
+				if strings.Contains(endpoint.path, "/hls/") && response.Header().Get("Cache-Control") != "" {
+					t.Fatalf("middleware failure unexpectedly has handler cache policy: %v", response.Header())
+				}
 				assertOpenAPIExchange(t, endpoint.operation, request, response)
 			})
 		}

@@ -578,6 +578,9 @@ func TestStopPersonalHLSSession_AuthenticationDatabaseFailure(t *testing.T) {
 			if response.Code != http.StatusInternalServerError {
 				t.Fatalf("status = %d, want 500: %s", response.Code, response.Body.String())
 			}
+			if response.Header().Get("Cache-Control") != "" {
+				t.Fatalf("middleware failure unexpectedly has handler cache policy: %v", response.Header())
+			}
 			assertOpenAPIExchange(t, "stopPersonalHlsSession", request, response)
 			var envelope helpers.JSONResponse
 			err = json.Unmarshal(response.Body.Bytes(), &envelope)

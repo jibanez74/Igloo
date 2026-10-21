@@ -140,3 +140,88 @@ func TestEmptyPlaylistArraysRejectedByHandlerAndOpenAPI(t *testing.T) {
 		})
 	}
 }
+
+func TestTrimmedUserFieldsConformToOpenAPI(t *testing.T) {
+	endpoints := []struct {
+		schema, operation, method, path, field string
+		limit, status                          int
+	}{
+		{"UpdateUserEmailRequest", "updateUserEmail", http.MethodPut, "/api/user/email", "email", userEmailMaxLength, http.StatusOK},
+		{"AdminCreateUserRequest", "adminCreateUser", http.MethodPost, "/api/admin/users", "name", userNameMaxLength, http.StatusCreated},
+		{"AdminCreateUserRequest", "adminCreateUser", http.MethodPost, "/api/admin/users", "email", userEmailMaxLength, http.StatusCreated},
+		{"AdminUpdateUserRequest", "adminUpdateUser", http.MethodPatch, "/api/admin/users/", "name", userNameMaxLength, http.StatusOK},
+		{"AdminUpdateUserRequest", "adminUpdateUser", http.MethodPatch, "/api/admin/users/", "email", userEmailMaxLength, http.StatusOK},
+	}
+	document, _ := loadOpenAPIContract(t)
+	for _, endpoint := range endpoints {
+		cases := []struct {
+			name, value, stored string
+			valid               bool
+		}{
+			{"trimmed Unicode boundary", "\u2003" + strings.Repeat("é", endpoint.limit) + "\t", strings.Repeat("é", endpoint.limit), true},
+			{"long raw whitespace", strings.Repeat(" ", endpoint.limit+1) + "value\u2003", "value", true},
+			{"overlong trimmed value", " " + strings.Repeat("é", endpoint.limit+1) + " ", "", false},
+			{"whitespace only", " \t\u2003", "", false},
+			{"empty", "", "", false},
+		}
+		for _, tc := range cases {
+			t.Run(endpoint.operation+"/"+endpoint.field+"/"+tc.name, func(t *testing.T) {
+				app := setupSessionTestApp(t)
+				admin := createTestUser(t, app, "Admin", "admin@example.com", true)
+				handler := authenticatedRouter(t, app, admin.ID)
+				path := endpoint.path
+				body := map[string]any{}
+				if endpoint.operation != "updateUserEmail" {
+					body["name"] = "New User"
+					body["email"] = "new@example.com"
+					body["is_admin"] = false
+				}
+				if endpoint.operation == "adminCreateUser" {
+					body["password"] = testUserPassword
+				}
+				if endpoint.operation == "adminUpdateUser" {
+					target := createTestUser(t, app, "Target", "target@example.com", false)
+					path += fmt.Sprint(target.ID)
+				}
+				body[endpoint.field] = tc.value
+				encoded, err := json.Marshal(body)
+				if err != nil {
+					t.Fatal(err)
+				}
+				request := newOpenAPIJSONRequest(endpoint.method, path, string(encoded))
+				response := httptest.NewRecorder()
+				handler.ServeHTTP(response, request)
+				wantStatus := http.StatusBadRequest
+				if tc.valid {
+					wantStatus = endpoint.status
+				}
+				if response.Code != wantStatus {
+					t.Fatalf("status = %d, want %d: %s", response.Code, wantStatus, response.Body.String())
+				}
+				if tc.value == "" {
+					err = document.Components.Schemas[endpoint.schema].Value.VisitJSON(body)
+					if err == nil {
+						t.Fatal("request schema accepted an empty required field")
+					}
+					assertOpenAPIResponse(t, endpoint.operation, request, response)
+				} else {
+					assertOpenAPIExchange(t, endpoint.operation, request, response)
+				}
+				if tc.valid {
+					var result struct {
+						Data struct {
+							User map[string]any `json:"user"`
+						} `json:"data"`
+					}
+					err = json.Unmarshal(response.Body.Bytes(), &result)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if result.Data.User[endpoint.field] != tc.stored {
+						t.Fatalf("stored %s = %q, want %q", endpoint.field, result.Data.User[endpoint.field], tc.stored)
+					}
+				}
+			})
+		}
+	}
+}

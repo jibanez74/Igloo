@@ -17,6 +17,10 @@ func (app *Application) InitRouter() {
 
 	app.registerWebSocketRoutes(router)
 
+	// A static document needs no session, so it stays outside the session
+	// group: nothing to load or save, and no session failure to answer.
+	router.Get("/api/openapi.json", app.ServeOpenAPIDocument)
+
 	router.Group(func(r chi.Router) {
 		r.Use(app.LoadAndSaveSession)
 		// The session middleware is where io.ReaderFrom is lost, so the

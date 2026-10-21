@@ -36,6 +36,9 @@ type quickConnectEntry struct {
 	secretHash     [32]byte
 	approvedUserID int64
 	expiresAt      time.Time
+	// Set while one redeem request is issuing the device token, so a second
+	// request for the same code cannot issue another.
+	issuing bool
 }
 
 // QuickConnectBroker holds pending quick-connect codes in memory. Codes are
@@ -141,9 +144,11 @@ type redeemResult struct {
 	userID int64
 }
 
-// Redeem checks a code+secret pair. Approved entries are NOT consumed here:
-// the caller must call Consume once the device token has been durably issued,
-// so a failed issuance leaves the code redeemable on the device's next poll.
+// Redeem checks a code+secret pair. An approved entry is claimed for the
+// caller rather than consumed: the caller issues the device token, then calls
+// Consume on success or Release on failure, so a failed issuance leaves the
+// code redeemable on the device's next poll. While the claim is held, another
+// redeem of the same code reports pending instead of issuing a second token.
 func (b *QuickConnectBroker) Redeem(code, secret string) redeemResult {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -159,9 +164,11 @@ func (b *QuickConnectBroker) Redeem(code, secret string) redeemResult {
 		return redeemResult{status: redeemNotFound}
 	}
 
-	if entry.approvedUserID == 0 {
+	if entry.approvedUserID == 0 || entry.issuing {
 		return redeemResult{status: redeemPending}
 	}
+
+	entry.issuing = true
 
 	return redeemResult{
 		quickConnectDeviceInfo: entry.quickConnectDeviceInfo,
@@ -171,14 +178,24 @@ func (b *QuickConnectBroker) Redeem(code, secret string) redeemResult {
 }
 
 // Consume removes a code after its device token has been issued, so the code
-// cannot mint another token. Concurrent redeems of the same code before
-// Consume could each issue a token, but both need the device-held secret and
-// the device polls sequentially; worst case is an extra device row the user
-// can revoke.
+// cannot mint another token.
 func (b *QuickConnectBroker) Consume(code string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	delete(b.entries, code)
+}
+
+// Release gives up the claim Redeem took when issuing the device token
+// failed. The entry may already have expired and been purged; the code's TTL
+// bounds a claim nobody releases.
+func (b *QuickConnectBroker) Release(code string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	entry, ok := b.entries[code]
+	if ok {
+		entry.issuing = false
+	}
 }
 
 func (b *QuickConnectBroker) purgeExpiredLocked() {

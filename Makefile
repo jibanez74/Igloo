@@ -4,6 +4,7 @@ SERVER_DIR := server
 WEB_DIR := web
 WEB_DIST := $(WEB_DIR)/dist
 WEB_EMBED_DIR := $(SERVER_DIR)/cmd/api/webdist
+OPENAPI_EMBED_DIR := $(SERVER_DIR)/cmd/api/openapi
 
 DIST_DIR := $(SERVER_DIR)/dist
 SERVER_BINARY := dist/$(BINARY_NAME)
@@ -44,22 +45,22 @@ FFPROBE_PAYLOAD_ZST := $(FFPROBE_PAYLOAD).zst
 .DEFAULT_GOAL := dev
 
 .PHONY: dev dev-profile build start stop clean help check test test-server lint-server test-tmdb-integration test-spotify-integration test-web lint-web build-web test-openapi lint-openapi generate-openapi check-openapi preview-openapi
-.PHONY: check-go-tools check-web-tools check-sqlc-tools check-media-tools check-dev-tools check-build-tools check-server-test-tools check-platform check-media-payloads compress-media-payloads generate prepare-webdist-placeholder prepare-test-webdist prepare-web
+.PHONY: check-go-tools check-web-tools check-sqlc-tools check-media-tools check-dev-tools check-build-tools check-server-test-tools check-platform check-media-payloads compress-media-payloads generate prepare-webdist-placeholder prepare-openapi-embed prepare-test-webdist prepare-web
 
-dev: check-dev-tools generate prepare-webdist-placeholder
+dev: check-dev-tools generate prepare-webdist-placeholder prepare-openapi-embed
 	@echo "Starting development server..."
 	@echo "Start the web client separately with: cd $(WEB_DIR) && bun run dev"
 	@mkdir -p $(DIST_DIR)
 	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go build -tags "$(DEV_TAGS)" -o $(DEV_BINARY) ./cmd/api
 	@env VITE_DEV_SERVER=http://localhost:3000 "$(DEV_BINARY_PATH)"
 
-dev-profile: check-dev-tools generate prepare-webdist-placeholder
+dev-profile: check-dev-tools generate prepare-webdist-placeholder prepare-openapi-embed
 	@echo "Starting development server with pprof at /api/debug/pprof (admin only)..."
 	@mkdir -p $(DIST_DIR)
 	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go build -tags "$(PROFILE_TAGS)" -o $(DEV_BINARY) ./cmd/api
 	@env VITE_DEV_SERVER=http://localhost:3000 "$(DEV_BINARY_PATH)"
 
-build: check-build-tools check-media-payloads compress-media-payloads generate prepare-web
+build: check-build-tools check-media-payloads compress-media-payloads generate prepare-web prepare-openapi-embed
 	@echo "Building $(BINARY_NAME) for $(PLATFORM)..."
 	@mkdir -p $(DIST_DIR)
 	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go build -trimpath -tags "$(GO_TAGS)" -ldflags="$(LDFLAGS)" -o $(SERVER_BINARY) ./cmd/api
@@ -151,7 +152,7 @@ check: test-openapi check-openapi lint-server test-server lint-web test-web buil
 
 test: test-server test-web
 
-test-server: check-server-test-tools prepare-webdist-placeholder
+test-server: check-server-test-tools prepare-webdist-placeholder prepare-openapi-embed
 	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go test -count=1 -v -tags "$(TEST_TAGS)" ./...
 
 # go vet plus a whole-program reachability check. deadcode roots at the tests as
@@ -172,7 +173,7 @@ test-server: check-server-test-tools prepare-webdist-placeholder
 # pipefail, so piping deadcode into grep would hand the pipeline grep's status,
 # and the `|| true` that an empty grep result needs would then also swallow a
 # deadcode failure and leave an empty report that passes the emptiness test.
-lint-server: check-server-test-tools prepare-webdist-placeholder
+lint-server: check-server-test-tools prepare-webdist-placeholder prepare-openapi-embed
 	@mkdir -p $(DIST_DIR)
 	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go vet -tags "$(TEST_TAGS)" ./...
 	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go run $(DEADCODE_TOOL) -test -tags "$(TEST_TAGS)" ./... > $(DEADCODE_REPORT_REL)
@@ -201,7 +202,7 @@ lint-web: check-web-tools
 build-web: check-web-tools
 	@cd $(WEB_DIR) && bun run build
 
-test-openapi: lint-openapi check-server-test-tools prepare-webdist-placeholder
+test-openapi: lint-openapi check-server-test-tools prepare-webdist-placeholder prepare-openapi-embed
 	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go test -tags "$(TEST_TAGS)" ./cmd/api -run TestOpenAPIDocumentsRegisteredAPIRoutes -count=1
 
 lint-openapi: check-web-tools
@@ -265,6 +266,13 @@ generate:
 prepare-webdist-placeholder:
 	@mkdir -p $(WEB_EMBED_DIR)
 	@touch $(WEB_EMBED_DIR)/.keep
+
+# The server embeds docs/openapi.json to serve it at /api/openapi.json, and
+# go:embed cannot reach outside the package, so the copy is refreshed before
+# every build and test run.
+prepare-openapi-embed:
+	@mkdir -p $(OPENAPI_EMBED_DIR)
+	@cp docs/openapi.json $(OPENAPI_EMBED_DIR)/openapi.json
 
 prepare-test-webdist: prepare-webdist-placeholder
 
