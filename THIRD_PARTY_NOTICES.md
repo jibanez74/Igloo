@@ -31,8 +31,7 @@ Compiled into the Igloo server binary. Module versions are pinned in [server/go.
 | github.com/klauspost/compress | BSD-3-Clause |
 | github.com/mattn/go-sqlite3 (bundles SQLite, public domain) | MIT |
 | github.com/patrickmn/go-cache | MIT |
-| github.com/zmb3/spotify/v2 | Apache-2.0 |
-| golang.org/x/crypto, x/oauth2, x/sync, x/text | BSD-3-Clause |
+| golang.org/x/crypto, x/sync, x/text | BSD-3-Clause |
 
 `github.com/getkin/kin-openapi` (MIT) and its dependencies are used only by tests and are not part of the server binary.
 
