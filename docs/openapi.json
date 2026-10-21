@@ -14375,7 +14375,8 @@
             "format": "int64"
           },
           "has_more": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "True when rows remain after offset + limit. False whenever offset is at or beyond total, including for the largest accepted offset."
           }
         },
         "additionalProperties": false
