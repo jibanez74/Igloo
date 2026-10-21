@@ -4,6 +4,26 @@
  */
 
 export interface paths {
+    "/api/openapi.json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the OpenAPI document
+         * @description Returns this contract as embedded in the running binary: the repository's docs/openapi.json at build time, byte for byte. Served outside the session middleware, so no cookie is read or written.
+         */
+        get: operations["getOpenAPIDocument"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -129,7 +149,7 @@ export interface paths {
         put?: never;
         /**
          * Poll a quick-connect code and receive a device token once approved
-         * @description Devices poll this endpoint at the advertised interval. Pending codes live only in this server process's memory, so a restart discards them. A 404 means the code or secret is missing, unknown, expired, or mismatched; the device should request a new code and start over. 400 is returned only for a malformed body. The approved response consumes the code. Rate limited to 60 requests per minute per client IP (the TCP peer address, not forwarded headers).
+         * @description Devices poll this endpoint at the advertised interval. Pending codes live only in this server process's memory, so a restart discards them. A 404 means the code or secret is missing, unknown, expired, or mismatched; the device should request a new code and start over. 400 is returned only for a malformed body. The approved response consumes the code; it is issued at most once per approval. A redeem that arrives while another request is still issuing the token for the same code answers pending, and a failed issuance leaves the code redeemable on the next poll. Rate limited to 60 requests per minute per client IP (the TCP peer address, not forwarded headers).
          */
         post: operations["redeemQuickConnect"];
         delete?: never;
@@ -2662,6 +2682,15 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** @description An OpenAPI document. Only the top-level keys every document carries are typed; the rest is open. */
+        OpenAPIDocument: {
+            /** @description OpenAPI specification version. */
+            openapi: string;
+            info: Record<string, never>;
+            paths: Record<string, never>;
+        } & {
+            [key: string]: unknown;
+        };
         MessageSuccess: {
             /** @constant */
             error: false;
@@ -2861,7 +2890,7 @@ export interface components {
             /** @description Directory new HLS sessions write their output to. */
             transcode_dir: string;
         };
-        /** @description Replaces every general setting. All strings are trimmed; a blank optional string clears that value. */
+        /** @description Replaces every general setting, so every field must be present: a missing or null field is rejected with 400 and nothing is saved. All strings are trimmed; a blank optional string clears that value. */
         UpdateGeneralSettingsRequest: {
             tmdb_key: string;
             /** @description Blank clears the value; nonblank values must use http:// or https://. Stored only; no server feature reads this value. */
@@ -4151,6 +4180,7 @@ export interface components {
             offset: number;
             /** Format: int64 */
             limit: number;
+            /** @description True when rows remain after offset + limit. False whenever offset is at or beyond total, including for the largest accepted offset. */
             has_more: boolean;
         };
         TracksEnvelope: components["schemas"]["JsonSuccess"] & {
@@ -5101,6 +5131,15 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["MessageSuccess"];
+            };
+        };
+        /** @description The OpenAPI 3.1 document describing this API. */
+        OpenAPIDocumentResponse: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["OpenAPIDocument"];
             };
         };
         /** @description Server health status. */
@@ -6565,6 +6604,18 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    getOpenAPIDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["OpenAPIDocumentResponse"];
+        };
+    };
     healthCheck: {
         parameters: {
             query?: never;

@@ -30,6 +30,16 @@ Use `make lint-openapi` for an explicit Redocly lint run. For a local rendered
 reference, run `make preview-openapi`; it builds a temporary HTML file and
 serves it only at `http://127.0.0.1:8081`.
 
+## Serving the contract
+
+The server serves the contract at `GET /api/openapi.json` (public, no session).
+Go's `embed` cannot reach outside a package, so `make prepare-openapi-embed`
+copies `docs/openapi.json` to the gitignored `server/cmd/api/openapi/` directory;
+the dev, build, lint and test targets run it automatically, and CI copies the
+file before its plain `go test` step. `TestServeOpenAPIDocument` fails when the
+embedded copy differs from `docs/openapi.json`, so a stale copy cannot pass the
+suite. Running `go build` or `go test` by hand needs the copy in place first.
+
 Conventions:
 
 - JSON responses use the shared `{ "error": boolean, "message"?: string, "data"?: object }` envelope.

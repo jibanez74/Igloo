@@ -18,6 +18,9 @@
 # Embedded frontend assets generated during build
 /server/cmd/api/webdist/
 
+# Copy of docs/openapi.json embedded by the server (make prepare-openapi-embed)
+/server/cmd/api/openapi/
+
 # Runtime data created by local app runs
 *.db
 *.db-journal

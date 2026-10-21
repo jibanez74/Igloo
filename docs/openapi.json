@@ -106,6 +106,22 @@
     }
   ],
   "paths": {
+    "/api/openapi.json": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Get the OpenAPI document",
+        "description": "Returns this contract as embedded in the running binary: the repository's docs/openapi.json at build time, byte for byte. Served outside the session middleware, so no cookie is read or written.",
+        "operationId": "getOpenAPIDocument",
+        "security": [],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/OpenAPIDocumentResponse"
+          }
+        }
+      }
+    },
     "/api/health": {
       "get": {
         "tags": [
@@ -7077,6 +7093,16 @@
           }
         }
       },
+      "OpenAPIDocumentResponse": {
+        "description": "The OpenAPI 3.1 document describing this API.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/OpenAPIDocument"
+            }
+          }
+        }
+      },
       "HealthResponse": {
         "description": "Server health status.",
         "content": {
@@ -8706,6 +8732,28 @@
           }
         },
         "additionalProperties": false
+      },
+      "OpenAPIDocument": {
+        "type": "object",
+        "required": [
+          "openapi",
+          "info",
+          "paths"
+        ],
+        "properties": {
+          "openapi": {
+            "type": "string",
+            "description": "OpenAPI specification version."
+          },
+          "info": {
+            "type": "object"
+          },
+          "paths": {
+            "type": "object"
+          }
+        },
+        "additionalProperties": true,
+        "description": "An OpenAPI document. Only the top-level keys every document carries are typed; the rest is open."
       },
       "MessageSuccess": {
         "type": "object",
