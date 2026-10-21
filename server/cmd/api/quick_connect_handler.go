@@ -90,6 +90,7 @@ func (app *Application) RedeemQuickConnect(w http.ResponseWriter, r *http.Reques
 	case redeemApproved:
 		token, device, ok := app.issueDeviceToken(w, r, result.userID, result.deviceName, result.platform, result.appVersion)
 		if !ok {
+			app.QuickConnect.Release(code)
 			return
 		}
 

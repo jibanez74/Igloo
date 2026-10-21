@@ -175,7 +175,9 @@ func (app *Application) GetTracksAlphabetical(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	hasMore := offset+limit < total
+	// Subtracting keeps the comparison in range for any offset the query
+	// parser accepts; offset+limit overflows at the maximum offset.
+	hasMore := total-offset > limit
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{

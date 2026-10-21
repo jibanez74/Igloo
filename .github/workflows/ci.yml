@@ -33,8 +33,9 @@ jobs:
       - name: Run Go tests
         run: |
           cd server
-          mkdir -p cmd/api/webdist
+          mkdir -p cmd/api/webdist cmd/api/openapi
           touch cmd/api/webdist/.keep
+          cp ../docs/openapi.json cmd/api/openapi/openapi.json
           go test -count=1 -v -tags "externalbin sqlite_fts5" ./...
 
   test-openapi:

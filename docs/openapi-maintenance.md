@@ -30,6 +30,16 @@ Use `make lint-openapi` for an explicit Redocly lint run. For a local rendered
 reference, run `make preview-openapi`; it builds a temporary HTML file and
 serves it only at `http://127.0.0.1:8081`.
 
+## Serving the contract
+
+The server serves the contract at `GET /api/openapi.json` (public, no session).
+Go's `embed` cannot reach outside a package, so `make prepare-openapi-embed`
+copies `docs/openapi.json` to the gitignored `server/cmd/api/openapi/` directory;
+the dev, build, lint and test targets run it automatically, and CI copies the
+file before its plain `go test` step. `TestServeOpenAPIDocument` fails when the
+embedded copy differs from `docs/openapi.json`, so a stale copy cannot pass the
+suite. Running `go build` or `go test` by hand needs the copy in place first.
+
 Conventions:
 
 - JSON responses use the shared `{ "error": boolean, "message"?: string, "data"?: object }` envelope.
@@ -40,8 +50,9 @@ Conventions:
 - Protected routes inherit the alternative `cookieAuth` and `bearerAuth` security
   requirements: either a session cookie or an `Authorization: Bearer igd_...`
   device token authenticates the request. Public routes set `security: []`.
-- Device management, quick-connect lookup and approval, and `GET /api/user/pin`
-  require a session cookie and override security with `cookieAuth` only.
+- Device management, quick-connect lookup and approval, `GET /api/user/pin`,
+  `PUT /api/user/email`, `PUT /api/user/password`, and `DELETE /api/user` require
+  a session cookie and override security with `cookieAuth` only.
   Authenticated device tokens are rejected on these routes, even with a cookie.
 - Admin-only routes accept either authentication method, include `403`, and
   state the admin requirement in the description.
