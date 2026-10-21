@@ -26,18 +26,76 @@ type generalSettingsResponse struct {
 	TranscodeDir        string  `json:"transcode_dir"`
 }
 
+// Every field is a pointer: the endpoint replaces the whole configuration, so
+// a missing or null field is a 400 rather than a silent blank or false that
+// would erase the stored value.
 type updateGeneralSettingsRequest struct {
-	TmdbKey             string `json:"tmdb_key"`
-	ImmichBaseURL       string `json:"immich_base_url"`
-	ImmichApiKey        string `json:"immich_api_key"`
-	JellyfinBaseURL     string `json:"jellyfin_base_url"`
-	JellyfinApiKey      string `json:"jellyfin_api_key"`
-	SpotifyClientID     string `json:"spotify_client_id"`
-	SpotifyClientSecret string `json:"spotify_client_secret"`
-	EnableWatcher       bool   `json:"enable_watcher"`
-	DownloadImages      bool   `json:"download_images"`
-	StaticDir           string `json:"static_dir"`
-	TranscodeDir        string `json:"transcode_dir"`
+	TmdbKey             *string `json:"tmdb_key"`
+	ImmichBaseURL       *string `json:"immich_base_url"`
+	ImmichApiKey        *string `json:"immich_api_key"`
+	JellyfinBaseURL     *string `json:"jellyfin_base_url"`
+	JellyfinApiKey      *string `json:"jellyfin_api_key"`
+	SpotifyClientID     *string `json:"spotify_client_id"`
+	SpotifyClientSecret *string `json:"spotify_client_secret"`
+	EnableWatcher       *bool   `json:"enable_watcher"`
+	DownloadImages      *bool   `json:"download_images"`
+	StaticDir           *string `json:"static_dir"`
+	TranscodeDir        *string `json:"transcode_dir"`
+}
+
+// generalSettingsValues is the request with every field present and trimmed.
+type generalSettingsValues struct {
+	tmdbKey, immichBaseURL, immichApiKey, jellyfinBaseURL, jellyfinApiKey string
+	spotifyClientID, spotifyClientSecret, staticDir, transcodeDir         string
+	enableWatcher, downloadImages                                         bool
+}
+
+// missingField names the first required field the request
+// leaves out or sets to null, or "" when every field is present.
+func (req *updateGeneralSettingsRequest) missingField() string {
+	stringFields := []struct {
+		name  string
+		value *string
+	}{
+		{"tmdb_key", req.TmdbKey},
+		{"immich_base_url", req.ImmichBaseURL},
+		{"immich_api_key", req.ImmichApiKey},
+		{"jellyfin_base_url", req.JellyfinBaseURL},
+		{"jellyfin_api_key", req.JellyfinApiKey},
+		{"spotify_client_id", req.SpotifyClientID},
+		{"spotify_client_secret", req.SpotifyClientSecret},
+		{"static_dir", req.StaticDir},
+		{"transcode_dir", req.TranscodeDir},
+	}
+	for _, field := range stringFields {
+		if field.value == nil {
+			return field.name
+		}
+	}
+	if req.EnableWatcher == nil {
+		return "enable_watcher"
+	}
+	if req.DownloadImages == nil {
+		return "download_images"
+	}
+
+	return ""
+}
+
+func (req *updateGeneralSettingsRequest) values() generalSettingsValues {
+	return generalSettingsValues{
+		tmdbKey:             strings.TrimSpace(*req.TmdbKey),
+		immichBaseURL:       strings.TrimSpace(*req.ImmichBaseURL),
+		immichApiKey:        strings.TrimSpace(*req.ImmichApiKey),
+		jellyfinBaseURL:     strings.TrimSpace(*req.JellyfinBaseURL),
+		jellyfinApiKey:      strings.TrimSpace(*req.JellyfinApiKey),
+		spotifyClientID:     strings.TrimSpace(*req.SpotifyClientID),
+		spotifyClientSecret: strings.TrimSpace(*req.SpotifyClientSecret),
+		staticDir:           strings.TrimSpace(*req.StaticDir),
+		transcodeDir:        strings.TrimSpace(*req.TranscodeDir),
+		enableWatcher:       *req.EnableWatcher,
+		downloadImages:      *req.DownloadImages,
+	}
 }
 
 // librarySettings is both the library settings response and the update request.
@@ -151,43 +209,44 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	for _, field := range []*string{
-		&req.TmdbKey, &req.ImmichBaseURL, &req.ImmichApiKey, &req.JellyfinBaseURL, &req.JellyfinApiKey,
-		&req.SpotifyClientID, &req.SpotifyClientSecret, &req.StaticDir, &req.TranscodeDir,
-	} {
-		*field = strings.TrimSpace(*field)
+	missing := req.missingField()
+	if missing != "" {
+		helpers.ErrorJSON(w, errors.New(missing+" is required"), http.StatusBadRequest)
+		return
 	}
 
-	if !isOptionalHTTPURL(req.JellyfinBaseURL) {
+	values := req.values()
+
+	if !isOptionalHTTPURL(values.jellyfinBaseURL) {
 		helpers.ErrorJSON(w, errors.New("jellyfin base URL must be a valid http or https URL"), http.StatusBadRequest)
 		return
 	}
 
-	if !isOptionalHTTPURL(req.ImmichBaseURL) {
+	if !isOptionalHTTPURL(values.immichBaseURL) {
 		helpers.ErrorJSON(w, errors.New("immich base URL must be a valid http or https URL"), http.StatusBadRequest)
 		return
 	}
 
-	if req.StaticDir == "" {
+	if values.staticDir == "" {
 		helpers.ErrorJSON(w, errors.New("static directory is required"), http.StatusBadRequest)
 		return
 	}
 
-	if req.TranscodeDir == "" {
+	if values.transcodeDir == "" {
 		helpers.ErrorJSON(w, errors.New("transcode directory is required"), http.StatusBadRequest)
 		return
 	}
 
-	_, err = helpers.GetOrCreateDir(req.StaticDir)
+	_, err = helpers.GetOrCreateDir(values.staticDir)
 	if err != nil {
-		app.Logger.Error("failed to validate static directory", "error", err, "path", req.StaticDir)
+		app.Logger.Error("failed to validate static directory", "error", err, "path", values.staticDir)
 		helpers.ErrorJSON(w, errors.New("static directory is not accessible"), http.StatusBadRequest)
 		return
 	}
 
-	_, err = helpers.GetOrCreateDir(req.TranscodeDir)
+	_, err = helpers.GetOrCreateDir(values.transcodeDir)
 	if err != nil {
-		app.Logger.Error("failed to validate transcode directory", "error", err, "path", req.TranscodeDir)
+		app.Logger.Error("failed to validate transcode directory", "error", err, "path", values.transcodeDir)
 		helpers.ErrorJSON(w, errors.New("transcode directory is not accessible"), http.StatusBadRequest)
 		return
 	}
@@ -197,17 +256,17 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 	var restartRequired bool
 	updatedSettings, err := app.withSettingsWrite(func(current database.Setting) (database.Setting, error) {
 		updated, err := app.Queries.UpdateGeneralSettings(r.Context(), database.UpdateGeneralSettingsParams{
-			TmdbKey:             helpers.NullString(req.TmdbKey),
-			ImmichBaseUrl:       helpers.NullString(req.ImmichBaseURL),
-			ImmichApiKey:        helpers.NullString(req.ImmichApiKey),
-			JellyfinBaseUrl:     helpers.NullString(req.JellyfinBaseURL),
-			JellyfinApiKey:      helpers.NullString(req.JellyfinApiKey),
-			SpotifyClientID:     helpers.NullString(req.SpotifyClientID),
-			SpotifyClientSecret: helpers.NullString(req.SpotifyClientSecret),
-			EnableWatcher:       req.EnableWatcher,
-			DownloadImages:      req.DownloadImages,
-			StaticDir:           req.StaticDir,
-			TranscodeDir:        req.TranscodeDir,
+			TmdbKey:             helpers.NullString(values.tmdbKey),
+			ImmichBaseUrl:       helpers.NullString(values.immichBaseURL),
+			ImmichApiKey:        helpers.NullString(values.immichApiKey),
+			JellyfinBaseUrl:     helpers.NullString(values.jellyfinBaseURL),
+			JellyfinApiKey:      helpers.NullString(values.jellyfinApiKey),
+			SpotifyClientID:     helpers.NullString(values.spotifyClientID),
+			SpotifyClientSecret: helpers.NullString(values.spotifyClientSecret),
+			EnableWatcher:       values.enableWatcher,
+			DownloadImages:      values.downloadImages,
+			StaticDir:           values.staticDir,
+			TranscodeDir:        values.transcodeDir,
 		})
 		if err != nil {
 			return database.Setting{}, err

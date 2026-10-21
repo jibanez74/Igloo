@@ -9532,7 +9532,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "Replaces every general setting. All strings are trimmed; a blank optional string clears that value."
+        "description": "Replaces every general setting, so every field must be present: a missing or null field is rejected with 400 and nothing is saved. All strings are trimmed; a blank optional string clears that value."
       },
       "GeneralSettingsData": {
         "type": "object",

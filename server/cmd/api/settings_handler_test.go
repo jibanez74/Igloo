@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -436,6 +438,70 @@ func TestTriggerScan_MapsStartStatusesAndRequiresAdmin(t *testing.T) {
 				allowed := tc.authenticated && tc.admin
 				if allowed && calls != 1 || !allowed && calls != 0 {
 					t.Fatalf("scanner invoked %d times", calls)
+				}
+			})
+		}
+	}
+}
+
+// The endpoint replaces the whole configuration, so a field the request leaves
+// out used to read as blank or false and erase the stored value.
+func TestUpdateGeneralSettings_RejectsMissingRequiredFields(t *testing.T) {
+	app := setupSessionTestApp(t)
+	admin := createTestUser(t, app, "Settings Admin", "settings-admin@example.com", true)
+	handler := authenticatedRouter(t, app, admin.ID)
+
+	staticDir := filepath.Join(t.TempDir(), "static")
+	w := serveAs(t, app, admin.ID, http.MethodPut, "/api/settings/general", generalSettingsBody(staticDir))
+	if w.Code != http.StatusOK {
+		t.Fatalf("seed update status = %d, want 200: %s", w.Code, w.Body.String())
+	}
+	seeded, err := app.Queries.GetSettings(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var complete map[string]any
+	err = json.Unmarshal([]byte(generalSettingsBody(staticDir)), &complete)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for field := range complete {
+		for _, variant := range []string{"omitted", "null"} {
+			t.Run(field+"/"+variant, func(t *testing.T) {
+				body := make(map[string]any, len(complete))
+				maps.Copy(body, complete)
+				if variant == "null" {
+					body[field] = nil
+				} else {
+					delete(body, field)
+				}
+				encoded, err := json.Marshal(body)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				req := newOpenAPIJSONRequest(http.MethodPut, "/api/settings/general", string(encoded))
+				w := httptest.NewRecorder()
+				handler.ServeHTTP(w, req)
+				assertOpenAPIResponse(t, "updateGeneralSettings", req, w)
+				if w.Code != http.StatusBadRequest {
+					t.Fatalf("status = %d, want 400: %s", w.Code, w.Body.String())
+				}
+				if !strings.Contains(w.Body.String(), field+" is required") {
+					t.Fatalf("body = %s, want it to name %s", w.Body.String(), field)
+				}
+
+				stored, err := app.Queries.GetSettings(context.Background())
+				if err != nil {
+					t.Fatal(err)
+				}
+				if stored != seeded {
+					t.Fatalf("settings changed by a rejected request:\n got %+v\nwant %+v", stored, seeded)
+				}
+				if *app.CurrentSettings() != seeded {
+					t.Fatal("in-memory settings changed by a rejected request")
 				}
 			})
 		}
