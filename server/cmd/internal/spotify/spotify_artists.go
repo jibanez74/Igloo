@@ -3,11 +3,9 @@ package spotify
 import (
 	"context"
 	"strings"
-
-	"github.com/zmb3/spotify/v2"
 )
 
-func (s *spotifyClient) SearchArtistByName(ctx context.Context, artistName string) (*spotify.FullArtist, error) {
+func (s *spotifyClient) SearchArtistByName(ctx context.Context, artistName string) (*FullArtist, error) {
 	artistName = strings.TrimSpace(artistName)
 	if artistName == "" {
 		return nil, newMatchError(MatchDebugInfo{
@@ -28,7 +26,7 @@ func (s *spotifyClient) SearchArtistByName(ctx context.Context, artistName strin
 	ctx, cancel := spotifyRequestContext(ctx)
 	defer cancel()
 
-	results, err := s.client.Search(ctx, artistName, spotify.SearchTypeArtist, spotify.Limit(spotifyArtistSearchLimit))
+	results, err := s.search(ctx, artistName, "artist", spotifyArtistSearchLimit)
 	if err != nil {
 		return nil, newMatchError(MatchDebugInfo{
 			Lookup:      lookupArtist,
@@ -41,9 +39,9 @@ func (s *spotifyClient) SearchArtistByName(ctx context.Context, artistName strin
 	}
 
 	// No artists page reads as no results, which selectBestArtistMatch reports.
-	var artists []spotify.FullArtist
+	var artists []FullArtist
 	if results.Artists != nil {
-		artists = results.Artists.Artists
+		artists = results.Artists.Items
 	}
 	returned, info := selectBestArtistMatch(artistName, artists, strategyArtistSearch)
 	if returned == nil {

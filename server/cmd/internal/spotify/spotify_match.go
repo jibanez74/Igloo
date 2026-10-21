@@ -7,7 +7,6 @@ import (
 	"strings"
 	"unicode"
 
-	spotifylib "github.com/zmb3/spotify/v2"
 	"golang.org/x/text/unicode/norm"
 )
 
@@ -325,7 +324,7 @@ func scoreTokenSequence(queryTokens, candidateTokens []string) int {
 	return matched * 70 / len(queryTokens)
 }
 
-func scoreAlbumArtist(queryArtist string, candidateArtists []spotifylib.SimpleArtist) (int, string) {
+func scoreAlbumArtist(queryArtist string, candidateArtists []SimpleArtist) (int, string) {
 	if strings.TrimSpace(queryArtist) == "" {
 		return 100, ""
 	}
@@ -369,7 +368,7 @@ func sanitizeSpotifySearchQueryValue(value string) string {
 	return strings.ReplaceAll(value, `"`, `'`)
 }
 
-func selectBestArtistMatch(query string, artists []spotifylib.FullArtist, strategy string) (*spotifylib.FullArtist, MatchDebugInfo) {
+func selectBestArtistMatch(query string, artists []FullArtist, strategy string) (*FullArtist, MatchDebugInfo) {
 	info := MatchDebugInfo{
 		Lookup:      lookupArtist,
 		Input:       query,
@@ -409,7 +408,7 @@ func selectBestArtistMatch(query string, artists []spotifylib.FullArtist, strate
 	return &artists[bestIndex], info
 }
 
-func selectBestAlbumMatch(title, artist string, albums []spotifylib.SimpleAlbum, searchQuery, strategy string) (*spotifylib.SimpleAlbum, MatchDebugInfo) {
+func selectBestAlbumMatch(title, artist string, albums []SimpleAlbum, searchQuery, strategy string) (*SimpleAlbum, MatchDebugInfo) {
 	info := MatchDebugInfo{
 		Lookup:      lookupAlbum,
 		Input:       title,

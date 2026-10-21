@@ -3,12 +3,11 @@ package spotify
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
-
-	"golang.org/x/oauth2"
 )
 
 func TestSpotifyRequestsUseDeadlineWhenCallerHasNone(t *testing.T) {
@@ -69,9 +68,8 @@ func TestNew(t *testing.T) {
 				}
 			})},
 		}
-		ctx := context.WithValue(context.Background(), oauth2.HTTPClient, httpClient)
 
-		client, err := New(ctx, "client-id", "client-secret")
+		client, err := newClient(context.Background(), httpClient, "client-id", "client-secret")
 		if err != nil {
 			t.Fatalf("expected constructor to succeed, got error: %v", err)
 		}
@@ -94,6 +92,41 @@ func TestNew(t *testing.T) {
 		}
 	})
 
+	t.Run("requests the token with the client-credentials grant", func(t *testing.T) {
+		httpClient := &http.Client{
+			Transport: &mockTransport{handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost {
+					t.Errorf("method = %s, want POST", r.Method)
+				}
+				contentType := r.Header.Get("Content-Type")
+				if contentType != "application/x-www-form-urlencoded" {
+					t.Errorf("Content-Type = %q, want a form body", contentType)
+				}
+				id, secret, ok := r.BasicAuth()
+				if !ok || id != "client-id" || secret != "client-secret" {
+					t.Errorf("basic auth = %q, %q, %v, want the client credentials", id, secret, ok)
+				}
+				err := r.ParseForm()
+				if err != nil {
+					t.Errorf("ParseForm: %v", err)
+				}
+				grantType := r.PostForm.Get("grant_type")
+				if grantType != "client_credentials" {
+					t.Errorf("grant_type = %q, want client_credentials", grantType)
+				}
+				writeSpotifyTokenResponse(w, "granted-token")
+			})},
+		}
+
+		client, err := newClient(context.Background(), httpClient, "client-id", "client-secret")
+		if err != nil {
+			t.Fatalf("expected constructor to succeed, got error: %v", err)
+		}
+		if client.tokens.accessToken != "granted-token" {
+			t.Fatalf("accessToken = %q, want granted-token", client.tokens.accessToken)
+		}
+	})
+
 	t.Run("returns error when token exchange fails", func(t *testing.T) {
 		httpClient := &http.Client{
 			Transport: &mockTransport{handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -106,14 +139,156 @@ func TestNew(t *testing.T) {
 				w.Write(b)
 			})},
 		}
-		ctx := context.WithValue(context.Background(), oauth2.HTTPClient, httpClient)
 
-		client, err := New(ctx, "client-id", "client-secret")
+		client, err := newClient(context.Background(), httpClient, "client-id", "client-secret")
 		if err == nil {
 			t.Fatal("expected constructor error, got nil")
 		}
 		if client != nil {
 			t.Fatal("expected nil client on constructor failure")
 		}
+		if !strings.Contains(err.Error(), "status 401: invalid_client: bad credentials") {
+			t.Fatalf("error = %q, want the token endpoint's status and reason", err)
+		}
+		if strings.Contains(err.Error(), "client-secret") {
+			t.Fatalf("error = %q leaks the client secret", err)
+		}
 	})
+
+	t.Run("returns error when the token response has no access token", func(t *testing.T) {
+		httpClient := &http.Client{
+			Transport: &mockTransport{handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				writeJSON(w, map[string]interface{}{"token_type": "Bearer", "expires_in": 3600})
+			})},
+		}
+
+		_, err := newClient(context.Background(), httpClient, "client-id", "client-secret")
+		if err == nil || !strings.Contains(err.Error(), "missing access_token") {
+			t.Fatalf("err = %v, want a missing access_token error", err)
+		}
+	})
+
+	t.Run("New returns a nil interface when the token cannot be fetched", func(t *testing.T) {
+		// A canceled context fails the token request before it leaves the
+		// process, so this reaches no network.
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		client, err := New(ctx, "client-id", "client-secret")
+		if err == nil {
+			t.Fatal("expected constructor error, got nil")
+		}
+		if client != nil {
+			t.Fatalf("client = %#v, want a nil interface", client)
+		}
+	})
+}
+
+func TestTokenRefresh(t *testing.T) {
+	t.Run("fetches one new token when the cached one is about to expire", func(t *testing.T) {
+		tokenExchangeCount := 0
+		var authorizations []string
+		sc := newMockClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.String() == spotifyTokenURL {
+				tokenExchangeCount++
+				writeSpotifyTokenResponse(w, "fresh-token")
+				return
+			}
+			authorizations = append(authorizations, r.Header.Get("Authorization"))
+			writeJSON(w, albumSearchJSON("album123", "Blue Record"))
+		}))
+		sc.tokens.accessToken = "stale-token"
+		sc.tokens.expiry = time.Now().Add(spotifyTokenExpiryMargin / 2)
+
+		for range 2 {
+			_, err := sc.SearchAlbums(context.Background(), "Blue Record")
+			if err != nil {
+				t.Fatalf("SearchAlbums failed: %v", err)
+			}
+		}
+
+		if tokenExchangeCount != 1 {
+			t.Fatalf("tokenExchangeCount = %d, want one refresh", tokenExchangeCount)
+		}
+		if len(authorizations) != 2 || authorizations[0] != "Bearer fresh-token" || authorizations[1] != "Bearer fresh-token" {
+			t.Fatalf("authorizations = %q, want the refreshed token on both requests", authorizations)
+		}
+	})
+
+	t.Run("reports search_failed when the refresh fails", func(t *testing.T) {
+		searchCount := 0
+		sc := newMockClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.String() == spotifyTokenURL {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			searchCount++
+			writeJSON(w, artistSearchJSON("jm123", "John Mayer"))
+		}))
+		sc.tokens.expiry = time.Now()
+
+		_, err := sc.SearchArtistByName(context.Background(), "John Mayer")
+		assertMatchReason(t, err, MatchReasonSearchFailed)
+		if searchCount != 0 {
+			t.Fatalf("searchCount = %d, want no API request without a token", searchCount)
+		}
+	})
+}
+
+func TestSpotifyRequestShape(t *testing.T) {
+	var requests []string
+	sc := newMockClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests = append(requests, r.Method+" "+r.URL.String()+" "+r.Header.Get("Authorization"))
+		if strings.HasSuffix(r.URL.Path, "/search") {
+			writeJSON(w, albumSearchJSON("abc123", "Abbey Road"))
+			return
+		}
+		writeJSON(w, fullAlbumJSON("abc123", "Abbey Road"))
+	}))
+
+	_, err := sc.SearchAndGetAlbumDetails(context.Background(), "Abbey Road", "")
+	if err != nil {
+		t.Fatalf("SearchAndGetAlbumDetails failed: %v", err)
+	}
+
+	want := []string{
+		`GET https://api.spotify.com/v1/search?limit=5&q=album%3A%22Abbey+Road%22&type=album Bearer test-token`,
+		`GET https://api.spotify.com/v1/albums/abc123 Bearer test-token`,
+	}
+	if strings.Join(requests, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("requests =\n%s\nwant\n%s", strings.Join(requests, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+func TestSpotifyAPIErrors(t *testing.T) {
+	tests := []struct {
+		name        string
+		respond     func(http.ResponseWriter)
+		wantStatus  int
+		wantMessage string
+	}{
+		{"uses the message from the error envelope", respondSpotifyAPIError(http.StatusBadGateway, "search failed"), http.StatusBadGateway, "search failed"},
+		{"falls back to the status text for an empty body", func(w http.ResponseWriter) { w.WriteHeader(http.StatusServiceUnavailable) }, http.StatusServiceUnavailable, "Service Unavailable"},
+		{"falls back to the status text for a body that is not an envelope", func(w http.ResponseWriter) {
+			w.WriteHeader(http.StatusTooManyRequests)
+			w.Write([]byte("slow down"))
+		}, http.StatusTooManyRequests, "Too Many Requests"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			sc := newMockClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				tc.respond(w)
+			}))
+
+			_, err := sc.SearchAlbums(context.Background(), "Blue Record")
+			statusErr, ok := errors.AsType[*StatusError](err)
+			if !ok {
+				t.Fatalf("err = %v, want a StatusError", err)
+			}
+			if statusErr.StatusCode != tc.wantStatus || statusErr.Message != tc.wantMessage {
+				t.Fatalf("StatusError = %+v, want %d %q", statusErr, tc.wantStatus, tc.wantMessage)
+			}
+		})
+	}
 }

@@ -7,9 +7,9 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	gocache "github.com/patrickmn/go-cache"
-	spotifylib "github.com/zmb3/spotify/v2"
 )
 
 // mockTransport intercepts HTTP calls and routes them to an in-process handler,
@@ -24,10 +24,11 @@ func (m *mockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return rr.Result(), nil
 }
 
+// newMockClient starts with a valid token, so handler sees only API requests.
 func newMockClient(handler http.Handler) *spotifyClient {
-	client := spotifylib.New(&http.Client{Transport: &mockTransport{handler: handler}})
 	return &spotifyClient{
-		client:      client,
+		httpClient:  &http.Client{Transport: &mockTransport{handler: handler}},
+		tokens:      &tokenSource{accessToken: "test-token", expiry: time.Now().Add(time.Hour)},
 		artistCache: gocache.New(spotifyArtistCacheTTL, spotifyCacheCleanup),
 		albumCache:  gocache.New(spotifyAlbumCacheTTL, spotifyCacheCleanup),
 	}
@@ -51,8 +52,6 @@ func writeSpotifyAPIError(w http.ResponseWriter, status int, message string) {
 	w.Write(b)
 }
 
-// writeSpotifyTokenResponse keeps its Content-Type: oauth2 parses a token
-// response by that header, and the recorder would otherwise guess text/plain.
 func writeSpotifyTokenResponse(w http.ResponseWriter, accessToken string) {
 	w.Header().Set("Content-Type", "application/json")
 	b, _ := json.Marshal(map[string]interface{}{

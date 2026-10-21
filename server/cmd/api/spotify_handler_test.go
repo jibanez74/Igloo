@@ -14,20 +14,19 @@ import (
 	spotifyapi "igloo/cmd/internal/spotify"
 
 	"github.com/go-chi/chi/v5"
-	spotifylib "github.com/zmb3/spotify/v2"
 )
 
 type spotifyHandlerStub struct {
-	albums       []spotifylib.SimpleAlbum
+	albums       []spotifyapi.SimpleAlbum
 	searchErr    error
 	searchTitles []string
 }
 
-func (s *spotifyHandlerStub) SearchAndGetAlbumDetails(_ context.Context, _, _ string) (*spotifylib.FullAlbum, error) {
+func (s *spotifyHandlerStub) SearchAndGetAlbumDetails(_ context.Context, _, _ string) (*spotifyapi.FullAlbum, error) {
 	return nil, nil
 }
 
-func (s *spotifyHandlerStub) SearchAlbums(_ context.Context, title string) ([]spotifylib.SimpleAlbum, error) {
+func (s *spotifyHandlerStub) SearchAlbums(_ context.Context, title string) ([]spotifyapi.SimpleAlbum, error) {
 	s.searchTitles = append(s.searchTitles, title)
 	if s.searchErr != nil {
 		return nil, s.searchErr
@@ -36,7 +35,7 @@ func (s *spotifyHandlerStub) SearchAlbums(_ context.Context, title string) ([]sp
 	return s.albums, nil
 }
 
-func (s *spotifyHandlerStub) SearchTracks(_ context.Context, title string) ([]spotifylib.FullTrack, error) {
+func (s *spotifyHandlerStub) SearchTracks(_ context.Context, title string) ([]spotifyapi.FullTrack, error) {
 	s.searchTitles = append(s.searchTitles, title)
 	if s.searchErr != nil {
 		return nil, s.searchErr
@@ -45,7 +44,7 @@ func (s *spotifyHandlerStub) SearchTracks(_ context.Context, title string) ([]sp
 	return nil, nil
 }
 
-func (s *spotifyHandlerStub) SearchArtistByName(_ context.Context, _ string) (*spotifylib.FullArtist, error) {
+func (s *spotifyHandlerStub) SearchArtistByName(_ context.Context, _ string) (*spotifyapi.FullArtist, error) {
 	return nil, nil
 }
 
@@ -123,29 +122,29 @@ func TestSearchSpotifyAlbums_HTTPMarksExistingLibraryMatches(t *testing.T) {
 	}
 
 	stub := &spotifyHandlerStub{
-		albums: []spotifylib.SimpleAlbum{
+		albums: []spotifyapi.SimpleAlbum{
 			{
-				ID:          spotifylib.ID("album123"),
+				ID:          spotifyapi.ID("album123"),
 				Name:        "Blue Record",
 				AlbumType:   "album",
 				ReleaseDate: "2026-01-02",
-				TotalTracks: spotifylib.Numeric(10),
-				Artists: []spotifylib.SimpleArtist{
+				TotalTracks: spotifyapi.Numeric(10),
+				Artists: []spotifyapi.SimpleArtist{
 					{Name: "The Band"},
 				},
-				Images: []spotifylib.Image{
-					{URL: "https://i.scdn.co/image/cover.jpg", Height: 640, Width: 640},
+				Images: []spotifyapi.Image{
+					{URL: "https://i.scdn.co/image/cover.jpg"},
 				},
 				ExternalURLs: map[string]string{
 					"spotify": "https://open.spotify.com/album/album123",
 				},
 			},
 			{
-				ID:          spotifylib.ID("album456"),
+				ID:          spotifyapi.ID("album456"),
 				Name:        "Blue Record Live",
 				AlbumType:   "album",
 				ReleaseDate: "2026",
-				TotalTracks: spotifylib.Numeric(8),
+				TotalTracks: spotifyapi.Numeric(8),
 			},
 		},
 	}
@@ -237,9 +236,9 @@ func TestSearchSpotifyAlbums_HTTPReturnsErrorWhenLibraryLookupFails(t *testing.T
 	app := setupTestApp(t)
 
 	app.Spotify = &spotifyHandlerStub{
-		albums: []spotifylib.SimpleAlbum{
+		albums: []spotifyapi.SimpleAlbum{
 			{
-				ID:   spotifylib.ID("album123"),
+				ID:   spotifyapi.ID("album123"),
 				Name: "Blue Record",
 			},
 		},

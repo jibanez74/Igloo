@@ -19,7 +19,6 @@ import (
 	tmdbapi "igloo/cmd/internal/tmdb"
 
 	"github.com/gorilla/websocket"
-	"github.com/zmb3/spotify/v2"
 )
 
 const (
@@ -35,19 +34,19 @@ type shutdownTestSpotify struct {
 	cleared bool
 }
 
-func (s *shutdownTestSpotify) SearchAndGetAlbumDetails(_ context.Context, _, _ string) (*spotify.FullAlbum, error) {
+func (s *shutdownTestSpotify) SearchAndGetAlbumDetails(_ context.Context, _, _ string) (*spotifyapi.FullAlbum, error) {
 	return nil, nil
 }
 
-func (s *shutdownTestSpotify) SearchAlbums(_ context.Context, _ string) ([]spotify.SimpleAlbum, error) {
+func (s *shutdownTestSpotify) SearchAlbums(_ context.Context, _ string) ([]spotifyapi.SimpleAlbum, error) {
 	return nil, nil
 }
 
-func (s *shutdownTestSpotify) SearchTracks(_ context.Context, _ string) ([]spotify.FullTrack, error) {
+func (s *shutdownTestSpotify) SearchTracks(_ context.Context, _ string) ([]spotifyapi.FullTrack, error) {
 	return nil, nil
 }
 
-func (s *shutdownTestSpotify) SearchArtistByName(_ context.Context, _ string) (*spotify.FullArtist, error) {
+func (s *shutdownTestSpotify) SearchArtistByName(_ context.Context, _ string) (*spotifyapi.FullArtist, error) {
 	return nil, nil
 }
 

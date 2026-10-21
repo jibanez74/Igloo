@@ -13,8 +13,7 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"igloo/cmd/internal/scanner"
-
-	spotifylib "github.com/zmb3/spotify/v2"
+	spotifyapi "igloo/cmd/internal/spotify"
 )
 
 type resolvedTrack struct {
@@ -36,7 +35,7 @@ type resolvedMusician struct {
 	// Persistence refreshes this identity inside the transaction because an
 	// earlier credit may have merged its owner.
 	existing               *database.GetMusicianBySpotifyIDRow
-	spotifyArtist          *spotifylib.FullArtist
+	spotifyArtist          *spotifyapi.FullArtist
 	spotifyMatch           *resolvedSpotifyMatch
 	splitCompoundOnNoMatch bool
 }
@@ -49,7 +48,7 @@ type resolvedAlbum struct {
 	hasExistingID bool
 	// Persistence refreshes this identity inside the transaction.
 	existing     *database.GetAlbumBySpotifyIDRow
-	spotifyAlbum *spotifylib.FullAlbum
+	spotifyAlbum *spotifyapi.FullAlbum
 	spotifyMatch *resolvedSpotifyMatch
 }
 

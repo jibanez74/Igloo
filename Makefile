@@ -43,7 +43,7 @@ FFPROBE_PAYLOAD_ZST := $(FFPROBE_PAYLOAD).zst
 
 .DEFAULT_GOAL := dev
 
-.PHONY: dev dev-profile build start stop clean help check test test-server lint-server test-tmdb-integration test-web lint-web build-web test-openapi lint-openapi generate-openapi check-openapi preview-openapi
+.PHONY: dev dev-profile build start stop clean help check test test-server lint-server test-tmdb-integration test-spotify-integration test-web lint-web build-web test-openapi lint-openapi generate-openapi check-openapi preview-openapi
 .PHONY: check-go-tools check-web-tools check-sqlc-tools check-media-tools check-dev-tools check-build-tools check-server-test-tools check-platform check-media-payloads compress-media-payloads generate prepare-webdist-placeholder prepare-test-webdist prepare-web
 
 dev: check-dev-tools generate prepare-webdist-placeholder
@@ -137,6 +137,7 @@ help:
 	@echo "  make test-server   Run backend tests with required build tags"
 	@echo "  make lint-server   Run go vet and the dead-code reachability checks"
 	@echo "  make test-tmdb-integration Run live TMDB API tests (requires TMDB_API_KEY)"
+	@echo "  make test-spotify-integration Run live Spotify API tests (requires SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET)"
 	@echo "  make test-web      Run frontend unit tests"
 	@echo "  make lint-web      Run frontend lint"
 	@echo "  make build-web     Build and type-check the frontend"
@@ -186,6 +187,10 @@ lint-server: check-server-test-tools prepare-webdist-placeholder
 test-tmdb-integration: check-go-tools
 	@test -n "$$TMDB_API_KEY" || { echo "TMDB_API_KEY is required for the live TMDB tests"; exit 1; }
 	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go test -count=1 -v -tags "$(TEST_TAGS) integration" ./cmd/internal/tmdb/
+
+test-spotify-integration: check-go-tools
+	@test -n "$$SPOTIFY_CLIENT_ID" && test -n "$$SPOTIFY_CLIENT_SECRET" || { echo "SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET are required for the live Spotify tests"; exit 1; }
+	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go test -count=1 -v -tags "$(TEST_TAGS) integration" ./cmd/internal/spotify/
 
 test-web: check-web-tools
 	@cd $(WEB_DIR) && bun run test

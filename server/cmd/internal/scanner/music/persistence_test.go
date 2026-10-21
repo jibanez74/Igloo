@@ -15,8 +15,7 @@ import (
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/scannertest"
-
-	spotifylib "github.com/zmb3/spotify/v2"
+	spotifyapi "igloo/cmd/internal/spotify"
 )
 
 func TestProcessMusicBatchSkipsBadTrackAndCommitsGoodTrack(t *testing.T) {
@@ -491,7 +490,7 @@ func TestRelationshipFailuresRollBackAndRetry(t *testing.T) {
 			metadata.Format.Tags.Genre = "Local Genre"
 			s.ffprobe = &scannertest.CountingProbe{Default: metadata}
 			if tc.spotify {
-				s.spotify = &musicScannerSpotifyStub{artist: &spotifylib.FullArtist{SimpleArtist: spotifylib.SimpleArtist{ID: "artist"}, Genres: []string{"Spotify Genre"}}, album: &spotifylib.FullAlbum{SimpleAlbum: spotifylib.SimpleAlbum{ID: "album"}, Genres: []string{"Spotify Genre"}}}
+				s.spotify = &musicScannerSpotifyStub{artist: &spotifyapi.FullArtist{SimpleArtist: spotifyapi.SimpleArtist{ID: "artist"}, Genres: []string{"Spotify Genre"}}, album: &spotifyapi.FullAlbum{SimpleAlbum: spotifyapi.SimpleAlbum{ID: "album"}, Genres: []string{"Spotify Genre"}}}
 			}
 			scan := newMusicScanContext(nil)
 			invalidations := 0

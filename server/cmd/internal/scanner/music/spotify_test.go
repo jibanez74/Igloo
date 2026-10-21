@@ -14,8 +14,6 @@ import (
 	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/scannertest"
 	spotifyapi "igloo/cmd/internal/spotify"
-
-	spotifylib "github.com/zmb3/spotify/v2"
 )
 
 func TestProcessMusicBatchAssignsFirstSpotifyImages(t *testing.T) {
@@ -23,22 +21,22 @@ func TestProcessMusicBatchAssignsFirstSpotifyImages(t *testing.T) {
 
 	app.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadata()}
 	app.spotify = &musicScannerSpotifyStub{
-		artist: &spotifylib.FullArtist{
-			SimpleArtist: spotifylib.SimpleArtist{
-				ID:   spotifylib.ID("artist123"),
+		artist: &spotifyapi.FullArtist{
+			SimpleArtist: spotifyapi.SimpleArtist{
+				ID:   spotifyapi.ID("artist123"),
 				Name: "Test Artist",
 			},
-			Images: []spotifylib.Image{
+			Images: []spotifyapi.Image{
 				{URL: "https://i.scdn.co/artist-first.jpg"},
 				{URL: "https://i.scdn.co/artist-second.jpg"},
 			},
 		},
-		album: &spotifylib.FullAlbum{
-			SimpleAlbum: spotifylib.SimpleAlbum{
-				ID:          spotifylib.ID("album123"),
+		album: &spotifyapi.FullAlbum{
+			SimpleAlbum: spotifyapi.SimpleAlbum{
+				ID:          spotifyapi.ID("album123"),
 				Name:        "Test Album",
 				TotalTracks: 10,
-				Images: []spotifylib.Image{
+				Images: []spotifyapi.Image{
 					{URL: "https://i.scdn.co/album-first.jpg"},
 					{URL: "https://i.scdn.co/album-second.jpg"},
 				},
@@ -79,18 +77,18 @@ func TestProcessMusicBatchRefreshesExistingSpotifyImages(t *testing.T) {
 
 	app.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadata()}
 	app.spotify = &musicScannerSpotifyStub{
-		artist: &spotifylib.FullArtist{
-			SimpleArtist: spotifylib.SimpleArtist{
-				ID:   spotifylib.ID("artist123"),
+		artist: &spotifyapi.FullArtist{
+			SimpleArtist: spotifyapi.SimpleArtist{
+				ID:   spotifyapi.ID("artist123"),
 				Name: "Test Artist",
 			},
-			Images: []spotifylib.Image{{URL: "https://i.scdn.co/refreshed-artist.jpg"}},
+			Images: []spotifyapi.Image{{URL: "https://i.scdn.co/refreshed-artist.jpg"}},
 		},
-		album: &spotifylib.FullAlbum{
-			SimpleAlbum: spotifylib.SimpleAlbum{
-				ID:     spotifylib.ID("album123"),
+		album: &spotifyapi.FullAlbum{
+			SimpleAlbum: spotifyapi.SimpleAlbum{
+				ID:     spotifyapi.ID("album123"),
 				Name:   "Test Album",
-				Images: []spotifylib.Image{{URL: "https://i.scdn.co/refreshed-album.jpg"}},
+				Images: []spotifyapi.Image{{URL: "https://i.scdn.co/refreshed-album.jpg"}},
 			},
 		},
 	}
@@ -183,15 +181,15 @@ func TestProcessMusicBatchPreservesExistingImagesWhenSpotifyMatchHasNoImages(t *
 
 	app.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadata()}
 	app.spotify = &musicScannerSpotifyStub{
-		artist: &spotifylib.FullArtist{
-			SimpleArtist: spotifylib.SimpleArtist{
-				ID:   spotifylib.ID("artist123"),
+		artist: &spotifyapi.FullArtist{
+			SimpleArtist: spotifyapi.SimpleArtist{
+				ID:   spotifyapi.ID("artist123"),
 				Name: "Test Artist",
 			},
 		},
-		album: &spotifylib.FullAlbum{
-			SimpleAlbum: spotifylib.SimpleAlbum{
-				ID:   spotifylib.ID("album123"),
+		album: &spotifyapi.FullAlbum{
+			SimpleAlbum: spotifyapi.SimpleAlbum{
+				ID:   spotifyapi.ID("album123"),
 				Name: "Test Album",
 			},
 		},
@@ -397,18 +395,18 @@ func TestProcessMusicBatchDoesNotUpdateUnchangedSpotifyImages(t *testing.T) {
 
 	app.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadata()}
 	app.spotify = &musicScannerSpotifyStub{
-		artist: &spotifylib.FullArtist{
-			SimpleArtist: spotifylib.SimpleArtist{
-				ID:   spotifylib.ID("artist123"),
+		artist: &spotifyapi.FullArtist{
+			SimpleArtist: spotifyapi.SimpleArtist{
+				ID:   spotifyapi.ID("artist123"),
 				Name: "Test Artist",
 			},
-			Images: []spotifylib.Image{{URL: "https://i.scdn.co/artist.jpg"}},
+			Images: []spotifyapi.Image{{URL: "https://i.scdn.co/artist.jpg"}},
 		},
-		album: &spotifylib.FullAlbum{
-			SimpleAlbum: spotifylib.SimpleAlbum{
-				ID:     spotifylib.ID("album123"),
+		album: &spotifyapi.FullAlbum{
+			SimpleAlbum: spotifyapi.SimpleAlbum{
+				ID:     spotifyapi.ID("album123"),
 				Name:   "Test Album",
-				Images: []spotifylib.Image{{URL: "https://i.scdn.co/album.jpg"}},
+				Images: []spotifyapi.Image{{URL: "https://i.scdn.co/album.jpg"}},
 			},
 		},
 	}
@@ -431,15 +429,15 @@ func TestProcessMusicBatchPersistsSpotifyMatchedRows(t *testing.T) {
 
 	app.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadata()}
 	app.spotify = &musicScannerSpotifyStub{
-		artist: &spotifylib.FullArtist{
-			SimpleArtist: spotifylib.SimpleArtist{
-				ID:   spotifylib.ID("artist123"),
+		artist: &spotifyapi.FullArtist{
+			SimpleArtist: spotifyapi.SimpleArtist{
+				ID:   spotifyapi.ID("artist123"),
 				Name: "Test Artist",
 			},
 		},
-		album: &spotifylib.FullAlbum{
-			SimpleAlbum: spotifylib.SimpleAlbum{
-				ID:   spotifylib.ID("album123"),
+		album: &spotifyapi.FullAlbum{
+			SimpleAlbum: spotifyapi.SimpleAlbum{
+				ID:   spotifyapi.ID("album123"),
 				Name: "Test Album",
 			},
 		},
@@ -487,28 +485,28 @@ func TestProcessMusicBatchPersistsSpotifyMetadataAndGenres(t *testing.T) {
 
 	app.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadata()}
 	app.spotify = &musicScannerSpotifyStub{
-		artist: &spotifylib.FullArtist{
-			SimpleArtist: spotifylib.SimpleArtist{
-				ID:   spotifylib.ID("artist-meta-123"),
+		artist: &spotifyapi.FullArtist{
+			SimpleArtist: spotifyapi.SimpleArtist{
+				ID:   spotifyapi.ID("artist-meta-123"),
 				Name: "Test Artist",
 			},
 			Popularity: 76,
 			Genres:     []string{"dream pop", "indie rock"},
-			Followers: spotifylib.Followers{
+			Followers: spotifyapi.Followers{
 				Count: 1500000,
 			},
-			Images: []spotifylib.Image{
+			Images: []spotifyapi.Image{
 				{URL: "https://i.scdn.co/artist-meta.jpg"},
 			},
 		},
-		album: &spotifylib.FullAlbum{
-			SimpleAlbum: spotifylib.SimpleAlbum{
-				ID:                   spotifylib.ID("album-meta-123"),
+		album: &spotifyapi.FullAlbum{
+			SimpleAlbum: spotifyapi.SimpleAlbum{
+				ID:                   spotifyapi.ID("album-meta-123"),
 				Name:                 "Test Album",
 				ReleaseDate:          "2024-04-12",
 				ReleaseDatePrecision: "day",
 				TotalTracks:          10,
-				Images: []spotifylib.Image{
+				Images: []spotifyapi.Image{
 					{URL: "https://i.scdn.co/album-meta.jpg"},
 				},
 			},
@@ -770,11 +768,11 @@ func TestProcessMusicBatchPreservesEnrichmentWhenSpotifyReportsZeroes(t *testing
 
 	app.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadata()}
 	app.spotify = &musicScannerSpotifyStub{
-		artist: &spotifylib.FullArtist{
-			SimpleArtist: spotifylib.SimpleArtist{ID: spotifylib.ID("artist123"), Name: "Test Artist"},
+		artist: &spotifyapi.FullArtist{
+			SimpleArtist: spotifyapi.SimpleArtist{ID: spotifyapi.ID("artist123"), Name: "Test Artist"},
 		},
-		album: &spotifylib.FullAlbum{
-			SimpleAlbum: spotifylib.SimpleAlbum{ID: spotifylib.ID("album123"), Name: "Test Album"},
+		album: &spotifyapi.FullAlbum{
+			SimpleAlbum: spotifyapi.SimpleAlbum{ID: spotifyapi.ID("album123"), Name: "Test Album"},
 		},
 	}
 
@@ -902,7 +900,7 @@ func TestArtistSortPersistenceAndSpotifyReconciliation(t *testing.T) {
 
 func TestMergedArtistSortVotesOncePerTrack(t *testing.T) {
 	s := setupMusicScanner(t)
-	s.spotify = &musicScannerSpotifyStub{artist: &spotifylib.FullArtist{SimpleArtist: spotifylib.SimpleArtist{ID: "shared"}}}
+	s.spotify = &musicScannerSpotifyStub{artist: &spotifyapi.FullArtist{SimpleArtist: spotifyapi.SimpleArtist{ID: "shared"}}}
 	dir := t.TempDir()
 	scanTaggedTrack(t, s, newMusicScanContext(nil), filepath.Join(dir, "one"), 1,
 		ffprobe.FormatTags{Title: "One", Artist: "Artist One, Artist Two, Artist One", SortArtist: "Z & A & Z"})
@@ -997,11 +995,11 @@ func seedLocalMusicianAndAlbum(t *testing.T, app *Scanner) (database.Musician, d
 }
 
 func TestGenerateMusicianSummaryOmitsFiguresSpotifyDidNotSend(t *testing.T) {
-	artist := func(popularity spotifylib.Numeric, followers spotifylib.Numeric) *spotifylib.FullArtist {
-		return &spotifylib.FullArtist{
-			SimpleArtist: spotifylib.SimpleArtist{Name: "Test Artist"},
+	artist := func(popularity spotifyapi.Numeric, followers spotifyapi.Numeric) *spotifyapi.FullArtist {
+		return &spotifyapi.FullArtist{
+			SimpleArtist: spotifyapi.SimpleArtist{Name: "Test Artist"},
 			Popularity:   popularity,
-			Followers:    spotifylib.Followers{Count: followers},
+			Followers:    spotifyapi.Followers{Count: followers},
 		}
 	}
 

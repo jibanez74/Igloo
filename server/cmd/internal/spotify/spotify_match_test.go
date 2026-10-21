@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-
-	spotifylib "github.com/zmb3/spotify/v2"
 )
 
 func TestMatchErrorFormatsDebugInfo(t *testing.T) {
@@ -162,7 +160,7 @@ func TestScoreAlbumTitle(t *testing.T) {
 
 func TestScoreAlbumArtist(t *testing.T) {
 	// No artist in the query: neutral perfect score so title alone decides.
-	score, name := scoreAlbumArtist("", []spotifylib.SimpleArtist{{Name: "Someone"}})
+	score, name := scoreAlbumArtist("", []SimpleArtist{{Name: "Someone"}})
 	if score != 100 || name != "" {
 		t.Fatalf("empty query artist = (%d, %q), want (100, \"\")", score, name)
 	}
@@ -173,7 +171,7 @@ func TestScoreAlbumArtist(t *testing.T) {
 		t.Fatalf("candidate without artists = (%d, %q), want (70, \"\")", score, name)
 	}
 
-	score, name = scoreAlbumArtist("The Beatles", []spotifylib.SimpleArtist{
+	score, name = scoreAlbumArtist("The Beatles", []SimpleArtist{
 		{Name: "Wrong Artist"},
 		{Name: "The Beatles"},
 	})
@@ -210,9 +208,9 @@ func TestSelectBestArtistMatch(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			artists := make([]spotifylib.FullArtist, 0, len(tc.candidates))
+			artists := make([]FullArtist, 0, len(tc.candidates))
 			for _, name := range tc.candidates {
-				var artist spotifylib.FullArtist
+				var artist FullArtist
 				artist.Name = name
 				artists = append(artists, artist)
 			}
@@ -233,10 +231,10 @@ func TestSelectBestArtistMatch(t *testing.T) {
 }
 
 func TestSelectBestAlbumMatch(t *testing.T) {
-	album := func(id, name string, artists ...string) spotifylib.SimpleAlbum {
-		candidate := spotifylib.SimpleAlbum{ID: spotifylib.ID(id), Name: name}
+	album := func(id, name string, artists ...string) SimpleAlbum {
+		candidate := SimpleAlbum{ID: ID(id), Name: name}
 		for _, artist := range artists {
-			candidate.Artists = append(candidate.Artists, spotifylib.SimpleArtist{Name: artist})
+			candidate.Artists = append(candidate.Artists, SimpleArtist{Name: artist})
 		}
 		return candidate
 	}
@@ -245,7 +243,7 @@ func TestSelectBestAlbumMatch(t *testing.T) {
 		name       string
 		title      string
 		artist     string
-		albums     []spotifylib.SimpleAlbum
+		albums     []SimpleAlbum
 		wantID     string
 		wantReason string
 	}{
@@ -253,19 +251,19 @@ func TestSelectBestAlbumMatch(t *testing.T) {
 		{
 			"later candidate with the matching artist wins",
 			"Greatest Hits", "Artist B",
-			[]spotifylib.SimpleAlbum{album("wrong123", "Greatest Hits", "Artist A"), album("right123", "Greatest Hits", "Artist B")},
+			[]SimpleAlbum{album("wrong123", "Greatest Hits", "Artist A"), album("right123", "Greatest Hits", "Artist B")},
 			"right123", MatchReasonAccepted,
 		},
 		{
 			"unicode-bearing title matches its ascii query",
 			"Love Yourself Answer", "BTS",
-			[]spotifylib.SimpleAlbum{album("answer123", "Love Yourself 結 'Answer'", "BTS")},
+			[]SimpleAlbum{album("answer123", "Love Yourself 結 'Answer'", "BTS")},
 			"answer123", MatchReasonAccepted,
 		},
 		{
 			"all-negative scores keep the first candidate as the best",
 			"Target Title", "Expected Artist",
-			[]spotifylib.SimpleAlbum{album("bad123", "Completely Different", "Wrong Artist"), album("worse123", "Nothing Related", "Another Artist")},
+			[]SimpleAlbum{album("bad123", "Completely Different", "Wrong Artist"), album("worse123", "Nothing Related", "Another Artist")},
 			"bad123", MatchReasonScoreBelowThreshold,
 		},
 	}

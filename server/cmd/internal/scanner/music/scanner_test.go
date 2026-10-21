@@ -13,9 +13,9 @@ import (
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/scannertest"
+	spotifyapi "igloo/cmd/internal/spotify"
 
 	_ "github.com/mattn/go-sqlite3"
-	spotifylib "github.com/zmb3/spotify/v2"
 )
 
 func setupMusicScanner(t testing.TB) *Scanner {
@@ -157,20 +157,20 @@ func (s *musicScannerFfprobeByPath) totalMetadataCalls() int {
 }
 
 type musicScannerSpotifyStub struct {
-	artist *spotifylib.FullArtist
+	artist *spotifyapi.FullArtist
 	// artistsByName, when set, answers per name (lowercased); a name it does
 	// not carry fails the lookup, so one stub can model a compound credit where
 	// only some members match.
-	artistsByName map[string]*spotifylib.FullArtist
+	artistsByName map[string]*spotifyapi.FullArtist
 	artistErr     error
 	artistCalls   int
-	album         *spotifylib.FullAlbum
+	album         *spotifyapi.FullAlbum
 	albumErr      error
 	albumCalls    int
 	clearCalls    int
 }
 
-func (s *musicScannerSpotifyStub) SearchArtistByName(_ context.Context, name string) (*spotifylib.FullArtist, error) {
+func (s *musicScannerSpotifyStub) SearchArtistByName(_ context.Context, name string) (*spotifyapi.FullArtist, error) {
 	s.artistCalls++
 	if s.artistsByName != nil {
 		artist, ok := s.artistsByName[strings.ToLower(strings.TrimSpace(name))]
@@ -186,7 +186,7 @@ func (s *musicScannerSpotifyStub) SearchArtistByName(_ context.Context, name str
 	return s.artist, nil
 }
 
-func (s *musicScannerSpotifyStub) SearchAndGetAlbumDetails(_ context.Context, _, _ string) (*spotifylib.FullAlbum, error) {
+func (s *musicScannerSpotifyStub) SearchAndGetAlbumDetails(_ context.Context, _, _ string) (*spotifyapi.FullAlbum, error) {
 	s.albumCalls++
 	if s.albumErr != nil {
 		return nil, s.albumErr
@@ -195,11 +195,11 @@ func (s *musicScannerSpotifyStub) SearchAndGetAlbumDetails(_ context.Context, _,
 	return s.album, nil
 }
 
-func (s *musicScannerSpotifyStub) SearchAlbums(_ context.Context, _ string) ([]spotifylib.SimpleAlbum, error) {
+func (s *musicScannerSpotifyStub) SearchAlbums(_ context.Context, _ string) ([]spotifyapi.SimpleAlbum, error) {
 	return nil, nil
 }
 
-func (s *musicScannerSpotifyStub) SearchTracks(_ context.Context, _ string) ([]spotifylib.FullTrack, error) {
+func (s *musicScannerSpotifyStub) SearchTracks(_ context.Context, _ string) ([]spotifyapi.FullTrack, error) {
 	return nil, nil
 }
 

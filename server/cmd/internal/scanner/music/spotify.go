@@ -11,8 +11,6 @@ import (
 	"igloo/cmd/internal/helpers"
 	"igloo/cmd/internal/scanner"
 	spotifyapi "igloo/cmd/internal/spotify"
-
-	spotifylib "github.com/zmb3/spotify/v2"
 )
 
 const (
@@ -95,7 +93,7 @@ func musicSpotifyReasonSplitsCompound(reason string) bool {
 // nothing to say: a sentence built from zeros ("is an independent artist with
 // 0 followers") would read as a claim about the artist rather than a gap. The
 // same holds for either figure alone, so a missing one contributes no phrase.
-func generateMusicianSummary(artist *spotifylib.FullArtist) string {
+func generateMusicianSummary(artist *spotifyapi.FullArtist) string {
 	followers := artist.Followers.Count
 	if artist.Popularity == 0 && followers == 0 {
 		return ""
@@ -148,7 +146,7 @@ func generateMusicianSummary(artist *spotifylib.FullArtist) string {
 	return strings.Join(parts, " ") + "."
 }
 
-func firstImageURL(images []spotifylib.Image) string {
+func firstImageURL(images []spotifyapi.Image) string {
 	if len(images) == 0 {
 		return ""
 	}

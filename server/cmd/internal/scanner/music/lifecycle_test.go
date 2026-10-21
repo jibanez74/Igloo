@@ -15,9 +15,9 @@ import (
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/scannertest"
+	spotifyapi "igloo/cmd/internal/spotify"
 
 	"github.com/mattn/go-sqlite3"
-	spotifylib "github.com/zmb3/spotify/v2"
 )
 
 func TestRunMusicScanLogsCancellationFromFinalPartialBatch(t *testing.T) {
@@ -371,7 +371,7 @@ type cancelingMusicSpotify struct {
 	phase  string
 }
 
-func (s *cancelingMusicSpotify) SearchArtistByName(context.Context, string) (*spotifylib.FullArtist, error) {
+func (s *cancelingMusicSpotify) SearchArtistByName(context.Context, string) (*spotifyapi.FullArtist, error) {
 	s.artistCalls++
 	if s.phase == "artist" {
 		s.cancel()
@@ -380,7 +380,7 @@ func (s *cancelingMusicSpotify) SearchArtistByName(context.Context, string) (*sp
 	return nil, nil
 }
 
-func (s *cancelingMusicSpotify) SearchAndGetAlbumDetails(context.Context, string, string) (*spotifylib.FullAlbum, error) {
+func (s *cancelingMusicSpotify) SearchAndGetAlbumDetails(context.Context, string, string) (*spotifyapi.FullAlbum, error) {
 	s.albumCalls++
 	s.cancel()
 	return nil, context.Canceled

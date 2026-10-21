@@ -14,8 +14,6 @@ import (
 	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/scannertest"
 	spotifyapi "igloo/cmd/internal/spotify"
-
-	spotifylib "github.com/zmb3/spotify/v2"
 )
 
 // musicStatusFixture probes three files, failing c.flac until the test clears
@@ -168,8 +166,8 @@ func TestMusicScanStatusSpotifyTallies(t *testing.T) {
 	}
 
 	s.spotify = &musicScannerSpotifyStub{
-		artist: &spotifylib.FullArtist{SimpleArtist: spotifylib.SimpleArtist{ID: "artist"}},
-		album:  &spotifylib.FullAlbum{SimpleAlbum: spotifylib.SimpleAlbum{ID: "album"}},
+		artist: &spotifyapi.FullArtist{SimpleArtist: spotifyapi.SimpleArtist{ID: "artist"}},
+		album:  &spotifyapi.FullAlbum{SimpleAlbum: spotifyapi.SimpleAlbum{ID: "album"}},
 	}
 	s.scan(dir)
 	second := s.Status()

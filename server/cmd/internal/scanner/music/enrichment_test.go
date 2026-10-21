@@ -12,8 +12,6 @@ import (
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/scanner/scannertest"
 	spotifyapi "igloo/cmd/internal/spotify"
-
-	spotifylib "github.com/zmb3/spotify/v2"
 )
 
 func TestSpotifyRetriesUnchangedCatalog(t *testing.T) {
@@ -38,8 +36,8 @@ func TestSpotifyRetriesUnchangedCatalog(t *testing.T) {
 			s.spotify = stub
 			stub.artistErr = nil
 			stub.albumErr = nil
-			stub.artist = &spotifylib.FullArtist{SimpleArtist: spotifylib.SimpleArtist{ID: "artist"}}
-			stub.album = &spotifylib.FullAlbum{SimpleAlbum: spotifylib.SimpleAlbum{ID: "album", ReleaseDate: "2001", ReleaseDatePrecision: "year"}}
+			stub.artist = &spotifyapi.FullArtist{SimpleArtist: spotifyapi.SimpleArtist{ID: "artist"}}
+			stub.album = &spotifyapi.FullAlbum{SimpleAlbum: spotifyapi.SimpleAlbum{ID: "album", ReleaseDate: "2001", ReleaseDatePrecision: "year"}}
 			beforeArtist, beforeAlbum := stub.artistCalls, stub.albumCalls
 			s.scan(dir)
 			if probe.Calls() != 1 || stub.artistCalls != beforeArtist+1 || stub.albumCalls != beforeAlbum+1 {
@@ -135,7 +133,7 @@ func TestMusicNormalizedIdentityAndMutableMetadata(t *testing.T) {
 func TestMusicRelationshipsAndSpotifyDateFallback(t *testing.T) {
 	fixtureDir := t.TempDir()
 	s := setupMusicScanner(t)
-	s.spotify = &musicScannerSpotifyStub{artist: &spotifylib.FullArtist{SimpleArtist: spotifylib.SimpleArtist{ID: "artist"}, Genres: []string{"Rock"}}, album: &spotifylib.FullAlbum{SimpleAlbum: spotifylib.SimpleAlbum{ID: "album", ReleaseDate: "2000", ReleaseDatePrecision: "year"}, Genres: []string{"Rock"}}}
+	s.spotify = &musicScannerSpotifyStub{artist: &spotifyapi.FullArtist{SimpleArtist: spotifyapi.SimpleArtist{ID: "artist"}, Genres: []string{"Rock"}}, album: &spotifyapi.FullAlbum{SimpleAlbum: spotifyapi.SimpleAlbum{ID: "album", ReleaseDate: "2000", ReleaseDatePrecision: "year"}, Genres: []string{"Rock"}}}
 	scan := newMusicScanContext(nil)
 	tags := ffprobe.FormatTags{Title: "Track", Artist: "Artist", Album: "Album", Genre: "Rock", Date: "2022"}
 	scanTaggedTrack(t, s, scan, fixtureDir+"/one", 1, tags)
@@ -248,7 +246,7 @@ func TestSpotifyMergesPreserveTracksAndRollback(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s.spotify = &musicScannerSpotifyStub{artist: &spotifylib.FullArtist{SimpleArtist: spotifylib.SimpleArtist{ID: "artist"}}, album: &spotifylib.FullAlbum{SimpleAlbum: spotifylib.SimpleAlbum{ID: "album"}}}
+	s.spotify = &musicScannerSpotifyStub{artist: &spotifyapi.FullArtist{SimpleArtist: spotifyapi.SimpleArtist{ID: "artist"}}, album: &spotifyapi.FullAlbum{SimpleAlbum: spotifyapi.SimpleAlbum{ID: "album"}}}
 	scan := newMusicScanContext(nil)
 	// Enrich the first owner before forcing the second merge to roll back.
 	artist, err := s.resolveMusician(ctx, scan, "Artist 1", "")
@@ -424,7 +422,7 @@ func TestSpotifyAlbumMergeRollback(t *testing.T) {
 	for i := 1; i <= 2; i++ {
 		scanTaggedTrack(t, s, scan, fmt.Sprintf(fixtureDir+"/%d", i), 1, ffprobe.FormatTags{Title: "Track", Album: fmt.Sprintf("Album %d", i), Date: fmt.Sprintf("200%d", i)})
 	}
-	s.spotify = &musicScannerSpotifyStub{album: &spotifylib.FullAlbum{SimpleAlbum: spotifylib.SimpleAlbum{ID: "album"}}}
+	s.spotify = &musicScannerSpotifyStub{album: &spotifyapi.FullAlbum{SimpleAlbum: spotifyapi.SimpleAlbum{ID: "album"}}}
 	scan = newMusicScanContext(nil)
 	owner, err := s.resolveAlbum(ctx, scan, "Album 1", "Album 1", "")
 	if err != nil {
@@ -484,7 +482,7 @@ func TestMusicUnchangedDerivedMetadataDoesNotWrite(t *testing.T) {
 		t.Fatal(err)
 	}
 	scanTaggedTrack(t, s, scan, fixtureDir+"/one", 2, tags)
-	s.spotify = &musicScannerSpotifyStub{artist: &spotifylib.FullArtist{SimpleArtist: spotifylib.SimpleArtist{ID: "artist"}}, album: &spotifylib.FullAlbum{SimpleAlbum: spotifylib.SimpleAlbum{ID: "album", ReleaseDate: "1999", ReleaseDatePrecision: "year"}}}
+	s.spotify = &musicScannerSpotifyStub{artist: &spotifyapi.FullArtist{SimpleArtist: spotifyapi.SimpleArtist{ID: "artist"}}, album: &spotifyapi.FullAlbum{SimpleAlbum: spotifyapi.SimpleAlbum{ID: "album", ReleaseDate: "1999", ReleaseDatePrecision: "year"}}}
 	err = s.retrySpotify(context.Background(), newMusicScanContext(nil), newScanReport(Status{}))
 	if err != nil {
 		t.Fatal(err)
@@ -522,7 +520,7 @@ func TestCompoundCreditMergeRepointsEarlierCredits(t *testing.T) {
 	}
 
 	s.spotify = &musicScannerSpotifyStub{
-		artist: &spotifylib.FullArtist{SimpleArtist: spotifylib.SimpleArtist{ID: "s2", Name: "Canonical Two"}},
+		artist: &spotifyapi.FullArtist{SimpleArtist: spotifyapi.SimpleArtist{ID: "s2", Name: "Canonical Two"}},
 	}
 	scanTaggedTrack(t, s, newMusicScanContext(nil), filepath.Join(t.TempDir(), "one"), 1,
 		ffprobe.FormatTags{Title: "One", Artist: "Artist One, Artist Two"})

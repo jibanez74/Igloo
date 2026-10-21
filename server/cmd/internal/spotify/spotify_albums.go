@@ -5,11 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-
-	"github.com/zmb3/spotify/v2"
 )
 
-func (s *spotifyClient) SearchAlbums(ctx context.Context, title string) ([]spotify.SimpleAlbum, error) {
+func (s *spotifyClient) SearchAlbums(ctx context.Context, title string) ([]SimpleAlbum, error) {
 	title = strings.TrimSpace(title)
 	if title == "" {
 		return nil, errors.New("album title is required")
@@ -18,18 +16,18 @@ func (s *spotifyClient) SearchAlbums(ctx context.Context, title string) ([]spoti
 	ctx, cancel := spotifyRequestContext(ctx)
 	defer cancel()
 
-	results, err := s.client.Search(ctx, title, spotify.SearchTypeAlbum, spotify.Limit(spotifyAlbumRequestSearchLimit))
+	results, err := s.search(ctx, title, "album", spotifyAlbumRequestSearchLimit)
 	if err != nil {
 		return nil, fmt.Errorf("spotify album search failed: %w", err)
 	}
 	if results.Albums == nil {
-		return []spotify.SimpleAlbum{}, nil
+		return []SimpleAlbum{}, nil
 	}
 
-	return results.Albums.Albums, nil
+	return results.Albums.Items, nil
 }
 
-func (s *spotifyClient) SearchAndGetAlbumDetails(ctx context.Context, title, artist string) (*spotify.FullAlbum, error) {
+func (s *spotifyClient) SearchAndGetAlbumDetails(ctx context.Context, title, artist string) (*FullAlbum, error) {
 	title = strings.TrimSpace(title)
 	artist = strings.TrimSpace(artist)
 	if title == "" {
@@ -84,7 +82,7 @@ func (s *spotifyClient) SearchAndGetAlbumDetails(ctx context.Context, title, art
 			Threshold:   spotifyAlbumThreshold,
 		}
 
-		results, err := s.client.Search(ctx, search.query, spotify.SearchTypeAlbum, spotify.Limit(spotifyAlbumSearchLimit))
+		results, err := s.search(ctx, search.query, "album", spotifyAlbumSearchLimit)
 		if err != nil {
 			info.Reason = MatchReasonSearchFailed
 			return nil, newMatchError(info, err)
@@ -93,13 +91,13 @@ func (s *spotifyClient) SearchAndGetAlbumDetails(ctx context.Context, title, art
 			continue
 		}
 
-		returned, matchInfo := selectBestAlbumMatch(title, artist, results.Albums.Albums, search.query, search.strategy)
+		returned, matchInfo := selectBestAlbumMatch(title, artist, results.Albums.Items, search.query, search.strategy)
 		bestInfo = chooseBetterMatchInfo(bestInfo, matchInfo)
 		if returned == nil {
 			continue
 		}
 
-		album, err := s.client.GetAlbum(ctx, returned.ID)
+		album, err := s.fetchAlbum(ctx, returned.ID)
 		if err != nil {
 			info.CandidateName = returned.Name
 			info.Reason = MatchReasonDetailsFailed
