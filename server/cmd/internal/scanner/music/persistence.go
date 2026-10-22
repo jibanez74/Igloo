@@ -58,6 +58,16 @@ func (s *Scanner) persistResolvedTrackTx(ctx context.Context, qtx *database.Quer
 		return 0, err
 	}
 	params := resolved.params
+	// Saved ahead of the credits: a merge it causes makes persistMusicians
+	// re-read the credits' aliases.
+	var adoptedIDs []int64
+	if resolved.adoptedArtist != nil {
+		id, err := s.persistMusician(ctx, qtx, scan, *resolved.adoptedArtist)
+		if err != nil {
+			return 0, fmt.Errorf("adopted musician failed: %w", err)
+		}
+		adoptedIDs = append(adoptedIDs, id)
+	}
 	musicianIDs, err := s.persistMusicians(ctx, qtx, scan, resolved.musicians)
 	if err != nil {
 		return 0, err
@@ -134,7 +144,7 @@ func (s *Scanner) persistResolvedTrackTx(ctx context.Context, qtx *database.Quer
 		}
 	}
 
-	for _, id := range uniqueIDs(oldArtists, musicianIDs) {
+	for _, id := range uniqueIDs(oldArtists, musicianIDs, adoptedIDs) {
 		err = qtx.ReconcileMusicArtistSort(ctx, id)
 		if err != nil {
 			return 0, err

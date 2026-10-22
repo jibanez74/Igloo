@@ -21,10 +21,14 @@ type resolvedTrack struct {
 	params     database.UpsertTrackParams
 	musicians  []resolvedMusician
 	album      *resolvedAlbum
-	genreTag   string
-	artistTag  string
-	artistSort string
-	albumSort  string
+	// adoptedArtist is the album artist adopted from the album's match when
+	// none of the track's credits carries that name; it is persisted with the
+	// track.
+	adoptedArtist *resolvedMusician
+	genreTag      string
+	artistTag     string
+	artistSort    string
+	albumSort     string
 }
 
 type resolvedMusician struct {
@@ -224,8 +228,8 @@ func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, 
 			if adoptErr != nil {
 				return nil, adoptErr
 			}
-			if adopted != nil {
-				applyAdoptedArtist(resolved.musicians, adopted)
+			if adopted != nil && !applyAdoptedArtist(resolved.musicians, adopted) {
+				resolved.adoptedArtist = adopted
 			}
 		}
 	}
@@ -617,9 +621,11 @@ func (s *Scanner) adoptAlbumArtist(ctx context.Context, scan *musicScanContext, 
 }
 
 // applyAdoptedArtist copies an adoption onto the credits resolved before it,
-// which hold values rather than the scan's pointer.
-func applyAdoptedArtist(credits []resolvedMusician, adopted *resolvedMusician) {
+// which hold values rather than the scan's pointer, and reports whether any
+// credit carries the adopted name.
+func applyAdoptedArtist(credits []resolvedMusician, adopted *resolvedMusician) bool {
 	key := scanner.NormalizedScanCacheKey(adopted.name)
+	applied := false
 	for i := range credits {
 		if scanner.NormalizedScanCacheKey(credits[i].name) != key {
 			continue
@@ -627,7 +633,9 @@ func applyAdoptedArtist(credits []resolvedMusician, adopted *resolvedMusician) {
 		credits[i].spotifyArtist = adopted.spotifyArtist
 		credits[i].spotifyMatch = adopted.spotifyMatch
 		credits[i].splitCompoundOnNoMatch = false
+		applied = true
 	}
+	return applied
 }
 
 func (s *Scanner) findExistingMusician(ctx context.Context, name string) (database.GetMusicianBySpotifyIDRow, bool, error) {

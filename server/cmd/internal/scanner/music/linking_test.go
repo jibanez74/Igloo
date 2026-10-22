@@ -512,6 +512,22 @@ func TestAlbumArtistAdoptedFromMatchedAlbum(t *testing.T) {
 		}
 	})
 
+	t.Run("for an album artist the track does not credit", func(t *testing.T) {
+		fixtureDir := t.TempDir()
+		s := setupMusicScanner(t)
+		s.spotify = beatlesStub()
+		scan := newMusicScanContext(nil)
+		// The first track saves the name with its own search's miss.
+		scanTaggedTrack(t, s, scan, fixtureDir+"/intro.m4a", 1, ffprobe.FormatTags{Title: "Intro", Artist: "Beatles"})
+		// The album's credit adopts it from a track credited to someone else.
+		scanTaggedTrack(t, s, scan, fixtureDir+"/01.m4a", 1, ffprobe.FormatTags{Title: "Come Together", Artist: "Billy Preston", AlbumArtist: "Beatles", Album: "Abbey Road", Track: "1"})
+
+		spotifyID, thumb, status := musicianMatchFor(t, s, "Beatles")
+		if spotifyID.String != "beatles-1" || thumb.String != "https://i.scdn.co/beatles.jpg" || status.String != musicSpotifyStatusMatched {
+			t.Fatalf("musician = %#v %#v %#v, want the adoption saved with the track", spotifyID, thumb, status)
+		}
+	})
+
 	t.Run("during the retry pass", func(t *testing.T) {
 		dir := t.TempDir()
 		s := setupMusicScanner(t)
