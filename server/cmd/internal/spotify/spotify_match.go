@@ -2,10 +2,12 @@ package spotify
 
 import (
 	"fmt"
+	"maps"
 	"math"
 	"slices"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"golang.org/x/text/unicode/norm"
 )
@@ -102,6 +104,34 @@ var albumNoiseTokens = map[string]struct{}{
 	"remastered":  {},
 	"single":      {},
 	"version":     {},
+}
+
+// trackVersionWords name a different recording when a track title's
+// qualifier carries one the other title lacks: "Orgullecida (Alternate Take)"
+// is not "Orgullecida", while "Live and Let Die" carries no qualifier at all.
+var trackVersionWords = map[string]struct{}{
+	"acoustic":     {},
+	"alternate":    {},
+	"demo":         {},
+	"finale":       {},
+	"instrumental": {},
+	"karaoke":      {},
+	"live":         {},
+	"mix":          {},
+	"remix":        {},
+	"reprise":      {},
+	"take":         {},
+	"unplugged":    {},
+}
+
+// trackRemasterWords make up a qualifier that only notes a remaster, as in
+// Spotify's "Song - Remastered 2011"; a four-digit year counts too.
+var trackRemasterWords = map[string]struct{}{
+	"digital":    {},
+	"digitally":  {},
+	"remaster":   {},
+	"remastered": {},
+	"version":    {},
 }
 
 type MatchDebugInfo struct {
@@ -365,6 +395,102 @@ func scoreTokenSequence(queryTokens, candidateTokens []string) int {
 	return matched * 70 / len(queryTokens)
 }
 
+// scoreTrackTitle scores a track title the way scoreTitle does, and also
+// compares both titles' cores, without featured artists, source notes or
+// remaster notes, keeping the better score. A version word in only one title
+// keeps the score below the threshold.
+func scoreTrackTitle(query, candidate string) int {
+	queryCore, queryVersions := trackTitleCore(query)
+	candidateCore, candidateVersions := trackTitleCore(candidate)
+	score := max(scoreTitle(query, candidate), scoreTitle(queryCore, candidateCore))
+	if !maps.Equal(queryVersions, candidateVersions) {
+		score = min(score, spotifyTrackThreshold-1)
+	}
+	return score
+}
+
+// trackTitleCore drops the qualifiers that name no different recording and
+// returns what remains, with the version words the kept qualifiers carry.
+func trackTitleCore(title string) (string, map[string]struct{}) {
+	base, qualifiers := trackTitleParts(title)
+	core := []string{base}
+	versions := map[string]struct{}{}
+	for _, qualifier := range qualifiers {
+		words := strings.Fields(normalizeComparisonText(qualifier))
+		if trackQualifierDropped(words) {
+			continue
+		}
+		core = append(core, qualifier)
+		for _, word := range words {
+			_, isVersion := trackVersionWords[word]
+			if isVersion {
+				versions[word] = struct{}{}
+			}
+		}
+	}
+	return strings.Join(core, " "), versions
+}
+
+// trackTitleParts splits a track title into the text outside brackets and its
+// qualifiers: each bracketed segment, and everything after a " - " outside
+// brackets, as in "Song (feat. X) - Remastered 2011".
+func trackTitleParts(title string) (string, []string) {
+	var base, segment strings.Builder
+	var qualifiers []string
+	depth := 0
+	for i := 0; i < len(title); {
+		if depth == 0 && strings.HasPrefix(title[i:], " - ") {
+			qualifiers = append(qualifiers, title[i+len(" - "):])
+			break
+		}
+		r, size := utf8.DecodeRuneInString(title[i:])
+		i += size
+		switch {
+		case r == '(' || r == '[':
+			if depth > 0 {
+				segment.WriteRune(r)
+			}
+			depth++
+		case (r == ')' || r == ']') && depth > 0:
+			depth--
+			if depth == 0 {
+				qualifiers = append(qualifiers, segment.String())
+				segment.Reset()
+			} else {
+				segment.WriteRune(r)
+			}
+		case depth > 0:
+			segment.WriteRune(r)
+		default:
+			base.WriteRune(r)
+		}
+	}
+	if segment.Len() > 0 {
+		qualifiers = append(qualifiers, segment.String())
+	}
+	return base.String(), qualifiers
+}
+
+// trackQualifierDropped reports a qualifier that names no different
+// recording: a featured artist, a "From ..." source note, or a remaster note.
+func trackQualifierDropped(words []string) bool {
+	if len(words) == 0 {
+		return true
+	}
+	switch words[0] {
+	case "feat", "ft", "featuring", "with", "from":
+		return true
+	}
+	for _, word := range words {
+		_, isRemaster := trackRemasterWords[word]
+		isYear := len(word) == 4 && strings.Trim(word, "0123456789") == ""
+		if !isRemaster && !isYear {
+			return false
+		}
+	}
+	return true
+}
+
 // scoreAlbumArtist scores a candidate's credits against the query artist. A
 // candidate without credits keeps a lenient score so the title can still
 // decide; when the artist's Spotify id is known, a candidate crediting it is
@@ -564,7 +690,7 @@ func MatchAlbumTrack(query TrackQuery, tracks []SimpleTrack) (*SimpleTrack, Matc
 	positioned := trackAtPosition(query, tracks)
 	if positioned != nil {
 		info.CandidateName = positioned.Name
-		info.Score = scoreTitle(query.Title, positioned.Name)
+		info.Score = scoreTrackTitle(query.Title, positioned.Name)
 		titleAgrees := info.Score >= spotifyTrackThreshold
 		durationAgrees := durationGap(query, *positioned) <= trackDurationToleranceMs
 		if titleAgrees || durationAgrees {
@@ -576,7 +702,7 @@ func MatchAlbumTrack(query TrackQuery, tracks []SimpleTrack) (*SimpleTrack, Matc
 	info.Strategy = strategyTrackTitle
 	bestIndex, bestScore, bestGap := 0, -1, int64(0)
 	for index := range tracks {
-		score := scoreTitle(query.Title, tracks[index].Name)
+		score := scoreTrackTitle(query.Title, tracks[index].Name)
 		gap := durationGap(query, tracks[index])
 		better := score > bestScore || (score == bestScore && gap < bestGap)
 		if !better {

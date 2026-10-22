@@ -158,6 +158,35 @@ func TestScoreTitle(t *testing.T) {
 	}
 }
 
+func TestScoreTrackTitle(t *testing.T) {
+	tests := []struct {
+		query, candidate string
+		agrees           bool
+	}{
+		{"Present Without a Bow (feat. Leon Bridges)", "Present Without A Bow", true},
+		{"Party for Two (feat. Mark McGrath)", "Party For Two - Remastered 2023", true},
+		{`We Have All The Time in The World (From "On Her Majesty's Secret Service" Soundtrack)`, "We Have All the Time in the World", true},
+		{"Half of My Heart (with Taylor Swift)", "Half of My Heart", true},
+		{"Paranoid Android", "Paranoid Android - 2017 Remaster", true},
+		{"Song (Live)", "Song - Live", true},
+		{"Song - Radio Edit", "Song", true},
+		{"Live and Let Die", "Live and Let Die", true},
+		{"Orgullecida (Alternate Take)", "Orgullecida", false},
+		{"Chan Chan (Monitor Mix)", "Chan Chan", false},
+		{"Beauty and the Beast (Finale)", "Beauty and the Beast", false},
+		{"Step Up (Live) [Bonus Track]", "Step Up", false},
+		{"Song (Radio Mix)", "Song (Club Mix)", false},
+		// A featured artist's name is no version word.
+		{"Track (feat. Mix Master Mike)", "Track", true},
+	}
+	for _, tc := range tests {
+		score := scoreTrackTitle(tc.query, tc.candidate)
+		if (score >= spotifyTrackThreshold) != tc.agrees {
+			t.Errorf("scoreTrackTitle(%q, %q) = %d, want agreement %v", tc.query, tc.candidate, score, tc.agrees)
+		}
+	}
+}
+
 func TestScoreAlbumArtist(t *testing.T) {
 	// No artist in the query: neutral perfect score so title alone decides.
 	score, name := scoreAlbumArtist(AlbumQuery{}, []SimpleArtist{{Name: "Someone"}})
