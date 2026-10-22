@@ -86,7 +86,7 @@ func (s *Scanner) enrichMovies(ctx context.Context, scan *movieScanContext, repo
 	sort.Slice(candidates, func(i, j int) bool { return candidates[i].file.Path < candidates[j].file.Path })
 	report.status.EnrichmentTotal = len(candidates)
 	s.publish(report)
-	breaker := &scanner.ProviderBreaker{}
+	breaker := &scanner.ProviderBreaker{Classify: tmdb.ProviderFailure}
 	scanner.RunWorkers(ctx, scanWorkers, candidates, func() bool { return !breaker.Stopped }, s.prepareEnrichment,
 		func(job enrichmentJob) {
 			report.Activate(job.file.Path)
