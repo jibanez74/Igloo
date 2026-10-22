@@ -491,6 +491,7 @@ describe("album details content", () => {
 
   it("omits the Spotify link, type label and explicit markers for an unmatched album", async () => {
     const local = albumDetailsResponse(42, "Blue Record", "The Band", "Alabaster");
+    local.album.spotify_id = nullableString(null);
     local.album.spotify_url = null;
     local.album.album_type = nullableString(null);
 
