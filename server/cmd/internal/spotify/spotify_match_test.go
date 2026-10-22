@@ -3,6 +3,7 @@ package spotify
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -409,7 +410,7 @@ func TestArtistNamesAgree(t *testing.T) {
 	}
 }
 
-func TestMatchAlbumTrack(t *testing.T) {
+func TestMatchAlbumTracks(t *testing.T) {
 	track := func(id, name string, disc, number, durationMs int) SimpleTrack {
 		return SimpleTrack{ID: ID(id), Name: name, DiscNumber: Numeric(disc), TrackNumber: Numeric(number), Duration: Numeric(durationMs)}
 	}
@@ -444,7 +445,8 @@ func TestMatchAlbumTrack(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			matched, info := MatchAlbumTrack(tc.query, tc.tracks)
+			pairing := MatchAlbumTracks([]TrackQuery{tc.query}, nil, tc.tracks)[0]
+			matched, info := pairing.Track, pairing.Info
 			if info.Reason != tc.wantReason || info.Strategy != tc.wantStrategy || info.Lookup != lookupTrack {
 				t.Fatalf("info = %+v, want reason %s strategy %s", info, tc.wantReason, tc.wantStrategy)
 			}
@@ -462,9 +464,81 @@ func TestMatchAlbumTrack(t *testing.T) {
 	}
 
 	t.Run("a length-decided position still records the title score", func(t *testing.T) {
-		_, info := MatchAlbumTrack(TrackQuery{Title: "02 - Track 2", Disc: 1, Number: 2, DurationMs: 386500}, okComputer)
+		info := MatchAlbumTracks([]TrackQuery{{Title: "02 - Track 2", Disc: 1, Number: 2, DurationMs: 386500}}, nil, okComputer)[0].Info
 		if info.CandidateName != "Paranoid Android" || info.Score >= spotifyTrackThreshold {
 			t.Fatalf("info = %+v, want the candidate with its real (low) title score", info)
+		}
+	})
+	// Several files of one album, each wanting a Spotify track.
+	pair := func(t *testing.T, pending []TrackQuery, held []HeldTrack, tracks []SimpleTrack) []string {
+		t.Helper()
+		results := MatchAlbumTracks(pending, held, tracks)
+		got := make([]string, len(results))
+		for i, result := range results {
+			got[i] = result.Info.Reason
+			if result.Track != nil {
+				got[i] = string(result.Track.ID)
+			}
+		}
+		return got
+	}
+	album := []SimpleTrack{
+		track("aria", "Aria", 1, 6, 62000),
+		track("box", "How Does a Moment Last Forever (Music Box)", 1, 3, 63000),
+		track("chan", "Chan Chan", 1, 1, 256000),
+		track("bottle", "Message In A Bottle (Taylor's Version) [From The Vault]", 1, 25, 226000),
+	}
+	cases := []struct {
+		name    string
+		pending []TrackQuery
+		held    []HeldTrack
+		want    []string
+	}{
+		{
+			"a title claim beats a claim on length alone",
+			[]TrackQuery{{Title: "Aria", Disc: 1, Number: 3, DurationMs: 62400}, {Title: "How Does a Moment Last Forever (Music Box)", Disc: 1, Number: 6, DurationMs: 63100}},
+			nil,
+			[]string{"aria", "box"},
+		},
+		{
+			"a second file wanting a taken track misses as claimed",
+			[]TrackQuery{{Title: "Chan Chan", Disc: 1, Number: 1, DurationMs: 256000}, {Title: "Chan Chan (Monitor Mix)", Disc: 2, Number: 1, DurationMs: 250000}, {Title: "Chan Chan (Edit)", Disc: 2, Number: 2, DurationMs: 200000}},
+			nil,
+			[]string{"chan", MatchReasonScoreBelowThreshold, MatchReasonTrackClaimed},
+		},
+		{
+			"a held track is taken",
+			[]TrackQuery{{Title: "A Message From Taylor", Disc: 1, Number: 31, DurationMs: 30000}},
+			[]HeldTrack{{TrackQuery: TrackQuery{Title: "Message In A Bottle (Taylor's Version) [From The Vault]", Disc: 1, Number: 25, DurationMs: 226000}, ID: "bottle"}},
+			[]string{MatchReasonTrackClaimed},
+		},
+		{
+			"a duplicate file shares the track",
+			[]TrackQuery{{Title: "Chan Chan", Disc: 1, Number: 1, DurationMs: 256300}, {Title: "Chan Chan", Disc: 1, Number: 1, DurationMs: 255900}},
+			nil,
+			[]string{"chan", "chan"},
+		},
+		{
+			"a duplicate of a held file shares the track",
+			[]TrackQuery{{Title: "Chan Chan", Disc: 1, Number: 1, DurationMs: 256300}},
+			[]HeldTrack{{TrackQuery: TrackQuery{Title: "Chan Chan", Disc: 1, Number: 1, DurationMs: 256000}, ID: "chan"}},
+			[]string{"chan"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := pair(t, tc.pending, tc.held, album)
+			if !slices.Equal(got, tc.want) {
+				t.Fatalf("pairings = %q, want %q", got, tc.want)
+			}
+		})
+	}
+
+	t.Run("a claimed miss records the track it lost", func(t *testing.T) {
+		results := MatchAlbumTracks([]TrackQuery{{Title: "Chan Chan", Number: 1, DurationMs: 256000}, {Title: "Chan Chan (Edit)", DurationMs: 200000}}, nil, album)
+		info := results[1].Info
+		if info.CandidateName != "Chan Chan" || info.Score < spotifyTrackThreshold {
+			t.Fatalf("info = %+v, want the lost candidate with its agreeing score", info)
 		}
 	})
 }

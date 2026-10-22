@@ -18,6 +18,12 @@ const (
 	musicSpotifyStatusMatched   = "matched"
 	musicSpotifyStatusFailed    = "failed"
 	musicSpotifyStatusUnmatched = "unmatched"
+	// musicSpotifyReasonTracksDisagree records an album match the link pass
+	// dropped because the album's tracks contradicted it.
+	musicSpotifyReasonTracksDisagree = "tracks_disagree"
+	// albumCheckMinTracks is the fewest local tracks an album needs before its
+	// tracks may contradict its match; one or two files say too little.
+	albumCheckMinTracks = 3
 )
 
 // resolvedSpotifyMatch is one lookup's outcome. A miss keeps the best
@@ -62,7 +68,7 @@ func resolvedSpotifyMatchFromInfo(info spotifyapi.MatchDebugInfo) resolvedSpotif
 		reason:    helpers.NullString(info.Reason),
 		candidate: helpers.NullString(info.CandidateName),
 	}
-	scored := info.Reason == spotifyapi.MatchReasonScoreBelowThreshold
+	scored := info.Reason == spotifyapi.MatchReasonScoreBelowThreshold || info.Reason == spotifyapi.MatchReasonTrackClaimed
 	if scored {
 		match.score = sql.NullInt64{Int64: int64(info.Score), Valid: true}
 	}
@@ -88,7 +94,8 @@ func musicSpotifyMatchStatusIsFinal(status string) bool {
 func musicSpotifyReasonIsUnmatched(reason string) bool {
 	return reason == spotifyapi.MatchReasonNoResults ||
 		reason == spotifyapi.MatchReasonScoreBelowThreshold ||
-		reason == spotifyapi.MatchReasonEmptyQuery
+		reason == spotifyapi.MatchReasonEmptyQuery ||
+		reason == spotifyapi.MatchReasonTrackClaimed
 }
 
 func musicSpotifyReasonSplitsCompound(reason string) bool {

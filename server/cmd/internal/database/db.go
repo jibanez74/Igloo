@@ -42,6 +42,15 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.clearMovieTmdbRetryStmt, err = db.PrepareContext(ctx, clearMovieTmdbRetry); err != nil {
 		return nil, fmt.Errorf("error preparing query ClearMovieTmdbRetry: %w", err)
 	}
+	if q.clearMusicAlbumSpotifyStmt, err = db.PrepareContext(ctx, clearMusicAlbumSpotify); err != nil {
+		return nil, fmt.Errorf("error preparing query ClearMusicAlbumSpotify: %w", err)
+	}
+	if q.clearMusicAlbumSpotifyDateStmt, err = db.PrepareContext(ctx, clearMusicAlbumSpotifyDate); err != nil {
+		return nil, fmt.Errorf("error preparing query ClearMusicAlbumSpotifyDate: %w", err)
+	}
+	if q.clearMusicAlbumTrackLinksStmt, err = db.PrepareContext(ctx, clearMusicAlbumTrackLinks); err != nil {
+		return nil, fmt.Errorf("error preparing query ClearMusicAlbumTrackLinks: %w", err)
+	}
 	if q.clearShowEpisodeRetryStmt, err = db.PrepareContext(ctx, clearShowEpisodeRetry); err != nil {
 		return nil, fmt.Errorf("error preparing query ClearShowEpisodeRetry: %w", err)
 	}
@@ -227,6 +236,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.deleteMovieWatchProgressStmt, err = db.PrepareContext(ctx, deleteMovieWatchProgress); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteMovieWatchProgress: %w", err)
+	}
+	if q.deleteMusicAlbumTrackMatchesStmt, err = db.PrepareContext(ctx, deleteMusicAlbumTrackMatches); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteMusicAlbumTrackMatches: %w", err)
 	}
 	if q.deleteMusicCreditMetadataStmt, err = db.PrepareContext(ctx, deleteMusicCreditMetadata); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteMusicCreditMetadata: %w", err)
@@ -1142,6 +1154,21 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing clearMovieTmdbRetryStmt: %w", cerr)
 		}
 	}
+	if q.clearMusicAlbumSpotifyStmt != nil {
+		if cerr := q.clearMusicAlbumSpotifyStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing clearMusicAlbumSpotifyStmt: %w", cerr)
+		}
+	}
+	if q.clearMusicAlbumSpotifyDateStmt != nil {
+		if cerr := q.clearMusicAlbumSpotifyDateStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing clearMusicAlbumSpotifyDateStmt: %w", cerr)
+		}
+	}
+	if q.clearMusicAlbumTrackLinksStmt != nil {
+		if cerr := q.clearMusicAlbumTrackLinksStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing clearMusicAlbumTrackLinksStmt: %w", cerr)
+		}
+	}
 	if q.clearShowEpisodeRetryStmt != nil {
 		if cerr := q.clearShowEpisodeRetryStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing clearShowEpisodeRetryStmt: %w", cerr)
@@ -1450,6 +1477,11 @@ func (q *Queries) Close() error {
 	if q.deleteMovieWatchProgressStmt != nil {
 		if cerr := q.deleteMovieWatchProgressStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing deleteMovieWatchProgressStmt: %w", cerr)
+		}
+	}
+	if q.deleteMusicAlbumTrackMatchesStmt != nil {
+		if cerr := q.deleteMusicAlbumTrackMatchesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteMusicAlbumTrackMatchesStmt: %w", cerr)
 		}
 	}
 	if q.deleteMusicCreditMetadataStmt != nil {
@@ -2962,6 +2994,9 @@ type Queries struct {
 	addWatchRoomMemberStmt                      *sql.Stmt
 	adminUpdateUserStmt                         *sql.Stmt
 	clearMovieTmdbRetryStmt                     *sql.Stmt
+	clearMusicAlbumSpotifyStmt                  *sql.Stmt
+	clearMusicAlbumSpotifyDateStmt              *sql.Stmt
+	clearMusicAlbumTrackLinksStmt               *sql.Stmt
 	clearShowEpisodeRetryStmt                   *sql.Stmt
 	clearShowRetryStmt                          *sql.Stmt
 	clearShowSeasonRetryStmt                    *sql.Stmt
@@ -3024,6 +3059,7 @@ type Queries struct {
 	deleteMovieSubtitlesStmt                    *sql.Stmt
 	deleteMovieVideoStreamsStmt                 *sql.Stmt
 	deleteMovieWatchProgressStmt                *sql.Stmt
+	deleteMusicAlbumTrackMatchesStmt            *sql.Stmt
 	deleteMusicCreditMetadataStmt               *sql.Stmt
 	deleteMusicSpotifyMatchStmt                 *sql.Stmt
 	deleteNotificationForUserStmt               *sql.Stmt
@@ -3329,6 +3365,9 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		addWatchRoomMemberStmt:                      q.addWatchRoomMemberStmt,
 		adminUpdateUserStmt:                         q.adminUpdateUserStmt,
 		clearMovieTmdbRetryStmt:                     q.clearMovieTmdbRetryStmt,
+		clearMusicAlbumSpotifyStmt:                  q.clearMusicAlbumSpotifyStmt,
+		clearMusicAlbumSpotifyDateStmt:              q.clearMusicAlbumSpotifyDateStmt,
+		clearMusicAlbumTrackLinksStmt:               q.clearMusicAlbumTrackLinksStmt,
 		clearShowEpisodeRetryStmt:                   q.clearShowEpisodeRetryStmt,
 		clearShowRetryStmt:                          q.clearShowRetryStmt,
 		clearShowSeasonRetryStmt:                    q.clearShowSeasonRetryStmt,
@@ -3391,6 +3430,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		deleteMovieSubtitlesStmt:                    q.deleteMovieSubtitlesStmt,
 		deleteMovieVideoStreamsStmt:                 q.deleteMovieVideoStreamsStmt,
 		deleteMovieWatchProgressStmt:                q.deleteMovieWatchProgressStmt,
+		deleteMusicAlbumTrackMatchesStmt:            q.deleteMusicAlbumTrackMatchesStmt,
 		deleteMusicCreditMetadataStmt:               q.deleteMusicCreditMetadataStmt,
 		deleteMusicSpotifyMatchStmt:                 q.deleteMusicSpotifyMatchStmt,
 		deleteNotificationForUserStmt:               q.deleteNotificationForUserStmt,

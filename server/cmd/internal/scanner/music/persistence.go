@@ -81,16 +81,9 @@ func (s *Scanner) persistResolvedTrackTx(ctx context.Context, qtx *database.Quer
 		return 0, fmt.Errorf("upsert track failed: %w", err)
 	}
 
-	if resolved.trackMatch != nil {
-		err = saveMusicSpotifyMatch(ctx, qtx, musicSpotifyEntityTrack, trackID, resolved.trackMatch)
-		if params.SpotifyID.Valid {
-			scan.tracksLinked++
-		}
-	} else {
-		// Unpaired this scan, a changed file drops its stale outcome so the
-		// retry pass pairs it afresh.
-		err = qtx.DeleteMusicSpotifyMatch(ctx, database.DeleteMusicSpotifyMatchParams{EntityType: musicSpotifyEntityTrack, EntityID: trackID})
-	}
+	// The link pass pairs a new or changed file with the rest of its album, so
+	// a stale outcome goes.
+	err = qtx.DeleteMusicSpotifyMatch(ctx, database.DeleteMusicSpotifyMatchParams{EntityType: musicSpotifyEntityTrack, EntityID: trackID})
 	if err != nil {
 		return 0, fmt.Errorf("track spotify match failed: %w", err)
 	}

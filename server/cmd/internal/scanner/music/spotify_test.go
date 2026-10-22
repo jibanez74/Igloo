@@ -504,10 +504,12 @@ func TestProcessMusicBatchPersistsSpotifyMetadata(t *testing.T) {
 	}
 
 	file := testTrackFile(t)
-	scanned, skipped, errCount := app.processMusicBatchForTest(t, context.Background(), []scanner.ScanFile{file})
+	scan := newMusicScanContext(nil)
+	scanned, skipped, errCount := app.processMusicFixtureBatch(t, context.Background(), scan, []scanner.ScanFile{file})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
 		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
 	}
+	linkScannedTracks(t, app, scan)
 
 	var musicianSpotifyID sql.NullString
 	var musicianThumb sql.NullString

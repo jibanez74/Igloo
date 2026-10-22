@@ -1,6 +1,7 @@
 package spotify
 
 import (
+	"cmp"
 	"fmt"
 	"maps"
 	"math"
@@ -23,6 +24,7 @@ const (
 	MatchReasonEmptyQuery          = "empty_query"
 	MatchReasonSearchFailed        = "search_failed"
 	MatchReasonDetailsFailed       = "details_failed"
+	MatchReasonTrackClaimed        = "track_claimed"
 )
 
 // Lookup and strategy names describe which Spotify query produced a match.
@@ -83,6 +85,20 @@ type TrackQuery struct {
 	Disc       int
 	Number     int
 	DurationMs int64
+}
+
+// HeldTrack is a local track already paired with the Spotify track ID, which
+// no other file of its album may take.
+type HeldTrack struct {
+	TrackQuery
+	ID ID
+}
+
+// TrackPairing is one local track's outcome: the Spotify track it pairs with,
+// nil on a miss, and the diagnostics that explain either.
+type TrackPairing struct {
+	Track *SimpleTrack
+	Info  MatchDebugInfo
 }
 
 var artistStopWords = map[string]struct{}{
@@ -670,36 +686,107 @@ func ArtistNamesAgree(local, candidate string) bool {
 	return scoreArtistName(local, candidate) >= artistAdoptionThreshold
 }
 
-// MatchAlbumTrack pairs a local track with one of its album's Spotify tracks.
-// The file's position nominates a candidate, accepted when its title or its
-// length agrees; otherwise the best title wins. The info always carries the
-// candidate's title score, even when the length decided.
-func MatchAlbumTrack(query TrackQuery, tracks []SimpleTrack) (*SimpleTrack, MatchDebugInfo) {
-	info := MatchDebugInfo{
-		Lookup:    lookupTrack,
-		Input:     query.Title,
-		Strategy:  strategyTrackPosition,
-		Threshold: spotifyTrackThreshold,
-		Reason:    MatchReasonNoResults,
-	}
+// trackEdge is one acceptable pairing of a pending local track with a
+// Spotify track. tier ranks its evidence: the file's position with an
+// agreeing title (3), an agreeing title alone (2), then the position with
+// only an agreeing length (1).
+type trackEdge struct {
+	query, track, tier, score int
+	gap                       int64
+}
 
-	if len(tracks) == 0 {
-		return nil, info
+func (e trackEdge) strategy() string {
+	if e.tier == 2 {
+		return strategyTrackTitle
 	}
+	return strategyTrackPosition
+}
 
-	positioned := trackAtPosition(query, tracks)
-	if positioned != nil {
-		info.CandidateName = positioned.Name
-		info.Score = scoreTrackTitle(query.Title, positioned.Name)
-		titleAgrees := info.Score >= spotifyTrackThreshold
-		durationAgrees := durationGap(query, *positioned) <= trackDurationToleranceMs
-		if titleAgrees || durationAgrees {
-			info.Reason = MatchReasonAccepted
-			return positioned, info
+// MatchAlbumTracks pairs an album's pending local tracks with its Spotify
+// track list. Every acceptable pairing is ranked and taken best first, so each
+// Spotify track goes to one file: the one at its position with an agreeing
+// title before one whose title merely agrees, and either before one at its
+// position whose length alone agrees. A held track is already taken, and only
+// a duplicate file, with the same title and length as the file holding a
+// track, shares it. A file that loses every acceptable track to others misses
+// with MatchReasonTrackClaimed; the results follow pending's order.
+func MatchAlbumTracks(pending []TrackQuery, held []HeldTrack, tracks []SimpleTrack) []TrackPairing {
+	owners := make(map[int]TrackQuery, len(held)+len(pending))
+	for _, holder := range held {
+		index := slices.IndexFunc(tracks, func(track SimpleTrack) bool { return track.ID == holder.ID })
+		if index < 0 {
+			continue
+		}
+		_, taken := owners[index]
+		if !taken {
+			owners[index] = holder.TrackQuery
 		}
 	}
 
-	info.Strategy = strategyTrackTitle
+	var edges []trackEdge
+	for queryIndex, query := range pending {
+		positioned := trackAtPosition(query, tracks)
+		for trackIndex := range tracks {
+			edge := trackEdge{query: queryIndex, track: trackIndex, score: scoreTrackTitle(query.Title, tracks[trackIndex].Name), gap: durationGap(query, tracks[trackIndex])}
+			atPosition := positioned == &tracks[trackIndex]
+			titleAgrees := edge.score >= spotifyTrackThreshold
+			switch {
+			case atPosition && titleAgrees:
+				edge.tier = 3
+			case titleAgrees:
+				edge.tier = 2
+			case atPosition && edge.gap <= trackDurationToleranceMs:
+				edge.tier = 1
+			default:
+				continue
+			}
+			edges = append(edges, edge)
+		}
+	}
+	// Stable, so a tie keeps the album's file order and Spotify's track order.
+	slices.SortStableFunc(edges, func(a, b trackEdge) int {
+		return cmp.Or(cmp.Compare(b.tier, a.tier), cmp.Compare(b.score, a.score), cmp.Compare(a.gap, b.gap))
+	})
+
+	results := make([]TrackPairing, len(pending))
+	best := make([]*trackEdge, len(pending))
+	for i := range edges {
+		edge := &edges[i]
+		if results[edge.query].Track != nil {
+			continue
+		}
+		if best[edge.query] == nil {
+			best[edge.query] = edge
+		}
+		query := pending[edge.query]
+		owner, taken := owners[edge.track]
+		if taken && !sameRecording(owner, query) {
+			continue
+		}
+		if !taken {
+			owners[edge.track] = query
+		}
+		results[edge.query] = TrackPairing{Track: &tracks[edge.track], Info: trackMatchInfo(query, tracks[edge.track], edge.score, edge.strategy(), MatchReasonAccepted)}
+	}
+	for i, query := range pending {
+		if results[i].Track != nil {
+			continue
+		}
+		if best[i] != nil {
+			results[i].Info = trackMatchInfo(query, tracks[best[i].track], best[i].score, best[i].strategy(), MatchReasonTrackClaimed)
+			continue
+		}
+		results[i].Info = nearestTrackTitle(query, tracks)
+	}
+	return results
+}
+
+// nearestTrackTitle explains a file no Spotify track accepts with the best
+// title among them.
+func nearestTrackTitle(query TrackQuery, tracks []SimpleTrack) MatchDebugInfo {
+	if len(tracks) == 0 {
+		return MatchDebugInfo{Lookup: lookupTrack, Input: query.Title, Strategy: strategyTrackPosition, Threshold: spotifyTrackThreshold, Reason: MatchReasonNoResults}
+	}
 	bestIndex, bestScore, bestGap := 0, -1, int64(0)
 	for index := range tracks {
 		score := scoreTrackTitle(query.Title, tracks[index].Name)
@@ -710,16 +797,26 @@ func MatchAlbumTrack(query TrackQuery, tracks []SimpleTrack) (*SimpleTrack, Matc
 		}
 		bestIndex, bestScore, bestGap = index, score, gap
 	}
+	return trackMatchInfo(query, tracks[bestIndex], bestScore, strategyTrackTitle, MatchReasonScoreBelowThreshold)
+}
 
-	info.CandidateName = tracks[bestIndex].Name
-	info.Score = bestScore
-	if bestScore < spotifyTrackThreshold {
-		info.Reason = MatchReasonScoreBelowThreshold
-		return nil, info
+func trackMatchInfo(query TrackQuery, track SimpleTrack, score int, strategy, reason string) MatchDebugInfo {
+	return MatchDebugInfo{
+		Lookup:        lookupTrack,
+		Input:         query.Title,
+		Strategy:      strategy,
+		CandidateName: track.Name,
+		Score:         score,
+		Threshold:     spotifyTrackThreshold,
+		Reason:        reason,
 	}
+}
 
-	info.Reason = MatchReasonAccepted
-	return &tracks[bestIndex], info
+// sameRecording reports a duplicate file: the same title and, within the
+// length tolerance, the same length.
+func sameRecording(a, b TrackQuery) bool {
+	gap := a.DurationMs - b.DurationMs
+	return normalizeComparisonText(a.Title) == normalizeComparisonText(b.Title) && max(gap, -gap) <= trackDurationToleranceMs
 }
 
 // trackAtPosition returns the one Spotify track at the file's disc and track

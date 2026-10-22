@@ -589,13 +589,11 @@ INSERT INTO tracks (
   composer,
   copyright,
   language,
-  spotify_id,
-  explicit,
   album_id,
   musician_id
 )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (file_path) DO UPDATE
 SET
   title = excluded.title,
@@ -617,8 +615,8 @@ SET
   composer = excluded.composer,
   copyright = excluded.copyright,
   language = excluded.language,
-  spotify_id = excluded.spotify_id,
-  explicit = excluded.explicit,
+  spotify_id = NULL,
+  explicit = false,
   album_id = excluded.album_id,
   musician_id = excluded.musician_id,
   updated_at = CURRENT_TIMESTAMP
@@ -646,12 +644,12 @@ type UpsertTrackParams struct {
 	Composer      sql.NullString `json:"composer"`
 	Copyright     sql.NullString `json:"copyright"`
 	Language      sql.NullString `json:"language"`
-	SpotifyID     sql.NullString `json:"spotify_id"`
-	Explicit      bool           `json:"explicit"`
 	AlbumID       sql.NullInt64  `json:"album_id"`
 	MusicianID    sql.NullInt64  `json:"musician_id"`
 }
 
+// A changed file loses its Spotify pairing; the scan's link pass pairs it
+// again with the rest of its album.
 func (q *Queries) UpsertTrack(ctx context.Context, arg UpsertTrackParams) (int64, error) {
 	row := q.queryRow(ctx, q.upsertTrackStmt, upsertTrack,
 		arg.Title,
@@ -674,8 +672,6 @@ func (q *Queries) UpsertTrack(ctx context.Context, arg UpsertTrackParams) (int64
 		arg.Composer,
 		arg.Copyright,
 		arg.Language,
-		arg.SpotifyID,
-		arg.Explicit,
 		arg.AlbumID,
 		arg.MusicianID,
 	)

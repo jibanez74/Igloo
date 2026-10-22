@@ -21,10 +21,6 @@ type resolvedTrack struct {
 	params     database.UpsertTrackParams
 	musicians  []resolvedMusician
 	album      *resolvedAlbum
-	// trackMatch is the outcome of pairing the track with its album's Spotify
-	// track list; nil when the list was not at hand this scan, which the retry
-	// pass settles.
-	trackMatch *resolvedSpotifyMatch
 	genreTag   string
 	artistTag  string
 	artistSort string
@@ -232,7 +228,6 @@ func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, 
 				applyAdoptedArtist(resolved.musicians, adopted)
 			}
 		}
-		linkTrack(scan, resolved, scanner.NormalizedScanCacheKey(album.title, album.albumArtist))
 	}
 
 	return resolved, nil
@@ -632,51 +627,6 @@ func applyAdoptedArtist(credits []resolvedMusician, adopted *resolvedMusician) {
 		credits[i].spotifyArtist = adopted.spotifyArtist
 		credits[i].spotifyMatch = adopted.spotifyMatch
 		credits[i].splitCompoundOnNoMatch = false
-	}
-}
-
-// trackLink is a pairing with a Spotify track, as applied to the catalog row.
-type trackLink struct {
-	spotifyID   sql.NullString
-	explicit    bool
-	trackNumber int64
-}
-
-// pairTrack matches one local track against its album's Spotify tracks. The
-// link is nil on a miss, which the returned outcome explains.
-func pairTrack(query spotifyapi.TrackQuery, tracks []spotifyapi.SimpleTrack) (*trackLink, resolvedSpotifyMatch) {
-	track, info := spotifyapi.MatchAlbumTrack(query, tracks)
-	if track == nil {
-		return nil, resolvedSpotifyMatchFromInfo(info)
-	}
-	link := &trackLink{
-		spotifyID:   sql.NullString{String: track.ID.String(), Valid: true},
-		explicit:    track.Explicit,
-		trackNumber: int64(track.TrackNumber),
-	}
-	return link, resolvedSpotifyMatch{status: musicSpotifyStatusMatched}
-}
-
-// linkTrack pairs the track with its album's Spotify track list when this
-// scan has it. A track whose album matched in an earlier scan stays unpaired
-// here; the retry pass fetches the list once and links it. Spotify's track
-// number only fills in a missing tag.
-func linkTrack(scan *musicScanContext, resolved *resolvedTrack, albumKey string) {
-	tracks, ok := scan.albumTracks[albumKey]
-	if !ok {
-		return
-	}
-	params := &resolved.params
-	query := spotifyapi.TrackQuery{Title: params.Title, Disc: int(params.Disc), Number: int(params.TrackIndex), DurationMs: params.Duration}
-	link, match := pairTrack(query, tracks)
-	resolved.trackMatch = &match
-	if link == nil {
-		return
-	}
-	params.SpotifyID = link.spotifyID
-	params.Explicit = link.explicit
-	if params.TrackIndex == 0 {
-		params.TrackIndex = link.trackNumber
 	}
 }
 

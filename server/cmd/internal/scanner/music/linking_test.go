@@ -4,8 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -60,6 +62,16 @@ func trackLinkFor(t *testing.T, s *Scanner, path string) trackLinkRow {
 	return row
 }
 
+// linkScannedTracks runs the link pass that pairs the tracks scan persisted,
+// from the track lists scan's album matches brought along.
+func linkScannedTracks(t *testing.T, s *Scanner, scan *musicScanContext) {
+	t.Helper()
+	err := s.linkAlbumTracks(context.Background(), scan, newScanReport(Status{}))
+	if err != nil {
+		t.Fatalf("link album tracks: %v", err)
+	}
+}
+
 func assertLinked(t *testing.T, row trackLinkRow, spotifyID string, explicit bool, trackIndex int64) {
 	t.Helper()
 	if row.spotifyID.String != spotifyID || row.explicit != explicit || row.trackIndex != trackIndex || row.status.String != musicSpotifyStatusMatched {
@@ -86,6 +98,7 @@ func TestTrackLinkingPairsTracksWithTheAlbumList(t *testing.T) {
 	// Without a track number the title decides, and Spotify's number fills the gap.
 	byTitle := fixtureDir + "/03.m4a"
 	scanTaggedTrack(t, s, scan, byTitle, 1, albumTags("Third Song", ""))
+	linkScannedTracks(t, s, scan)
 
 	assertLinked(t, trackLinkFor(t, s, byPosition), "t1", true, 1)
 	assertLinked(t, trackLinkFor(t, s, byLength), "t2", false, 2)
@@ -103,7 +116,9 @@ func TestTrackLinkingRecordsExtrasAsUnmatched(t *testing.T) {
 	ctx := context.Background()
 
 	extra := fixtureDir + "/09.m4a"
-	scanTaggedTrack(t, s, newMusicScanContext(nil), extra, 1, albumTags("Hidden Bonus Jam", "9"))
+	scan := newMusicScanContext(nil)
+	scanTaggedTrack(t, s, scan, extra, 1, albumTags("Hidden Bonus Jam", "9"))
+	linkScannedTracks(t, s, scan)
 	row := trackLinkFor(t, s, extra)
 	if row.spotifyID.Valid || row.status.String != musicSpotifyStatusUnmatched || row.reason.String != spotifyapi.MatchReasonScoreBelowThreshold {
 		t.Fatalf("extra track = %+v, want an unmatched score_below_threshold outcome", row)
@@ -119,6 +134,145 @@ func TestTrackLinkingRecordsExtrasAsUnmatched(t *testing.T) {
 	}
 	if stub.albumCalls != 1 || stub.albumFetches != 0 {
 		t.Fatalf("album searches=%d fetches=%d, want no further requests", stub.albumCalls, stub.albumFetches)
+	}
+}
+
+func TestTrackLinkingGivesEachSpotifyTrackToOneFile(t *testing.T) {
+	fixtureDir := t.TempDir()
+	s := setupMusicScanner(t)
+	s.spotify = &musicScannerSpotifyStub{artist: testArtist(), album: testAlbum(
+		spotifyTrack("t1", "Chan Chan", 1, 1, 180250, false),
+		spotifyTrack("t2", "Second Song", 1, 2, 240000, false),
+	)}
+	scan := newMusicScanContext(nil)
+	original := fixtureDir + "/01.m4a"
+	scanTaggedTrack(t, s, scan, original, 1, albumTags("Chan Chan", "1"))
+	bonus := fixtureDir + "/03.m4a"
+	scanTaggedTrack(t, s, scan, bonus, 1, albumTags("Chan Chan (Exclusivo)", "3"))
+	duplicate := fixtureDir + "/01 copy.m4a"
+	scanTaggedTrack(t, s, scan, duplicate, 1, albumTags("Chan Chan", "1"))
+	linkScannedTracks(t, s, scan)
+
+	assertLinked(t, trackLinkFor(t, s, original), "t1", false, 1)
+	// A copy of the same file is the same recording and shares the track.
+	assertLinked(t, trackLinkFor(t, s, duplicate), "t1", false, 1)
+	row := trackLinkFor(t, s, bonus)
+	if row.spotifyID.Valid || row.status.String != musicSpotifyStatusUnmatched || row.reason.String != spotifyapi.MatchReasonTrackClaimed {
+		t.Fatalf("bonus track = %+v, want an unmatched track_claimed outcome", row)
+	}
+	if row.candidate.String != "Chan Chan" || !row.score.Valid || row.score.Int64 < 70 {
+		t.Fatalf("bonus track = %+v, want the track it lost recorded with its score", row)
+	}
+}
+
+// albumMatchRow is what an album match stores on the album.
+type albumMatchRow struct {
+	spotifyID, cover, albumType, spotifyDate, releaseDate, status, reason sql.NullString
+	totalTracks                                                           sql.NullInt64
+}
+
+func albumMatchFor(t *testing.T, s *Scanner, title string) albumMatchRow {
+	t.Helper()
+	var row albumMatchRow
+	err := s.tx.DB.QueryRow(`
+		SELECT a.spotify_id, a.cover, a.album_type, a.total_tracks, md.spotify_date, a.release_date, m.status, m.reason
+		FROM albums a
+		LEFT JOIN music_album_metadata md ON md.album_id = a.id
+		LEFT JOIN music_spotify_matches m ON m.entity_type = 'album' AND m.entity_id = a.id
+		WHERE a.title = ?`, title).Scan(&row.spotifyID, &row.cover, &row.albumType, &row.totalTracks, &row.spotifyDate, &row.releaseDate, &row.status, &row.reason)
+	if err != nil {
+		t.Fatalf("album match for %s: %v", title, err)
+	}
+	return row
+}
+
+func TestTrackLinkingDropsAnAlbumMatchItsTracksContradict(t *testing.T) {
+	fixtureDir := t.TempDir()
+	s := setupMusicScanner(t)
+	// A same-titled album whose tracks are none of the files'.
+	album := testAlbum(
+		spotifyTrack("x1", "Malena", 1, 1, 240000, false),
+		spotifyTrack("x2", "Negracha", 1, 2, 250000, true),
+	)
+	album.Images = []spotifyapi.Image{{URL: "https://i.scdn.co/wrong.jpg"}}
+	album.TotalTracks = 2
+	album.ReleaseDate = "2011-09-16"
+	album.ReleaseDatePrecision = "day"
+	stub := &musicScannerSpotifyStub{artist: testArtist(), album: album}
+	s.spotify = stub
+	scan := newMusicScanContext(nil)
+	var paths []string
+	for i, title := range []string{"Forget You", "Nothin' On You", "California Gurls"} {
+		path := fmt.Sprintf("%s/%02d.m4a", fixtureDir, i+1)
+		scanTaggedTrack(t, s, scan, path, 1, albumTags(title, strconv.Itoa(i+1)))
+		paths = append(paths, path)
+	}
+	linkScannedTracks(t, s, scan)
+
+	row := albumMatchFor(t, s, "Test Album")
+	cleared := !row.spotifyID.Valid && !row.cover.Valid && !row.albumType.Valid && !row.totalTracks.Valid && !row.spotifyDate.Valid && !row.releaseDate.Valid
+	if !cleared || row.status.String != musicSpotifyStatusUnmatched || row.reason.String != musicSpotifyReasonTracksDisagree {
+		t.Fatalf("album = %+v, want its Spotify fields cleared and an unmatched tracks_disagree outcome", row)
+	}
+	for _, path := range paths {
+		link := trackLinkFor(t, s, path)
+		if link.spotifyID.Valid || link.explicit || link.status.Valid {
+			t.Fatalf("track %s = %+v, want no pairing and no outcome", path, link)
+		}
+	}
+	if scan.enrichmentCounts[musicSpotifyStatusMatched] != 1 || scan.enrichmentCounts[musicSpotifyStatusUnmatched] != 1 {
+		t.Fatalf("enrichment counts = %v, want the artist matched and the album moved to unmatched", scan.enrichmentCounts)
+	}
+
+	// The outcome is final: a later scan neither searches for the album again
+	// nor fetches its tracks.
+	err := s.retrySpotify(context.Background(), newMusicScanContext(nil), newScanReport(Status{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stub.albumCalls != 1 || stub.albumFetches != 0 {
+		t.Fatalf("album searches=%d fetches=%d, want no further requests", stub.albumCalls, stub.albumFetches)
+	}
+}
+
+func TestTrackLinkingKeepsABiggerLocalEditionMatched(t *testing.T) {
+	fixtureDir := t.TempDir()
+	s := setupMusicScanner(t)
+	// The files are an anniversary edition holding the whole Spotify album
+	// plus extras; few of them pair, but every Spotify track does.
+	s.spotify = &musicScannerSpotifyStub{artist: testArtist(), album: testAlbum(spotifyTrack("t1", "Opening Song", 1, 1, 180250, false))}
+	scan := newMusicScanContext(nil)
+	for i, title := range []string{"Opening Song", "Vicenta", "La Pluma", "Mandinga"} {
+		scanTaggedTrack(t, s, scan, fmt.Sprintf("%s/%02d.m4a", fixtureDir, i+1), 1, albumTags(title, strconv.Itoa(i+1)))
+	}
+	linkScannedTracks(t, s, scan)
+
+	row := albumMatchFor(t, s, "Test Album")
+	if row.spotifyID.String != "album" || row.status.String != musicSpotifyStatusMatched {
+		t.Fatalf("album = %+v, want the match kept", row)
+	}
+	assertLinked(t, trackLinkFor(t, s, fixtureDir+"/01.m4a"), "t1", false, 1)
+}
+
+func TestTrackLinkingPairsFromListsAtHandAfterTheBreakerTrips(t *testing.T) {
+	fixtureDir := t.TempDir()
+	s := setupMusicScanner(t)
+	stub := &musicScannerSpotifyStub{artist: testArtist(), album: testAlbum(spotifyTrack("t1", "Opening Song", 1, 1, 180250, false))}
+	s.spotify = stub
+	scan := newMusicScanContext(nil)
+	path := fixtureDir + "/01.m4a"
+	scanTaggedTrack(t, s, scan, path, 1, albumTags("Opening Song", "1"))
+
+	// The album matched before Spotify started failing, so its track list is
+	// already here and pairing needs no request.
+	scan.breaker.Stopped = true
+	err := s.retrySpotify(context.Background(), scan, newScanReport(Status{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertLinked(t, trackLinkFor(t, s, path), "t1", false, 1)
+	if stub.albumFetches != 0 {
+		t.Fatalf("fetches=%d, want none", stub.albumFetches)
 	}
 }
 

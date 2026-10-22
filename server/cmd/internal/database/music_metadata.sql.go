@@ -10,6 +10,36 @@ import (
 	"database/sql"
 )
 
+const clearMusicAlbumSpotify = `-- name: ClearMusicAlbumSpotify :exec
+UPDATE albums SET spotify_id=NULL, cover=NULL, album_type=NULL, total_tracks=NULL, updated_at=CURRENT_TIMESTAMP WHERE id=?
+`
+
+// Drops what a match its tracks contradicted stored on the album; the next
+// three statements drop its date and its tracks' pairings and outcomes.
+func (q *Queries) ClearMusicAlbumSpotify(ctx context.Context, id int64) error {
+	_, err := q.exec(ctx, q.clearMusicAlbumSpotifyStmt, clearMusicAlbumSpotify, id)
+	return err
+}
+
+const clearMusicAlbumSpotifyDate = `-- name: ClearMusicAlbumSpotifyDate :exec
+UPDATE music_album_metadata SET spotify_date=NULL WHERE album_id=?
+`
+
+func (q *Queries) ClearMusicAlbumSpotifyDate(ctx context.Context, albumID int64) error {
+	_, err := q.exec(ctx, q.clearMusicAlbumSpotifyDateStmt, clearMusicAlbumSpotifyDate, albumID)
+	return err
+}
+
+const clearMusicAlbumTrackLinks = `-- name: ClearMusicAlbumTrackLinks :exec
+UPDATE tracks SET spotify_id=NULL, explicit=false, updated_at=CURRENT_TIMESTAMP
+WHERE album_id=? AND (spotify_id IS NOT NULL OR explicit)
+`
+
+func (q *Queries) ClearMusicAlbumTrackLinks(ctx context.Context, albumID sql.NullInt64) error {
+	_, err := q.exec(ctx, q.clearMusicAlbumTrackLinksStmt, clearMusicAlbumTrackLinks, albumID)
+	return err
+}
+
 const countMusicAlbumRetryCandidates = `-- name: CountMusicAlbumRetryCandidates :one
 SELECT COUNT(*) FROM albums e LEFT JOIN music_spotify_matches m ON m.entity_id=e.id AND m.entity_type='album'
 WHERE (m.status IS NULL OR m.status='failed')
@@ -65,6 +95,15 @@ DELETE FROM musicians WHERE id=?
 
 func (q *Queries) DeleteMergedMusicArtist(ctx context.Context, id int64) error {
 	_, err := q.exec(ctx, q.deleteMergedMusicArtistStmt, deleteMergedMusicArtist, id)
+	return err
+}
+
+const deleteMusicAlbumTrackMatches = `-- name: DeleteMusicAlbumTrackMatches :exec
+DELETE FROM music_spotify_matches WHERE entity_type='track' AND entity_id IN (SELECT id FROM tracks WHERE album_id=?)
+`
+
+func (q *Queries) DeleteMusicAlbumTrackMatches(ctx context.Context, albumID sql.NullInt64) error {
+	_, err := q.exec(ctx, q.deleteMusicAlbumTrackMatchesStmt, deleteMusicAlbumTrackMatches, albumID)
 	return err
 }
 
@@ -328,20 +367,24 @@ func (q *Queries) MusicAlbumTrackIDs(ctx context.Context, albumID sql.NullInt64)
 }
 
 const musicAlbumTracksToLink = `-- name: MusicAlbumTracksToLink :many
-SELECT t.id, t.title, t.disc, t.track_index, t.duration FROM tracks t
+SELECT t.id, t.title, t.disc, t.track_index, t.duration, t.spotify_id, m.status FROM tracks t
 LEFT JOIN music_spotify_matches m ON m.entity_type='track' AND m.entity_id=t.id
-WHERE t.album_id=? AND (m.status IS NULL OR m.status='failed')
+WHERE t.album_id=?
 ORDER BY t.disc, t.track_index, t.id
 `
 
 type MusicAlbumTracksToLinkRow struct {
-	ID         int64  `json:"id"`
-	Title      string `json:"title"`
-	Disc       int64  `json:"disc"`
-	TrackIndex int64  `json:"track_index"`
-	Duration   int64  `json:"duration"`
+	ID         int64          `json:"id"`
+	Title      string         `json:"title"`
+	Disc       int64          `json:"disc"`
+	TrackIndex int64          `json:"track_index"`
+	Duration   int64          `json:"duration"`
+	SpotifyID  sql.NullString `json:"spotify_id"`
+	Status     sql.NullString `json:"status"`
 }
 
+// Every track of the album with its outcome: one without an outcome, or with
+// a failed one, is paired; a matched one holds its Spotify track.
 func (q *Queries) MusicAlbumTracksToLink(ctx context.Context, albumID sql.NullInt64) ([]MusicAlbumTracksToLinkRow, error) {
 	rows, err := q.query(ctx, q.musicAlbumTracksToLinkStmt, musicAlbumTracksToLink, albumID)
 	if err != nil {
@@ -357,6 +400,8 @@ func (q *Queries) MusicAlbumTracksToLink(ctx context.Context, albumID sql.NullIn
 			&i.Disc,
 			&i.TrackIndex,
 			&i.Duration,
+			&i.SpotifyID,
+			&i.Status,
 		); err != nil {
 			return nil, err
 		}

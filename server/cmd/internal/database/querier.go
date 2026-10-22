@@ -20,6 +20,11 @@ type Querier interface {
 	AddWatchRoomMember(ctx context.Context, arg AddWatchRoomMemberParams) error
 	AdminUpdateUser(ctx context.Context, arg AdminUpdateUserParams) (AdminUpdateUserRow, error)
 	ClearMovieTmdbRetry(ctx context.Context, movieID int64) error
+	// Drops what a match its tracks contradicted stored on the album; the next
+	// three statements drop its date and its tracks' pairings and outcomes.
+	ClearMusicAlbumSpotify(ctx context.Context, id int64) error
+	ClearMusicAlbumSpotifyDate(ctx context.Context, albumID int64) error
+	ClearMusicAlbumTrackLinks(ctx context.Context, albumID sql.NullInt64) error
 	ClearShowEpisodeRetry(ctx context.Context, episodeID int64) error
 	ClearShowRetry(ctx context.Context, showID int64) error
 	ClearShowSeasonRetry(ctx context.Context, seasonID int64) error
@@ -97,6 +102,7 @@ type Querier interface {
 	// Delete all video streams for a movie
 	DeleteMovieVideoStreams(ctx context.Context, movieID int64) error
 	DeleteMovieWatchProgress(ctx context.Context, arg DeleteMovieWatchProgressParams) error
+	DeleteMusicAlbumTrackMatches(ctx context.Context, albumID sql.NullInt64) error
 	DeleteMusicCreditMetadata(ctx context.Context, trackID int64) error
 	DeleteMusicSpotifyMatch(ctx context.Context, arg DeleteMusicSpotifyMatchParams) error
 	DeleteNotificationForUser(ctx context.Context, notificationID int64) (int64, error)
@@ -532,6 +538,8 @@ type Querier interface {
 	MovieExists(ctx context.Context, id int64) (bool, error)
 	MusicAlbumRetryCandidates(ctx context.Context, afterID int64) ([]MusicAlbumRetryCandidatesRow, error)
 	MusicAlbumTrackIDs(ctx context.Context, albumID sql.NullInt64) ([]int64, error)
+	// Every track of the album with its outcome: one without an outcome, or with
+	// a failed one, is paired; a matched one holds its Spotify track.
 	MusicAlbumTracksToLink(ctx context.Context, albumID sql.NullInt64) ([]MusicAlbumTracksToLinkRow, error)
 	MusicArtistRetryCandidates(ctx context.Context, afterID int64) ([]MusicArtistRetryCandidatesRow, error)
 	MusicArtistTrackIDs(ctx context.Context, musicianID int64) ([]int64, error)
@@ -641,6 +649,8 @@ type Querier interface {
 	UpsertShowFingerprint(ctx context.Context, arg UpsertShowFingerprintParams) error
 	UpsertShowKeyframeIndex(ctx context.Context, arg UpsertShowKeyframeIndexParams) error
 	UpsertShowRemuxSafetyVerdict(ctx context.Context, arg UpsertShowRemuxSafetyVerdictParams) error
+	// A changed file loses its Spotify pairing; the scan's link pass pairs it
+	// again with the rest of its album.
 	UpsertTrack(ctx context.Context, arg UpsertTrackParams) (int64, error)
 	UpsertTrackFileFingerprint(ctx context.Context, arg UpsertTrackFileFingerprintParams) (int64, error)
 	UpsertUserPreferences(ctx context.Context, arg UpsertUserPreferencesParams) (UpsertUserPreferencesRow, error)

@@ -5,18 +5,30 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/scanner"
 	spotifyapi "igloo/cmd/internal/spotify"
 )
 
-// Retry only persisted catalog metadata. Pages are closed before any requests
-// or writes. A tripped breaker ends the pass; what is left retries next scan.
+// retrySpotify retries the catalog, then pairs the tracks of matched albums.
+// The pairing runs even after the breaker trips, since the albums this scan
+// matched brought their track lists along.
 func (s *Scanner) retrySpotify(ctx context.Context, scan *musicScanContext, report *scanReport) error {
 	if s.spotify == nil {
 		return nil
 	}
+	err := s.retryCatalog(ctx, scan, report)
+	if err != nil {
+		return err
+	}
+	return s.linkAlbumTracks(ctx, scan, report)
+}
+
+// Retry only persisted catalog metadata. Pages are closed before any requests
+// or writes. A tripped breaker ends the pass; what is left retries next scan.
+func (s *Scanner) retryCatalog(ctx context.Context, scan *musicScanContext, report *scanReport) error {
 	stopped := s.noteSpotifyStop(scan, report)
 	if stopped {
 		return nil
@@ -121,11 +133,7 @@ func (s *Scanner) retrySpotify(ctx context.Context, scan *musicScanContext, repo
 			s.publish(report)
 		}
 	}
-	err = s.reconcilePendingCompoundCredits(ctx, scan)
-	if err != nil {
-		return err
-	}
-	return s.linkAlbumTracks(ctx, scan, report)
+	return s.reconcilePendingCompoundCredits(ctx, scan)
 }
 
 // persistMusicianEnrichment commits one artist outcome reached outside a
@@ -157,10 +165,10 @@ func (s *Scanner) persistEnrichment(ctx context.Context, scan *musicScanContext,
 }
 
 // linkAlbumTracks pairs the tracks of matched albums that still lack a
-// Spotify outcome: tracks persisted before their album matched, files added
-// to an album matched in an earlier scan, and pairings a failed request
-// skipped. Each album costs at most one request, and only when this scan did
-// not match it.
+// Spotify outcome: every track of an album matched this scan, files added to
+// an album matched in an earlier scan, and pairings a failed request skipped.
+// Each album costs at most one request, and only when this scan did not match
+// it.
 func (s *Scanner) linkAlbumTracks(ctx context.Context, scan *musicScanContext, report *scanReport) error {
 	pending, err := s.queries.CountMusicTrackLinkAlbumCandidates(ctx)
 	if err != nil {
@@ -175,16 +183,12 @@ func (s *Scanner) linkAlbumTracks(ctx context.Context, scan *musicScanContext, r
 			return err
 		}
 		if len(candidates) == 0 {
-			return nil
+			break
 		}
 		for _, candidate := range candidates {
 			contextErr := ctx.Err()
 			if contextErr != nil {
 				return contextErr
-			}
-			stopped := s.noteSpotifyStop(scan, report)
-			if stopped {
-				return nil
 			}
 			after = candidate.ID
 			err = s.linkAlbum(ctx, scan, candidate)
@@ -195,8 +199,14 @@ func (s *Scanner) linkAlbumTracks(ctx context.Context, scan *musicScanContext, r
 			s.publish(report)
 		}
 	}
+	// A breaker tripped by a track-list fetch stops only the fetches.
+	s.noteSpotifyStop(scan, report)
+	return nil
 }
 
+// linkAlbum pairs an album's pending tracks with its Spotify track list in one
+// pass, so each Spotify track goes to one file, and drops the album's match
+// when its tracks contradict it.
 func (s *Scanner) linkAlbum(ctx context.Context, scan *musicScanContext, candidate database.MusicTrackLinkAlbumCandidatesRow) error {
 	tracks, available, err := s.albumTracksFor(ctx, scan, candidate)
 	if err != nil || !available {
@@ -206,12 +216,32 @@ func (s *Scanner) linkAlbum(ctx context.Context, scan *musicScanContext, candida
 	if err != nil {
 		return err
 	}
-	return s.persistEnrichment(ctx, scan, func(qtx *database.Queries, txScan *musicScanContext) error {
-		for _, row := range rows {
-			query := spotifyapi.TrackQuery{Title: row.Title, Disc: int(row.Disc), Number: int(row.TrackIndex), DurationMs: row.Duration}
-			link, match := pairTrack(query, tracks)
-			if link != nil {
-				err := qtx.LinkMusicTrackSpotify(ctx, database.LinkMusicTrackSpotifyParams{SpotifyID: link.spotifyID, Explicit: link.explicit, TrackIndex: link.trackNumber, ID: row.ID})
+	var pending []database.MusicAlbumTracksToLinkRow
+	var queries []spotifyapi.TrackQuery
+	var held []spotifyapi.HeldTrack
+	for _, row := range rows {
+		query := spotifyapi.TrackQuery{Title: row.Title, Disc: int(row.Disc), Number: int(row.TrackIndex), DurationMs: row.Duration}
+		switch {
+		case !row.Status.Valid || row.Status.String == musicSpotifyStatusFailed:
+			pending = append(pending, row)
+			queries = append(queries, query)
+		case row.SpotifyID.Valid:
+			held = append(held, spotifyapi.HeldTrack{TrackQuery: query, ID: spotifyapi.ID(row.SpotifyID.String)})
+		}
+	}
+	pairings := spotifyapi.MatchAlbumTracks(queries, held, tracks)
+	contradicted := albumContradicted(len(rows), held, pairings, tracks)
+	err = s.persistEnrichment(ctx, scan, func(qtx *database.Queries, txScan *musicScanContext) error {
+		if contradicted {
+			return dropAlbumMatch(ctx, qtx, txScan, candidate.ID, rows)
+		}
+		for i, row := range pending {
+			pairing := pairings[i]
+			match := resolvedSpotifyMatch{status: musicSpotifyStatusMatched}
+			if pairing.Track == nil {
+				match = resolvedSpotifyMatchFromInfo(pairing.Info)
+			} else {
+				err := qtx.LinkMusicTrackSpotify(ctx, database.LinkMusicTrackSpotifyParams{SpotifyID: sql.NullString{String: pairing.Track.ID.String(), Valid: true}, Explicit: pairing.Track.Explicit, TrackIndex: int64(pairing.Track.TrackNumber), ID: row.ID})
 				if err != nil {
 					return err
 				}
@@ -225,6 +255,82 @@ func (s *Scanner) linkAlbum(ctx context.Context, scan *musicScanContext, candida
 		}
 		return nil
 	})
+	if err != nil || !contradicted {
+		return err
+	}
+	scan.recountEnrichment(albumCountKey(scan, candidate), musicSpotifyStatusUnmatched)
+	return nil
+}
+
+// albumContradicted reports an album match its tracks disagree with: fewer
+// than half of at least albumCheckMinTracks local tracks pair, and the album
+// is not a bigger local edition holding every Spotify track.
+func albumContradicted(local int, held []spotifyapi.HeldTrack, pairings []spotifyapi.TrackPairing, tracks []spotifyapi.SimpleTrack) bool {
+	paired := len(held)
+	taken := make(map[spotifyapi.ID]bool, len(held)+len(pairings))
+	for _, holder := range held {
+		taken[holder.ID] = true
+	}
+	for _, pairing := range pairings {
+		if pairing.Track != nil {
+			paired++
+			taken[pairing.Track.ID] = true
+		}
+	}
+	if local < albumCheckMinTracks || paired*2 >= local {
+		return false
+	}
+	for _, track := range tracks {
+		if !taken[track.ID] {
+			return true
+		}
+	}
+	return false
+}
+
+// dropAlbumMatch undoes an album match its tracks contradicted: what the match
+// stored on the album and its tracks goes, and the album is recorded as
+// unmatched for good.
+func dropAlbumMatch(ctx context.Context, qtx *database.Queries, txScan *musicScanContext, albumID int64, rows []database.MusicAlbumTracksToLinkRow) error {
+	tracksAlbum := sql.NullInt64{Int64: albumID, Valid: true}
+	err := qtx.ClearMusicAlbumSpotify(ctx, albumID)
+	if err != nil {
+		return err
+	}
+	err = qtx.ClearMusicAlbumSpotifyDate(ctx, albumID)
+	if err != nil {
+		return err
+	}
+	err = qtx.ClearMusicAlbumTrackLinks(ctx, tracksAlbum)
+	if err != nil {
+		return err
+	}
+	err = qtx.DeleteMusicAlbumTrackMatches(ctx, tracksAlbum)
+	if err != nil {
+		return err
+	}
+	err = reconcileAlbum(ctx, qtx, albumID)
+	if err != nil {
+		return err
+	}
+	for _, row := range rows {
+		txScan.invalidatedTracks[row.ID] = true
+	}
+	return saveMusicSpotifyMatch(ctx, qtx, musicSpotifyEntityAlbum, albumID, &resolvedSpotifyMatch{
+		status: musicSpotifyStatusUnmatched,
+		reason: sql.NullString{String: musicSpotifyReasonTracksDisagree, Valid: true},
+	})
+}
+
+// albumCountKey is the key resolveAlbum tallied the album under: its title and
+// artist when this scan created it, its id when it already existed.
+func albumCountKey(scan *musicScanContext, candidate database.MusicTrackLinkAlbumCandidatesRow) string {
+	byName := musicSpotifyEntityAlbum + ":" + scanner.NormalizedScanCacheKey(candidate.Title, candidate.Musician.String)
+	_, counted := scan.enrichmentOutcome[byName]
+	if counted {
+		return byName
+	}
+	return musicSpotifyEntityAlbum + ":" + strconv.FormatInt(candidate.ID, 10)
 }
 
 // albumTracksFor returns the album's Spotify track list, from this scan's
@@ -236,6 +342,9 @@ func (s *Scanner) albumTracksFor(ctx context.Context, scan *musicScanContext, ca
 	tracks, ok := scan.albumTracks[key]
 	if ok {
 		return tracks, true, nil
+	}
+	if !s.spotifyReady(scan) {
+		return nil, false, nil
 	}
 	album, fetchErr := s.spotify.GetAlbum(ctx, spotifyapi.ID(candidate.SpotifyID.String))
 	contextErr := ctx.Err()

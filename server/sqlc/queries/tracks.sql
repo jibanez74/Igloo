@@ -51,6 +51,8 @@ FROM tracks c
 LEFT JOIN track_file_fingerprints f ON f.track_id = c.id;
 
 -- name: UpsertTrack :one
+-- A changed file loses its Spotify pairing; the scan's link pass pairs it
+-- again with the rest of its album.
 INSERT INTO tracks (
   title,
   sort_title,
@@ -72,13 +74,11 @@ INSERT INTO tracks (
   composer,
   copyright,
   language,
-  spotify_id,
-  explicit,
   album_id,
   musician_id
 )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (file_path) DO UPDATE
 SET
   title = excluded.title,
@@ -100,8 +100,8 @@ SET
   composer = excluded.composer,
   copyright = excluded.copyright,
   language = excluded.language,
-  spotify_id = excluded.spotify_id,
-  explicit = excluded.explicit,
+  spotify_id = NULL,
+  explicit = false,
   album_id = excluded.album_id,
   musician_id = excluded.musician_id,
   updated_at = CURRENT_TIMESTAMP

@@ -162,10 +162,27 @@ AND EXISTS(SELECT 1 FROM tracks t LEFT JOIN music_spotify_matches m ON m.entity_
 WHERE t.album_id=e.id AND (m.status IS NULL OR m.status='failed'));
 
 -- name: MusicAlbumTracksToLink :many
-SELECT t.id, t.title, t.disc, t.track_index, t.duration FROM tracks t
+-- Every track of the album with its outcome: one without an outcome, or with
+-- a failed one, is paired; a matched one holds its Spotify track.
+SELECT t.id, t.title, t.disc, t.track_index, t.duration, t.spotify_id, m.status FROM tracks t
 LEFT JOIN music_spotify_matches m ON m.entity_type='track' AND m.entity_id=t.id
-WHERE t.album_id=? AND (m.status IS NULL OR m.status='failed')
+WHERE t.album_id=?
 ORDER BY t.disc, t.track_index, t.id;
+
+-- name: ClearMusicAlbumSpotify :exec
+-- Drops what a match its tracks contradicted stored on the album; the next
+-- three statements drop its date and its tracks' pairings and outcomes.
+UPDATE albums SET spotify_id=NULL, cover=NULL, album_type=NULL, total_tracks=NULL, updated_at=CURRENT_TIMESTAMP WHERE id=?;
+
+-- name: ClearMusicAlbumSpotifyDate :exec
+UPDATE music_album_metadata SET spotify_date=NULL WHERE album_id=?;
+
+-- name: ClearMusicAlbumTrackLinks :exec
+UPDATE tracks SET spotify_id=NULL, explicit=false, updated_at=CURRENT_TIMESTAMP
+WHERE album_id=? AND (spotify_id IS NOT NULL OR explicit);
+
+-- name: DeleteMusicAlbumTrackMatches :exec
+DELETE FROM music_spotify_matches WHERE entity_type='track' AND entity_id IN (SELECT id FROM tracks WHERE album_id=?);
 
 -- name: MusicCompoundReconciliationCandidates :many
 -- Driven from musicians so the keyset cursor rides the primary key, like
