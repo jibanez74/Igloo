@@ -10,6 +10,7 @@ import {
   MOTION_TRACK_ROW_CLASS,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
 import TrackActionsMenu from "@/components/music/TrackActionsMenu";
 import type { TrackItemVariant } from "@/types";
 
@@ -21,6 +22,8 @@ export type TrackItemProps = {
 
   // Optional display data
   trackIndex?: number;
+  // Spotify's explicit-lyrics flag for a paired track.
+  explicit?: boolean;
   subtitle?: string;
   genres?: string[];
 
@@ -57,6 +60,7 @@ export default function TrackItem({
   title,
   duration,
   trackIndex,
+  explicit = false,
   subtitle,
   genres,
   albumId,
@@ -160,9 +164,21 @@ export default function TrackItem({
       {/* Track info */}
       <div className="min-w-0 flex-1">
         <p
-          className={`truncate font-medium ${isCurrentTrack ? "text-primary" : "text-foreground"}`}
+          className={cn(
+            "flex items-center gap-2 font-medium",
+            isCurrentTrack ? "text-primary" : "text-foreground",
+          )}
         >
-          {title}
+          <span className="truncate">{title}</span>
+          {explicit && (
+            <Badge
+              variant="outline"
+              className="shrink-0 px-1.5 py-0 text-[10px]/4 font-semibold"
+            >
+              <span aria-hidden="true">E</span>
+              <span className="sr-only">Explicit</span>
+            </Badge>
+          )}
         </p>
 
         {/* Second line: genres for album, subtitle for others; below `sm` the
