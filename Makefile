@@ -186,11 +186,9 @@ lint-server: check-server-test-tools prepare-webdist-placeholder prepare-openapi
 	@rm -f $(DEADCODE_MAIN_REPORT)
 
 test-tmdb-integration: check-go-tools
-	@test -n "$$TMDB_API_KEY" || { echo "TMDB_API_KEY is required for the live TMDB tests"; exit 1; }
 	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go test -count=1 -v -tags "$(TEST_TAGS) integration" ./cmd/internal/tmdb/
 
 test-spotify-integration: check-go-tools
-	@test -n "$$SPOTIFY_CLIENT_ID" && test -n "$$SPOTIFY_CLIENT_SECRET" || { echo "SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET are required for the live Spotify tests"; exit 1; }
 	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go test -count=1 -v -tags "$(TEST_TAGS) integration" ./cmd/internal/spotify/
 
 test-web: check-web-tools
