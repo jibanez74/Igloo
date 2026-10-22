@@ -9,7 +9,10 @@ import (
 	"igloo/cmd/internal/scanner"
 )
 
-const reasonFailed = "Unable to inspect, probe, or save this track. Any previous record was preserved."
+const (
+	reasonFailed         = "Unable to inspect, probe, or save this track. Any previous record was preserved."
+	reasonSpotifyStopped = "Spotify lookups stopped after provider failures. Pending artists, albums and tracks will retry on a later scan."
+)
 
 // Start launches a scan asynchronously when configured and no music scan is running.
 func (s *Scanner) Start() scanner.StartResult {
@@ -38,7 +41,7 @@ func (s *Scanner) runMusicScan(directory string) {
 		report.Finish(&report.status.Progress, contextErr != nil)
 		s.publish(report)
 		now := *report.status.FinishedAt
-		s.logger.Info("music scan finished", "run", report.status.RunID, "state", report.status.State, "elapsed", now.Sub(*report.status.StartedAt), "processed", report.status.Processed, "total", report.status.Total, "imported", report.status.Imported, "updated", report.status.Updated, "unchanged", report.status.Unchanged, "failed", report.status.Failed, "deferred", report.status.Deferred, "deleted", report.status.Deleted, "matched", report.status.Enriched, "enrichment_failed", report.status.EnrichmentFailed, "unmatched", report.status.EnrichmentUnmatched)
+		s.logger.Info("music scan finished", "run", report.status.RunID, "state", report.status.State, "elapsed", now.Sub(*report.status.StartedAt), "processed", report.status.Processed, "total", report.status.Total, "imported", report.status.Imported, "updated", report.status.Updated, "unchanged", report.status.Unchanged, "failed", report.status.Failed, "deferred", report.status.Deferred, "deleted", report.status.Deleted, "matched", report.status.Enriched, "enrichment_failed", report.status.EnrichmentFailed, "unmatched", report.status.EnrichmentUnmatched, "tracks_linked", report.tracksLinked())
 	}()
 	// fail marks a fatal error; a cancellation is reported once by the deferred
 	// finish instead.
@@ -152,6 +155,7 @@ func (s *Scanner) processMusicBatch(ctx context.Context, scan *musicScanContext,
 		default:
 			report.status.Imported++
 		}
+		s.noteSpotifyStop(scan, report)
 		s.publish(report)
 	}
 }

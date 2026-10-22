@@ -60,18 +60,6 @@ UPDATE albums SET year=CAST(substr(release_date,1,4) AS INTEGER), updated_at = C
 SELECT t.album_id, tm.musician_id FROM tracks t LEFT JOIN track_musicians tm ON tm.track_id=t.id
 WHERE t.file_path=? ORDER BY tm.musician_id;
 
--- name: DeleteMusicArtistSpotifyGenres :exec
-DELETE FROM musician_genres WHERE musician_id=? AND source='spotify';
-
--- name: SaveMusicArtistSpotifyGenre :exec
-INSERT OR IGNORE INTO musician_genres(musician_id,genre_id,source) VALUES(?,?,'spotify');
-
--- name: DeleteMusicAlbumSpotifyGenres :exec
-DELETE FROM album_genres WHERE album_id=? AND source='spotify';
-
--- name: SaveMusicAlbumSpotifyGenre :exec
-INSERT OR IGNORE INTO album_genres(album_id,genre_id,source) VALUES(?,?,'spotify');
-
 -- name: MoveMusicArtistAliases :exec
 UPDATE music_artist_identity SET musician_id=sqlc.arg(owner) WHERE musician_id=sqlc.arg(redundant);
 
@@ -110,7 +98,7 @@ SELECT sqlc.arg(owner),genre_id,source FROM album_genres WHERE album_genres.albu
 DELETE FROM albums WHERE id=?;
 
 -- name: MusicAlbumRetryCandidates :many
-SELECT e.id, e.title, e.musician FROM albums e LEFT JOIN music_spotify_matches m ON m.entity_id=e.id AND m.entity_type='album'
+SELECT e.id, e.title, e.musician, e.year FROM albums e LEFT JOIN music_spotify_matches m ON m.entity_id=e.id AND m.entity_type='album'
 WHERE e.id>sqlc.arg(after_id) AND (m.status IS NULL OR m.status='failed')
 AND EXISTS(SELECT 1 FROM tracks t WHERE t.album_id=e.id)
 ORDER BY e.id LIMIT 100;
@@ -132,9 +120,6 @@ SELECT track_id,sqlc.arg(owner),sort_name FROM music_credit_metadata WHERE music
 INSERT OR IGNORE INTO music_album_metadata(album_id,spotify_date)
 SELECT sqlc.arg(owner),spotify_date FROM music_album_metadata WHERE music_album_metadata.album_id=sqlc.arg(redundant);
 
--- name: DeleteMergedMusicMatch :exec
-DELETE FROM music_spotify_matches WHERE entity_type=? AND entity_id=?;
-
 -- name: MusicArtistTrackMetadata :many
 -- The range and order ride idx_track_musicians_musician_track, so keep them on tm.
 SELECT m.track_id, m.artist_tag, m.artist_sort FROM track_musicians tm JOIN music_track_metadata m ON m.track_id=tm.track_id
@@ -150,24 +135,37 @@ SELECT track_id FROM track_musicians WHERE musician_id=?;
 -- name: MusicAlbumTrackIDs :many
 SELECT id FROM tracks WHERE album_id=?;
 
--- name: UpdateMusicArtistEnrichment :exec
--- COALESCE like UpsertMusician: the scanner maps an empty summary and a zero
--- popularity/follower count to NULL, and an obscure artist legitimately reports
--- both, so an unguarded SET would erase values a previous match stored.
-UPDATE musicians SET
- summary = COALESCE(sqlc.narg(summary), summary),
- spotify_popularity = COALESCE(sqlc.narg(spotify_popularity), spotify_popularity),
- spotify_followers = COALESCE(sqlc.narg(spotify_followers), spotify_followers),
+-- name: UpdateMusicAlbumEnrichment :exec
+-- COALESCE like UpsertAlbum: the scanner maps a zero track count and an
+-- unknown album type to NULL, so an unguarded SET would erase values a
+-- previous match stored.
+UPDATE albums SET
+ total_tracks = COALESCE(sqlc.narg(total_tracks), total_tracks),
+ album_type = COALESCE(sqlc.narg(album_type), album_type),
  updated_at = CURRENT_TIMESTAMP
 WHERE id = sqlc.arg(id);
 
--- name: UpdateMusicAlbumEnrichment :exec
--- Same NULL-coercion guard as UpdateMusicArtistEnrichment.
-UPDATE albums SET
- spotify_popularity = COALESCE(sqlc.narg(spotify_popularity), spotify_popularity),
- total_tracks = COALESCE(sqlc.narg(total_tracks), total_tracks),
- updated_at = CURRENT_TIMESTAMP
-WHERE id = sqlc.arg(id);
+-- name: MusicTrackLinkAlbumCandidates :many
+-- Matched albums with a track still to pair with Spotify's track list: no
+-- 'track' outcome yet, or a failed one. Unmatched tracks are final, so an
+-- album whose extras are not on Spotify drops out once they are recorded.
+SELECT e.id, e.title, e.musician, e.spotify_id FROM albums e
+WHERE e.id>sqlc.arg(after_id) AND e.spotify_id IS NOT NULL
+AND EXISTS(SELECT 1 FROM tracks t LEFT JOIN music_spotify_matches m ON m.entity_type='track' AND m.entity_id=t.id
+WHERE t.album_id=e.id AND (m.status IS NULL OR m.status='failed'))
+ORDER BY e.id LIMIT 100;
+
+-- name: CountMusicTrackLinkAlbumCandidates :one
+SELECT COUNT(*) FROM albums e
+WHERE e.spotify_id IS NOT NULL
+AND EXISTS(SELECT 1 FROM tracks t LEFT JOIN music_spotify_matches m ON m.entity_type='track' AND m.entity_id=t.id
+WHERE t.album_id=e.id AND (m.status IS NULL OR m.status='failed'));
+
+-- name: MusicAlbumTracksToLink :many
+SELECT t.id, t.title, t.disc, t.track_index, t.duration FROM tracks t
+LEFT JOIN music_spotify_matches m ON m.entity_type='track' AND m.entity_id=t.id
+WHERE t.album_id=? AND (m.status IS NULL OR m.status='failed')
+ORDER BY t.disc, t.track_index, t.id;
 
 -- name: MusicCompoundReconciliationCandidates :many
 -- Driven from musicians so the keyset cursor rides the primary key, like

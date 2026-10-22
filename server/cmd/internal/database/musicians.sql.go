@@ -351,34 +351,25 @@ const upsertMusician = `-- name: UpsertMusician :one
 INSERT INTO musicians (
   name,
   sort_name,
-  summary,
   spotify_id,
-  spotify_popularity,
-  spotify_followers,
   thumb
 )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?)
+  (?, ?, ?, ?)
 ON CONFLICT (name) DO UPDATE
 SET
   sort_name = excluded.sort_name,
-  summary = COALESCE(excluded.summary, musicians.summary),
   spotify_id = COALESCE(excluded.spotify_id, musicians.spotify_id),
-  spotify_popularity = COALESCE(excluded.spotify_popularity, musicians.spotify_popularity),
-  spotify_followers = COALESCE(excluded.spotify_followers, musicians.spotify_followers),
   thumb = COALESCE(excluded.thumb, musicians.thumb),
   updated_at = CURRENT_TIMESTAMP
 RETURNING id, spotify_id, thumb
 `
 
 type UpsertMusicianParams struct {
-	Name              string          `json:"name"`
-	SortName          string          `json:"sort_name"`
-	Summary           sql.NullString  `json:"summary"`
-	SpotifyID         sql.NullString  `json:"spotify_id"`
-	SpotifyPopularity sql.NullFloat64 `json:"spotify_popularity"`
-	SpotifyFollowers  sql.NullInt64   `json:"spotify_followers"`
-	Thumb             sql.NullString  `json:"thumb"`
+	Name      string         `json:"name"`
+	SortName  string         `json:"sort_name"`
+	SpotifyID sql.NullString `json:"spotify_id"`
+	Thumb     sql.NullString `json:"thumb"`
 }
 
 type UpsertMusicianRow struct {
@@ -391,10 +382,7 @@ func (q *Queries) UpsertMusician(ctx context.Context, arg UpsertMusicianParams) 
 	row := q.queryRow(ctx, q.upsertMusicianStmt, upsertMusician,
 		arg.Name,
 		arg.SortName,
-		arg.Summary,
 		arg.SpotifyID,
-		arg.SpotifyPopularity,
-		arg.SpotifyFollowers,
 		arg.Thumb,
 	)
 	var i UpsertMusicianRow

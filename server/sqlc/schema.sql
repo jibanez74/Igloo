@@ -142,6 +142,7 @@ CREATE TABLE IF NOT EXISTS albums (
   sort_title TEXT NOT NULL,
   spotify_id TEXT UNIQUE,
   spotify_popularity REAL,
+  album_type TEXT CHECK (album_type IN ('album', 'single', 'compilation')),
   musician TEXT,
   release_date TEXT,
   year INTEGER,
@@ -190,6 +191,10 @@ CREATE TABLE IF NOT EXISTS tracks (
   composer TEXT,
   copyright TEXT,
   language TEXT,
+  -- spotify_id is not unique: two files of one recording are both that track.
+  -- explicit is Spotify's flag; false also covers unknown.
+  spotify_id TEXT,
+  explicit BOOLEAN NOT NULL DEFAULT false,
   album_id INTEGER,
   musician_id INTEGER,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -226,8 +231,9 @@ CREATE TABLE IF NOT EXISTS track_musicians (
 -- track_id order without a temporary sort.
 CREATE INDEX IF NOT EXISTS idx_track_musicians_musician_track ON track_musicians (musician_id, track_id);
 
--- Local and Spotify genre contributions coexist; reconciliation removes only
--- the affected source. The same provenance rule applies to album_genres.
+-- Genre links record their source. Spotify stopped supplying genres to this
+-- app in 2026, so the scanner writes only local rows; the provenance column is
+-- retained. The same applies to album_genres.
 CREATE TABLE IF NOT EXISTS musician_genres (
   musician_id INTEGER NOT NULL,
   genre_id INTEGER NOT NULL,
@@ -318,12 +324,15 @@ CREATE TABLE IF NOT EXISTS music_album_metadata (
 );
 
 -- Cached Spotify outcomes survive rescans. Entity type determines the owner;
--- maintenance triggers remove entries when that owner is deleted.
+-- maintenance triggers remove entries when that owner is deleted. A miss keeps
+-- the best candidate's name and score so it can be explained.
 CREATE TABLE IF NOT EXISTS music_spotify_matches (
-  entity_type TEXT NOT NULL CHECK (entity_type IN ('album', 'musician')),
+  entity_type TEXT NOT NULL CHECK (entity_type IN ('album', 'musician', 'track')),
   entity_id INTEGER NOT NULL,
   status TEXT NOT NULL CHECK (status IN ('matched', 'failed', 'unmatched')),
   reason TEXT,
+  candidate TEXT,
+  score INTEGER,
   PRIMARY KEY (entity_type, entity_id)
 );
 
@@ -837,6 +846,12 @@ CREATE TRIGGER IF NOT EXISTS music_spotify_matches_musician_ad
 AFTER DELETE ON musicians
 BEGIN
   DELETE FROM music_spotify_matches WHERE entity_type = 'musician' AND entity_id = old.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS music_spotify_matches_track_ad
+AFTER DELETE ON tracks
+BEGIN
+  DELETE FROM music_spotify_matches WHERE entity_type = 'track' AND entity_id = old.id;
 END;
 
 -- Search indexing

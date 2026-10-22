@@ -16,21 +16,15 @@ RETURNING id, spotify_id, thumb;
 INSERT INTO musicians (
   name,
   sort_name,
-  summary,
   spotify_id,
-  spotify_popularity,
-  spotify_followers,
   thumb
 )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?)
+  (?, ?, ?, ?)
 ON CONFLICT (name) DO UPDATE
 SET
   sort_name = excluded.sort_name,
-  summary = COALESCE(excluded.summary, musicians.summary),
   spotify_id = COALESCE(excluded.spotify_id, musicians.spotify_id),
-  spotify_popularity = COALESCE(excluded.spotify_popularity, musicians.spotify_popularity),
-  spotify_followers = COALESCE(excluded.spotify_followers, musicians.spotify_followers),
   thumb = COALESCE(excluded.thumb, musicians.thumb),
   updated_at = CURRENT_TIMESTAMP
 RETURNING id, spotify_id, thumb;

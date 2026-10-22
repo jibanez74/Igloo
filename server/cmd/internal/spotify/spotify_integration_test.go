@@ -19,7 +19,7 @@ import (
 // credentials fail rather than skip: the live suite is opt-in through make
 // test-spotify-integration, and a silent skip would report a green run that
 // tested nothing.
-func newIntegrationClient(t *testing.T) SpotifyInterface {
+func newIntegrationClient(t *testing.T) *Client {
 	t.Helper()
 
 	_, currentFile, _, _ := runtime.Caller(0)
@@ -43,8 +43,8 @@ func newIntegrationClient(t *testing.T) SpotifyInterface {
 	return client
 }
 
-// Popularity, followers and genres are not asserted: Spotify omits them for
-// some apps and catalog entries.
+// Popularity, followers and genres are not decoded: Spotify stopped sending
+// them to Development Mode apps.
 func TestSpotifyIntegration(t *testing.T) {
 	client := newIntegrationClient(t)
 	ctx := context.Background()
@@ -59,22 +59,51 @@ func TestSpotifyIntegration(t *testing.T) {
 		}
 	})
 
-	t.Run("matches an album and loads its details", func(t *testing.T) {
-		album, err := client.SearchAndGetAlbumDetails(ctx, "OK Computer", "Radiohead")
+	t.Run("matches an album and loads its details with every track", func(t *testing.T) {
+		album, err := client.MatchAlbum(ctx, AlbumQuery{Title: "OK Computer", Artist: "Radiohead", Year: 1997, TotalTracks: 12})
 		if err != nil {
-			t.Fatalf("SearchAndGetAlbumDetails: %v", err)
+			t.Fatalf("MatchAlbum: %v", err)
 		}
-		if album.ID == "" || !strings.HasPrefix(album.Name, "OK Computer") || album.TotalTracks == 0 || len(album.Images) == 0 {
-			t.Fatalf("album = %+v, want OK Computer with tracks and a cover", album)
+		if album.ID == "" || !strings.HasPrefix(album.Name, "OK Computer") || album.TotalTracks == 0 || len(album.Images) == 0 || album.AlbumType != "album" {
+			t.Fatalf("album = %+v, want the OK Computer album with tracks and a cover", album)
 		}
 		releaseYear := album.ReleaseDateTime().Year()
 		if releaseYear != 1997 {
 			t.Fatalf("release date %q (%s) = year %d, want 1997", album.ReleaseDate, album.ReleaseDatePrecision, releaseYear)
 		}
+		if len(album.Tracks) != int(album.TotalTracks) {
+			t.Fatalf("tracks = %d, want all %d", len(album.Tracks), album.TotalTracks)
+		}
+		first := album.Tracks[0]
+		if first.ID == "" || first.Name == "" || first.TrackNumber != 1 || first.DiscNumber != 1 || first.Duration == 0 {
+			t.Fatalf("first track = %+v, want id, name, position and length", first)
+		}
+		if len(album.Artists) == 0 || album.Artists[0].ID == "" {
+			t.Fatalf("artists = %+v, want the credited artist with an id", album.Artists)
+		}
+
+		artist, err := client.GetArtist(ctx, album.Artists[0].ID)
+		if err != nil {
+			t.Fatalf("GetArtist: %v", err)
+		}
+		if artist.Name != "Radiohead" || len(artist.Images) == 0 {
+			t.Fatalf("artist = %+v, want Radiohead with an image", artist)
+		}
+	})
+
+	t.Run("pages a long album's track list", func(t *testing.T) {
+		// The Beatles ("the White Album", super deluxe edition) lists 107 tracks.
+		album, err := client.GetAlbum(ctx, "1WMVvswNzB9i2UMh9svso5")
+		if err != nil {
+			t.Fatalf("GetAlbum: %v", err)
+		}
+		if album.TotalTracks <= spotifyAlbumTracksPageLimit || len(album.Tracks) != int(album.TotalTracks) {
+			t.Fatalf("tracks = %d of %d, want every page of a >%d-track album", len(album.Tracks), album.TotalTracks, spotifyAlbumTracksPageLimit)
+		}
 	})
 
 	t.Run("reports an unmatched album as a match error", func(t *testing.T) {
-		_, err := client.SearchAndGetAlbumDetails(ctx, "Qzxv Wplk Nonexistent Album 4417", "Nobody Qzxv")
+		_, err := client.MatchAlbum(ctx, AlbumQuery{Title: "Qzxv Wplk Nonexistent Album 4417", Artist: "Nobody Qzxv"})
 		matchErr, ok := errors.AsType[*MatchError](err)
 		if !ok {
 			t.Fatalf("err = %v, want a MatchError", err)

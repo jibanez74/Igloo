@@ -6,8 +6,10 @@ import (
 )
 
 // These types mirror the Spotify Web API objects, trimmed to the fields Igloo
-// reads. Spotify omits some of them for some catalog entries (popularity,
-// followers, genres), which decode as zero values.
+// reads. Popularity, followers, genres and labels are not decoded: Spotify
+// stopped sending them to Development Mode apps in February 2026.
+
+const spotifyOpenURL = "https://open.spotify.com"
 
 type ID string
 
@@ -34,10 +36,6 @@ type Image struct {
 	URL string `json:"url"`
 }
 
-type Followers struct {
-	Count Numeric `json:"total"`
-}
-
 type SimpleArtist struct {
 	ID   ID     `json:"id"`
 	Name string `json:"name"`
@@ -45,10 +43,7 @@ type SimpleArtist struct {
 
 type FullArtist struct {
 	SimpleArtist
-	Popularity Numeric   `json:"popularity"`
-	Genres     []string  `json:"genres"`
-	Followers  Followers `json:"followers"`
-	Images     []Image   `json:"images"`
+	Images []Image `json:"images"`
 }
 
 type SimpleAlbum struct {
@@ -88,10 +83,34 @@ func (a SimpleAlbum) ReleaseDateTime() time.Time {
 	return date
 }
 
+// FullAlbum is an album's details together with its complete track list.
 type FullAlbum struct {
 	SimpleAlbum
-	Genres     []string `json:"genres"`
-	Popularity Numeric  `json:"popularity"`
+	Tracks []SimpleTrack
+}
+
+// SimpleTrack is a track as listed on its album.
+type SimpleTrack struct {
+	ID          ID      `json:"id"`
+	Name        string  `json:"name"`
+	DiscNumber  Numeric `json:"disc_number"`
+	TrackNumber Numeric `json:"track_number"`
+	Duration    Numeric `json:"duration_ms"`
+	Explicit    bool    `json:"explicit"`
+}
+
+// trackPage is one page of an album's track list; Total counts every track
+// on the album, so a caller knows whether more pages follow.
+type trackPage struct {
+	Items []SimpleTrack `json:"items"`
+	Total Numeric       `json:"total"`
+}
+
+// albumDetails is the GET /albums/{id} payload: the album with the first page
+// of its tracks.
+type albumDetails struct {
+	SimpleAlbum
+	Tracks trackPage `json:"tracks"`
 }
 
 type FullTrack struct {
@@ -115,4 +134,13 @@ type searchResult struct {
 	Tracks *struct {
 		Items []FullTrack `json:"items"`
 	} `json:"tracks"`
+}
+
+// AlbumURL and ArtistURL are the public Spotify pages for stored catalog ids.
+func AlbumURL(id string) string {
+	return spotifyOpenURL + "/album/" + id
+}
+
+func ArtistURL(id string) string {
+	return spotifyOpenURL + "/artist/" + id
 }

@@ -22,10 +22,6 @@ type spotifyHandlerStub struct {
 	searchTitles []string
 }
 
-func (s *spotifyHandlerStub) SearchAndGetAlbumDetails(_ context.Context, _, _ string) (*spotifyapi.FullAlbum, error) {
-	return nil, nil
-}
-
 func (s *spotifyHandlerStub) SearchAlbums(_ context.Context, title string) ([]spotifyapi.SimpleAlbum, error) {
 	s.searchTitles = append(s.searchTitles, title)
 	if s.searchErr != nil {
@@ -44,13 +40,7 @@ func (s *spotifyHandlerStub) SearchTracks(_ context.Context, title string) ([]sp
 	return nil, nil
 }
 
-func (s *spotifyHandlerStub) SearchArtistByName(_ context.Context, _ string) (*spotifyapi.FullArtist, error) {
-	return nil, nil
-}
-
-func (s *spotifyHandlerStub) ClearAllCaches() {}
-
-var _ spotifyapi.SpotifyInterface = (*spotifyHandlerStub)(nil)
+var _ spotifySearcher = (*spotifyHandlerStub)(nil)
 
 func TestGetSpotifyStatus_HTTP(t *testing.T) {
 	app := setupTestApp(t)

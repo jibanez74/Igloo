@@ -19,6 +19,18 @@ const (
 	spotifyTokenExpiryMargin = time.Minute
 )
 
+// TokenError is a non-2xx answer from the token endpoint. Reason carries
+// Spotify's error code and description; a 400 or 401 means the client
+// credentials were rejected.
+type TokenError struct {
+	StatusCode int
+	Reason     string
+}
+
+func (e *TokenError) Error() string {
+	return fmt.Sprintf("spotify token request failed: status %d: %s", e.StatusCode, e.Reason)
+}
+
 // tokenSource holds the app token from Spotify's client-credentials flow. The
 // mutex is held across a fetch, so concurrent callers share one refresh.
 type tokenSource struct {
@@ -83,7 +95,7 @@ func (t *tokenSource) fetch(ctx context.Context, httpClient *http.Client) (strin
 		if body.ErrorDescription != "" {
 			reason += ": " + body.ErrorDescription
 		}
-		return "", 0, fmt.Errorf("spotify token request failed: status %d: %s", resp.StatusCode, reason)
+		return "", 0, &TokenError{StatusCode: resp.StatusCode, Reason: reason}
 	}
 	if decodeErr != nil {
 		return "", 0, fmt.Errorf("spotify token response: %w", decodeErr)

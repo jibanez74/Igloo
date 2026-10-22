@@ -36,6 +36,20 @@ func (q *Queries) CountMusicArtistRetryCandidates(ctx context.Context) (int64, e
 	return count, err
 }
 
+const countMusicTrackLinkAlbumCandidates = `-- name: CountMusicTrackLinkAlbumCandidates :one
+SELECT COUNT(*) FROM albums e
+WHERE e.spotify_id IS NOT NULL
+AND EXISTS(SELECT 1 FROM tracks t LEFT JOIN music_spotify_matches m ON m.entity_type='track' AND m.entity_id=t.id
+WHERE t.album_id=e.id AND (m.status IS NULL OR m.status='failed'))
+`
+
+func (q *Queries) CountMusicTrackLinkAlbumCandidates(ctx context.Context) (int64, error) {
+	row := q.queryRow(ctx, q.countMusicTrackLinkAlbumCandidatesStmt, countMusicTrackLinkAlbumCandidates)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const deleteMergedMusicAlbum = `-- name: DeleteMergedMusicAlbum :exec
 DELETE FROM albums WHERE id=?
 `
@@ -51,38 +65,6 @@ DELETE FROM musicians WHERE id=?
 
 func (q *Queries) DeleteMergedMusicArtist(ctx context.Context, id int64) error {
 	_, err := q.exec(ctx, q.deleteMergedMusicArtistStmt, deleteMergedMusicArtist, id)
-	return err
-}
-
-const deleteMergedMusicMatch = `-- name: DeleteMergedMusicMatch :exec
-DELETE FROM music_spotify_matches WHERE entity_type=? AND entity_id=?
-`
-
-type DeleteMergedMusicMatchParams struct {
-	EntityType string `json:"entity_type"`
-	EntityID   int64  `json:"entity_id"`
-}
-
-func (q *Queries) DeleteMergedMusicMatch(ctx context.Context, arg DeleteMergedMusicMatchParams) error {
-	_, err := q.exec(ctx, q.deleteMergedMusicMatchStmt, deleteMergedMusicMatch, arg.EntityType, arg.EntityID)
-	return err
-}
-
-const deleteMusicAlbumSpotifyGenres = `-- name: DeleteMusicAlbumSpotifyGenres :exec
-DELETE FROM album_genres WHERE album_id=? AND source='spotify'
-`
-
-func (q *Queries) DeleteMusicAlbumSpotifyGenres(ctx context.Context, albumID int64) error {
-	_, err := q.exec(ctx, q.deleteMusicAlbumSpotifyGenresStmt, deleteMusicAlbumSpotifyGenres, albumID)
-	return err
-}
-
-const deleteMusicArtistSpotifyGenres = `-- name: DeleteMusicArtistSpotifyGenres :exec
-DELETE FROM musician_genres WHERE musician_id=? AND source='spotify'
-`
-
-func (q *Queries) DeleteMusicArtistSpotifyGenres(ctx context.Context, musicianID int64) error {
-	_, err := q.exec(ctx, q.deleteMusicArtistSpotifyGenresStmt, deleteMusicArtistSpotifyGenres, musicianID)
 	return err
 }
 
@@ -277,7 +259,7 @@ func (q *Queries) MoveMusicArtistTracks(ctx context.Context, arg MoveMusicArtist
 }
 
 const musicAlbumRetryCandidates = `-- name: MusicAlbumRetryCandidates :many
-SELECT e.id, e.title, e.musician FROM albums e LEFT JOIN music_spotify_matches m ON m.entity_id=e.id AND m.entity_type='album'
+SELECT e.id, e.title, e.musician, e.year FROM albums e LEFT JOIN music_spotify_matches m ON m.entity_id=e.id AND m.entity_type='album'
 WHERE e.id>?1 AND (m.status IS NULL OR m.status='failed')
 AND EXISTS(SELECT 1 FROM tracks t WHERE t.album_id=e.id)
 ORDER BY e.id LIMIT 100
@@ -287,6 +269,7 @@ type MusicAlbumRetryCandidatesRow struct {
 	ID       int64          `json:"id"`
 	Title    string         `json:"title"`
 	Musician sql.NullString `json:"musician"`
+	Year     sql.NullInt64  `json:"year"`
 }
 
 func (q *Queries) MusicAlbumRetryCandidates(ctx context.Context, afterID int64) ([]MusicAlbumRetryCandidatesRow, error) {
@@ -298,7 +281,12 @@ func (q *Queries) MusicAlbumRetryCandidates(ctx context.Context, afterID int64) 
 	items := []MusicAlbumRetryCandidatesRow{}
 	for rows.Next() {
 		var i MusicAlbumRetryCandidatesRow
-		if err := rows.Scan(&i.ID, &i.Title, &i.Musician); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Musician,
+			&i.Year,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -329,6 +317,50 @@ func (q *Queries) MusicAlbumTrackIDs(ctx context.Context, albumID sql.NullInt64)
 			return nil, err
 		}
 		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const musicAlbumTracksToLink = `-- name: MusicAlbumTracksToLink :many
+SELECT t.id, t.title, t.disc, t.track_index, t.duration FROM tracks t
+LEFT JOIN music_spotify_matches m ON m.entity_type='track' AND m.entity_id=t.id
+WHERE t.album_id=? AND (m.status IS NULL OR m.status='failed')
+ORDER BY t.disc, t.track_index, t.id
+`
+
+type MusicAlbumTracksToLinkRow struct {
+	ID         int64  `json:"id"`
+	Title      string `json:"title"`
+	Disc       int64  `json:"disc"`
+	TrackIndex int64  `json:"track_index"`
+	Duration   int64  `json:"duration"`
+}
+
+func (q *Queries) MusicAlbumTracksToLink(ctx context.Context, albumID sql.NullInt64) ([]MusicAlbumTracksToLinkRow, error) {
+	rows, err := q.query(ctx, q.musicAlbumTracksToLinkStmt, musicAlbumTracksToLink, albumID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []MusicAlbumTracksToLinkRow{}
+	for rows.Next() {
+		var i MusicAlbumTracksToLinkRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Disc,
+			&i.TrackIndex,
+			&i.Duration,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -514,6 +546,52 @@ func (q *Queries) MusicTrackAffected(ctx context.Context, filePath string) ([]Mu
 	return items, nil
 }
 
+const musicTrackLinkAlbumCandidates = `-- name: MusicTrackLinkAlbumCandidates :many
+SELECT e.id, e.title, e.musician, e.spotify_id FROM albums e
+WHERE e.id>?1 AND e.spotify_id IS NOT NULL
+AND EXISTS(SELECT 1 FROM tracks t LEFT JOIN music_spotify_matches m ON m.entity_type='track' AND m.entity_id=t.id
+WHERE t.album_id=e.id AND (m.status IS NULL OR m.status='failed'))
+ORDER BY e.id LIMIT 100
+`
+
+type MusicTrackLinkAlbumCandidatesRow struct {
+	ID        int64          `json:"id"`
+	Title     string         `json:"title"`
+	Musician  sql.NullString `json:"musician"`
+	SpotifyID sql.NullString `json:"spotify_id"`
+}
+
+// Matched albums with a track still to pair with Spotify's track list: no
+// 'track' outcome yet, or a failed one. Unmatched tracks are final, so an
+// album whose extras are not on Spotify drops out once they are recorded.
+func (q *Queries) MusicTrackLinkAlbumCandidates(ctx context.Context, afterID int64) ([]MusicTrackLinkAlbumCandidatesRow, error) {
+	rows, err := q.query(ctx, q.musicTrackLinkAlbumCandidatesStmt, musicTrackLinkAlbumCandidates, afterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []MusicTrackLinkAlbumCandidatesRow{}
+	for rows.Next() {
+		var i MusicTrackLinkAlbumCandidatesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Musician,
+			&i.SpotifyID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const reconcileMusicAlbumDate = `-- name: ReconcileMusicAlbumDate :exec
 UPDATE albums SET release_date=COALESCE((SELECT t.release_date FROM tracks t WHERE t.album_id=albums.id AND t.release_date IS NOT NULL
 GROUP BY t.release_date ORDER BY COUNT(*) DESC,t.release_date LIMIT 1),(SELECT spotify_date FROM music_album_metadata WHERE album_id=albums.id)), updated_at = CURRENT_TIMESTAMP
@@ -591,20 +669,6 @@ func (q *Queries) SaveMusicAlbumIdentity(ctx context.Context, arg SaveMusicAlbum
 	return err
 }
 
-const saveMusicAlbumSpotifyGenre = `-- name: SaveMusicAlbumSpotifyGenre :exec
-INSERT OR IGNORE INTO album_genres(album_id,genre_id,source) VALUES(?,?,'spotify')
-`
-
-type SaveMusicAlbumSpotifyGenreParams struct {
-	AlbumID int64 `json:"album_id"`
-	GenreID int64 `json:"genre_id"`
-}
-
-func (q *Queries) SaveMusicAlbumSpotifyGenre(ctx context.Context, arg SaveMusicAlbumSpotifyGenreParams) error {
-	_, err := q.exec(ctx, q.saveMusicAlbumSpotifyGenreStmt, saveMusicAlbumSpotifyGenre, arg.AlbumID, arg.GenreID)
-	return err
-}
-
 const saveMusicArtistIdentity = `-- name: SaveMusicArtistIdentity :exec
 INSERT INTO music_artist_identity(identity_key, musician_id) VALUES (?, ?) ON CONFLICT DO NOTHING
 `
@@ -616,20 +680,6 @@ type SaveMusicArtistIdentityParams struct {
 
 func (q *Queries) SaveMusicArtistIdentity(ctx context.Context, arg SaveMusicArtistIdentityParams) error {
 	_, err := q.exec(ctx, q.saveMusicArtistIdentityStmt, saveMusicArtistIdentity, arg.IdentityKey, arg.MusicianID)
-	return err
-}
-
-const saveMusicArtistSpotifyGenre = `-- name: SaveMusicArtistSpotifyGenre :exec
-INSERT OR IGNORE INTO musician_genres(musician_id,genre_id,source) VALUES(?,?,'spotify')
-`
-
-type SaveMusicArtistSpotifyGenreParams struct {
-	MusicianID int64 `json:"musician_id"`
-	GenreID    int64 `json:"genre_id"`
-}
-
-func (q *Queries) SaveMusicArtistSpotifyGenre(ctx context.Context, arg SaveMusicArtistSpotifyGenreParams) error {
-	_, err := q.exec(ctx, q.saveMusicArtistSpotifyGenreStmt, saveMusicArtistSpotifyGenre, arg.MusicianID, arg.GenreID)
 	return err
 }
 
@@ -716,50 +766,23 @@ func (q *Queries) SetMusicArtistSpotifyID(ctx context.Context, arg SetMusicArtis
 
 const updateMusicAlbumEnrichment = `-- name: UpdateMusicAlbumEnrichment :exec
 UPDATE albums SET
- spotify_popularity = COALESCE(?1, spotify_popularity),
- total_tracks = COALESCE(?2, total_tracks),
+ total_tracks = COALESCE(?1, total_tracks),
+ album_type = COALESCE(?2, album_type),
  updated_at = CURRENT_TIMESTAMP
 WHERE id = ?3
 `
 
 type UpdateMusicAlbumEnrichmentParams struct {
-	SpotifyPopularity sql.NullFloat64 `json:"spotify_popularity"`
-	TotalTracks       sql.NullInt64   `json:"total_tracks"`
-	ID                int64           `json:"id"`
+	TotalTracks sql.NullInt64  `json:"total_tracks"`
+	AlbumType   sql.NullString `json:"album_type"`
+	ID          int64          `json:"id"`
 }
 
-// Same NULL-coercion guard as UpdateMusicArtistEnrichment.
+// COALESCE like UpsertAlbum: the scanner maps a zero track count and an
+// unknown album type to NULL, so an unguarded SET would erase values a
+// previous match stored.
 func (q *Queries) UpdateMusicAlbumEnrichment(ctx context.Context, arg UpdateMusicAlbumEnrichmentParams) error {
-	_, err := q.exec(ctx, q.updateMusicAlbumEnrichmentStmt, updateMusicAlbumEnrichment, arg.SpotifyPopularity, arg.TotalTracks, arg.ID)
-	return err
-}
-
-const updateMusicArtistEnrichment = `-- name: UpdateMusicArtistEnrichment :exec
-UPDATE musicians SET
- summary = COALESCE(?1, summary),
- spotify_popularity = COALESCE(?2, spotify_popularity),
- spotify_followers = COALESCE(?3, spotify_followers),
- updated_at = CURRENT_TIMESTAMP
-WHERE id = ?4
-`
-
-type UpdateMusicArtistEnrichmentParams struct {
-	Summary           sql.NullString  `json:"summary"`
-	SpotifyPopularity sql.NullFloat64 `json:"spotify_popularity"`
-	SpotifyFollowers  sql.NullInt64   `json:"spotify_followers"`
-	ID                int64           `json:"id"`
-}
-
-// COALESCE like UpsertMusician: the scanner maps an empty summary and a zero
-// popularity/follower count to NULL, and an obscure artist legitimately reports
-// both, so an unguarded SET would erase values a previous match stored.
-func (q *Queries) UpdateMusicArtistEnrichment(ctx context.Context, arg UpdateMusicArtistEnrichmentParams) error {
-	_, err := q.exec(ctx, q.updateMusicArtistEnrichmentStmt, updateMusicArtistEnrichment,
-		arg.Summary,
-		arg.SpotifyPopularity,
-		arg.SpotifyFollowers,
-		arg.ID,
-	)
+	_, err := q.exec(ctx, q.updateMusicAlbumEnrichmentStmt, updateMusicAlbumEnrichment, arg.TotalTracks, arg.AlbumType, arg.ID)
 	return err
 }
 

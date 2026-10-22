@@ -480,38 +480,26 @@ func TestProcessMusicBatchPersistsSpotifyMatchedRows(t *testing.T) {
 	}
 }
 
-func TestProcessMusicBatchPersistsSpotifyMetadataAndGenres(t *testing.T) {
+func TestProcessMusicBatchPersistsSpotifyMetadata(t *testing.T) {
 	app := setupMusicScanner(t)
 
 	app.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadata()}
 	app.spotify = &musicScannerSpotifyStub{
 		artist: &spotifyapi.FullArtist{
-			SimpleArtist: spotifyapi.SimpleArtist{
-				ID:   spotifyapi.ID("artist-meta-123"),
-				Name: "Test Artist",
-			},
-			Popularity: 76,
-			Genres:     []string{"dream pop", "indie rock"},
-			Followers: spotifyapi.Followers{
-				Count: 1500000,
-			},
-			Images: []spotifyapi.Image{
-				{URL: "https://i.scdn.co/artist-meta.jpg"},
-			},
+			SimpleArtist: spotifyapi.SimpleArtist{ID: "artist-meta-123", Name: "Test Artist"},
+			Images:       []spotifyapi.Image{{URL: "https://i.scdn.co/artist-meta.jpg"}},
 		},
 		album: &spotifyapi.FullAlbum{
 			SimpleAlbum: spotifyapi.SimpleAlbum{
-				ID:                   spotifyapi.ID("album-meta-123"),
+				ID:                   "album-meta-123",
 				Name:                 "Test Album",
+				AlbumType:            "single",
 				ReleaseDate:          "2024-04-12",
 				ReleaseDatePrecision: "day",
 				TotalTracks:          10,
-				Images: []spotifyapi.Image{
-					{URL: "https://i.scdn.co/album-meta.jpg"},
-				},
+				Images:               []spotifyapi.Image{{URL: "https://i.scdn.co/album-meta.jpg"}},
 			},
-			Popularity: 64,
-			Genres:     []string{"dream pop", "shoegaze"},
+			Tracks: []spotifyapi.SimpleTrack{{ID: "track-meta-1", Name: "Test Track", DiscNumber: 1, TrackNumber: 1, Duration: 180000, Explicit: true}},
 		},
 	}
 
@@ -522,54 +510,37 @@ func TestProcessMusicBatchPersistsSpotifyMetadataAndGenres(t *testing.T) {
 	}
 
 	var musicianSpotifyID sql.NullString
-	var musicianPopularity sql.NullFloat64
-	var musicianFollowers sql.NullInt64
-	var musicianSummary sql.NullString
 	var musicianThumb sql.NullString
-	err := app.tx.DB.QueryRow(`
-		SELECT spotify_id, spotify_popularity, spotify_followers, summary, thumb
-		FROM musicians
-		WHERE name = ?
-	`, "Test Artist").Scan(&musicianSpotifyID, &musicianPopularity, &musicianFollowers, &musicianSummary, &musicianThumb)
+	err := app.tx.DB.QueryRow(`SELECT spotify_id, thumb FROM musicians WHERE name = ?`, "Test Artist").Scan(&musicianSpotifyID, &musicianThumb)
 	if err != nil {
 		t.Fatalf("get musician metadata: %v", err)
 	}
 	if !musicianSpotifyID.Valid || musicianSpotifyID.String != "artist-meta-123" {
 		t.Fatalf("musician spotify_id = %#v, want artist-meta-123", musicianSpotifyID)
 	}
-	if !musicianPopularity.Valid || musicianPopularity.Float64 != 76 {
-		t.Fatalf("musician popularity = %#v, want 76", musicianPopularity)
-	}
-	if !musicianFollowers.Valid || musicianFollowers.Int64 != 1500000 {
-		t.Fatalf("musician followers = %#v, want 1500000", musicianFollowers)
-	}
-	wantSummary := "Test Artist known for dream pop, indie rock is a popular artist with 1.5M followers on Spotify."
-	if !musicianSummary.Valid || musicianSummary.String != wantSummary {
-		t.Fatalf("musician summary = %#v, want %q", musicianSummary, wantSummary)
-	}
 	if !musicianThumb.Valid || musicianThumb.String != "https://i.scdn.co/artist-meta.jpg" {
 		t.Fatalf("musician thumb = %#v, want Spotify artist image", musicianThumb)
 	}
 
 	var albumSpotifyID sql.NullString
-	var albumPopularity sql.NullFloat64
+	var albumType sql.NullString
 	var totalTracks sql.NullInt64
 	var releaseDate sql.NullString
 	var year sql.NullInt64
 	var cover sql.NullString
 	err = app.tx.DB.QueryRow(`
-		SELECT spotify_id, spotify_popularity, total_tracks, release_date, year, cover
+		SELECT spotify_id, album_type, total_tracks, release_date, year, cover
 		FROM albums
 		WHERE title = ? AND musician = ?
-	`, "Test Album", "Test Artist").Scan(&albumSpotifyID, &albumPopularity, &totalTracks, &releaseDate, &year, &cover)
+	`, "Test Album", "Test Artist").Scan(&albumSpotifyID, &albumType, &totalTracks, &releaseDate, &year, &cover)
 	if err != nil {
 		t.Fatalf("get album metadata: %v", err)
 	}
 	if !albumSpotifyID.Valid || albumSpotifyID.String != "album-meta-123" {
 		t.Fatalf("album spotify_id = %#v, want album-meta-123", albumSpotifyID)
 	}
-	if !albumPopularity.Valid || albumPopularity.Float64 != 64 {
-		t.Fatalf("album popularity = %#v, want 64", albumPopularity)
+	if !albumType.Valid || albumType.String != "single" {
+		t.Fatalf("album album_type = %#v, want single", albumType)
 	}
 	if !totalTracks.Valid || totalTracks.Int64 != 10 {
 		t.Fatalf("album total_tracks = %#v, want 10", totalTracks)
@@ -584,45 +555,25 @@ func TestProcessMusicBatchPersistsSpotifyMetadataAndGenres(t *testing.T) {
 		t.Fatalf("album cover = %#v, want Spotify album image", cover)
 	}
 
-	got := scannertest.CountRows(t, app.tx.DB, "SELECT COUNT(*) FROM genres WHERE genre_type = ? AND tag IN (?, ?, ?)", "music", "dream pop", "indie rock", "shoegaze")
-	if got != 3 {
-		t.Fatalf("Spotify genre count = %d, want 3", got)
+	var trackSpotifyID sql.NullString
+	var explicit bool
+	var trackStatus string
+	err = app.tx.DB.QueryRow(`
+		SELECT t.spotify_id, t.explicit, m.status FROM tracks t
+		JOIN music_spotify_matches m ON m.entity_type = 'track' AND m.entity_id = t.id
+		WHERE t.file_path = ?
+	`, file.Path).Scan(&trackSpotifyID, &explicit, &trackStatus)
+	if err != nil {
+		t.Fatalf("get track link: %v", err)
 	}
-	got = scannertest.CountRows(t, app.tx.DB, "SELECT COUNT(*) FROM genres WHERE genre_type = ? AND tag = ?", "music", "dream pop")
-	if got != 1 {
-		t.Fatalf("shared dream pop genre rows = %d, want 1", got)
+	if !trackSpotifyID.Valid || trackSpotifyID.String != "track-meta-1" || !explicit || trackStatus != musicSpotifyStatusMatched {
+		t.Fatalf("track link = %#v explicit=%v status=%s, want track-meta-1 explicit matched", trackSpotifyID, explicit, trackStatus)
 	}
-	got = scannertest.CountRows(t, app.tx.DB, `
-		SELECT COUNT(*)
-		FROM musician_genres AS mg
-		INNER JOIN musicians AS m ON m.id = mg.musician_id
-		INNER JOIN genres AS g ON g.id = mg.genre_id
-		WHERE m.name = ? AND g.tag IN (?, ?)
-	`, "Test Artist", "dream pop", "indie rock")
-	if got != 2 {
-		t.Fatalf("musician_genres count = %d, want 2", got)
-	}
-	got = scannertest.CountRows(t, app.tx.DB, `
-		SELECT COUNT(*)
-		FROM album_genres AS ag
-		INNER JOIN albums AS a ON a.id = ag.album_id
-		INNER JOIN genres AS g ON g.id = ag.genre_id
-		WHERE a.title = ? AND a.musician = ? AND g.tag IN (?, ?)
-	`, "Test Album", "Test Artist", "dream pop", "shoegaze")
-	if got != 2 {
-		t.Fatalf("album_genres count = %d, want 2", got)
-	}
-	got = scannertest.CountRows(t, app.tx.DB, `
-		SELECT COUNT(*)
-		FROM musician_genres AS mg
-		INNER JOIN musicians AS m ON m.id = mg.musician_id
-		INNER JOIN album_genres AS ag ON ag.genre_id = mg.genre_id
-		INNER JOIN albums AS a ON a.id = ag.album_id
-		INNER JOIN genres AS g ON g.id = mg.genre_id
-		WHERE m.name = ? AND a.title = ? AND a.musician = ? AND g.tag = ?
-	`, "Test Artist", "Test Album", "Test Artist", "dream pop")
-	if got != 1 {
-		t.Fatalf("shared dream pop relationship count = %d, want 1", got)
+
+	// Spotify sends no genres; nothing but the files' own tags creates one.
+	genres := scannertest.CountRows(t, app.tx.DB, "SELECT COUNT(*) FROM genres")
+	if genres != 0 {
+		t.Fatalf("genre count = %d, want none from Spotify", genres)
 	}
 }
 
@@ -663,32 +614,43 @@ func TestProcessMusicBatchPersistsSpotifyUnmatchedReasons(t *testing.T) {
 	}
 
 	var status string
-	var reason sql.NullString
+	var reason, candidate sql.NullString
+	var score sql.NullInt64
 	err := app.tx.DB.QueryRow(`
-		SELECT msm.status, msm.reason
+		SELECT msm.status, msm.reason, msm.candidate, msm.score
 		FROM music_spotify_matches AS msm
 		INNER JOIN musicians AS m ON m.id = msm.entity_id
 		WHERE msm.entity_type = ? AND m.name = ?
-	`, musicSpotifyEntityMusician, "Test Artist").Scan(&status, &reason)
+	`, musicSpotifyEntityMusician, "Test Artist").Scan(&status, &reason, &candidate, &score)
 	if err != nil {
 		t.Fatalf("get musician unmatched row: %v", err)
 	}
 	if status != musicSpotifyStatusUnmatched || !reason.Valid || reason.String != "score_below_threshold" {
 		t.Fatalf("musician status/reason = %s/%#v, want unmatched/score_below_threshold", status, reason)
 	}
+	// A scored miss keeps the rejected candidate and its score, so the miss
+	// can be explained and the threshold tuned.
+	if candidate.String != "Best Guess" || !score.Valid || score.Int64 != 52 {
+		t.Fatalf("musician candidate/score = %#v/%#v, want Best Guess/52", candidate, score)
+	}
 
-	var albumReason sql.NullString
+	var albumReason, albumCandidate sql.NullString
+	var albumScore sql.NullInt64
 	err = app.tx.DB.QueryRow(`
-		SELECT msm.reason
+		SELECT msm.reason, msm.candidate, msm.score
 		FROM music_spotify_matches AS msm
 		INNER JOIN albums AS a ON a.id = msm.entity_id
 		WHERE msm.entity_type = ? AND a.title = ?
-	`, musicSpotifyEntityAlbum, "Test Album").Scan(&albumReason)
+	`, musicSpotifyEntityAlbum, "Test Album").Scan(&albumReason, &albumCandidate, &albumScore)
 	if err != nil {
 		t.Fatalf("get album unmatched row: %v", err)
 	}
 	if !albumReason.Valid || albumReason.String != "no_results" {
 		t.Fatalf("album reason = %#v, want no_results", albumReason)
+	}
+	// An unscored miss keeps the candidate name alone.
+	if albumCandidate.String != "Wrong Album" || albumScore.Valid {
+		t.Fatalf("album candidate/score = %#v/%#v, want Wrong Album and no score", albumCandidate, albumScore)
 	}
 }
 
@@ -736,34 +698,34 @@ func TestProcessMusicBatchPersistsSpotifyFailedRows(t *testing.T) {
 	}
 }
 
-// Spotify reports 0 popularity and 0 followers for obscure artists, and the
-// scanner maps a zero to NULL. Without a COALESCE guard the enrichment UPDATE
-// erased values a previous, richer match had stored.
-func TestProcessMusicBatchPreservesEnrichmentWhenSpotifyReportsZeroes(t *testing.T) {
+// Spotify omits total_tracks for some entries and sends album types the schema
+// does not know; the scanner maps both to NULL, and without a COALESCE guard
+// the enrichment UPDATE erased values a previous, richer match had stored.
+func TestProcessMusicBatchPreservesAlbumEnrichmentWhenSpotifyOmitsIt(t *testing.T) {
 	app := setupMusicScanner(t)
 	ctx := context.Background()
 
-	musician, err := app.queries.UpsertMusician(ctx, database.UpsertMusicianParams{
-		Name:              "Test Artist",
-		SortName:          "Test Artist",
-		SpotifyID:         sql.NullString{String: "artist123", Valid: true},
-		Summary:           sql.NullString{String: "A stored summary", Valid: true},
-		SpotifyPopularity: sql.NullFloat64{Float64: 61, Valid: true},
-		SpotifyFollowers:  sql.NullInt64{Int64: 4200, Valid: true},
+	_, err := app.queries.UpsertMusician(ctx, database.UpsertMusicianParams{
+		Name:      "Test Artist",
+		SortName:  "Test Artist",
+		SpotifyID: sql.NullString{String: "artist123", Valid: true},
 	})
 	if err != nil {
 		t.Fatalf("seed musician: %v", err)
 	}
 	album, err := app.queries.UpsertAlbum(ctx, database.UpsertAlbumParams{
-		Title:             "Test Album",
-		SortTitle:         "Test Album",
-		Musician:          sql.NullString{String: "Test Artist", Valid: true},
-		SpotifyID:         sql.NullString{String: "album123", Valid: true},
-		SpotifyPopularity: sql.NullFloat64{Float64: 55, Valid: true},
-		TotalTracks:       sql.NullInt64{Int64: 12, Valid: true},
+		Title:       "Test Album",
+		SortTitle:   "Test Album",
+		Musician:    sql.NullString{String: "Test Artist", Valid: true},
+		SpotifyID:   sql.NullString{String: "album123", Valid: true},
+		TotalTracks: sql.NullInt64{Int64: 12, Valid: true},
 	})
 	if err != nil {
 		t.Fatalf("seed album: %v", err)
+	}
+	err = app.queries.UpdateMusicAlbumEnrichment(ctx, database.UpdateMusicAlbumEnrichmentParams{ID: album.ID, AlbumType: sql.NullString{String: "album", Valid: true}})
+	if err != nil {
+		t.Fatalf("seed album type: %v", err)
 	}
 
 	app.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadata()}
@@ -772,7 +734,7 @@ func TestProcessMusicBatchPreservesEnrichmentWhenSpotifyReportsZeroes(t *testing
 			SimpleArtist: spotifyapi.SimpleArtist{ID: spotifyapi.ID("artist123"), Name: "Test Artist"},
 		},
 		album: &spotifyapi.FullAlbum{
-			SimpleAlbum: spotifyapi.SimpleAlbum{ID: spotifyapi.ID("album123"), Name: "Test Album"},
+			SimpleAlbum: spotifyapi.SimpleAlbum{ID: spotifyapi.ID("album123"), Name: "Test Album", AlbumType: "ep"},
 		},
 	}
 
@@ -782,27 +744,15 @@ func TestProcessMusicBatchPreservesEnrichmentWhenSpotifyReportsZeroes(t *testing
 		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
 	}
 
-	var summary sql.NullString
-	var popularity sql.NullFloat64
-	var followers sql.NullInt64
-	err = app.tx.DB.QueryRow("SELECT summary, spotify_popularity, spotify_followers FROM musicians WHERE id = ?", musician.ID).
-		Scan(&summary, &popularity, &followers)
-	if err != nil {
-		t.Fatalf("get musician enrichment: %v", err)
-	}
-	if popularity.Float64 != 61 || followers.Int64 != 4200 || !summary.Valid {
-		t.Fatalf("musician enrichment = %#v %#v %#v, want the stored values preserved", summary, popularity, followers)
-	}
-
-	var albumPopularity sql.NullFloat64
+	var albumType sql.NullString
 	var totalTracks sql.NullInt64
-	err = app.tx.DB.QueryRow("SELECT spotify_popularity, total_tracks FROM albums WHERE id = ?", album.ID).
-		Scan(&albumPopularity, &totalTracks)
+	err = app.tx.DB.QueryRow("SELECT album_type, total_tracks FROM albums WHERE id = ?", album.ID).
+		Scan(&albumType, &totalTracks)
 	if err != nil {
 		t.Fatalf("get album enrichment: %v", err)
 	}
-	if albumPopularity.Float64 != 55 || totalTracks.Int64 != 12 {
-		t.Fatalf("album enrichment = %#v %#v, want the stored values preserved", albumPopularity, totalTracks)
+	if albumType.String != "album" || totalTracks.Int64 != 12 {
+		t.Fatalf("album enrichment = %#v %#v, want the stored values preserved", albumType, totalTracks)
 	}
 }
 
@@ -815,11 +765,8 @@ func TestSpotifyEnrichmentWritesAdvanceUpdatedAt(t *testing.T) {
 		name, table, predicate string
 		update                 func(*database.Queries) error
 	}{
-		{"artist enrichment", "musicians", "summary='Summary' AND spotify_popularity=42 AND spotify_followers=100", func(q *database.Queries) error {
-			return q.UpdateMusicArtistEnrichment(ctx, database.UpdateMusicArtistEnrichmentParams{ID: 1, Summary: sql.NullString{String: "Summary", Valid: true}, SpotifyPopularity: sql.NullFloat64{Float64: 42, Valid: true}, SpotifyFollowers: sql.NullInt64{Int64: 100, Valid: true}})
-		}},
-		{"album enrichment", "albums", "spotify_popularity=42 AND total_tracks=10", func(q *database.Queries) error {
-			return q.UpdateMusicAlbumEnrichment(ctx, database.UpdateMusicAlbumEnrichmentParams{ID: 1, SpotifyPopularity: sql.NullFloat64{Float64: 42, Valid: true}, TotalTracks: sql.NullInt64{Int64: 10, Valid: true}})
+		{"album enrichment", "albums", "total_tracks=10 AND album_type='single'", func(q *database.Queries) error {
+			return q.UpdateMusicAlbumEnrichment(ctx, database.UpdateMusicAlbumEnrichmentParams{ID: 1, TotalTracks: sql.NullInt64{Int64: 10, Valid: true}, AlbumType: sql.NullString{String: "single", Valid: true}})
 		}},
 		{"artist Spotify ID", "musicians", "spotify_id='artist'", func(q *database.Queries) error {
 			return q.SetMusicArtistSpotifyID(ctx, database.SetMusicArtistSpotifyIDParams{ID: 1, SpotifyID: sql.NullString{String: "artist", Valid: true}})
@@ -992,24 +939,4 @@ func seedLocalMusicianAndAlbum(t *testing.T, app *Scanner) (database.Musician, d
 		t.Fatal(err)
 	}
 	return musician, album
-}
-
-func TestGenerateMusicianSummaryOmitsFiguresSpotifyDidNotSend(t *testing.T) {
-	artist := func(popularity spotifyapi.Numeric, followers spotifyapi.Numeric) *spotifyapi.FullArtist {
-		return &spotifyapi.FullArtist{
-			SimpleArtist: spotifyapi.SimpleArtist{Name: "Test Artist"},
-			Popularity:   popularity,
-			Followers:    spotifyapi.Followers{Count: followers},
-		}
-	}
-
-	if got := generateMusicianSummary(artist(0, 0)); got != "" {
-		t.Fatalf("summary with no figures = %q, want empty", got)
-	}
-	if got, want := generateMusicianSummary(artist(45, 0)), "Test Artist has a dedicated following."; got != want {
-		t.Fatalf("summary without followers = %q, want %q", got, want)
-	}
-	if got, want := generateMusicianSummary(artist(0, 2_500)), "Test Artist has 2.5K followers on Spotify."; got != want {
-		t.Fatalf("summary without popularity = %q, want %q", got, want)
-	}
 }

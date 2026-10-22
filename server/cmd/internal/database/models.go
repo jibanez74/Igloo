@@ -14,6 +14,7 @@ type Album struct {
 	SortTitle         string          `json:"sort_title"`
 	SpotifyID         sql.NullString  `json:"spotify_id"`
 	SpotifyPopularity sql.NullFloat64 `json:"spotify_popularity"`
+	AlbumType         sql.NullString  `json:"album_type"`
 	Musician          sql.NullString  `json:"musician"`
 	ReleaseDate       sql.NullString  `json:"release_date"`
 	Year              sql.NullInt64   `json:"year"`

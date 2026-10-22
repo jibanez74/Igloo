@@ -11,8 +11,24 @@ import (
 	"strings"
 )
 
+// spotifySearcher is the part of the Spotify client the request pickers use.
+type spotifySearcher interface {
+	SearchAlbums(ctx context.Context, title string) ([]spotify.SimpleAlbum, error)
+	SearchTracks(ctx context.Context, title string) ([]spotify.FullTrack, error)
+}
+
 type spotifySearchRequest struct {
 	Title string `json:"title"`
+}
+
+// spotifyURLField is the public Spotify page for a stored catalog id, or nil
+// when the entity has none.
+func spotifyURLField(id sql.NullString, build func(string) string) *string {
+	if !id.Valid || id.String == "" {
+		return nil
+	}
+	url := build(id.String)
+	return &url
 }
 
 type spotifyAlbumSearchResult struct {

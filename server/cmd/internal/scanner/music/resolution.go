@@ -21,6 +21,10 @@ type resolvedTrack struct {
 	params     database.UpsertTrackParams
 	musicians  []resolvedMusician
 	album      *resolvedAlbum
+	// trackMatch is the outcome of pairing the track with its album's Spotify
+	// track list; nil when the list was not at hand this scan, which the retry
+	// pass settles.
+	trackMatch *resolvedSpotifyMatch
 	genreTag   string
 	artistTag  string
 	artistSort string
@@ -114,10 +118,12 @@ func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, 
 		}
 	}
 
+	var trackTotal int64
 	if tags.Track != "" {
-		index, parseErr := helpers.ParseSlashNumber(tags.Track)
+		index, total, parseErr := helpers.ParseSlashNumbers(tags.Track)
 		if parseErr == nil {
 			params.TrackIndex = index
+			trackTotal = total
 		} else {
 			s.logTagParse(file.Path, "track", tags.Track, parseErr)
 		}
@@ -126,7 +132,7 @@ func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, 
 	params.BitRate = helpers.ParseBitRate(info.Format.BitRate)
 
 	if tags.Disc != "" {
-		disc, parseErr := helpers.ParseSlashNumber(tags.Disc)
+		disc, _, parseErr := helpers.ParseSlashNumbers(tags.Disc)
 		if parseErr == nil {
 			params.Disc = disc
 		} else {
@@ -208,11 +214,25 @@ func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, 
 			effectiveAlbumArtist = artistTag
 		}
 
-		album, resolveErr := s.resolveAlbum(ctx, scan, tags.Album, sortAlbum, effectiveAlbumArtist)
+		query := albumQuery{title: tags.Album, sortTitle: sortAlbum, artist: effectiveAlbumArtist, totalTracks: int(trackTotal)}
+		if params.Year.Valid {
+			query.year = int(params.Year.Int64)
+		}
+		album, resolveErr := s.resolveAlbum(ctx, scan, query)
 		if resolveErr != nil {
 			return nil, fmt.Errorf("album failed: %w", resolveErr)
 		}
 		resolved.album = album
+		if album.spotifyAlbum != nil {
+			adopted, adoptErr := s.adoptAlbumArtist(ctx, scan, album.albumArtist, album.spotifyAlbum)
+			if adoptErr != nil {
+				return nil, adoptErr
+			}
+			if adopted != nil {
+				applyAdoptedArtist(resolved.musicians, adopted)
+			}
+		}
+		linkTrack(scan, resolved, scanner.NormalizedScanCacheKey(album.title, album.albumArtist))
 	}
 
 	return resolved, nil
@@ -329,7 +349,7 @@ func (s *Scanner) resolveMusician(ctx context.Context, scan *musicScanContext, n
 		}
 	}
 
-	if s.spotify == nil {
+	if !s.spotifyReady(scan) {
 		if found {
 			scan.musicianIDs.Set(cacheKey, existing.ID)
 		}
@@ -352,6 +372,7 @@ func (s *Scanner) resolveMusician(ctx context.Context, scan *musicScanContext, n
 	if contextErr != nil {
 		return nil, contextErr
 	}
+	scan.breaker.Observe(searchErr)
 	if searchErr != nil {
 		match := resolvedSpotifyMatchFromError(searchErr)
 		scan.spotifyArtistMisses[cacheKey] = match
@@ -372,14 +393,28 @@ func (s *Scanner) resolveMusician(ctx context.Context, scan *musicScanContext, n
 	return resolved, nil
 }
 
-func (s *Scanner) resolveAlbum(ctx context.Context, scan *musicScanContext, title, sortTitle, albumArtist string) (resolved *resolvedAlbum, err error) {
-	title = strings.TrimSpace(title)
-	albumArtist = strings.TrimSpace(albumArtist)
-	sortTitle = strings.TrimSpace(sortTitle)
+// albumQuery is a local album as its tracks' tags describe it; year and
+// totalTracks are zero when untagged.
+type albumQuery struct {
+	title, sortTitle, artist string
+	year, totalTracks        int
+}
+
+func (s *Scanner) resolveAlbum(ctx context.Context, scan *musicScanContext, query albumQuery) (resolved *resolvedAlbum, err error) {
+	title := strings.TrimSpace(query.title)
+	albumArtist := strings.TrimSpace(query.artist)
+	sortTitle := strings.TrimSpace(query.sortTitle)
 	cacheKey := scanner.NormalizedScanCacheKey(title, albumArtist)
 	// Same tally as resolveMusician, keyed on the catalog row once it is known.
 	countKey := musicSpotifyEntityAlbum + ":" + cacheKey
 	defer func() { scan.countEnrichment(countKey, resolvedAlbumMatch(resolved)) }()
+	// Whichever branch produced it, a resolution carrying the Spotify album
+	// leaves its track list for the album's tracks to pair with.
+	defer func() {
+		if resolved != nil && resolved.spotifyAlbum != nil {
+			scan.albumTracks[cacheKey] = resolved.spotifyAlbum.Tracks
+		}
+	}()
 	albumID, ok := scan.albumIDs.Get(cacheKey)
 	if ok {
 		return &resolvedAlbum{
@@ -449,7 +484,7 @@ func (s *Scanner) resolveAlbum(ctx context.Context, scan *musicScanContext, titl
 		}
 	}
 
-	if s.spotify == nil {
+	if !s.spotifyReady(scan) {
 		if found {
 			scan.albumIDs.Set(cacheKey, existing.ID)
 		}
@@ -466,11 +501,22 @@ func (s *Scanner) resolveAlbum(ctx context.Context, scan *musicScanContext, titl
 			}
 		}
 	}()
-	albumDetails, searchErr := s.spotify.SearchAndGetAlbumDetails(ctx, title, albumArtist)
+	artistID, err := s.knownArtistSpotifyID(ctx, scan, albumArtist)
+	if err != nil {
+		return nil, err
+	}
+	albumDetails, searchErr := s.spotify.MatchAlbum(ctx, spotifyapi.AlbumQuery{
+		Title:       title,
+		Artist:      albumArtist,
+		ArtistID:    artistID,
+		Year:        query.year,
+		TotalTracks: query.totalTracks,
+	})
 	contextErr := ctx.Err()
 	if contextErr != nil {
 		return nil, contextErr
 	}
+	scan.breaker.Observe(searchErr)
 	if searchErr != nil {
 		match := resolvedSpotifyMatchFromError(searchErr)
 		scan.spotifyAlbumMisses[cacheKey] = match
@@ -487,6 +533,151 @@ func (s *Scanner) resolveAlbum(ctx context.Context, scan *musicScanContext, titl
 	}
 
 	return resolved, nil
+}
+
+// knownArtistSpotifyID is the album artist's Spotify id when this scan or the
+// catalog already matched it, and empty otherwise. A name attempted this scan
+// and missed has no id, so its catalog row is not re-read.
+func (s *Scanner) knownArtistSpotifyID(ctx context.Context, scan *musicScanContext, name string) (spotifyapi.ID, error) {
+	if name == "" {
+		return "", nil
+	}
+	attempt, attempted := scan.artistAttempts[scanner.NormalizedScanCacheKey(name)]
+	if attempted {
+		if attempt.spotifyArtist != nil {
+			return attempt.spotifyArtist.ID, nil
+		}
+		return "", nil
+	}
+	existing, found, err := s.findExistingMusician(ctx, name)
+	if err != nil || !found || !existing.SpotifyID.Valid {
+		return "", err
+	}
+	return spotifyapi.ID(existing.SpotifyID.String), nil
+}
+
+// adoptAlbumArtist takes the artist a matched album credits as the local
+// album artist of that name, when that artist's own search missed: the album
+// match corroborates the name, and the credit carries the id. Compilations
+// never qualify, since "Various Artists" agrees with no local name. The
+// adopted resolution replaces the scan's record of the name; nil means nothing
+// changed.
+func (s *Scanner) adoptAlbumArtist(ctx context.Context, scan *musicScanContext, name string, album *spotifyapi.FullAlbum) (*resolvedMusician, error) {
+	name = strings.TrimSpace(name)
+	if name == "" || len(album.Artists) == 0 || !s.spotifyReady(scan) {
+		return nil, nil
+	}
+	credited := album.Artists[0]
+	if !spotifyapi.ArtistNamesAgree(name, credited.Name) {
+		return nil, nil
+	}
+
+	cacheKey := scanner.NormalizedScanCacheKey(name)
+	var existing *database.GetMusicianBySpotifyIDRow
+	attempt, attempted := scan.artistAttempts[cacheKey]
+	if attempted {
+		if attempt.spotifyArtist != nil {
+			return nil, nil
+		}
+		existing = attempt.existing
+	} else {
+		row, found, err := s.findExistingMusician(ctx, name)
+		if err != nil {
+			return nil, err
+		}
+		// A name no track credits has no musician to adopt for; one with a
+		// Spotify id is already matched.
+		if !found || row.SpotifyID.Valid {
+			return nil, nil
+		}
+		existing = &row
+	}
+
+	artist, fetchErr := s.spotify.GetArtist(ctx, credited.ID)
+	contextErr := ctx.Err()
+	if contextErr != nil {
+		return nil, contextErr
+	}
+	scan.breaker.Observe(fetchErr)
+	if fetchErr != nil {
+		s.logger.Warn("spotify album artist lookup failed", "artist", name, "spotify_id", credited.ID, "error", fetchErr)
+		return nil, nil
+	}
+
+	match := resolvedSpotifyMatch{status: musicSpotifyStatusMatched}
+	adopted := &resolvedMusician{name: name, spotifyArtist: artist, spotifyMatch: &match}
+	countKey := musicSpotifyEntityMusician + ":" + cacheKey
+	if existing != nil {
+		adopted.existingID = existing.ID
+		adopted.hasExistingID = true
+		adopted.existing = existing
+		scan.artistAttemptsByID[existing.ID] = adopted
+		countKey = musicSpotifyEntityMusician + ":" + strconv.FormatInt(existing.ID, 10)
+	}
+	scan.artistAttempts[cacheKey] = adopted
+	delete(scan.spotifyArtistMisses, cacheKey)
+	scan.compoundSplits[cacheKey] = false
+	scan.recountEnrichment(countKey, musicSpotifyStatusMatched)
+	return adopted, nil
+}
+
+// applyAdoptedArtist copies an adoption onto the credits resolved before it,
+// which hold values rather than the scan's pointer.
+func applyAdoptedArtist(credits []resolvedMusician, adopted *resolvedMusician) {
+	key := scanner.NormalizedScanCacheKey(adopted.name)
+	for i := range credits {
+		if scanner.NormalizedScanCacheKey(credits[i].name) != key {
+			continue
+		}
+		credits[i].spotifyArtist = adopted.spotifyArtist
+		credits[i].spotifyMatch = adopted.spotifyMatch
+		credits[i].splitCompoundOnNoMatch = false
+	}
+}
+
+// trackLink is a pairing with a Spotify track, as applied to the catalog row.
+type trackLink struct {
+	spotifyID   sql.NullString
+	explicit    bool
+	trackNumber int64
+}
+
+// pairTrack matches one local track against its album's Spotify tracks. The
+// link is nil on a miss, which the returned outcome explains.
+func pairTrack(query spotifyapi.TrackQuery, tracks []spotifyapi.SimpleTrack) (*trackLink, resolvedSpotifyMatch) {
+	track, info := spotifyapi.MatchAlbumTrack(query, tracks)
+	if track == nil {
+		return nil, resolvedSpotifyMatchFromInfo(info)
+	}
+	link := &trackLink{
+		spotifyID:   sql.NullString{String: track.ID.String(), Valid: true},
+		explicit:    track.Explicit,
+		trackNumber: int64(track.TrackNumber),
+	}
+	return link, resolvedSpotifyMatch{status: musicSpotifyStatusMatched}
+}
+
+// linkTrack pairs the track with its album's Spotify track list when this
+// scan has it. A track whose album matched in an earlier scan stays unpaired
+// here; the retry pass fetches the list once and links it. Spotify's track
+// number only fills in a missing tag.
+func linkTrack(scan *musicScanContext, resolved *resolvedTrack, albumKey string) {
+	tracks, ok := scan.albumTracks[albumKey]
+	if !ok {
+		return
+	}
+	params := &resolved.params
+	query := spotifyapi.TrackQuery{Title: params.Title, Disc: int(params.Disc), Number: int(params.TrackIndex), DurationMs: params.Duration}
+	link, match := pairTrack(query, tracks)
+	resolved.trackMatch = &match
+	if link == nil {
+		return
+	}
+	params.SpotifyID = link.spotifyID
+	params.Explicit = link.explicit
+	if params.TrackIndex == 0 {
+		params.TrackIndex = link.trackNumber
+	}
 }
 
 func (s *Scanner) findExistingMusician(ctx context.Context, name string) (database.GetMusicianBySpotifyIDRow, bool, error) {

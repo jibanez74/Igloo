@@ -5,7 +5,10 @@ WHERE entity_type = ? AND entity_id = ?
 LIMIT 1;
 
 -- name: UpsertMusicSpotifyMatch :exec
-INSERT INTO music_spotify_matches (entity_type, entity_id, status, reason)
-VALUES (?, ?, ?, ?)
+INSERT INTO music_spotify_matches (entity_type, entity_id, status, reason, candidate, score)
+VALUES (?, ?, ?, ?, ?, ?)
 ON CONFLICT (entity_type, entity_id) DO UPDATE
-SET status = excluded.status, reason = excluded.reason;
+SET status = excluded.status, reason = excluded.reason, candidate = excluded.candidate, score = excluded.score;
+
+-- name: DeleteMusicSpotifyMatch :exec
+DELETE FROM music_spotify_matches WHERE entity_type = ? AND entity_id = ?;

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
+	"igloo/cmd/internal/spotify"
 	"net/http"
 )
 
@@ -38,6 +39,13 @@ func (app *Application) GetMusiciansAlphabetical(w http.ResponseWriter, r *http.
 			"total_pages": totalPages(total, perPage),
 		},
 	})
+}
+
+// musicianWithSpotify is the musician row plus its Spotify page, like
+// albumWithSpotify.
+type musicianWithSpotify struct {
+	database.Musician
+	SpotifyURL *string `json:"spotify_url"`
 }
 
 func (app *Application) GetMusicianDetails(w http.ResponseWriter, r *http.Request) {
@@ -88,7 +96,7 @@ func (app *Application) GetMusicianDetails(w http.ResponseWriter, r *http.Reques
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
-			"musician":       musician,
+			"musician":       musicianWithSpotify{Musician: musician, SpotifyURL: spotifyURLField(musician.SpotifyID, spotify.ArtistURL)},
 			"albums":         albums,
 			"tracks":         tracks,
 			"genres":         genres,

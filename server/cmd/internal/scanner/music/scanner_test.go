@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -164,10 +165,22 @@ type musicScannerSpotifyStub struct {
 	artistsByName map[string]*spotifyapi.FullArtist
 	artistErr     error
 	artistCalls   int
+	// artistsByID answers GetArtist; an id it does not carry is a 404.
+	artistsByID   map[spotifyapi.ID]*spotifyapi.FullArtist
+	artistFetches int
 	album         *spotifyapi.FullAlbum
+	// albumsByTitle, when set, answers per album title (lowercased); a title
+	// it does not carry fails the lookup for that one album.
+	albumsByTitle map[string]*spotifyapi.FullAlbum
 	albumErr      error
 	albumCalls    int
-	clearCalls    int
+	// albumQueries records every MatchAlbum query in order.
+	albumQueries []spotifyapi.AlbumQuery
+	// albumsByID answers GetAlbum; an id it does not carry is a 404, and
+	// albumFetchErr, when set, fails every fetch.
+	albumsByID    map[spotifyapi.ID]*spotifyapi.FullAlbum
+	albumFetchErr error
+	albumFetches  int
 }
 
 func (s *musicScannerSpotifyStub) SearchArtistByName(_ context.Context, name string) (*spotifyapi.FullArtist, error) {
@@ -186,8 +199,25 @@ func (s *musicScannerSpotifyStub) SearchArtistByName(_ context.Context, name str
 	return s.artist, nil
 }
 
-func (s *musicScannerSpotifyStub) SearchAndGetAlbumDetails(_ context.Context, _, _ string) (*spotifyapi.FullAlbum, error) {
+func (s *musicScannerSpotifyStub) GetArtist(_ context.Context, id spotifyapi.ID) (*spotifyapi.FullArtist, error) {
+	s.artistFetches++
+	artist, ok := s.artistsByID[id]
+	if !ok {
+		return nil, &spotifyapi.StatusError{StatusCode: http.StatusNotFound, Message: "non existing id"}
+	}
+	return artist, nil
+}
+
+func (s *musicScannerSpotifyStub) MatchAlbum(_ context.Context, query spotifyapi.AlbumQuery) (*spotifyapi.FullAlbum, error) {
 	s.albumCalls++
+	s.albumQueries = append(s.albumQueries, query)
+	if s.albumsByTitle != nil {
+		album, ok := s.albumsByTitle[strings.ToLower(strings.TrimSpace(query.Title))]
+		if !ok {
+			return nil, entityLookupFailure
+		}
+		return album, nil
+	}
 	if s.albumErr != nil {
 		return nil, s.albumErr
 	}
@@ -195,17 +225,21 @@ func (s *musicScannerSpotifyStub) SearchAndGetAlbumDetails(_ context.Context, _,
 	return s.album, nil
 }
 
-func (s *musicScannerSpotifyStub) SearchAlbums(_ context.Context, _ string) ([]spotifyapi.SimpleAlbum, error) {
-	return nil, nil
+func (s *musicScannerSpotifyStub) GetAlbum(_ context.Context, id spotifyapi.ID) (*spotifyapi.FullAlbum, error) {
+	s.albumFetches++
+	if s.albumFetchErr != nil {
+		return nil, s.albumFetchErr
+	}
+	album, ok := s.albumsByID[id]
+	if !ok {
+		return nil, &spotifyapi.StatusError{StatusCode: http.StatusNotFound, Message: "non existing id"}
+	}
+	return album, nil
 }
 
-func (s *musicScannerSpotifyStub) SearchTracks(_ context.Context, _ string) ([]spotifyapi.FullTrack, error) {
-	return nil, nil
-}
-
-func (s *musicScannerSpotifyStub) ClearAllCaches() {
-	s.clearCalls++
-}
+// entityLookupFailure fails a lookup the way a 404 does: the entity is
+// recorded as failed and retried later, and the breaker does not count it.
+var entityLookupFailure = &spotifyapi.StatusError{StatusCode: http.StatusNotFound, Message: "non existing id"}
 
 // scan runs one complete library scan synchronously, publishing the run the
 // way Start does.

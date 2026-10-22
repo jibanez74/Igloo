@@ -26,6 +26,8 @@ SELECT
   composer,
   copyright,
   language,
+  spotify_id,
+  explicit,
   album_id,
   musician_id,
   created_at,
@@ -70,11 +72,13 @@ INSERT INTO tracks (
   composer,
   copyright,
   language,
+  spotify_id,
+  explicit,
   album_id,
   musician_id
 )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (file_path) DO UPDATE
 SET
   title = excluded.title,
@@ -96,10 +100,28 @@ SET
   composer = excluded.composer,
   copyright = excluded.copyright,
   language = excluded.language,
+  spotify_id = excluded.spotify_id,
+  explicit = excluded.explicit,
   album_id = excluded.album_id,
   musician_id = excluded.musician_id,
   updated_at = CURRENT_TIMESTAMP
 RETURNING id;
+
+-- name: LinkMusicTrackSpotify :exec
+-- Guarded so an unchanged link does not advance updated_at. A track number is
+-- only ever filled in, never replaced: the file's own tag wins when it has one.
+UPDATE tracks
+SET
+  spotify_id = sqlc.arg(spotify_id),
+  explicit = sqlc.arg(explicit),
+  track_index = CASE WHEN track_index = 0 THEN sqlc.arg(track_index) ELSE track_index END,
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = sqlc.arg(id)
+  AND (
+    spotify_id IS NOT sqlc.arg(spotify_id)
+    OR explicit IS NOT sqlc.arg(explicit)
+    OR (track_index = 0 AND sqlc.arg(track_index) <> 0)
+  );
 
 -- name: GetTracksByAlbumID :many
 SELECT
@@ -112,6 +134,7 @@ SELECT
   disc,
   channel_layout,
   bit_rate,
+  explicit,
   album_id,
   musician_id
 FROM tracks

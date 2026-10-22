@@ -2,7 +2,6 @@ package spotify
 
 import (
 	"encoding/json"
-	"slices"
 	"testing"
 	"time"
 )
@@ -91,9 +90,7 @@ func TestCatalogTypesDecodeSpotifyPayloads(t *testing.T) {
 		}
 
 		artist := result.Artists.Items[0]
-		if artist.ID.String() != "artist1" || artist.Name != "Radiohead" || artist.Popularity != 79 ||
-			artist.Followers.Count != 9876543 || !slices.Equal(artist.Genres, []string{"alternative rock", "art rock"}) ||
-			artist.Images[0].URL != "https://i.scdn.co/artist-640.jpg" {
+		if artist.ID.String() != "artist1" || artist.Name != "Radiohead" || artist.Images[0].URL != "https://i.scdn.co/artist-640.jpg" {
 			t.Fatalf("artist = %+v", artist)
 		}
 
@@ -113,23 +110,41 @@ func TestCatalogTypesDecodeSpotifyPayloads(t *testing.T) {
 	})
 
 	t.Run("album details", func(t *testing.T) {
-		var album FullAlbum
+		var album albumDetails
 		err := json.Unmarshal([]byte(`{
 			"id": "album1", "name": "OK Computer", "album_type": "album", "total_tracks": 12,
 			"release_date": "1997", "release_date_precision": "year",
-			"popularity": 81, "genres": ["rock"], "label": "XL",
-			"tracks": {"items": [{"id": "track1", "name": "Airbag"}], "total": 12},
+			"popularity": 81, "genres": [], "label": "XL",
+			"tracks": {"href": "", "limit": 50, "offset": 0, "next": null, "previous": null, "total": 12, "items": [
+				{"id": "track1", "name": "Airbag", "disc_number": 1, "track_number": 1, "duration_ms": 287880, "explicit": false, "type": "track"},
+				{"id": "track2", "name": "Paranoid Android", "disc_number": 1, "track_number": 2, "duration_ms": 387213, "explicit": true, "type": "track"}
+			]},
 			"copyrights": [{"text": "1997 XL", "type": "C"}],
+			"external_ids": {"upc": "634904078164"},
 			"images": [{"url": "https://i.scdn.co/album-640.jpg"}]
 		}`), &album)
 		if err != nil {
 			t.Fatalf("Unmarshal: %v", err)
 		}
 
-		if album.ID.String() != "album1" || album.Popularity != 81 || album.TotalTracks != 12 ||
-			!slices.Equal(album.Genres, []string{"rock"}) || album.Images[0].URL != "https://i.scdn.co/album-640.jpg" ||
+		if album.ID.String() != "album1" || album.AlbumType != "album" || album.TotalTracks != 12 ||
+			album.Images[0].URL != "https://i.scdn.co/album-640.jpg" ||
 			album.ReleaseDateTime().Format(time.DateOnly) != "1997-01-01" {
 			t.Fatalf("album = %+v", album)
+		}
+		if album.Tracks.Total != 12 || len(album.Tracks.Items) != 2 {
+			t.Fatalf("tracks = %+v, want a page of 2 out of 12", album.Tracks)
+		}
+		track := album.Tracks.Items[1]
+		if track.ID != "track2" || track.Name != "Paranoid Android" || track.DiscNumber != 1 || track.TrackNumber != 2 ||
+			track.Duration != 387213 || !track.Explicit {
+			t.Fatalf("track = %+v", track)
+		}
+	})
+
+	t.Run("catalog urls", func(t *testing.T) {
+		if AlbumURL("album1") != "https://open.spotify.com/album/album1" || ArtistURL("artist1") != "https://open.spotify.com/artist/artist1" {
+			t.Fatalf("urls = %q, %q", AlbumURL("album1"), ArtistURL("artist1"))
 		}
 	})
 }

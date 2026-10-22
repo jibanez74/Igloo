@@ -133,14 +133,16 @@ func TestMusicNormalizedIdentityAndMutableMetadata(t *testing.T) {
 func TestMusicRelationshipsAndSpotifyDateFallback(t *testing.T) {
 	fixtureDir := t.TempDir()
 	s := setupMusicScanner(t)
-	s.spotify = &musicScannerSpotifyStub{artist: &spotifyapi.FullArtist{SimpleArtist: spotifyapi.SimpleArtist{ID: "artist"}, Genres: []string{"Rock"}}, album: &spotifyapi.FullAlbum{SimpleAlbum: spotifyapi.SimpleAlbum{ID: "album", ReleaseDate: "2000", ReleaseDatePrecision: "year"}, Genres: []string{"Rock"}}}
+	s.spotify = &musicScannerSpotifyStub{artist: &spotifyapi.FullArtist{SimpleArtist: spotifyapi.SimpleArtist{ID: "artist"}}, album: &spotifyapi.FullAlbum{SimpleAlbum: spotifyapi.SimpleAlbum{ID: "album", ReleaseDate: "2000", ReleaseDatePrecision: "year"}}}
 	scan := newMusicScanContext(nil)
 	tags := ffprobe.FormatTags{Title: "Track", Artist: "Artist", Album: "Album", Genre: "Rock", Date: "2022"}
 	scanTaggedTrack(t, s, scan, fixtureDir+"/one", 1, tags)
 	scanTaggedTrack(t, s, scan, fixtureDir+"/two", 1, tags)
-	musicianGenres := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musician_genres")
-	if musicianGenres != 2 {
-		t.Fatal("missing provenance overlap")
+	// Spotify no longer supplies genres, so every link is local.
+	localMusicianGenres := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musician_genres WHERE source='local'")
+	spotifyGenres := scannertest.CountRows(t, s.tx.DB, "SELECT (SELECT count(*) FROM musician_genres WHERE source='spotify') + (SELECT count(*) FROM album_genres WHERE source='spotify')")
+	if localMusicianGenres != 1 || spotifyGenres != 0 {
+		t.Fatalf("genre provenance: local=%d spotify=%d", localMusicianGenres, spotifyGenres)
 	}
 	genres, err := s.queries.GetGenresByMusicianID(context.Background(), 1)
 	if err != nil || len(genres) != 1 {
@@ -163,9 +165,8 @@ func TestMusicRelationshipsAndSpotifyDateFallback(t *testing.T) {
 	if datedAlbums != 1 {
 		t.Fatal("missing Spotify date fallback")
 	}
-	spotifyAlbumGenres := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM album_genres WHERE source='spotify'")
-	localMusicianGenres := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musician_genres WHERE source='local'")
-	if localMusicianGenres != 0 || spotifyAlbumGenres != 1 {
+	remainingGenres := scannertest.CountRows(t, s.tx.DB, "SELECT (SELECT count(*) FROM musician_genres) + (SELECT count(*) FROM album_genres)")
+	if remainingGenres != 0 {
 		t.Fatal("genre provenance removal")
 	}
 	tags.Genre = "Rock"
@@ -187,10 +188,6 @@ func TestMusicRelationshipsAndSpotifyDateFallback(t *testing.T) {
 	fallbackSortMusicians := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musicians WHERE sort_name=name")
 	if fallbackSortMusicians != 1 {
 		t.Fatal("album deletion left sort contribution")
-	}
-	spotifyMusicianGenres := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musician_genres WHERE source='spotify'")
-	if spotifyMusicianGenres != 1 {
-		t.Fatal("album deletion removed Spotify genre")
 	}
 }
 
@@ -350,7 +347,9 @@ func TestSpotifyRetryPagesAndCancellation(t *testing.T) {
 		t.Fatalf("page size=%d", len(candidates))
 	}
 	probe := s.ffprobe.(*scannertest.CountingProbe)
-	stub := &musicScannerSpotifyStub{artistErr: errors.New("temporary"), albumErr: errors.New("temporary")}
+	// A failure about one entity, like a 404, leaves the entity failed without
+	// counting against the breaker, so every page is visited.
+	stub := &musicScannerSpotifyStub{artistErr: entityLookupFailure, albumErr: entityLookupFailure}
 	s.spotify = stub
 	retryScan := newMusicScanContext(nil)
 	err = s.retrySpotify(ctx, retryScan, newScanReport(Status{}))
@@ -424,7 +423,7 @@ func TestSpotifyAlbumMergeRollback(t *testing.T) {
 	}
 	s.spotify = &musicScannerSpotifyStub{album: &spotifyapi.FullAlbum{SimpleAlbum: spotifyapi.SimpleAlbum{ID: "album"}}}
 	scan = newMusicScanContext(nil)
-	owner, err := s.resolveAlbum(ctx, scan, "Album 1", "Album 1", "")
+	owner, err := s.resolveAlbum(ctx, scan, albumQuery{title: "Album 1", sortTitle: "Album 1"})
 	if err != nil {
 		t.Fatal(err)
 	}

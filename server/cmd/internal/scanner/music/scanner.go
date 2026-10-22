@@ -13,6 +13,16 @@ import (
 	spotifyapi "igloo/cmd/internal/spotify"
 )
 
+// SpotifyProvider is the part of the Spotify client the scanner uses: name
+// searches for artists and albums, and id lookups for the artist an album
+// credits and for an album's track list.
+type SpotifyProvider interface {
+	SearchArtistByName(ctx context.Context, name string) (*spotifyapi.FullArtist, error)
+	GetArtist(ctx context.Context, id spotifyapi.ID) (*spotifyapi.FullArtist, error)
+	MatchAlbum(ctx context.Context, query spotifyapi.AlbumQuery) (*spotifyapi.FullAlbum, error)
+	GetAlbum(ctx context.Context, id spotifyapi.ID) (*spotifyapi.FullAlbum, error)
+}
+
 // Dependencies are the application services used by Scanner. DB, Queries,
 // Logger and Ffprobe are required. Spotify and shutdown tracking are optional.
 type Dependencies struct {
@@ -22,7 +32,7 @@ type Dependencies struct {
 	Queries                  *database.Queries
 	Logger                   logger.LoggerInterface
 	Ffprobe                  ffprobe.FfprobeInterface
-	Spotify                  spotifyapi.SpotifyInterface
+	Spotify                  SpotifyProvider
 	ScanContext              context.Context
 	Wait                     *sync.WaitGroup
 	ScannerDBMu              *sync.Mutex
@@ -36,7 +46,7 @@ type Scanner struct {
 	queries                  *database.Queries
 	logger                   logger.LoggerInterface
 	ffprobe                  ffprobe.FfprobeInterface
-	spotify                  spotifyapi.SpotifyInterface
+	spotify                  SpotifyProvider
 	scanContext              context.Context
 	launcher                 scanner.Launcher
 	tx                       scanner.TxRunner

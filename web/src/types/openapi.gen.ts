@@ -3972,8 +3972,12 @@ export interface components {
             title: string;
             sort_title: string;
             spotify_id: components["schemas"]["SqlNullString"];
-            /** @description Valid is false until a Spotify match reports a nonzero popularity. */
+            /** @description The album's page on Spotify, built from spotify_id; null until a Spotify match. */
+            spotify_url: string | null;
+            /** @description No longer written: Spotify stopped reporting popularity to this app in 2026, so Valid is false. */
             spotify_popularity: components["schemas"]["SqlNullFloat64"];
+            /** @description Spotify's album type: album, single or compilation. Valid is false until a Spotify match reports one. */
+            album_type: components["schemas"]["SqlNullString"];
             musician: components["schemas"]["SqlNullString"];
             release_date: components["schemas"]["SqlNullString"];
             year: components["schemas"]["SqlNullInt64"];
@@ -4013,6 +4017,10 @@ export interface components {
             composer: components["schemas"]["SqlNullString"];
             copyright: components["schemas"]["SqlNullString"];
             language: components["schemas"]["SqlNullString"];
+            /** @description The Spotify track this file was paired with through its album's track list. Valid is false until the album matches and a track pairs. */
+            spotify_id: components["schemas"]["SqlNullString"];
+            /** @description Spotify's explicit-lyrics flag for the paired track; false when unknown or unpaired. */
+            explicit: boolean;
             album_id: components["schemas"]["SqlNullInt64"];
             musician_id: components["schemas"]["SqlNullInt64"];
             created_at: string;
@@ -4120,12 +4128,14 @@ export interface components {
             id: number;
             name: string;
             sort_name: string;
-            /** @description A sentence built from the Spotify match's name, genres, popularity, and follower count. Valid is false until a Spotify match reports a popularity or a follower count. */
+            /** @description No longer written: it was built from popularity and follower figures Spotify stopped reporting to this app in 2026, so Valid is false. */
             summary: components["schemas"]["SqlNullString"];
             spotify_id: components["schemas"]["SqlNullString"];
-            /** @description Valid is false until a Spotify match reports a nonzero popularity. */
+            /** @description The artist's page on Spotify, built from spotify_id; null until a Spotify match. */
+            spotify_url: string | null;
+            /** @description No longer written: Spotify stopped reporting popularity to this app in 2026, so Valid is false. */
             spotify_popularity: components["schemas"]["SqlNullFloat64"];
-            /** @description Valid is false until a Spotify match reports a nonzero follower count. */
+            /** @description No longer written: Spotify stopped reporting follower counts to this app in 2026, so Valid is false. */
             spotify_followers: components["schemas"]["SqlNullInt64"];
             thumb: components["schemas"]["SqlNullString"];
             created_at: string;
@@ -4755,6 +4765,8 @@ export interface components {
             channel_layout: string;
             /** Format: int64 */
             bit_rate: number;
+            /** @description Spotify's explicit-lyrics flag for the paired track; false when unknown or unpaired. */
+            explicit: boolean;
             album_id: components["schemas"]["SqlNullInt64"];
             musician_id: components["schemas"]["SqlNullInt64"];
             mime_type: string;

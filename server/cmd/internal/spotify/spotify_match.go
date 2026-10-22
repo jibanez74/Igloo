@@ -28,9 +28,12 @@ const (
 const (
 	lookupArtist             = "artist"
 	lookupAlbum              = "album"
+	lookupTrack              = "track"
 	strategyArtistSearch     = "artist_search"
 	strategyAlbumFieldSearch = "album_field_search"
 	strategyAlbumFallback    = "album_fallback_search"
+	strategyTrackPosition    = "track_position"
+	strategyTrackTitle       = "track_title"
 )
 
 const (
@@ -40,7 +43,45 @@ const (
 	spotifyTrackRequestSearchLimit = 10
 	spotifyArtistThreshold         = 78
 	spotifyAlbumThreshold          = 76
+	spotifyTrackThreshold          = 70
+	// uncreditedAlbumArtistScore stands in for the artist score when a
+	// candidate names no artists, or names one that is not the known artist.
+	uncreditedAlbumArtistScore = 70
+	// artistAdoptionThreshold accepts an album's credited artist as the local
+	// artist whose own search missed. It sits below the search threshold
+	// because the album match already corroborates the name.
+	artistAdoptionThreshold = 60
+	// Editions of one album score alike on title and artist; a release year
+	// and a track count that agree with the file's tags separate them.
+	albumYearBonus       = 3
+	albumTrackTotalBonus = 3
+	// Two recordings at the same album position within this many
+	// milliseconds are the same track however the file titles it.
+	trackDurationToleranceMs = 2000
 )
+
+// AlbumQuery describes a local album. Artist is the album artist; ArtistID is
+// its Spotify id when already known, which makes a candidate crediting that id
+// a certain artist match and one crediting a same-named artist without it a
+// doubtful one. Year and TotalTracks come from the files' tags and only break
+// ties; zero means unknown.
+type AlbumQuery struct {
+	Title       string
+	Artist      string
+	ArtistID    ID
+	Year        int
+	TotalTracks int
+}
+
+// TrackQuery describes a local track being paired with one of its album's
+// Spotify tracks. Disc and Number are the file's tags, zero when untagged;
+// DurationMs is the probed length.
+type TrackQuery struct {
+	Title      string
+	Disc       int
+	Number     int
+	DurationMs int64
+}
 
 var artistStopWords = map[string]struct{}{
 	"and": {},
@@ -270,7 +311,7 @@ func scoreArtistName(query, candidate string) int {
 	return matched * 60 / len(queryTokens)
 }
 
-func scoreAlbumTitle(query, candidate string) int {
+func scoreTitle(query, candidate string) int {
 	normalizedQuery := normalizeComparisonText(query)
 	normalizedCandidate := normalizeComparisonText(candidate)
 	if normalizedQuery == "" || normalizedCandidate == "" {
@@ -324,26 +365,44 @@ func scoreTokenSequence(queryTokens, candidateTokens []string) int {
 	return matched * 70 / len(queryTokens)
 }
 
-func scoreAlbumArtist(queryArtist string, candidateArtists []SimpleArtist) (int, string) {
-	if strings.TrimSpace(queryArtist) == "" {
+// scoreAlbumArtist scores a candidate's credits against the query artist. A
+// candidate without credits keeps a lenient score so the title can still
+// decide; when the artist's Spotify id is known, a candidate crediting it is
+// certain and one crediting only a same-named artist is held to that same
+// leniency, since it is probably another artist of that name.
+func scoreAlbumArtist(query AlbumQuery, candidateArtists []SimpleArtist) (int, string) {
+	hasKnownID := query.ArtistID != ""
+	if hasKnownID {
+		for _, candidateArtist := range candidateArtists {
+			if candidateArtist.ID == query.ArtistID {
+				return 100, candidateArtist.Name
+			}
+		}
+	}
+
+	if strings.TrimSpace(query.Artist) == "" {
 		return 100, ""
 	}
 
 	if len(candidateArtists) == 0 {
-		return 70, ""
+		return uncreditedAlbumArtistScore, ""
 	}
 
 	bestScore := 0
 	bestName := ""
 
 	for _, candidateArtist := range candidateArtists {
-		score := scoreArtistName(queryArtist, candidateArtist.Name)
+		score := scoreArtistName(query.Artist, candidateArtist.Name)
 		if score <= bestScore {
 			continue
 		}
 
 		bestScore = score
 		bestName = candidateArtist.Name
+	}
+
+	if hasKnownID {
+		bestScore = min(bestScore, uncreditedAlbumArtistScore)
 	}
 
 	return bestScore, bestName
@@ -408,10 +467,10 @@ func selectBestArtistMatch(query string, artists []FullArtist, strategy string) 
 	return &artists[bestIndex], info
 }
 
-func selectBestAlbumMatch(title, artist string, albums []SimpleAlbum, searchQuery, strategy string) (*SimpleAlbum, MatchDebugInfo) {
+func selectBestAlbumMatch(query AlbumQuery, albums []SimpleAlbum, searchQuery, strategy string) (*SimpleAlbum, MatchDebugInfo) {
 	info := MatchDebugInfo{
 		Lookup:      lookupAlbum,
-		Input:       title,
+		Input:       query.Title,
 		SearchQuery: searchQuery,
 		Strategy:    strategy,
 		Threshold:   spotifyAlbumThreshold,
@@ -423,12 +482,12 @@ func selectBestAlbumMatch(title, artist string, albums []SimpleAlbum, searchQuer
 	}
 
 	// Later results pay one point per rank, so a tie keeps Spotify's order.
-	hasArtist := strings.TrimSpace(artist) != ""
+	hasArtist := strings.TrimSpace(query.Artist) != ""
 	bestScore, bestIndex, bestArtistName := math.MinInt, 0, ""
 	for index, album := range albums {
-		titleScore := scoreAlbumTitle(title, album.Name)
-		artistScore, candidateArtistName := scoreAlbumArtist(artist, album.Artists)
-		score := (titleScore*3+artistScore)/4 - index
+		titleScore := scoreTitle(query.Title, album.Name)
+		artistScore, candidateArtistName := scoreAlbumArtist(query, album.Artists)
+		score := (titleScore*3+artistScore)/4 + albumTagBonus(query, album) - index
 		if hasArtist && artistScore < 60 {
 			score -= 12
 		}
@@ -463,4 +522,109 @@ func chooseBetterMatchInfo(current, candidate MatchDebugInfo) MatchDebugInfo {
 	}
 
 	return current
+}
+
+func albumTagBonus(query AlbumQuery, album SimpleAlbum) int {
+	bonus := 0
+	yearAgrees := query.Year > 0 && album.ReleaseDateTime().Year() == query.Year
+	if yearAgrees {
+		bonus += albumYearBonus
+	}
+	trackTotalAgrees := query.TotalTracks > 0 && int(album.TotalTracks) == query.TotalTracks
+	if trackTotalAgrees {
+		bonus += albumTrackTotalBonus
+	}
+	return bonus
+}
+
+// ArtistNamesAgree reports whether candidate plausibly names the artist a
+// local credit calls local, loosely enough to adopt an album's credited artist
+// when the name search itself missed.
+func ArtistNamesAgree(local, candidate string) bool {
+	return scoreArtistName(local, candidate) >= artistAdoptionThreshold
+}
+
+// MatchAlbumTrack pairs a local track with one of its album's Spotify tracks.
+// The file's position nominates a candidate, accepted when its title or its
+// length agrees; otherwise the best title wins. The info always carries the
+// candidate's title score, even when the length decided.
+func MatchAlbumTrack(query TrackQuery, tracks []SimpleTrack) (*SimpleTrack, MatchDebugInfo) {
+	info := MatchDebugInfo{
+		Lookup:    lookupTrack,
+		Input:     query.Title,
+		Strategy:  strategyTrackPosition,
+		Threshold: spotifyTrackThreshold,
+		Reason:    MatchReasonNoResults,
+	}
+
+	if len(tracks) == 0 {
+		return nil, info
+	}
+
+	positioned := trackAtPosition(query, tracks)
+	if positioned != nil {
+		info.CandidateName = positioned.Name
+		info.Score = scoreTitle(query.Title, positioned.Name)
+		titleAgrees := info.Score >= spotifyTrackThreshold
+		durationAgrees := durationGap(query, *positioned) <= trackDurationToleranceMs
+		if titleAgrees || durationAgrees {
+			info.Reason = MatchReasonAccepted
+			return positioned, info
+		}
+	}
+
+	info.Strategy = strategyTrackTitle
+	bestIndex, bestScore, bestGap := 0, -1, int64(0)
+	for index := range tracks {
+		score := scoreTitle(query.Title, tracks[index].Name)
+		gap := durationGap(query, tracks[index])
+		better := score > bestScore || (score == bestScore && gap < bestGap)
+		if !better {
+			continue
+		}
+		bestIndex, bestScore, bestGap = index, score, gap
+	}
+
+	info.CandidateName = tracks[bestIndex].Name
+	info.Score = bestScore
+	if bestScore < spotifyTrackThreshold {
+		info.Reason = MatchReasonScoreBelowThreshold
+		return nil, info
+	}
+
+	info.Reason = MatchReasonAccepted
+	return &tracks[bestIndex], info
+}
+
+// trackAtPosition returns the one Spotify track at the file's disc and track
+// number, or nil when the position is untagged or ambiguous (a file with no
+// disc tag on a multi-disc album).
+func trackAtPosition(query TrackQuery, tracks []SimpleTrack) *SimpleTrack {
+	if query.Number <= 0 {
+		return nil
+	}
+
+	var found *SimpleTrack
+	for index := range tracks {
+		track := &tracks[index]
+		numberAgrees := int(track.TrackNumber) == query.Number
+		discAgrees := query.Disc == 0 || int(track.DiscNumber) == query.Disc
+		if !numberAgrees || !discAgrees {
+			continue
+		}
+		if found != nil {
+			return nil
+		}
+		found = track
+	}
+
+	return found
+}
+
+func durationGap(query TrackQuery, track SimpleTrack) int64 {
+	gap := int64(track.Duration) - query.DurationMs
+	if gap < 0 {
+		return -gap
+	}
+	return gap
 }

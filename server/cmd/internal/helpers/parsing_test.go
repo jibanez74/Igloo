@@ -122,16 +122,18 @@ func TestParseDurationMs(t *testing.T) {
 	}
 }
 
-func TestParseSlashNumber(t *testing.T) {
+func TestParseSlashNumbers(t *testing.T) {
 	tests := []struct {
-		name    string
-		input   string
-		want    int64
-		wantErr bool
+		name      string
+		input     string
+		want      int64
+		wantTotal int64
+		wantErr   bool
 	}{
-		{name: "track of total", input: "1/12", want: 1},
+		{name: "track of total", input: "1/12", want: 1, wantTotal: 12},
 		{name: "bare number", input: "7", want: 7},
-		{name: "surrounding whitespace", input: " 3 /12", want: 3},
+		{name: "surrounding whitespace", input: " 3 / 12 ", want: 3, wantTotal: 12},
+		{name: "unreadable total", input: "3/x", want: 3},
 		{name: "empty", input: "", wantErr: true},
 		{name: "leading separator", input: "/12", wantErr: true},
 		{name: "not a number", input: "A/12", wantErr: true},
@@ -139,18 +141,18 @@ func TestParseSlashNumber(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ParseSlashNumber(tt.input)
+			got, total, err := ParseSlashNumbers(tt.input)
 			if tt.wantErr {
 				if err == nil {
-					t.Fatalf("ParseSlashNumber(%q) = %d, want an error", tt.input, got)
+					t.Fatalf("ParseSlashNumbers(%q) = %d, want an error", tt.input, got)
 				}
 				return
 			}
 			if err != nil {
-				t.Fatalf("ParseSlashNumber(%q) returned error: %v", tt.input, err)
+				t.Fatalf("ParseSlashNumbers(%q) returned error: %v", tt.input, err)
 			}
-			if got != tt.want {
-				t.Errorf("ParseSlashNumber(%q) = %d, want %d", tt.input, got, tt.want)
+			if got != tt.want || total != tt.wantTotal {
+				t.Errorf("ParseSlashNumbers(%q) = %d/%d, want %d/%d", tt.input, got, total, tt.want, tt.wantTotal)
 			}
 		})
 	}
