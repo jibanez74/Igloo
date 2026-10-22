@@ -93,6 +93,20 @@ func TestSplitCompoundArtistCreditsPreservesSuffixes(t *testing.T) {
 		t.Fatal("expected Hamilton-style credits to split locally")
 	}
 
+	// A suffix followed by " & " still belongs to the name before it.
+	for input, want := range map[string][]string{
+		"Leslie Odom, Jr. & Lin-Manuel Miranda": {"Leslie Odom, Jr.", "Lin-Manuel Miranda"},
+		`Christopher Jackson, Lin-Manuel Miranda, Leslie Odom, Jr. & Original Broadway Cast of "Hamilton"`: {
+			"Christopher Jackson", "Lin-Manuel Miranda", "Leslie Odom, Jr.", `Original Broadway Cast of "Hamilton"`,
+		},
+		"Leslie Odom, Jr., Anthony Ramos & Daveed Diggs": {"Leslie Odom, Jr.", "Anthony Ramos", "Daveed Diggs"},
+	} {
+		credits = parseCompoundArtistCredits(input)
+		if !slices.Equal(credits.parts, want) || !shouldSplitCompoundArtistCreditsLocally(credits) {
+			t.Fatalf("%q: parts = %#v, want %#v split locally", input, credits.parts, want)
+		}
+	}
+
 	credits = parseCompoundArtistCredits("Earth, Wind & Fire")
 	if shouldSplitCompoundArtistCreditsLocally(credits) {
 		t.Fatal("expected single-word comma/ampersand band name to stay combined locally")
@@ -354,6 +368,7 @@ func TestArtistSortCreditPositions(t *testing.T) {
 		{"First, , Third", 3, []string{"First", "", "Third"}},
 		{"First, Jr., Second", 2, []string{"First, Jr.", "Second"}},
 		{"First, Jr. & Second, III", 2, []string{"First, Jr.", "Second, III"}},
+		{"First One, Second Two, Jr. & Third Three", 3, []string{"First One", "Second Two, Jr.", "Third Three"}},
 		{"Last, First, Other, Second", 2, nil},
 		{"One & Two & Three", 2, nil},
 	}
