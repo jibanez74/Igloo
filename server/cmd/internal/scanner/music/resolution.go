@@ -505,11 +505,12 @@ func (s *Scanner) resolveAlbum(ctx context.Context, scan *musicScanContext, quer
 		return nil, err
 	}
 	albumDetails, searchErr := s.spotify.MatchAlbum(ctx, spotifyapi.AlbumQuery{
-		Title:       title,
-		Artist:      albumArtist,
-		ArtistID:    artistID,
-		Year:        query.year,
-		TotalTracks: query.totalTracks,
+		Title:         title,
+		Artist:        albumArtist,
+		ArtistCredits: parseCompoundArtistCredits(albumArtist).parts,
+		ArtistID:      artistID,
+		Year:          query.year,
+		TotalTracks:   query.totalTracks,
 	})
 	contextErr := ctx.Err()
 	if contextErr != nil {

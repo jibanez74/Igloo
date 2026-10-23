@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
+	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -240,9 +242,13 @@ func TestTrackLinkingKeepsABiggerLocalEditionMatched(t *testing.T) {
 	s := setupMusicScanner(t)
 	// The files are an anniversary edition holding the whole Spotify album
 	// plus extras; few of them pair, but every Spotify track does.
-	s.spotify = &musicScannerSpotifyStub{artist: testArtist(), album: testAlbum(spotifyTrack("t1", "Opening Song", 1, 1, 180250, false))}
+	s.spotify = &musicScannerSpotifyStub{artist: testArtist(), album: testAlbum(
+		spotifyTrack("t1", "Opening Song", 1, 1, 180250, false),
+		spotifyTrack("t2", "Vicenta", 1, 2, 180250, false),
+		spotifyTrack("t3", "La Pluma", 1, 3, 180250, false),
+	)}
 	scan := newMusicScanContext(nil)
-	for i, title := range []string{"Opening Song", "Vicenta", "La Pluma", "Mandinga"} {
+	for i, title := range []string{"Opening Song", "Vicenta", "La Pluma", "Mandinga", "Candela", "Orgullecida", "Chan Chan"} {
 		scanTaggedTrack(t, s, scan, fmt.Sprintf("%s/%02d.m4a", fixtureDir, i+1), 1, albumTags(title, strconv.Itoa(i+1)))
 	}
 	linkScannedTracks(t, s, scan)
@@ -251,7 +257,31 @@ func TestTrackLinkingKeepsABiggerLocalEditionMatched(t *testing.T) {
 	if row.spotifyID.String != "album" || row.status.String != musicSpotifyStatusMatched {
 		t.Fatalf("album = %+v, want the match kept", row)
 	}
-	assertLinked(t, trackLinkFor(t, s, fixtureDir+"/01.m4a"), "t1", false, 1)
+	assertLinked(t, trackLinkFor(t, s, fixtureDir+"/03.m4a"), "t3", false, 3)
+}
+
+func TestTrackLinkingDropsASingleMatchedForTheAlbum(t *testing.T) {
+	fixtureDir := t.TempDir()
+	s := setupMusicScanner(t)
+	// The album's lead single: its one track pairs, but a one-track release
+	// is not an edition of a four-track album.
+	single := testAlbum(spotifyTrack("t1", "Opening Song", 1, 1, 180250, false))
+	single.AlbumType = "single"
+	s.spotify = &musicScannerSpotifyStub{artist: testArtist(), album: single}
+	scan := newMusicScanContext(nil)
+	for i, title := range []string{"Opening Song", "Ghosts On The Stereo", "Low", "Backsliding"} {
+		scanTaggedTrack(t, s, scan, fmt.Sprintf("%s/%02d.m4a", fixtureDir, i+1), 1, albumTags(title, strconv.Itoa(i+1)))
+	}
+	linkScannedTracks(t, s, scan)
+
+	row := albumMatchFor(t, s, "Test Album")
+	if row.spotifyID.Valid || row.status.String != musicSpotifyStatusUnmatched || row.reason.String != musicSpotifyReasonTracksDisagree {
+		t.Fatalf("album = %+v, want the single's match dropped as tracks_disagree", row)
+	}
+	link := trackLinkFor(t, s, fixtureDir+"/01.m4a")
+	if link.spotifyID.Valid || link.status.Valid {
+		t.Fatalf("track = %+v, want no pairing and no outcome", link)
+	}
 }
 
 func TestTrackLinkingPairsFromListsAtHandAfterTheBreakerTrips(t *testing.T) {
@@ -436,9 +466,24 @@ func TestAlbumQueryCarriesKnownArtistIDAndTagEvidence(t *testing.T) {
 	tags.Date = "2001-05-05"
 	scanTaggedTrack(t, s, newMusicScanContext(nil), fixtureDir+"/03.m4a", 1, tags)
 
-	want := spotifyapi.AlbumQuery{Title: "Test Album", Artist: "Test Artist", ArtistID: "artist", Year: 2001, TotalTracks: 12}
-	if len(stub.albumQueries) != 1 || stub.albumQueries[0] != want {
+	want := spotifyapi.AlbumQuery{Title: "Test Album", Artist: "Test Artist", ArtistCredits: []string{"Test Artist"}, ArtistID: "artist", Year: 2001, TotalTracks: 12}
+	if len(stub.albumQueries) != 1 || !reflect.DeepEqual(stub.albumQueries[0], want) {
 		t.Fatalf("album queries = %+v, want %+v", stub.albumQueries, want)
+	}
+}
+
+func TestAlbumQueryCarriesCompoundArtistCredits(t *testing.T) {
+	fixtureDir := t.TempDir()
+	s := setupMusicScanner(t)
+	stub := &musicScannerSpotifyStub{artist: testArtist(), album: testAlbum()}
+	s.spotify = stub
+	tags := albumTags("Opening Song", "1")
+	tags.AlbumArtist = "Lin-Manuel Miranda, Leslie Odom, Jr. & Phillipa Soo"
+	scanTaggedTrack(t, s, newMusicScanContext(nil), fixtureDir+"/01.m4a", 1, tags)
+
+	want := []string{"Lin-Manuel Miranda", "Leslie Odom, Jr.", "Phillipa Soo"}
+	if len(stub.albumQueries) != 1 || !slices.Equal(stub.albumQueries[0].ArtistCredits, want) {
+		t.Fatalf("album queries = %+v, want credits %q", stub.albumQueries, want)
 	}
 }
 

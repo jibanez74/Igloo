@@ -165,9 +165,12 @@ func TestMusicScanStatusSpotifyTallies(t *testing.T) {
 		t.Fatalf("first scan tallies: %+v", first)
 	}
 
+	// The fixture's files are one track three times over, so all three pair
+	// with the album's one Spotify track.
+	tracks := []spotifyapi.SimpleTrack{spotifyTrack("t1", "Test Track", 1, 1, 180000, false)}
 	s.spotify = &musicScannerSpotifyStub{
 		artist: &spotifyapi.FullArtist{SimpleArtist: spotifyapi.SimpleArtist{ID: "artist"}},
-		album:  &spotifyapi.FullAlbum{SimpleAlbum: spotifyapi.SimpleAlbum{ID: "album"}},
+		album:  &spotifyapi.FullAlbum{SimpleAlbum: spotifyapi.SimpleAlbum{ID: "album"}, Tracks: tracks},
 	}
 	s.scan(dir)
 	second := s.Status()
@@ -180,7 +183,7 @@ func TestMusicScanStatusSpotifyTallies(t *testing.T) {
 	stub := &musicScannerSpotifyStub{
 		artistErr:  errors.New("temporary"),
 		albumErr:   errors.New("temporary"),
-		albumsByID: map[spotifyapi.ID]*spotifyapi.FullAlbum{"album": {SimpleAlbum: spotifyapi.SimpleAlbum{ID: "album"}}},
+		albumsByID: map[spotifyapi.ID]*spotifyapi.FullAlbum{"album": {SimpleAlbum: spotifyapi.SimpleAlbum{ID: "album"}, Tracks: tracks}},
 	}
 	s.spotify = stub
 	scannertest.WriteFile(t, filepath.Join(dir, "a.m4a"), "a.m4a changed")

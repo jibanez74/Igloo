@@ -264,7 +264,8 @@ func (s *Scanner) linkAlbum(ctx context.Context, scan *musicScanContext, candida
 
 // albumContradicted reports an album match its tracks disagree with: fewer
 // than half of at least albumCheckMinTracks local tracks pair, and the album
-// is not a bigger local edition holding every Spotify track.
+// is not a bigger local edition holding every Spotify track. A Spotify release
+// shorter than albumCheckMinTracks is a single, not an edition of the album.
 func albumContradicted(local int, held []spotifyapi.HeldTrack, pairings []spotifyapi.TrackPairing, tracks []spotifyapi.SimpleTrack) bool {
 	paired := len(held)
 	taken := make(map[spotifyapi.ID]bool, len(held)+len(pairings))
@@ -279,6 +280,9 @@ func albumContradicted(local int, held []spotifyapi.HeldTrack, pairings []spotif
 	}
 	if local < albumCheckMinTracks || paired*2 >= local {
 		return false
+	}
+	if len(tracks) < albumCheckMinTracks {
+		return true
 	}
 	for _, track := range tracks {
 		if !taken[track.ID] {

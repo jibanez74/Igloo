@@ -188,6 +188,27 @@ func TestScoreTrackTitle(t *testing.T) {
 	}
 }
 
+// The accepted cases are albums from a library scan that Spotify lists
+// under a slightly different title.
+func TestScoreAlbumTitle(t *testing.T) {
+	tests := []struct {
+		query, candidate string
+		accepted         bool
+	}{
+		{"Virtuoso (OJC Remaster)", "Virtuoso (Remastered 2025)", true},
+		{"Buena Vista Social Club (25th Anniversary Edition) [2021 Remaster]", "Buena Vista Social Club (25th Anniversary Edition)", true},
+		{"Greatest Hits, Vol. One: The Singles", "Greatest Hits Volume One - The Singles", true},
+		// "Version" alone notes no remaster.
+		{"Red (Taylor's Version)", "Red", false},
+	}
+	for _, tc := range tests {
+		got := scoreAlbumTitle(tc.query, tc.candidate)
+		if (got >= spotifyAlbumThreshold) != tc.accepted {
+			t.Errorf("scoreAlbumTitle(%q, %q) = %d, want accepted=%v at threshold %d", tc.query, tc.candidate, got, tc.accepted, spotifyAlbumThreshold)
+		}
+	}
+}
+
 func TestScoreAlbumArtist(t *testing.T) {
 	// No artist in the query: neutral perfect score so title alone decides.
 	score, name := scoreAlbumArtist(AlbumQuery{}, []SimpleArtist{{Name: "Someone"}})
@@ -222,6 +243,29 @@ func TestScoreAlbumArtist(t *testing.T) {
 	score, name = scoreAlbumArtist(AlbumQuery{Artist: "The Beatles", ArtistID: "beatles1"}, []SimpleArtist{{ID: "other1", Name: "The Beatles"}})
 	if score != uncreditedAlbumArtistScore || name != "The Beatles" {
 		t.Fatalf("same-named credit without the known id = (%d, %q), want (%d, \"The Beatles\")", score, name, uncreditedAlbumArtistScore)
+	}
+
+	// A compound album artist agrees with a candidate crediting any one of its names.
+	score, name = scoreAlbumArtist(AlbumQuery{
+		Artist:        "Mark Keali'i Ho'omalu, Iam Tongi & Dan Romer",
+		ArtistCredits: []string{"Mark Keali'i Ho'omalu", "Iam Tongi", "Dan Romer"},
+	}, []SimpleArtist{{Name: "Disney"}, {Name: "Mark Keali'i Ho'omalu"}})
+	if score != 100 || name != "Mark Keali'i Ho'omalu" {
+		t.Fatalf("compound artist credit = (%d, %q), want (100, \"Mark Keali'i Ho'omalu\")", score, name)
+	}
+
+	// "Various Artists" on either side names no artist, so it keeps the uncredited score.
+	score, _ = scoreAlbumArtist(AlbumQuery{Artist: "Various Artists"}, []SimpleArtist{{Name: "Bridgerton"}})
+	if score != uncreditedAlbumArtistScore {
+		t.Fatalf("local compilation = %d, want %d", score, uncreditedAlbumArtistScore)
+	}
+	score, _ = scoreAlbumArtist(AlbumQuery{Artist: "Elton John & Tim Rice, Hans Zimmer"}, []SimpleArtist{{Name: "Various Artists"}})
+	if score != uncreditedAlbumArtistScore {
+		t.Fatalf("candidate compilation = %d, want %d", score, uncreditedAlbumArtistScore)
+	}
+	score, _ = scoreAlbumArtist(AlbumQuery{Artist: "Various Artists"}, []SimpleArtist{{Name: "Various Artists"}})
+	if score != 100 {
+		t.Fatalf("compilation on both sides = %d, want 100", score)
 	}
 }
 
@@ -334,6 +378,30 @@ func TestSelectBestAlbumMatch(t *testing.T) {
 			AlbumQuery{Title: "Meteora", TotalTracks: 13},
 			[]SimpleAlbum{edition("remaster123", "Meteora", "2023-04-07", 34), edition("original123", "Meteora", "2003-03-25", 13)},
 			"original123", MatchReasonAccepted,
+		},
+		{
+			"a release too small for the tagged album loses to the album",
+			AlbumQuery{Title: "Cry Pretty", Artist: "Carrie Underwood", Year: 2018, TotalTracks: 12},
+			[]SimpleAlbum{
+				{ID: "single123", Name: "Cry Pretty", Artists: []SimpleArtist{{Name: "Carrie Underwood"}}, ReleaseDate: "2018-04-11", ReleaseDatePrecision: "day", TotalTracks: 1},
+				{ID: "album123", Name: "Cry Pretty", Artists: []SimpleArtist{{Name: "Carrie Underwood"}}, ReleaseDate: "2018-09-14", ReleaseDatePrecision: "day", TotalTracks: 13},
+			},
+			"album123", MatchReasonAccepted,
+		},
+		{
+			"a compound album artist matches through one of its credits",
+			AlbumQuery{
+				Title:         "Hamilton: An American Musical (Original Broadway Cast Recording)",
+				Artist:        "Lin-Manuel Miranda, Leslie Odom, Jr., Phillipa Soo, Daveed Diggs & Christopher Jackson",
+				ArtistCredits: []string{"Lin-Manuel Miranda", "Leslie Odom, Jr.", "Phillipa Soo", "Daveed Diggs", "Christopher Jackson"},
+				Year:          2015,
+				TotalTracks:   23,
+			},
+			[]SimpleAlbum{
+				{ID: "hamilton123", Name: "Hamilton (Original Broadway Cast Recording)", Artists: []SimpleArtist{{Name: "Lin-Manuel Miranda"}}, ReleaseDate: "2015-09-25", ReleaseDatePrecision: "day", TotalTracks: 46},
+				album("mixtape123", "The Hamilton Mixtape", "Lin-Manuel Miranda"),
+			},
+			"hamilton123", MatchReasonAccepted,
 		},
 		{
 			"without tag evidence the earlier edition keeps Spotify's order",

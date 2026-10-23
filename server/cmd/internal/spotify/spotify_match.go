@@ -59,6 +59,10 @@ const (
 	// and a track count that agree with the file's tags separate them.
 	albumYearBonus       = 3
 	albumTrackTotalBonus = 3
+	// A release with fewer than half the tracks the file's tags count is a
+	// single or EP from the album, not the album; the penalty outweighs both
+	// bonuses and a few ranks of Spotify's order.
+	albumSizePenalty = 6
 	// Two recordings at the same album position within this many
 	// milliseconds are the same track however the file titles it.
 	trackDurationToleranceMs = 2000
@@ -67,14 +71,18 @@ const (
 // AlbumQuery describes a local album. Artist is the album artist; ArtistID is
 // its Spotify id when already known, which makes a candidate crediting that id
 // a certain artist match and one crediting a same-named artist without it a
-// doubtful one. Year and TotalTracks come from the files' tags and only break
-// ties; zero means unknown.
+// doubtful one. ArtistCredits are the names a compound album artist credits,
+// such as "A, B & C", each of which may be the one Spotify credits. Year and
+// TotalTracks come from the files' tags; they break ties between editions,
+// and TotalTracks also marks down a release too small to be the album. Zero
+// means unknown.
 type AlbumQuery struct {
-	Title       string
-	Artist      string
-	ArtistID    ID
-	Year        int
-	TotalTracks int
+	Title         string
+	Artist        string
+	ArtistCredits []string
+	ArtistID      ID
+	Year          int
+	TotalTracks   int
 }
 
 // TrackQuery describes a local track being paired with one of its album's
@@ -105,6 +113,16 @@ var artistStopWords = map[string]struct{}{
 	"and": {},
 	"the": {},
 }
+
+// comparisonTokenAliases spell abbreviations out, so "Vol. One" compares
+// equal to "Volume One".
+var comparisonTokenAliases = map[string]string{
+	"vol": "volume",
+}
+
+// variousArtists is how compilations credit their artist, locally and on
+// Spotify; it names no artist, so it cannot confirm or deny one.
+const variousArtists = "various artists"
 
 var albumNoiseTokens = map[string]struct{}{
 	"album":       {},
@@ -262,6 +280,9 @@ func tokenizeComparisonText(value string, stopWords map[string]struct{}) []strin
 	for _, field := range fields {
 		if _, skip := stopWords[field]; skip {
 			continue
+		}
+		if alias, ok := comparisonTokenAliases[field]; ok {
+			field = alias
 		}
 		tokens = append(tokens, field)
 	}
@@ -425,10 +446,32 @@ func scoreTrackTitle(query, candidate string) int {
 	return score
 }
 
+// scoreAlbumTitle scores an album title the way scoreTitle does, and also
+// without the qualifiers that note a remaster, keeping the better score:
+// "Virtuoso (OJC Remaster)" is "Virtuoso (Remastered 2025)".
+func scoreAlbumTitle(query, candidate string) int {
+	return max(scoreTitle(query, candidate), scoreTitle(albumTitleCore(query), albumTitleCore(candidate)))
+}
+
+// albumTitleCore drops every bracketed or " - " qualifier that mentions a
+// remaster. Only the remaster words count: "version" alone would also drop
+// "(Taylor's Version)", which names a different album.
+func albumTitleCore(title string) string {
+	base, qualifiers := titleParts(title)
+	core := []string{base}
+	for _, qualifier := range qualifiers {
+		words := strings.Fields(normalizeComparisonText(qualifier))
+		if !slices.Contains(words, "remaster") && !slices.Contains(words, "remastered") {
+			core = append(core, qualifier)
+		}
+	}
+	return strings.Join(core, " ")
+}
+
 // trackTitleCore drops the qualifiers that name no different recording and
 // returns what remains, with the version words the kept qualifiers carry.
 func trackTitleCore(title string) (string, map[string]struct{}) {
-	base, qualifiers := trackTitleParts(title)
+	base, qualifiers := titleParts(title)
 	core := []string{base}
 	versions := map[string]struct{}{}
 	for _, qualifier := range qualifiers {
@@ -447,10 +490,10 @@ func trackTitleCore(title string) (string, map[string]struct{}) {
 	return strings.Join(core, " "), versions
 }
 
-// trackTitleParts splits a track title into the text outside brackets and its
+// titleParts splits a title into the text outside brackets and its
 // qualifiers: each bracketed segment, and everything after a " - " outside
 // brackets, as in "Song (feat. X) - Remastered 2011".
-func trackTitleParts(title string) (string, []string) {
+func titleParts(title string) (string, []string) {
 	var base, segment strings.Builder
 	var qualifiers []string
 	depth := 0
@@ -507,11 +550,13 @@ func trackQualifierDropped(words []string) bool {
 	return true
 }
 
-// scoreAlbumArtist scores a candidate's credits against the query artist. A
-// candidate without credits keeps a lenient score so the title can still
-// decide; when the artist's Spotify id is known, a candidate crediting it is
-// certain and one crediting only a same-named artist is held to that same
-// leniency, since it is probably another artist of that name.
+// scoreAlbumArtist scores a candidate's credits against the query artist and
+// each of its credits. A candidate without credits keeps a lenient score so
+// the title can still decide, and so does a side credited to "Various
+// Artists" against a named artist; when the artist's Spotify id is known, a
+// candidate crediting it is certain and one crediting only a same-named artist
+// is held to that same leniency, since it is probably another artist of that
+// name.
 func scoreAlbumArtist(query AlbumQuery, candidateArtists []SimpleArtist) (int, string) {
 	hasKnownID := query.ArtistID != ""
 	if hasKnownID {
@@ -535,6 +580,9 @@ func scoreAlbumArtist(query AlbumQuery, candidateArtists []SimpleArtist) (int, s
 
 	for _, candidateArtist := range candidateArtists {
 		score := scoreArtistName(query.Artist, candidateArtist.Name)
+		for _, credit := range query.ArtistCredits {
+			score = max(score, scoreArtistName(credit, candidateArtist.Name))
+		}
 		if score <= bestScore {
 			continue
 		}
@@ -546,8 +594,15 @@ func scoreAlbumArtist(query AlbumQuery, candidateArtists []SimpleArtist) (int, s
 	if hasKnownID {
 		bestScore = min(bestScore, uncreditedAlbumArtistScore)
 	}
+	if isVariousArtists(query.Artist) || slices.ContainsFunc(candidateArtists, func(artist SimpleArtist) bool { return isVariousArtists(artist.Name) }) {
+		bestScore = max(bestScore, uncreditedAlbumArtistScore)
+	}
 
 	return bestScore, bestName
+}
+
+func isVariousArtists(name string) bool {
+	return normalizeComparisonText(name) == variousArtists
 }
 
 func trimAlbumSearchTitle(title string) string {
@@ -627,7 +682,7 @@ func selectBestAlbumMatch(query AlbumQuery, albums []SimpleAlbum, searchQuery, s
 	hasArtist := strings.TrimSpace(query.Artist) != ""
 	bestScore, bestIndex, bestArtistName := math.MinInt, 0, ""
 	for index, album := range albums {
-		titleScore := scoreTitle(query.Title, album.Name)
+		titleScore := scoreAlbumTitle(query.Title, album.Name)
 		artistScore, candidateArtistName := scoreAlbumArtist(query, album.Artists)
 		score := (titleScore*3+artistScore)/4 + albumTagBonus(query, album) - index
 		if hasArtist && artistScore < 60 {
@@ -666,6 +721,9 @@ func chooseBetterMatchInfo(current, candidate MatchDebugInfo) MatchDebugInfo {
 	return current
 }
 
+// albumTagBonus weighs a candidate against the file's tags: a release year and
+// a track count that agree add to its score, and a release too small to be
+// the tagged album takes away.
 func albumTagBonus(query AlbumQuery, album SimpleAlbum) int {
 	bonus := 0
 	yearAgrees := query.Year > 0 && album.ReleaseDateTime().Year() == query.Year
@@ -675,6 +733,9 @@ func albumTagBonus(query AlbumQuery, album SimpleAlbum) int {
 	trackTotalAgrees := query.TotalTracks > 0 && int(album.TotalTracks) == query.TotalTracks
 	if trackTotalAgrees {
 		bonus += albumTrackTotalBonus
+	}
+	if int(album.TotalTracks)*2 < query.TotalTracks {
+		bonus -= albumSizePenalty
 	}
 	return bonus
 }
