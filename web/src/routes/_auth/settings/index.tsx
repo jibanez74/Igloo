@@ -4,6 +4,7 @@ import { useId, useState, useTransition } from "react";
 import type { FormEvent, ReactNode } from "react";
 import {
   Activity,
+  Disc3,
   Download,
   Eye,
   EyeOff,
@@ -72,6 +73,7 @@ function formFromSettings(
     jellyfin_api_key: settings.jellyfin_api_key ?? "",
     spotify_client_id: settings.spotify_client_id ?? "",
     spotify_client_secret: settings.spotify_client_secret ?? "",
+    enable_apple_lookups: settings.enable_apple_lookups,
     enable_watcher: settings.enable_watcher,
     download_images: settings.download_images,
     static_dir: settings.static_dir,
@@ -92,6 +94,7 @@ function formsMatchSettings(
     form.jellyfin_api_key === settingsForm.jellyfin_api_key &&
     form.spotify_client_id === settingsForm.spotify_client_id &&
     form.spotify_client_secret === settingsForm.spotify_client_secret &&
+    form.enable_apple_lookups === settingsForm.enable_apple_lookups &&
     form.enable_watcher === settingsForm.enable_watcher &&
     form.download_images === settingsForm.download_images &&
     form.static_dir === settingsForm.static_dir &&
@@ -156,6 +159,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   const immichApiKeyId = useId();
   const spotifyClientIdId = useId();
   const spotifyClientSecretId = useId();
+  const appleLookupsId = useId();
   const staticDirId = useId();
   const transcodeDirId = useId();
   const enableWatcherId = useId();
@@ -211,6 +215,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
               spotify_client_secret: trimmedOrNull(
                 nextSettings.spotify_client_secret,
               ),
+              enable_apple_lookups: nextSettings.enable_apple_lookups,
               enable_watcher: nextSettings.enable_watcher,
               download_images: nextSettings.download_images,
               static_dir: nextSettings.static_dir,
@@ -281,7 +286,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   };
 
   const handleToggleChange = (
-    field: "enable_watcher" | "download_images",
+    field: "enable_watcher" | "download_images" | "enable_apple_lookups",
     value: boolean,
   ) => {
     startTransition(() => {
@@ -447,7 +452,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
         <SettingsCardHeader
           icon={KeyRound}
           title="External Services"
-          description="Manage credentials used for metadata and interoperability."
+          description="Manage the services and credentials used for metadata and interoperability."
         />
         <CardContent className="divide-y divide-border/50">
           <ServiceSection title="TMDB">
@@ -497,6 +502,19 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
               label="Immich API key"
               value={form.immich_api_key}
               onChange={value => handleSecretChange("immich_api_key", value)}
+              disabled={updateMutation.isPending}
+            />
+          </ServiceSection>
+          <ServiceSection title="Apple Music">
+            <SwitchField
+              id={appleLookupsId}
+              label="Apple Music lookups"
+              description="Match albums from iTunes purchases against the Apple Music catalog during music scans. No account needed; applies from the next scan."
+              checked={form.enable_apple_lookups}
+              onCheckedChange={checked =>
+                handleToggleChange("enable_apple_lookups", checked)
+              }
+              icon={<Disc3 className="size-5 text-primary" aria-hidden="true" />}
               disabled={updateMutation.isPending}
             />
           </ServiceSection>

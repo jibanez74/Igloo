@@ -192,6 +192,7 @@ SELECT
   copyright,
   language,
   spotify_id,
+  apple_id,
   explicit,
   album_id,
   musician_id,
@@ -224,6 +225,7 @@ type GetTrackRow struct {
 	Copyright     sql.NullString `json:"copyright"`
 	Language      sql.NullString `json:"language"`
 	SpotifyID     sql.NullString `json:"spotify_id"`
+	AppleID       sql.NullInt64  `json:"apple_id"`
 	Explicit      bool           `json:"explicit"`
 	AlbumID       sql.NullInt64  `json:"album_id"`
 	MusicianID    sql.NullInt64  `json:"musician_id"`
@@ -256,6 +258,7 @@ func (q *Queries) GetTrack(ctx context.Context, id int64) (GetTrackRow, error) {
 		&i.Copyright,
 		&i.Language,
 		&i.SpotifyID,
+		&i.AppleID,
 		&i.Explicit,
 		&i.AlbumID,
 		&i.MusicianID,

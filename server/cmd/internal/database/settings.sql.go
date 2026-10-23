@@ -16,6 +16,7 @@ INSERT INTO settings (
   jellyfin_api_key,
   spotify_client_id,
   spotify_client_secret,
+  enable_apple_lookups,
   hardware_acceleration_device,
   enable_watcher,
   download_images,
@@ -26,7 +27,7 @@ INSERT INTO settings (
   transcode_dir
 )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, tmdb_key, immich_base_url, immich_api_key, jellyfin_base_url, jellyfin_api_key, spotify_client_id, spotify_client_secret, enable_apple_lookups, hardware_acceleration_device, enable_watcher, download_images, movies_dir, shows_dir, music_dir, server_upload_mbps, static_dir, transcode_dir
 `
 
@@ -35,6 +36,7 @@ type CreateSettingsParams struct {
 	JellyfinApiKey             sql.NullString `json:"jellyfin_api_key"`
 	SpotifyClientID            sql.NullString `json:"spotify_client_id"`
 	SpotifyClientSecret        sql.NullString `json:"spotify_client_secret"`
+	EnableAppleLookups         bool           `json:"enable_apple_lookups"`
 	HardwareAccelerationDevice sql.NullString `json:"hardware_acceleration_device"`
 	EnableWatcher              bool           `json:"enable_watcher"`
 	DownloadImages             bool           `json:"download_images"`
@@ -51,6 +53,7 @@ func (q *Queries) CreateSettings(ctx context.Context, arg CreateSettingsParams) 
 		arg.JellyfinApiKey,
 		arg.SpotifyClientID,
 		arg.SpotifyClientSecret,
+		arg.EnableAppleLookups,
 		arg.HardwareAccelerationDevice,
 		arg.EnableWatcher,
 		arg.DownloadImages,
@@ -128,6 +131,7 @@ SET
   jellyfin_api_key = ?,
   spotify_client_id = ?,
   spotify_client_secret = ?,
+  enable_apple_lookups = ?,
   enable_watcher = ?,
   download_images = ?,
   static_dir = ?,
@@ -149,6 +153,7 @@ type UpdateGeneralSettingsParams struct {
 	JellyfinApiKey      sql.NullString `json:"jellyfin_api_key"`
 	SpotifyClientID     sql.NullString `json:"spotify_client_id"`
 	SpotifyClientSecret sql.NullString `json:"spotify_client_secret"`
+	EnableAppleLookups  bool           `json:"enable_apple_lookups"`
 	EnableWatcher       bool           `json:"enable_watcher"`
 	DownloadImages      bool           `json:"download_images"`
 	StaticDir           string         `json:"static_dir"`
@@ -164,6 +169,7 @@ func (q *Queries) UpdateGeneralSettings(ctx context.Context, arg UpdateGeneralSe
 		arg.JellyfinApiKey,
 		arg.SpotifyClientID,
 		arg.SpotifyClientSecret,
+		arg.EnableAppleLookups,
 		arg.EnableWatcher,
 		arg.DownloadImages,
 		arg.StaticDir,

@@ -158,6 +158,12 @@ type Querier interface {
 	// mapper: it only needs the library id per match, not the whole album row.
 	GetAlbumsBySpotifyIDs(ctx context.Context, spotifyIds []sql.NullString) ([]GetAlbumsBySpotifyIDsRow, error)
 	GetAlbumsCount(ctx context.Context) (int64, error)
+	// Name fallback for the same mapper: library albums without a Spotify id, by
+	// the (title, artist) alias keys derived from a page of results. The pairs
+	// arrive as a JSON array of two-element arrays, like GetRandomTracks's
+	// exclusions, so the statement stays preparable; each pair is a primary-key
+	// probe of music_album_identity.
+	GetAlbumsWithoutSpotifyIDByIdentityKeys(ctx context.Context, identityKeys string) ([]MusicAlbumIdentity, error)
 	// has_pin instead of the PIN itself: the admin listing only shows whether one
 	// is set, so the values never leave the database.
 	GetAllUsers(ctx context.Context) ([]GetAllUsersRow, error)

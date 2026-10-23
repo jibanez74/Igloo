@@ -83,6 +83,12 @@ type Movie struct {
 	UpdatedAt      string          `json:"updated_at"`
 }
 
+type MusicAlbumIdentity struct {
+	TitleKey  string `json:"title_key"`
+	ArtistKey string `json:"artist_key"`
+	AlbumID   int64  `json:"album_id"`
+}
+
 type Musician struct {
 	ID                int64           `json:"id"`
 	Name              string          `json:"name"`

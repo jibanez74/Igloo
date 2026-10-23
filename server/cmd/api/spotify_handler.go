@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"igloo/cmd/internal/helpers"
+	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/spotify"
 	"net/http"
 	"strings"
@@ -185,10 +187,89 @@ func (app *Application) libraryAlbumIDsBySpotifyID(ctx context.Context, albums [
 	return existing, nil
 }
 
+// libraryAlbumIDsByName resolves the albums that have no Spotify id match, in
+// one query: a library album matched on Apple Music, or not at all, has no
+// Spotify id to find it by, so it is found by the alias keys its files' tags
+// saved it under. A Spotify-matched library album is only ever found by id.
+func (app *Application) libraryAlbumIDsByName(ctx context.Context, albums []spotify.SimpleAlbum, byID map[string]int64) (map[string]int64, error) {
+	candidates := make(map[string][][2]string, len(albums))
+	var keys [][2]string
+	seen := make(map[[2]string]bool)
+	for _, album := range albums {
+		id := album.ID.String()
+		_, found := byID[id]
+		if id == "" || found {
+			continue
+		}
+		candidates[id] = albumIdentityCandidates(album)
+		for _, key := range candidates[id] {
+			if !seen[key] {
+				seen[key] = true
+				keys = append(keys, key)
+			}
+		}
+	}
+	if len(keys) == 0 {
+		return nil, nil
+	}
+
+	encoded, err := json.Marshal(keys)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := app.Queries.GetAlbumsWithoutSpotifyIDByIdentityKeys(ctx, string(encoded))
+	if err != nil {
+		return nil, fmt.Errorf("failed to look up existing albums by name: %w", err)
+	}
+	libraryIDs := make(map[[2]string]int64, len(rows))
+	for _, row := range rows {
+		libraryIDs[[2]string{row.TitleKey, row.ArtistKey}] = row.AlbumID
+	}
+
+	existing := make(map[string]int64)
+	for id, keys := range candidates {
+		for _, key := range keys {
+			albumID, found := libraryIDs[key]
+			if found {
+				existing[id] = albumID
+				break
+			}
+		}
+	}
+	return existing, nil
+}
+
+// albumIdentityCandidates are the alias keys a library copy of the album
+// could be saved under, most specific first. A file's album artist tag holds
+// the whole credit, spelled the ways tags join names, or one of its artists.
+func albumIdentityCandidates(album spotify.SimpleAlbum) [][2]string {
+	names := spotifyAlbumArtistNames(album.Artists)
+	var artists []string
+	if len(names) > 1 {
+		artists = append(artists, strings.Join(names, ", "), strings.Join(names, " & "))
+	}
+	if len(names) > 2 {
+		last := len(names) - 1
+		artists = append(artists, strings.Join(names[:last], ", ")+" & "+names[last])
+	}
+	artists = append(artists, names...)
+
+	title := scanner.NormalizedScanCacheKey(album.Name)
+	keys := make([][2]string, 0, len(artists))
+	for _, artist := range artists {
+		keys = append(keys, [2]string{title, scanner.NormalizedScanCacheKey(artist)})
+	}
+	return keys
+}
+
 func (app *Application) mapSpotifyAlbumSearchResults(r *http.Request, albums []spotify.SimpleAlbum) ([]spotifyAlbumSearchResult, error) {
 	mapped := make([]spotifyAlbumSearchResult, 0, len(albums))
 
 	existing, err := app.libraryAlbumIDsBySpotifyID(r.Context(), albums)
+	if err != nil {
+		return nil, err
+	}
+	existingByName, err := app.libraryAlbumIDsByName(r.Context(), albums, existing)
 	if err != nil {
 		return nil, err
 	}
@@ -210,7 +291,11 @@ func (app *Application) mapSpotifyAlbumSearchResults(r *http.Request, albums []s
 			SpotifyURL:  album.ExternalURLs["spotify"],
 		}
 
-		if albumID, found := existing[spotifyID]; found {
+		albumID, found := existing[spotifyID]
+		if !found {
+			albumID, found = existingByName[spotifyID]
+		}
+		if found {
 			result.AlreadyInLibrary = true
 			result.LibraryAlbumID = &albumID
 		}

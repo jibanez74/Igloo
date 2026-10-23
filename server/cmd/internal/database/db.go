@@ -366,6 +366,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getAlbumsCountStmt, err = db.PrepareContext(ctx, getAlbumsCount); err != nil {
 		return nil, fmt.Errorf("error preparing query GetAlbumsCount: %w", err)
 	}
+	if q.getAlbumsWithoutSpotifyIDByIdentityKeysStmt, err = db.PrepareContext(ctx, getAlbumsWithoutSpotifyIDByIdentityKeys); err != nil {
+		return nil, fmt.Errorf("error preparing query GetAlbumsWithoutSpotifyIDByIdentityKeys: %w", err)
+	}
 	if q.getAllUsersStmt, err = db.PrepareContext(ctx, getAllUsers); err != nil {
 		return nil, fmt.Errorf("error preparing query GetAllUsers: %w", err)
 	}
@@ -1728,6 +1731,11 @@ func (q *Queries) Close() error {
 	if q.getAlbumsCountStmt != nil {
 		if cerr := q.getAlbumsCountStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getAlbumsCountStmt: %w", cerr)
+		}
+	}
+	if q.getAlbumsWithoutSpotifyIDByIdentityKeysStmt != nil {
+		if cerr := q.getAlbumsWithoutSpotifyIDByIdentityKeysStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getAlbumsWithoutSpotifyIDByIdentityKeysStmt: %w", cerr)
 		}
 	}
 	if q.getAllUsersStmt != nil {
@@ -3198,6 +3206,7 @@ type Queries struct {
 	getAlbumsByMusicianIDStmt                   *sql.Stmt
 	getAlbumsBySpotifyIDsStmt                   *sql.Stmt
 	getAlbumsCountStmt                          *sql.Stmt
+	getAlbumsWithoutSpotifyIDByIdentityKeysStmt *sql.Stmt
 	getAllUsersStmt                             *sql.Stmt
 	getArtistByTmdbIDStmt                       *sql.Stmt
 	getAudioStreamsByMovieIDStmt                *sql.Stmt
@@ -3581,6 +3590,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getAlbumsByMusicianIDStmt:                   q.getAlbumsByMusicianIDStmt,
 		getAlbumsBySpotifyIDsStmt:                   q.getAlbumsBySpotifyIDsStmt,
 		getAlbumsCountStmt:                          q.getAlbumsCountStmt,
+		getAlbumsWithoutSpotifyIDByIdentityKeysStmt: q.getAlbumsWithoutSpotifyIDByIdentityKeysStmt,
 		getAllUsersStmt:                             q.getAllUsersStmt,
 		getArtistByTmdbIDStmt:                       q.getArtistByTmdbIDStmt,
 		getAudioStreamsByMovieIDStmt:                q.getAudioStreamsByMovieIDStmt,

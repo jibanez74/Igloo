@@ -20,6 +20,7 @@ function requestFromSettings(
     jellyfin_api_key: settings.jellyfin_api_key ?? "",
     spotify_client_id: settings.spotify_client_id ?? "",
     spotify_client_secret: settings.spotify_client_secret ?? "",
+    enable_apple_lookups: settings.enable_apple_lookups,
     enable_watcher: settings.enable_watcher,
     download_images: settings.download_images,
     static_dir: settings.static_dir,
@@ -107,6 +108,9 @@ async function expectScreenReaderSupport(page: Page) {
   await expect(
     page.getByRole("textbox", { name: "Immich API key" }),
   ).toHaveAccessibleDescription(/Leave blank to clear/);
+  await expect(
+    page.getByRole("switch", { name: "Apple Music lookups" }),
+  ).toHaveAccessibleDescription(/No account needed/);
 
   await page.getByRole("textbox", { name: "Jellyfin base URL" }).fill(
     "ftp://not-valid.local",
@@ -133,6 +137,8 @@ async function expectKeyboardFlow(page: Page) {
     page.getByRole("textbox", { name: "Immich base URL" }),
     page.getByRole("textbox", { name: "Immich API key" }),
     page.getByRole("button", { name: "Show Immich API key" }),
+    page.getByRole("switch", { name: "Apple Music lookups" }),
+    page.getByRole("textbox", { name: "Spotify client ID" }),
   ]) {
     await page.keyboard.press("Tab");
     await expect(control).toBeFocused();
@@ -206,6 +212,7 @@ test.describe("General settings", () => {
       jellyfin_api_key: `playwright-jellyfin-key-${stamp}`,
       immich_base_url: `http://immich-playwright-${stamp}.local:2283`,
       immich_api_key: `playwright-immich-key-${stamp}`,
+      enable_apple_lookups: !baselineRequest.enable_apple_lookups,
     };
 
     const delayed = {
@@ -219,6 +226,12 @@ test.describe("General settings", () => {
       await expectScreenReaderSupport(page);
       await expectKeyboardFlow(page);
       await fillIntegrationSettings(page, nextSettings);
+      const appleLookups = page.getByRole("switch", { name: "Apple Music lookups" });
+      await appleLookups.click();
+      await expect(appleLookups).toHaveAttribute(
+        "aria-checked",
+        String(nextSettings.enable_apple_lookups),
+      );
       // The invalid URL was rejected before the mutation: nothing was sent.
       expect(settingsPutCount).toBe(0);
 
@@ -243,6 +256,7 @@ test.describe("General settings", () => {
         jellyfin_api_key: nextSettings.jellyfin_api_key,
         immich_base_url: nextSettings.immich_base_url,
         immich_api_key: nextSettings.immich_api_key,
+        enable_apple_lookups: nextSettings.enable_apple_lookups,
       });
 
       await page.getByRole("tab", { name: "Account" }).click();
@@ -284,6 +298,9 @@ test.describe("General settings", () => {
       );
       expect(savedSettings.immich_base_url).toBe(nextSettings.immich_base_url);
       expect(savedSettings.immich_api_key).toBe(nextSettings.immich_api_key);
+      expect(savedSettings.enable_apple_lookups).toBe(
+        nextSettings.enable_apple_lookups,
+      );
     } finally {
       const routeToContinue = delayed.route;
       if (routeToContinue !== null) {

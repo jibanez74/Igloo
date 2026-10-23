@@ -190,6 +190,7 @@ func (app *Application) InitSettings(ctx context.Context) error {
 		JellyfinApiKey:             helpers.NullString(app.Config.JellyfinAPIKey),
 		SpotifyClientID:            helpers.NullString(app.Config.SpotifyClientID),
 		SpotifyClientSecret:        helpers.NullString(app.Config.SpotifyClientSecret),
+		EnableAppleLookups:         app.Config.EnableAppleLookups,
 		HardwareAccelerationDevice: helpers.NullString(device),
 		EnableWatcher:              app.Config.EnableWatcher,
 		DownloadImages:             app.Config.DownloadImages,

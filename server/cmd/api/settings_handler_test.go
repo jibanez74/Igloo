@@ -28,6 +28,7 @@ func generalSettingsBody(staticDir string) string {
 		"immich_api_key": "immich-api-key",
 		"spotify_client_id": "spotify-id",
 		"spotify_client_secret": "spotify-secret",
+		"enable_apple_lookups": false,
 		"enable_watcher": true,
 		"download_images": true,
 		"static_dir": %q,
@@ -69,6 +70,9 @@ func TestUpdateGeneralSettings_UpdatesDatabaseAndApplicationSettings(t *testing.
 	if !settings.EnableWatcher || !settings.DownloadImages {
 		t.Fatal("expected boolean general settings to be enabled")
 	}
+	if settings.EnableAppleLookups || app.CurrentSettings().EnableAppleLookups {
+		t.Fatal("expected Apple lookups to be turned off in the database and the application settings")
+	}
 	if settings.StaticDir != staticDir {
 		t.Fatalf("expected static dir %q, got %q", staticDir, settings.StaticDir)
 	}
@@ -104,6 +108,7 @@ func TestGeneralSettingsRestartRequired_OnlyForStartupClients(t *testing.T) {
 			s.ImmichBaseUrl = sql.NullString{String: "http://immich.local", Valid: true}
 		}, false},
 		{"watcher flag", func(s *database.Setting) { s.EnableWatcher = true }, false},
+		{"apple lookups flag", func(s *database.Setting) { s.EnableAppleLookups = true }, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -208,6 +213,7 @@ func TestUpdateGeneralSettings_ClearsOptionalStringSettings(t *testing.T) {
 		"immich_api_key": "",
 		"spotify_client_id": "",
 		"spotify_client_secret": "",
+		"enable_apple_lookups": true,
 		"enable_watcher": false,
 		"download_images": false,
 		"static_dir": %q,

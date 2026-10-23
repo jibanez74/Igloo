@@ -27,6 +27,7 @@ SELECT
   copyright,
   language,
   spotify_id,
+  apple_id,
   explicit,
   album_id,
   musician_id,

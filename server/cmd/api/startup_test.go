@@ -272,6 +272,9 @@ func TestInitSettings_CreatesDefaultSettings(t *testing.T) {
 	if app.settings.EnableWatcher != false {
 		t.Error("Expected EnableWatcher to be false by default")
 	}
+	if !app.settings.EnableAppleLookups {
+		t.Error("Expected EnableAppleLookups to be true by default")
+	}
 	if app.settings.DownloadImages != false {
 		t.Error("Expected DownloadImages to be false by default")
 	}
@@ -313,6 +316,7 @@ func TestInitSettings_UsesEnvVars(t *testing.T) {
 	t.Setenv("HARDWARE_ACCELERATION_DEVICE", "nvidia")
 	t.Setenv("ENABLE_WATCHER", "true")
 	t.Setenv("DOWNLOAD_IMAGES", "true")
+	t.Setenv("ENABLE_APPLE_LOOKUPS", "false")
 	t.Setenv("MOVIES_DIR", "/host/movies")
 	t.Setenv("SHOWS_DIR", "/host/shows")
 	t.Setenv("MUSIC_DIR", "/host/music")
@@ -361,6 +365,9 @@ func TestInitSettings_UsesEnvVars(t *testing.T) {
 	}
 	if app.settings.DownloadImages != true {
 		t.Error("Expected DownloadImages to be true")
+	}
+	if app.settings.EnableAppleLookups {
+		t.Error("Expected EnableAppleLookups to be false")
 	}
 }
 
@@ -413,6 +420,7 @@ func TestInitSettings_ExistingSettingsIgnoreConfigSeeds(t *testing.T) {
 		SpotifyClientID:            sql.NullString{String: "existing-spotify-id", Valid: true},
 		SpotifyClientSecret:        sql.NullString{String: "existing-spotify-secret", Valid: true},
 		HardwareAccelerationDevice: sql.NullString{String: "cpu", Valid: true},
+		EnableAppleLookups:         false,
 		EnableWatcher:              false,
 		DownloadImages:             false,
 		MoviesDir:                  sql.NullString{String: existingMoviesDir, Valid: true},
@@ -433,6 +441,7 @@ func TestInitSettings_ExistingSettingsIgnoreConfigSeeds(t *testing.T) {
 	app.Config.SpotifyClientID = "override-spotify-id"
 	app.Config.SpotifyClientSecret = "override-spotify-secret"
 	app.Config.HardwareAccelerationDevice = "nvidia"
+	app.Config.EnableAppleLookups = true
 	app.Config.EnableWatcher = true
 	app.Config.DownloadImages = true
 	app.Config.MoviesDir = "/override/movies"
@@ -466,6 +475,9 @@ func TestInitSettings_ExistingSettingsIgnoreConfigSeeds(t *testing.T) {
 	}
 	if app.settings.DownloadImages {
 		t.Error("Expected existing DownloadImages to remain false")
+	}
+	if app.settings.EnableAppleLookups {
+		t.Error("Expected existing EnableAppleLookups to remain false")
 	}
 	if app.settings.MoviesDir.String != existingMoviesDir {
 		t.Errorf("Expected MoviesDir to remain fixed at %q, got %q", existingMoviesDir, app.settings.MoviesDir.String)

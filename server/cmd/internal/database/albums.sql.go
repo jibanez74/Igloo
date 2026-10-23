@@ -185,6 +185,45 @@ func (q *Queries) GetAlbumsBySpotifyIDs(ctx context.Context, spotifyIds []sql.Nu
 	return items, nil
 }
 
+const getAlbumsWithoutSpotifyIDByIdentityKeys = `-- name: GetAlbumsWithoutSpotifyIDByIdentityKeys :many
+SELECT i.title_key, i.artist_key, i.album_id
+FROM json_each(CAST(?1 AS TEXT)) AS k
+JOIN music_album_identity AS i
+  ON i.title_key = json_extract(k.value, '$[0]')
+  AND i.artist_key = json_extract(k.value, '$[1]')
+JOIN albums AS a
+  ON a.id = i.album_id
+WHERE a.spotify_id IS NULL
+`
+
+// Name fallback for the same mapper: library albums without a Spotify id, by
+// the (title, artist) alias keys derived from a page of results. The pairs
+// arrive as a JSON array of two-element arrays, like GetRandomTracks's
+// exclusions, so the statement stays preparable; each pair is a primary-key
+// probe of music_album_identity.
+func (q *Queries) GetAlbumsWithoutSpotifyIDByIdentityKeys(ctx context.Context, identityKeys string) ([]MusicAlbumIdentity, error) {
+	rows, err := q.query(ctx, q.getAlbumsWithoutSpotifyIDByIdentityKeysStmt, getAlbumsWithoutSpotifyIDByIdentityKeys, identityKeys)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []MusicAlbumIdentity{}
+	for rows.Next() {
+		var i MusicAlbumIdentity
+		if err := rows.Scan(&i.TitleKey, &i.ArtistKey, &i.AlbumID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getLatestAlbums = `-- name: GetLatestAlbums :many
 SELECT
   id,
