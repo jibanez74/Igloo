@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"igloo/cmd/internal/ffprobe"
+	"igloo/cmd/internal/itunes"
 	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/scannertest"
 )
@@ -67,7 +68,7 @@ func TestResolveTrackFileMapsAudioMetadata(t *testing.T) {
 		Path: trackPath,
 		Ext:  "flac",
 		Size: 42,
-	})
+	}, itunes.CatalogIDs{})
 	if err != nil {
 		t.Fatalf("resolve track file: %v", err)
 	}
@@ -142,7 +143,7 @@ func TestResolveTrackFileFallsBackToFilenameAndNumericDefaults(t *testing.T) {
 		Path: trackPath,
 		Ext:  "mp3",
 		Size: 7,
-	})
+	}, itunes.CatalogIDs{})
 	if err != nil {
 		t.Fatalf("resolve track file: %v", err)
 	}
@@ -205,7 +206,7 @@ func TestAudioWithArtworkSelectsFirstAudioStream(t *testing.T) {
 	metadata := testMusicMetadata()
 	metadata.Streams = []ffprobe.Stream{{CodecType: "video", CodecName: "mjpeg"}, {CodecType: "audio", CodecName: "aac", Channels: 2}, {CodecType: "audio", CodecName: "mp3", Channels: 1}}
 	s.ffprobe = &scannertest.CountingProbe{Default: metadata}
-	resolved, err := s.resolveTrackFile(context.Background(), newMusicScanContext(nil), scanner.ScanFile{Path: musicDir + "/art.m4a", Ext: "m4a", Size: 1})
+	resolved, err := s.resolveTrackFile(context.Background(), newMusicScanContext(nil), scanner.ScanFile{Path: musicDir + "/art.m4a", Ext: "m4a", Size: 1}, itunes.CatalogIDs{})
 	if err != nil {
 		t.Fatal(err)
 	}

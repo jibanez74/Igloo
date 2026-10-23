@@ -1,6 +1,7 @@
 package music
 
 import (
+	"igloo/cmd/internal/itunes"
 	"igloo/cmd/internal/scanner"
 	spotifyapi "igloo/cmd/internal/spotify"
 )
@@ -39,6 +40,11 @@ type musicScanContext struct {
 	// is failing; stopReported keeps the scan-wide issue to one.
 	breaker      *scanner.ProviderBreaker
 	stopReported bool
+	// appleEnabled is whether this scan looks albums up on Apple; Apple has
+	// its own breaker and stop report.
+	appleEnabled      bool
+	appleBreaker      *scanner.ProviderBreaker
+	appleStopReported bool
 }
 
 func newMusicScanContext(trackIndex map[string]scanner.FileFingerprint) *musicScanContext {
@@ -67,6 +73,7 @@ func newMusicScanContext(trackIndex map[string]scanner.FileFingerprint) *musicSc
 		albumTrackFailures:  make(map[string]bool),
 		artistIDAttempts:    make(map[spotifyapi.ID]artistIDResult),
 		breaker:             &scanner.ProviderBreaker{Classify: spotifyapi.ProviderFailure},
+		appleBreaker:        &scanner.ProviderBreaker{Classify: itunes.ProviderFailure},
 	}
 }
 
@@ -90,6 +97,8 @@ func (scan *musicScanContext) clone() *musicScanContext {
 		albumTrackFailures:  scan.albumTrackFailures,
 		artistIDAttempts:    scan.artistIDAttempts,
 		breaker:             scan.breaker,
+		appleEnabled:        scan.appleEnabled,
+		appleBreaker:        scan.appleBreaker,
 	}
 }
 

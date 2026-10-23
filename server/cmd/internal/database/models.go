@@ -13,6 +13,7 @@ type Album struct {
 	Title             string          `json:"title"`
 	SortTitle         string          `json:"sort_title"`
 	SpotifyID         sql.NullString  `json:"spotify_id"`
+	AppleID           sql.NullInt64   `json:"apple_id"`
 	SpotifyPopularity sql.NullFloat64 `json:"spotify_popularity"`
 	AlbumType         sql.NullString  `json:"album_type"`
 	Musician          sql.NullString  `json:"musician"`
@@ -134,6 +135,7 @@ type Setting struct {
 	JellyfinApiKey             sql.NullString  `json:"jellyfin_api_key"`
 	SpotifyClientID            sql.NullString  `json:"spotify_client_id"`
 	SpotifyClientSecret        sql.NullString  `json:"spotify_client_secret"`
+	EnableAppleLookups         bool            `json:"enable_apple_lookups"`
 	HardwareAccelerationDevice sql.NullString  `json:"hardware_acceleration_device"`
 	EnableWatcher              bool            `json:"enable_watcher"`
 	DownloadImages             bool            `json:"download_images"`

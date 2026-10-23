@@ -12,6 +12,7 @@ import (
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
+	"igloo/cmd/internal/itunes"
 	"igloo/cmd/internal/scanner"
 	spotifyapi "igloo/cmd/internal/spotify"
 )
@@ -25,10 +26,12 @@ type resolvedTrack struct {
 	// none of the track's credits carries that name; it is persisted with the
 	// track.
 	adoptedArtist *resolvedMusician
-	genreTag      string
-	artistTag     string
-	artistSort    string
-	albumSort     string
+	// catalog holds the Apple ids the file carries, kept for the Apple pass.
+	catalog    itunes.CatalogIDs
+	genreTag   string
+	artistTag  string
+	artistSort string
+	albumSort  string
 }
 
 type resolvedMusician struct {
@@ -74,7 +77,7 @@ func resolvedAlbumMatch(resolved *resolvedAlbum) *resolvedMatch {
 	return resolved.spotifyMatch
 }
 
-func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, file scanner.ScanFile) (*resolvedTrack, error) {
+func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, file scanner.ScanFile, catalog itunes.CatalogIDs) (*resolvedTrack, error) {
 	info, err := s.ffprobe.GetAudioMetadata(ctx, file.Path)
 	if err != nil {
 		return nil, fmt.Errorf("ffprobe failed: %w", err)
@@ -191,6 +194,7 @@ func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, 
 
 	resolved := &resolvedTrack{
 		params:    params,
+		catalog:   catalog,
 		genreTag:  strings.TrimSpace(tags.Genre),
 		artistTag: tags.Artist, artistSort: tags.SortArtist, albumSort: strings.TrimSpace(tags.SortAlbum),
 	}
@@ -216,7 +220,7 @@ func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, 
 			effectiveAlbumArtist = artistTag
 		}
 
-		query := albumQuery{title: tags.Album, sortTitle: sortAlbum, artist: effectiveAlbumArtist, totalTracks: int(trackTotal)}
+		query := albumQuery{title: tags.Album, sortTitle: sortAlbum, artist: effectiveAlbumArtist, totalTracks: int(trackTotal), appleAlbumID: catalog.Album}
 		if params.Year.Valid {
 			query.year = int(params.Year.Int64)
 		}
@@ -337,7 +341,7 @@ func (s *Scanner) resolveMusician(ctx context.Context, scan *musicScanContext, n
 			EntityID:   existing.ID,
 		})
 		if matchErr == nil {
-			isFinal := musicMatchIsFinal(persisted.Status)
+			isFinal := musicMatchIsFinal(persisted)
 			if isFinal {
 				resolved.splitCompoundOnNoMatch = musicSpotifyMatchSplitsCompound(persisted.Status, persisted.Reason)
 				scan.compoundSplits[cacheKey] = resolved.splitCompoundOnNoMatch
@@ -403,10 +407,12 @@ func (s *Scanner) resolveMusician(ctx context.Context, scan *musicScanContext, n
 }
 
 // albumQuery is a local album as its tracks' tags describe it; year and
-// totalTracks are zero when untagged.
+// totalTracks are zero when untagged, appleAlbumID when the file carries no
+// Apple collection id.
 type albumQuery struct {
 	title, sortTitle, artist string
 	year, totalTracks        int
+	appleAlbumID             int64
 }
 
 func (s *Scanner) resolveAlbum(ctx context.Context, scan *musicScanContext, query albumQuery) (resolved *resolvedAlbum, err error) {
@@ -461,6 +467,7 @@ func (s *Scanner) resolveAlbum(ctx context.Context, scan *musicScanContext, quer
 	if err != nil {
 		return nil, err
 	}
+	hasOutcome := false
 	if found {
 		countKey = musicEntityAlbum + ":" + strconv.FormatInt(existing.ID, 10)
 		resolved.existingID = existing.ID
@@ -472,7 +479,8 @@ func (s *Scanner) resolveAlbum(ctx context.Context, scan *musicScanContext, quer
 			EntityID:   existing.ID,
 		})
 		if matchErr == nil {
-			isFinal := musicMatchIsFinal(persisted.Status)
+			hasOutcome = true
+			isFinal := musicMatchIsFinal(persisted)
 			if isFinal {
 				scan.albumIDs.Set(cacheKey, existing.ID)
 				return resolved, nil
@@ -493,7 +501,13 @@ func (s *Scanner) resolveAlbum(ctx context.Context, scan *musicScanContext, quer
 		}
 	}
 
-	if !s.spotifyReady(scan) {
+	// An album the Apple pass will look up is left unsettled here, and never
+	// recorded as attempted.
+	appleOwns, err := s.appleOwnsAlbum(ctx, scan, query.appleAlbumID, existing.ID, found, hasOutcome)
+	if err != nil {
+		return nil, err
+	}
+	if appleOwns || !s.spotifyReady(scan) {
 		if found {
 			scan.albumIDs.Set(cacheKey, existing.ID)
 		}
@@ -543,6 +557,23 @@ func (s *Scanner) resolveAlbum(ctx context.Context, scan *musicScanContext, quer
 	}
 
 	return resolved, nil
+}
+
+// appleOwnsAlbum reports whether the album waits for the Apple pass rather
+// than a Spotify search: this scan looks albums up on Apple, nothing has
+// settled the album, and this file or one already in the album carries an
+// Apple collection id.
+func (s *Scanner) appleOwnsAlbum(ctx context.Context, scan *musicScanContext, appleAlbumID, albumID int64, found, hasOutcome bool) (bool, error) {
+	if !scan.appleEnabled || hasOutcome {
+		return false, nil
+	}
+	if appleAlbumID != 0 {
+		return true, nil
+	}
+	if !found {
+		return false, nil
+	}
+	return s.queries.MusicAlbumHasAppleHint(ctx, sql.NullInt64{Int64: albumID, Valid: true})
 }
 
 // knownArtistSpotifyID is the album artist's Spotify id when this scan or the

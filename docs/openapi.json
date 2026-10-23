@@ -13704,7 +13704,9 @@
           "created_at",
           "updated_at",
           "spotify_url",
-          "album_type"
+          "album_type",
+          "apple_id",
+          "apple_url"
         ],
         "properties": {
           "id": {
@@ -13718,7 +13720,19 @@
             "type": "string"
           },
           "spotify_id": {
-            "$ref": "#/components/schemas/SqlNullString"
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "The matched Spotify album. Valid is false for an album matched on Apple Music: an album is matched by one provider, never both."
+          },
+          "apple_id": {
+            "$ref": "#/components/schemas/SqlNullInt64",
+            "description": "The Apple Music collection the album matched, by the collection id its iTunes purchases carry. Valid is false unless the Apple catalog lists the album."
+          },
+          "apple_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The album's page on Apple Music, built from apple_id; null unless the album matched on Apple Music."
           },
           "spotify_url": {
             "type": [
@@ -13733,7 +13747,7 @@
           },
           "album_type": {
             "$ref": "#/components/schemas/SqlNullString",
-            "description": "Spotify's album type: album, single or compilation. Valid is false until a Spotify match reports one."
+            "description": "The matched provider's album type: album, single or compilation. Valid is false until a match reports one."
           },
           "musician": {
             "$ref": "#/components/schemas/SqlNullString"
@@ -13746,10 +13760,11 @@
           },
           "total_tracks": {
             "$ref": "#/components/schemas/SqlNullInt64",
-            "description": "The track count Spotify reports for the matched album, not the number of local tracks. Valid is false until a Spotify match reports one."
+            "description": "The track count the matched provider reports for the album, not the number of local tracks. Valid is false until a match reports one."
           },
           "cover": {
-            "$ref": "#/components/schemas/SqlNullString"
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "The matched provider's cover art URL. Valid is false until a match supplies one."
           },
           "created_at": {
             "type": "string"

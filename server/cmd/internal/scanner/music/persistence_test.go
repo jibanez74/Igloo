@@ -520,6 +520,7 @@ func TestRelationshipFailuresRollBackAndRetry(t *testing.T) {
 			expected.albumAttemptsByID = scan.albumAttemptsByID
 			expected.albumTracks = scan.albumTracks
 			expected.breaker = scan.breaker
+			expected.appleBreaker = scan.appleBreaker
 			if !reflect.DeepEqual(scan, expected) {
 				t.Fatalf("failed transaction published cache entries: %+v", scan)
 			}

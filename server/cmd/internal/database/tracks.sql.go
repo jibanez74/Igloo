@@ -467,6 +467,29 @@ func (q *Queries) GetTracksCount(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const linkMusicTrackApple = `-- name: LinkMusicTrackApple :exec
+UPDATE tracks
+SET
+  apple_id = ?1,
+  explicit = ?2,
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = ?3
+  AND (apple_id IS NOT ?1 OR explicit IS NOT ?2)
+`
+
+type LinkMusicTrackAppleParams struct {
+	AppleID  sql.NullInt64 `json:"apple_id"`
+	Explicit bool          `json:"explicit"`
+	ID       int64         `json:"id"`
+}
+
+// Guarded like LinkMusicTrackSpotify. iTunes files always carry their track
+// number, so none is filled in.
+func (q *Queries) LinkMusicTrackApple(ctx context.Context, arg LinkMusicTrackAppleParams) error {
+	_, err := q.exec(ctx, q.linkMusicTrackAppleStmt, linkMusicTrackApple, arg.AppleID, arg.Explicit, arg.ID)
+	return err
+}
+
 const linkMusicTrackSpotify = `-- name: LinkMusicTrackSpotify :exec
 UPDATE tracks
 SET
@@ -616,6 +639,7 @@ SET
   copyright = excluded.copyright,
   language = excluded.language,
   spotify_id = NULL,
+  apple_id = NULL,
   explicit = false,
   album_id = excluded.album_id,
   musician_id = excluded.musician_id,
@@ -648,8 +672,8 @@ type UpsertTrackParams struct {
 	MusicianID    sql.NullInt64  `json:"musician_id"`
 }
 
-// A changed file loses its Spotify pairing; the scan's link pass pairs it
-// again with the rest of its album.
+// A changed file loses its provider pairing; the scan pairs it again with the
+// rest of its album.
 func (q *Queries) UpsertTrack(ctx context.Context, arg UpsertTrackParams) (int64, error) {
 	row := q.queryRow(ctx, q.upsertTrackStmt, upsertTrack,
 		arg.Title,

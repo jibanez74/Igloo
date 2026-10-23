@@ -12,6 +12,7 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffmpeg"
 	"igloo/cmd/internal/ffprobe"
+	"igloo/cmd/internal/itunes"
 	applogger "igloo/cmd/internal/logger"
 	"igloo/cmd/internal/preroll"
 	"igloo/cmd/internal/scanner"
@@ -221,7 +222,9 @@ func InitApp() (initializedApp *Application, err error) {
 
 	app.initRuntimeCaches()
 	app.ScanContext, app.ScanCancel = context.WithCancel(context.Background())
-	app.initScanners(musicSpotify)
+	// Apple lookups take no credentials, so the client always exists; the
+	// enable_apple_lookups setting gates its use at each music scan.
+	app.initScanners(musicSpotify, itunes.New())
 
 	app.InitRouter()
 
@@ -229,17 +232,21 @@ func InitApp() (initializedApp *Application, err error) {
 }
 
 // initScanners wires the three library scanners from what InitApp has set up
-// by this point: logger, prepared queries, settings, ffprobe, the TMDB and
-// Spotify clients, the scan context and the runtime caches. The scanners
-// capture those dependencies at construction, so swapping one afterwards
-// means calling this again.
-func (app *Application) initScanners(musicSpotify music.SpotifyProvider) {
+// by this point: logger, prepared queries, settings, ffprobe, the TMDB,
+// Spotify and iTunes clients, the scan context and the runtime caches. The
+// scanners capture those dependencies at construction, so swapping one
+// afterwards means calling this again.
+func (app *Application) initScanners(musicSpotify music.SpotifyProvider, musicApple music.AppleProvider) {
 	app.MusicScanner = music.New(music.Dependencies{
-		DB:          app.DB,
-		Queries:     app.Queries,
-		Logger:      app.Logger,
-		Ffprobe:     app.Ffprobe,
-		Spotify:     musicSpotify,
+		DB:      app.DB,
+		Queries: app.Queries,
+		Logger:  app.Logger,
+		Ffprobe: app.Ffprobe,
+		Spotify: musicSpotify,
+		Apple:   musicApple,
+		AppleLookupsEnabled: func() bool {
+			return app.CurrentSettings().EnableAppleLookups
+		},
 		ScanContext: app.ScanContext,
 		Wait:        app.Wait,
 		ScannerDBMu: &app.ScannerDBMu,

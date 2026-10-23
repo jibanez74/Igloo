@@ -91,8 +91,8 @@ func (s *Scanner) persistResolvedTrackTx(ctx context.Context, qtx *database.Quer
 		return 0, fmt.Errorf("upsert track failed: %w", err)
 	}
 
-	// The link pass pairs a new or changed file with the rest of its album, so
-	// a stale outcome goes.
+	// The Apple pass or the link pass pairs a new or changed file with the rest
+	// of its album, so a stale outcome goes.
 	err = qtx.DeleteMusicProviderMatch(ctx, database.DeleteMusicProviderMatchParams{EntityType: musicEntityTrack, EntityID: trackID})
 	if err != nil {
 		return 0, fmt.Errorf("track spotify match failed: %w", err)
@@ -129,7 +129,10 @@ func (s *Scanner) persistResolvedTrackTx(ctx context.Context, qtx *database.Quer
 
 	}
 
-	err = qtx.SaveMusicTrackMetadata(ctx, database.SaveMusicTrackMetadataParams{TrackID: trackID, ArtistTag: resolved.artistTag, ArtistKey: scanner.NormalizedScanCacheKey(resolved.artistTag), ArtistSort: resolved.artistSort, AlbumSort: resolved.albumSort})
+	err = qtx.SaveMusicTrackMetadata(ctx, database.SaveMusicTrackMetadataParams{
+		TrackID: trackID, ArtistTag: resolved.artistTag, ArtistKey: scanner.NormalizedScanCacheKey(resolved.artistTag), ArtistSort: resolved.artistSort, AlbumSort: resolved.albumSort,
+		AppleTrackID: helpers.NullInt64(resolved.catalog.Track), AppleAlbumID: helpers.NullInt64(resolved.catalog.Album),
+	})
 	if err != nil {
 		return 0, err
 	}

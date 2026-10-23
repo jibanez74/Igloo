@@ -40,6 +40,9 @@ CREATE TABLE IF NOT EXISTS settings (
   jellyfin_api_key TEXT,
   spotify_client_id TEXT,
   spotify_client_secret TEXT,
+  -- Apple lookups need no credentials; this turns them off. Read at each music
+  -- scan start.
+  enable_apple_lookups BOOLEAN NOT NULL DEFAULT true,
   hardware_acceleration_device TEXT CHECK (
     hardware_acceleration_device IN ('cpu', 'apple', 'nvidia', 'intel')
   ),
@@ -141,6 +144,8 @@ CREATE TABLE IF NOT EXISTS albums (
   title TEXT NOT NULL,
   sort_title TEXT NOT NULL,
   spotify_id TEXT UNIQUE,
+  -- An album is matched by Apple or by Spotify, never both.
+  apple_id INTEGER UNIQUE,
   spotify_popularity REAL,
   album_type TEXT CHECK (album_type IN ('album', 'single', 'compilation')),
   musician TEXT,
@@ -191,9 +196,11 @@ CREATE TABLE IF NOT EXISTS tracks (
   composer TEXT,
   copyright TEXT,
   language TEXT,
-  -- spotify_id is not unique: two files of one recording are both that track.
-  -- explicit is Spotify's flag; false also covers unknown.
+  -- spotify_id and apple_id are not unique: two files of one recording are
+  -- both that track. explicit is the flag of whichever provider paired the
+  -- track; false also covers unknown.
   spotify_id TEXT,
+  apple_id INTEGER,
   explicit BOOLEAN NOT NULL DEFAULT false,
   album_id INTEGER,
   musician_id INTEGER,
@@ -295,13 +302,16 @@ CREATE TABLE IF NOT EXISTS music_genre_identity (
 );
 
 -- Original tags support enrichment retries and credit reconciliation
--- without probing files again.
+-- without probing files again. The Apple ids are the catalog ids an iTunes
+-- Store purchase carries; NULL when the file has none.
 CREATE TABLE IF NOT EXISTS music_track_metadata (
   track_id INTEGER PRIMARY KEY REFERENCES tracks (id) ON DELETE CASCADE,
   artist_tag TEXT NOT NULL,
   artist_key TEXT NOT NULL,
   artist_sort TEXT NOT NULL,
-  album_sort TEXT NOT NULL
+  album_sort TEXT NOT NULL,
+  apple_track_id INTEGER,
+  apple_album_id INTEGER
 );
 
 -- Explicit credit sort values contribute at most one vote per track and artist.

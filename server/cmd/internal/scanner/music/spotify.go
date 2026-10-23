@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"igloo/cmd/internal/helpers"
-	"igloo/cmd/internal/scanner"
 	spotifyapi "igloo/cmd/internal/spotify"
 )
 
@@ -80,26 +79,7 @@ func (s *Scanner) spotifyReady(scan *musicScanContext) bool {
 // noteSpotifyStop reports the breaker tripping once per scan and returns
 // whether it has tripped.
 func (s *Scanner) noteSpotifyStop(scan *musicScanContext, report *scanReport) bool {
-	if !scan.breaker.Stopped {
-		return false
-	}
-	if !scan.stopReported {
-		scan.stopReported = true
-		s.logger.Warn("spotify lookups stopped for this scan", "run", report.status.RunID)
-		report.Issue("", scanner.PhaseEnrichment, reasonSpotifyStopped)
-		s.publish(report)
-	}
-	return true
-}
-
-// albumTypeValue keeps Spotify's album type inside the albums.album_type
-// CHECK; any other value is stored as unknown rather than failing the write.
-func albumTypeValue(albumType string) sql.NullString {
-	switch albumType {
-	case "album", "single", "compilation":
-		return sql.NullString{String: albumType, Valid: true}
-	}
-	return sql.NullString{}
+	return s.noteProviderStop(report, scan.breaker, &scan.stopReported, musicProviderSpotify, reasonSpotifyStopped)
 }
 
 func firstImageURL(images []spotifyapi.Image) string {

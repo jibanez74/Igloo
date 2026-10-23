@@ -35,11 +35,11 @@ func (s *Scanner) retryCatalog(ctx context.Context, scan *musicScanContext, repo
 	if err != nil {
 		return err
 	}
-	albums, err := s.queries.CountMusicAlbumRetryCandidates(ctx)
+	albums, err := s.queries.CountMusicAlbumRetryCandidates(ctx, scan.appleEnabled)
 	if err != nil {
 		return err
 	}
-	report.status.EnrichmentTotal = int(artists + albums)
+	report.status.EnrichmentTotal += int(artists + albums)
 	s.publish(report)
 	var after int64
 	for {
@@ -80,7 +80,7 @@ func (s *Scanner) retryCatalog(ctx context.Context, scan *musicScanContext, repo
 	}
 	after = 0
 	for {
-		candidates, err := s.queries.MusicAlbumRetryCandidates(ctx, after)
+		candidates, err := s.queries.MusicAlbumRetryCandidates(ctx, database.MusicAlbumRetryCandidatesParams{AfterID: after, AppleEnabled: scan.appleEnabled})
 		if err != nil {
 			return err
 		}

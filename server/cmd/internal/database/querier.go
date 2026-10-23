@@ -30,7 +30,8 @@ type Querier interface {
 	ClearShowSeasonRetry(ctx context.Context, seasonID int64) error
 	CountAdmins(ctx context.Context) (int64, error)
 	CountMoviesForGenre(ctx context.Context, genreID int64) (int64, error)
-	CountMusicAlbumRetryCandidates(ctx context.Context) (int64, error)
+	CountMusicAlbumRetryCandidates(ctx context.Context, appleEnabled bool) (int64, error)
+	CountMusicAppleAlbumCandidates(ctx context.Context) (int64, error)
 	CountMusicArtistRetryCandidates(ctx context.Context) (int64, error)
 	CountMusicTrackLinkAlbumCandidates(ctx context.Context) (int64, error)
 	CountPlaylistMovies(ctx context.Context, playlistID int64) (int64, error)
@@ -139,6 +140,7 @@ type Querier interface {
 	FindMusicArtistIdentity(ctx context.Context, identityKey string) (FindMusicArtistIdentityRow, error)
 	FindMusicGenreIdentity(ctx context.Context, identityKey string) (int64, error)
 	GetAdminUser(ctx context.Context) (int64, error)
+	GetAlbumByAppleID(ctx context.Context, appleID sql.NullInt64) (int64, error)
 	GetAlbumByID(ctx context.Context, id int64) (Album, error)
 	GetAlbumBySpotifyID(ctx context.Context, spotifyID sql.NullString) (GetAlbumBySpotifyIDRow, error)
 	// Returns all genres associated with an album
@@ -498,6 +500,9 @@ type Querier interface {
 	// Idempotent: duplicate (user_id, movie_id) is a no-op (no error).
 	LikeMovie(ctx context.Context, arg LikeMovieParams) error
 	LikeTrack(ctx context.Context, arg LikeTrackParams) error
+	// Guarded like LinkMusicTrackSpotify. iTunes files always carry their track
+	// number, so none is filled in.
+	LinkMusicTrackApple(ctx context.Context, arg LinkMusicTrackAppleParams) error
 	// Guarded so an unchanged link does not advance updated_at. A track number is
 	// only ever filled in, never replaced: the file's own tag wins when it has one.
 	LinkMusicTrackSpotify(ctx context.Context, arg LinkMusicTrackSpotifyParams) error
@@ -538,12 +543,26 @@ type Querier interface {
 	// Existence probe for handlers that only need to 404 on an unknown movie;
 	// avoids shipping the full 27-column row.
 	MovieExists(ctx context.Context, id int64) (bool, error)
+	// The album's Apple collection ids, the one most of its tracks carry first.
+	MusicAlbumAppleCollections(ctx context.Context, albumID sql.NullInt64) ([]sql.NullInt64, error)
+	MusicAlbumHasAppleHint(ctx context.Context, albumID sql.NullInt64) (bool, error)
 	MusicAlbumIdentityKeys(ctx context.Context, albumID int64) ([]MusicAlbumIdentityKeysRow, error)
-	MusicAlbumRetryCandidates(ctx context.Context, afterID int64) ([]MusicAlbumRetryCandidatesRow, error)
+	// Albums for Spotify to search: a failed search, an album Apple handed over
+	// because it no longer lists it, or one nothing has settled yet, unless that
+	// one waits for Apple: lookups are on and one of its files carries an Apple
+	// collection id.
+	MusicAlbumRetryCandidates(ctx context.Context, arg MusicAlbumRetryCandidatesParams) ([]MusicAlbumRetryCandidatesRow, error)
 	MusicAlbumTrackIDs(ctx context.Context, albumID sql.NullInt64) ([]int64, error)
 	// Every track of the album with its outcome: one without an outcome, or with
 	// a failed one, is paired; a matched one holds its Spotify track.
 	MusicAlbumTracksToLink(ctx context.Context, albumID sql.NullInt64) ([]MusicAlbumTracksToLinkRow, error)
+	// The album's tracks without an outcome, with the Apple track id each file
+	// carries.
+	MusicAlbumTracksToPairApple(ctx context.Context, albumID sql.NullInt64) ([]MusicAlbumTracksToPairAppleRow, error)
+	// Albums for the Apple pass: one nothing has settled whose files carry an
+	// Apple collection id, and an Apple-matched one with tracks still to pair
+	// (files added or changed since it matched).
+	MusicAppleAlbumCandidates(ctx context.Context, afterID int64) ([]MusicAppleAlbumCandidatesRow, error)
 	MusicArtistRetryCandidates(ctx context.Context, afterID int64) ([]MusicArtistRetryCandidatesRow, error)
 	MusicArtistTrackIDs(ctx context.Context, musicianID int64) ([]int64, error)
 	// The range and order ride idx_track_musicians_musician_track, so keep them on tm.
@@ -587,6 +606,7 @@ type Querier interface {
 	SaveMusicGenreIdentity(ctx context.Context, arg SaveMusicGenreIdentityParams) error
 	SaveMusicSpotifyAdoption(ctx context.Context, arg SaveMusicSpotifyAdoptionParams) error
 	SaveMusicTrackMetadata(ctx context.Context, arg SaveMusicTrackMetadataParams) error
+	SetMusicAlbumAppleID(ctx context.Context, arg SetMusicAlbumAppleIDParams) error
 	SetMusicAlbumSpotifyID(ctx context.Context, arg SetMusicAlbumSpotifyIDParams) error
 	SetMusicArtistSpotifyID(ctx context.Context, arg SetMusicArtistSpotifyIDParams) error
 	// Existence probe for the watch-progress handlers, which only need to 404 on
@@ -653,8 +673,8 @@ type Querier interface {
 	UpsertShowFingerprint(ctx context.Context, arg UpsertShowFingerprintParams) error
 	UpsertShowKeyframeIndex(ctx context.Context, arg UpsertShowKeyframeIndexParams) error
 	UpsertShowRemuxSafetyVerdict(ctx context.Context, arg UpsertShowRemuxSafetyVerdictParams) error
-	// A changed file loses its Spotify pairing; the scan's link pass pairs it
-	// again with the rest of its album.
+	// A changed file loses its provider pairing; the scan pairs it again with the
+	// rest of its album.
 	UpsertTrack(ctx context.Context, arg UpsertTrackParams) (int64, error)
 	UpsertTrackFileFingerprint(ctx context.Context, arg UpsertTrackFileFingerprintParams) (int64, error)
 	UpsertUserPreferences(ctx context.Context, arg UpsertUserPreferencesParams) (UpsertUserPreferencesRow, error)

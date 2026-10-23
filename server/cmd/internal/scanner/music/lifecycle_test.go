@@ -475,6 +475,7 @@ func TestShutdownDuringTrackTransaction(t *testing.T) {
 	}
 	expected := newMusicScanContext(nil)
 	expected.breaker = scan.breaker
+	expected.appleBreaker = scan.appleBreaker
 	if !reflect.DeepEqual(scan, expected) {
 		t.Fatal("canceled transaction published caches")
 	}

@@ -82,6 +82,12 @@ func (r *FileInspection) Close() error {
 	return err
 }
 
+// ReadAt reads the inspected file through the descriptor that was hashed, so
+// what it reads is the content Validate vouches for.
+func (r *FileInspection) ReadAt(p []byte, off int64) (int, error) {
+	return r.file.ReadAt(p, off)
+}
+
 func sameFileMetadata(a, b FileFingerprint) bool {
 	return a.Size == b.Size && a.MtimeNS == b.MtimeNS && a.CtimeNS == b.CtimeNS && a.Device == b.Device && a.Inode == b.Inode
 }

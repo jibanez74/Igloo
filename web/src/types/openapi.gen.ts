@@ -3971,18 +3971,24 @@ export interface components {
             id: number;
             title: string;
             sort_title: string;
+            /** @description The matched Spotify album. Valid is false for an album matched on Apple Music: an album is matched by one provider, never both. */
             spotify_id: components["schemas"]["SqlNullString"];
+            /** @description The Apple Music collection the album matched, by the collection id its iTunes purchases carry. Valid is false unless the Apple catalog lists the album. */
+            apple_id: components["schemas"]["SqlNullInt64"];
+            /** @description The album's page on Apple Music, built from apple_id; null unless the album matched on Apple Music. */
+            apple_url: string | null;
             /** @description The album's page on Spotify, built from spotify_id; null until a Spotify match. */
             spotify_url: string | null;
             /** @description No longer written: Spotify stopped reporting popularity to this app in 2026, so Valid is false. */
             spotify_popularity: components["schemas"]["SqlNullFloat64"];
-            /** @description Spotify's album type: album, single or compilation. Valid is false until a Spotify match reports one. */
+            /** @description The matched provider's album type: album, single or compilation. Valid is false until a match reports one. */
             album_type: components["schemas"]["SqlNullString"];
             musician: components["schemas"]["SqlNullString"];
             release_date: components["schemas"]["SqlNullString"];
             year: components["schemas"]["SqlNullInt64"];
-            /** @description The track count Spotify reports for the matched album, not the number of local tracks. Valid is false until a Spotify match reports one. */
+            /** @description The track count the matched provider reports for the album, not the number of local tracks. Valid is false until a match reports one. */
             total_tracks: components["schemas"]["SqlNullInt64"];
+            /** @description The matched provider's cover art URL. Valid is false until a match supplies one. */
             cover: components["schemas"]["SqlNullString"];
             created_at: string;
             updated_at: string;
