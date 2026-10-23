@@ -3,16 +3,22 @@ package keyframeindex
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"sort"
+
+	"igloo/cmd/internal/isobmff"
 )
 
 // extractISOBMFF indexes an mp4/m4v/mov file from its sample tables. The moov
 // box (front or back of the file) is read in one sequential pass and walked in
 // memory; no media data is touched.
 func extractISOBMFF(ctx context.Context, r io.ReaderAt, size int64) (Index, error) {
-	moov, err := readMoovPayload(ctx, r, size)
+	moov, err := isobmff.ReadMoov(ctx, r, size)
+	if errors.Is(err, isobmff.ErrMoovTooLarge) {
+		return Index{}, ErrNoIndex
+	}
 	if err != nil {
 		return Index{}, err
 	}
@@ -43,128 +49,10 @@ func extractISOBMFF(ctx context.Context, r io.ReaderAt, size int64) (Index, erro
 	}, nil
 }
 
-// readMoovPayload walks top-level boxes to find moov wherever the muxer put
-// it and reads its payload with a single sequential read.
-func readMoovPayload(ctx context.Context, r io.ReaderAt, size int64) ([]byte, error) {
-	offset := int64(0)
-	for offset < size {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-
-		header := make([]byte, 16)
-		n, err := r.ReadAt(header, offset)
-		if err != nil && err != io.EOF {
-			return nil, fmt.Errorf("read box header at %d: %w", offset, err)
-		}
-		if n < 8 {
-			return nil, fmt.Errorf("truncated box header at %d", offset)
-		}
-
-		boxSize := int64(binary.BigEndian.Uint32(header[0:4]))
-		boxType := string(header[4:8])
-		payloadStart := offset + 8
-		switch boxSize {
-		case 0:
-			// Box extends to end of file.
-			boxSize = size - offset
-		case 1:
-			if n < 16 {
-				return nil, fmt.Errorf("truncated largesize header at %d", offset)
-			}
-			largeSize := binary.BigEndian.Uint64(header[8:16])
-			if largeSize > uint64(size) {
-				return nil, fmt.Errorf("box %q largesize overruns file", boxType)
-			}
-			boxSize = int64(largeSize)
-			payloadStart = offset + 16
-		}
-		if boxSize < payloadStart-offset || offset+boxSize > size {
-			return nil, fmt.Errorf("box %q overruns file", boxType)
-		}
-
-		if boxType == "moov" {
-			payloadSize := offset + boxSize - payloadStart
-			if payloadSize > maxMoovPayloadBytes {
-				return nil, ErrNoIndex
-			}
-			payload := make([]byte, payloadSize)
-			_, err = io.ReadFull(io.NewSectionReader(r, payloadStart, payloadSize), payload)
-			if err != nil {
-				return nil, fmt.Errorf("read moov payload: %w", err)
-			}
-			return payload, nil
-		}
-
-		offset += boxSize
-	}
-
-	return nil, fmt.Errorf("missing moov box")
-}
-
-// isoBox delimits one box inside an in-memory payload.
-type isoBox struct {
-	Type         string
-	PayloadStart int
-	End          int
-}
-
-func listISOChildBoxes(data []byte, start, end int) ([]isoBox, error) {
-	boxes := make([]isoBox, 0, 8)
-	offset := start
-	for offset < end {
-		if end-offset < 8 {
-			return nil, fmt.Errorf("truncated box header")
-		}
-
-		size := int(binary.BigEndian.Uint32(data[offset : offset+4]))
-		boxType := string(data[offset+4 : offset+8])
-		payloadStart := offset + 8
-		if size == 1 {
-			if end-offset < 16 {
-				return nil, fmt.Errorf("truncated largesize header")
-			}
-			largeSize := binary.BigEndian.Uint64(data[offset+8 : offset+16])
-			if largeSize > uint64(end-offset) {
-				return nil, fmt.Errorf("box %q overruns its parent", boxType)
-			}
-			size = int(largeSize)
-			payloadStart = offset + 16
-		}
-		if size == 0 {
-			size = end - offset
-		}
-		if size < payloadStart-offset || offset+size > end {
-			return nil, fmt.Errorf("box %q overruns its parent", boxType)
-		}
-
-		boxes = append(boxes, isoBox{
-			Type:         boxType,
-			PayloadStart: payloadStart,
-			End:          offset + size,
-		})
-		offset += size
-	}
-	return boxes, nil
-}
-
-func findISOChildBox(data []byte, start, end int, boxType string) (isoBox, bool, error) {
-	boxes, err := listISOChildBoxes(data, start, end)
-	if err != nil {
-		return isoBox{}, false, err
-	}
-	for _, box := range boxes {
-		if box.Type == boxType {
-			return box, true, nil
-		}
-	}
-	return isoBox{}, false, nil
-}
-
 // parseMvhd returns the movie timescale and duration in seconds; zeros when
 // the box is absent or malformed (callers treat them as fallbacks only).
 func parseMvhd(moov []byte) (uint64, float64) {
-	mvhd, found, err := findISOChildBox(moov, 0, len(moov), "mvhd")
+	mvhd, found, err := isobmff.FindChild(moov, 0, len(moov), "mvhd")
 	if err != nil || !found {
 		return 0, 0
 	}
@@ -194,26 +82,26 @@ func decodeTimescaleDuration(payload []byte) (timescale uint64, durationSec floa
 	return timescale, float64(duration) / float64(timescale), true
 }
 
-func findVideoTrak(moov []byte) (isoBox, bool, error) {
-	boxes, err := listISOChildBoxes(moov, 0, len(moov))
+func findVideoTrak(moov []byte) (isobmff.Box, bool, error) {
+	boxes, err := isobmff.ChildBoxes(moov, 0, len(moov))
 	if err != nil {
-		return isoBox{}, false, err
+		return isobmff.Box{}, false, err
 	}
 
 	for _, trak := range boxes {
 		if trak.Type != "trak" {
 			continue
 		}
-		mdia, found, findErr := findISOChildBox(moov, trak.PayloadStart, trak.End, "mdia")
+		mdia, found, findErr := isobmff.FindChild(moov, trak.PayloadStart, trak.End, "mdia")
 		if findErr != nil {
-			return isoBox{}, false, findErr
+			return isobmff.Box{}, false, findErr
 		}
 		if !found {
 			continue
 		}
-		hdlr, found, findErr := findISOChildBox(moov, mdia.PayloadStart, mdia.End, "hdlr")
+		hdlr, found, findErr := isobmff.FindChild(moov, mdia.PayloadStart, mdia.End, "hdlr")
 		if findErr != nil {
-			return isoBox{}, false, findErr
+			return isobmff.Box{}, false, findErr
 		}
 		if !found {
 			continue
@@ -224,11 +112,11 @@ func findVideoTrak(moov []byte) (isoBox, bool, error) {
 		}
 	}
 
-	return isoBox{}, false, nil
+	return isobmff.Box{}, false, nil
 }
 
-func parseVideoTrakKeyframes(moov []byte, trak isoBox, movieTimescale uint64) ([]float64, float64, error) {
-	mdia, found, err := findISOChildBox(moov, trak.PayloadStart, trak.End, "mdia")
+func parseVideoTrakKeyframes(moov []byte, trak isobmff.Box, movieTimescale uint64) ([]float64, float64, error) {
+	mdia, found, err := isobmff.FindChild(moov, trak.PayloadStart, trak.End, "mdia")
 	if err != nil {
 		return nil, 0, err
 	}
@@ -241,14 +129,14 @@ func parseVideoTrakKeyframes(moov []byte, trak isoBox, movieTimescale uint64) ([
 		return nil, 0, err
 	}
 
-	minf, found, err := findISOChildBox(moov, mdia.PayloadStart, mdia.End, "minf")
+	minf, found, err := isobmff.FindChild(moov, mdia.PayloadStart, mdia.End, "minf")
 	if err != nil {
 		return nil, 0, err
 	}
 	if !found {
 		return nil, 0, fmt.Errorf("missing minf box")
 	}
-	stbl, found, err := findISOChildBox(moov, minf.PayloadStart, minf.End, "stbl")
+	stbl, found, err := isobmff.FindChild(moov, minf.PayloadStart, minf.End, "stbl")
 	if err != nil {
 		return nil, 0, err
 	}
@@ -294,8 +182,8 @@ func parseVideoTrakKeyframes(moov []byte, trak isoBox, movieTimescale uint64) ([
 	return keyframes, mediaDurationSec, nil
 }
 
-func parseMdhd(moov []byte, mdia isoBox) (uint64, float64, error) {
-	mdhd, found, err := findISOChildBox(moov, mdia.PayloadStart, mdia.End, "mdhd")
+func parseMdhd(moov []byte, mdia isobmff.Box) (uint64, float64, error) {
+	mdhd, found, err := isobmff.FindChild(moov, mdia.PayloadStart, mdia.End, "mdhd")
 	if err != nil {
 		return 0, 0, err
 	}
@@ -310,8 +198,8 @@ func parseMdhd(moov []byte, mdia isoBox) (uint64, float64, error) {
 	return timescale, durationSec, nil
 }
 
-func parseStts(moov []byte, stbl isoBox) (*runLengthTable, uint64, error) {
-	stts, found, err := findISOChildBox(moov, stbl.PayloadStart, stbl.End, "stts")
+func parseStts(moov []byte, stbl isobmff.Box) (*runLengthTable, uint64, error) {
+	stts, found, err := isobmff.FindChild(moov, stbl.PayloadStart, stbl.End, "stts")
 	if err != nil {
 		return nil, 0, err
 	}
@@ -339,8 +227,8 @@ func parseStts(moov []byte, stbl isoBox) (*runLengthTable, uint64, error) {
 }
 
 // parseCtts returns nil when the box is absent (no composition offsets).
-func parseCtts(moov []byte, stbl isoBox) (*runLengthTable, error) {
-	ctts, found, err := findISOChildBox(moov, stbl.PayloadStart, stbl.End, "ctts")
+func parseCtts(moov []byte, stbl isobmff.Box) (*runLengthTable, error) {
+	ctts, found, err := isobmff.FindChild(moov, stbl.PayloadStart, stbl.End, "ctts")
 	if err != nil {
 		return nil, err
 	}
@@ -395,8 +283,8 @@ func parseRunLengthEntries(payload []byte, boxName string, decode func(raw uint3
 // parseStss returns ascending 1-based sync sample numbers; an absent stss
 // means every sample is sync (capped — an intra-only source gains nothing
 // over the probing fallback).
-func parseStss(moov []byte, stbl isoBox, totalSamples uint64) ([]uint64, error) {
-	stss, found, err := findISOChildBox(moov, stbl.PayloadStart, stbl.End, "stss")
+func parseStss(moov []byte, stbl isobmff.Box, totalSamples uint64) ([]uint64, error) {
+	stss, found, err := isobmff.FindChild(moov, stbl.PayloadStart, stbl.End, "stss")
 	if err != nil {
 		return nil, err
 	}
@@ -444,15 +332,15 @@ func parseStss(moov []byte, stbl isoBox, totalSamples uint64) ([]uint64, error) 
 // composition-delay compensation); a leading empty edit followed by one media
 // edit. Anything else aborts extraction — ffprobe's pts_time honors edit
 // lists, so serving unshifted times would disagree with the ground truth.
-func parseElstShift(moov []byte, trak isoBox, mediaTimescale, movieTimescale uint64) (float64, error) {
-	edts, found, err := findISOChildBox(moov, trak.PayloadStart, trak.End, "edts")
+func parseElstShift(moov []byte, trak isobmff.Box, mediaTimescale, movieTimescale uint64) (float64, error) {
+	edts, found, err := isobmff.FindChild(moov, trak.PayloadStart, trak.End, "edts")
 	if err != nil {
 		return 0, err
 	}
 	if !found {
 		return 0, nil
 	}
-	elst, found, err := findISOChildBox(moov, edts.PayloadStart, edts.End, "elst")
+	elst, found, err := isobmff.FindChild(moov, edts.PayloadStart, edts.End, "elst")
 	if err != nil {
 		return 0, err
 	}
