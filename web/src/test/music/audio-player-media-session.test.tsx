@@ -67,6 +67,7 @@ function track(overrides: Partial<TrackType> = {}): TrackType {
     disc: 1,
     channel_layout: "stereo",
     bit_rate: 900000,
+    explicit: false,
     album_id: nullableInt64(7),
     musician_id: nullableInt64(8),
     ...overrides,

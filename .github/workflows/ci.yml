@@ -30,6 +30,9 @@ jobs:
       - name: Vet and check for unreachable code
         run: make lint-server
 
+      - name: Race-test music scanning and Spotify
+        run: make test-music-race
+
       - name: Run Go tests
         run: |
           cd server

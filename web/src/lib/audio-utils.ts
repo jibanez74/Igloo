@@ -35,6 +35,8 @@ export function convertToAudioTrack(track: PlayableTrackData) {
     disc: 1,
     channel_layout: "",
     bit_rate: track.bit_rate,
+    // List rows carry no Spotify pairing, so the flag reads as unknown.
+    explicit: false,
     album_id: track.album_id,
     musician_id: track.musician_id,
   };

@@ -13702,7 +13702,9 @@
           "total_tracks",
           "cover",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "spotify_url",
+          "album_type"
         ],
         "properties": {
           "id": {
@@ -13718,9 +13720,20 @@
           "spotify_id": {
             "$ref": "#/components/schemas/SqlNullString"
           },
+          "spotify_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The album's page on Spotify, built from spotify_id; null until a Spotify match."
+          },
           "spotify_popularity": {
             "$ref": "#/components/schemas/SqlNullFloat64",
-            "description": "Valid is false until a Spotify match reports a nonzero popularity."
+            "description": "No longer written: Spotify stopped reporting popularity to this app in 2026, so Valid is false."
+          },
+          "album_type": {
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "Spotify's album type: album, single or compilation. Valid is false until a Spotify match reports one."
           },
           "musician": {
             "$ref": "#/components/schemas/SqlNullString"
@@ -13773,7 +13786,9 @@
           "album_id",
           "musician_id",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "spotify_id",
+          "explicit"
         ],
         "properties": {
           "id": {
@@ -13842,6 +13857,14 @@
           },
           "language": {
             "$ref": "#/components/schemas/SqlNullString"
+          },
+          "spotify_id": {
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "The Spotify track this file was paired with through its album's track list. Valid is false until the album matches and a track pairs."
+          },
+          "explicit": {
+            "type": "boolean",
+            "description": "Spotify's explicit-lyrics flag for the paired track; false when unknown or unpaired."
           },
           "album_id": {
             "$ref": "#/components/schemas/SqlNullInt64"
@@ -14218,7 +14241,8 @@
           "spotify_followers",
           "thumb",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "spotify_url"
         ],
         "properties": {
           "id": {
@@ -14233,18 +14257,25 @@
           },
           "summary": {
             "$ref": "#/components/schemas/SqlNullString",
-            "description": "A sentence built from the Spotify match's name, genres, popularity, and follower count. Valid is false until a Spotify match reports a popularity or a follower count."
+            "description": "No longer written: it was built from popularity and follower figures Spotify stopped reporting to this app in 2026, so Valid is false."
           },
           "spotify_id": {
             "$ref": "#/components/schemas/SqlNullString"
           },
+          "spotify_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The artist's page on Spotify, built from spotify_id; null until a Spotify match."
+          },
           "spotify_popularity": {
             "$ref": "#/components/schemas/SqlNullFloat64",
-            "description": "Valid is false until a Spotify match reports a nonzero popularity."
+            "description": "No longer written: Spotify stopped reporting popularity to this app in 2026, so Valid is false."
           },
           "spotify_followers": {
             "$ref": "#/components/schemas/SqlNullInt64",
-            "description": "Valid is false until a Spotify match reports a nonzero follower count."
+            "description": "No longer written: Spotify stopped reporting follower counts to this app in 2026, so Valid is false."
           },
           "thumb": {
             "$ref": "#/components/schemas/SqlNullString"
@@ -16528,7 +16559,8 @@
           "bit_rate",
           "album_id",
           "musician_id",
-          "mime_type"
+          "mime_type",
+          "explicit"
         ],
         "properties": {
           "id": {
@@ -16559,6 +16591,10 @@
           "bit_rate": {
             "type": "integer",
             "format": "int64"
+          },
+          "explicit": {
+            "type": "boolean",
+            "description": "Spotify's explicit-lyrics flag for the paired track; false when unknown or unpaired."
           },
           "album_id": {
             "$ref": "#/components/schemas/SqlNullInt64"

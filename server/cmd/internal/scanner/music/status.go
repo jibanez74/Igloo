@@ -35,6 +35,15 @@ func (r *scanReport) syncCounts() {
 	r.status.EnrichmentUnmatched = r.scan.enrichmentCounts[musicSpotifyStatusUnmatched]
 }
 
+// tracksLinked is the number of tracks paired with a Spotify track this run,
+// for the completion log.
+func (r *scanReport) tracksLinked() int {
+	if r.scan == nil {
+		return 0
+	}
+	return r.scan.tracksLinked
+}
+
 func (s *Scanner) Status() Status {
 	s.statusMu.RLock()
 	defer s.statusMu.RUnlock()

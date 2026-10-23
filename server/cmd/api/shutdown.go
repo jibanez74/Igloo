@@ -101,9 +101,6 @@ func (app *Application) cleanupHLSSessions() {
 }
 
 func (app *Application) clearMediaClientCaches() {
-	if app.Spotify != nil {
-		app.Spotify.ClearAllCaches()
-	}
 	if app.Tmdb != nil {
 		app.Tmdb.ClearCache()
 	}

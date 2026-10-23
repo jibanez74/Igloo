@@ -58,6 +58,16 @@ func (s *Scanner) persistResolvedTrackTx(ctx context.Context, qtx *database.Quer
 		return 0, err
 	}
 	params := resolved.params
+	// Saved ahead of the credits: a merge it causes makes persistMusicians
+	// re-read the credits' aliases.
+	var adoptedIDs []int64
+	if resolved.adoptedArtist != nil {
+		id, err := s.persistMusician(ctx, qtx, scan, *resolved.adoptedArtist)
+		if err != nil {
+			return 0, fmt.Errorf("adopted musician failed: %w", err)
+		}
+		adoptedIDs = append(adoptedIDs, id)
+	}
 	musicianIDs, err := s.persistMusicians(ctx, qtx, scan, resolved.musicians)
 	if err != nil {
 		return 0, err
@@ -79,6 +89,13 @@ func (s *Scanner) persistResolvedTrackTx(ctx context.Context, qtx *database.Quer
 	trackID, err := qtx.UpsertTrack(ctx, params)
 	if err != nil {
 		return 0, fmt.Errorf("upsert track failed: %w", err)
+	}
+
+	// The link pass pairs a new or changed file with the rest of its album, so
+	// a stale outcome goes.
+	err = qtx.DeleteMusicSpotifyMatch(ctx, database.DeleteMusicSpotifyMatchParams{EntityType: musicSpotifyEntityTrack, EntityID: trackID})
+	if err != nil {
+		return 0, fmt.Errorf("track spotify match failed: %w", err)
 	}
 
 	err = s.syncTrackMusicians(ctx, qtx, trackID, musicianIDs)
@@ -127,7 +144,7 @@ func (s *Scanner) persistResolvedTrackTx(ctx context.Context, qtx *database.Quer
 		}
 	}
 
-	for _, id := range uniqueIDs(oldArtists, musicianIDs) {
+	for _, id := range uniqueIDs(oldArtists, musicianIDs, adoptedIDs) {
 		err = qtx.ReconcileMusicArtistSort(ctx, id)
 		if err != nil {
 			return 0, err
@@ -249,23 +266,25 @@ func (s *Scanner) persistMusician(ctx context.Context, qtx *database.Queries, sc
 	}
 
 	if input.spotifyArtist != nil {
-		err = qtx.UpdateMusicArtistEnrichment(ctx, database.UpdateMusicArtistEnrichmentParams{ID: musician.ID, Summary: helpers.NullString(generateMusicianSummary(input.spotifyArtist)), SpotifyPopularity: helpers.NullFloat64(float64(input.spotifyArtist.Popularity)), SpotifyFollowers: helpers.NullInt64(int64(input.spotifyArtist.Followers.Count))})
-		if err != nil {
-			return 0, err
-		}
 		musician, err = s.updateMusicianThumbIfChanged(ctx, qtx, musician, firstImageURL(input.spotifyArtist.Images))
 		if err != nil {
 			return 0, err
 		}
-		err = s.processSpotifyGenres(ctx, qtx, scan, musician.ID, input.spotifyArtist.Genres)
-		if err != nil {
-			return 0, err
-		}
 	}
-	err = s.upsertMusicSpotifyMatchAndCacheID(ctx, qtx, musicSpotifyEntityMusician, musician.ID, input.spotifyMatch, scan.musicianIDs, cacheKey)
+	err = saveMusicSpotifyMatch(ctx, qtx, musicSpotifyEntityMusician, musician.ID, input.spotifyMatch)
 	if err != nil {
 		return 0, err
 	}
+	if input.spotifyArtist != nil || input.adoptionDone {
+		err = qtx.DeleteMusicSpotifyAdoption(ctx, musician.ID)
+	} else if input.adoptionTarget != "" {
+		err = qtx.SaveMusicSpotifyAdoption(ctx, database.SaveMusicSpotifyAdoptionParams{MusicianID: musician.ID, SpotifyID: input.adoptionTarget})
+	}
+	if err != nil {
+		return 0, err
+	}
+
+	scan.musicianIDs.Set(cacheKey, musician.ID)
 	return musician.ID, nil
 }
 
@@ -327,7 +346,7 @@ func (s *Scanner) persistAlbum(ctx context.Context, qtx *database.Queries, scan 
 	}
 
 	if input.spotifyAlbum != nil {
-		err = qtx.UpdateMusicAlbumEnrichment(ctx, database.UpdateMusicAlbumEnrichmentParams{ID: album.ID, SpotifyPopularity: helpers.NullFloat64(float64(input.spotifyAlbum.Popularity)), TotalTracks: helpers.NullInt64(int64(input.spotifyAlbum.TotalTracks))})
+		err = qtx.UpdateMusicAlbumEnrichment(ctx, database.UpdateMusicAlbumEnrichmentParams{ID: album.ID, TotalTracks: helpers.NullInt64(int64(input.spotifyAlbum.TotalTracks)), AlbumType: albumTypeValue(input.spotifyAlbum.AlbumType)})
 		if err != nil {
 			return 0, err
 		}
@@ -345,15 +364,12 @@ func (s *Scanner) persistAlbum(ctx context.Context, qtx *database.Queries, scan 
 		if err != nil {
 			return 0, err
 		}
-		err = s.processSpotifyAlbumGenres(ctx, qtx, scan, album.ID, input.spotifyAlbum.Genres)
-		if err != nil {
-			return 0, err
-		}
 	}
-	err = s.upsertMusicSpotifyMatchAndCacheID(ctx, qtx, musicSpotifyEntityAlbum, album.ID, input.spotifyMatch, scan.albumIDs, cacheKey)
+	err = saveMusicSpotifyMatch(ctx, qtx, musicSpotifyEntityAlbum, album.ID, input.spotifyMatch)
 	if err != nil {
 		return 0, err
 	}
+	scan.albumIDs.Set(cacheKey, album.ID)
 	return album.ID, nil
 }
 

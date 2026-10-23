@@ -2,12 +2,12 @@ package spotify
 
 import (
 	"context"
+	"fmt"
+	"net/url"
 	"strings"
-
-	"github.com/zmb3/spotify/v2"
 )
 
-func (s *spotifyClient) SearchArtistByName(ctx context.Context, artistName string) (*spotify.FullArtist, error) {
+func (c *Client) SearchArtistByName(ctx context.Context, artistName string) (*FullArtist, error) {
 	artistName = strings.TrimSpace(artistName)
 	if artistName == "" {
 		return nil, newMatchError(MatchDebugInfo{
@@ -19,16 +19,10 @@ func (s *spotifyClient) SearchArtistByName(ctx context.Context, artistName strin
 		}, nil)
 	}
 
-	cacheKey := strings.ToLower(artistName)
-
-	if cached, exists := s.getArtist(cacheKey); exists {
-		return cached, nil
-	}
-
 	ctx, cancel := spotifyRequestContext(ctx)
 	defer cancel()
 
-	results, err := s.client.Search(ctx, artistName, spotify.SearchTypeArtist, spotify.Limit(spotifyArtistSearchLimit))
+	results, err := c.search(ctx, artistName, "artist", spotifyArtistSearchLimit)
 	if err != nil {
 		return nil, newMatchError(MatchDebugInfo{
 			Lookup:      lookupArtist,
@@ -41,16 +35,28 @@ func (s *spotifyClient) SearchArtistByName(ctx context.Context, artistName strin
 	}
 
 	// No artists page reads as no results, which selectBestArtistMatch reports.
-	var artists []spotify.FullArtist
+	var artists []FullArtist
 	if results.Artists != nil {
-		artists = results.Artists.Artists
+		artists = results.Artists.Items
 	}
 	returned, info := selectBestArtistMatch(artistName, artists, strategyArtistSearch)
 	if returned == nil {
 		return nil, newMatchError(info, nil)
 	}
 
-	s.setArtist(cacheKey, returned)
-
 	return returned, nil
+}
+
+// GetArtist loads one artist by id.
+func (c *Client) GetArtist(ctx context.Context, id ID) (*FullArtist, error) {
+	ctx, cancel := spotifyRequestContext(ctx)
+	defer cancel()
+
+	var artist FullArtist
+	err := c.getJSON(ctx, spotifyAPIBaseURL+"/artists/"+url.PathEscape(id.String()), &artist)
+	if err != nil {
+		return nil, fmt.Errorf("spotify artist lookup failed: %w", err)
+	}
+
+	return &artist, nil
 }

@@ -15,11 +15,9 @@ import (
 	"testing"
 	"time"
 
-	spotifyapi "igloo/cmd/internal/spotify"
 	tmdbapi "igloo/cmd/internal/tmdb"
 
 	"github.com/gorilla/websocket"
-	"github.com/zmb3/spotify/v2"
 )
 
 const (
@@ -30,32 +28,6 @@ const (
 	listenForShutdownHLSMarkerEnv        = "IGLOO_LISTEN_FOR_SHUTDOWN_HLS_MARKER"
 	listenForShutdownCacheMarkerEnv      = "IGLOO_LISTEN_FOR_SHUTDOWN_CACHE_MARKER"
 )
-
-type shutdownTestSpotify struct {
-	cleared bool
-}
-
-func (s *shutdownTestSpotify) SearchAndGetAlbumDetails(_ context.Context, _, _ string) (*spotify.FullAlbum, error) {
-	return nil, nil
-}
-
-func (s *shutdownTestSpotify) SearchAlbums(_ context.Context, _ string) ([]spotify.SimpleAlbum, error) {
-	return nil, nil
-}
-
-func (s *shutdownTestSpotify) SearchTracks(_ context.Context, _ string) ([]spotify.FullTrack, error) {
-	return nil, nil
-}
-
-func (s *shutdownTestSpotify) SearchArtistByName(_ context.Context, _ string) (*spotify.FullArtist, error) {
-	return nil, nil
-}
-
-func (s *shutdownTestSpotify) ClearAllCaches() {
-	s.cleared = true
-}
-
-var _ spotifyapi.SpotifyInterface = (*shutdownTestSpotify)(nil)
 
 type shutdownTestTmdb struct {
 	cleared bool
@@ -150,7 +122,6 @@ func TestListenForShutdown_CleansUpCachesWebSocketsLoggerAndHLSSessions(t *testi
 		"hls_cache_empty=true",
 		"subtitle_cache_empty=true",
 		"room_tombstone_empty=true",
-		"spotify_cache_cleared=true",
 		"tmdb_cache_cleared=true",
 	} {
 		if !strings.Contains(cacheResult, expected) {
@@ -179,9 +150,7 @@ func runListenForShutdownHelper(t *testing.T) {
 	app.SubtitleVTTCache.SetDefault("shutdown-test-subtitle", []byte("subtitle"))
 	app.RoomHLSTombstone.SetDefault("room:shutdown-test", struct{}{})
 
-	spotifyClient := &shutdownTestSpotify{}
 	tmdbClient := &shutdownTestTmdb{}
-	app.Spotify = spotifyClient
 	app.Tmdb = tmdbClient
 
 	session, err := attachShutdownTestHLSSession(t, app)
@@ -414,22 +383,16 @@ func writeShutdownHLSMarker(markerPath string, session *HLSSession) error {
 }
 
 func writeShutdownCacheMarker(markerPath string, app *Application) error {
-	spotifyCleared := false
-	if spotifyClient, ok := app.Spotify.(*shutdownTestSpotify); ok {
-		spotifyCleared = spotifyClient.cleared
-	}
-
 	tmdbCleared := false
 	if tmdbClient, ok := app.Tmdb.(*shutdownTestTmdb); ok {
 		tmdbCleared = tmdbClient.cleared
 	}
 
 	content := fmt.Sprintf(
-		"hls_cache_empty=%t subtitle_cache_empty=%t room_tombstone_empty=%t spotify_cache_cleared=%t tmdb_cache_cleared=%t\n",
+		"hls_cache_empty=%t subtitle_cache_empty=%t room_tombstone_empty=%t tmdb_cache_cleared=%t\n",
 		cacheIsEmpty(app.HLSSessionCache),
 		cacheIsEmpty(app.SubtitleVTTCache),
 		cacheIsEmpty(app.RoomHLSTombstone),
-		spotifyCleared,
 		tmdbCleared,
 	)
 

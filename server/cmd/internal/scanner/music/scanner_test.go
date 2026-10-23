@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,9 +14,9 @@ import (
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/scannertest"
+	spotifyapi "igloo/cmd/internal/spotify"
 
 	_ "github.com/mattn/go-sqlite3"
-	spotifylib "github.com/zmb3/spotify/v2"
 )
 
 func setupMusicScanner(t testing.TB) *Scanner {
@@ -157,20 +158,37 @@ func (s *musicScannerFfprobeByPath) totalMetadataCalls() int {
 }
 
 type musicScannerSpotifyStub struct {
-	artist *spotifylib.FullArtist
+	script *spotifyScript
+	artist *spotifyapi.FullArtist
 	// artistsByName, when set, answers per name (lowercased); a name it does
 	// not carry fails the lookup, so one stub can model a compound credit where
 	// only some members match.
-	artistsByName map[string]*spotifylib.FullArtist
+	artistsByName map[string]*spotifyapi.FullArtist
 	artistErr     error
 	artistCalls   int
-	album         *spotifylib.FullAlbum
+	// artistsByID answers GetArtist; an id it does not carry is a 404.
+	artistsByID   map[spotifyapi.ID]*spotifyapi.FullArtist
+	artistFetches int
+	album         *spotifyapi.FullAlbum
+	// albumsByTitle, when set, answers per album title (lowercased); a title
+	// it does not carry fails the lookup for that one album.
+	albumsByTitle map[string]*spotifyapi.FullAlbum
 	albumErr      error
 	albumCalls    int
-	clearCalls    int
+	// albumQueries records every MatchAlbum query in order.
+	albumQueries []spotifyapi.AlbumQuery
+	// albumsByID answers GetAlbum; an id it does not carry is a 404, and
+	// albumFetchErr, when set, fails every fetch.
+	albumsByID    map[spotifyapi.ID]*spotifyapi.FullAlbum
+	albumFetchErr error
+	albumFetches  int
 }
 
-func (s *musicScannerSpotifyStub) SearchArtistByName(_ context.Context, name string) (*spotifylib.FullArtist, error) {
+func (s *musicScannerSpotifyStub) SearchArtistByName(ctx context.Context, name string) (*spotifyapi.FullArtist, error) {
+	if s.script != nil {
+		step := s.script.request(ctx, "search", name)
+		return step.artist, step.err
+	}
 	s.artistCalls++
 	if s.artistsByName != nil {
 		artist, ok := s.artistsByName[strings.ToLower(strings.TrimSpace(name))]
@@ -186,8 +204,33 @@ func (s *musicScannerSpotifyStub) SearchArtistByName(_ context.Context, name str
 	return s.artist, nil
 }
 
-func (s *musicScannerSpotifyStub) SearchAndGetAlbumDetails(_ context.Context, _, _ string) (*spotifylib.FullAlbum, error) {
+func (s *musicScannerSpotifyStub) GetArtist(ctx context.Context, id spotifyapi.ID) (*spotifyapi.FullArtist, error) {
+	if s.script != nil {
+		step := s.script.request(ctx, "artist", id.String())
+		return step.artist, step.err
+	}
+	s.artistFetches++
+	artist, ok := s.artistsByID[id]
+	if !ok {
+		return nil, &spotifyapi.StatusError{StatusCode: http.StatusNotFound, Message: "non existing id"}
+	}
+	return artist, nil
+}
+
+func (s *musicScannerSpotifyStub) MatchAlbum(ctx context.Context, query spotifyapi.AlbumQuery) (*spotifyapi.FullAlbum, error) {
+	if s.script != nil {
+		step := s.script.request(ctx, "match", query.Title)
+		return step.album, step.err
+	}
 	s.albumCalls++
+	s.albumQueries = append(s.albumQueries, query)
+	if s.albumsByTitle != nil {
+		album, ok := s.albumsByTitle[strings.ToLower(strings.TrimSpace(query.Title))]
+		if !ok {
+			return nil, entityLookupFailure
+		}
+		return album, nil
+	}
 	if s.albumErr != nil {
 		return nil, s.albumErr
 	}
@@ -195,17 +238,25 @@ func (s *musicScannerSpotifyStub) SearchAndGetAlbumDetails(_ context.Context, _,
 	return s.album, nil
 }
 
-func (s *musicScannerSpotifyStub) SearchAlbums(_ context.Context, _ string) ([]spotifylib.SimpleAlbum, error) {
-	return nil, nil
+func (s *musicScannerSpotifyStub) GetAlbum(ctx context.Context, id spotifyapi.ID) (*spotifyapi.FullAlbum, error) {
+	if s.script != nil {
+		step := s.script.request(ctx, "album", id.String())
+		return step.album, step.err
+	}
+	s.albumFetches++
+	if s.albumFetchErr != nil {
+		return nil, s.albumFetchErr
+	}
+	album, ok := s.albumsByID[id]
+	if !ok {
+		return nil, &spotifyapi.StatusError{StatusCode: http.StatusNotFound, Message: "non existing id"}
+	}
+	return album, nil
 }
 
-func (s *musicScannerSpotifyStub) SearchTracks(_ context.Context, _ string) ([]spotifylib.FullTrack, error) {
-	return nil, nil
-}
-
-func (s *musicScannerSpotifyStub) ClearAllCaches() {
-	s.clearCalls++
-}
+// entityLookupFailure fails a lookup the way a 404 does: the entity is
+// recorded as failed and retried later, and the breaker does not count it.
+var entityLookupFailure = &spotifyapi.StatusError{StatusCode: http.StatusNotFound, Message: "non existing id"}
 
 // scan runs one complete library scan synchronously, publishing the run the
 // way Start does.

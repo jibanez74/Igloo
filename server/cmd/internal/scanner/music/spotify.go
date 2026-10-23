@@ -4,67 +4,79 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
-	"strings"
+	"net/http"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"igloo/cmd/internal/scanner"
 	spotifyapi "igloo/cmd/internal/spotify"
-
-	spotifylib "github.com/zmb3/spotify/v2"
 )
 
 const (
 	musicSpotifyEntityAlbum     = "album"
 	musicSpotifyEntityMusician  = "musician"
+	musicSpotifyEntityTrack     = "track"
 	musicSpotifyStatusMatched   = "matched"
 	musicSpotifyStatusFailed    = "failed"
 	musicSpotifyStatusUnmatched = "unmatched"
+	// musicSpotifyReasonTracksDisagree records an album match the link pass
+	// dropped because the album's tracks contradicted it.
+	musicSpotifyReasonTracksDisagree = "tracks_disagree"
+	// albumCheckMinTracks is the fewest local tracks an album needs before its
+	// tracks may contradict its match; one or two files say too little.
+	albumCheckMinTracks = 3
 )
 
+// resolvedSpotifyMatch is one lookup's outcome. A miss keeps the best
+// candidate's name and, when one was scored, its score, so it can be
+// explained later.
 type resolvedSpotifyMatch struct {
-	status string
-	reason sql.NullString
+	status    string
+	reason    sql.NullString
+	candidate sql.NullString
+	score     sql.NullInt64
 }
 
-func (s *Scanner) upsertMusicSpotifyMatchAndCacheID(
-	ctx context.Context,
-	qtx *database.Queries,
-	entityType string,
-	entityID int64,
-	match *resolvedSpotifyMatch,
-	cache scanner.ScanCache[string, int64],
-	cacheKey string,
-) error {
-	if match != nil {
-		err := qtx.UpsertMusicSpotifyMatch(ctx, database.UpsertMusicSpotifyMatchParams{
-			EntityType: entityType,
-			EntityID:   entityID,
-			Status:     match.status,
-			Reason:     match.reason,
-		})
-		if err != nil {
-			return err
-		}
+// saveMusicSpotifyMatch records an outcome; a nil match leaves the stored one
+// alone.
+func saveMusicSpotifyMatch(ctx context.Context, qtx *database.Queries, entityType string, entityID int64, match *resolvedSpotifyMatch) error {
+	if match == nil {
+		return nil
 	}
-
-	cache.Set(cacheKey, entityID)
-	return nil
+	return qtx.UpsertMusicSpotifyMatch(ctx, database.UpsertMusicSpotifyMatchParams{
+		EntityType: entityType,
+		EntityID:   entityID,
+		Status:     match.status,
+		Reason:     match.reason,
+		Candidate:  match.candidate,
+		Score:      match.score,
+	})
 }
 
 func resolvedSpotifyMatchFromError(err error) resolvedSpotifyMatch {
-	match := resolvedSpotifyMatch{status: musicSpotifyStatusFailed}
 	matchErr, ok := errors.AsType[*spotifyapi.MatchError](err)
 	if !ok {
-		return match
+		return resolvedSpotifyMatch{status: musicSpotifyStatusFailed}
 	}
-	info := matchErr.Info
+	return resolvedSpotifyMatchFromInfo(matchErr.Info)
+}
+
+// resolvedSpotifyMatchFromInfo reads a miss: a definitive reason is unmatched
+// for good, any other is failed and retried.
+func resolvedSpotifyMatchFromInfo(info spotifyapi.MatchDebugInfo) resolvedSpotifyMatch {
+	match := resolvedSpotifyMatch{
+		status:    musicSpotifyStatusFailed,
+		reason:    helpers.NullString(info.Reason),
+		candidate: helpers.NullString(info.CandidateName),
+	}
+	scored := info.Reason == spotifyapi.MatchReasonScoreBelowThreshold || info.Reason == spotifyapi.MatchReasonTrackClaimed
+	if scored {
+		match.score = sql.NullInt64{Int64: int64(info.Score), Valid: true}
+	}
 	unmatched := musicSpotifyReasonIsUnmatched(info.Reason)
 	if unmatched {
 		match.status = musicSpotifyStatusUnmatched
 	}
-	match.reason = helpers.NullString(info.Reason)
 	return match
 }
 
@@ -83,72 +95,52 @@ func musicSpotifyMatchStatusIsFinal(status string) bool {
 func musicSpotifyReasonIsUnmatched(reason string) bool {
 	return reason == spotifyapi.MatchReasonNoResults ||
 		reason == spotifyapi.MatchReasonScoreBelowThreshold ||
-		reason == spotifyapi.MatchReasonEmptyQuery
+		reason == spotifyapi.MatchReasonEmptyQuery ||
+		reason == spotifyapi.MatchReasonTrackClaimed
 }
 
 func musicSpotifyReasonSplitsCompound(reason string) bool {
 	return reason == spotifyapi.MatchReasonNoResults || reason == spotifyapi.MatchReasonScoreBelowThreshold
 }
 
-// generateMusicianSummary words the Spotify popularity and follower figures as
-// a sentence. Spotify omits both for some artists, in which case there is
-// nothing to say: a sentence built from zeros ("is an independent artist with
-// 0 followers") would read as a claim about the artist rather than a gap. The
-// same holds for either figure alone, so a missing one contributes no phrase.
-func generateMusicianSummary(artist *spotifylib.FullArtist) string {
-	followers := artist.Followers.Count
-	if artist.Popularity == 0 && followers == 0 {
-		return ""
-	}
-
-	var parts []string
-
-	parts = append(parts, artist.Name)
-
-	if len(artist.Genres) > 0 {
-		maxGenres := min(len(artist.Genres), 3)
-		genreStr := strings.Join(artist.Genres[:maxGenres], ", ")
-		parts = append(parts, fmt.Sprintf("known for %s", genreStr))
-	}
-
-	// The follower figure hangs off the popularity phrase ("is a popular artist
-	// with ..."); without one it carries the sentence itself.
-	followersVerb := "with"
-
-	pop := artist.Popularity
-	switch {
-	case pop == 0:
-		followersVerb = "has"
-	case pop >= 80:
-		parts = append(parts, "is a globally recognized artist")
-	case pop >= 60:
-		parts = append(parts, "is a popular artist")
-	case pop >= 40:
-		parts = append(parts, "has a dedicated following")
-	case pop >= 20:
-		parts = append(parts, "is an emerging artist")
-	default:
-		parts = append(parts, "is an independent artist")
-	}
-
-	switch {
-	case followers == 0:
-	case followers >= 10_000_000:
-		parts = append(parts, fmt.Sprintf("%s over %dM followers on Spotify", followersVerb, followers/1_000_000))
-	case followers >= 1_000_000:
-		parts = append(parts, fmt.Sprintf("%s %.1fM followers on Spotify", followersVerb, float64(followers)/1_000_000))
-	case followers >= 100_000:
-		parts = append(parts, fmt.Sprintf("%s %dK followers on Spotify", followersVerb, followers/1_000))
-	case followers >= 1_000:
-		parts = append(parts, fmt.Sprintf("%s %.1fK followers on Spotify", followersVerb, float64(followers)/1_000))
-	default:
-		parts = append(parts, fmt.Sprintf("%s %d followers on Spotify", followersVerb, followers))
-	}
-
-	return strings.Join(parts, " ") + "."
+// spotifyNotFound reports a 404: the requested catalog entry is gone, which
+// settles the lookup rather than leaving it to retry.
+func spotifyNotFound(err error) bool {
+	status, ok := errors.AsType[*spotifyapi.StatusError](err)
+	return ok && status.StatusCode == http.StatusNotFound
 }
 
-func firstImageURL(images []spotifylib.Image) string {
+// spotifyReady reports whether lookups may still go to Spotify this scan.
+func (s *Scanner) spotifyReady(scan *musicScanContext) bool {
+	return s.spotify != nil && !scan.breaker.Stopped
+}
+
+// noteSpotifyStop reports the breaker tripping once per scan and returns
+// whether it has tripped.
+func (s *Scanner) noteSpotifyStop(scan *musicScanContext, report *scanReport) bool {
+	if !scan.breaker.Stopped {
+		return false
+	}
+	if !scan.stopReported {
+		scan.stopReported = true
+		s.logger.Warn("spotify lookups stopped for this scan", "run", report.status.RunID)
+		report.Issue("", scanner.PhaseEnrichment, reasonSpotifyStopped)
+		s.publish(report)
+	}
+	return true
+}
+
+// albumTypeValue keeps Spotify's album type inside the albums.album_type
+// CHECK; any other value is stored as unknown rather than failing the write.
+func albumTypeValue(albumType string) sql.NullString {
+	switch albumType {
+	case "album", "single", "compilation":
+		return sql.NullString{String: albumType, Valid: true}
+	}
+	return sql.NullString{}
+}
+
+func firstImageURL(images []spotifyapi.Image) string {
 	if len(images) == 0 {
 		return ""
 	}

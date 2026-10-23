@@ -123,7 +123,7 @@ func (s *Scanner) enrich(ctx context.Context, report *scanReport) error {
 	}
 	report.status.EnrichmentTotal = total
 	s.publish(report)
-	breaker := &scanner.ProviderBreaker{}
+	breaker := &scanner.ProviderBreaker{Classify: tmdb.ProviderFailure}
 	for _, item := range pending {
 		if breaker.Stopped {
 			break

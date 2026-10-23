@@ -49,7 +49,7 @@ type Application struct {
 	LoggerCloser            func() error
 	Ffprobe                 ffprobe.FfprobeInterface
 	FFmpeg                  ffmpeg.FFmpegInterface
-	Spotify                 spotify.SpotifyInterface
+	Spotify                 spotifySearcher
 	Tmdb                    tmdb.TmdbInterface
 	PrerollTheaters         *preroll.TheatersPool
 	TmdbImageBaseURL        string
@@ -198,6 +198,10 @@ func InitApp() (initializedApp *Application, err error) {
 		}
 	}
 
+	// The one client serves the request pickers through app.Spotify and the
+	// music scanner through its own narrower view. Both stay nil interfaces
+	// when Spotify is not configured; a typed nil would read as available.
+	var musicSpotify music.SpotifyProvider
 	if settings.SpotifyClientID.Valid && settings.SpotifyClientID.String != "" &&
 		settings.SpotifyClientSecret.Valid && settings.SpotifyClientSecret.String != "" {
 		spotifyClient, err := spotify.New(
@@ -210,13 +214,14 @@ func InitApp() (initializedApp *Application, err error) {
 			app.Logger.Warn("failed to initialize spotify client", "error", err)
 		} else {
 			app.Spotify = spotifyClient
+			musicSpotify = spotifyClient
 			app.Logger.Info("spotify client initialized successfully")
 		}
 	}
 
 	app.initRuntimeCaches()
 	app.ScanContext, app.ScanCancel = context.WithCancel(context.Background())
-	app.initScanners()
+	app.initScanners(musicSpotify)
 
 	app.InitRouter()
 
@@ -228,13 +233,13 @@ func InitApp() (initializedApp *Application, err error) {
 // Spotify clients, the scan context and the runtime caches. The scanners
 // capture those dependencies at construction, so swapping one afterwards
 // means calling this again.
-func (app *Application) initScanners() {
+func (app *Application) initScanners(musicSpotify music.SpotifyProvider) {
 	app.MusicScanner = music.New(music.Dependencies{
 		DB:          app.DB,
 		Queries:     app.Queries,
 		Logger:      app.Logger,
 		Ffprobe:     app.Ffprobe,
-		Spotify:     app.Spotify,
+		Spotify:     musicSpotify,
 		ScanContext: app.ScanContext,
 		Wait:        app.Wait,
 		ScannerDBMu: &app.ScannerDBMu,

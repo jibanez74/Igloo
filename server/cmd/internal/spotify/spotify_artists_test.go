@@ -2,10 +2,10 @@ package spotify
 
 import (
 	"context"
+	"errors"
 	"net/http"
+	"strings"
 	"testing"
-
-	gocache "github.com/patrickmn/go-cache"
 )
 
 func TestSearchArtistByName(t *testing.T) {
@@ -79,60 +79,44 @@ func TestSearchArtistByName(t *testing.T) {
 		}
 	})
 
-	t.Run("treats unexpected cached artist value as cache miss", func(t *testing.T) {
-		callCount := 0
-		sc := newMockClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			callCount++
-			writeJSON(w, artistSearchJSON("safeArtist123", "John Mayer"))
-		}))
-		sc.artistCache.Set("john mayer", "bad-cache-value", gocache.DefaultExpiration)
-
-		artist, err := sc.SearchArtistByName(context.Background(), "John Mayer")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if callCount != 1 {
-			t.Fatalf("callCount = %d, want cache miss and one search", callCount)
-		}
-		if string(artist.ID) != "safeArtist123" {
-			t.Fatalf("artist.ID = %q, want safeArtist123", artist.ID)
-		}
-		// The planted key must be the one the lookup used, or the miss above
-		// proves nothing about the wrong-type branch.
-		if _, ok := sc.getArtist("john mayer"); !ok {
-			t.Fatal("the fetched artist did not replace the wrong-type entry under the planted key")
-		}
-	})
-
-	t.Run("cache key ignores case and surrounding whitespace", func(t *testing.T) {
-		callCount := 0
-		sc := newMockClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			callCount++
-			writeJSON(w, artistSearchJSON("trimmedID", "John Mayer"))
-		}))
-		ctx := context.Background()
-
-		first, err := sc.SearchArtistByName(ctx, "  John Mayer  ")
-		if err != nil {
-			t.Fatalf("first call failed: %v", err)
-		}
-		second, err := sc.SearchArtistByName(ctx, "john mayer")
-		if err != nil {
-			t.Fatalf("second call failed: %v", err)
-		}
-		if callCount != 1 {
-			t.Errorf("expected 1 HTTP call for the normalized cache key, got %d", callCount)
-		}
-		if first != second {
-			t.Error("expected the cached artist pointer to be returned")
-		}
-	})
-
 	t.Run("returns search_failed when the spotify request fails", func(t *testing.T) {
 		sc := newMockClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			writeSpotifyAPIError(w, http.StatusInternalServerError, "search failed")
 		}))
 		_, err := sc.SearchArtistByName(context.Background(), "John Mayer")
 		assertMatchReason(t, err, MatchReasonSearchFailed)
+	})
+}
+
+func TestGetArtist(t *testing.T) {
+	t.Run("returns the artist by id", func(t *testing.T) {
+		var path string
+		sc := newMockClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			path = r.URL.Path
+			writeJSON(w, artistItemJSON("abc123", "Charlie Puth"))
+		}))
+
+		artist, err := sc.GetArtist(context.Background(), "abc123")
+		if err != nil {
+			t.Fatalf("GetArtist failed: %v", err)
+		}
+		if path != "/v1/artists/abc123" {
+			t.Fatalf("path = %q, want the artist endpoint", path)
+		}
+		if artist.ID != "abc123" || artist.Name != "Charlie Puth" || len(artist.Images) != 1 {
+			t.Fatalf("artist = %+v, want Charlie Puth with an image", artist)
+		}
+	})
+
+	t.Run("surfaces an unknown id as a 404 status error", func(t *testing.T) {
+		sc := newMockClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			writeSpotifyAPIError(w, http.StatusNotFound, "non existing id")
+		}))
+
+		_, err := sc.GetArtist(context.Background(), "gone123")
+		statusErr, ok := errors.AsType[*StatusError](err)
+		if !ok || statusErr.StatusCode != http.StatusNotFound || !strings.Contains(err.Error(), "spotify artist lookup failed") {
+			t.Fatalf("err = %v, want a wrapped 404 StatusError", err)
+		}
 	})
 }

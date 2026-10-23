@@ -3,8 +3,6 @@ package scanner
 import (
 	"database/sql"
 	"time"
-
-	"igloo/cmd/internal/tmdb"
 )
 
 const (
@@ -37,22 +35,25 @@ func MissBackoffElapsed(attempts int64, lastAttemptAt sql.NullInt64, now time.Ti
 	return !now.Before(eligibleAt)
 }
 
-// ProviderBreaker stops enrichment dispatch after an authentication failure
-// or a run of transient provider failures; pending entities retry on a later
-// scan. Only errors returned by the TMDB client are observed.
+// ProviderBreaker stops enrichment dispatch after a fatal provider failure
+// (rejected credentials, an exhausted quota) or a run of transient ones;
+// pending entities retry on a later scan. Classify is the provider's own
+// failure classification, so only errors returned by that provider's client
+// should be observed.
 type ProviderBreaker struct {
+	Classify    func(err error) (fatal, transient bool)
 	consecutive int
 	Stopped     bool
 }
 
 func (b *ProviderBreaker) Observe(err error) {
-	authentication, transient := tmdb.ProviderFailure(err)
+	fatal, transient := b.Classify(err)
 	if transient {
 		b.consecutive++
 	} else {
 		b.consecutive = 0
 	}
-	if authentication || b.consecutive >= MaxConsecutiveProviderFailures {
+	if fatal || b.consecutive >= MaxConsecutiveProviderFailures {
 		b.Stopped = true
 	}
 }

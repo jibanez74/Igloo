@@ -2,20 +2,19 @@ package spotify
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
-
-	gocache "github.com/patrickmn/go-cache"
 )
 
-func TestSearchAndGetAlbumDetails(t *testing.T) {
+func TestMatchAlbum(t *testing.T) {
 	t.Run("rejects a blank album title without calling the API", func(t *testing.T) {
 		callCount := 0
 		sc := newMockClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			callCount++
 		}))
-		_, err := sc.SearchAndGetAlbumDetails(context.Background(), "  ", "Some Artist")
+		_, err := sc.MatchAlbum(context.Background(), AlbumQuery{Title: "  ", Artist: "Some Artist"})
 		assertMatchReason(t, err, MatchReasonEmptyQuery)
 		if callCount != 0 {
 			t.Fatalf("callCount = %d, want no API calls", callCount)
@@ -25,7 +24,7 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 	t.Run("builds structured field query when artist is provided", func(t *testing.T) {
 		var queries []string
 		sc := newMockClient(albumSearchThenDetails("t123", "Thriller", &queries))
-		_, err := sc.SearchAndGetAlbumDetails(context.Background(), "Thriller", "Michael Jackson")
+		_, err := sc.MatchAlbum(context.Background(), AlbumQuery{Title: "Thriller", Artist: "Michael Jackson"})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -37,7 +36,7 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 	t.Run("sanitizes double quotes in structured field query values", func(t *testing.T) {
 		var queries []string
 		sc := newMockClient(albumSearchThenDetails("q123", `Live "At Home"`, &queries))
-		_, err := sc.SearchAndGetAlbumDetails(context.Background(), `Live "At Home"`, `The "Band"`)
+		_, err := sc.MatchAlbum(context.Background(), AlbumQuery{Title: `Live "At Home"`, Artist: `The "Band"`})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -49,7 +48,7 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 	t.Run("omits artist field filter when artist is empty", func(t *testing.T) {
 		var queries []string
 		sc := newMockClient(albumSearchThenDetails("g123", "Greatest Hits", &queries))
-		_, err := sc.SearchAndGetAlbumDetails(context.Background(), "Greatest Hits", "")
+		_, err := sc.MatchAlbum(context.Background(), AlbumQuery{Title: "Greatest Hits", Artist: ""})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -61,7 +60,7 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 	t.Run("strips '- Single' suffix before sending search query", func(t *testing.T) {
 		var queries []string
 		sc := newMockClient(albumSearchThenDetails("s123", "The Joker and the Queen", &queries))
-		_, err := sc.SearchAndGetAlbumDetails(context.Background(), "The Joker And The Queen - Single", "Ed Sheeran")
+		_, err := sc.MatchAlbum(context.Background(), AlbumQuery{Title: "The Joker And The Queen - Single", Artist: "Ed Sheeran"})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -73,7 +72,7 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 	t.Run("strips '- EP' suffix before sending search query", func(t *testing.T) {
 		var queries []string
 		sc := newMockClient(albumSearchThenDetails("e123", "Some Album", &queries))
-		_, err := sc.SearchAndGetAlbumDetails(context.Background(), "Some Album - EP", "Some Artist")
+		_, err := sc.MatchAlbum(context.Background(), AlbumQuery{Title: "Some Album - EP", Artist: "Some Artist"})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -85,7 +84,7 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 	t.Run("preserves internal '- EP' text when it is not a suffix", func(t *testing.T) {
 		var queries []string
 		sc := newMockClient(albumSearchThenDetails("eps123", "Foo - EP Sessions", &queries))
-		_, err := sc.SearchAndGetAlbumDetails(context.Background(), "Foo - EP Sessions", "Some Artist")
+		_, err := sc.MatchAlbum(context.Background(), AlbumQuery{Title: "Foo - EP Sessions", Artist: "Some Artist"})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -99,7 +98,7 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 		// The normalize function strips all non-alphanumeric characters before comparison,
 		// so both variants produce "whatevers clever" and match correctly.
 		sc := newMockClient(albumSearchThenDetails("wc123", "Whatever's Clever!", nil))
-		album, err := sc.SearchAndGetAlbumDetails(context.Background(), "Whatever’s Clever!", "Charlie Puth")
+		album, err := sc.MatchAlbum(context.Background(), AlbumQuery{Title: "Whatever’s Clever!", Artist: "Charlie Puth"})
 		if err != nil {
 			t.Fatalf("unexpected error for apostrophe variant: %v", err)
 		}
@@ -111,7 +110,7 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 	t.Run("falls back to plain text search when field filter returns no results", func(t *testing.T) {
 		var queries []string
 		sc := newMockClient(albumFallbackThenDetails("fb123", "Whatever's Clever!", &queries))
-		album, err := sc.SearchAndGetAlbumDetails(context.Background(), "Whatever's Clever!", "Charlie Puth")
+		album, err := sc.MatchAlbum(context.Background(), AlbumQuery{Title: "Whatever's Clever!", Artist: "Charlie Puth"})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -132,7 +131,7 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 	t.Run("falls back when the field search response has no albums object", func(t *testing.T) {
 		var queries []string
 		sc := newMockClient(albumSearchSequence(respondJSON(map[string]interface{}{}), respondJSON(albumSearchJSON("noobj123", "Abbey Road")), respondJSON(fullAlbumJSON("noobj123", "Abbey Road")), &queries))
-		album, err := sc.SearchAndGetAlbumDetails(context.Background(), "Abbey Road", "The Beatles")
+		album, err := sc.MatchAlbum(context.Background(), AlbumQuery{Title: "Abbey Road", Artist: "The Beatles"})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -144,7 +143,7 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 	t.Run("sanitizes double quotes in fallback query", func(t *testing.T) {
 		var queries []string
 		sc := newMockClient(albumFallbackThenDetails("quoteFallback123", `Live "At Home"`, &queries))
-		_, err := sc.SearchAndGetAlbumDetails(context.Background(), `Live "At Home"`, `The "Band"`)
+		_, err := sc.MatchAlbum(context.Background(), AlbumQuery{Title: `Live "At Home"`, Artist: `The "Band"`})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -162,78 +161,8 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 				writeJSON(w, emptyAlbumSearchJSON())
 			}
 		}))
-		_, err := sc.SearchAndGetAlbumDetails(context.Background(), "Nonexistent Album XYZ999", "Nobody")
+		_, err := sc.MatchAlbum(context.Background(), AlbumQuery{Title: "Nonexistent Album XYZ999", Artist: "Nobody"})
 		assertMatchReason(t, err, MatchReasonNoResults)
-	})
-
-	t.Run("reports score_below_threshold when no candidate is close enough", func(t *testing.T) {
-		sc := newMockClient(albumSearchThenDetails("wrong123", "Completely Different Album", nil))
-		_, err := sc.SearchAndGetAlbumDetails(context.Background(), "My Album", "My Artist")
-		matchErr := assertMatchReason(t, err, MatchReasonScoreBelowThreshold)
-		if matchErr.Info.CandidateName != "Completely Different Album" {
-			t.Fatalf("candidate = %q, want the rejected album", matchErr.Info.CandidateName)
-		}
-	})
-
-	t.Run("treats unexpected cached album value as cache miss", func(t *testing.T) {
-		var queries []string
-		sc := newMockClient(albumSearchThenDetails("safeAlbum123", "Abbey Road", &queries))
-		sc.albumCache.Set("abbey road|the beatles", "bad-cache-value", gocache.DefaultExpiration)
-
-		album, err := sc.SearchAndGetAlbumDetails(context.Background(), "Abbey Road", "The Beatles")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if len(queries) != 1 {
-			t.Fatalf("searches = %d, want cache miss and one search", len(queries))
-		}
-		if string(album.ID) != "safeAlbum123" {
-			t.Fatalf("album.ID = %q, want safeAlbum123", album.ID)
-		}
-		// The planted key must be the one the lookup used, or the miss above
-		// proves nothing about the wrong-type branch.
-		if _, ok := sc.getAlbum("abbey road|the beatles"); !ok {
-			t.Fatal("the fetched album did not replace the wrong-type entry under the planted key")
-		}
-	})
-
-	t.Run("cache key includes artist so same title with different artist is a separate entry", func(t *testing.T) {
-		var queries []string
-		sc := newMockClient(albumSearchThenDetails("hits123", "Greatest Hits", &queries))
-		ctx := context.Background()
-
-		_, err := sc.SearchAndGetAlbumDetails(ctx, "Greatest Hits", "Artist A")
-		if err != nil {
-			t.Fatalf("first call failed: %v", err)
-		}
-		_, err = sc.SearchAndGetAlbumDetails(ctx, "Greatest Hits", "Artist B")
-		if err != nil {
-			t.Fatalf("second call failed: %v", err)
-		}
-		if len(queries) != 2 {
-			t.Errorf("expected 2 search calls for same title with different artists, got %d", len(queries))
-		}
-	})
-
-	t.Run("cache key ignores case and surrounding whitespace in title and artist", func(t *testing.T) {
-		var queries []string
-		sc := newMockClient(albumSearchThenDetails("trimAlbum123", "Abbey Road", &queries))
-		ctx := context.Background()
-
-		first, err := sc.SearchAndGetAlbumDetails(ctx, "  Abbey Road  ", "  The Beatles  ")
-		if err != nil {
-			t.Fatalf("first call failed: %v", err)
-		}
-		second, err := sc.SearchAndGetAlbumDetails(ctx, "abbey road", "the beatles")
-		if err != nil {
-			t.Fatalf("second call failed: %v", err)
-		}
-		if len(queries) != 1 {
-			t.Errorf("expected 1 search call for the normalized cache key, got %d", len(queries))
-		}
-		if first != second {
-			t.Error("expected the cached album pointer to be returned")
-		}
 	})
 
 	t.Run("returns search_failed when the field filter search request fails", func(t *testing.T) {
@@ -241,7 +170,7 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 			writeSpotifyAPIError(w, http.StatusBadGateway, "field search failed")
 		}))
 
-		_, err := sc.SearchAndGetAlbumDetails(context.Background(), "Abbey Road", "The Beatles")
+		_, err := sc.MatchAlbum(context.Background(), AlbumQuery{Title: "Abbey Road", Artist: "The Beatles"})
 		matchErr := assertMatchReason(t, err, MatchReasonSearchFailed)
 		if matchErr.Info.Strategy != strategyAlbumFieldSearch {
 			t.Fatalf("strategy = %q, want %s", matchErr.Info.Strategy, strategyAlbumFieldSearch)
@@ -252,7 +181,7 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 		var queries []string
 		sc := newMockClient(albumSearchSequence(respondJSON(emptyAlbumSearchJSON()), respondJSON(map[string]interface{}{}), nil, &queries))
 
-		_, err := sc.SearchAndGetAlbumDetails(context.Background(), "Abbey Road", "The Beatles")
+		_, err := sc.MatchAlbum(context.Background(), AlbumQuery{Title: "Abbey Road", Artist: "The Beatles"})
 		assertMatchReason(t, err, MatchReasonNoResults)
 		if len(queries) != 2 {
 			t.Fatalf("searches = %d, want 2", len(queries))
@@ -262,7 +191,7 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 	t.Run("returns search_failed on the fallback strategy when the fallback request fails", func(t *testing.T) {
 		sc := newMockClient(albumSearchSequence(respondJSON(emptyAlbumSearchJSON()), respondSpotifyAPIError(http.StatusBadGateway, "fallback failed"), nil, nil))
 
-		_, err := sc.SearchAndGetAlbumDetails(context.Background(), "Abbey Road", "The Beatles")
+		_, err := sc.MatchAlbum(context.Background(), AlbumQuery{Title: "Abbey Road", Artist: "The Beatles"})
 		matchErr := assertMatchReason(t, err, MatchReasonSearchFailed)
 		if matchErr.Info.Strategy != strategyAlbumFallback {
 			t.Fatalf("strategy = %q, want %s", matchErr.Info.Strategy, strategyAlbumFallback)
@@ -278,7 +207,7 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 			writeSpotifyAPIError(w, http.StatusBadGateway, "album details failed")
 		}))
 
-		_, err := sc.SearchAndGetAlbumDetails(context.Background(), "Abbey Road", "The Beatles")
+		_, err := sc.MatchAlbum(context.Background(), AlbumQuery{Title: "Abbey Road", Artist: "The Beatles"})
 		matchErr := assertMatchReason(t, err, MatchReasonDetailsFailed)
 		if matchErr.Info.Strategy != strategyAlbumFieldSearch || matchErr.Info.CandidateName != "Abbey Road" {
 			t.Fatalf("info = %+v, want the field-search candidate", matchErr.Info)
@@ -288,10 +217,147 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 	t.Run("returns details_failed on the fallback strategy when its details request fails", func(t *testing.T) {
 		sc := newMockClient(albumSearchSequence(respondJSON(emptyAlbumSearchJSON()), respondJSON(albumSearchJSON("fallbackBad123", "Abbey Road")), respondSpotifyAPIError(http.StatusBadGateway, "album details failed"), nil))
 
-		_, err := sc.SearchAndGetAlbumDetails(context.Background(), "Abbey Road", "The Beatles")
+		_, err := sc.MatchAlbum(context.Background(), AlbumQuery{Title: "Abbey Road", Artist: "The Beatles"})
 		matchErr := assertMatchReason(t, err, MatchReasonDetailsFailed)
 		if matchErr.Info.Strategy != strategyAlbumFallback || matchErr.Info.CandidateName != "Abbey Road" {
 			t.Fatalf("info = %+v, want the fallback candidate", matchErr.Info)
+		}
+	})
+
+	t.Run("records the rejected candidate's score", func(t *testing.T) {
+		sc := newMockClient(albumSearchThenDetails("wrong123", "Completely Different Album", nil))
+		_, err := sc.MatchAlbum(context.Background(), AlbumQuery{Title: "My Album", Artist: "My Artist"})
+		matchErr := assertMatchReason(t, err, MatchReasonScoreBelowThreshold)
+		if matchErr.Info.CandidateName != "Completely Different Album" || matchErr.Info.Score >= spotifyAlbumThreshold {
+			t.Fatalf("info = %+v, want the rejected album with its score", matchErr.Info)
+		}
+	})
+
+	t.Run("a candidate crediting the known artist id wins over a same-named one", func(t *testing.T) {
+		sc := newMockClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/search") {
+				other := albumItemJSON("other123", "Greatest Hits")
+				other["artists"] = []interface{}{map[string]interface{}{"id": "artistOther", "name": "Nirvana"}}
+				wanted := albumItemJSON("wanted123", "Greatest Hits")
+				wanted["artists"] = []interface{}{map[string]interface{}{"id": "artistWanted", "name": "Nirvana Tribute Band"}}
+				writeJSON(w, albumSearchItemsJSON(other, wanted))
+				return
+			}
+			writeJSON(w, fullAlbumJSON(strings.TrimPrefix(r.URL.Path, "/v1/albums/"), "Greatest Hits"))
+		}))
+
+		album, err := sc.MatchAlbum(context.Background(), AlbumQuery{Title: "Greatest Hits", Artist: "Nirvana", ArtistID: "artistWanted"})
+		if err != nil {
+			t.Fatalf("MatchAlbum failed: %v", err)
+		}
+		if album.ID != "wanted123" {
+			t.Fatalf("album.ID = %q, want the candidate credited to the known artist id", album.ID)
+		}
+	})
+
+	t.Run("the files' year and track total break a tie between editions", func(t *testing.T) {
+		sc := newMockClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/search") {
+				remaster := albumItemJSON("remaster123", "Meteora")
+				remaster["release_date"] = "2023-04-07"
+				remaster["total_tracks"] = 34
+				original := albumItemJSON("original123", "Meteora")
+				original["release_date"] = "2003-03-25"
+				original["total_tracks"] = 13
+				writeJSON(w, albumSearchItemsJSON(remaster, original))
+				return
+			}
+			writeJSON(w, fullAlbumJSON(strings.TrimPrefix(r.URL.Path, "/v1/albums/"), "Meteora"))
+		}))
+
+		album, err := sc.MatchAlbum(context.Background(), AlbumQuery{Title: "Meteora", Artist: "", Year: 2003, TotalTracks: 13})
+		if err != nil {
+			t.Fatalf("MatchAlbum failed: %v", err)
+		}
+		if album.ID != "original123" {
+			t.Fatalf("album.ID = %q, want the edition agreeing with the tags", album.ID)
+		}
+	})
+
+	t.Run("loads every page of the matched album's tracks", func(t *testing.T) {
+		var requests []string
+		sc := newMockClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requests = append(requests, r.URL.RequestURI())
+			switch {
+			case strings.HasSuffix(r.URL.Path, "/search"):
+				writeJSON(w, albumSearchJSON("paged123", "White Album"))
+			case strings.HasSuffix(r.URL.Path, "/tracks"):
+				writeJSON(w, albumTracksPageJSON(3, trackItemJSON("t3", "Glass Onion", 1, 3, 137000, false)))
+			default:
+				details := fullAlbumJSON("paged123", "White Album")
+				details["tracks"] = albumTracksPageJSON(3, trackItemJSON("t1", "Back in the U.S.S.R.", 1, 1, 163000, false), trackItemJSON("t2", "Dear Prudence", 1, 2, 236000, true))
+				writeJSON(w, details)
+			}
+		}))
+
+		album, err := sc.MatchAlbum(context.Background(), AlbumQuery{Title: "White Album", Artist: "The Beatles"})
+		if err != nil {
+			t.Fatalf("MatchAlbum failed: %v", err)
+		}
+		if len(album.Tracks) != 3 || album.Tracks[2].ID != "t3" || album.Tracks[1].Explicit != true || album.Tracks[2].TrackNumber != 3 {
+			t.Fatalf("tracks = %+v, want three tracks across two pages", album.Tracks)
+		}
+		wantPage := "/v1/albums/paged123/tracks?limit=50&offset=2"
+		if len(requests) != 3 || requests[2] != wantPage {
+			t.Fatalf("requests = %q, want the second page at %s", requests, wantPage)
+		}
+	})
+}
+
+func TestGetAlbum(t *testing.T) {
+	t.Run("returns the album with its tracks", func(t *testing.T) {
+		sc := newMockClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			details := fullAlbumJSON("album123", "Blue Record")
+			details["album_type"] = "single"
+			details["tracks"] = albumTracksPageJSON(1, trackItemJSON("t1", "Blue", 1, 1, 200000, false))
+			writeJSON(w, details)
+		}))
+
+		album, err := sc.GetAlbum(context.Background(), "album123")
+		if err != nil {
+			t.Fatalf("GetAlbum failed: %v", err)
+		}
+		if album.ID != "album123" || album.AlbumType != "single" || len(album.Tracks) != 1 || album.Tracks[0].Name != "Blue" {
+			t.Fatalf("album = %+v, want the single with its one track", album)
+		}
+	})
+
+	t.Run("stops paging when a page comes back empty", func(t *testing.T) {
+		pages := 0
+		sc := newMockClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/tracks") {
+				pages++
+				writeJSON(w, albumTracksPageJSON(5))
+				return
+			}
+			details := fullAlbumJSON("short123", "Short")
+			details["tracks"] = albumTracksPageJSON(5, trackItemJSON("t1", "One", 1, 1, 1000, false))
+			writeJSON(w, details)
+		}))
+
+		album, err := sc.GetAlbum(context.Background(), "short123")
+		if err != nil {
+			t.Fatalf("GetAlbum failed: %v", err)
+		}
+		if len(album.Tracks) != 1 || pages != 1 {
+			t.Fatalf("tracks = %d, pages = %d, want one track after a single empty page", len(album.Tracks), pages)
+		}
+	})
+
+	t.Run("surfaces a missing album as a 404 status error", func(t *testing.T) {
+		sc := newMockClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			writeSpotifyAPIError(w, http.StatusNotFound, "non existing id")
+		}))
+
+		_, err := sc.GetAlbum(context.Background(), "gone123")
+		statusErr, ok := errors.AsType[*StatusError](err)
+		if !ok || statusErr.StatusCode != http.StatusNotFound {
+			t.Fatalf("err = %v, want a 404 StatusError", err)
 		}
 	})
 }

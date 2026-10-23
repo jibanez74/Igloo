@@ -60,6 +60,7 @@ import MusicStatList, {
 } from "@/components/music/MusicStatList";
 import DetailSkipLinks from "@/components/shared/DetailSkipLinks";
 import { SpotifyPopularityMeter } from "@/components/music/SpotifyPopularity";
+import SpotifyLink from "@/components/music/SpotifyLink";
 import {
   DETAIL_PAGE_CONTENT_ENTER_CLASS,
   DETAIL_SECTION_HEADING_CLASS,
@@ -73,6 +74,12 @@ import {
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { apiErrorMessage } from "@/lib/is-api-failure";
+
+// Spotify's album types worth calling out; a plain album needs no label.
+const ALBUM_TYPE_LABELS = new Map([
+  ["single", "Single"],
+  ["compilation", "Compilation"],
+]);
 
 type AlbumHeadData = {
   title: string;
@@ -180,6 +187,9 @@ function AlbumDetailsContent({
   const releaseYear = unwrapInt(album.year);
   const musicianName = unwrapString(album.musician);
   const spotifyPopularity = unwrapFloat(album.spotify_popularity);
+  const albumType = unwrapString(album.album_type);
+  const albumTypeLabel = albumType ? ALBUM_TYPE_LABELS.get(albumType) : undefined;
+  const spotifyUrl = album.spotify_url;
 
   // The album artist links to the musician page when it matches one of the
   // album's artists (which are musician rows server-side). A non-match (e.g.
@@ -380,6 +390,9 @@ function AlbumDetailsContent({
               )}
 
               <MusicStatList label="Album details">
+                {albumTypeLabel && (
+                  <MusicStatChip icon={Disc3}>{albumTypeLabel}</MusicStatChip>
+                )}
                 {(releaseDate || releaseYear) && (
                   <MusicStatChip icon={Calendar}>
                     <time dateTime={releaseDate ?? String(releaseYear ?? "")}>
@@ -541,6 +554,7 @@ function AlbumDetailsContent({
                         title={track.title}
                         duration={track.duration}
                         trackIndex={track.track_index}
+                        explicit={track.explicit}
                         genres={trackGenreMap.get(track.id) || []}
                         variant="album"
                         musicianId={linkedArtist?.id}
@@ -636,6 +650,16 @@ function AlbumDetailsContent({
                     Audio Quality
                   </dt>
                   <dd className="mt-1 text-foreground">{audioQuality}</dd>
+                </div>
+              )}
+              {spotifyUrl && (
+                <div>
+                  <dt className="font-semibold tracking-wide text-muted-foreground uppercase">
+                    Spotify
+                  </dt>
+                  <dd className="mt-1 text-foreground">
+                    <SpotifyLink href={spotifyUrl} name={album.title} />
+                  </dd>
                 </div>
               )}
               {spotifyPopularity != null && (

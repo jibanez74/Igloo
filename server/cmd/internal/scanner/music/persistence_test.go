@@ -15,8 +15,7 @@ import (
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/scannertest"
-
-	spotifylib "github.com/zmb3/spotify/v2"
+	spotifyapi "igloo/cmd/internal/spotify"
 )
 
 func TestProcessMusicBatchSkipsBadTrackAndCommitsGoodTrack(t *testing.T) {
@@ -473,9 +472,6 @@ func TestRelationshipFailuresRollBackAndRetry(t *testing.T) {
 		{name: "track genre", table: "track_genres"},
 		{name: "musician genre", table: "musician_genres"},
 		{name: "album genre", table: "album_genres"},
-		{name: "Spotify musician genre", table: "musician_genres", spotify: true},
-		{name: "Spotify album genre", table: "album_genres", spotify: true},
-		{name: "Spotify genre", table: "genres", when: " WHEN NEW.tag = 'Spotify Genre'", spotify: true},
 		{name: "Spotify bookkeeping", table: "music_spotify_matches", spotify: true},
 	}
 	for _, tc := range cases {
@@ -491,7 +487,7 @@ func TestRelationshipFailuresRollBackAndRetry(t *testing.T) {
 			metadata.Format.Tags.Genre = "Local Genre"
 			s.ffprobe = &scannertest.CountingProbe{Default: metadata}
 			if tc.spotify {
-				s.spotify = &musicScannerSpotifyStub{artist: &spotifylib.FullArtist{SimpleArtist: spotifylib.SimpleArtist{ID: "artist"}, Genres: []string{"Spotify Genre"}}, album: &spotifylib.FullAlbum{SimpleAlbum: spotifylib.SimpleAlbum{ID: "album"}, Genres: []string{"Spotify Genre"}}}
+				s.spotify = &musicScannerSpotifyStub{artist: &spotifyapi.FullArtist{SimpleArtist: spotifyapi.SimpleArtist{ID: "artist"}}, album: &spotifyapi.FullAlbum{SimpleAlbum: spotifyapi.SimpleAlbum{ID: "album"}}}
 			}
 			scan := newMusicScanContext(nil)
 			invalidations := 0
@@ -519,9 +515,11 @@ func TestRelationshipFailuresRollBackAndRetry(t *testing.T) {
 			expected.artistAttempts = scan.artistAttempts
 			expected.albumAttempts = scan.albumAttempts
 			expected.enrichmentCounts = scan.enrichmentCounts
-			expected.enrichmentCounted = scan.enrichmentCounted
+			expected.enrichmentOutcome = scan.enrichmentOutcome
 			expected.artistAttemptsByID = scan.artistAttemptsByID
 			expected.albumAttemptsByID = scan.albumAttemptsByID
+			expected.albumTracks = scan.albumTracks
+			expected.breaker = scan.breaker
 			if !reflect.DeepEqual(scan, expected) {
 				t.Fatalf("failed transaction published cache entries: %+v", scan)
 			}

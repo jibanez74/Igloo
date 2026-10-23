@@ -16,24 +16,7 @@ type compoundArtistCredits struct {
 }
 
 func parseCompoundArtistCredits(artistTag string) compoundArtistCredits {
-	rawCommaParts := strings.Split(artistTag, ",")
-	commaParts := make([]string, 0, len(rawCommaParts))
-
-	for _, rawPart := range rawCommaParts {
-		part := strings.TrimSpace(rawPart)
-		if part == "" {
-			continue
-		}
-
-		isSuffix := isArtistSuffix(part)
-		if isSuffix && len(commaParts) > 0 {
-			lastIndex := len(commaParts) - 1
-			commaParts[lastIndex] = commaParts[lastIndex] + ", " + part
-			continue
-		}
-
-		commaParts = append(commaParts, part)
-	}
+	commaParts := commaCredits(artistTag, false)
 
 	credits := compoundArtistCredits{
 		hasComma: strings.Contains(artistTag, ","),
@@ -92,6 +75,31 @@ func shouldSplitCompoundArtistCredits(err error) bool {
 	return musicSpotifyReasonSplitsCompound(matchErr.Info.Reason)
 }
 
+// commaCredits splits value on commas, attaching a name suffix to the credit
+// before it, so "Leslie Odom, Jr." stays whole, also when " & " follows the
+// suffix ("Leslie Odom, Jr. & Lin-Manuel Miranda"). keepEmpty retains empty
+// positions, which sort credits need.
+func commaCredits(value string, keepEmpty bool) []string {
+	parts := []string{}
+	for raw := range strings.SplitSeq(value, ",") {
+		part := strings.TrimSpace(raw)
+		if part == "" && !keepEmpty {
+			continue
+		}
+		suffix, rest, _ := strings.Cut(part, " & ")
+		suffix = strings.TrimSpace(suffix)
+		if isArtistSuffix(suffix) && len(parts) > 0 {
+			parts[len(parts)-1] += ", " + suffix
+			part = strings.TrimSpace(rest)
+			if part == "" {
+				continue
+			}
+		}
+		parts = append(parts, part)
+	}
+	return parts
+}
+
 func isArtistSuffix(value string) bool {
 	suffix := strings.ToLower(strings.TrimSuffix(value, "."))
 
@@ -116,17 +124,7 @@ func parseArtistSortCredits(value string, count int) []string {
 		return parts
 	}
 
-	commaParts := []string{}
-	for raw := range strings.SplitSeq(value, ",") {
-		part := strings.TrimSpace(raw)
-		isSuffix := isArtistSuffix(part)
-		if isSuffix && len(commaParts) > 0 {
-			last := len(commaParts) - 1
-			commaParts[last] += ", " + part
-		} else {
-			commaParts = append(commaParts, part)
-		}
-	}
+	commaParts := commaCredits(value, true)
 	parts = nil
 	for _, part := range commaParts {
 		for credit := range strings.SplitSeq(" "+part+" ", " & ") {

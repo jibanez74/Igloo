@@ -39,10 +39,6 @@ func (s *Scanner) mergeMusicArtist(ctx context.Context, qtx *database.Queries, s
 	if err != nil {
 		return err
 	}
-	err = qtx.DeleteMergedMusicMatch(ctx, database.DeleteMergedMusicMatchParams{EntityType: musicSpotifyEntityMusician, EntityID: redundant})
-	if err != nil {
-		return err
-	}
 	err = qtx.DeleteMergedMusicArtist(ctx, redundant)
 	if err != nil {
 		return err
@@ -74,10 +70,6 @@ func (s *Scanner) mergeMusicAlbum(ctx context.Context, qtx *database.Queries, sc
 		return err
 	}
 	err = qtx.MoveMusicAlbumFallback(ctx, database.MoveMusicAlbumFallbackParams{Owner: owner, Redundant: redundant})
-	if err != nil {
-		return err
-	}
-	err = qtx.DeleteMergedMusicMatch(ctx, database.DeleteMergedMusicMatchParams{EntityType: musicSpotifyEntityAlbum, EntityID: redundant})
 	if err != nil {
 		return err
 	}

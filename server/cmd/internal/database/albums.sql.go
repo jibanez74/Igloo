@@ -27,7 +27,7 @@ func (q *Queries) DeleteAlbum(ctx context.Context, id int64) (string, error) {
 
 const getAlbumByID = `-- name: GetAlbumByID :one
 SELECT
-  id, title, sort_title, spotify_id, spotify_popularity, musician, release_date, year, total_tracks, cover, created_at, updated_at
+  id, title, sort_title, spotify_id, spotify_popularity, album_type, musician, release_date, year, total_tracks, cover, created_at, updated_at
 FROM albums
 WHERE id = ?
 LIMIT 1
@@ -42,6 +42,7 @@ func (q *Queries) GetAlbumByID(ctx context.Context, id int64) (Album, error) {
 		&i.SortTitle,
 		&i.SpotifyID,
 		&i.SpotifyPopularity,
+		&i.AlbumType,
 		&i.Musician,
 		&i.ReleaseDate,
 		&i.Year,
@@ -264,7 +265,6 @@ INSERT INTO albums (
   title,
   sort_title,
   spotify_id,
-  spotify_popularity,
   musician,
   release_date,
   year,
@@ -272,12 +272,11 @@ INSERT INTO albums (
   cover
 )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  (?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (title, COALESCE(musician, '')) DO UPDATE
 SET
   sort_title = excluded.sort_title,
   spotify_id = COALESCE(excluded.spotify_id, albums.spotify_id),
-  spotify_popularity = COALESCE(excluded.spotify_popularity, albums.spotify_popularity),
   release_date = COALESCE(excluded.release_date, albums.release_date),
   year = COALESCE(excluded.year, albums.year),
   total_tracks = COALESCE(excluded.total_tracks, albums.total_tracks),
@@ -287,15 +286,14 @@ RETURNING id, spotify_id, cover
 `
 
 type UpsertAlbumParams struct {
-	Title             string          `json:"title"`
-	SortTitle         string          `json:"sort_title"`
-	SpotifyID         sql.NullString  `json:"spotify_id"`
-	SpotifyPopularity sql.NullFloat64 `json:"spotify_popularity"`
-	Musician          sql.NullString  `json:"musician"`
-	ReleaseDate       sql.NullString  `json:"release_date"`
-	Year              sql.NullInt64   `json:"year"`
-	TotalTracks       sql.NullInt64   `json:"total_tracks"`
-	Cover             sql.NullString  `json:"cover"`
+	Title       string         `json:"title"`
+	SortTitle   string         `json:"sort_title"`
+	SpotifyID   sql.NullString `json:"spotify_id"`
+	Musician    sql.NullString `json:"musician"`
+	ReleaseDate sql.NullString `json:"release_date"`
+	Year        sql.NullInt64  `json:"year"`
+	TotalTracks sql.NullInt64  `json:"total_tracks"`
+	Cover       sql.NullString `json:"cover"`
 }
 
 type UpsertAlbumRow struct {
@@ -311,7 +309,6 @@ func (q *Queries) UpsertAlbum(ctx context.Context, arg UpsertAlbumParams) (Upser
 		arg.Title,
 		arg.SortTitle,
 		arg.SpotifyID,
-		arg.SpotifyPopularity,
 		arg.Musician,
 		arg.ReleaseDate,
 		arg.Year,

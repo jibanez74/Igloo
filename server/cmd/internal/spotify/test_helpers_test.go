@@ -7,9 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	gocache "github.com/patrickmn/go-cache"
-	spotifylib "github.com/zmb3/spotify/v2"
+	"time"
 )
 
 // mockTransport intercepts HTTP calls and routes them to an in-process handler,
@@ -24,12 +22,11 @@ func (m *mockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return rr.Result(), nil
 }
 
-func newMockClient(handler http.Handler) *spotifyClient {
-	client := spotifylib.New(&http.Client{Transport: &mockTransport{handler: handler}})
-	return &spotifyClient{
-		client:      client,
-		artistCache: gocache.New(spotifyArtistCacheTTL, spotifyCacheCleanup),
-		albumCache:  gocache.New(spotifyAlbumCacheTTL, spotifyCacheCleanup),
+// newMockClient starts with a valid token, so handler sees only API requests.
+func newMockClient(handler http.Handler) *Client {
+	return &Client{
+		httpClient: &http.Client{Transport: &mockTransport{handler: handler}},
+		tokens:     &tokenSource{accessToken: "test-token", expiry: time.Now().Add(time.Hour)},
 	}
 }
 
@@ -51,8 +48,6 @@ func writeSpotifyAPIError(w http.ResponseWriter, status int, message string) {
 	w.Write(b)
 }
 
-// writeSpotifyTokenResponse keeps its Content-Type: oauth2 parses a token
-// response by that header, and the recorder would otherwise guess text/plain.
 func writeSpotifyTokenResponse(w http.ResponseWriter, accessToken string) {
 	w.Header().Set("Content-Type", "application/json")
 	b, _ := json.Marshal(map[string]interface{}{
@@ -80,6 +75,8 @@ func assertMatchReason(t *testing.T, err error, reason string) *MatchError {
 	return matchErr
 }
 
+// artistItemJSON keeps the popularity, follower and genre fields Spotify
+// sends to some apps, so the decoder is seen to ignore them.
 func artistItemJSON(id, name string) map[string]interface{} {
 	return map[string]interface{}{
 		"id":            id,
@@ -145,7 +142,41 @@ func emptyAlbumSearchJSON() interface{} {
 	return albumSearchItemsJSON()
 }
 
-func fullAlbumJSON(id, name string) interface{} {
+func trackItemJSON(id, name string, disc, number, durationMs int, explicit bool) map[string]interface{} {
+	return map[string]interface{}{
+		"id":            id,
+		"name":          name,
+		"type":          "track",
+		"disc_number":   disc,
+		"track_number":  number,
+		"duration_ms":   durationMs,
+		"explicit":      explicit,
+		"artists":       []interface{}{},
+		"external_urls": map[string]interface{}{},
+		"href":          "",
+		"uri":           "",
+	}
+}
+
+// albumTracksPageJSON is one page of an album's track list; total may exceed
+// the items given, which tells the client to request the next page.
+func albumTracksPageJSON(total int, items ...map[string]interface{}) map[string]interface{} {
+	if items == nil {
+		items = []map[string]interface{}{}
+	}
+	return map[string]interface{}{
+		"items":    items,
+		"total":    total,
+		"limit":    spotifyAlbumTracksPageLimit,
+		"offset":   0,
+		"next":     nil,
+		"previous": nil,
+	}
+}
+
+// fullAlbumJSON is an album details payload with an empty track list; tests
+// that need tracks replace its "tracks" page.
+func fullAlbumJSON(id, name string) map[string]interface{} {
 	return map[string]interface{}{
 		"id":                     id,
 		"name":                   name,
@@ -158,7 +189,7 @@ func fullAlbumJSON(id, name string) interface{} {
 		"genres":                 []string{"pop"},
 		"images":                 []map[string]interface{}{{"url": "https://example.com/cover.jpg", "height": 640, "width": 640}},
 		"artists":                []interface{}{},
-		"tracks":                 map[string]interface{}{"items": []interface{}{}, "total": 12, "limit": 50, "offset": 0},
+		"tracks":                 albumTracksPageJSON(0),
 		"copyrights":             []interface{}{},
 		"external_ids":           map[string]interface{}{},
 		"external_urls":          map[string]interface{}{},

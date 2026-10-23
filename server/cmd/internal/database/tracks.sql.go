@@ -191,6 +191,8 @@ SELECT
   composer,
   copyright,
   language,
+  spotify_id,
+  explicit,
   album_id,
   musician_id,
   created_at,
@@ -221,6 +223,8 @@ type GetTrackRow struct {
 	Composer      sql.NullString `json:"composer"`
 	Copyright     sql.NullString `json:"copyright"`
 	Language      sql.NullString `json:"language"`
+	SpotifyID     sql.NullString `json:"spotify_id"`
+	Explicit      bool           `json:"explicit"`
 	AlbumID       sql.NullInt64  `json:"album_id"`
 	MusicianID    sql.NullInt64  `json:"musician_id"`
 	CreatedAt     string         `json:"created_at"`
@@ -251,6 +255,8 @@ func (q *Queries) GetTrack(ctx context.Context, id int64) (GetTrackRow, error) {
 		&i.Composer,
 		&i.Copyright,
 		&i.Language,
+		&i.SpotifyID,
+		&i.Explicit,
 		&i.AlbumID,
 		&i.MusicianID,
 		&i.CreatedAt,
@@ -387,6 +393,7 @@ SELECT
   disc,
   channel_layout,
   bit_rate,
+  explicit,
   album_id,
   musician_id
 FROM tracks
@@ -406,6 +413,7 @@ type GetTracksByAlbumIDRow struct {
 	Disc          int64         `json:"disc"`
 	ChannelLayout string        `json:"channel_layout"`
 	BitRate       int64         `json:"bit_rate"`
+	Explicit      bool          `json:"explicit"`
 	AlbumID       sql.NullInt64 `json:"album_id"`
 	MusicianID    sql.NullInt64 `json:"musician_id"`
 }
@@ -429,6 +437,7 @@ func (q *Queries) GetTracksByAlbumID(ctx context.Context, albumID sql.NullInt64)
 			&i.Disc,
 			&i.ChannelLayout,
 			&i.BitRate,
+			&i.Explicit,
 			&i.AlbumID,
 			&i.MusicianID,
 		); err != nil {
@@ -456,6 +465,40 @@ func (q *Queries) GetTracksCount(ctx context.Context) (int64, error) {
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const linkMusicTrackSpotify = `-- name: LinkMusicTrackSpotify :exec
+UPDATE tracks
+SET
+  spotify_id = ?1,
+  explicit = ?2,
+  track_index = CASE WHEN track_index = 0 THEN ?3 ELSE track_index END,
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = ?4
+  AND (
+    spotify_id IS NOT ?1
+    OR explicit IS NOT ?2
+    OR (track_index = 0 AND ?3 <> 0)
+  )
+`
+
+type LinkMusicTrackSpotifyParams struct {
+	SpotifyID  sql.NullString `json:"spotify_id"`
+	Explicit   bool           `json:"explicit"`
+	TrackIndex int64          `json:"track_index"`
+	ID         int64          `json:"id"`
+}
+
+// Guarded so an unchanged link does not advance updated_at. A track number is
+// only ever filled in, never replaced: the file's own tag wins when it has one.
+func (q *Queries) LinkMusicTrackSpotify(ctx context.Context, arg LinkMusicTrackSpotifyParams) error {
+	_, err := q.exec(ctx, q.linkMusicTrackSpotifyStmt, linkMusicTrackSpotify,
+		arg.SpotifyID,
+		arg.Explicit,
+		arg.TrackIndex,
+		arg.ID,
+	)
+	return err
 }
 
 const listMusicTrackScanIndex = `-- name: ListMusicTrackScanIndex :many
@@ -572,6 +615,8 @@ SET
   composer = excluded.composer,
   copyright = excluded.copyright,
   language = excluded.language,
+  spotify_id = NULL,
+  explicit = false,
   album_id = excluded.album_id,
   musician_id = excluded.musician_id,
   updated_at = CURRENT_TIMESTAMP
@@ -603,6 +648,8 @@ type UpsertTrackParams struct {
 	MusicianID    sql.NullInt64  `json:"musician_id"`
 }
 
+// A changed file loses its Spotify pairing; the scan's link pass pairs it
+// again with the rest of its album.
 func (q *Queries) UpsertTrack(ctx context.Context, arg UpsertTrackParams) (int64, error) {
 	row := q.queryRow(ctx, q.upsertTrackStmt, upsertTrack,
 		arg.Title,

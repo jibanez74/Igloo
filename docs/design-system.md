@@ -914,6 +914,19 @@ included, guard through `MediaDetailGuard` (§3.4), so a malformed id, a failed
 load and a missing payload each render `MediaNotFound` with a link back to the
 owning tab, never a bare heading or a lone spinner.
 
+A Spotify match shows up in three places, each absent when there is no
+match. `SpotifyLink` ("Open on Spotify", the `SpotifyGlyph` in the brand
+green beside underlined primary text) opens the matched album's or artist's
+page in a new tab and, like the people page's external links, carries the
+destination and new-tab behaviour in its accessible name ("Blue Record on
+Spotify (opens in a new tab)"); the album page keeps it as a "Spotify" row in
+the Album Details list, the musician page under its stat pills. A single or
+compilation earns one more `MusicStatChip` ("Single", "Compilation") at the
+head of the album's stat pills; a plain album gets no label. An explicit
+track wears a small outline `Badge` after its title in `TrackItem`: a visible
+"E" that is `aria-hidden`, with "Explicit" in an `sr-only` span, so the row
+reads as "Alabaster Explicit" and never as a bare letter.
+
 #### Seasons and episode rows
 
 A long control strip scrolls on the rail bleed rather than wrapping.

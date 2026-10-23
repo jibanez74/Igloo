@@ -10,6 +10,20 @@ import (
 	"database/sql"
 )
 
+const deleteMusicSpotifyMatch = `-- name: DeleteMusicSpotifyMatch :exec
+DELETE FROM music_spotify_matches WHERE entity_type = ? AND entity_id = ?
+`
+
+type DeleteMusicSpotifyMatchParams struct {
+	EntityType string `json:"entity_type"`
+	EntityID   int64  `json:"entity_id"`
+}
+
+func (q *Queries) DeleteMusicSpotifyMatch(ctx context.Context, arg DeleteMusicSpotifyMatchParams) error {
+	_, err := q.exec(ctx, q.deleteMusicSpotifyMatchStmt, deleteMusicSpotifyMatch, arg.EntityType, arg.EntityID)
+	return err
+}
+
 const getMusicSpotifyMatch = `-- name: GetMusicSpotifyMatch :one
 SELECT status, reason
 FROM music_spotify_matches
@@ -35,10 +49,10 @@ func (q *Queries) GetMusicSpotifyMatch(ctx context.Context, arg GetMusicSpotifyM
 }
 
 const upsertMusicSpotifyMatch = `-- name: UpsertMusicSpotifyMatch :exec
-INSERT INTO music_spotify_matches (entity_type, entity_id, status, reason)
-VALUES (?, ?, ?, ?)
+INSERT INTO music_spotify_matches (entity_type, entity_id, status, reason, candidate, score)
+VALUES (?, ?, ?, ?, ?, ?)
 ON CONFLICT (entity_type, entity_id) DO UPDATE
-SET status = excluded.status, reason = excluded.reason
+SET status = excluded.status, reason = excluded.reason, candidate = excluded.candidate, score = excluded.score
 `
 
 type UpsertMusicSpotifyMatchParams struct {
@@ -46,6 +60,8 @@ type UpsertMusicSpotifyMatchParams struct {
 	EntityID   int64          `json:"entity_id"`
 	Status     string         `json:"status"`
 	Reason     sql.NullString `json:"reason"`
+	Candidate  sql.NullString `json:"candidate"`
+	Score      sql.NullInt64  `json:"score"`
 }
 
 func (q *Queries) UpsertMusicSpotifyMatch(ctx context.Context, arg UpsertMusicSpotifyMatchParams) error {
@@ -54,6 +70,8 @@ func (q *Queries) UpsertMusicSpotifyMatch(ctx context.Context, arg UpsertMusicSp
 		arg.EntityID,
 		arg.Status,
 		arg.Reason,
+		arg.Candidate,
+		arg.Score,
 	)
 	return err
 }

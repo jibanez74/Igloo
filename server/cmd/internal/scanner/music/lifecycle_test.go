@@ -15,9 +15,9 @@ import (
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/scannertest"
+	spotifyapi "igloo/cmd/internal/spotify"
 
 	"github.com/mattn/go-sqlite3"
-	spotifylib "github.com/zmb3/spotify/v2"
 )
 
 func TestRunMusicScanLogsCancellationFromFinalPartialBatch(t *testing.T) {
@@ -371,7 +371,7 @@ type cancelingMusicSpotify struct {
 	phase  string
 }
 
-func (s *cancelingMusicSpotify) SearchArtistByName(context.Context, string) (*spotifylib.FullArtist, error) {
+func (s *cancelingMusicSpotify) SearchArtistByName(context.Context, string) (*spotifyapi.FullArtist, error) {
 	s.artistCalls++
 	if s.phase == "artist" {
 		s.cancel()
@@ -380,7 +380,7 @@ func (s *cancelingMusicSpotify) SearchArtistByName(context.Context, string) (*sp
 	return nil, nil
 }
 
-func (s *cancelingMusicSpotify) SearchAndGetAlbumDetails(context.Context, string, string) (*spotifylib.FullAlbum, error) {
+func (s *cancelingMusicSpotify) MatchAlbum(context.Context, spotifyapi.AlbumQuery) (*spotifyapi.FullAlbum, error) {
 	s.albumCalls++
 	s.cancel()
 	return nil, context.Canceled
@@ -473,7 +473,9 @@ func TestShutdownDuringTrackTransaction(t *testing.T) {
 	if scanned != 0 || failures != 0 || invalidations != 0 {
 		t.Fatalf("scanned=%d failures=%d invalidations=%d", scanned, failures, invalidations)
 	}
-	if !reflect.DeepEqual(scan, newMusicScanContext(nil)) {
+	expected := newMusicScanContext(nil)
+	expected.breaker = scan.breaker
+	if !reflect.DeepEqual(scan, expected) {
 		t.Fatal("canceled transaction published caches")
 	}
 	for _, table := range []string{"tracks", "musicians", "albums", "musician_albums"} {

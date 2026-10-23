@@ -53,6 +53,8 @@ type MusicianDetailsFixtureOptions = {
   trackIds?: number[];
   trackTitles?: string[];
   genres?: string[];
+  // null for a musician Spotify never matched.
+  spotifyUrl?: string | null;
 };
 
 function musicianDetailsResponse({
@@ -66,6 +68,7 @@ function musicianDetailsResponse({
   trackIds = [1, 2],
   trackTitles = ["Alabaster", "Borrowed Light"],
   genres = ["Alternative"],
+  spotifyUrl = `https://open.spotify.com/artist/spotify-${id}`,
 }: MusicianDetailsFixtureOptions = {}): MusicianDetailsResponseType {
   const tracks = trackTitles.map((title, index) =>
     musicianTrack(
@@ -85,6 +88,7 @@ function musicianDetailsResponse({
       spotify_popularity: nullableFloat64(74),
       spotify_followers: nullableInt64(12000),
       spotify_id: nullableString(`spotify-${id}`),
+      spotify_url: spotifyUrl,
       thumb: nullableString(""),
       created_at: "2026-01-01T00:00:00Z",
       updated_at: "2026-01-01T00:00:00Z",
@@ -115,6 +119,7 @@ const silentMusician = musicianDetailsResponse({
   summary: "An artist with nothing scanned yet.",
   trackIds: [],
   trackTitles: [],
+  spotifyUrl: null,
 });
 silentMusician.albums = [];
 
@@ -386,6 +391,15 @@ describe("musician details route accessibility", () => {
       screen.getByRole("group", { name: "Spotify popularity 74 out of 100" }),
     ).toBeInTheDocument();
     expect(screen.getByText("12K")).toBeInTheDocument();
+    const spotifyLink = screen.getByRole("link", {
+      name: "The Band on Spotify (opens in a new tab)",
+    });
+    expect(spotifyLink).toHaveAttribute(
+      "href",
+      "https://open.spotify.com/artist/spotify-20",
+    );
+    expect(spotifyLink).toHaveAttribute("target", "_blank");
+    expect(spotifyLink).toHaveAttribute("rel", "noopener noreferrer");
 
     expect(screen.getByRole("heading", { name: "Discography" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "All Tracks" })).toBeInTheDocument();
@@ -417,6 +431,7 @@ describe("musician details route accessibility", () => {
     ).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Play all/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Shuffle play/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /on Spotify/ })).not.toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Back to Musicians library" }),
     ).toBeInTheDocument();

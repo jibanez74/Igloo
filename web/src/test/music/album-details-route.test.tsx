@@ -43,6 +43,7 @@ function albumTrack(
     disc: 1,
     channel_layout: "stereo",
     bit_rate: 900000,
+    explicit: false,
     album_id: nullableInt64(albumId),
     musician_id: nullableInt64(albumId + 100),
   };
@@ -61,7 +62,9 @@ function albumDetailsResponse(
       sort_title: title,
       musician: nullableString(artistName),
       spotify_id: nullableString(`spotify-${id}`),
+      spotify_url: `https://open.spotify.com/album/spotify-${id}`,
       spotify_popularity: nullableFloat64(76),
+      album_type: nullableString("album"),
       release_date: nullableString("2026-01-01"),
       year: nullableInt64(2026),
       total_tracks: nullableInt64(1),
@@ -455,6 +458,56 @@ describe("album details content", () => {
     const summary = document.getElementById("album-42-summary");
     expect(summary?.textContent).toContain("Blue Record by The Band");
     expect(summary?.textContent).toContain("1 track");
+  });
+
+  it("links to Spotify, labels a single and marks explicit tracks", async () => {
+    const single = albumDetailsResponse(42, "Blue Record", "The Band", "Alabaster");
+    single.album.album_type = nullableString("single");
+    single.tracks[0].explicit = true;
+
+    await renderAlbumDetailsRoute("/music/album/42", {
+      additionalAlbums: [[42, single]],
+    });
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Blue Record" }),
+    ).toBeInTheDocument();
+    const stats = within(screen.getByRole("list", { name: "Album details" }));
+    expect(stats.getByText("Single")).toBeInTheDocument();
+
+    const spotifyLink = within(
+      screen.getByRole("region", { name: "Album Details" }),
+    ).getByRole("link", { name: "Blue Record on Spotify (opens in a new tab)" });
+    expect(spotifyLink).toHaveAttribute(
+      "href",
+      "https://open.spotify.com/album/spotify-42",
+    );
+    expect(spotifyLink).toHaveAttribute("target", "_blank");
+    expect(spotifyLink).toHaveAttribute("rel", "noopener noreferrer");
+
+    // The marker is a visible "E" the screen reader hears as "Explicit".
+    expect(screen.getByText("Explicit")).toHaveClass("sr-only");
+  });
+
+  it("omits the Spotify link, type label and explicit markers for an unmatched album", async () => {
+    const local = albumDetailsResponse(42, "Blue Record", "The Band", "Alabaster");
+    local.album.spotify_id = nullableString(null);
+    local.album.spotify_url = null;
+    local.album.album_type = nullableString(null);
+
+    await renderAlbumDetailsRoute("/music/album/42", {
+      additionalAlbums: [[42, local]],
+    });
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Blue Record" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /on Spotify/ }),
+    ).not.toBeInTheDocument();
+    const stats = within(screen.getByRole("list", { name: "Album details" }));
+    expect(stats.queryByText("Single")).not.toBeInTheDocument();
+    expect(screen.queryByText("Explicit")).not.toBeInTheDocument();
   });
 
   it("renders the enriched album details section", async () => {

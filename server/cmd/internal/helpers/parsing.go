@@ -75,15 +75,25 @@ func ParseDurationMs(s string) (int64, error) {
 	return int64(seconds * 1000), nil
 }
 
-// ParseSlashNumber parses a "1/12" format string and returns the first number.
-// Used for parsing track numbers and disc numbers from metadata.
-func ParseSlashNumber(s string) (int64, error) {
-	parts := strings.Split(s, "/")
-	if parts[0] == "" {
-		return 0, fmt.Errorf("invalid format: %s", s)
+// ParseSlashNumbers parses a "1/12" format string into its number and total.
+// A bare number, or a total that does not parse, has a total of 0.
+func ParseSlashNumbers(s string) (number, total int64, err error) {
+	numberText, totalText, _ := strings.Cut(s, "/")
+	if numberText == "" {
+		return 0, 0, fmt.Errorf("invalid format: %s", s)
 	}
 
-	return strconv.ParseInt(strings.TrimSpace(parts[0]), 10, 64)
+	number, err = strconv.ParseInt(strings.TrimSpace(numberText), 10, 64)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	total, totalErr := strconv.ParseInt(strings.TrimSpace(totalText), 10, 64)
+	if totalErr != nil {
+		total = 0
+	}
+
+	return number, total, nil
 }
 
 // ParseBitRate returns 0 if parsing fails or the input is empty.

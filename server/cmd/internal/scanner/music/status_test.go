@@ -14,8 +14,6 @@ import (
 	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/scannertest"
 	spotifyapi "igloo/cmd/internal/spotify"
-
-	spotifylib "github.com/zmb3/spotify/v2"
 )
 
 // musicStatusFixture probes three files, failing c.flac until the test clears
@@ -167,21 +165,37 @@ func TestMusicScanStatusSpotifyTallies(t *testing.T) {
 		t.Fatalf("first scan tallies: %+v", first)
 	}
 
+	// The fixture's files are one track three times over, so all three pair
+	// with the album's one Spotify track.
+	tracks := []spotifyapi.SimpleTrack{spotifyTrack("t1", "Test Track", 1, 1, 180000, false)}
 	s.spotify = &musicScannerSpotifyStub{
-		artist: &spotifylib.FullArtist{SimpleArtist: spotifylib.SimpleArtist{ID: "artist"}},
-		album:  &spotifylib.FullAlbum{SimpleAlbum: spotifylib.SimpleAlbum{ID: "album"}},
+		artist: &spotifyapi.FullArtist{SimpleArtist: spotifyapi.SimpleArtist{ID: "artist"}},
+		album:  &spotifyapi.FullAlbum{SimpleAlbum: spotifyapi.SimpleAlbum{ID: "album"}, Tracks: tracks},
 	}
 	s.scan(dir)
 	second := s.Status()
-	if second.Unchanged != 3 || second.Enriched != 1 || second.EnrichmentFailed != 0 || second.EnrichmentUnmatched != 0 || second.EnrichmentTotal != 1 || second.EnrichmentProcessed != 1 {
+	// The retried album counts once, and once more when its tracks are paired
+	// with the track list; the track outcomes themselves are not tallied.
+	if second.Unchanged != 3 || second.Enriched != 1 || second.EnrichmentFailed != 0 || second.EnrichmentUnmatched != 0 || second.EnrichmentTotal != 2 || second.EnrichmentProcessed != 2 {
 		t.Fatalf("retry scan tallies: %+v", second)
 	}
 
-	s.spotify = &musicScannerSpotifyStub{artistErr: errors.New("temporary"), albumErr: errors.New("temporary")}
+	stub := &musicScannerSpotifyStub{
+		artistErr:  errors.New("temporary"),
+		albumErr:   errors.New("temporary"),
+		albumsByID: map[spotifyapi.ID]*spotifyapi.FullAlbum{"album": {SimpleAlbum: spotifyapi.SimpleAlbum{ID: "album"}, Tracks: tracks}},
+	}
+	s.spotify = stub
 	scannertest.WriteFile(t, filepath.Join(dir, "a.m4a"), "a.m4a changed")
 	s.scan(dir)
 	third := s.Status()
-	if third.Updated != 1 || third.State != scanner.StateCompleted || third.EnrichmentTotal != 0 {
+	// The matched artist and album are not searched again. The changed file
+	// dropped its track pairing, so its album's track list is fetched once to
+	// pair it afresh; that album is the one enrichment candidate.
+	if third.Updated != 1 || third.State != scanner.StateCompleted || third.EnrichmentTotal != 1 || third.EnrichmentProcessed != 1 || third.Enriched != 0 {
 		t.Fatalf("matched entities are not retried: %+v", third)
+	}
+	if stub.artistCalls != 0 || stub.albumCalls != 0 || stub.albumFetches != 1 {
+		t.Fatalf("third scan requests: artist=%d album=%d fetches=%d, want only one track-list fetch", stub.artistCalls, stub.albumCalls, stub.albumFetches)
 	}
 }

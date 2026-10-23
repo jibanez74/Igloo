@@ -28,6 +28,7 @@ import {
   SpotifyGlyph,
   SpotifyPopularityMeter,
 } from "@/components/music/SpotifyPopularity";
+import SpotifyLink from "@/components/music/SpotifyLink";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useTrackPlaybackMatcher } from "@/hooks/useTrackPlaybackMatcher";
 import TrackItem from "@/components/music/TrackItem";
@@ -154,6 +155,7 @@ function MusicianDetailsContent({
   const summary = unwrapString(musician.summary);
   const spotifyPopularity = unwrapFloat(musician.spotify_popularity);
   const spotifyFollowers = unwrapInt(musician.spotify_followers);
+  const spotifyUrl = musician.spotify_url;
 
   // A musician's tracks span every album they appear on, so each row carries its
   // own album title and cover. Keep them as PlayableTrackData and hand them to
@@ -301,6 +303,12 @@ function MusicianDetailsContent({
                     onPlay={() => startMusicianQueue(false)}
                     onShuffle={() => startMusicianQueue(true)}
                   />
+                </div>
+              )}
+
+              {spotifyUrl && (
+                <div className="mt-4 flex justify-center lg:justify-start">
+                  <SpotifyLink href={spotifyUrl} name={musician.name} />
                 </div>
               )}
 

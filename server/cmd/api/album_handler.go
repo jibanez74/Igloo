@@ -5,6 +5,7 @@ import (
 	"errors"
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
+	"igloo/cmd/internal/spotify"
 	"net/http"
 )
 
@@ -51,6 +52,13 @@ func (app *Application) GetLatestAlbums(w http.ResponseWriter, r *http.Request) 
 }
 
 // Use a read-only transaction so album details come from one snapshot.
+// albumWithSpotify is the album row plus its Spotify page, derived from the
+// stored id so clients need not know the URL shape.
+type albumWithSpotify struct {
+	database.Album
+	SpotifyURL *string `json:"spotify_url"`
+}
+
 func (app *Application) GetAlbumDetails(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseIDParam(w, r, "id", "invalid album id")
 	if !ok {
@@ -113,7 +121,7 @@ func (app *Application) GetAlbumDetails(w http.ResponseWriter, r *http.Request) 
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
-			"album":          album,
+			"album":          albumWithSpotify{Album: album, SpotifyURL: spotifyURLField(album.SpotifyID, spotify.AlbumURL)},
 			"tracks":         tracks,
 			"artists":        artists,
 			"track_genres":   trackGenres,

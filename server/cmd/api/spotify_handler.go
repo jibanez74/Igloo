@@ -6,14 +6,29 @@ import (
 	"errors"
 	"fmt"
 	"igloo/cmd/internal/helpers"
+	"igloo/cmd/internal/spotify"
 	"net/http"
 	"strings"
-
-	spotifylib "github.com/zmb3/spotify/v2"
 )
+
+// spotifySearcher is the part of the Spotify client the request pickers use.
+type spotifySearcher interface {
+	SearchAlbums(ctx context.Context, title string) ([]spotify.SimpleAlbum, error)
+	SearchTracks(ctx context.Context, title string) ([]spotify.FullTrack, error)
+}
 
 type spotifySearchRequest struct {
 	Title string `json:"title"`
+}
+
+// spotifyURLField is the public Spotify page for a stored catalog id, or nil
+// when the entity has none.
+func spotifyURLField(id sql.NullString, build func(string) string) *string {
+	if !id.Valid || id.String == "" {
+		return nil
+	}
+	url := build(id.String)
+	return &url
 }
 
 type spotifyAlbumSearchResult struct {
@@ -109,7 +124,7 @@ func (app *Application) SearchSpotifyTracks(w http.ResponseWriter, r *http.Reque
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"results": results}})
 }
 
-func mapSpotifyTrackSearchResults(tracks []spotifylib.FullTrack) []spotifyTrackSearchResult {
+func mapSpotifyTrackSearchResults(tracks []spotify.FullTrack) []spotifyTrackSearchResult {
 	mapped := make([]spotifyTrackSearchResult, 0, len(tracks))
 
 	for _, track := range tracks {
@@ -145,7 +160,7 @@ func (app *Application) ensureSpotifyAvailable(w http.ResponseWriter) bool {
 // libraryAlbumIDsBySpotifyID resolves a whole page of Spotify ids in one query,
 // for the same reason as libraryMovieIDsByTmdbID: a lookup per result row is
 // ~20 serialized point queries on a single-connection pool.
-func (app *Application) libraryAlbumIDsBySpotifyID(ctx context.Context, albums []spotifylib.SimpleAlbum) (map[string]int64, error) {
+func (app *Application) libraryAlbumIDsBySpotifyID(ctx context.Context, albums []spotify.SimpleAlbum) (map[string]int64, error) {
 	spotifyIDs := make([]sql.NullString, 0, len(albums))
 	seen := make(map[string]struct{}, len(albums))
 
@@ -180,7 +195,7 @@ func (app *Application) libraryAlbumIDsBySpotifyID(ctx context.Context, albums [
 	return existing, nil
 }
 
-func (app *Application) mapSpotifyAlbumSearchResults(r *http.Request, albums []spotifylib.SimpleAlbum) ([]spotifyAlbumSearchResult, error) {
+func (app *Application) mapSpotifyAlbumSearchResults(r *http.Request, albums []spotify.SimpleAlbum) ([]spotifyAlbumSearchResult, error) {
 	mapped := make([]spotifyAlbumSearchResult, 0, len(albums))
 
 	existing, err := app.libraryAlbumIDsBySpotifyID(r.Context(), albums)
@@ -216,7 +231,7 @@ func (app *Application) mapSpotifyAlbumSearchResults(r *http.Request, albums []s
 	return mapped, nil
 }
 
-func spotifyAlbumArtistNames(artists []spotifylib.SimpleArtist) []string {
+func spotifyAlbumArtistNames(artists []spotify.SimpleArtist) []string {
 	names := make([]string, 0, len(artists))
 
 	for _, artist := range artists {
@@ -230,7 +245,7 @@ func spotifyAlbumArtistNames(artists []spotifylib.SimpleArtist) []string {
 	return names
 }
 
-func firstSpotifyAlbumImageURL(images []spotifylib.Image) string {
+func firstSpotifyAlbumImageURL(images []spotify.Image) string {
 	if len(images) == 0 {
 		return ""
 	}

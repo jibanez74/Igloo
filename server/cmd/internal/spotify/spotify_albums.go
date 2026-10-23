@@ -4,12 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
+	"strconv"
 	"strings"
-
-	"github.com/zmb3/spotify/v2"
 )
 
-func (s *spotifyClient) SearchAlbums(ctx context.Context, title string) ([]spotify.SimpleAlbum, error) {
+// spotifyAlbumTracksPageLimit is the most tracks one album-tracks request
+// returns.
+const spotifyAlbumTracksPageLimit = 50
+
+func (c *Client) SearchAlbums(ctx context.Context, title string) ([]SimpleAlbum, error) {
 	title = strings.TrimSpace(title)
 	if title == "" {
 		return nil, errors.New("album title is required")
@@ -18,59 +22,54 @@ func (s *spotifyClient) SearchAlbums(ctx context.Context, title string) ([]spoti
 	ctx, cancel := spotifyRequestContext(ctx)
 	defer cancel()
 
-	results, err := s.client.Search(ctx, title, spotify.SearchTypeAlbum, spotify.Limit(spotifyAlbumRequestSearchLimit))
+	results, err := c.search(ctx, title, "album", spotifyAlbumRequestSearchLimit)
 	if err != nil {
 		return nil, fmt.Errorf("spotify album search failed: %w", err)
 	}
 	if results.Albums == nil {
-		return []spotify.SimpleAlbum{}, nil
+		return []SimpleAlbum{}, nil
 	}
 
-	return results.Albums.Albums, nil
+	return results.Albums.Items, nil
 }
 
-func (s *spotifyClient) SearchAndGetAlbumDetails(ctx context.Context, title, artist string) (*spotify.FullAlbum, error) {
-	title = strings.TrimSpace(title)
-	artist = strings.TrimSpace(artist)
-	if title == "" {
+// MatchAlbum finds the Spotify album for a local one and loads its details,
+// track list included. The field search runs first; a plain-text search is
+// the fallback when it finds no acceptable album.
+func (c *Client) MatchAlbum(ctx context.Context, query AlbumQuery) (*FullAlbum, error) {
+	query.Title = strings.TrimSpace(query.Title)
+	query.Artist = strings.TrimSpace(query.Artist)
+	if query.Title == "" {
 		return nil, newMatchError(MatchDebugInfo{
 			Lookup:    lookupAlbum,
-			Input:     title,
+			Input:     query.Title,
 			Strategy:  strategyAlbumFieldSearch,
 			Reason:    MatchReasonEmptyQuery,
 			Threshold: spotifyAlbumThreshold,
 		}, nil)
 	}
 
-	cacheKey := strings.ToLower(title) + "|" + strings.ToLower(artist)
-
-	if cached, exists := s.getAlbum(cacheKey); exists {
-		return cached, nil
-	}
-
 	ctx, cancel := spotifyRequestContext(ctx)
 	defer cancel()
 
-	searchTitle := sanitizeSpotifySearchQueryValue(trimAlbumSearchTitle(title))
-	searchArtist := sanitizeSpotifySearchQueryValue(artist)
+	searchTitle := sanitizeSpotifySearchQueryValue(trimAlbumSearchTitle(query.Title))
+	searchArtist := sanitizeSpotifySearchQueryValue(query.Artist)
 	fieldQuery := fmt.Sprintf("album:\"%s\"", searchTitle)
 	fallbackQuery := searchTitle
-	if artist != "" {
+	if query.Artist != "" {
 		fieldQuery += fmt.Sprintf(" artist:\"%s\"", searchArtist)
 		fallbackQuery += " " + searchArtist
 	}
 
 	bestInfo := MatchDebugInfo{
 		Lookup:      lookupAlbum,
-		Input:       title,
+		Input:       query.Title,
 		SearchQuery: fieldQuery,
 		Strategy:    strategyAlbumFieldSearch,
 		Threshold:   spotifyAlbumThreshold,
 		Reason:      MatchReasonNoResults,
 	}
 
-	// The field search runs first; a plain-text search is the fallback when it
-	// finds no acceptable album.
 	searches := []struct{ query, strategy string }{
 		{fieldQuery, strategyAlbumFieldSearch},
 		{fallbackQuery, strategyAlbumFallback},
@@ -78,13 +77,13 @@ func (s *spotifyClient) SearchAndGetAlbumDetails(ctx context.Context, title, art
 	for _, search := range searches {
 		info := MatchDebugInfo{
 			Lookup:      lookupAlbum,
-			Input:       title,
+			Input:       query.Title,
 			SearchQuery: search.query,
 			Strategy:    search.strategy,
 			Threshold:   spotifyAlbumThreshold,
 		}
 
-		results, err := s.client.Search(ctx, search.query, spotify.SearchTypeAlbum, spotify.Limit(spotifyAlbumSearchLimit))
+		results, err := c.search(ctx, search.query, "album", spotifyAlbumSearchLimit)
 		if err != nil {
 			info.Reason = MatchReasonSearchFailed
 			return nil, newMatchError(info, err)
@@ -93,22 +92,56 @@ func (s *spotifyClient) SearchAndGetAlbumDetails(ctx context.Context, title, art
 			continue
 		}
 
-		returned, matchInfo := selectBestAlbumMatch(title, artist, results.Albums.Albums, search.query, search.strategy)
+		returned, matchInfo := selectBestAlbumMatch(query, results.Albums.Items, search.query, search.strategy)
 		bestInfo = chooseBetterMatchInfo(bestInfo, matchInfo)
 		if returned == nil {
 			continue
 		}
 
-		album, err := s.client.GetAlbum(ctx, returned.ID)
+		album, err := c.GetAlbum(ctx, returned.ID)
 		if err != nil {
 			info.CandidateName = returned.Name
 			info.Reason = MatchReasonDetailsFailed
 			return nil, newMatchError(info, err)
 		}
 
-		s.setAlbum(cacheKey, album)
 		return album, nil
 	}
 
 	return nil, newMatchError(bestInfo, nil)
+}
+
+// GetAlbum loads an album by id with every page of its track list.
+func (c *Client) GetAlbum(ctx context.Context, id ID) (*FullAlbum, error) {
+	ctx, cancel := spotifyRequestContext(ctx)
+	defer cancel()
+
+	albumURL := spotifyAPIBaseURL + "/albums/" + url.PathEscape(id.String())
+	var details albumDetails
+	err := c.getJSON(ctx, albumURL, &details)
+	if err != nil {
+		return nil, fmt.Errorf("spotify album lookup failed: %w", err)
+	}
+
+	tracks := details.Tracks.Items
+	total := int(details.Tracks.Total)
+	for len(tracks) < total {
+		params := url.Values{
+			"limit":  {strconv.Itoa(spotifyAlbumTracksPageLimit)},
+			"offset": {strconv.Itoa(len(tracks))},
+		}
+		var page trackPage
+		err = c.getJSON(ctx, albumURL+"/tracks?"+params.Encode(), &page)
+		if err != nil {
+			return nil, fmt.Errorf("spotify album tracks failed: %w", err)
+		}
+		// An empty page means the total overstated the list; stop rather than
+		// ask for the same offset forever.
+		if len(page.Items) == 0 {
+			break
+		}
+		tracks = append(tracks, page.Items...)
+	}
+
+	return &FullAlbum{SimpleAlbum: details.SimpleAlbum, Tracks: tracks}, nil
 }

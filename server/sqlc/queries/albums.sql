@@ -63,7 +63,6 @@ INSERT INTO albums (
   title,
   sort_title,
   spotify_id,
-  spotify_popularity,
   musician,
   release_date,
   year,
@@ -71,14 +70,13 @@ INSERT INTO albums (
   cover
 )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  (?, ?, ?, ?, ?, ?, ?, ?)
 -- Matches idx_albums_title_musician, which treats a missing musician as '' so an
 -- untagged album cannot be inserted twice.
 ON CONFLICT (title, COALESCE(musician, '')) DO UPDATE
 SET
   sort_title = excluded.sort_title,
   spotify_id = COALESCE(excluded.spotify_id, albums.spotify_id),
-  spotify_popularity = COALESCE(excluded.spotify_popularity, albums.spotify_popularity),
   release_date = COALESCE(excluded.release_date, albums.release_date),
   year = COALESCE(excluded.year, albums.year),
   total_tracks = COALESCE(excluded.total_tracks, albums.total_tracks),

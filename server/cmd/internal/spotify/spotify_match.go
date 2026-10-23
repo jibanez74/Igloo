@@ -1,13 +1,15 @@
 package spotify
 
 import (
+	"cmp"
 	"fmt"
+	"maps"
 	"math"
 	"slices"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
-	spotifylib "github.com/zmb3/spotify/v2"
 	"golang.org/x/text/unicode/norm"
 )
 
@@ -22,6 +24,7 @@ const (
 	MatchReasonEmptyQuery          = "empty_query"
 	MatchReasonSearchFailed        = "search_failed"
 	MatchReasonDetailsFailed       = "details_failed"
+	MatchReasonTrackClaimed        = "track_claimed"
 )
 
 // Lookup and strategy names describe which Spotify query produced a match.
@@ -29,9 +32,12 @@ const (
 const (
 	lookupArtist             = "artist"
 	lookupAlbum              = "album"
+	lookupTrack              = "track"
 	strategyArtistSearch     = "artist_search"
 	strategyAlbumFieldSearch = "album_field_search"
 	strategyAlbumFallback    = "album_fallback_search"
+	strategyTrackPosition    = "track_position"
+	strategyTrackTitle       = "track_title"
 )
 
 const (
@@ -41,12 +47,82 @@ const (
 	spotifyTrackRequestSearchLimit = 10
 	spotifyArtistThreshold         = 78
 	spotifyAlbumThreshold          = 76
+	spotifyTrackThreshold          = 70
+	// uncreditedAlbumArtistScore stands in for the artist score when a
+	// candidate names no artists, or names one that is not the known artist.
+	uncreditedAlbumArtistScore = 70
+	// artistAdoptionThreshold accepts an album's credited artist as the local
+	// artist whose own search missed. It sits below the search threshold
+	// because the album match already corroborates the name.
+	artistAdoptionThreshold = 60
+	// Editions of one album score alike on title and artist; a release year
+	// and a track count that agree with the file's tags separate them.
+	albumYearBonus       = 3
+	albumTrackTotalBonus = 3
+	// A release with fewer than half the tracks the file's tags count is a
+	// single or EP from the album, not the album; the penalty outweighs both
+	// bonuses and a few ranks of Spotify's order.
+	albumSizePenalty = 6
+	// Two recordings at the same album position within this many
+	// milliseconds are the same track however the file titles it.
+	trackDurationToleranceMs = 2000
 )
+
+// AlbumQuery describes a local album. Artist is the album artist; ArtistID is
+// its Spotify id when already known, which makes a candidate crediting that id
+// a certain artist match and one crediting a same-named artist without it a
+// doubtful one. ArtistCredits are the names a compound album artist credits,
+// such as "A, B & C", each of which may be the one Spotify credits. Year and
+// TotalTracks come from the files' tags; they break ties between editions,
+// and TotalTracks also marks down a release too small to be the album. Zero
+// means unknown.
+type AlbumQuery struct {
+	Title         string
+	Artist        string
+	ArtistCredits []string
+	ArtistID      ID
+	Year          int
+	TotalTracks   int
+}
+
+// TrackQuery describes a local track being paired with one of its album's
+// Spotify tracks. Disc and Number are the file's tags, zero when untagged;
+// DurationMs is the probed length.
+type TrackQuery struct {
+	Title      string
+	Disc       int
+	Number     int
+	DurationMs int64
+}
+
+// HeldTrack is a local track already paired with the Spotify track ID, which
+// no other file of its album may take.
+type HeldTrack struct {
+	TrackQuery
+	ID ID
+}
+
+// TrackPairing is one local track's outcome: the Spotify track it pairs with,
+// nil on a miss, and the diagnostics that explain either.
+type TrackPairing struct {
+	Track *SimpleTrack
+	Info  MatchDebugInfo
+}
 
 var artistStopWords = map[string]struct{}{
 	"and": {},
 	"the": {},
 }
+
+// comparisonTokenAliases spell abbreviations out, so "Vol. One" compares
+// equal to "Volume One".
+var comparisonTokenAliases = map[string]string{
+	"vol": "volume",
+}
+
+// variousArtists is how compilations credit their artist, locally and on
+// Spotify; it names no artist, so it cannot confirm or deny one.
+const variousArtists = "various artists"
 
 var albumNoiseTokens = map[string]struct{}{
 	"album":       {},
@@ -62,6 +138,34 @@ var albumNoiseTokens = map[string]struct{}{
 	"remastered":  {},
 	"single":      {},
 	"version":     {},
+}
+
+// trackVersionWords name a different recording when a track title's
+// qualifier carries one the other title lacks: "Orgullecida (Alternate Take)"
+// is not "Orgullecida", while "Live and Let Die" carries no qualifier at all.
+var trackVersionWords = map[string]struct{}{
+	"acoustic":     {},
+	"alternate":    {},
+	"demo":         {},
+	"finale":       {},
+	"instrumental": {},
+	"karaoke":      {},
+	"live":         {},
+	"mix":          {},
+	"remix":        {},
+	"reprise":      {},
+	"take":         {},
+	"unplugged":    {},
+}
+
+// trackRemasterWords make up a qualifier that only notes a remaster, as in
+// Spotify's "Song - Remastered 2011"; a four-digit year counts too.
+var trackRemasterWords = map[string]struct{}{
+	"digital":    {},
+	"digitally":  {},
+	"remaster":   {},
+	"remastered": {},
+	"version":    {},
 }
 
 type MatchDebugInfo struct {
@@ -177,6 +281,9 @@ func tokenizeComparisonText(value string, stopWords map[string]struct{}) []strin
 		if _, skip := stopWords[field]; skip {
 			continue
 		}
+		if alias, ok := comparisonTokenAliases[field]; ok {
+			field = alias
+		}
 		tokens = append(tokens, field)
 	}
 
@@ -271,7 +378,7 @@ func scoreArtistName(query, candidate string) int {
 	return matched * 60 / len(queryTokens)
 }
 
-func scoreAlbumTitle(query, candidate string) int {
+func scoreTitle(query, candidate string) int {
 	normalizedQuery := normalizeComparisonText(query)
 	normalizedCandidate := normalizeComparisonText(candidate)
 	if normalizedQuery == "" || normalizedCandidate == "" {
@@ -325,20 +432,157 @@ func scoreTokenSequence(queryTokens, candidateTokens []string) int {
 	return matched * 70 / len(queryTokens)
 }
 
-func scoreAlbumArtist(queryArtist string, candidateArtists []spotifylib.SimpleArtist) (int, string) {
-	if strings.TrimSpace(queryArtist) == "" {
+// scoreTrackTitle scores a track title the way scoreTitle does, and also
+// compares both titles' cores, without featured artists, source notes or
+// remaster notes, keeping the better score. A version word in only one title
+// keeps the score below the threshold.
+func scoreTrackTitle(query, candidate string) int {
+	queryCore, queryVersions := trackTitleCore(query)
+	candidateCore, candidateVersions := trackTitleCore(candidate)
+	score := max(scoreTitle(query, candidate), scoreTitle(queryCore, candidateCore))
+	if !maps.Equal(queryVersions, candidateVersions) {
+		score = min(score, spotifyTrackThreshold-1)
+	}
+	return score
+}
+
+// scoreAlbumTitle scores an album title the way scoreTitle does, and also
+// without the qualifiers that note a remaster, keeping the better score:
+// "Virtuoso (OJC Remaster)" is "Virtuoso (Remastered 2025)".
+func scoreAlbumTitle(query, candidate string) int {
+	return max(scoreTitle(query, candidate), scoreTitle(albumTitleCore(query), albumTitleCore(candidate)))
+}
+
+// albumTitleCore drops every bracketed or " - " qualifier that mentions a
+// remaster. Only the remaster words count: "version" alone would also drop
+// "(Taylor's Version)", which names a different album.
+func albumTitleCore(title string) string {
+	base, qualifiers := titleParts(title)
+	core := []string{base}
+	for _, qualifier := range qualifiers {
+		words := strings.Fields(normalizeComparisonText(qualifier))
+		if !slices.Contains(words, "remaster") && !slices.Contains(words, "remastered") {
+			core = append(core, qualifier)
+		}
+	}
+	return strings.Join(core, " ")
+}
+
+// trackTitleCore drops the qualifiers that name no different recording and
+// returns what remains, with the version words the kept qualifiers carry.
+func trackTitleCore(title string) (string, map[string]struct{}) {
+	base, qualifiers := titleParts(title)
+	core := []string{base}
+	versions := map[string]struct{}{}
+	for _, qualifier := range qualifiers {
+		words := strings.Fields(normalizeComparisonText(qualifier))
+		if trackQualifierDropped(words) {
+			continue
+		}
+		core = append(core, qualifier)
+		for _, word := range words {
+			_, isVersion := trackVersionWords[word]
+			if isVersion {
+				versions[word] = struct{}{}
+			}
+		}
+	}
+	return strings.Join(core, " "), versions
+}
+
+// titleParts splits a title into the text outside brackets and its
+// qualifiers: each bracketed segment, and everything after a " - " outside
+// brackets, as in "Song (feat. X) - Remastered 2011".
+func titleParts(title string) (string, []string) {
+	var base, segment strings.Builder
+	var qualifiers []string
+	depth := 0
+	for i := 0; i < len(title); {
+		if depth == 0 && strings.HasPrefix(title[i:], " - ") {
+			qualifiers = append(qualifiers, title[i+len(" - "):])
+			break
+		}
+		r, size := utf8.DecodeRuneInString(title[i:])
+		i += size
+		switch {
+		case r == '(' || r == '[':
+			if depth > 0 {
+				segment.WriteRune(r)
+			}
+			depth++
+		case (r == ')' || r == ']') && depth > 0:
+			depth--
+			if depth == 0 {
+				qualifiers = append(qualifiers, segment.String())
+				segment.Reset()
+			} else {
+				segment.WriteRune(r)
+			}
+		case depth > 0:
+			segment.WriteRune(r)
+		default:
+			base.WriteRune(r)
+		}
+	}
+	if segment.Len() > 0 {
+		qualifiers = append(qualifiers, segment.String())
+	}
+	return base.String(), qualifiers
+}
+
+// trackQualifierDropped reports a qualifier that names no different
+// recording: a featured artist, a "From ..." source note, or a remaster note.
+func trackQualifierDropped(words []string) bool {
+	if len(words) == 0 {
+		return true
+	}
+	switch words[0] {
+	case "feat", "ft", "featuring", "with", "from":
+		return true
+	}
+	for _, word := range words {
+		_, isRemaster := trackRemasterWords[word]
+		isYear := len(word) == 4 && strings.Trim(word, "0123456789") == ""
+		if !isRemaster && !isYear {
+			return false
+		}
+	}
+	return true
+}
+
+// scoreAlbumArtist scores a candidate's credits against the query artist and
+// each of its credits. A candidate without credits keeps a lenient score so
+// the title can still decide, and so does a side credited to "Various
+// Artists" against a named artist; when the artist's Spotify id is known, a
+// candidate crediting it is certain and one crediting only a same-named artist
+// is held to that same leniency, since it is probably another artist of that
+// name.
+func scoreAlbumArtist(query AlbumQuery, candidateArtists []SimpleArtist) (int, string) {
+	hasKnownID := query.ArtistID != ""
+	if hasKnownID {
+		for _, candidateArtist := range candidateArtists {
+			if candidateArtist.ID == query.ArtistID {
+				return 100, candidateArtist.Name
+			}
+		}
+	}
+
+	if strings.TrimSpace(query.Artist) == "" {
 		return 100, ""
 	}
 
 	if len(candidateArtists) == 0 {
-		return 70, ""
+		return uncreditedAlbumArtistScore, ""
 	}
 
 	bestScore := 0
 	bestName := ""
 
 	for _, candidateArtist := range candidateArtists {
-		score := scoreArtistName(queryArtist, candidateArtist.Name)
+		score := scoreArtistName(query.Artist, candidateArtist.Name)
+		for _, credit := range query.ArtistCredits {
+			score = max(score, scoreArtistName(credit, candidateArtist.Name))
+		}
 		if score <= bestScore {
 			continue
 		}
@@ -347,7 +591,18 @@ func scoreAlbumArtist(queryArtist string, candidateArtists []spotifylib.SimpleAr
 		bestName = candidateArtist.Name
 	}
 
+	if hasKnownID {
+		bestScore = min(bestScore, uncreditedAlbumArtistScore)
+	}
+	if isVariousArtists(query.Artist) || slices.ContainsFunc(candidateArtists, func(artist SimpleArtist) bool { return isVariousArtists(artist.Name) }) {
+		bestScore = max(bestScore, uncreditedAlbumArtistScore)
+	}
+
 	return bestScore, bestName
+}
+
+func isVariousArtists(name string) bool {
+	return normalizeComparisonText(name) == variousArtists
 }
 
 func trimAlbumSearchTitle(title string) string {
@@ -369,7 +624,7 @@ func sanitizeSpotifySearchQueryValue(value string) string {
 	return strings.ReplaceAll(value, `"`, `'`)
 }
 
-func selectBestArtistMatch(query string, artists []spotifylib.FullArtist, strategy string) (*spotifylib.FullArtist, MatchDebugInfo) {
+func selectBestArtistMatch(query string, artists []FullArtist, strategy string) (*FullArtist, MatchDebugInfo) {
 	info := MatchDebugInfo{
 		Lookup:      lookupArtist,
 		Input:       query,
@@ -409,10 +664,10 @@ func selectBestArtistMatch(query string, artists []spotifylib.FullArtist, strate
 	return &artists[bestIndex], info
 }
 
-func selectBestAlbumMatch(title, artist string, albums []spotifylib.SimpleAlbum, searchQuery, strategy string) (*spotifylib.SimpleAlbum, MatchDebugInfo) {
+func selectBestAlbumMatch(query AlbumQuery, albums []SimpleAlbum, searchQuery, strategy string) (*SimpleAlbum, MatchDebugInfo) {
 	info := MatchDebugInfo{
 		Lookup:      lookupAlbum,
-		Input:       title,
+		Input:       query.Title,
 		SearchQuery: searchQuery,
 		Strategy:    strategy,
 		Threshold:   spotifyAlbumThreshold,
@@ -424,12 +679,12 @@ func selectBestAlbumMatch(title, artist string, albums []spotifylib.SimpleAlbum,
 	}
 
 	// Later results pay one point per rank, so a tie keeps Spotify's order.
-	hasArtist := strings.TrimSpace(artist) != ""
+	hasArtist := strings.TrimSpace(query.Artist) != ""
 	bestScore, bestIndex, bestArtistName := math.MinInt, 0, ""
 	for index, album := range albums {
-		titleScore := scoreAlbumTitle(title, album.Name)
-		artistScore, candidateArtistName := scoreAlbumArtist(artist, album.Artists)
-		score := (titleScore*3+artistScore)/4 - index
+		titleScore := scoreAlbumTitle(query.Title, album.Name)
+		artistScore, candidateArtistName := scoreAlbumArtist(query, album.Artists)
+		score := (titleScore*3+artistScore)/4 + albumTagBonus(query, album) - index
 		if hasArtist && artistScore < 60 {
 			score -= 12
 		}
@@ -464,4 +719,196 @@ func chooseBetterMatchInfo(current, candidate MatchDebugInfo) MatchDebugInfo {
 	}
 
 	return current
+}
+
+// albumTagBonus weighs a candidate against the file's tags: a release year and
+// a track count that agree add to its score, and a release too small to be
+// the tagged album takes away.
+func albumTagBonus(query AlbumQuery, album SimpleAlbum) int {
+	bonus := 0
+	yearAgrees := query.Year > 0 && album.ReleaseDateTime().Year() == query.Year
+	if yearAgrees {
+		bonus += albumYearBonus
+	}
+	trackTotalAgrees := query.TotalTracks > 0 && int(album.TotalTracks) == query.TotalTracks
+	if trackTotalAgrees {
+		bonus += albumTrackTotalBonus
+	}
+	if int(album.TotalTracks)*2 < query.TotalTracks {
+		bonus -= albumSizePenalty
+	}
+	return bonus
+}
+
+// ArtistNamesAgree reports whether candidate plausibly names the artist a
+// local credit calls local, loosely enough to adopt an album's credited artist
+// when the name search itself missed.
+func ArtistNamesAgree(local, candidate string) bool {
+	return scoreArtistName(local, candidate) >= artistAdoptionThreshold
+}
+
+// trackEdge is one acceptable pairing of a pending local track with a
+// Spotify track. tier ranks its evidence: the file's position with an
+// agreeing title (3), an agreeing title alone (2), then the position with
+// only an agreeing length (1).
+type trackEdge struct {
+	query, track, tier, score int
+	gap                       int64
+}
+
+func (e trackEdge) strategy() string {
+	if e.tier == 2 {
+		return strategyTrackTitle
+	}
+	return strategyTrackPosition
+}
+
+// MatchAlbumTracks pairs an album's pending local tracks with its Spotify
+// track list. Every acceptable pairing is ranked and taken best first, so each
+// Spotify track goes to one file: the one at its position with an agreeing
+// title before one whose title merely agrees, and either before one at its
+// position whose length alone agrees. A held track is already taken, and only
+// a duplicate file, with the same title and length as the file holding a
+// track, shares it. A file that loses every acceptable track to others misses
+// with MatchReasonTrackClaimed; the results follow pending's order.
+func MatchAlbumTracks(pending []TrackQuery, held []HeldTrack, tracks []SimpleTrack) []TrackPairing {
+	owners := make(map[int]TrackQuery, len(held)+len(pending))
+	for _, holder := range held {
+		index := slices.IndexFunc(tracks, func(track SimpleTrack) bool { return track.ID == holder.ID })
+		if index < 0 {
+			continue
+		}
+		_, taken := owners[index]
+		if !taken {
+			owners[index] = holder.TrackQuery
+		}
+	}
+
+	var edges []trackEdge
+	for queryIndex, query := range pending {
+		positioned := trackAtPosition(query, tracks)
+		for trackIndex := range tracks {
+			edge := trackEdge{query: queryIndex, track: trackIndex, score: scoreTrackTitle(query.Title, tracks[trackIndex].Name), gap: durationGap(query, tracks[trackIndex])}
+			atPosition := positioned == &tracks[trackIndex]
+			titleAgrees := edge.score >= spotifyTrackThreshold
+			switch {
+			case atPosition && titleAgrees:
+				edge.tier = 3
+			case titleAgrees:
+				edge.tier = 2
+			case atPosition && edge.gap <= trackDurationToleranceMs:
+				edge.tier = 1
+			default:
+				continue
+			}
+			edges = append(edges, edge)
+		}
+	}
+	// Stable, so a tie keeps the album's file order and Spotify's track order.
+	slices.SortStableFunc(edges, func(a, b trackEdge) int {
+		return cmp.Or(cmp.Compare(b.tier, a.tier), cmp.Compare(b.score, a.score), cmp.Compare(a.gap, b.gap))
+	})
+
+	results := make([]TrackPairing, len(pending))
+	best := make([]*trackEdge, len(pending))
+	for i := range edges {
+		edge := &edges[i]
+		if results[edge.query].Track != nil {
+			continue
+		}
+		if best[edge.query] == nil {
+			best[edge.query] = edge
+		}
+		query := pending[edge.query]
+		owner, taken := owners[edge.track]
+		if taken && !sameRecording(owner, query) {
+			continue
+		}
+		if !taken {
+			owners[edge.track] = query
+		}
+		results[edge.query] = TrackPairing{Track: &tracks[edge.track], Info: trackMatchInfo(query, tracks[edge.track], edge.score, edge.strategy(), MatchReasonAccepted)}
+	}
+	for i, query := range pending {
+		if results[i].Track != nil {
+			continue
+		}
+		if best[i] != nil {
+			results[i].Info = trackMatchInfo(query, tracks[best[i].track], best[i].score, best[i].strategy(), MatchReasonTrackClaimed)
+			continue
+		}
+		results[i].Info = nearestTrackTitle(query, tracks)
+	}
+	return results
+}
+
+// nearestTrackTitle explains a file no Spotify track accepts with the best
+// title among them.
+func nearestTrackTitle(query TrackQuery, tracks []SimpleTrack) MatchDebugInfo {
+	if len(tracks) == 0 {
+		return MatchDebugInfo{Lookup: lookupTrack, Input: query.Title, Strategy: strategyTrackPosition, Threshold: spotifyTrackThreshold, Reason: MatchReasonNoResults}
+	}
+	bestIndex, bestScore, bestGap := 0, -1, int64(0)
+	for index := range tracks {
+		score := scoreTrackTitle(query.Title, tracks[index].Name)
+		gap := durationGap(query, tracks[index])
+		better := score > bestScore || (score == bestScore && gap < bestGap)
+		if !better {
+			continue
+		}
+		bestIndex, bestScore, bestGap = index, score, gap
+	}
+	return trackMatchInfo(query, tracks[bestIndex], bestScore, strategyTrackTitle, MatchReasonScoreBelowThreshold)
+}
+
+func trackMatchInfo(query TrackQuery, track SimpleTrack, score int, strategy, reason string) MatchDebugInfo {
+	return MatchDebugInfo{
+		Lookup:        lookupTrack,
+		Input:         query.Title,
+		Strategy:      strategy,
+		CandidateName: track.Name,
+		Score:         score,
+		Threshold:     spotifyTrackThreshold,
+		Reason:        reason,
+	}
+}
+
+// sameRecording reports a duplicate file: the same title and, within the
+// length tolerance, the same length.
+func sameRecording(a, b TrackQuery) bool {
+	gap := a.DurationMs - b.DurationMs
+	return normalizeComparisonText(a.Title) == normalizeComparisonText(b.Title) && max(gap, -gap) <= trackDurationToleranceMs
+}
+
+// trackAtPosition returns the one Spotify track at the file's disc and track
+// number, or nil when the position is untagged or ambiguous (a file with no
+// disc tag on a multi-disc album).
+func trackAtPosition(query TrackQuery, tracks []SimpleTrack) *SimpleTrack {
+	if query.Number <= 0 {
+		return nil
+	}
+
+	var found *SimpleTrack
+	for index := range tracks {
+		track := &tracks[index]
+		numberAgrees := int(track.TrackNumber) == query.Number
+		discAgrees := query.Disc == 0 || int(track.DiscNumber) == query.Disc
+		if !numberAgrees || !discAgrees {
+			continue
+		}
+		if found != nil {
+			return nil
+		}
+		found = track
+	}
+
+	return found
+}
+
+func durationGap(query TrackQuery, track SimpleTrack) int64 {
+	gap := int64(track.Duration) - query.DurationMs
+	if gap < 0 {
+		return -gap
+	}
+	return gap
 }

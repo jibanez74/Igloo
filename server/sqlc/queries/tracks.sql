@@ -26,6 +26,8 @@ SELECT
   composer,
   copyright,
   language,
+  spotify_id,
+  explicit,
   album_id,
   musician_id,
   created_at,
@@ -49,6 +51,8 @@ FROM tracks c
 LEFT JOIN track_file_fingerprints f ON f.track_id = c.id;
 
 -- name: UpsertTrack :one
+-- A changed file loses its Spotify pairing; the scan's link pass pairs it
+-- again with the rest of its album.
 INSERT INTO tracks (
   title,
   sort_title,
@@ -96,10 +100,28 @@ SET
   composer = excluded.composer,
   copyright = excluded.copyright,
   language = excluded.language,
+  spotify_id = NULL,
+  explicit = false,
   album_id = excluded.album_id,
   musician_id = excluded.musician_id,
   updated_at = CURRENT_TIMESTAMP
 RETURNING id;
+
+-- name: LinkMusicTrackSpotify :exec
+-- Guarded so an unchanged link does not advance updated_at. A track number is
+-- only ever filled in, never replaced: the file's own tag wins when it has one.
+UPDATE tracks
+SET
+  spotify_id = sqlc.arg(spotify_id),
+  explicit = sqlc.arg(explicit),
+  track_index = CASE WHEN track_index = 0 THEN sqlc.arg(track_index) ELSE track_index END,
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = sqlc.arg(id)
+  AND (
+    spotify_id IS NOT sqlc.arg(spotify_id)
+    OR explicit IS NOT sqlc.arg(explicit)
+    OR (track_index = 0 AND sqlc.arg(track_index) <> 0)
+  );
 
 -- name: GetTracksByAlbumID :many
 SELECT
@@ -112,6 +134,7 @@ SELECT
   disc,
   channel_layout,
   bit_rate,
+  explicit,
   album_id,
   musician_id
 FROM tracks
