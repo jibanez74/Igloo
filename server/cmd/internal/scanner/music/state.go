@@ -33,8 +33,8 @@ type musicScanContext struct {
 	albumTracks        map[string][]spotifyapi.SimpleTrack
 	albumTrackFailures map[string]bool
 	artistIDAttempts   map[spotifyapi.ID]artistIDResult
-	// tracksLinked counts the tracks paired with a Spotify track; a clone
-	// counts its own transaction and mergeFrom adds it.
+	// tracksLinked counts the tracks paired with an Apple Music or Spotify
+	// track; a clone counts its own transaction and mergeFrom adds it.
 	tracksLinked int
 	// breaker stops Spotify lookups for the rest of the scan once the provider
 	// is failing; stopReported keeps the scan-wide issue to one.
