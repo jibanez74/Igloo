@@ -873,6 +873,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.movieExistsStmt, err = db.PrepareContext(ctx, movieExists); err != nil {
 		return nil, fmt.Errorf("error preparing query MovieExists: %w", err)
 	}
+	if q.musicAlbumIdentityKeysStmt, err = db.PrepareContext(ctx, musicAlbumIdentityKeys); err != nil {
+		return nil, fmt.Errorf("error preparing query MusicAlbumIdentityKeys: %w", err)
+	}
 	if q.musicAlbumRetryCandidatesStmt, err = db.PrepareContext(ctx, musicAlbumRetryCandidates); err != nil {
 		return nil, fmt.Errorf("error preparing query MusicAlbumRetryCandidates: %w", err)
 	}
@@ -2548,6 +2551,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing movieExistsStmt: %w", cerr)
 		}
 	}
+	if q.musicAlbumIdentityKeysStmt != nil {
+		if cerr := q.musicAlbumIdentityKeysStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing musicAlbumIdentityKeysStmt: %w", cerr)
+		}
+	}
 	if q.musicAlbumRetryCandidatesStmt != nil {
 		if cerr := q.musicAlbumRetryCandidatesStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing musicAlbumRetryCandidatesStmt: %w", cerr)
@@ -3295,6 +3303,7 @@ type Queries struct {
 	moveMusicArtistGenresStmt                   *sql.Stmt
 	moveMusicArtistTracksStmt                   *sql.Stmt
 	movieExistsStmt                             *sql.Stmt
+	musicAlbumIdentityKeysStmt                  *sql.Stmt
 	musicAlbumRetryCandidatesStmt               *sql.Stmt
 	musicAlbumTrackIDsStmt                      *sql.Stmt
 	musicAlbumTracksToLinkStmt                  *sql.Stmt
@@ -3669,6 +3678,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		moveMusicArtistGenresStmt:                   q.moveMusicArtistGenresStmt,
 		moveMusicArtistTracksStmt:                   q.moveMusicArtistTracksStmt,
 		movieExistsStmt:                             q.movieExistsStmt,
+		musicAlbumIdentityKeysStmt:                  q.musicAlbumIdentityKeysStmt,
 		musicAlbumRetryCandidatesStmt:               q.musicAlbumRetryCandidatesStmt,
 		musicAlbumTrackIDsStmt:                      q.musicAlbumTrackIDsStmt,
 		musicAlbumTracksToLinkStmt:                  q.musicAlbumTracksToLinkStmt,

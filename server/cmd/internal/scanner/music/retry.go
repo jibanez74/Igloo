@@ -264,8 +264,7 @@ func (s *Scanner) linkAlbum(ctx context.Context, scan *musicScanContext, candida
 	if err != nil || !contradicted {
 		return err
 	}
-	scan.recountEnrichment(albumCountKey(scan, candidate), musicSpotifyStatusUnmatched)
-	return nil
+	return s.recountContradictedAlbum(ctx, scan, candidate.ID)
 }
 
 // albumContradicted reports an album match its tracks disagree with: fewer
@@ -332,15 +331,32 @@ func dropAlbumMatch(ctx context.Context, qtx *database.Queries, txScan *musicSca
 	})
 }
 
-// albumCountKey is the key resolveAlbum tallied the album under: its title and
-// artist when this scan created it, its id when it already existed.
-func albumCountKey(scan *musicScanContext, candidate database.MusicTrackLinkAlbumCandidatesRow) string {
-	byName := musicSpotifyEntityAlbum + ":" + scanner.NormalizedScanCacheKey(candidate.Title, candidate.Musician.String)
-	_, counted := scan.enrichmentOutcome[byName]
-	if counted {
-		return byName
+// recountContradictedAlbum moves every tally this scan made for the album to
+// unmatched: the one under its id, and those under each alias name it was
+// resolved by before persistence merged it into this row. An album matched by
+// an earlier scan was not tallied, so it counts as one unmatched outcome.
+func (s *Scanner) recountContradictedAlbum(ctx context.Context, scan *musicScanContext, albumID int64) error {
+	aliases, err := s.queries.MusicAlbumIdentityKeys(ctx, albumID)
+	if err != nil {
+		return err
 	}
-	return musicSpotifyEntityAlbum + ":" + strconv.FormatInt(candidate.ID, 10)
+	idKey := musicSpotifyEntityAlbum + ":" + strconv.FormatInt(albumID, 10)
+	keys := []string{idKey}
+	for _, alias := range aliases {
+		keys = append(keys, musicSpotifyEntityAlbum+":"+scanner.NormalizedScanCacheKey(alias.TitleKey, alias.ArtistKey))
+	}
+	recounted := false
+	for _, key := range keys {
+		_, counted := scan.enrichmentOutcome[key]
+		if counted {
+			scan.recountEnrichment(key, musicSpotifyStatusUnmatched)
+			recounted = true
+		}
+	}
+	if !recounted {
+		scan.recountEnrichment(idKey, musicSpotifyStatusUnmatched)
+	}
+	return nil
 }
 
 // albumTracksFor returns the album's Spotify track list, from this scan's

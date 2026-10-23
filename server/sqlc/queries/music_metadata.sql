@@ -220,3 +220,6 @@ ON CONFLICT(musician_id) DO NOTHING;
 
 -- name: DeleteMusicSpotifyAdoption :exec
 DELETE FROM music_spotify_adoptions WHERE musician_id=?;
+
+-- name: MusicAlbumIdentityKeys :many
+SELECT title_key, artist_key FROM music_album_identity WHERE album_id=?;

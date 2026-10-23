@@ -538,6 +538,7 @@ type Querier interface {
 	// Existence probe for handlers that only need to 404 on an unknown movie;
 	// avoids shipping the full 27-column row.
 	MovieExists(ctx context.Context, id int64) (bool, error)
+	MusicAlbumIdentityKeys(ctx context.Context, albumID int64) ([]MusicAlbumIdentityKeysRow, error)
 	MusicAlbumRetryCandidates(ctx context.Context, afterID int64) ([]MusicAlbumRetryCandidatesRow, error)
 	MusicAlbumTrackIDs(ctx context.Context, albumID sql.NullInt64) ([]int64, error)
 	// Every track of the album with its outcome: one without an outcome, or with

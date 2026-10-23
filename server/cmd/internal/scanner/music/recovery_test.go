@@ -837,6 +837,30 @@ func TestSpotifyRecoveryAlbumArtistWithoutTrackCredit(t *testing.T) {
 	}
 }
 
+// An alias created this scan merges into the album already holding its
+// Spotify ID; when the link pass drops that match, the alias's tally moves
+// to unmatched instead of a second outcome being counted for the owner.
+func TestSpotifyAlbumAliasContradictionCountsOnce(t *testing.T) {
+	s := setupMusicScanner(t)
+	ctx := context.Background()
+	_, err := s.queries.UpsertAlbum(ctx, database.UpsertAlbumParams{Title: "Retained", SortTitle: "Retained", SpotifyID: helpers.NullString("album")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.spotify = scriptedSpotify(t, spotifyStep{operation: "match", target: "Alias", album: testAlbum(spotifyTrack("other", "Unrelated", 1, 1, 1000, false))})
+	scan := newMusicScanContext(nil)
+	for i := 0; i < 3; i++ {
+		scanTaggedTrack(t, s, scan, filepath.Join(t.TempDir(), "track.m4a"), 1, ffprobe.FormatTags{Title: fmt.Sprintf("Local %d", i), Album: "Alias"})
+	}
+	linkScannedTracks(t, s, scan)
+	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM albums WHERE spotify_id IS NOT NULL") != 0 {
+		t.Fatal("contradicted album kept Spotify identity")
+	}
+	if scan.enrichmentCounts[musicSpotifyStatusMatched] != 0 || scan.enrichmentCounts[musicSpotifyStatusUnmatched] != 1 {
+		t.Fatalf("enrichment counts = %v, want the one album moved to unmatched", scan.enrichmentCounts)
+	}
+}
+
 func TestSpotifyRecoveryPreservesMatchedMusician(t *testing.T) {
 	s := setupMusicScanner(t)
 	dir := t.TempDir()

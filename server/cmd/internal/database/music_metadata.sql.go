@@ -321,6 +321,38 @@ func (q *Queries) MoveMusicArtistTracks(ctx context.Context, arg MoveMusicArtist
 	return err
 }
 
+const musicAlbumIdentityKeys = `-- name: MusicAlbumIdentityKeys :many
+SELECT title_key, artist_key FROM music_album_identity WHERE album_id=?
+`
+
+type MusicAlbumIdentityKeysRow struct {
+	TitleKey  string `json:"title_key"`
+	ArtistKey string `json:"artist_key"`
+}
+
+func (q *Queries) MusicAlbumIdentityKeys(ctx context.Context, albumID int64) ([]MusicAlbumIdentityKeysRow, error) {
+	rows, err := q.query(ctx, q.musicAlbumIdentityKeysStmt, musicAlbumIdentityKeys, albumID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []MusicAlbumIdentityKeysRow{}
+	for rows.Next() {
+		var i MusicAlbumIdentityKeysRow
+		if err := rows.Scan(&i.TitleKey, &i.ArtistKey); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const musicAlbumRetryCandidates = `-- name: MusicAlbumRetryCandidates :many
 SELECT e.id, e.title, e.musician, e.year FROM albums e LEFT JOIN music_spotify_matches m ON m.entity_id=e.id AND m.entity_type='album'
 WHERE e.id>?1 AND (m.status IS NULL OR m.status='failed')
