@@ -491,6 +491,34 @@ describe("album details content", () => {
     expect(screen.getByText("Explicit")).toHaveClass("sr-only");
   });
 
+  it("links an Apple Music album to Apple Music instead of Spotify", async () => {
+    const apple = albumDetailsResponse(42, "Blue Record", "The Band", "Alabaster");
+    apple.album.spotify_id = nullableString(null);
+    apple.album.spotify_url = null;
+    apple.album.apple_id = nullableInt64(1432044881);
+    apple.album.apple_url = "https://music.apple.com/us/album/1432044881";
+    apple.tracks[0].explicit = true;
+
+    await renderAlbumDetailsRoute("/music/album/42", {
+      additionalAlbums: [[42, apple]],
+    });
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Blue Record" }),
+    ).toBeInTheDocument();
+    const details = within(screen.getByRole("region", { name: "Album Details" }));
+    const appleLink = details.getByRole("link", {
+      name: "Blue Record on Apple Music (opens in a new tab)",
+    });
+    expect(appleLink).toHaveTextContent("Open in Apple Music");
+    expect(appleLink).toHaveAttribute("href", "https://music.apple.com/us/album/1432044881");
+    expect(appleLink).toHaveAttribute("target", "_blank");
+    expect(appleLink).toHaveAttribute("rel", "noopener noreferrer");
+    expect(details.getByText("Apple Music")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /on Spotify/ })).not.toBeInTheDocument();
+    expect(screen.getByText("Explicit")).toHaveClass("sr-only");
+  });
+
   it("omits the Spotify link, type label and explicit markers for an unmatched album", async () => {
     const local = albumDetailsResponse(42, "Blue Record", "The Band", "Alabaster");
     local.album.spotify_id = nullableString(null);
@@ -506,6 +534,9 @@ describe("album details content", () => {
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("link", { name: /on Spotify/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /on Apple Music/ }),
     ).not.toBeInTheDocument();
     const stats = within(screen.getByRole("list", { name: "Album details" }));
     expect(stats.queryByText("Single")).not.toBeInTheDocument();

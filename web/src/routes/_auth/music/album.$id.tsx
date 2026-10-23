@@ -60,7 +60,7 @@ import MusicStatList, {
 } from "@/components/music/MusicStatList";
 import DetailSkipLinks from "@/components/shared/DetailSkipLinks";
 import { SpotifyPopularityMeter } from "@/components/music/SpotifyPopularity";
-import SpotifyLink from "@/components/music/SpotifyLink";
+import CatalogLink from "@/components/music/CatalogLink";
 import {
   DETAIL_PAGE_CONTENT_ENTER_CLASS,
   DETAIL_SECTION_HEADING_CLASS,
@@ -75,7 +75,7 @@ import {
 import { cn } from "@/lib/utils";
 import { apiErrorMessage } from "@/lib/is-api-failure";
 
-// Spotify's album types worth calling out; a plain album needs no label.
+// Catalog album types worth calling out; a plain album needs no label.
 const ALBUM_TYPE_LABELS = new Map([
   ["single", "Single"],
   ["compilation", "Compilation"],
@@ -190,6 +190,7 @@ function AlbumDetailsContent({
   const albumType = unwrapString(album.album_type);
   const albumTypeLabel = albumType ? ALBUM_TYPE_LABELS.get(albumType) : undefined;
   const spotifyUrl = album.spotify_url;
+  const appleUrl = album.apple_url;
 
   // The album artist links to the musician page when it matches one of the
   // album's artists (which are musician rows server-side). A non-match (e.g.
@@ -652,13 +653,23 @@ function AlbumDetailsContent({
                   <dd className="mt-1 text-foreground">{audioQuality}</dd>
                 </div>
               )}
+              {appleUrl && (
+                <div>
+                  <dt className="font-semibold tracking-wide text-muted-foreground uppercase">
+                    Apple Music
+                  </dt>
+                  <dd className="mt-1 text-foreground">
+                    <CatalogLink provider="appleMusic" href={appleUrl} name={album.title} />
+                  </dd>
+                </div>
+              )}
               {spotifyUrl && (
                 <div>
                   <dt className="font-semibold tracking-wide text-muted-foreground uppercase">
                     Spotify
                   </dt>
                   <dd className="mt-1 text-foreground">
-                    <SpotifyLink href={spotifyUrl} name={album.title} />
+                    <CatalogLink provider="spotify" href={spotifyUrl} name={album.title} />
                   </dd>
                 </div>
               )}

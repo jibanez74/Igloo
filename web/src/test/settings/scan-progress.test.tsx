@@ -164,7 +164,7 @@ describe("movie scan progress", () => {
 });
 
 describe("music scan progress", () => {
-  it("announces music phases, Spotify tallies and the next-scan deferral", async () => {
+  it("announces music phases, provider tallies and the next-scan deferral", async () => {
     const user = userEvent.setup();
     const status = musicScanStatus({
       state: "completed-with-issues", phase: "enrichment", processed: 2267, imported: 2260, failed: 1, deferred: 6, deleted: 3,
@@ -176,7 +176,7 @@ describe("music scan progress", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Music scan status is unavailable");
     expect(screen.getByText(/2267 of 2267 files processed/)).toBeInTheDocument();
     expect(screen.getByText(/3 missing tracks removed/)).toBeInTheDocument();
-    expect(screen.getByText("Spotify: 4 of 4 retried · 120 matched · 2 failed · 9 unmatched")).toBeInTheDocument();
+    expect(screen.getByText("Apple Music and Spotify: 4 of 4 processed · 120 matched · 2 failed · 9 unmatched")).toBeInTheDocument();
     expect(screen.getByText(/retried on the next scan/)).toBeInTheDocument();
     expect(screen.queryByText(/two minutes/)).not.toBeInTheDocument();
     await user.click(screen.getByText("7 outstanding issues"));
