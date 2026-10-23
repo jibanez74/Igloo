@@ -93,7 +93,7 @@ func (s *Scanner) persistResolvedTrackTx(ctx context.Context, qtx *database.Quer
 
 	// The link pass pairs a new or changed file with the rest of its album, so
 	// a stale outcome goes.
-	err = qtx.DeleteMusicSpotifyMatch(ctx, database.DeleteMusicSpotifyMatchParams{EntityType: musicSpotifyEntityTrack, EntityID: trackID})
+	err = qtx.DeleteMusicProviderMatch(ctx, database.DeleteMusicProviderMatchParams{EntityType: musicEntityTrack, EntityID: trackID})
 	if err != nil {
 		return 0, fmt.Errorf("track spotify match failed: %w", err)
 	}
@@ -271,7 +271,7 @@ func (s *Scanner) persistMusician(ctx context.Context, qtx *database.Queries, sc
 			return 0, err
 		}
 	}
-	err = saveMusicSpotifyMatch(ctx, qtx, musicSpotifyEntityMusician, musician.ID, input.spotifyMatch)
+	err = saveMusicMatch(ctx, qtx, musicProviderSpotify, musicEntityMusician, musician.ID, input.spotifyMatch)
 	if err != nil {
 		return 0, err
 	}
@@ -365,7 +365,7 @@ func (s *Scanner) persistAlbum(ctx context.Context, qtx *database.Queries, scan 
 			return 0, err
 		}
 	}
-	err = saveMusicSpotifyMatch(ctx, qtx, musicSpotifyEntityAlbum, album.ID, input.spotifyMatch)
+	err = saveMusicMatch(ctx, qtx, musicProviderSpotify, musicEntityAlbum, album.ID, input.spotifyMatch)
 	if err != nil {
 		return 0, err
 	}
@@ -396,7 +396,7 @@ func (s *Scanner) updateAlbumCoverIfChanged(ctx context.Context, qtx *database.Q
 		return album, nil
 	}
 
-	row, err := qtx.UpdateAlbumSpotifyCover(ctx, database.UpdateAlbumSpotifyCoverParams{
+	row, err := qtx.UpdateAlbumCover(ctx, database.UpdateAlbumCoverParams{
 		ID:    album.ID,
 		Cover: helpers.NullString(coverURL),
 	})

@@ -74,7 +74,7 @@ SELECT sqlc.arg(owner),genre_id,source FROM musician_genres WHERE musician_genre
 DELETE FROM musicians WHERE id=?;
 
 -- name: MusicArtistRetryCandidates :many
-SELECT e.id, e.name FROM musicians e LEFT JOIN music_spotify_matches m ON m.entity_id=e.id AND m.entity_type='musician'
+SELECT e.id, e.name FROM musicians e LEFT JOIN music_provider_matches m ON m.entity_id=e.id AND m.entity_type='musician'
 WHERE e.id>sqlc.arg(after_id) AND (m.status IS NULL OR m.status='failed' OR EXISTS(SELECT 1 FROM music_spotify_adoptions p WHERE p.musician_id=e.id))
 AND (EXISTS(SELECT 1 FROM track_musicians t WHERE t.musician_id=e.id)
 OR EXISTS(SELECT 1 FROM music_spotify_adoptions p
@@ -84,7 +84,7 @@ OR EXISTS(SELECT 1 FROM music_spotify_adoptions p
 ORDER BY e.id LIMIT 100;
 
 -- name: CountMusicArtistRetryCandidates :one
-SELECT COUNT(*) FROM musicians e LEFT JOIN music_spotify_matches m ON m.entity_id=e.id AND m.entity_type='musician'
+SELECT COUNT(*) FROM musicians e LEFT JOIN music_provider_matches m ON m.entity_id=e.id AND m.entity_type='musician'
 WHERE (m.status IS NULL OR m.status='failed' OR EXISTS(SELECT 1 FROM music_spotify_adoptions p WHERE p.musician_id=e.id))
 AND (EXISTS(SELECT 1 FROM track_musicians t WHERE t.musician_id=e.id)
 OR EXISTS(SELECT 1 FROM music_spotify_adoptions p
@@ -106,13 +106,13 @@ SELECT sqlc.arg(owner),genre_id,source FROM album_genres WHERE album_genres.albu
 DELETE FROM albums WHERE id=?;
 
 -- name: MusicAlbumRetryCandidates :many
-SELECT e.id, e.title, e.musician, e.year FROM albums e LEFT JOIN music_spotify_matches m ON m.entity_id=e.id AND m.entity_type='album'
+SELECT e.id, e.title, e.musician, e.year FROM albums e LEFT JOIN music_provider_matches m ON m.entity_id=e.id AND m.entity_type='album'
 WHERE e.id>sqlc.arg(after_id) AND (m.status IS NULL OR m.status='failed')
 AND EXISTS(SELECT 1 FROM tracks t WHERE t.album_id=e.id)
 ORDER BY e.id LIMIT 100;
 
 -- name: CountMusicAlbumRetryCandidates :one
-SELECT COUNT(*) FROM albums e LEFT JOIN music_spotify_matches m ON m.entity_id=e.id AND m.entity_type='album'
+SELECT COUNT(*) FROM albums e LEFT JOIN music_provider_matches m ON m.entity_id=e.id AND m.entity_type='album'
 WHERE (m.status IS NULL OR m.status='failed')
 AND EXISTS(SELECT 1 FROM tracks t WHERE t.album_id=e.id);
 
@@ -159,21 +159,21 @@ WHERE id = sqlc.arg(id);
 -- album whose extras are not on Spotify drops out once they are recorded.
 SELECT e.id, e.title, e.musician, e.spotify_id FROM albums e
 WHERE e.id>sqlc.arg(after_id) AND e.spotify_id IS NOT NULL
-AND EXISTS(SELECT 1 FROM tracks t LEFT JOIN music_spotify_matches m ON m.entity_type='track' AND m.entity_id=t.id
+AND EXISTS(SELECT 1 FROM tracks t LEFT JOIN music_provider_matches m ON m.entity_type='track' AND m.entity_id=t.id
 WHERE t.album_id=e.id AND (m.status IS NULL OR m.status='failed'))
 ORDER BY e.id LIMIT 100;
 
 -- name: CountMusicTrackLinkAlbumCandidates :one
 SELECT COUNT(*) FROM albums e
 WHERE e.spotify_id IS NOT NULL
-AND EXISTS(SELECT 1 FROM tracks t LEFT JOIN music_spotify_matches m ON m.entity_type='track' AND m.entity_id=t.id
+AND EXISTS(SELECT 1 FROM tracks t LEFT JOIN music_provider_matches m ON m.entity_type='track' AND m.entity_id=t.id
 WHERE t.album_id=e.id AND (m.status IS NULL OR m.status='failed'));
 
 -- name: MusicAlbumTracksToLink :many
 -- Every track of the album with its outcome: one without an outcome, or with
 -- a failed one, is paired; a matched one holds its Spotify track.
 SELECT t.id, t.title, t.disc, t.track_index, t.duration, t.spotify_id, m.status FROM tracks t
-LEFT JOIN music_spotify_matches m ON m.entity_type='track' AND m.entity_id=t.id
+LEFT JOIN music_provider_matches m ON m.entity_type='track' AND m.entity_id=t.id
 WHERE t.album_id=?
 ORDER BY t.disc, t.track_index, t.id;
 
@@ -190,15 +190,15 @@ UPDATE tracks SET spotify_id=NULL, explicit=false, updated_at=CURRENT_TIMESTAMP
 WHERE album_id=? AND (spotify_id IS NOT NULL OR explicit);
 
 -- name: DeleteMusicAlbumTrackMatches :exec
-DELETE FROM music_spotify_matches WHERE entity_type='track' AND entity_id IN (SELECT id FROM tracks WHERE album_id=?);
+DELETE FROM music_provider_matches WHERE entity_type='track' AND entity_id IN (SELECT id FROM tracks WHERE album_id=?);
 
 -- name: MusicCompoundReconciliationCandidates :many
 -- Driven from musicians so the keyset cursor rides the primary key, like
--- MusicArtistRetryCandidates. Joining from music_spotify_matches instead forced
+-- MusicArtistRetryCandidates. Joining from music_provider_matches instead forced
 -- a temp b-tree sort of every remaining candidate on each 100-row page.
 SELECT e.id FROM musicians e
 WHERE e.id>sqlc.arg(after_id)
-AND EXISTS (SELECT 1 FROM music_spotify_matches m WHERE m.entity_type='musician' AND m.entity_id=e.id
+AND EXISTS (SELECT 1 FROM music_provider_matches m WHERE m.entity_type='musician' AND m.entity_id=e.id
 AND m.status='unmatched' AND m.reason IN ('no_results','score_below_threshold'))
 AND EXISTS (SELECT 1 FROM track_musicians tm JOIN music_track_metadata local ON local.track_id=tm.track_id
 JOIN music_artist_identity i ON i.musician_id=tm.musician_id AND i.identity_key=local.artist_key

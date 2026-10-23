@@ -43,7 +43,7 @@ func TestSpotifyRetriesUnchangedCatalog(t *testing.T) {
 			if probe.Calls() != 1 || stub.artistCalls != beforeArtist+1 || stub.albumCalls != beforeAlbum+1 {
 				t.Fatalf("recovery probes=%d artist=%d album=%d", probe.Calls(), stub.artistCalls, stub.albumCalls)
 			}
-			matchedRows := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_spotify_matches WHERE status='matched'")
+			matchedRows := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_provider_matches WHERE status='matched'")
 			if matchedRows != 2 {
 				t.Fatal("recovery did not persist matches")
 			}
@@ -306,7 +306,7 @@ func TestSpotifyMergesPreserveTracksAndRollback(t *testing.T) {
 	// row.
 	ownerGenres := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musician_genres WHERE musician_id=1")
 	ownerCredits := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM track_musicians WHERE musician_id=1")
-	redundantRefs := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM track_musicians WHERE musician_id=2") + scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_spotify_matches WHERE entity_type='musician' AND entity_id=2")
+	redundantRefs := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM track_musicians WHERE musician_id=2") + scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_provider_matches WHERE entity_type='musician' AND entity_id=2")
 	if ownerGenres != 2 || ownerCredits != 2 || redundantRefs != 0 {
 		t.Fatalf("merge moved genres=%d credits=%d, redundant references=%d", ownerGenres, ownerCredits, redundantRefs)
 	}

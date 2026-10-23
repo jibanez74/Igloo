@@ -228,7 +228,7 @@ func (s *Scanner) linkAlbum(ctx context.Context, scan *musicScanContext, candida
 	for _, row := range rows {
 		query := spotifyapi.TrackQuery{Title: row.Title, Disc: int(row.Disc), Number: int(row.TrackIndex), DurationMs: row.Duration}
 		switch {
-		case !row.Status.Valid || row.Status.String == musicSpotifyStatusFailed:
+		case !row.Status.Valid || row.Status.String == musicStatusFailed:
 			pending = append(pending, row)
 			queries = append(queries, query)
 		case row.SpotifyID.Valid:
@@ -243,7 +243,7 @@ func (s *Scanner) linkAlbum(ctx context.Context, scan *musicScanContext, candida
 		}
 		for i, row := range pending {
 			pairing := pairings[i]
-			match := resolvedSpotifyMatch{status: musicSpotifyStatusMatched}
+			match := resolvedMatch{status: musicStatusMatched}
 			if pairing.Track == nil {
 				match = resolvedSpotifyMatchFromInfo(pairing.Info)
 			} else {
@@ -254,7 +254,7 @@ func (s *Scanner) linkAlbum(ctx context.Context, scan *musicScanContext, candida
 				txScan.invalidatedTracks[row.ID] = true
 				txScan.tracksLinked++
 			}
-			err := saveMusicSpotifyMatch(ctx, qtx, musicSpotifyEntityTrack, row.ID, &match)
+			err := saveMusicMatch(ctx, qtx, musicProviderSpotify, musicEntityTrack, row.ID, &match)
 			if err != nil {
 				return err
 			}
@@ -325,8 +325,8 @@ func dropAlbumMatch(ctx context.Context, qtx *database.Queries, txScan *musicSca
 	for _, row := range rows {
 		txScan.invalidatedTracks[row.ID] = true
 	}
-	return saveMusicSpotifyMatch(ctx, qtx, musicSpotifyEntityAlbum, albumID, &resolvedSpotifyMatch{
-		status: musicSpotifyStatusUnmatched,
+	return saveMusicMatch(ctx, qtx, musicProviderSpotify, musicEntityAlbum, albumID, &resolvedMatch{
+		status: musicStatusUnmatched,
 		reason: sql.NullString{String: musicSpotifyReasonTracksDisagree, Valid: true},
 	})
 }
@@ -340,21 +340,21 @@ func (s *Scanner) recountContradictedAlbum(ctx context.Context, scan *musicScanC
 	if err != nil {
 		return err
 	}
-	idKey := musicSpotifyEntityAlbum + ":" + strconv.FormatInt(albumID, 10)
+	idKey := musicEntityAlbum + ":" + strconv.FormatInt(albumID, 10)
 	keys := []string{idKey}
 	for _, alias := range aliases {
-		keys = append(keys, musicSpotifyEntityAlbum+":"+scanner.NormalizedScanCacheKey(alias.TitleKey, alias.ArtistKey))
+		keys = append(keys, musicEntityAlbum+":"+scanner.NormalizedScanCacheKey(alias.TitleKey, alias.ArtistKey))
 	}
 	recounted := false
 	for _, key := range keys {
 		_, counted := scan.enrichmentOutcome[key]
 		if counted {
-			scan.recountEnrichment(key, musicSpotifyStatusUnmatched)
+			scan.recountEnrichment(key, musicStatusUnmatched)
 			recounted = true
 		}
 	}
 	if !recounted {
-		scan.recountEnrichment(idKey, musicSpotifyStatusUnmatched)
+		scan.recountEnrichment(idKey, musicStatusUnmatched)
 	}
 	return nil
 }

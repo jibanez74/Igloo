@@ -142,7 +142,7 @@ func fileDatabaseSource(t *testing.T) string {
 // markArtistsUnmatched records a final name-search miss for every musician.
 func markArtistsUnmatched(t *testing.T, s *Scanner) {
 	t.Helper()
-	_, err := s.tx.DB.Exec("INSERT INTO music_spotify_matches(entity_type,entity_id,status,reason) SELECT 'musician',id,'unmatched','no_results' FROM musicians")
+	_, err := s.tx.DB.Exec("INSERT INTO music_provider_matches(provider,entity_type,entity_id,status,reason) SELECT 'spotify','musician',id,'unmatched','no_results' FROM musicians")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +208,7 @@ func TestSpotifyRecoveryProviderFailures(t *testing.T) {
 				}
 				// A final name-search miss must not hide a persisted ID adoption.
 				if !tc.terminal {
-					_, err := s.tx.DB.Exec("UPDATE music_spotify_matches SET status='unmatched',reason='no_results' WHERE entity_type='musician'")
+					_, err := s.tx.DB.Exec("UPDATE music_provider_matches SET status='unmatched',reason='no_results' WHERE entity_type='musician'")
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -560,7 +560,7 @@ func TestSpotifyRecoveryTrackListOutcomes(t *testing.T) {
 				if link.status.Valid {
 					t.Fatalf("transient settled track: %+v", link)
 				}
-			} else if link.status.String != musicSpotifyStatusUnmatched {
+			} else if link.status.String != musicStatusUnmatched {
 				t.Fatalf("empty list did not settle track: %+v", link)
 			}
 		})
@@ -583,7 +583,7 @@ func TestSpotifyRecoveryPendingPagination(t *testing.T) {
 	s.scan(dir)
 	_, err := s.tx.DB.Exec(`
  INSERT INTO musicians(name,sort_name) VALUES('Orphan','Orphan');
- INSERT INTO music_spotify_matches(entity_type,entity_id,status,reason) SELECT 'musician',id,'unmatched','no_results' FROM musicians;
+ INSERT INTO music_provider_matches(provider,entity_type,entity_id,status,reason) SELECT 'spotify','musician',id,'unmatched','no_results' FROM musicians;
  INSERT INTO music_spotify_adoptions SELECT id,name FROM musicians;
  `)
 	if err != nil {
@@ -652,7 +652,7 @@ func TestSpotifyRecoveryBreakerDefersAdoption(t *testing.T) {
 		t.Fatal(err)
 	}
 	linkScannedTracks(t, s, scan)
-	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_spotify_matches WHERE entity_type='musician' AND status='unmatched'") != 1 {
+	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_provider_matches WHERE entity_type='musician' AND status='unmatched'") != 1 {
 		t.Fatal("deferral changed final name miss")
 	}
 	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_spotify_adoptions") != 1 {
@@ -663,7 +663,7 @@ func TestSpotifyRecoveryBreakerDefersAdoption(t *testing.T) {
 	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musicians WHERE spotify_id='artist'") != 1 {
 		t.Fatal("deferred adoption did not resume")
 	}
-	if trackLinkFor(t, s, path).status.String != musicSpotifyStatusUnmatched {
+	if trackLinkFor(t, s, path).status.String != musicStatusUnmatched {
 		t.Fatal("cached empty album list did not settle track")
 	}
 }
@@ -678,7 +678,7 @@ func TestSpotifyRecoveryPendingBreaker(t *testing.T) {
 	}
 	s.ffprobe = newMusicScannerFfprobeByPath(results)
 	s.scan(dir)
-	_, err := s.tx.DB.Exec(`INSERT INTO music_spotify_matches(entity_type,entity_id,status) SELECT 'musician',id,'unmatched' FROM musicians;
+	_, err := s.tx.DB.Exec(`INSERT INTO music_provider_matches(provider,entity_type,entity_id,status) SELECT 'spotify','musician',id,'unmatched' FROM musicians;
  INSERT INTO music_spotify_adoptions SELECT id,name FROM musicians;`)
 	if err != nil {
 		t.Fatal(err)
@@ -692,7 +692,7 @@ func TestSpotifyRecoveryPendingBreaker(t *testing.T) {
 	if s.Status().State != scanner.StateCompletedWithIssues || s.Status().EnrichmentFailed != 3 {
 		t.Fatalf("status=%+v", s.Status())
 	}
-	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_spotify_adoptions") != 4 || scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_spotify_matches WHERE status='unmatched'") != 1 {
+	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_spotify_adoptions") != 4 || scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_provider_matches WHERE status='unmatched'") != 1 {
 		t.Fatal("breaker discarded pending work or recorded skipped failure")
 	}
 }
@@ -755,8 +755,8 @@ func TestSpotifyRecoveryAdoptionMergesPreserveReferences(t *testing.T) {
 	_, err := s.tx.DB.Exec(`
  UPDATE musicians SET spotify_id='artist' WHERE name='Owner';
  UPDATE albums SET spotify_id='album' WHERE title='Retained';
- INSERT INTO music_spotify_matches(entity_type,entity_id,status) SELECT 'musician',id,CASE WHEN spotify_id IS NULL THEN 'unmatched' ELSE 'matched' END FROM musicians;
- INSERT INTO music_spotify_matches(entity_type,entity_id,status) SELECT 'album',id,'matched' FROM albums WHERE spotify_id IS NOT NULL;
+ INSERT INTO music_provider_matches(provider,entity_type,entity_id,status) SELECT 'spotify','musician',id,CASE WHEN spotify_id IS NULL THEN 'unmatched' ELSE 'matched' END FROM musicians;
+ INSERT INTO music_provider_matches(provider,entity_type,entity_id,status) SELECT 'spotify','album',id,'matched' FROM albums WHERE spotify_id IS NOT NULL;
  INSERT INTO users(id,email,password,name) VALUES(1,'test@example.com','hash','Test');
  INSERT INTO playlists(id,name,user_id) VALUES(1,'Music',1);
  INSERT INTO playlist_tracks(playlist_id,track_id,added_by,position) VALUES(1,2,1,0);
@@ -813,7 +813,7 @@ func TestSpotifyRecoveryAlbumArtistWithoutTrackCredit(t *testing.T) {
 	_, err := s.tx.DB.Exec(`
  INSERT INTO musicians(name,sort_name) VALUES('Test Artist','Test Artist');
  INSERT INTO music_artist_identity(identity_key,musician_id) SELECT 'test artist',id FROM musicians WHERE name='Test Artist';
- INSERT INTO music_spotify_matches(entity_type,entity_id,status) SELECT 'musician',id,'unmatched' FROM musicians;
+ INSERT INTO music_provider_matches(provider,entity_type,entity_id,status) SELECT 'spotify','musician',id,'unmatched' FROM musicians;
  `)
 	if err != nil {
 		t.Fatal(err)
@@ -832,7 +832,7 @@ func TestSpotifyRecoveryAlbumArtistWithoutTrackCredit(t *testing.T) {
 	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM track_musicians tm JOIN musicians m ON m.id=tm.musician_id WHERE m.name='Guest'") != 1 {
 		t.Fatal("adoption changed track credits")
 	}
-	if trackLinkFor(t, s, path).status.String != musicSpotifyStatusUnmatched {
+	if trackLinkFor(t, s, path).status.String != musicStatusUnmatched {
 		t.Fatal("empty album tracks not settled")
 	}
 }
@@ -856,7 +856,7 @@ func TestSpotifyAlbumAliasContradictionCountsOnce(t *testing.T) {
 	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM albums WHERE spotify_id IS NOT NULL") != 0 {
 		t.Fatal("contradicted album kept Spotify identity")
 	}
-	if scan.enrichmentCounts[musicSpotifyStatusMatched] != 0 || scan.enrichmentCounts[musicSpotifyStatusUnmatched] != 1 {
+	if scan.enrichmentCounts[musicStatusMatched] != 0 || scan.enrichmentCounts[musicStatusUnmatched] != 1 {
 		t.Fatalf("enrichment counts = %v, want the one album moved to unmatched", scan.enrichmentCounts)
 	}
 }
@@ -869,7 +869,7 @@ func TestSpotifyRecoveryPreservesMatchedMusician(t *testing.T) {
 	s.scan(dir)
 	_, err := s.tx.DB.Exec(`
  UPDATE musicians SET spotify_id='retained';
- INSERT INTO music_spotify_matches(entity_type,entity_id,status) SELECT 'musician',id,'matched' FROM musicians;
+ INSERT INTO music_provider_matches(provider,entity_type,entity_id,status) SELECT 'spotify','musician',id,'matched' FROM musicians;
  INSERT INTO music_spotify_adoptions SELECT id,'obsolete' FROM musicians;
  `)
 	if err != nil {

@@ -30,9 +30,9 @@ func (r *scanReport) syncCounts() {
 	if r.scan == nil {
 		return
 	}
-	r.status.Enriched = r.scan.enrichmentCounts[musicSpotifyStatusMatched]
-	r.status.EnrichmentFailed = r.scan.enrichmentCounts[musicSpotifyStatusFailed]
-	r.status.EnrichmentUnmatched = r.scan.enrichmentCounts[musicSpotifyStatusUnmatched]
+	r.status.Enriched = r.scan.enrichmentCounts[musicStatusMatched]
+	r.status.EnrichmentFailed = r.scan.enrichmentCounts[musicStatusFailed]
+	r.status.EnrichmentUnmatched = r.scan.enrichmentCounts[musicStatusUnmatched]
 }
 
 // tracksLinked is the number of tracks paired with a Spotify track this run,

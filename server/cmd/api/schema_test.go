@@ -506,7 +506,7 @@ func TestInitTables_Idempotent(t *testing.T) {
 		INSERT INTO music_artist_identity (identity_key, musician_id) VALUES ('aurora', 1);
 		INSERT INTO music_album_identity (title_key, artist_key, album_id) VALUES ('daylight', 'aurora', 1);
 		INSERT INTO music_credit_metadata (track_id, musician_id, sort_name) VALUES (1, 1, 'aurora');
-		INSERT INTO music_spotify_matches (entity_type, entity_id, status) VALUES ('album', 1, 'unmatched');
+		INSERT INTO music_provider_matches (provider, entity_type, entity_id, status) VALUES ('spotify', 'album', 1, 'unmatched');
 	`)
 	if err != nil {
 		t.Fatalf("populate catalog: %v", err)
@@ -530,7 +530,7 @@ func TestInitTables_Idempotent(t *testing.T) {
 		{"artist alias", `SELECT identity_key || ':' || musician_id FROM music_artist_identity`, "aurora:1"},
 		{"album alias", `SELECT title_key || ':' || artist_key || ':' || album_id FROM music_album_identity`, "daylight:aurora:1"},
 		{"sort contribution", `SELECT track_id || ':' || musician_id || ':' || sort_name FROM music_credit_metadata`, "1:1:aurora"},
-		{"match cache", `SELECT entity_type || ':' || entity_id || ':' || status FROM music_spotify_matches`, "album:1:unmatched"},
+		{"match cache", `SELECT entity_type || ':' || entity_id || ':' || status FROM music_provider_matches`, "album:1:unmatched"},
 		{"movie search", `SELECT group_concat(rowid) FROM movies_fts WHERE movies_fts MATCH 'moonrise'`, "1"},
 		{"show search", `SELECT group_concat(rowid) FROM shows_fts WHERE shows_fts MATCH 'nightfall dusk'`, "1"},
 		{"album search", `SELECT group_concat(rowid) FROM albums_fts WHERE albums_fts MATCH 'daylight aurora'`, "1"},

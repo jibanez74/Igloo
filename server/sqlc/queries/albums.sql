@@ -50,7 +50,7 @@ ORDER BY
 LIMIT ?
 OFFSET ?;
 
--- name: UpdateAlbumSpotifyCover :one
+-- name: UpdateAlbumCover :one
 UPDATE albums
 SET
   cover = ?,

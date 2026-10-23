@@ -185,7 +185,7 @@ func TestAudioStreamRequiredBeforeResolution(t *testing.T) {
 			if scanned != 0 || failures != 1 || spotify.artistCalls != 0 || spotify.albumCalls != 0 {
 				t.Fatalf("scanned=%d errors=%d Spotify=%+v", scanned, failures, spotify)
 			}
-			for _, table := range []string{"tracks", "musicians", "albums", "music_spotify_matches"} {
+			for _, table := range []string{"tracks", "musicians", "albums", "music_provider_matches"} {
 				count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM "+table)
 				if count != 0 {
 					t.Fatalf("%s has %d rows", table, count)

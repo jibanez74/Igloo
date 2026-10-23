@@ -23,8 +23,8 @@ type musicScanContext struct {
 	musicianIDs         scanner.ScanCache[string, int64]
 	albumIDs            scanner.ScanCache[string, int64]
 	genreIDs            scanner.ScanCache[string, int64]
-	spotifyArtistMisses map[string]resolvedSpotifyMatch
-	spotifyAlbumMisses  map[string]resolvedSpotifyMatch
+	spotifyArtistMisses map[string]resolvedMatch
+	spotifyAlbumMisses  map[string]resolvedMatch
 	compoundSplits      map[string]bool
 	// albumTracks holds the Spotify track list of every album matched or
 	// fetched this scan, keyed by Spotify ID, so its tracks pair without
@@ -61,8 +61,8 @@ func newMusicScanContext(trackIndex map[string]scanner.FileFingerprint) *musicSc
 		musicianIDs:         scanner.NewScanCache[string, int64](),
 		albumIDs:            scanner.NewScanCache[string, int64](),
 		genreIDs:            scanner.NewScanCache[string, int64](),
-		spotifyArtistMisses: make(map[string]resolvedSpotifyMatch),
-		spotifyAlbumMisses:  make(map[string]resolvedSpotifyMatch),
+		spotifyArtistMisses: make(map[string]resolvedMatch),
+		spotifyAlbumMisses:  make(map[string]resolvedMatch),
 		albumTracks:         make(map[string][]spotifyapi.SimpleTrack),
 		albumTrackFailures:  make(map[string]bool),
 		artistIDAttempts:    make(map[spotifyapi.ID]artistIDResult),
@@ -109,7 +109,7 @@ func (scan *musicScanContext) mergeFrom(other *musicScanContext) {
 // Every resolution path funnels through it, including the cached ones, because
 // counting only where the network call happens reported requests rather than
 // artists and albums.
-func (scan *musicScanContext) countEnrichment(key string, match *resolvedSpotifyMatch) {
+func (scan *musicScanContext) countEnrichment(key string, match *resolvedMatch) {
 	if match == nil {
 		return
 	}

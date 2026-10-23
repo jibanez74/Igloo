@@ -16,7 +16,7 @@ import (
 // Match reasons are the values carried by MatchDebugInfo.Reason. The music
 // scanner branches on them to decide whether a failed match is "unmatched"
 // (definitive) or "failed" (retry later), and they are persisted verbatim to
-// music_spotify_matches.reason, so they are exported rather than re-spelled.
+// music_provider_matches.reason, so they are exported rather than re-spelled.
 const (
 	MatchReasonAccepted            = "accepted"
 	MatchReasonNoResults           = "no_results"

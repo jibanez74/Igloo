@@ -329,12 +329,14 @@ CREATE TABLE IF NOT EXISTS music_spotify_adoptions (
   spotify_id TEXT NOT NULL CHECK (spotify_id <> '')
 );
 
--- Cached Spotify outcomes survive rescans. Entity type determines the owner;
--- maintenance triggers remove entries when that owner is deleted. A miss keeps
--- the best candidate's name and score so it can be explained.
-CREATE TABLE IF NOT EXISTS music_spotify_matches (
+-- Cached provider outcomes survive rescans, one per entity: provider names the
+-- catalog that settled it. Entity type determines the owner; maintenance
+-- triggers remove entries when that owner is deleted. A miss keeps the best
+-- candidate's name and score so it can be explained.
+CREATE TABLE IF NOT EXISTS music_provider_matches (
   entity_type TEXT NOT NULL CHECK (entity_type IN ('album', 'musician', 'track')),
   entity_id INTEGER NOT NULL,
+  provider TEXT NOT NULL CHECK (provider IN ('spotify', 'apple')),
   status TEXT NOT NULL CHECK (status IN ('matched', 'failed', 'unmatched')),
   reason TEXT,
   candidate TEXT,
@@ -842,22 +844,22 @@ CREATE VIRTUAL TABLE IF NOT EXISTS tracks_search_fts_vocab USING fts5vocab (trac
 
 -- Match-cache cleanup
 
-CREATE TRIGGER IF NOT EXISTS music_spotify_matches_album_ad
+CREATE TRIGGER IF NOT EXISTS music_provider_matches_album_ad
 AFTER DELETE ON albums
 BEGIN
-  DELETE FROM music_spotify_matches WHERE entity_type = 'album' AND entity_id = old.id;
+  DELETE FROM music_provider_matches WHERE entity_type = 'album' AND entity_id = old.id;
 END;
 
-CREATE TRIGGER IF NOT EXISTS music_spotify_matches_musician_ad
+CREATE TRIGGER IF NOT EXISTS music_provider_matches_musician_ad
 AFTER DELETE ON musicians
 BEGIN
-  DELETE FROM music_spotify_matches WHERE entity_type = 'musician' AND entity_id = old.id;
+  DELETE FROM music_provider_matches WHERE entity_type = 'musician' AND entity_id = old.id;
 END;
 
-CREATE TRIGGER IF NOT EXISTS music_spotify_matches_track_ad
+CREATE TRIGGER IF NOT EXISTS music_provider_matches_track_ad
 AFTER DELETE ON tracks
 BEGIN
-  DELETE FROM music_spotify_matches WHERE entity_type = 'track' AND entity_id = old.id;
+  DELETE FROM music_provider_matches WHERE entity_type = 'track' AND entity_id = old.id;
 END;
 
 -- Search indexing

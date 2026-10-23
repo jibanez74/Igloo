@@ -104,8 +104,8 @@ type Querier interface {
 	DeleteMovieWatchProgress(ctx context.Context, arg DeleteMovieWatchProgressParams) error
 	DeleteMusicAlbumTrackMatches(ctx context.Context, albumID sql.NullInt64) error
 	DeleteMusicCreditMetadata(ctx context.Context, trackID int64) error
+	DeleteMusicProviderMatch(ctx context.Context, arg DeleteMusicProviderMatchParams) error
 	DeleteMusicSpotifyAdoption(ctx context.Context, musicianID int64) error
-	DeleteMusicSpotifyMatch(ctx context.Context, arg DeleteMusicSpotifyMatchParams) error
 	DeleteNotificationForUser(ctx context.Context, notificationID int64) (int64, error)
 	DeletePlaylist(ctx context.Context, arg DeletePlaylistParams) error
 	DeleteShowCast(ctx context.Context, showID int64) error
@@ -251,8 +251,8 @@ type Querier interface {
 	GetMoviesLibraryDesc(ctx context.Context, arg GetMoviesLibraryDescParams) ([]GetMoviesLibraryDescRow, error)
 	// The music stats endpoint needs all three; one round trip instead of three.
 	GetMusicLibraryCounts(ctx context.Context) (GetMusicLibraryCountsRow, error)
+	GetMusicProviderMatch(ctx context.Context, arg GetMusicProviderMatchParams) (GetMusicProviderMatchRow, error)
 	GetMusicSpotifyAdoption(ctx context.Context, musicianID int64) (string, error)
-	GetMusicSpotifyMatch(ctx context.Context, arg GetMusicSpotifyMatchParams) (GetMusicSpotifyMatchRow, error)
 	GetMusicianByID(ctx context.Context, id int64) (Musician, error)
 	GetMusicianBySpotifyID(ctx context.Context, spotifyID sql.NullString) (GetMusicianBySpotifyIDRow, error)
 	// Returns musicians sorted alphabetically by sort_name with pagination.
@@ -549,7 +549,7 @@ type Querier interface {
 	// The range and order ride idx_track_musicians_musician_track, so keep them on tm.
 	MusicArtistTrackMetadata(ctx context.Context, arg MusicArtistTrackMetadataParams) ([]MusicArtistTrackMetadataRow, error)
 	// Driven from musicians so the keyset cursor rides the primary key, like
-	// MusicArtistRetryCandidates. Joining from music_spotify_matches instead forced
+	// MusicArtistRetryCandidates. Joining from music_provider_matches instead forced
 	// a temp b-tree sort of every remaining candidate on each 100-row page.
 	MusicCompoundReconciliationCandidates(ctx context.Context, afterID int64) ([]int64, error)
 	// The album and artists a track contributes to, read before a rewrite or delete
@@ -596,7 +596,7 @@ type Querier interface {
 	TrackExists(ctx context.Context, id int64) (bool, error)
 	UnlikeMovie(ctx context.Context, arg UnlikeMovieParams) (int64, error)
 	UnlikeTrack(ctx context.Context, arg UnlikeTrackParams) (int64, error)
-	UpdateAlbumSpotifyCover(ctx context.Context, arg UpdateAlbumSpotifyCoverParams) (UpdateAlbumSpotifyCoverRow, error)
+	UpdateAlbumCover(ctx context.Context, arg UpdateAlbumCoverParams) (UpdateAlbumCoverRow, error)
 	UpdateDeviceLastUsed(ctx context.Context, id int64) error
 	UpdateGeneralSettings(ctx context.Context, arg UpdateGeneralSettingsParams) (Setting, error)
 	UpdateLibrarySettings(ctx context.Context, arg UpdateLibrarySettingsParams) (Setting, error)
@@ -643,7 +643,7 @@ type Querier interface {
 	UpsertMovie(ctx context.Context, arg UpsertMovieParams) (int64, error)
 	UpsertMovieFileFingerprint(ctx context.Context, arg UpsertMovieFileFingerprintParams) (int64, error)
 	UpsertMovieWatchProgress(ctx context.Context, arg UpsertMovieWatchProgressParams) error
-	UpsertMusicSpotifyMatch(ctx context.Context, arg UpsertMusicSpotifyMatchParams) error
+	UpsertMusicProviderMatch(ctx context.Context, arg UpsertMusicProviderMatchParams) error
 	UpsertMusician(ctx context.Context, arg UpsertMusicianParams) (UpsertMusicianRow, error)
 	UpsertNetwork(ctx context.Context, arg UpsertNetworkParams) (Network, error)
 	UpsertProductionCompany(ctx context.Context, arg UpsertProductionCompanyParams) (int64, error)

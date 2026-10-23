@@ -233,7 +233,7 @@ func (q *Queries) GetLatestAlbums(ctx context.Context) ([]GetLatestAlbumsRow, er
 	return items, nil
 }
 
-const updateAlbumSpotifyCover = `-- name: UpdateAlbumSpotifyCover :one
+const updateAlbumCover = `-- name: UpdateAlbumCover :one
 UPDATE albums
 SET
   cover = ?,
@@ -242,20 +242,20 @@ WHERE id = ?
 RETURNING id, spotify_id, cover
 `
 
-type UpdateAlbumSpotifyCoverParams struct {
+type UpdateAlbumCoverParams struct {
 	Cover sql.NullString `json:"cover"`
 	ID    int64          `json:"id"`
 }
 
-type UpdateAlbumSpotifyCoverRow struct {
+type UpdateAlbumCoverRow struct {
 	ID        int64          `json:"id"`
 	SpotifyID sql.NullString `json:"spotify_id"`
 	Cover     sql.NullString `json:"cover"`
 }
 
-func (q *Queries) UpdateAlbumSpotifyCover(ctx context.Context, arg UpdateAlbumSpotifyCoverParams) (UpdateAlbumSpotifyCoverRow, error) {
-	row := q.queryRow(ctx, q.updateAlbumSpotifyCoverStmt, updateAlbumSpotifyCover, arg.Cover, arg.ID)
-	var i UpdateAlbumSpotifyCoverRow
+func (q *Queries) UpdateAlbumCover(ctx context.Context, arg UpdateAlbumCoverParams) (UpdateAlbumCoverRow, error) {
+	row := q.queryRow(ctx, q.updateAlbumCoverStmt, updateAlbumCover, arg.Cover, arg.ID)
+	var i UpdateAlbumCoverRow
 	err := row.Scan(&i.ID, &i.SpotifyID, &i.Cover)
 	return i, err
 }
