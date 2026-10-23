@@ -158,6 +158,7 @@ func (s *musicScannerFfprobeByPath) totalMetadataCalls() int {
 }
 
 type musicScannerSpotifyStub struct {
+	script *spotifyScript
 	artist *spotifyapi.FullArtist
 	// artistsByName, when set, answers per name (lowercased); a name it does
 	// not carry fails the lookup, so one stub can model a compound credit where
@@ -183,7 +184,11 @@ type musicScannerSpotifyStub struct {
 	albumFetches  int
 }
 
-func (s *musicScannerSpotifyStub) SearchArtistByName(_ context.Context, name string) (*spotifyapi.FullArtist, error) {
+func (s *musicScannerSpotifyStub) SearchArtistByName(ctx context.Context, name string) (*spotifyapi.FullArtist, error) {
+	if s.script != nil {
+		step := s.script.request(ctx, "search", name)
+		return step.artist, step.err
+	}
 	s.artistCalls++
 	if s.artistsByName != nil {
 		artist, ok := s.artistsByName[strings.ToLower(strings.TrimSpace(name))]
@@ -199,7 +204,11 @@ func (s *musicScannerSpotifyStub) SearchArtistByName(_ context.Context, name str
 	return s.artist, nil
 }
 
-func (s *musicScannerSpotifyStub) GetArtist(_ context.Context, id spotifyapi.ID) (*spotifyapi.FullArtist, error) {
+func (s *musicScannerSpotifyStub) GetArtist(ctx context.Context, id spotifyapi.ID) (*spotifyapi.FullArtist, error) {
+	if s.script != nil {
+		step := s.script.request(ctx, "artist", id.String())
+		return step.artist, step.err
+	}
 	s.artistFetches++
 	artist, ok := s.artistsByID[id]
 	if !ok {
@@ -208,7 +217,11 @@ func (s *musicScannerSpotifyStub) GetArtist(_ context.Context, id spotifyapi.ID)
 	return artist, nil
 }
 
-func (s *musicScannerSpotifyStub) MatchAlbum(_ context.Context, query spotifyapi.AlbumQuery) (*spotifyapi.FullAlbum, error) {
+func (s *musicScannerSpotifyStub) MatchAlbum(ctx context.Context, query spotifyapi.AlbumQuery) (*spotifyapi.FullAlbum, error) {
+	if s.script != nil {
+		step := s.script.request(ctx, "match", query.Title)
+		return step.album, step.err
+	}
 	s.albumCalls++
 	s.albumQueries = append(s.albumQueries, query)
 	if s.albumsByTitle != nil {
@@ -225,7 +238,11 @@ func (s *musicScannerSpotifyStub) MatchAlbum(_ context.Context, query spotifyapi
 	return s.album, nil
 }
 
-func (s *musicScannerSpotifyStub) GetAlbum(_ context.Context, id spotifyapi.ID) (*spotifyapi.FullAlbum, error) {
+func (s *musicScannerSpotifyStub) GetAlbum(ctx context.Context, id spotifyapi.ID) (*spotifyapi.FullAlbum, error) {
+	if s.script != nil {
+		step := s.script.request(ctx, "album", id.String())
+		return step.album, step.err
+	}
 	s.albumFetches++
 	if s.albumFetchErr != nil {
 		return nil, s.albumFetchErr

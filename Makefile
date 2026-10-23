@@ -44,7 +44,7 @@ FFPROBE_PAYLOAD_ZST := $(FFPROBE_PAYLOAD).zst
 
 .DEFAULT_GOAL := dev
 
-.PHONY: dev dev-profile build start stop clean help check test test-server lint-server test-tmdb-integration test-spotify-integration test-web lint-web build-web test-openapi lint-openapi generate-openapi check-openapi preview-openapi
+.PHONY: dev dev-profile build start stop clean help check test test-server test-music-race lint-server test-tmdb-integration test-spotify-integration test-web lint-web build-web test-openapi lint-openapi generate-openapi check-openapi preview-openapi
 .PHONY: check-go-tools check-web-tools check-sqlc-tools check-media-tools check-dev-tools check-build-tools check-server-test-tools check-platform check-media-payloads compress-media-payloads generate prepare-webdist-placeholder prepare-openapi-embed prepare-test-webdist prepare-web
 
 dev: check-dev-tools generate prepare-webdist-placeholder prepare-openapi-embed
@@ -136,6 +136,7 @@ help:
 	@echo "  make check         Run contract checks, backend lint and tests, web lint, web tests, and web build"
 	@echo "  make test          Run backend and web unit tests"
 	@echo "  make test-server   Run backend tests with required build tags"
+	@echo "  make test-music-race Run music scanner and Spotify tests with the race detector"
 	@echo "  make lint-server   Run go vet and the dead-code reachability checks"
 	@echo "  make test-tmdb-integration Run live TMDB API tests (requires TMDB_API_KEY)"
 	@echo "  make test-spotify-integration Run live Spotify API tests (requires SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET)"
@@ -154,6 +155,9 @@ test: test-server test-web
 
 test-server: check-server-test-tools prepare-webdist-placeholder prepare-openapi-embed
 	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go test -count=1 -v -tags "$(TEST_TAGS)" ./...
+
+test-music-race: check-server-test-tools
+	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go test -race -count=1 -tags "$(TEST_TAGS)" ./cmd/internal/scanner/music ./cmd/internal/spotify
 
 # go vet plus a whole-program reachability check. deadcode roots at the tests as
 # well as main, so the baseline is empty and needs no allowlist; the trade-off is

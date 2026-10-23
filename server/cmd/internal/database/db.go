@@ -243,6 +243,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.deleteMusicCreditMetadataStmt, err = db.PrepareContext(ctx, deleteMusicCreditMetadata); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteMusicCreditMetadata: %w", err)
 	}
+	if q.deleteMusicSpotifyAdoptionStmt, err = db.PrepareContext(ctx, deleteMusicSpotifyAdoption); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteMusicSpotifyAdoption: %w", err)
+	}
 	if q.deleteMusicSpotifyMatchStmt, err = db.PrepareContext(ctx, deleteMusicSpotifyMatch); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteMusicSpotifyMatch: %w", err)
 	}
@@ -482,6 +485,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.getMusicLibraryCountsStmt, err = db.PrepareContext(ctx, getMusicLibraryCounts); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMusicLibraryCounts: %w", err)
+	}
+	if q.getMusicSpotifyAdoptionStmt, err = db.PrepareContext(ctx, getMusicSpotifyAdoption); err != nil {
+		return nil, fmt.Errorf("error preparing query GetMusicSpotifyAdoption: %w", err)
 	}
 	if q.getMusicSpotifyMatchStmt, err = db.PrepareContext(ctx, getMusicSpotifyMatch); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMusicSpotifyMatch: %w", err)
@@ -950,6 +956,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.saveMusicGenreIdentityStmt, err = db.PrepareContext(ctx, saveMusicGenreIdentity); err != nil {
 		return nil, fmt.Errorf("error preparing query SaveMusicGenreIdentity: %w", err)
+	}
+	if q.saveMusicSpotifyAdoptionStmt, err = db.PrepareContext(ctx, saveMusicSpotifyAdoption); err != nil {
+		return nil, fmt.Errorf("error preparing query SaveMusicSpotifyAdoption: %w", err)
 	}
 	if q.saveMusicTrackMetadataStmt, err = db.PrepareContext(ctx, saveMusicTrackMetadata); err != nil {
 		return nil, fmt.Errorf("error preparing query SaveMusicTrackMetadata: %w", err)
@@ -1489,6 +1498,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing deleteMusicCreditMetadataStmt: %w", cerr)
 		}
 	}
+	if q.deleteMusicSpotifyAdoptionStmt != nil {
+		if cerr := q.deleteMusicSpotifyAdoptionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteMusicSpotifyAdoptionStmt: %w", cerr)
+		}
+	}
 	if q.deleteMusicSpotifyMatchStmt != nil {
 		if cerr := q.deleteMusicSpotifyMatchStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing deleteMusicSpotifyMatchStmt: %w", cerr)
@@ -1887,6 +1901,11 @@ func (q *Queries) Close() error {
 	if q.getMusicLibraryCountsStmt != nil {
 		if cerr := q.getMusicLibraryCountsStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getMusicLibraryCountsStmt: %w", cerr)
+		}
+	}
+	if q.getMusicSpotifyAdoptionStmt != nil {
+		if cerr := q.getMusicSpotifyAdoptionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getMusicSpotifyAdoptionStmt: %w", cerr)
 		}
 	}
 	if q.getMusicSpotifyMatchStmt != nil {
@@ -2669,6 +2688,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing saveMusicGenreIdentityStmt: %w", cerr)
 		}
 	}
+	if q.saveMusicSpotifyAdoptionStmt != nil {
+		if cerr := q.saveMusicSpotifyAdoptionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing saveMusicSpotifyAdoptionStmt: %w", cerr)
+		}
+	}
 	if q.saveMusicTrackMetadataStmt != nil {
 		if cerr := q.saveMusicTrackMetadataStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing saveMusicTrackMetadataStmt: %w", cerr)
@@ -3061,6 +3085,7 @@ type Queries struct {
 	deleteMovieWatchProgressStmt                *sql.Stmt
 	deleteMusicAlbumTrackMatchesStmt            *sql.Stmt
 	deleteMusicCreditMetadataStmt               *sql.Stmt
+	deleteMusicSpotifyAdoptionStmt              *sql.Stmt
 	deleteMusicSpotifyMatchStmt                 *sql.Stmt
 	deleteNotificationForUserStmt               *sql.Stmt
 	deletePlaylistStmt                          *sql.Stmt
@@ -3141,6 +3166,7 @@ type Queries struct {
 	getMoviesLibraryAscStmt                     *sql.Stmt
 	getMoviesLibraryDescStmt                    *sql.Stmt
 	getMusicLibraryCountsStmt                   *sql.Stmt
+	getMusicSpotifyAdoptionStmt                 *sql.Stmt
 	getMusicSpotifyMatchStmt                    *sql.Stmt
 	getMusicianByIDStmt                         *sql.Stmt
 	getMusicianBySpotifyIDStmt                  *sql.Stmt
@@ -3297,6 +3323,7 @@ type Queries struct {
 	saveMusicArtistIdentityStmt                 *sql.Stmt
 	saveMusicCreditMetadataStmt                 *sql.Stmt
 	saveMusicGenreIdentityStmt                  *sql.Stmt
+	saveMusicSpotifyAdoptionStmt                *sql.Stmt
 	saveMusicTrackMetadataStmt                  *sql.Stmt
 	setMusicAlbumSpotifyIDStmt                  *sql.Stmt
 	setMusicArtistSpotifyIDStmt                 *sql.Stmt
@@ -3432,6 +3459,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		deleteMovieWatchProgressStmt:                q.deleteMovieWatchProgressStmt,
 		deleteMusicAlbumTrackMatchesStmt:            q.deleteMusicAlbumTrackMatchesStmt,
 		deleteMusicCreditMetadataStmt:               q.deleteMusicCreditMetadataStmt,
+		deleteMusicSpotifyAdoptionStmt:              q.deleteMusicSpotifyAdoptionStmt,
 		deleteMusicSpotifyMatchStmt:                 q.deleteMusicSpotifyMatchStmt,
 		deleteNotificationForUserStmt:               q.deleteNotificationForUserStmt,
 		deletePlaylistStmt:                          q.deletePlaylistStmt,
@@ -3512,6 +3540,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getMoviesLibraryAscStmt:                     q.getMoviesLibraryAscStmt,
 		getMoviesLibraryDescStmt:                    q.getMoviesLibraryDescStmt,
 		getMusicLibraryCountsStmt:                   q.getMusicLibraryCountsStmt,
+		getMusicSpotifyAdoptionStmt:                 q.getMusicSpotifyAdoptionStmt,
 		getMusicSpotifyMatchStmt:                    q.getMusicSpotifyMatchStmt,
 		getMusicianByIDStmt:                         q.getMusicianByIDStmt,
 		getMusicianBySpotifyIDStmt:                  q.getMusicianBySpotifyIDStmt,
@@ -3668,6 +3697,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		saveMusicArtistIdentityStmt:                 q.saveMusicArtistIdentityStmt,
 		saveMusicCreditMetadataStmt:                 q.saveMusicCreditMetadataStmt,
 		saveMusicGenreIdentityStmt:                  q.saveMusicGenreIdentityStmt,
+		saveMusicSpotifyAdoptionStmt:                q.saveMusicSpotifyAdoptionStmt,
 		saveMusicTrackMetadataStmt:                  q.saveMusicTrackMetadataStmt,
 		setMusicAlbumSpotifyIDStmt:                  q.setMusicAlbumSpotifyIDStmt,
 		setMusicArtistSpotifyIDStmt:                 q.setMusicArtistSpotifyIDStmt,

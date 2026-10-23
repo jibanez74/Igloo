@@ -104,6 +104,7 @@ type Querier interface {
 	DeleteMovieWatchProgress(ctx context.Context, arg DeleteMovieWatchProgressParams) error
 	DeleteMusicAlbumTrackMatches(ctx context.Context, albumID sql.NullInt64) error
 	DeleteMusicCreditMetadata(ctx context.Context, trackID int64) error
+	DeleteMusicSpotifyAdoption(ctx context.Context, musicianID int64) error
 	DeleteMusicSpotifyMatch(ctx context.Context, arg DeleteMusicSpotifyMatchParams) error
 	DeleteNotificationForUser(ctx context.Context, notificationID int64) (int64, error)
 	DeletePlaylist(ctx context.Context, arg DeletePlaylistParams) error
@@ -250,6 +251,7 @@ type Querier interface {
 	GetMoviesLibraryDesc(ctx context.Context, arg GetMoviesLibraryDescParams) ([]GetMoviesLibraryDescRow, error)
 	// The music stats endpoint needs all three; one round trip instead of three.
 	GetMusicLibraryCounts(ctx context.Context) (GetMusicLibraryCountsRow, error)
+	GetMusicSpotifyAdoption(ctx context.Context, musicianID int64) (string, error)
 	GetMusicSpotifyMatch(ctx context.Context, arg GetMusicSpotifyMatchParams) (GetMusicSpotifyMatchRow, error)
 	GetMusicianByID(ctx context.Context, id int64) (Musician, error)
 	GetMusicianBySpotifyID(ctx context.Context, spotifyID sql.NullString) (GetMusicianBySpotifyIDRow, error)
@@ -582,6 +584,7 @@ type Querier interface {
 	SaveMusicArtistIdentity(ctx context.Context, arg SaveMusicArtistIdentityParams) error
 	SaveMusicCreditMetadata(ctx context.Context, arg SaveMusicCreditMetadataParams) error
 	SaveMusicGenreIdentity(ctx context.Context, arg SaveMusicGenreIdentityParams) error
+	SaveMusicSpotifyAdoption(ctx context.Context, arg SaveMusicSpotifyAdoptionParams) error
 	SaveMusicTrackMetadata(ctx context.Context, arg SaveMusicTrackMetadataParams) error
 	SetMusicAlbumSpotifyID(ctx context.Context, arg SetMusicAlbumSpotifyIDParams) error
 	SetMusicArtistSpotifyID(ctx context.Context, arg SetMusicArtistSpotifyIDParams) error

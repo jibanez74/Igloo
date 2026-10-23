@@ -27,9 +27,11 @@ type musicScanContext struct {
 	spotifyAlbumMisses  map[string]resolvedSpotifyMatch
 	compoundSplits      map[string]bool
 	// albumTracks holds the Spotify track list of every album matched or
-	// fetched this scan, keyed like albumIDs, so its tracks pair without
+	// fetched this scan, keyed by Spotify ID, so its tracks pair without
 	// another request.
-	albumTracks map[string][]spotifyapi.SimpleTrack
+	albumTracks        map[string][]spotifyapi.SimpleTrack
+	albumTrackFailures map[string]bool
+	artistIDAttempts   map[spotifyapi.ID]artistIDResult
 	// tracksLinked counts the tracks paired with a Spotify track; a clone
 	// counts its own transaction and mergeFrom adds it.
 	tracksLinked int
@@ -62,6 +64,8 @@ func newMusicScanContext(trackIndex map[string]scanner.FileFingerprint) *musicSc
 		spotifyArtistMisses: make(map[string]resolvedSpotifyMatch),
 		spotifyAlbumMisses:  make(map[string]resolvedSpotifyMatch),
 		albumTracks:         make(map[string][]spotifyapi.SimpleTrack),
+		albumTrackFailures:  make(map[string]bool),
+		artistIDAttempts:    make(map[spotifyapi.ID]artistIDResult),
 		breaker:             &scanner.ProviderBreaker{Classify: spotifyapi.ProviderFailure},
 	}
 }
@@ -83,6 +87,8 @@ func (scan *musicScanContext) clone() *musicScanContext {
 		spotifyArtistMisses: scan.spotifyArtistMisses,
 		spotifyAlbumMisses:  scan.spotifyAlbumMisses,
 		albumTracks:         scan.albumTracks,
+		albumTrackFailures:  scan.albumTrackFailures,
+		artistIDAttempts:    scan.artistIDAttempts,
 		breaker:             scan.breaker,
 	}
 }

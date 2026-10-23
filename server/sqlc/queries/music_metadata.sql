@@ -75,14 +75,22 @@ DELETE FROM musicians WHERE id=?;
 
 -- name: MusicArtistRetryCandidates :many
 SELECT e.id, e.name FROM musicians e LEFT JOIN music_spotify_matches m ON m.entity_id=e.id AND m.entity_type='musician'
-WHERE e.id>sqlc.arg(after_id) AND (m.status IS NULL OR m.status='failed')
-AND EXISTS(SELECT 1 FROM track_musicians t WHERE t.musician_id=e.id)
+WHERE e.id>sqlc.arg(after_id) AND (m.status IS NULL OR m.status='failed' OR EXISTS(SELECT 1 FROM music_spotify_adoptions p WHERE p.musician_id=e.id))
+AND (EXISTS(SELECT 1 FROM track_musicians t WHERE t.musician_id=e.id)
+OR EXISTS(SELECT 1 FROM music_spotify_adoptions p
+    JOIN music_artist_identity ai ON ai.musician_id=p.musician_id
+    JOIN music_album_identity al ON al.artist_key=ai.identity_key
+    JOIN tracks t ON t.album_id=al.album_id WHERE p.musician_id=e.id))
 ORDER BY e.id LIMIT 100;
 
 -- name: CountMusicArtistRetryCandidates :one
 SELECT COUNT(*) FROM musicians e LEFT JOIN music_spotify_matches m ON m.entity_id=e.id AND m.entity_type='musician'
-WHERE (m.status IS NULL OR m.status='failed')
-AND EXISTS(SELECT 1 FROM track_musicians t WHERE t.musician_id=e.id);
+WHERE (m.status IS NULL OR m.status='failed' OR EXISTS(SELECT 1 FROM music_spotify_adoptions p WHERE p.musician_id=e.id))
+AND (EXISTS(SELECT 1 FROM track_musicians t WHERE t.musician_id=e.id)
+OR EXISTS(SELECT 1 FROM music_spotify_adoptions p
+    JOIN music_artist_identity ai ON ai.musician_id=p.musician_id
+    JOIN music_album_identity al ON al.artist_key=ai.identity_key
+    JOIN tracks t ON t.album_id=al.album_id WHERE p.musician_id=e.id));
 
 -- name: MoveMusicAlbumAliases :exec
 UPDATE music_album_identity SET album_id=sqlc.arg(owner) WHERE album_id=sqlc.arg(redundant);
@@ -202,3 +210,13 @@ UPDATE musicians SET spotify_id=?, updated_at = CURRENT_TIMESTAMP WHERE id=?;
 
 -- name: SetMusicAlbumSpotifyID :exec
 UPDATE albums SET spotify_id=?, updated_at = CURRENT_TIMESTAMP WHERE id=?;
+
+-- name: GetMusicSpotifyAdoption :one
+SELECT spotify_id FROM music_spotify_adoptions WHERE musician_id=?;
+
+-- name: SaveMusicSpotifyAdoption :exec
+INSERT INTO music_spotify_adoptions(musician_id, spotify_id) VALUES (?, ?)
+ON CONFLICT(musician_id) DO NOTHING;
+
+-- name: DeleteMusicSpotifyAdoption :exec
+DELETE FROM music_spotify_adoptions WHERE musician_id=?;

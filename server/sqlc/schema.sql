@@ -323,6 +323,12 @@ CREATE TABLE IF NOT EXISTS music_album_metadata (
   spotify_date TEXT
 );
 
+-- Album-credit adoption targets survive provider failures and scan interruption.
+CREATE TABLE IF NOT EXISTS music_spotify_adoptions (
+  musician_id INTEGER PRIMARY KEY NOT NULL REFERENCES musicians(id) ON DELETE CASCADE,
+  spotify_id TEXT NOT NULL CHECK (spotify_id <> '')
+);
+
 -- Cached Spotify outcomes survive rescans. Entity type determines the owner;
 -- maintenance triggers remove entries when that owner is deleted. A miss keeps
 -- the best candidate's name and score so it can be explained.

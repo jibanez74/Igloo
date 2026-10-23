@@ -3,8 +3,6 @@ package music
 import (
 	"context"
 	"database/sql"
-	"errors"
-	"net/http"
 	"strconv"
 
 	"igloo/cmd/internal/database"
@@ -107,7 +105,20 @@ func (s *Scanner) retryCatalog(ctx context.Context, scan *musicScanContext, repo
 			if err != nil {
 				return err
 			}
+			var adopted *resolvedMusician
+			if resolved.spotifyAlbum != nil {
+				adopted, err = s.adoptAlbumArtist(ctx, scan, candidate.Musician.String, resolved.spotifyAlbum)
+				if err != nil {
+					return err
+				}
+			}
 			err = s.persistEnrichment(ctx, scan, func(qtx *database.Queries, txScan *musicScanContext) error {
+				if adopted != nil {
+					persistErr := s.persistEnrichedMusician(ctx, qtx, txScan, *adopted)
+					if persistErr != nil {
+						return persistErr
+					}
+				}
 				id, persistErr := s.persistAlbum(ctx, qtx, txScan, *resolved)
 				if persistErr != nil {
 					return persistErr
@@ -117,18 +128,7 @@ func (s *Scanner) retryCatalog(ctx context.Context, scan *musicScanContext, repo
 			if err != nil {
 				return err
 			}
-			if resolved.spotifyAlbum != nil {
-				adopted, adoptErr := s.adoptAlbumArtist(ctx, scan, candidate.Musician.String, resolved.spotifyAlbum)
-				if adoptErr != nil {
-					return adoptErr
-				}
-				if adopted != nil {
-					err = s.persistMusicianEnrichment(ctx, scan, adopted)
-					if err != nil {
-						return err
-					}
-				}
-			}
+
 			report.status.EnrichmentProcessed++
 			s.publish(report)
 		}
@@ -140,12 +140,18 @@ func (s *Scanner) retryCatalog(ctx context.Context, scan *musicScanContext, repo
 // track transaction and re-votes its sort name.
 func (s *Scanner) persistMusicianEnrichment(ctx context.Context, scan *musicScanContext, resolved *resolvedMusician) error {
 	return s.persistEnrichment(ctx, scan, func(qtx *database.Queries, txScan *musicScanContext) error {
-		id, persistErr := s.persistMusician(ctx, qtx, txScan, *resolved)
-		if persistErr != nil {
-			return persistErr
-		}
-		return qtx.ReconcileMusicArtistSort(ctx, id)
+		return s.persistEnrichedMusician(ctx, qtx, txScan, *resolved)
 	})
+}
+
+// persistEnrichedMusician saves an artist outcome inside a transaction and
+// re-votes its sort name.
+func (s *Scanner) persistEnrichedMusician(ctx context.Context, qtx *database.Queries, txScan *musicScanContext, resolved resolvedMusician) error {
+	id, err := s.persistMusician(ctx, qtx, txScan, resolved)
+	if err != nil {
+		return err
+	}
+	return qtx.ReconcileMusicArtistSort(ctx, id)
 }
 
 func (s *Scanner) persistEnrichment(ctx context.Context, scan *musicScanContext, persist func(*database.Queries, *musicScanContext) error) error {
@@ -342,12 +348,12 @@ func albumCountKey(scan *musicScanContext, candidate database.MusicTrackLinkAlbu
 // as an empty list so the pending tracks are settled rather than refetched
 // every scan; any other failure leaves them pending.
 func (s *Scanner) albumTracksFor(ctx context.Context, scan *musicScanContext, candidate database.MusicTrackLinkAlbumCandidatesRow) (tracks []spotifyapi.SimpleTrack, available bool, err error) {
-	key := scanner.NormalizedScanCacheKey(candidate.Title, candidate.Musician.String)
+	key := candidate.SpotifyID.String
 	tracks, ok := scan.albumTracks[key]
 	if ok {
 		return tracks, true, nil
 	}
-	if !s.spotifyReady(scan) {
+	if scan.albumTrackFailures[key] || !s.spotifyReady(scan) {
 		return nil, false, nil
 	}
 	album, fetchErr := s.spotify.GetAlbum(ctx, spotifyapi.ID(candidate.SpotifyID.String))
@@ -359,9 +365,9 @@ func (s *Scanner) albumTracksFor(ctx context.Context, scan *musicScanContext, ca
 	if fetchErr == nil {
 		tracks = album.Tracks
 	} else {
-		var status *spotifyapi.StatusError
-		gone := errors.As(fetchErr, &status) && status.StatusCode == http.StatusNotFound
+		gone := spotifyNotFound(fetchErr)
 		if !gone {
+			scan.albumTrackFailures[key] = true
 			s.logger.Warn("spotify album tracks unavailable", "album_id", candidate.ID, "spotify_id", candidate.SpotifyID.String, "error", fetchErr)
 			return nil, false, nil
 		}

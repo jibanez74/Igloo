@@ -55,8 +55,12 @@ func (q *Queries) CountMusicAlbumRetryCandidates(ctx context.Context) (int64, er
 
 const countMusicArtistRetryCandidates = `-- name: CountMusicArtistRetryCandidates :one
 SELECT COUNT(*) FROM musicians e LEFT JOIN music_spotify_matches m ON m.entity_id=e.id AND m.entity_type='musician'
-WHERE (m.status IS NULL OR m.status='failed')
-AND EXISTS(SELECT 1 FROM track_musicians t WHERE t.musician_id=e.id)
+WHERE (m.status IS NULL OR m.status='failed' OR EXISTS(SELECT 1 FROM music_spotify_adoptions p WHERE p.musician_id=e.id))
+AND (EXISTS(SELECT 1 FROM track_musicians t WHERE t.musician_id=e.id)
+OR EXISTS(SELECT 1 FROM music_spotify_adoptions p
+    JOIN music_artist_identity ai ON ai.musician_id=p.musician_id
+    JOIN music_album_identity al ON al.artist_key=ai.identity_key
+    JOIN tracks t ON t.album_id=al.album_id WHERE p.musician_id=e.id))
 `
 
 func (q *Queries) CountMusicArtistRetryCandidates(ctx context.Context) (int64, error) {
@@ -116,6 +120,15 @@ func (q *Queries) DeleteMusicCreditMetadata(ctx context.Context, trackID int64) 
 	return err
 }
 
+const deleteMusicSpotifyAdoption = `-- name: DeleteMusicSpotifyAdoption :exec
+DELETE FROM music_spotify_adoptions WHERE musician_id=?
+`
+
+func (q *Queries) DeleteMusicSpotifyAdoption(ctx context.Context, musicianID int64) error {
+	_, err := q.exec(ctx, q.deleteMusicSpotifyAdoptionStmt, deleteMusicSpotifyAdoption, musicianID)
+	return err
+}
+
 const findMusicAlbumIdentity = `-- name: FindMusicAlbumIdentity :one
 SELECT e.id, e.spotify_id, e.cover FROM albums e JOIN music_album_identity i ON i.album_id=e.id WHERE i.title_key = ? AND i.artist_key = ?
 `
@@ -164,6 +177,17 @@ func (q *Queries) FindMusicGenreIdentity(ctx context.Context, identityKey string
 	var id int64
 	err := row.Scan(&id)
 	return id, err
+}
+
+const getMusicSpotifyAdoption = `-- name: GetMusicSpotifyAdoption :one
+SELECT spotify_id FROM music_spotify_adoptions WHERE musician_id=?
+`
+
+func (q *Queries) GetMusicSpotifyAdoption(ctx context.Context, musicianID int64) (string, error) {
+	row := q.queryRow(ctx, q.getMusicSpotifyAdoptionStmt, getMusicSpotifyAdoption, musicianID)
+	var spotify_id string
+	err := row.Scan(&spotify_id)
+	return spotify_id, err
 }
 
 const moveMusicAlbumAliases = `-- name: MoveMusicAlbumAliases :exec
@@ -418,8 +442,12 @@ func (q *Queries) MusicAlbumTracksToLink(ctx context.Context, albumID sql.NullIn
 
 const musicArtistRetryCandidates = `-- name: MusicArtistRetryCandidates :many
 SELECT e.id, e.name FROM musicians e LEFT JOIN music_spotify_matches m ON m.entity_id=e.id AND m.entity_type='musician'
-WHERE e.id>?1 AND (m.status IS NULL OR m.status='failed')
-AND EXISTS(SELECT 1 FROM track_musicians t WHERE t.musician_id=e.id)
+WHERE e.id>?1 AND (m.status IS NULL OR m.status='failed' OR EXISTS(SELECT 1 FROM music_spotify_adoptions p WHERE p.musician_id=e.id))
+AND (EXISTS(SELECT 1 FROM track_musicians t WHERE t.musician_id=e.id)
+OR EXISTS(SELECT 1 FROM music_spotify_adoptions p
+    JOIN music_artist_identity ai ON ai.musician_id=p.musician_id
+    JOIN music_album_identity al ON al.artist_key=ai.identity_key
+    JOIN tracks t ON t.album_id=al.album_id WHERE p.musician_id=e.id))
 ORDER BY e.id LIMIT 100
 `
 
@@ -754,6 +782,21 @@ type SaveMusicGenreIdentityParams struct {
 
 func (q *Queries) SaveMusicGenreIdentity(ctx context.Context, arg SaveMusicGenreIdentityParams) error {
 	_, err := q.exec(ctx, q.saveMusicGenreIdentityStmt, saveMusicGenreIdentity, arg.IdentityKey, arg.GenreID)
+	return err
+}
+
+const saveMusicSpotifyAdoption = `-- name: SaveMusicSpotifyAdoption :exec
+INSERT INTO music_spotify_adoptions(musician_id, spotify_id) VALUES (?, ?)
+ON CONFLICT(musician_id) DO NOTHING
+`
+
+type SaveMusicSpotifyAdoptionParams struct {
+	MusicianID int64  `json:"musician_id"`
+	SpotifyID  string `json:"spotify_id"`
+}
+
+func (q *Queries) SaveMusicSpotifyAdoption(ctx context.Context, arg SaveMusicSpotifyAdoptionParams) error {
+	_, err := q.exec(ctx, q.saveMusicSpotifyAdoptionStmt, saveMusicSpotifyAdoption, arg.MusicianID, arg.SpotifyID)
 	return err
 }
 

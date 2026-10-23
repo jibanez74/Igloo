@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"net/http"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
@@ -100,6 +101,13 @@ func musicSpotifyReasonIsUnmatched(reason string) bool {
 
 func musicSpotifyReasonSplitsCompound(reason string) bool {
 	return reason == spotifyapi.MatchReasonNoResults || reason == spotifyapi.MatchReasonScoreBelowThreshold
+}
+
+// spotifyNotFound reports a 404: the requested catalog entry is gone, which
+// settles the lookup rather than leaving it to retry.
+func spotifyNotFound(err error) bool {
+	status, ok := errors.AsType[*spotifyapi.StatusError](err)
+	return ok && status.StatusCode == http.StatusNotFound
 }
 
 // spotifyReady reports whether lookups may still go to Spotify this scan.

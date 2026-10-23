@@ -275,6 +275,15 @@ func (s *Scanner) persistMusician(ctx context.Context, qtx *database.Queries, sc
 	if err != nil {
 		return 0, err
 	}
+	if input.spotifyArtist != nil || input.adoptionDone {
+		err = qtx.DeleteMusicSpotifyAdoption(ctx, musician.ID)
+	} else if input.adoptionTarget != "" {
+		err = qtx.SaveMusicSpotifyAdoption(ctx, database.SaveMusicSpotifyAdoptionParams{MusicianID: musician.ID, SpotifyID: input.adoptionTarget})
+	}
+	if err != nil {
+		return 0, err
+	}
+
 	scan.musicianIDs.Set(cacheKey, musician.ID)
 	return musician.ID, nil
 }
