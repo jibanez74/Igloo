@@ -70,6 +70,11 @@ type Application struct {
 	HLSHWTranscodeLimiter   *hlsTranscodeLimiter
 	PersonalHLSMu           sync.Mutex
 	PersonalHLSReservations map[int64]int
+	// HLSShutdown is cancelled when shutdown begins (beginHLSShutdown): from
+	// then on no HLS session starts or is published, and a start parked for a
+	// transcode permit gives up.
+	HLSShutdown      context.Context
+	beginHLSShutdown context.CancelFunc
 
 	// HLSMaxPersonalSessionsPerUser caps concurrent personal HLS sessions per
 	// user; zero falls back to hlsMaxPersonalSessionsPerUserDefault.
@@ -348,6 +353,7 @@ func (app *Application) initRuntimeCaches() {
 	app.HLSHWTranscodeLimiter = newHLSTranscodeLimiter(hlsTranscodePoolHardware, configuredHLSMaxHWTranscodes())
 	app.HLSMaxPersonalSessionsPerUser = configuredHLSMaxPersonalSessionsPerUser()
 	app.PersonalHLSReservations = make(map[int64]int)
+	app.HLSShutdown, app.beginHLSShutdown = context.WithCancel(context.Background())
 
 	// Eviction tears an aged-out session down off the sweep goroutine, tracked in
 	// app.Wait so shutdown drains in-flight FFmpeg kills; CleanupOnce dedupes it

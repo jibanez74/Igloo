@@ -669,21 +669,33 @@ func (reservation *hlsPersonalSessionReservation) release() {
 	})
 }
 
+// commit exchanges the reservation for the cached session. It refuses, and
+// stops the session, once shutdown has begun: the shutdown teardown has
+// already emptied the cache under this lock, so a session published after it
+// would keep its FFmpeg running past the server.
 func (reservation *hlsPersonalSessionReservation) commit(
 	media mediaRef,
 	key string,
 	session *HLSSession,
-) {
+) error {
+	var commitErr error
 	reservation.once.Do(func() {
 		app := reservation.app
 		app.PersonalHLSMu.Lock()
-		removed := app.cleanupPersonalHLSSessionsForOwnerLocked(
-			media,
-			reservation.ownerUserID,
-			session.PlaybackSession,
-			key,
-		)
-		app.HLSSessionCache.Set(key, session, hlsPersonalSessionTTL)
+		var removed []*HLSSession
+		shuttingDown := app.hlsShuttingDown()
+		if shuttingDown {
+			commitErr = errHLSShuttingDown
+			removed = []*HLSSession{session}
+		} else {
+			removed = app.cleanupPersonalHLSSessionsForOwnerLocked(
+				media,
+				reservation.ownerUserID,
+				session.PlaybackSession,
+				key,
+			)
+			app.HLSSessionCache.Set(key, session, hlsPersonalSessionTTL)
+		}
 
 		remaining := app.PersonalHLSReservations[reservation.ownerUserID] - 1
 		if remaining > 0 {
@@ -695,6 +707,7 @@ func (reservation *hlsPersonalSessionReservation) commit(
 
 		cleanupRemovedHLSSessions(removed)
 	})
+	return commitErr
 }
 
 // reservePersonalHLSSession admits one personal session before FFmpeg starts.
@@ -805,6 +818,13 @@ func (app *Application) isRoomHLSSessionDeleted(roomID int64) bool {
 
 func (app *Application) storeRoomHLSSessionIfActive(roomID int64, key string, session *HLSSession) error {
 	app.RoomHLSMu.Lock()
+	// See hlsPersonalSessionReservation.commit for why shutdown refuses here.
+	shuttingDown := app.hlsShuttingDown()
+	if shuttingDown {
+		app.RoomHLSMu.Unlock()
+		cleanupHLSSession(session)
+		return errHLSShuttingDown
+	}
 	deleted := app.isRoomHLSSessionDeleted(roomID)
 	if !deleted {
 		// Set does not fire OnEvicted — only Delete and DeleteExpired do — so
@@ -972,7 +992,16 @@ func (app *Application) checkHLSTranscodeSpace(transcodeRoot string) error {
 	}
 }
 
+// hlsShuttingDown reports whether shutdown has begun (see stopHLSSessions).
+func (app *Application) hlsShuttingDown() bool {
+	return app.HLSShutdown != nil && app.HLSShutdown.Err() != nil
+}
+
 func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionStartParams) (*HLSSession, error) {
+	shuttingDown := app.hlsShuttingDown()
+	if shuttingDown {
+		return nil, errHLSShuttingDown
+	}
 	startedAt := time.Now()
 	videoCodec := strings.ToLower(params.PrimaryVideo.Codec)
 	audioCodec := ""
@@ -1436,7 +1465,10 @@ func (app *Application) GetOrCreateHLSSession(
 		}
 		session.OwnerUserID = ownerUserID
 
-		reservation.commit(media, key, session)
+		commitErr := reservation.commit(media, key, session)
+		if commitErr != nil {
+			return nil, commitErr
+		}
 		return session, nil
 	})
 

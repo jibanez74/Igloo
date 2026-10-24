@@ -6169,7 +6169,7 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
-        /** @description HLS capacity or transcode storage is temporarily unavailable, or the requested playlist or segment is not ready. Every HLS 503 is retryable and includes Retry-After. */
+        /** @description HLS capacity or transcode storage is temporarily unavailable, the server is shutting down, or the requested playlist or segment is not ready. Every HLS 503 is retryable and includes Retry-After. */
         HLSServiceUnavailable: {
             headers: {
                 /** @description Seconds to wait before retrying this HLS request. */

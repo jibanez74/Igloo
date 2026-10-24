@@ -432,3 +432,105 @@ func (*shutdownTestTmdb) GetSeasonDetails(context.Context, int, int) (*tmdbapi.T
 func (*shutdownTestTmdb) GetPersonDetails(_ context.Context, _ int) (*tmdbapi.Person, error) {
 	return nil, nil
 }
+
+const listenForShutdownLongPollHelperEnv = "GO_WANT_LISTEN_FOR_SHUTDOWN_LONG_POLL_HELPER"
+
+// A segment request long-polls for up to two minutes. Shutdown used to run
+// the HTTP server's graceful shutdown first, which waited on that request for
+// its whole 30 s budget before any HLS session was stopped, so every restart
+// with a viewer mid-segment took half a minute.
+func TestListenForShutdown_AnswersHLSLongPollsBeforeTheGracePeriod(t *testing.T) {
+	if os.Getenv(listenForShutdownLongPollHelperEnv) == "1" {
+		runListenForShutdownLongPollHelper(t)
+		return
+	}
+
+	cmd := exec.Command(os.Args[0], "-test.run=^TestListenForShutdown_AnswersHLSLongPollsBeforeTheGracePeriod$", "-test.v")
+	cmd.Env = append(os.Environ(), listenForShutdownLongPollHelperEnv+"=1")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("helper process failed: %v\noutput:\n%s", err, string(output))
+	}
+}
+
+func runListenForShutdownLongPollHelper(t *testing.T) {
+	t.Helper()
+
+	app := setupTestApp(t)
+	app.DeviceExpiryCancel = func() {}
+
+	session := &HLSSession{Media: movieRef(1), TempDir: t.TempDir(), TempFileSegments: true}
+	exitOnCancel(session)
+	app.HLSSessionCache.Set("long-poll", session, hlsPersonalSessionTTL)
+
+	probe, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("reserve port: %v", err)
+	}
+	serverAddr := probe.Addr().String()
+	err = probe.Close()
+	if err != nil {
+		t.Fatalf("release reserved port: %v", err)
+	}
+	inFlight := make(chan struct{})
+	app.Server = &http.Server{
+		Addr: serverAddr,
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			close(inFlight)
+			serveReadyHLSSegment(w, r, session, hlsSegmentFilename(3))
+		}),
+	}
+
+	served := make(chan error, 1)
+	go func() {
+		served <- app.serveUntilShutdown()
+	}()
+	waitForListener(serverAddr, 5*time.Second)
+
+	status := make(chan int, 1)
+	go func() {
+		response, getErr := http.Get("http://" + serverAddr + "/segment")
+		if getErr != nil {
+			status <- -1
+			return
+		}
+		_ = response.Body.Close()
+		status <- response.StatusCode
+	}()
+	select {
+	case <-inFlight:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the segment request never reached the server")
+	}
+
+	process, err := os.FindProcess(os.Getpid())
+	if err != nil {
+		t.Fatalf("find process: %v", err)
+	}
+	startedShutdown := time.Now()
+	err = process.Signal(syscall.SIGTERM)
+	if err != nil {
+		t.Fatalf("signal shutdown: %v", err)
+	}
+
+	select {
+	case code := <-status:
+		if code != http.StatusNotFound {
+			t.Fatalf("long-polled segment answered %d, want the 404 clients rebase on", code)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the long-polled segment was not answered during shutdown")
+	}
+	select {
+	case err = <-served:
+		if err != nil {
+			t.Fatalf("serveUntilShutdown: %v", err)
+		}
+	case <-time.After(shutdownGracePeriod):
+		t.Fatal("shutdown waited out the grace period on an HLS long-poll")
+	}
+	elapsed := time.Since(startedShutdown)
+	if elapsed > 5*time.Second {
+		t.Fatalf("shutdown took %s with an HLS long-poll in flight", elapsed)
+	}
+}

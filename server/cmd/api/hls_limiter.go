@@ -224,7 +224,17 @@ func (app *Application) hlsTranscodeLimiterOrInstall(pool hlsTranscodePool) *hls
 func (app *Application) acquireHLSTranscodeSlot(ctx context.Context, pool hlsTranscodePool, wait time.Duration) (func(), error) {
 	limiter := app.hlsTranscodeLimiterOrInstall(pool)
 
-	release, err := limiter.acquire(ctx, wait)
+	// A start parked for a permit gives up when shutdown begins: the permit it
+	// waits for would go to a session the shutdown is about to stop, and the
+	// park would hold the HTTP server's graceful shutdown for its full length.
+	waitCtx, cancelWait := context.WithCancel(ctx)
+	defer cancelWait()
+	if app.HLSShutdown != nil {
+		stopOnShutdown := context.AfterFunc(app.HLSShutdown, cancelWait)
+		defer stopOnShutdown()
+	}
+
+	release, err := limiter.acquire(waitCtx, wait)
 	if err == nil {
 		return release, nil
 	}
@@ -232,6 +242,10 @@ func (app *Application) acquireHLSTranscodeSlot(ctx context.Context, pool hlsTra
 	// A cancelled context is a client that went away, not a capacity refusal.
 	if ctx.Err() != nil {
 		return nil, err
+	}
+	shuttingDown := app.hlsShuttingDown()
+	if shuttingDown {
+		return nil, errHLSShuttingDown
 	}
 
 	active, capacity := limiter.occupancy()

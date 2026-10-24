@@ -87,6 +87,11 @@ var errHLSSessionEmpty = errors.New("no playable media at this position")
 // playlist — a server-side failure, not a client error.
 var errHLSSessionFailed = errors.New("transcoding stopped before publishing a playlist")
 
+// errHLSShuttingDown refuses a session while the server shuts down. It is
+// retryable: the server is restarting or about to, and the client's retry
+// reaches whichever process answers next.
+var errHLSShuttingDown = errors.New("server is shutting down")
+
 type hlsRequestParams struct {
 	Media      mediaRef
 	Profile    string
@@ -538,6 +543,19 @@ func sessionPlaylistDurationSec(session *HLSSession) float64 {
 	return 0
 }
 
+// isHLSCapacityError reports a session start refused for want of room — a
+// transcode permit, a per-user slot, transcode storage, or a server that is
+// shutting down — which a retry after hlsTranscodeBusyRetryAfterSec can clear.
+func isHLSCapacityError(err error) bool {
+	var capacityErr *hlsTranscodeCapacityError
+	var personalCapacityErr *hlsPersonalSessionCapacityError
+	var storageErr *hlsStorageCapacityError
+	return errors.As(err, &capacityErr) ||
+		errors.As(err, &personalCapacityErr) ||
+		errors.As(err, &storageErr) ||
+		errors.Is(err, errHLSShuttingDown)
+}
+
 func writeHLSSessionError(w http.ResponseWriter, err error) {
 	notFound, isNotFound := errors.AsType[*hlsMediaNotFoundError](err)
 	if isNotFound {
@@ -587,10 +605,7 @@ func writeHLSSessionError(w http.ResponseWriter, err error) {
 		return
 	}
 
-	var capacityErr *hlsTranscodeCapacityError
-	var personalCapacityErr *hlsPersonalSessionCapacityError
-	var storageErr *hlsStorageCapacityError
-	atCapacity := errors.As(err, &capacityErr) || errors.As(err, &personalCapacityErr) || errors.As(err, &storageErr)
+	atCapacity := isHLSCapacityError(err)
 	if atCapacity {
 		w.Header().Set("Retry-After", strconv.Itoa(hlsTranscodeBusyRetryAfterSec))
 		helpers.ErrorJSON(w, err, http.StatusServiceUnavailable)
