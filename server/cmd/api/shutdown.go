@@ -111,6 +111,10 @@ func (app *Application) stopHLSSessions() {
 
 	app.PersonalHLSMu.Lock()
 	app.RoomHLSMu.Lock()
+	// Items skips entries that expired before the janitor swept them, and
+	// Flush drops entries without OnEvicted, so the expired ones are torn
+	// down through the eviction path (tracked in app.Wait) first.
+	app.HLSSessionCache.DeleteExpired()
 	var sessions []*HLSSession
 	for _, item := range app.HLSSessionCache.Items() {
 		session, ok := item.Object.(*HLSSession)

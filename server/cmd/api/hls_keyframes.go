@@ -12,6 +12,8 @@ import (
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/keyframeindex"
+
+	"golang.org/x/sync/singleflight"
 )
 
 // hlsStartProbeTimeout is the budget each of the two stages that resolve a
@@ -255,10 +257,16 @@ func (app *Application) resolveHLSActualStart(parentCtx context.Context, p hlsAc
 // every session waiting on it. A seek during a file's first copy-video play
 // starts a second session before the first one's extraction has persisted
 // anything, and each would otherwise read the container's seek tables again.
-// Joiners share the leader's deadline, which is the same budget theirs is.
+// Every caller still stops waiting at its own deadline: a persist stalled on
+// the database must not hold the others back from their ffprobe fallback. The
+// shared work keeps running after that, tracked by app.Wait for shutdown; the
+// count it adds to is never zero then, because its caller holds one.
 func (app *Application) extractAndPersistKeyframeIndex(ctx context.Context, p hlsActualStartParams) (keyframeindex.Index, error) {
 	key := fmt.Sprintf("%s:%d:%d:%s", p.Source.Ref.Kind, p.Source.FileID, p.StreamIndex, p.Fingerprint)
-	value, err, _ := app.KeyframeExtractGroup.Do(key, func() (any, error) {
+	results := app.KeyframeExtractGroup.DoChan(key, func() (any, error) {
+		app.Wait.Add(1)
+		defer app.Wait.Done()
+
 		idx, extractErr := app.extractKeyframeIndexFromFile(ctx, p.Source.FilePath, p.Source.Container)
 		if extractErr != nil {
 			return keyframeindex.Index{}, extractErr
@@ -266,12 +274,19 @@ func (app *Application) extractAndPersistKeyframeIndex(ctx context.Context, p hl
 		app.setKeyframeIndex(p.Source, p.StreamIndex, p.Fingerprint, idx)
 		return idx, nil
 	})
-	if err != nil {
-		return keyframeindex.Index{}, err
+
+	var result singleflight.Result
+	select {
+	case result = <-results:
+	case <-ctx.Done():
+		return keyframeindex.Index{}, ctx.Err()
 	}
-	idx, ok := value.(keyframeindex.Index)
+	if result.Err != nil {
+		return keyframeindex.Index{}, result.Err
+	}
+	idx, ok := result.Val.(keyframeindex.Index)
 	if !ok {
-		return keyframeindex.Index{}, fmt.Errorf("singleflight returned unexpected keyframe index type %T for %q", value, key)
+		return keyframeindex.Index{}, fmt.Errorf("singleflight returned unexpected keyframe index type %T for %q", result.Val, key)
 	}
 	return idx, nil
 }

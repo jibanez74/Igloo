@@ -197,3 +197,26 @@ func TestStopHLSSessions_RefusesRoomPublication(t *testing.T) {
 		t.Fatal("a room session was published after shutdown emptied the cache")
 	}
 }
+
+// A session whose TTL ran out moments before shutdown is still in the cache
+// until the janitor's next sweep, but Items no longer lists it and Flush drops
+// it without OnEvicted, so its FFmpeg used to outlive the teardown.
+func TestStopHLSSessions_StopsASessionThatExpiredBeforeTheSweep(t *testing.T) {
+	app := setupTestApp(t)
+	// The harness cache has no eviction hook; this needs production's.
+	app.initRuntimeCaches()
+	session := &HLSSession{Media: movieRef(1), TempDir: t.TempDir()}
+	app.HLSSessionCache.Set("expired", session, time.Millisecond)
+	time.Sleep(5 * time.Millisecond)
+
+	app.stopHLSSessions()
+	app.Wait.Wait()
+
+	if !session.stopped() {
+		t.Fatal("a session that expired before the sweep survived shutdown")
+	}
+	_, statErr := os.Stat(session.TempDir)
+	if !os.IsNotExist(statErr) {
+		t.Fatalf("the expired session's temp dir survived shutdown: %v", statErr)
+	}
+}

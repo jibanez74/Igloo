@@ -88,11 +88,18 @@ func TestResolveHLSActualStart_ExtractsEachIndexOnce(t *testing.T) {
 	// Read between the two: inotify folds identical unread events into one,
 	// which would hide a second open.
 	resolve(100)
-	time.Sleep(100 * time.Millisecond)
-	first := opens()
+	first := 0
+	deadline := time.Now().Add(5 * time.Second)
+	for first == 0 && time.Now().Before(deadline) {
+		first += opens()
+		time.Sleep(10 * time.Millisecond)
+	}
 	if first != 1 {
 		t.Fatalf("the first play opened the file %d times, want 1", first)
 	}
+	// singleflight exposes no join signal, so the seek's session gets a
+	// moment to reach the flight; an extraction of its own would open the
+	// file in that time, which is what the count below catches.
 	resolve(200)
 	time.Sleep(200 * time.Millisecond)
 

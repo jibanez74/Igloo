@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
@@ -391,5 +393,62 @@ func TestStartHLSSession_PrefetchesIndexAtStartZero(t *testing.T) {
 	prober.mu.Unlock()
 	if calls != 0 {
 		t.Fatalf("keyframe probe calls = %d, want 0 during prefetch", calls)
+	}
+}
+
+// Callers share one extraction, but each stops waiting at its own deadline:
+// with a blocking join, a persist stalled on the database held every session
+// of the file back from its ffprobe fallback until the write went through.
+func TestExtractAndPersistKeyframeIndex_EachCallerStopsAtItsOwnDeadline(t *testing.T) {
+	app := setupTestApp(t)
+	movieID := writeTestMKVFixture(t, app, []float64{0, 42, 84})
+	source, err := app.loadPlaybackSource(context.Background(), movieRef(movieID))
+	if err != nil {
+		t.Fatalf("load playback source: %v", err)
+	}
+	params := hlsActualStartParams{
+		Source:      source,
+		StreamIndex: 0,
+		Fingerprint: keyframeIndexFingerprint(source, &database.VideoStream{StreamIndex: 0}),
+	}
+
+	// The database's only connection is held, so the shared persist waits.
+	tx, err := app.DB.BeginTx(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("hold the database connection: %v", err)
+	}
+	released := make(chan struct{})
+	releaseDB := func() {
+		select {
+		case <-released:
+		default:
+			close(released)
+			_ = tx.Rollback()
+		}
+	}
+	defer releaseDB()
+	// A caller that waits for the write instead of its deadline fails below
+	// rather than hanging the test.
+	watchdog := time.AfterFunc(3*time.Second, releaseDB)
+	defer watchdog.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	started := time.Now()
+	_, err = app.extractAndPersistKeyframeIndex(ctx, params)
+	waited := time.Since(started)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("err = %v, want the caller's own deadline", err)
+	}
+	if waited > time.Second {
+		t.Fatalf("the caller waited %s for a stalled persist past its 100ms deadline", waited)
+	}
+
+	// The shared work still finishes once the database frees up.
+	releaseDB()
+	app.Wait.Wait()
+	row, err := app.Queries.GetKeyframeIndex(context.Background(), database.GetKeyframeIndexParams{MovieID: movieID, StreamIndex: 0})
+	if err != nil || row.Keyframes != "[0,42,84]" {
+		t.Fatalf("persisted index = %q (%v), want the extracted cues", row.Keyframes, err)
 	}
 }
