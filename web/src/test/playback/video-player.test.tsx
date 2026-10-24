@@ -846,6 +846,54 @@ describe("VideoPlayer hls.js error routing", () => {
   // A 503 on a fragment means the encoder has not reached that segment yet, not
   // that the stream is broken. hls.js has spent its own retries by the time the
   // error is fatal, so the player grants a bounded number of fresh attempts.
+  // hls.js retried every 5xx four times before the error above saw it. On a
+  // segment 503 each retry was another 120 s long-poll, so the player's own
+  // three restarts hid about 40 minutes of waiting; on a manifest 503 each was
+  // another 15 s park that ignored the server's Retry-After.
+  it("leaves the server's deliberate 500 and 503 answers to the player's own retries", async () => {
+    type RetryPolicy = {
+      default: {
+        errorRetry: {
+          shouldRetry: (
+            config: unknown,
+            count: number,
+            isTimeout: boolean,
+            response: { code?: number } | undefined,
+            retry: boolean,
+          ) => boolean;
+        };
+      };
+    };
+    const hls = await renderHlsPlayer();
+    const config = hls.config as unknown as Record<string, RetryPolicy>;
+
+    for (const policy of [
+      "fragLoadPolicy",
+      "manifestLoadPolicy",
+      "playlistLoadPolicy",
+    ]) {
+      const { shouldRetry } = config[policy].default.errorRetry;
+      expect(shouldRetry(null, 0, false, { code: 503 }, true), policy).toBe(
+        false,
+      );
+      // A segment 500 is FFmpeg dying, which only the rebase replaces; a
+      // manifest or level 500 keeps hls.js's retries, because the server
+      // replaces a failed session on the next manifest request.
+      expect(shouldRetry(null, 0, false, { code: 500 }, true), policy).toBe(
+        policy !== "fragLoadPolicy",
+      );
+      // A reverse proxy's 502 or 504 is no answer from Igloo at all.
+      expect(shouldRetry(null, 0, false, { code: 502 }, true), policy).toBe(
+        true,
+      );
+      expect(shouldRetry(null, 0, true, undefined, true), policy).toBe(true);
+      // Never past hls.js's own verdict, such as an exhausted budget.
+      expect(shouldRetry(null, 4, false, { code: 502 }, false), policy).toBe(
+        false,
+      );
+    }
+  });
+
   it("retries a not-yet-produced segment before reporting it", async () => {
     const onError = vi.fn();
     const hls = await renderHlsPlayer({ onError });
@@ -1723,7 +1771,7 @@ describe("VideoPlayer HLS seek reporting", () => {
     seekTo(video, 4000);
     await settleSeeks();
 
-    expect(onHlsSeeking).toHaveBeenCalledWith(10, 4000);
+    expect(onHlsSeeking).toHaveBeenCalledWith(10, 4000, expect.any(Number));
   });
 
   it("reports a seek from the playhead playback last settled at", async () => {
@@ -1733,7 +1781,7 @@ describe("VideoPlayer HLS seek reporting", () => {
     seekTo(video, 4000);
     await settleSeeks();
 
-    expect(onHlsSeeking).toHaveBeenCalledWith(42, 4000);
+    expect(onHlsSeeking).toHaveBeenCalledWith(42, 4000, expect.any(Number));
   });
 
   it("waits for the element to go quiet before reporting", async () => {
@@ -1765,7 +1813,7 @@ describe("VideoPlayer HLS seek reporting", () => {
     await settleSeeks();
 
     expect(onHlsSeeking).toHaveBeenCalledOnce();
-    expect(onHlsSeeking).toHaveBeenCalledWith(42, 220);
+    expect(onHlsSeeking).toHaveBeenCalledWith(42, 220, expect.any(Number));
   });
 
   it("moves the resting point once a seek completes", async () => {
@@ -1777,7 +1825,7 @@ describe("VideoPlayer HLS seek reporting", () => {
     seekTo(video, 160);
     await settleSeeks();
 
-    expect(onHlsSeeking).toHaveBeenLastCalledWith(100, 160);
+    expect(onHlsSeeking).toHaveBeenLastCalledWith(100, 160, expect.any(Number));
   });
 
   it("measures a new source from its own start, not the previous source's playhead", async () => {
@@ -1809,7 +1857,7 @@ describe("VideoPlayer HLS seek reporting", () => {
     seekTo(video, 15);
     await settleSeeks();
 
-    expect(onHlsSeeking).toHaveBeenLastCalledWith(12, 15);
+    expect(onHlsSeeking).toHaveBeenLastCalledWith(12, 15, expect.any(Number));
   });
 
   it("drops a seek the source change already answered", async () => {
@@ -1850,7 +1898,77 @@ describe("VideoPlayer HLS seek reporting", () => {
     seekTo(video, 4000);
     await settleSeeks();
 
-    expect(onHlsSeeking).toHaveBeenCalledWith(10, 4000);
+    expect(onHlsSeeking).toHaveBeenCalledWith(10, 4000, expect.any(Number));
+  });
+
+  // The page holds its own controls' rebases for the same window, so the two
+  // are ordered by when the viewer made them, not by which timer fires first.
+  it("orders each run by the viewer's latest seek and publishes it until the report", async () => {
+    const pendingHlsSeekOrderRef = { current: null as number | null };
+    const { video, onHlsSeeking } = await renderSeekingPlayer({
+      pendingHlsSeekOrderRef,
+    });
+
+    playTo(video, 42);
+    seekTo(video, 400);
+    const firstOrder = pendingHlsSeekOrderRef.current;
+    expect(firstOrder).toBeGreaterThan(0);
+    seekTo(video, 600);
+    const latestOrder = pendingHlsSeekOrderRef.current ?? 0;
+    expect(latestOrder).toBeGreaterThan(firstOrder ?? 0);
+
+    await settleSeeks();
+
+    expect(onHlsSeeking).toHaveBeenCalledExactlyOnceWith(42, 600, latestOrder);
+    expect(pendingHlsSeekOrderRef.current).toBeNull();
+  });
+
+  // hls.js moves the playhead a fraction of a second to get past a stall or a
+  // buffer gap; that must not outrank a far click the viewer is waiting on.
+  it("leaves a nudge unordered", async () => {
+    const pendingHlsSeekOrderRef = { current: null as number | null };
+    const { video, onHlsSeeking } = await renderSeekingPlayer({
+      pendingHlsSeekOrderRef,
+    });
+
+    playTo(video, 42);
+    seekTo(video, 42.3);
+    expect(pendingHlsSeekOrderRef.current).toBeNull();
+    await settleSeeks();
+
+    expect(onHlsSeeking).toHaveBeenCalledExactlyOnceWith(42, 42.3, 0);
+  });
+
+  it("withdraws the published order when the source changes", async () => {
+    vi.useFakeTimers();
+    const pendingHlsSeekOrderRef = { current: null as number | null };
+    const videoRef = createRef<HTMLVideoElement>();
+    const baseProps = {
+      videoRef,
+      isHlsSource: true,
+      title: "Test Movie",
+      onError: vi.fn(),
+      onHlsSeeking: vi.fn(),
+      pendingHlsSeekOrderRef,
+    };
+    const { rerender } = render(
+      <VideoPlayer {...baseProps} src={hlsSrc} startSec={10} />,
+    );
+    await act(async () => {});
+    const video = screen.getByLabelText("Video player for Test Movie");
+    seekTo(video, 4000);
+    expect(pendingHlsSeekOrderRef.current).not.toBeNull();
+
+    rerender(
+      <VideoPlayer
+        {...baseProps}
+        src={hlsSrc.replace("start=990", "start=3990")}
+        startSec={10}
+      />,
+    );
+    await act(async () => {});
+
+    expect(pendingHlsSeekOrderRef.current).toBeNull();
   });
 
   it("never reports a direct-play seek", async () => {

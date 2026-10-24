@@ -2,6 +2,7 @@ import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useSettledHlsRebase } from "@/hooks/useSettledHlsRebase";
 import { HLS_SEEK_SETTLE_MS } from "@/lib/constants";
+import { nextHlsSeekInputOrder } from "@/lib/video-playback";
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -11,10 +12,18 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-function renderSettledRebase(resetKey = "movie:1:720p:0") {
+function renderSettledRebase(
+  resetKey = "movie:1:720p:0",
+  newerElementSeekPending?: (requestOrder: number) => boolean,
+) {
   const onRebase = vi.fn();
   const rendered = renderHook(
-    ({ key, handler }) => useSettledHlsRebase({ resetKey: key, onRebase: handler }),
+    ({ key, handler }) =>
+      useSettledHlsRebase({
+        resetKey: key,
+        onRebase: handler,
+        newerElementSeekPending,
+      }),
     { initialProps: { key: resetKey, handler: onRebase } },
   );
   return { ...rendered, onRebase };
@@ -109,5 +118,61 @@ describe("useSettledHlsRebase", () => {
 
     expect(onRebase).not.toHaveBeenCalled();
     expect(laterHandler).toHaveBeenCalledExactlyOnceWith(4000);
+  });
+});
+
+// The page's controls and the element's own seeks settle in overlapping
+// windows. The first timer to fire used to decide: a far click followed by a
+// picture-in-picture scrub rebased to the click, and a drag's settled report
+// cancelled a far click made after it.
+describe("useSettledHlsRebase latest input", () => {
+  it("yields to an element seek the viewer made after the request", async () => {
+    let elementOrder: number | null = null;
+    const { result, onRebase } = renderSettledRebase(
+      "movie:1:720p:0",
+      (requestOrder) => (elementOrder ?? 0) > requestOrder,
+    );
+
+    act(() => {
+      result.current.requestRebase(4000);
+    });
+    elementOrder = nextHlsSeekInputOrder();
+    await advance(HLS_SEEK_SETTLE_MS);
+
+    expect(onRebase).not.toHaveBeenCalled();
+    expect(result.current.isRebasePending()).toBe(false);
+  });
+
+  it("rebases over an element seek the viewer made before the request", async () => {
+    const elementOrder = nextHlsSeekInputOrder();
+    const { result, onRebase } = renderSettledRebase(
+      "movie:1:720p:0",
+      (requestOrder) => elementOrder > requestOrder,
+    );
+
+    act(() => {
+      result.current.requestRebase(4000);
+    });
+    await advance(HLS_SEEK_SETTLE_MS);
+
+    expect(onRebase).toHaveBeenCalledExactlyOnceWith(4000);
+  });
+
+  it("tells an element report whether a newer request is waiting", () => {
+    const { result } = renderSettledRebase();
+    const before = nextHlsSeekInputOrder();
+
+    expect(result.current.isRebasePendingAfter(before)).toBe(false);
+    act(() => {
+      result.current.requestRebase(4000);
+    });
+    const after = nextHlsSeekInputOrder();
+
+    expect(result.current.isRebasePendingAfter(before)).toBe(true);
+    expect(result.current.isRebasePendingAfter(after)).toBe(false);
+    act(() => {
+      result.current.cancelRebase();
+    });
+    expect(result.current.isRebasePendingAfter(before)).toBe(false);
   });
 });

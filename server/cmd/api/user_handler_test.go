@@ -454,6 +454,23 @@ func TestDeleteUserAccount_RemovesTheUploadedAvatar(t *testing.T) {
 	}
 }
 
+func TestDeleteUserAccount_StopsTheUsersPersonalHLSSessions(t *testing.T) {
+	app := setupSessionTestApp(t)
+	user := createTestUser(t, app, "Leaving Mid-Film", "leaving-mid-film@example.com", false)
+	session := &HLSSession{Media: movieRef(1), OwnerUserID: user.ID, TempDir: t.TempDir()}
+	app.HLSSessionCache.Set("leaving", session, hlsPersonalSessionTTL)
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/user", nil)
+	serveOpenAPIExchange(t, authenticatedRouter(t, app, user.ID), "deleteUserAccount", req, http.StatusOK)
+
+	if !session.stopped() {
+		t.Fatal("the deleted account's HLS session was left running")
+	}
+	if app.HLSSessionCache.ItemCount() != 0 {
+		t.Fatal("the deleted account's HLS session is still cached")
+	}
+}
+
 func TestDeleteUserAccount_RefusesAdminsAndEndsTheSession(t *testing.T) {
 	app := setupSessionTestApp(t)
 	admin := createTestUser(t, app, "Admin", "admin@example.com", true)

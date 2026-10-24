@@ -257,6 +257,21 @@ func isInterlacedStream(stream *database.VideoStream) bool {
 	return false
 }
 
+// isBT601Stream reports whether the stream's pixels use the BT.601 matrix:
+// tagged NTSC (smpte170m) or PAL (bt470bg), or untagged at standard
+// definition, which is how players read an untagged stream (narrower than 1280
+// and no taller than 576). The transcode tags its output BT.709, so these get
+// their matrix converted rather than only relabelled.
+func isBT601Stream(stream *database.VideoStream) bool {
+	switch strings.ToLower(strings.TrimSpace(stream.ColorSpace.String)) {
+	case "smpte170m", "bt470bg":
+		return true
+	case "", "unknown":
+		return stream.Width < 1280 && stream.Height <= 576
+	}
+	return false
+}
+
 // hlsVFRRelativeTolerance separates real VFR from the rounding noise between
 // a container's nominal and average frame rates (e.g. 23.976 vs 24000/1001).
 const hlsVFRRelativeTolerance = 0.005
@@ -607,6 +622,20 @@ func (app *Application) invalidateHLSSessionsForFile(kind mediaKind, fileID int6
 	}
 }
 
+// stopPersonalHLSSessionsForOwner ends every personal session a deleted user
+// owns. Nothing of theirs can refresh one again, so each would otherwise keep
+// encoding, and holding its transcode permit, until its idle TTL ran out.
+func (app *Application) stopPersonalHLSSessionsForOwner(ownerUserID int64) {
+	app.PersonalHLSMu.Lock()
+	var removed []*HLSSession
+	for _, entry := range app.personalHLSSessionsForOwnerLocked(ownerUserID) {
+		removed = append(removed, app.deleteHLSSession(entry.key))
+	}
+	app.PersonalHLSMu.Unlock()
+
+	cleanupRemovedHLSSessions(removed)
+}
+
 // personalHLSSessionsForOwnerLocked returns the owner's personal (non-room)
 // session cache entries across all media, sorted least-recently-used first.
 // Every access re-sets the entry with the full personal TTL, so ascending
@@ -655,21 +684,33 @@ func (reservation *hlsPersonalSessionReservation) release() {
 	})
 }
 
+// commit exchanges the reservation for the cached session. It refuses, and
+// stops the session, once shutdown has begun: the shutdown teardown has
+// already emptied the cache under this lock, so a session published after it
+// would keep its FFmpeg running past the server.
 func (reservation *hlsPersonalSessionReservation) commit(
 	media mediaRef,
 	key string,
 	session *HLSSession,
-) {
+) error {
+	var commitErr error
 	reservation.once.Do(func() {
 		app := reservation.app
 		app.PersonalHLSMu.Lock()
-		removed := app.cleanupPersonalHLSSessionsForOwnerLocked(
-			media,
-			reservation.ownerUserID,
-			session.PlaybackSession,
-			key,
-		)
-		app.HLSSessionCache.Set(key, session, hlsPersonalSessionTTL)
+		var removed []*HLSSession
+		shuttingDown := app.hlsShuttingDown()
+		if shuttingDown {
+			commitErr = errHLSShuttingDown
+			removed = []*HLSSession{session}
+		} else {
+			removed = app.cleanupPersonalHLSSessionsForOwnerLocked(
+				media,
+				reservation.ownerUserID,
+				session.PlaybackSession,
+				key,
+			)
+			app.HLSSessionCache.Set(key, session, hlsPersonalSessionTTL)
+		}
 
 		remaining := app.PersonalHLSReservations[reservation.ownerUserID] - 1
 		if remaining > 0 {
@@ -681,6 +722,7 @@ func (reservation *hlsPersonalSessionReservation) commit(
 
 		cleanupRemovedHLSSessions(removed)
 	})
+	return commitErr
 }
 
 // reservePersonalHLSSession admits one personal session before FFmpeg starts.
@@ -791,6 +833,13 @@ func (app *Application) isRoomHLSSessionDeleted(roomID int64) bool {
 
 func (app *Application) storeRoomHLSSessionIfActive(roomID int64, key string, session *HLSSession) error {
 	app.RoomHLSMu.Lock()
+	// See hlsPersonalSessionReservation.commit for why shutdown refuses here.
+	shuttingDown := app.hlsShuttingDown()
+	if shuttingDown {
+		app.RoomHLSMu.Unlock()
+		cleanupHLSSession(session)
+		return errHLSShuttingDown
+	}
 	deleted := app.isRoomHLSSessionDeleted(roomID)
 	if !deleted {
 		// Set does not fire OnEvicted — only Delete and DeleteExpired do — so
@@ -958,7 +1007,16 @@ func (app *Application) checkHLSTranscodeSpace(transcodeRoot string) error {
 	}
 }
 
+// hlsShuttingDown reports whether shutdown has begun (see stopHLSSessions).
+func (app *Application) hlsShuttingDown() bool {
+	return app.HLSShutdown != nil && app.HLSShutdown.Err() != nil
+}
+
 func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionStartParams) (*HLSSession, error) {
+	shuttingDown := app.hlsShuttingDown()
+	if shuttingDown {
+		return nil, errHLSShuttingDown
+	}
 	startedAt := time.Now()
 	videoCodec := strings.ToLower(params.PrimaryVideo.Codec)
 	audioCodec := ""
@@ -987,6 +1045,7 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 	copyVideo := params.EffectiveProfile == helpers.HLS_PROFILE_REMUX
 	tonemapHDR := sourceIsHDR && params.EffectiveProfile != helpers.HLS_PROFILE_REMUX
 	deinterlace := !copyVideo && isInterlacedStream(params.PrimaryVideo)
+	convertBT601 := !copyVideo && !tonemapHDR && isBT601Stream(params.PrimaryVideo)
 	vfrDetected := isVFRStream(params.PrimaryVideo)
 
 	ffmpegCaps := app.FFmpeg.Capabilities()
@@ -1048,6 +1107,7 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 		Deinterlace:      deinterlace,
 		SourceFrameRate:  params.PrimaryVideo.FrameRate,
 		Capabilities:     ffmpegCaps,
+		ConvertBT601:     convertBT601,
 	}
 
 	runCtx, cancel := context.WithCancel(context.Background())
@@ -1152,6 +1212,8 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 		"tonemap_hdr", tonemapHDR,
 		"deinterlace", deinterlace,
 		"field_order", params.PrimaryVideo.FieldOrder.String,
+		"color_space", params.PrimaryVideo.ColorSpace.String,
+		"convert_bt601", convertBT601,
 		"rotation", rotationLogValue,
 		"vfr_detected", vfrDetected,
 		"configured_hw_device", deviceDecision.Configured,
@@ -1422,7 +1484,10 @@ func (app *Application) GetOrCreateHLSSession(
 		}
 		session.OwnerUserID = ownerUserID
 
-		reservation.commit(media, key, session)
+		commitErr := reservation.commit(media, key, session)
+		if commitErr != nil {
+			return nil, commitErr
+		}
 		return session, nil
 	})
 

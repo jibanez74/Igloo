@@ -624,6 +624,42 @@ func TestCreateWatchRoom_HTTP_HLSWarmUpFailureRollsBackRoom(t *testing.T) {
 	}
 }
 
+// A room start never parks for a transcode permit, so on a busy server it is
+// refused at once. That used to reach the client as the same 500 as a broken
+// file, which gives no reason to try again.
+func TestCreateWatchRoom_HTTP_FullTranscodePoolIsRetryable(t *testing.T) {
+	app := setupSessionTestApp(t)
+	fake := &fakeFFmpeg{}
+	app.FFmpeg = fake
+	app.HLSCPUTranscodeLimiter = newHLSTranscodeLimiter(hlsTranscodePoolCPU, 1)
+	holdHLSTranscodePermit(t, app, hlsTranscodePoolCPU)
+
+	owner := createTestUser(t, app, "Busy Owner", "busy-owner@example.com", false)
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 720)
+	handler := authenticatedRouter(t, app, owner.ID)
+
+	body := fmt.Sprintf(`{"movie_id":%d,"mode":"%s","audio_track":0,"invited_user_ids":[]}`, movieID, helpers.HLS_PROFILE_720P_3MBPS)
+	req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable || w.Header().Get("Retry-After") == "" {
+		t.Fatalf("expected a 503 with Retry-After, got %d (Retry-After %q): %s",
+			w.Code, w.Header().Get("Retry-After"), w.Body.String())
+	}
+	if fake.CallCount() != 0 {
+		t.Fatalf("FFmpeg started %d times on a full pool", fake.CallCount())
+	}
+	rooms, err := app.Queries.GetWatchRoomsForUser(context.Background(), owner.ID)
+	if err != nil {
+		t.Fatalf("get rooms after rollback: %v", err)
+	}
+	if len(rooms) != 0 {
+		t.Fatalf("expected the refused room to be rolled back, got %d rooms", len(rooms))
+	}
+}
+
 // An unknown room is indistinguishable from a room the caller cannot see: the
 // single joined authorization query returns no row either way, so both are 403.
 // The other room endpoints have always behaved this way.

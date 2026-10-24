@@ -162,6 +162,46 @@ func TestAdminDeleteUser_DeletesAdminWhenAnotherAdminExists(t *testing.T) {
 	}
 }
 
+// A deleted user can never refresh their sessions again, so each one used to
+// keep encoding, and holding its transcode permit, for the rest of its TTL.
+func TestAdminDeleteUser_StopsTheUsersPersonalHLSSessions(t *testing.T) {
+	app := setupSessionTestApp(t)
+
+	target := createTestUser(t, app, "Watching", "watching@example.com", false)
+	bystander := createTestUser(t, app, "Also Watching", "also-watching@example.com", false)
+	actor := createTestUser(t, app, "Admin", "delete-hls-admin@example.com", true)
+	handler := authenticatedRouter(t, app, actor.ID)
+
+	personalSession := func(ownerID int64, key string) *HLSSession {
+		session := &HLSSession{Media: movieRef(1), OwnerUserID: ownerID, TempDir: t.TempDir()}
+		app.HLSSessionCache.Set(key, session, hlsPersonalSessionTTL)
+		return session
+	}
+	targetSession := personalSession(target.ID, "target")
+	bystanderSession := personalSession(bystander.ID, "bystander")
+	defer cleanupHLSSession(bystanderSession)
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/admin/users/"+strconv.FormatInt(target.ID, 10), nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	if !targetSession.stopped() {
+		t.Fatal("the deleted user's HLS session was left running")
+	}
+	if _, ok := app.HLSSessionCache.Get("target"); ok {
+		t.Fatal("the deleted user's HLS session is still cached")
+	}
+	if bystanderSession.stopped() {
+		t.Fatal("another user's HLS session was stopped")
+	}
+	if _, ok := app.HLSSessionCache.Get("bystander"); !ok {
+		t.Fatal("another user's HLS session was evicted")
+	}
+}
+
 // Required body fields must be sent: a missing is_admin used to read as
 // false and demote an administrator, a missing pin removed the PIN, and a
 // missing avatar cleared it.

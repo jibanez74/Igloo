@@ -31,6 +31,7 @@ func (f *ffmpeg) ExtractSubtitleAsWebVTT(
 	}
 
 	cmd := exec.CommandContext(ctx, f.bin, args...)
+	cmd.SysProcAttr = childProcessAttributes()
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

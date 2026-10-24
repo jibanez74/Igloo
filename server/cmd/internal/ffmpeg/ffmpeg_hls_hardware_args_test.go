@@ -24,6 +24,7 @@ func TestBuildHLSArgs_DevicePaths(t *testing.T) {
 		profile     string
 		tonemap     bool
 		deinterlace bool
+		bt601       bool
 		caps        Capabilities
 		want        []string
 		notWant     []string
@@ -118,16 +119,34 @@ func TestBuildHLSArgs_DevicePaths(t *testing.T) {
 			notFlags: []string{"-hwaccel"},
 		},
 		{
-			// Apple keeps hwaccel so VideoToolbox can decode before scale_vt.
-			name:    "apple tone-maps with scale_vt",
+			// Decoded frames land in system memory, and scale_vt only takes
+			// hardware frames, so they are uploaded to the VideoToolbox device
+			// first; a -pix_fmt after the chain would ask for a software
+			// conversion those frames cannot reach.
+			name:    "apple tone-maps with scale_vt when probed",
 			device:  helpers.HARDWARE_ACCELERATION_DEVICE_APPLE,
 			profile: helpers.HLS_PROFILE_1080P_8MBPS,
 			tonemap: true,
+			caps:    hlsTestAppleVTCapabilities(),
 			want: []string{
-				"-hwaccel videotoolbox", "h264_videotoolbox", "scale_vt",
-				"color_transfer=bt709", "color_primaries=bt709", "color_matrix=bt709",
+				"-init_hw_device videotoolbox=igloo_vt", "-filter_hw_device igloo_vt",
+				"-hwaccel videotoolbox", "h264_videotoolbox",
+				"format=p010le,hwupload,scale_vt=w=-2:h=1080:color_matrix=bt709:color_primaries=bt709:color_transfer=bt709",
 			},
-			notWant: []string{"zscale", "tonemap="},
+			notWant:   []string{"zscale", "tonemap=", "-pix_fmt yuv420p"},
+			wantOrder: [][2]string{{"-init_hw_device", "-filter_hw_device"}, {"-filter_hw_device", "-i"}},
+		},
+		{
+			// An unprobed scale_vt chain is never trusted: the hardware
+			// encoder stays, the tone-map runs in software.
+			name:     "apple tone-maps in software when scale_vt is unproven",
+			device:   helpers.HARDWARE_ACCELERATION_DEVICE_APPLE,
+			profile:  helpers.HLS_PROFILE_1080P_8MBPS,
+			tonemap:  true,
+			caps:     hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_APPLE),
+			want:     []string{"-hwaccel videotoolbox", "zscale", "tonemap=tonemap=hable", "h264_videotoolbox", "-pix_fmt yuv420p"},
+			notWant:  []string{"scale_vt", "hwupload"},
+			notFlags: []string{"-init_hw_device", "-filter_hw_device"},
 		},
 		{
 			// Software decode is required for the zscale chain, but -hwaccel
@@ -216,15 +235,17 @@ func TestBuildHLSArgs_DevicePaths(t *testing.T) {
 			want:        []string{"yadif," + sdrScale, "h264_videotoolbox"},
 		},
 		{
-			// scale_vt consumes hardware frames, so interlaced HDR sources are
-			// routed to the software zscale chain instead.
+			// The scale_vt probe proves only the progressive chain, so
+			// interlaced HDR sources are routed to the software zscale chain.
 			name:        "apple HDR deinterlace falls back to the software tone-map",
 			device:      helpers.HARDWARE_ACCELERATION_DEVICE_APPLE,
 			profile:     helpers.HLS_PROFILE_1080P_8MBPS,
 			tonemap:     true,
 			deinterlace: true,
+			caps:        hlsTestAppleVTCapabilities(),
 			want:        []string{"yadif,zscale", "tonemap=tonemap=hable", "h264_videotoolbox"},
 			notWant:     []string{"scale_vt"},
+			notFlags:    []string{"-init_hw_device"},
 		},
 		{
 			name:        "nvidia deinterlaces before hwupload",
@@ -251,6 +272,67 @@ func TestBuildHLSArgs_DevicePaths(t *testing.T) {
 			caps:        hlsTestIntelQSVScaleCapabilities(),
 			want:        []string{"yadif,format=nv12,hwupload=extra_hw_frames=64,scale_qsv=w=-2:h=720:format=nv12"},
 		},
+
+		// --- a BT.601 source has its matrix converted, not just relabelled ---
+		{
+			name:     "cpu converts BT.601 to BT.709 while scaling",
+			device:   helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+			bt601:    true,
+			want:     []string{sdrScale + ":in_color_matrix=bt601:out_color_matrix=bt709,format=yuv420p,setparams="},
+			notWant:  []string{"scale=in_color_matrix"},
+			notFlags: []string{"-hwaccel"},
+		},
+		{
+			name:    "intel software scale converts BT.601 into nv12",
+			device:  helpers.HARDWARE_ACCELERATION_DEVICE_INTEL,
+			bt601:   true,
+			caps:    hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_INTEL),
+			want:    []string{sdrScale + ":in_color_matrix=bt601:out_color_matrix=bt709,format=nv12"},
+			notWant: []string{"scale=in_color_matrix"},
+		},
+		{
+			name:   "nvidia converts BT.601 before the CUDA upload",
+			device: helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+			bt601:  true,
+			caps:   hlsTestNvidiaCapabilities(false),
+			want: []string{
+				"scale=in_color_matrix=bt601:out_color_matrix=bt709,format=nv12,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709,hwupload,scale_cuda=w=-2:h=720:format=yuv420p",
+			},
+		},
+		{
+			name:   "intel converts BT.601 before the QSV upload",
+			device: helpers.HARDWARE_ACCELERATION_DEVICE_INTEL,
+			bt601:  true,
+			caps:   hlsTestIntelQSVScaleCapabilities(),
+			want: []string{
+				"scale=in_color_matrix=bt601:out_color_matrix=bt709,format=nv12,hwupload=extra_hw_frames=64,scale_qsv=w=-2:h=720:format=nv12",
+			},
+		},
+		{
+			name:        "deinterlacing precedes the BT.601 conversion",
+			device:      helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+			bt601:       true,
+			deinterlace: true,
+			caps:        hlsTestNvidiaCapabilities(false),
+			want:        []string{"yadif,scale=in_color_matrix=bt601:out_color_matrix=bt709,format=nv12,"},
+		},
+		{
+			// zscale reads the source matrix from the frame itself, and an
+			// HDR source is BT.2020 in any case.
+			name:    "the HDR tone-map ignores the BT.601 flag",
+			device:  helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+			profile: helpers.HLS_PROFILE_1080P_8MBPS,
+			tonemap: true,
+			bt601:   true,
+			want:    []string{"zscale", "tonemap=tonemap=hable"},
+			notWant: []string{"in_color_matrix"},
+		},
+		{
+			name:    "a BT.709 source is scaled without a matrix conversion",
+			device:  helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+			want:    []string{sdrScale + ",format=yuv420p"},
+			notWant: []string{"in_color_matrix"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -264,6 +346,7 @@ func TestBuildHLSArgs_DevicePaths(t *testing.T) {
 			params.HWDevice = tt.device
 			params.TonemapHDR = tt.tonemap
 			params.Deinterlace = tt.deinterlace
+			params.ConvertBT601 = tt.bt601
 			params.Capabilities = tt.caps
 			args := hlsArgs(t, params)
 

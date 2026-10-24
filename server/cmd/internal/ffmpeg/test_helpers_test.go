@@ -258,6 +258,16 @@ func hlsTestIntelQSVScaleCapabilities() Capabilities {
 	return caps
 }
 
+// hlsTestAppleVTCapabilities describes a build whose scale_vt tone-map chain
+// passed its runtime probe.
+func hlsTestAppleVTCapabilities() Capabilities {
+	caps := hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_APPLE)
+	caps.Filters["hwupload"] = true
+	caps.Filters["scale_vt"] = true
+	caps.AppleVTTonemapRuntimeUsable = true
+	return caps
+}
+
 func hlsTestNvidiaCapabilities(tonemap bool) Capabilities {
 	caps := hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA)
 	caps.NvidiaCUDAScaleRuntimeUsable = true

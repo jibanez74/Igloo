@@ -807,6 +807,97 @@ func TestIsInterlacedStream(t *testing.T) {
 	}
 }
 
+func TestIsBT601Stream(t *testing.T) {
+	tagged := func(space string, width, height int64) *database.VideoStream {
+		return &database.VideoStream{
+			ColorSpace: sql.NullString{String: space, Valid: space != ""},
+			Width:      width,
+			Height:     height,
+		}
+	}
+
+	tests := []struct {
+		name   string
+		stream *database.VideoStream
+		want   bool
+	}{
+		{name: "NTSC tag", stream: tagged("smpte170m", 720, 480), want: true},
+		{name: "PAL tag", stream: tagged("bt470bg", 720, 576), want: true},
+		// The tag wins over the size either way.
+		{name: "BT.601 tag on an HD frame", stream: tagged("smpte170m", 1920, 1080), want: true},
+		{name: "BT.709 tag on an SD frame", stream: tagged("bt709", 720, 480)},
+		{name: "untagged DVD frame", stream: tagged("", 720, 480), want: true},
+		{name: "untagged PAL frame", stream: tagged("", 720, 576), want: true},
+		{name: "unknown tag on an SD frame", stream: tagged("unknown", 640, 480), want: true},
+		{name: "untagged 720p frame", stream: tagged("", 1280, 720)},
+		{name: "untagged 1080p frame", stream: tagged("", 1920, 1080)},
+		{name: "untagged frame taller than PAL", stream: tagged("", 1024, 600)},
+		{name: "BT.2020 is never BT.601", stream: tagged("bt2020nc", 720, 480)},
+		{name: "tags match case-insensitively", stream: tagged(" BT470BG ", 1920, 1080), want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isBT601Stream(tt.stream)
+			if got != tt.want {
+				t.Fatalf("isBT601Stream(%q %dx%d) = %v, want %v",
+					tt.stream.ColorSpace.String, tt.stream.Width, tt.stream.Height, got, tt.want)
+			}
+		})
+	}
+}
+
+// The transcode tags its output BT.709, so an SD source has to reach FFmpeg
+// with the conversion asked for; a copy keeps the source's own tags and an
+// HDR source goes through the tone-map, which reads the matrix itself.
+func TestCreateHLSSession_ConvertsBT601SourcesOnTranscode(t *testing.T) {
+	tests := []struct {
+		name     string
+		width    int64
+		height   int64
+		space    any
+		transfer any
+		profile  string
+		want     bool
+	}{
+		{name: "untagged DVD transcode", width: 720, height: 480, profile: helpers.HLS_PROFILE_720P_3MBPS, want: true},
+		{name: "tagged PAL transcode", width: 720, height: 576, space: "bt470bg", profile: helpers.HLS_PROFILE_720P_3MBPS, want: true},
+		{name: "untagged HD transcode", width: 1920, height: 1080, profile: helpers.HLS_PROFILE_1080P_4MBPS},
+		{name: "HDR tone-map", width: 720, height: 480, space: "bt470bg", transfer: "smpte2084", profile: helpers.HLS_PROFILE_720P_3MBPS},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := setupTestApp(t)
+			fake := &fakeFFmpeg{plans: []fakeFFmpegRunPlan{hlsRunPlan(transcodeFixture)}}
+			app.FFmpeg = fake
+
+			movieID := insertTestHLSMovieFixture(t, app, "h264", tt.height)
+			_, err := app.DB.Exec(
+				`UPDATE video_streams SET width = ?, color_space = ?, color_transfer = ? WHERE movie_id = ?`,
+				tt.width, tt.space, tt.transfer, movieID,
+			)
+			if err != nil {
+				t.Fatalf("update video stream: %v", err)
+			}
+
+			session, err := createTestHLSSession(app, context.Background(), movieID, tt.profile, testIntPtr(0), testPlaybackSessionID, 0, false)
+			if err != nil {
+				t.Fatalf("createHLSSession returned error: %v", err)
+			}
+			defer cleanupHLSSession(session)
+
+			calls := fake.Calls()
+			if len(calls) != 1 {
+				t.Fatalf("RunHLS call count = %d, want 1", len(calls))
+			}
+			if calls[0].ConvertBT601 != tt.want {
+				t.Fatalf("ConvertBT601 = %v, want %v", calls[0].ConvertBT601, tt.want)
+			}
+		})
+	}
+}
+
 func TestIsVFRStream(t *testing.T) {
 	tests := []struct {
 		name         string

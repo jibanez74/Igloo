@@ -5,12 +5,15 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"sort"
 	"time"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/keyframeindex"
+
+	"golang.org/x/sync/singleflight"
 )
 
 // hlsStartProbeTimeout is the budget each of the two stages that resolve a
@@ -201,9 +204,8 @@ func (app *Application) resolveHLSActualStart(parentCtx context.Context, p hlsAc
 	extractCtx, cancelExtract := context.WithTimeout(parentCtx, hlsStartProbeTimeout)
 	defer cancelExtract()
 
-	idx, err := app.extractKeyframeIndexFromFile(extractCtx, p.Source.FilePath, p.Source.Container)
+	idx, err := app.extractAndPersistKeyframeIndex(extractCtx, p)
 	if err == nil {
-		app.setKeyframeIndex(p.Source, p.StreamIndex, p.Fingerprint, idx)
 		if p.RequestedStartSec > 0 {
 			keyframe, ok := keyframeAtOrBefore(idx.KeyframeSec, p.RequestedStartSec)
 			if ok {
@@ -249,6 +251,44 @@ func (app *Application) resolveHLSActualStart(parentCtx context.Context, p hlsAc
 	}
 
 	p.Session.setActualStartSec(actualStartSec)
+}
+
+// extractAndPersistKeyframeIndex extracts and stores a file's index once for
+// every session waiting on it. A seek during a file's first copy-video play
+// starts a second session before the first one's extraction has persisted
+// anything, and each would otherwise read the container's seek tables again.
+// Every caller still stops waiting at its own deadline: a persist stalled on
+// the database must not hold the others back from their ffprobe fallback. The
+// shared work keeps running after that, tracked by app.Wait for shutdown; the
+// count it adds to is never zero then, because its caller holds one.
+func (app *Application) extractAndPersistKeyframeIndex(ctx context.Context, p hlsActualStartParams) (keyframeindex.Index, error) {
+	key := fmt.Sprintf("%s:%d:%d:%s", p.Source.Ref.Kind, p.Source.FileID, p.StreamIndex, p.Fingerprint)
+	results := app.KeyframeExtractGroup.DoChan(key, func() (any, error) {
+		app.Wait.Add(1)
+		defer app.Wait.Done()
+
+		idx, extractErr := app.extractKeyframeIndexFromFile(ctx, p.Source.FilePath, p.Source.Container)
+		if extractErr != nil {
+			return keyframeindex.Index{}, extractErr
+		}
+		app.setKeyframeIndex(p.Source, p.StreamIndex, p.Fingerprint, idx)
+		return idx, nil
+	})
+
+	var result singleflight.Result
+	select {
+	case result = <-results:
+	case <-ctx.Done():
+		return keyframeindex.Index{}, ctx.Err()
+	}
+	if result.Err != nil {
+		return keyframeindex.Index{}, result.Err
+	}
+	idx, ok := result.Val.(keyframeindex.Index)
+	if !ok {
+		return keyframeindex.Index{}, fmt.Errorf("singleflight returned unexpected keyframe index type %T for %q", result.Val, key)
+	}
+	return idx, nil
 }
 
 func (app *Application) extractKeyframeIndexFromFile(

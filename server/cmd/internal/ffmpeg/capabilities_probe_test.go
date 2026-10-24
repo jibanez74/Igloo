@@ -328,3 +328,87 @@ func TestRunFFmpegProbeContextReturnsOutputAndNonzeroError(t *testing.T) {
 		t.Fatalf("probe output/error lost diagnostics: output=%q err=%v", output, err)
 	}
 }
+
+// scale_vt was trusted on the strength of the encoder being listed, and the
+// chain it was handed (system-memory frames, no upload) could not run on it.
+// The probe runs the production chain itself, so a chain the hardware refuses
+// costs the hardware tone-map rather than every HDR session on the device.
+func TestProbeCapabilitiesGatesAppleToneMapOnTheProductionChain(t *testing.T) {
+	appleFake := func(t *testing.T, logPath string, filters string, runtimeExit int) string {
+		t.Helper()
+		body := appendInvocationLog(logPath) + `
+if [ "$1" = "-encoders" ]; then
+  printf '%s\n' ' V..... h264_videotoolbox VideoToolbox' ' V..... libx264 CPU'
+  exit 0
+fi
+if [ "$1" = "-filters" ]; then
+  printf '%s\n' ` + filters + `
+  exit 0
+fi
+if [ "$1" = "-hwaccels" ]; then
+  printf '%s\n' 'Hardware acceleration methods:' 'videotoolbox'
+  exit 0
+fi
+case "$*" in
+  *scale_vt*) exit ` + strconv.Itoa(runtimeExit) + ` ;;
+esac
+exit 0
+`
+		return writeFakeFFmpeg(t, "probe ffmpeg", body)
+	}
+	bothFilters := `' ... hwupload V->V' ' ... scale_vt V->V'`
+
+	t.Run("a passing probe enables scale_vt", func(t *testing.T) {
+		logPath := filepath.Join(t.TempDir(), "probes.log")
+		caps := probeCapabilities(appleFake(t, logPath, bothFilters, 0), fakeFFmpegVersionBanner)
+		if !caps.AppleVTTonemapRuntimeUsable || !caps.SupportsAppleVTTonemap() {
+			t.Fatalf("scale_vt probe passed but the chain is not enabled: %#v", caps)
+		}
+
+		var probe string
+		for _, line := range readArgumentLog(t, logPath) {
+			if strings.Contains(line, "scale_vt") {
+				probe = line
+			}
+		}
+		chain := hlsAppleVTTonemapFilter(appleProbeHeight)
+		wantParts := []string{
+			"-init_hw_device videotoolbox=" + hlsAppleVTDeviceName,
+			"-filter_hw_device " + hlsAppleVTDeviceName,
+			"color_trc=smpte2084",
+			chain,
+			"-c:v h264_videotoolbox",
+		}
+		for _, part := range wantParts {
+			if !strings.Contains(probe, part) {
+				t.Fatalf("scale_vt probe %q is missing %q", probe, part)
+			}
+		}
+		taggedFirst := strings.Index(probe, "color_trc=smpte2084") < strings.Index(probe, chain)
+		if !taggedFirst {
+			t.Fatalf("scale_vt probe does not tag its frame as PQ before the chain: %s", probe)
+		}
+	})
+
+	t.Run("a failing probe keeps the tone-map in software", func(t *testing.T) {
+		logPath := filepath.Join(t.TempDir(), "probes.log")
+		caps := probeCapabilities(appleFake(t, logPath, bothFilters, 1), fakeFFmpegVersionBanner)
+		if caps.AppleVTTonemapRuntimeUsable || caps.SupportsAppleVTTonemap() {
+			t.Fatalf("scale_vt enabled although its probe failed: %#v", caps)
+		}
+	})
+
+	t.Run("a build without scale_vt is not probed", func(t *testing.T) {
+		logPath := filepath.Join(t.TempDir(), "probes.log")
+		caps := probeCapabilities(appleFake(t, logPath, `' ... hwupload V->V'`, 0), fakeFFmpegVersionBanner)
+		if caps.AppleVTTonemapRuntimeUsable {
+			t.Fatalf("scale_vt probe ran without the filter: %#v", caps)
+		}
+		ranProbe := slices.ContainsFunc(readArgumentLog(t, logPath), func(line string) bool {
+			return strings.Contains(line, "scale_vt")
+		})
+		if ranProbe {
+			t.Fatal("scale_vt runtime probe ran although the build does not list the filter")
+		}
+	})
+}

@@ -540,6 +540,7 @@ func (app *Application) DeleteUserAccount(w http.ResponseWriter, r *http.Request
 
 	app.endDeletedOwnerRooms(roomIDs)
 	app.forgetDeletedSessionUser(userID)
+	app.stopPersonalHLSSessionsForOwner(userID)
 	app.forgetUserDevices(userID)
 
 	if user.Avatar.Valid {

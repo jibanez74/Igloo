@@ -592,3 +592,100 @@ func TestExternalFFmpegExplicitAudioProfiles(t *testing.T) {
 		})
 	}
 }
+
+// The SDR chains tag their output BT.709, and the tag alone only relabels the
+// frames: an SD source's BT.601 pixels were shown through the BT.709 matrix,
+// which pushed this red from (191,30,62) to (204,48,61). The conversion has to
+// change the pixels, which only decoding the real output can show.
+func TestExternalFFmpegConvertsBT601SourcesToBT709(t *testing.T) {
+	candidate, err := resolveBinaryCandidate()
+	if err != nil {
+		t.Fatalf("resolve external FFmpeg: %v", err)
+	}
+	workspace := t.TempDir()
+	sourcePath := filepath.Join(workspace, "sd source.mp4")
+	runExternalFFmpegCommand(t, candidate.path,
+		"-y", "-v", "error",
+		"-f", "lavfi", "-i", "color=c=0xC02040:s=640x480:r=24:d=4.2",
+		"-vf", "scale=out_color_matrix=bt601:out_range=tv,format=yuv420p,"+
+			"setparams=color_primaries=smpte170m:color_trc=smpte170m:colorspace=smpte170m",
+		"-c:v", "libx264", "-preset", "ultrafast", "-qp", "0",
+		sourcePath,
+	)
+	want := decodeCenterPixel(t, candidate.path, sourcePath, "bt601")
+
+	f := &ffmpeg{bin: candidate.path, capabilities: Capabilities{Probed: true}}
+	transcode := func(convert bool) [3]int {
+		outDir := filepath.Join(workspace, fmt.Sprintf("convert %t", convert))
+		mkdirErr := os.Mkdir(outDir, 0755)
+		if mkdirErr != nil {
+			t.Fatalf("mkdir output: %v", mkdirErr)
+		}
+		params := basicHLSParams(outDir)
+		params.SourcePath = sourcePath
+		params.AudioStreamIndex = -1
+		params.SourceFrameRate = 24
+		params.ConvertBT601 = convert
+		runExternalHLSAndWait(t, f, params)
+
+		// A player decodes the output through the BT.709 matrix it is tagged with.
+		return decodeCenterPixel(t, candidate.path, joinHLSInitAndFirstSegment(t, outDir), "bt709")
+	}
+
+	converted := transcode(true)
+	if !pixelsWithin(converted, want, 4) {
+		t.Fatalf("converted BT.601 source decodes to %v, want about %v", converted, want)
+	}
+	relabelled := transcode(false)
+	if pixelsWithin(relabelled, want, 4) {
+		t.Fatalf("relabelled-only output decodes to %v, the same as the source; the fixture no longer shows the shift", relabelled)
+	}
+}
+
+// joinHLSInitAndFirstSegment writes init.mp4 followed by segment_0.m4s into
+// one file FFmpeg can decode on its own.
+func joinHLSInitAndFirstSegment(t *testing.T, outDir string) string {
+	t.Helper()
+	var joined []byte
+	firstSegment := helpers.HLS_SEGMENT_FILENAME_PREFIX + "0" + helpers.HLS_SEGMENT_FILENAME_SUFFIX
+	for _, name := range []string{helpers.HLS_INIT_FILENAME, firstSegment} {
+		data, readErr := os.ReadFile(filepath.Join(outDir, name))
+		if readErr != nil {
+			t.Fatalf("read %s: %v", name, readErr)
+		}
+		joined = append(joined, data...)
+	}
+	path := filepath.Join(outDir, "first.mp4")
+	writeErr := os.WriteFile(path, joined, 0644)
+	if writeErr != nil {
+		t.Fatalf("write joined segment: %v", writeErr)
+	}
+	return path
+}
+
+// decodeCenterPixel decodes the first frame's center pixel to RGB through the
+// given YUV matrix.
+func decodeCenterPixel(t *testing.T, binary string, path string, matrix string) [3]int {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), externalFFmpegIntegrationTimeout)
+	defer cancel()
+	output, err := exec.CommandContext(ctx, binary,
+		"-v", "error", "-i", path, "-frames:v", "1",
+		"-vf", "scale=in_color_matrix="+matrix+":in_range=tv,format=rgb24,crop=1:1:iw/2:ih/2",
+		"-f", "rawvideo", "pipe:1",
+	).Output()
+	if err != nil || len(output) < 3 {
+		t.Fatalf("decode center pixel of %s: %v (%d bytes)", path, err, len(output))
+	}
+	return [3]int{int(output[0]), int(output[1]), int(output[2])}
+}
+
+func pixelsWithin(got [3]int, want [3]int, tolerance int) bool {
+	for i := range got {
+		diff := got[i] - want[i]
+		if diff < -tolerance || diff > tolerance {
+			return false
+		}
+	}
+	return true
+}

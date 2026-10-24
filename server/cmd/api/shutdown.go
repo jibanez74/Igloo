@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -57,18 +58,27 @@ func (app *Application) ListenForShutdown(quit chan os.Signal) {
 
 	app.Logger.Info("shutting down server...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// Before the HTTP server: see stopHLSSessions.
+	app.stopHLSSessions()
+
+	ctx, cancel := context.WithTimeout(context.Background(), shutdownGracePeriod)
 	defer cancel()
 
 	err := app.Server.Shutdown(ctx)
 	if err != nil {
-		app.Logger.Error("failed to shutdown server", "error", err)
+		// What outlives the grace period is a response that ends only when its
+		// client stops reading, such as a direct-play stream, which the
+		// process exit would cut anyway.
+		app.Logger.Warn("closing connections still open after the shutdown grace period", "error", err)
+		closeErr := app.Server.Close()
+		if closeErr != nil {
+			app.Logger.Error("failed to close server connections", "error", closeErr)
+		}
 	}
 
 	app.Logger.Info("running clean up tasks...")
 
 	app.WatchRoomHub.Shutdown()
-	app.cleanupHLSSessions()
 	app.DeviceExpiryCancel()
 	app.ScanCancel()
 
@@ -83,21 +93,51 @@ func (app *Application) ListenForShutdown(quit chan os.Signal) {
 	app.closeLogger()
 }
 
-// cleanupHLSSessions stops the FFmpeg sessions, which must happen before the
-// FFmpeg binary is cleaned up.
-func (app *Application) cleanupHLSSessions() {
-	count := 0
+// shutdownGracePeriod bounds how long in-flight requests get to finish once
+// HLS is stopped. API requests take milliseconds; what is still open past it
+// is a stream that would otherwise hold the shutdown for its full length.
+const shutdownGracePeriod = 10 * time.Second
+
+// stopHLSSessions stops every FFmpeg session, which must happen before the
+// FFmpeg binary is cleaned up, and it runs before the HTTP server's graceful
+// shutdown: a segment request long-polls for up to two minutes and a manifest
+// for up to 45 seconds, Shutdown waits for every one of them, and only a
+// stopped session answers them, with the 404 clients rebase on once the server
+// is back. From here on no session starts or is published; the cache is
+// emptied under both locks the publishers take, so a creation that raced the
+// shutdown either is in this snapshot or sees the refusal.
+func (app *Application) stopHLSSessions() {
+	app.beginHLSShutdown()
+
+	app.PersonalHLSMu.Lock()
+	app.RoomHLSMu.Lock()
+	// Items skips entries that expired before the janitor swept them, and
+	// Flush drops entries without OnEvicted, so the expired ones are torn
+	// down through the eviction path (tracked in app.Wait) first.
+	app.HLSSessionCache.DeleteExpired()
+	var sessions []*HLSSession
 	for _, item := range app.HLSSessionCache.Items() {
 		session, ok := item.Object.(*HLSSession)
 		if ok {
-			cleanupHLSSession(session)
-			count++
+			sessions = append(sessions, session)
 		}
 	}
-	if count > 0 {
-		app.Logger.Info("cleaned up HLS sessions", "count", count)
-	}
 	app.HLSSessionCache.Flush()
+	app.RoomHLSMu.Unlock()
+	app.PersonalHLSMu.Unlock()
+
+	// Each stop can wait seconds for FFmpeg to exit, so they run together.
+	var stops sync.WaitGroup
+	for _, session := range sessions {
+		stops.Go(func() {
+			cleanupHLSSession(session)
+		})
+	}
+	stops.Wait()
+
+	if len(sessions) > 0 {
+		app.Logger.Info("cleaned up HLS sessions", "count", len(sessions))
+	}
 }
 
 func (app *Application) clearMediaClientCaches() {

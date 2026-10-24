@@ -261,6 +261,44 @@ func TestSupportsIntelQSVScaleRequiresEncodeAndScaleSupport(t *testing.T) {
 	}
 }
 
+func TestSupportsAppleVTTonemapRequiresTheRuntimeProbe(t *testing.T) {
+	base := func() Capabilities {
+		return Capabilities{
+			Probed:                      true,
+			Encoders:                    map[string]bool{"h264_videotoolbox": true},
+			Filters:                     map[string]bool{"hwupload": true, "scale_vt": true},
+			AppleVTTonemapRuntimeUsable: true,
+		}
+	}
+
+	tests := []struct {
+		name   string
+		mutate func(*Capabilities)
+		want   bool
+	}{
+		{name: "supported", want: true},
+		{name: "not probed", mutate: func(c *Capabilities) { c.Probed = false }},
+		{name: "missing h264_videotoolbox encoder", mutate: func(c *Capabilities) { c.Encoders = map[string]bool{} }},
+		{name: "missing hwupload filter", mutate: func(c *Capabilities) { delete(c.Filters, "hwupload") }},
+		{name: "missing scale_vt filter", mutate: func(c *Capabilities) { delete(c.Filters, "scale_vt") }},
+		{name: "runtime probe failed", mutate: func(c *Capabilities) { c.AppleVTTonemapRuntimeUsable = false }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			caps := base()
+			if tt.mutate != nil {
+				tt.mutate(&caps)
+			}
+
+			got := caps.SupportsAppleVTTonemap()
+			if got != tt.want {
+				t.Fatalf("SupportsAppleVTTonemap() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestResolveHLSDeviceScenarios(t *testing.T) {
 	tests := []struct {
 		name           string
