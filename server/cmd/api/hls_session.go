@@ -607,6 +607,20 @@ func (app *Application) invalidateHLSSessionsForFile(kind mediaKind, fileID int6
 	}
 }
 
+// stopPersonalHLSSessionsForOwner ends every personal session a deleted user
+// owns. Nothing of theirs can refresh one again, so each would otherwise keep
+// encoding, and holding its transcode permit, until its idle TTL ran out.
+func (app *Application) stopPersonalHLSSessionsForOwner(ownerUserID int64) {
+	app.PersonalHLSMu.Lock()
+	var removed []*HLSSession
+	for _, entry := range app.personalHLSSessionsForOwnerLocked(ownerUserID) {
+		removed = append(removed, app.deleteHLSSession(entry.key))
+	}
+	app.PersonalHLSMu.Unlock()
+
+	cleanupRemovedHLSSessions(removed)
+}
+
 // personalHLSSessionsForOwnerLocked returns the owner's personal (non-room)
 // session cache entries across all media, sorted least-recently-used first.
 // Every access re-sets the entry with the full personal TTL, so ascending
