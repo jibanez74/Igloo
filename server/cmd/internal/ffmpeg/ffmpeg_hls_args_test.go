@@ -96,7 +96,7 @@ func TestBuildHLSArgs_CodecSelection(t *testing.T) {
 			audioIndex: 1,
 			want: []string{
 				"-map 0:0", "-map 0:1",
-				"libx264", "-preset fast",
+				"libx264", "-preset veryfast",
 				"-sc_threshold:v:0 0",
 				"-force_key_frames:0 expr:gte(t,n_forced*4)",
 				"scale=-2:1080",
