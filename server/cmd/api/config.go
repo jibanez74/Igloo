@@ -53,6 +53,7 @@ const (
 	envJellyfinAPIKey             = "JELLYFIN_API_KEY"
 	envSpotifyClientID            = "SPOTIFY_CLIENT_ID"
 	envSpotifyClientSecret        = "SPOTIFY_CLIENT_SECRET"
+	envEnableAppleLookups         = "ENABLE_APPLE_LOOKUPS"
 	envHardwareAccelerationDevice = "HARDWARE_ACCELERATION_DEVICE"
 	envEnableWatcher              = "ENABLE_WATCHER"
 	envDownloadImages             = "DOWNLOAD_IMAGES"
@@ -77,6 +78,7 @@ type RuntimeConfig struct {
 	JellyfinAPIKey             string
 	SpotifyClientID            string
 	SpotifyClientSecret        string
+	EnableAppleLookups         bool
 	HardwareAccelerationDevice string
 	EnableWatcher              bool
 	DownloadImages             bool
@@ -133,6 +135,7 @@ func NewRuntimeConfig() (RuntimeConfig, error) {
 		JellyfinAPIKey:             strings.TrimSpace(os.Getenv(envJellyfinAPIKey)),
 		SpotifyClientID:            strings.TrimSpace(os.Getenv(envSpotifyClientID)),
 		SpotifyClientSecret:        strings.TrimSpace(os.Getenv(envSpotifyClientSecret)),
+		EnableAppleLookups:         envBool(envEnableAppleLookups, true),
 		HardwareAccelerationDevice: envString(envHardwareAccelerationDevice, helpers.HARDWARE_ACCELERATION_DEVICE_CPU),
 		EnableWatcher:              envBool(envEnableWatcher, false),
 		DownloadImages:             envBool(envDownloadImages, false),

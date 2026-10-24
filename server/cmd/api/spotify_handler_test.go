@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
+	"igloo/cmd/internal/scanner"
 	spotifyapi "igloo/cmd/internal/spotify"
 
 	"github.com/go-chi/chi/v5"
@@ -90,6 +92,124 @@ func TestGetSpotifyStatus_HTTP(t *testing.T) {
 	}
 	if !availableResp.Data.Available {
 		t.Fatal("expected Spotify status to be available when app.Spotify is configured")
+	}
+}
+
+func TestSearchSpotifyAlbums_HTTPMarksAlbumsWithoutSpotifyIDByName(t *testing.T) {
+	app := setupTestApp(t)
+	ctx := context.Background()
+	libraryAlbum := func(title, albumArtist string, spotifyID sql.NullString) int64 {
+		t.Helper()
+		album, err := app.Queries.UpsertAlbum(ctx, database.UpsertAlbumParams{Title: title, SortTitle: title, Musician: helpers.NullString(albumArtist), SpotifyID: spotifyID})
+		if err != nil {
+			t.Fatalf("insert album %q: %v", title, err)
+		}
+		err = app.Queries.SaveMusicAlbumIdentity(ctx, database.SaveMusicAlbumIdentityParams{
+			TitleKey:  scanner.NormalizedScanCacheKey(title),
+			ArtistKey: scanner.NormalizedScanCacheKey(albumArtist),
+			AlbumID:   album.ID,
+		})
+		if err != nil {
+			t.Fatalf("save alias for %q: %v", title, err)
+		}
+		return album.ID
+	}
+	// Matched on Apple Music, so it has no Spotify id.
+	cryPretty := libraryAlbum("Cry Pretty", "Carrie Underwood", sql.NullString{})
+	loveForSale := libraryAlbum("Love For Sale", "Tony Bennett & Lady Gaga", sql.NullString{})
+	// Matched on Spotify as another release: only its id may flag it.
+	libraryAlbum("Hello", "Adele", helpers.NullString("hello-single"))
+	libraryAlbum("Blue", "Local Band", sql.NullString{})
+
+	artists := func(names ...string) []spotifyapi.SimpleArtist {
+		credits := make([]spotifyapi.SimpleArtist, 0, len(names))
+		for _, name := range names {
+			credits = append(credits, spotifyapi.SimpleArtist{Name: name})
+		}
+		return credits
+	}
+	app.Spotify = &spotifyHandlerStub{albums: []spotifyapi.SimpleAlbum{
+		{ID: "cry-pretty", Name: " CRY PRETTY ", Artists: artists("Carrie Underwood")},
+		{ID: "love-for-sale", Name: "Love For Sale", Artists: artists("Tony Bennett", "Lady Gaga")},
+		{ID: "hello-album", Name: "Hello", Artists: artists("Adele")},
+		{ID: "blue", Name: "Blue", Artists: artists("Joni Mitchell")},
+	}}
+	viewer := createTestUser(t, app, "Viewer", "viewer@example.com", false)
+	router := authenticatedRouter(t, app, viewer.ID)
+
+	w := httptest.NewRecorder()
+	req := newOpenAPIJSONRequest(http.MethodPost, "/api/spotify/albums/search", `{"title":"anything"}`)
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
+	}
+	assertOpenAPIExchange(t, "searchSpotifyAlbums", req, w)
+
+	var resp struct {
+		Data struct {
+			Results []struct {
+				SpotifyID        string `json:"spotify_id"`
+				AlreadyInLibrary bool   `json:"already_in_library"`
+				LibraryAlbumID   *int64 `json:"library_album_id"`
+			} `json:"results"`
+		} `json:"data"`
+	}
+	err := json.NewDecoder(w.Body).Decode(&resp)
+	if err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	want := map[string]int64{"cry-pretty": cryPretty, "love-for-sale": loveForSale}
+	if len(resp.Data.Results) != 4 {
+		t.Fatalf("result count = %d, want 4", len(resp.Data.Results))
+	}
+	for _, result := range resp.Data.Results {
+		albumID, flagged := want[result.SpotifyID]
+		if result.AlreadyInLibrary != flagged {
+			t.Fatalf("%s: already_in_library = %v, want %v", result.SpotifyID, result.AlreadyInLibrary, flagged)
+		}
+		if flagged && (result.LibraryAlbumID == nil || *result.LibraryAlbumID != albumID) {
+			t.Fatalf("%s: library_album_id = %v, want %d", result.SpotifyID, result.LibraryAlbumID, albumID)
+		}
+	}
+}
+
+func TestAlbumIdentityCandidatesSpellTheCreditAsTagsDo(t *testing.T) {
+	credits := func(names ...string) spotifyapi.SimpleAlbum {
+		album := spotifyapi.SimpleAlbum{Name: " Trio "}
+		for _, name := range names {
+			album.Artists = append(album.Artists, spotifyapi.SimpleArtist{Name: name})
+		}
+		return album
+	}
+	tests := []struct {
+		name  string
+		album spotifyapi.SimpleAlbum
+		want  []string
+	}{
+		{"no artists", credits(), []string{}},
+		{"one artist", credits("Dolly Parton"), []string{"dolly parton"}},
+		{"two artists", credits("Tony Bennett", "Lady Gaga"), []string{"tony bennett, lady gaga", "tony bennett & lady gaga", "tony bennett", "lady gaga"}},
+		{"three artists", credits("Dolly Parton", "Linda Ronstadt", "Emmylou Harris"), []string{
+			"dolly parton, linda ronstadt, emmylou harris",
+			"dolly parton & linda ronstadt & emmylou harris",
+			"dolly parton, linda ronstadt & emmylou harris",
+			"dolly parton", "linda ronstadt", "emmylou harris",
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			keys := albumIdentityCandidates(tt.album)
+			got := make([]string, 0, len(keys))
+			for _, key := range keys {
+				if key[0] != "trio" {
+					t.Fatalf("title key = %q, want trio", key[0])
+				}
+				got = append(got, key[1])
+			}
+			if strings.Join(got, "|") != strings.Join(tt.want, "|") {
+				t.Fatalf("artist keys = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 

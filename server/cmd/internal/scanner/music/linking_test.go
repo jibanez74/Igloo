@@ -56,7 +56,7 @@ func trackLinkFor(t *testing.T, s *Scanner, path string) trackLinkRow {
 	var row trackLinkRow
 	err := s.tx.DB.QueryRow(`
 		SELECT t.spotify_id, t.explicit, t.track_index, m.status, m.reason, m.candidate, m.score
-		FROM tracks t LEFT JOIN music_spotify_matches m ON m.entity_type = 'track' AND m.entity_id = t.id
+		FROM tracks t LEFT JOIN music_provider_matches m ON m.entity_type = 'track' AND m.entity_id = t.id
 		WHERE t.file_path = ?`, path).Scan(&row.spotifyID, &row.explicit, &row.trackIndex, &row.status, &row.reason, &row.candidate, &row.score)
 	if err != nil {
 		t.Fatalf("track link for %s: %v", path, err)
@@ -76,7 +76,7 @@ func linkScannedTracks(t *testing.T, s *Scanner, scan *musicScanContext) {
 
 func assertLinked(t *testing.T, row trackLinkRow, spotifyID string, explicit bool, trackIndex int64) {
 	t.Helper()
-	if row.spotifyID.String != spotifyID || row.explicit != explicit || row.trackIndex != trackIndex || row.status.String != musicSpotifyStatusMatched {
+	if row.spotifyID.String != spotifyID || row.explicit != explicit || row.trackIndex != trackIndex || row.status.String != musicStatusMatched {
 		t.Fatalf("link = %+v, want %s explicit=%v index=%d matched", row, spotifyID, explicit, trackIndex)
 	}
 }
@@ -122,7 +122,7 @@ func TestTrackLinkingRecordsExtrasAsUnmatched(t *testing.T) {
 	scanTaggedTrack(t, s, scan, extra, 1, albumTags("Hidden Bonus Jam", "9"))
 	linkScannedTracks(t, s, scan)
 	row := trackLinkFor(t, s, extra)
-	if row.spotifyID.Valid || row.status.String != musicSpotifyStatusUnmatched || row.reason.String != spotifyapi.MatchReasonScoreBelowThreshold {
+	if row.spotifyID.Valid || row.status.String != musicStatusUnmatched || row.reason.String != spotifyapi.MatchReasonScoreBelowThreshold {
 		t.Fatalf("extra track = %+v, want an unmatched score_below_threshold outcome", row)
 	}
 	if row.candidate.String != "Opening Song" || !row.score.Valid || row.score.Int64 >= 70 {
@@ -159,7 +159,7 @@ func TestTrackLinkingGivesEachSpotifyTrackToOneFile(t *testing.T) {
 	// A copy of the same file is the same recording and shares the track.
 	assertLinked(t, trackLinkFor(t, s, duplicate), "t1", false, 1)
 	row := trackLinkFor(t, s, bonus)
-	if row.spotifyID.Valid || row.status.String != musicSpotifyStatusUnmatched || row.reason.String != spotifyapi.MatchReasonTrackClaimed {
+	if row.spotifyID.Valid || row.status.String != musicStatusUnmatched || row.reason.String != spotifyapi.MatchReasonTrackClaimed {
 		t.Fatalf("bonus track = %+v, want an unmatched track_claimed outcome", row)
 	}
 	if row.candidate.String != "Chan Chan" || !row.score.Valid || row.score.Int64 < 70 {
@@ -180,7 +180,7 @@ func albumMatchFor(t *testing.T, s *Scanner, title string) albumMatchRow {
 		SELECT a.spotify_id, a.cover, a.album_type, a.total_tracks, md.spotify_date, a.release_date, m.status, m.reason
 		FROM albums a
 		LEFT JOIN music_album_metadata md ON md.album_id = a.id
-		LEFT JOIN music_spotify_matches m ON m.entity_type = 'album' AND m.entity_id = a.id
+		LEFT JOIN music_provider_matches m ON m.entity_type = 'album' AND m.entity_id = a.id
 		WHERE a.title = ?`, title).Scan(&row.spotifyID, &row.cover, &row.albumType, &row.totalTracks, &row.spotifyDate, &row.releaseDate, &row.status, &row.reason)
 	if err != nil {
 		t.Fatalf("album match for %s: %v", title, err)
@@ -213,7 +213,7 @@ func TestTrackLinkingDropsAnAlbumMatchItsTracksContradict(t *testing.T) {
 
 	row := albumMatchFor(t, s, "Test Album")
 	cleared := !row.spotifyID.Valid && !row.cover.Valid && !row.albumType.Valid && !row.totalTracks.Valid && !row.spotifyDate.Valid && !row.releaseDate.Valid
-	if !cleared || row.status.String != musicSpotifyStatusUnmatched || row.reason.String != musicSpotifyReasonTracksDisagree {
+	if !cleared || row.status.String != musicStatusUnmatched || row.reason.String != musicSpotifyReasonTracksDisagree {
 		t.Fatalf("album = %+v, want its Spotify fields cleared and an unmatched tracks_disagree outcome", row)
 	}
 	for _, path := range paths {
@@ -222,7 +222,7 @@ func TestTrackLinkingDropsAnAlbumMatchItsTracksContradict(t *testing.T) {
 			t.Fatalf("track %s = %+v, want no pairing and no outcome", path, link)
 		}
 	}
-	if scan.enrichmentCounts[musicSpotifyStatusMatched] != 1 || scan.enrichmentCounts[musicSpotifyStatusUnmatched] != 1 {
+	if scan.enrichmentCounts[musicStatusMatched] != 1 || scan.enrichmentCounts[musicStatusUnmatched] != 1 {
 		t.Fatalf("enrichment counts = %v, want the artist matched and the album moved to unmatched", scan.enrichmentCounts)
 	}
 
@@ -254,7 +254,7 @@ func TestTrackLinkingKeepsABiggerLocalEditionMatched(t *testing.T) {
 	linkScannedTracks(t, s, scan)
 
 	row := albumMatchFor(t, s, "Test Album")
-	if row.spotifyID.String != "album" || row.status.String != musicSpotifyStatusMatched {
+	if row.spotifyID.String != "album" || row.status.String != musicStatusMatched {
 		t.Fatalf("album = %+v, want the match kept", row)
 	}
 	assertLinked(t, trackLinkFor(t, s, fixtureDir+"/03.m4a"), "t3", false, 3)
@@ -275,7 +275,7 @@ func TestTrackLinkingDropsASingleMatchedForTheAlbum(t *testing.T) {
 	linkScannedTracks(t, s, scan)
 
 	row := albumMatchFor(t, s, "Test Album")
-	if row.spotifyID.Valid || row.status.String != musicSpotifyStatusUnmatched || row.reason.String != musicSpotifyReasonTracksDisagree {
+	if row.spotifyID.Valid || row.status.String != musicStatusUnmatched || row.reason.String != musicSpotifyReasonTracksDisagree {
 		t.Fatalf("album = %+v, want the single's match dropped as tracks_disagree", row)
 	}
 	link := trackLinkFor(t, s, fixtureDir+"/01.m4a")
@@ -321,7 +321,7 @@ func TestTrackLinkRetryPassPairsEarlierTracksAndNewFiles(t *testing.T) {
 
 	// The album fails, so its tracks are imported without a pairing.
 	s.scan(dir)
-	pending := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_spotify_matches WHERE entity_type='track'")
+	pending := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_provider_matches WHERE entity_type='track'")
 	if pending != 0 {
 		t.Fatalf("track outcomes after a failed album = %d, want none", pending)
 	}
@@ -369,7 +369,7 @@ func TestTrackLinkRetryPassSettlesAlbumsGoneFromSpotify(t *testing.T) {
 	probe.results[second] = testMusicMetadataWithTags(albumTags("Second Song", "2/2"))
 	s.scan(dir)
 	row := trackLinkFor(t, s, second)
-	if row.spotifyID.Valid || row.status.String != musicSpotifyStatusUnmatched || row.reason.String != spotifyapi.MatchReasonNoResults {
+	if row.spotifyID.Valid || row.status.String != musicStatusUnmatched || row.reason.String != spotifyapi.MatchReasonNoResults {
 		t.Fatalf("new file = %+v, want unmatched/no_results", row)
 	}
 	s.scan(dir)
@@ -400,7 +400,7 @@ func TestSpotifyBreakerStopsLookupsForTheScan(t *testing.T) {
 		if stub.artistCalls != artistCalls || stub.albumCalls != albumCalls {
 			t.Fatalf("requests artist=%d album=%d, want %d/%d", stub.artistCalls, stub.albumCalls, artistCalls, albumCalls)
 		}
-		got := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_spotify_matches")
+		got := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_provider_matches")
 		if got != rows {
 			t.Fatalf("outcome rows = %d, want %d (entities after the stop stay pending)", got, rows)
 		}
@@ -433,7 +433,7 @@ func TestSpotifyBreakerStopsLookupsForTheScan(t *testing.T) {
 			stub.albumsByTitle["album "+strings.ToLower(name)] = album
 		}
 		s.scan(dir)
-		matched := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_spotify_matches WHERE status='matched' AND entity_type IN ('musician','album')")
+		matched := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_provider_matches WHERE status='matched' AND entity_type IN ('musician','album')")
 		if matched != 6 || s.Status().IssueCount != 0 {
 			t.Fatalf("matched entities after recovery = %d, issues = %d", matched, s.Status().IssueCount)
 		}
@@ -520,7 +520,7 @@ func musicianMatchFor(t *testing.T, s *Scanner, name string) (spotifyID, thumb, 
 	t.Helper()
 	err := s.tx.DB.QueryRow(`
 		SELECT m.spotify_id, m.thumb, o.status FROM musicians m
-		LEFT JOIN music_spotify_matches o ON o.entity_type = 'musician' AND o.entity_id = m.id
+		LEFT JOIN music_provider_matches o ON o.entity_type = 'musician' AND o.entity_id = m.id
 		WHERE m.name = ?`, name).Scan(&spotifyID, &thumb, &status)
 	if err != nil {
 		t.Fatalf("musician %s: %v", name, err)
@@ -541,10 +541,10 @@ func TestAlbumArtistAdoptedFromMatchedAlbum(t *testing.T) {
 		scanTaggedTrack(t, s, scan, fixtureDir+"/01.m4a", 1, tags)
 
 		spotifyID, thumb, status := musicianMatchFor(t, s, "Beatles")
-		if spotifyID.String != "beatles-1" || thumb.String != "https://i.scdn.co/beatles.jpg" || status.String != musicSpotifyStatusMatched {
+		if spotifyID.String != "beatles-1" || thumb.String != "https://i.scdn.co/beatles.jpg" || status.String != musicStatusMatched {
 			t.Fatalf("musician = %#v %#v %#v, want the credited artist adopted", spotifyID, thumb, status)
 		}
-		if scan.enrichmentCounts[musicSpotifyStatusMatched] != 2 || scan.enrichmentCounts[musicSpotifyStatusUnmatched] != 0 {
+		if scan.enrichmentCounts[musicStatusMatched] != 2 || scan.enrichmentCounts[musicStatusUnmatched] != 0 {
 			t.Fatalf("tallies = %v, want the adoption counted as a match", scan.enrichmentCounts)
 		}
 
@@ -568,7 +568,7 @@ func TestAlbumArtistAdoptedFromMatchedAlbum(t *testing.T) {
 		scanTaggedTrack(t, s, scan, fixtureDir+"/01.m4a", 1, ffprobe.FormatTags{Title: "Come Together", Artist: "Billy Preston", AlbumArtist: "Beatles", Album: "Abbey Road", Track: "1"})
 
 		spotifyID, thumb, status := musicianMatchFor(t, s, "Beatles")
-		if spotifyID.String != "beatles-1" || thumb.String != "https://i.scdn.co/beatles.jpg" || status.String != musicSpotifyStatusMatched {
+		if spotifyID.String != "beatles-1" || thumb.String != "https://i.scdn.co/beatles.jpg" || status.String != musicStatusMatched {
 			t.Fatalf("musician = %#v %#v %#v, want the adoption saved with the track", spotifyID, thumb, status)
 		}
 	})
@@ -585,7 +585,7 @@ func TestAlbumArtistAdoptedFromMatchedAlbum(t *testing.T) {
 		s.spotify = stub
 		s.scan(dir)
 		_, _, status := musicianMatchFor(t, s, "Beatles")
-		if status.String != musicSpotifyStatusUnmatched {
+		if status.String != musicStatusUnmatched {
 			t.Fatalf("musician status = %#v, want unmatched before the album matches", status)
 		}
 
@@ -593,7 +593,7 @@ func TestAlbumArtistAdoptedFromMatchedAlbum(t *testing.T) {
 		stub.albumErr = nil
 		s.scan(dir)
 		spotifyID, _, status := musicianMatchFor(t, s, "Beatles")
-		if spotifyID.String != "beatles-1" || status.String != musicSpotifyStatusMatched {
+		if spotifyID.String != "beatles-1" || status.String != musicStatusMatched {
 			t.Fatalf("musician = %#v %#v, want adopted from the retried album", spotifyID, status)
 		}
 		if stub.artistCalls != 1 || stub.artistFetches != 1 {
@@ -610,7 +610,7 @@ func TestAlbumArtistAdoptedFromMatchedAlbum(t *testing.T) {
 		scanTaggedTrack(t, s, newMusicScanContext(nil), fixtureDir+"/01.m4a", 1, ffprobe.FormatTags{Title: "Hit", Artist: "Someone", Album: "Now That's Music", AlbumArtist: "Various Artists"})
 
 		spotifyID, _, status := musicianMatchFor(t, s, "Someone")
-		if spotifyID.Valid || status.String != musicSpotifyStatusUnmatched || stub.artistFetches != 0 {
+		if spotifyID.Valid || status.String != musicStatusUnmatched || stub.artistFetches != 0 {
 			t.Fatalf("musician = %#v %#v fetches=%d, want no adoption", spotifyID, status, stub.artistFetches)
 		}
 	})

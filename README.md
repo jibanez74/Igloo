@@ -14,7 +14,7 @@ The Android TV and Fire TV client lives in the separate [Igloo TV repository](ht
 
 - **Movies:** Scan local files, browse details and technical information, enrich metadata with TMDB if configured, edit metadata as an admin, watch with direct playback or HLS, choose audio and supported text subtitles, and keep watch progress. You can like movies and make collaborative movie playlists.
 - **TV shows:** Scan a show library, browse shows by season and episode, and play episodes with the same direct and HLS playback options as movies. Episode progress and watched status are saved per user. An up-next prompt helps you continue to the following episode.
-- **Music:** Scan albums and tracks, browse musicians, play music, like tracks, see listening statistics, and make collaborative playlists. Spotify can optionally enrich metadata.
+- **Music:** Scan albums and tracks, browse musicians, play music, like tracks, see listening statistics, and make collaborative playlists. Albums bought on the iTunes Store are matched on Apple Music by the catalog IDs in their files; Spotify can optionally enrich the other albums and supply artist photos.
 - **Finding things:** Search across movies, shows, albums, musicians, and tracks. The home page brings together recent additions, continue watching, watch rooms, and movie listings from TMDB when available.
 - **Sharing and accounts:** Watch rooms synchronize movie playback over WebSockets. Accounts include an initial administrator, user management, account settings, avatars, profile PINs, Quick Connect device pairing, device management, and playback preferences. Members can send movie or music requests to admins through in-app notifications.
 
@@ -27,7 +27,7 @@ The web app includes light and dark themes. The Go server serves it in a product
 - Watch rooms support movies, not TV episodes.
 - Photos are a coming-soon page. The Jellyfin and Immich fields in Settings are stored, but those integrations do not run yet.
 - Automatic filesystem watching is not implemented, even though Settings has an `ENABLE_WATCHER` option. Use a startup or manual scan after adding files.
-- TMDB and Spotify are optional. Local scanning still works without their credentials, with less descriptive metadata and artwork.
+- TMDB and Spotify are optional. Local scanning still works without their credentials, with less descriptive metadata and artwork. Apple Music lookups need no credentials and are on by default; they contact Apple only for files that carry iTunes catalog IDs. Turn them off in Settings, or set `ENABLE_APPLE_LOOKUPS=false` before the first start.
 
 ## Get started from source
 
@@ -85,7 +85,7 @@ Some values apply every time the server starts:
 Other values seed **Settings only when the database has no Settings row**. After the first start, change them in the app:
 
 - `MOVIES_DIR`, `SHOWS_DIR`, and `MUSIC_DIR` choose library paths. `STATIC_DIR` and `TRANSCODE_DIR` choose artwork/upload storage and temporary HLS storage.
-- `TMDB_API_KEY` enables movie and TV metadata enrichment. `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` enable music enrichment and Spotify search.
+- `TMDB_API_KEY` enables movie and TV metadata enrichment. `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` enable music enrichment and Spotify search. `ENABLE_APPLE_LOOKUPS` (default `true`) controls matching iTunes Store purchases on Apple Music, which needs no credentials.
 - `HARDWARE_ACCELERATION_DEVICE` defaults to `cpu`; `apple`, `intel`, and `nvidia` select supported host acceleration when FFmpeg and drivers allow it.
 - `DOWNLOAD_IMAGES`, `ENABLE_WATCHER`, and `JELLYFIN_API_KEY` are stored settings. The watcher and Jellyfin integration are not implemented. Immich and Jellyfin URLs and keys can also be saved in the General Settings page, but there is no active integration.
 

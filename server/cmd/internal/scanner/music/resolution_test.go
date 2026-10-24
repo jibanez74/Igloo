@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"igloo/cmd/internal/ffprobe"
+	"igloo/cmd/internal/itunes"
 	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/scannertest"
 )
@@ -67,7 +68,7 @@ func TestResolveTrackFileMapsAudioMetadata(t *testing.T) {
 		Path: trackPath,
 		Ext:  "flac",
 		Size: 42,
-	})
+	}, itunes.CatalogIDs{})
 	if err != nil {
 		t.Fatalf("resolve track file: %v", err)
 	}
@@ -142,7 +143,7 @@ func TestResolveTrackFileFallsBackToFilenameAndNumericDefaults(t *testing.T) {
 		Path: trackPath,
 		Ext:  "mp3",
 		Size: 7,
-	})
+	}, itunes.CatalogIDs{})
 	if err != nil {
 		t.Fatalf("resolve track file: %v", err)
 	}
@@ -185,7 +186,7 @@ func TestAudioStreamRequiredBeforeResolution(t *testing.T) {
 			if scanned != 0 || failures != 1 || spotify.artistCalls != 0 || spotify.albumCalls != 0 {
 				t.Fatalf("scanned=%d errors=%d Spotify=%+v", scanned, failures, spotify)
 			}
-			for _, table := range []string{"tracks", "musicians", "albums", "music_spotify_matches"} {
+			for _, table := range []string{"tracks", "musicians", "albums", "music_provider_matches"} {
 				count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM "+table)
 				if count != 0 {
 					t.Fatalf("%s has %d rows", table, count)
@@ -205,7 +206,7 @@ func TestAudioWithArtworkSelectsFirstAudioStream(t *testing.T) {
 	metadata := testMusicMetadata()
 	metadata.Streams = []ffprobe.Stream{{CodecType: "video", CodecName: "mjpeg"}, {CodecType: "audio", CodecName: "aac", Channels: 2}, {CodecType: "audio", CodecName: "mp3", Channels: 1}}
 	s.ffprobe = &scannertest.CountingProbe{Default: metadata}
-	resolved, err := s.resolveTrackFile(context.Background(), newMusicScanContext(nil), scanner.ScanFile{Path: musicDir + "/art.m4a", Ext: "m4a", Size: 1})
+	resolved, err := s.resolveTrackFile(context.Background(), newMusicScanContext(nil), scanner.ScanFile{Path: musicDir + "/art.m4a", Ext: "m4a", Size: 1}, itunes.CatalogIDs{})
 	if err != nil {
 		t.Fatal(err)
 	}

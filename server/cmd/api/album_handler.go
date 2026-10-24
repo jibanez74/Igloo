@@ -5,6 +5,7 @@ import (
 	"errors"
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
+	"igloo/cmd/internal/itunes"
 	"igloo/cmd/internal/spotify"
 	"net/http"
 )
@@ -51,14 +52,26 @@ func (app *Application) GetLatestAlbums(w http.ResponseWriter, r *http.Request) 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"albums": albums}})
 }
 
-// Use a read-only transaction so album details come from one snapshot.
-// albumWithSpotify is the album row plus its Spotify page, derived from the
-// stored id so clients need not know the URL shape.
-type albumWithSpotify struct {
+// albumWithCatalogURLs is the album row plus its pages on Spotify and Apple
+// Music, derived from the stored ids so clients need not know the URL shapes.
+type albumWithCatalogURLs struct {
 	database.Album
 	SpotifyURL *string `json:"spotify_url"`
+	AppleURL   *string `json:"apple_url"`
 }
 
+// catalogURLField is a provider's public page for a stored catalog id, or nil
+// when the entity has none.
+func catalogURLField[ID string | int64](id ID, valid bool, build func(ID) string) *string {
+	var none ID
+	if !valid || id == none {
+		return nil
+	}
+	url := build(id)
+	return &url
+}
+
+// Use a read-only transaction so album details come from one snapshot.
 func (app *Application) GetAlbumDetails(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseIDParam(w, r, "id", "invalid album id")
 	if !ok {
@@ -121,7 +134,11 @@ func (app *Application) GetAlbumDetails(w http.ResponseWriter, r *http.Request) 
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
-			"album":          albumWithSpotify{Album: album, SpotifyURL: spotifyURLField(album.SpotifyID, spotify.AlbumURL)},
+			"album": albumWithCatalogURLs{
+				Album:      album,
+				SpotifyURL: catalogURLField(album.SpotifyID.String, album.SpotifyID.Valid, spotify.AlbumURL),
+				AppleURL:   catalogURLField(album.AppleID.Int64, album.AppleID.Valid, itunes.AlbumURL),
+			},
 			"tracks":         tracks,
 			"artists":        artists,
 			"track_genres":   trackGenres,

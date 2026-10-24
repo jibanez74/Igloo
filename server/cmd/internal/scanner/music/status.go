@@ -6,14 +6,14 @@ import (
 
 // Status is the current or latest run. The counters mirror docs/openapi.json.
 // Discovery and processing are interleaved, so Total grows during the local
-// phase. The Spotify tallies count unique artists and albums, one outcome each
-// per scan, across inline resolution and the retry phase.
+// phase. The provider tallies count unique artists and albums, one outcome
+// each per scan, across inline resolution and the enrichment passes.
 type Status struct {
 	scanner.Progress
 	scanner.Counts
 }
 
-// scanReport is owned by the scan goroutine. The Spotify tallies are not kept
+// scanReport is owned by the scan goroutine. The provider tallies are not kept
 // here: they derive from the scan context and syncCounts copies them before
 // every publish.
 type scanReport struct {
@@ -30,13 +30,13 @@ func (r *scanReport) syncCounts() {
 	if r.scan == nil {
 		return
 	}
-	r.status.Enriched = r.scan.enrichmentCounts[musicSpotifyStatusMatched]
-	r.status.EnrichmentFailed = r.scan.enrichmentCounts[musicSpotifyStatusFailed]
-	r.status.EnrichmentUnmatched = r.scan.enrichmentCounts[musicSpotifyStatusUnmatched]
+	r.status.Enriched = r.scan.enrichmentCounts[musicStatusMatched]
+	r.status.EnrichmentFailed = r.scan.enrichmentCounts[musicStatusFailed]
+	r.status.EnrichmentUnmatched = r.scan.enrichmentCounts[musicStatusUnmatched]
 }
 
-// tracksLinked is the number of tracks paired with a Spotify track this run,
-// for the completion log.
+// tracksLinked is the number of tracks paired with an Apple Music or Spotify
+// track this run, for the completion log.
 func (r *scanReport) tracksLinked() int {
 	if r.scan == nil {
 		return 0

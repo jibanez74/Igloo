@@ -285,7 +285,7 @@ func TestRepeatedCompoundCreditsFromPersistedMiss(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = s.tx.DB.Exec("INSERT INTO music_spotify_matches(entity_type, entity_id, status, reason) VALUES ('musician', ?, 'unmatched', 'no_results')", musician.ID)
+	_, err = s.tx.DB.Exec("INSERT INTO music_provider_matches(provider, entity_type, entity_id, status, reason) VALUES ('spotify', 'musician', ?, 'unmatched', 'no_results')", musician.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

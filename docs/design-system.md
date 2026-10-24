@@ -56,13 +56,17 @@ The system is implemented with:
   **generated** from `src/lib/theme-tokens.ts` (§2.4).
 - **`tw-animate-css`** for enter/exit animations, with a strict
   `motion-reduce:` discipline (§1.5).
-- **lucide-react** for all icons, with one exception: the **brand mark**.
-  `components/app/BrandMark.tsx` draws the igloo from `lib/brand-mark.ts`,
-  the same glyph the app icons are generated from (§2.4), in `currentColor`
-  with transparent cut-outs so the parent picks the tile: the sidebar shows
-  it on a `bg-primary` tile, the login card and loading screen in a
-  `bg-muted` orb tinted `text-primary`. Never stand in a lucide glyph or a
-  letter for the logo — one mark everywhere, as the streaming apps do.
+- **lucide-react** for all icons, with two exceptions. The first is the
+  **brand mark**: `components/app/BrandMark.tsx` draws the igloo from
+  `lib/brand-mark.ts`, the same glyph the app icons are generated from
+  (§2.4), in `currentColor` with transparent cut-outs so the parent picks the
+  tile: the sidebar shows it on a `bg-primary` tile, the login card and
+  loading screen in a `bg-muted` orb tinted `text-primary`. Never stand in a
+  lucide glyph or a letter for the logo — one mark everywhere, as the
+  streaming apps do. The second is **third-party service marks** (Spotify,
+  Apple Music): their paths come verbatim from Simple Icons (CC0) at a
+  pinned version noted beside each, they are `aria-hidden`, and they only
+  ever sit beside the service's visible name.
 
 Theme switching toggles the `dark` class on `<html>` (`web/src/lib/theme.ts`),
 persisted under the `igloo-theme` localStorage key, with an anti-flash inline
@@ -121,7 +125,9 @@ Rules:
   `dark:`-variant, literal white/slate in light and `background`-token in dark.
 - One deliberate brand exception exists: the `SPOTIFY_BRAND_*` constants in
   `lib/constants.ts` (Spotify green, documented there, carried past the lint
-  ban with inline `eslint-disable` comments).
+  ban with inline `eslint-disable` comments). The Apple Music mark takes no
+  brand colour: it is drawn in `text-foreground`, like Apple's monochrome
+  badges, so no second brand colour enters the palette.
 - `text-success` is AA-safe on `background` and `card` in both themes
   (light `--success` is a deep glacier green, `#167050`); the pairs are pinned
   by `contrast.test.ts`.
@@ -914,18 +920,23 @@ included, guard through `MediaDetailGuard` (§3.4), so a malformed id, a failed
 load and a missing payload each render `MediaNotFound` with a link back to the
 owning tab, never a bare heading or a lone spinner.
 
-A Spotify match shows up in three places, each absent when there is no
-match. `SpotifyLink` ("Open on Spotify", the `SpotifyGlyph` in the brand
-green beside underlined primary text) opens the matched album's or artist's
-page in a new tab and, like the people page's external links, carries the
-destination and new-tab behaviour in its accessible name ("Blue Record on
-Spotify (opens in a new tab)"); the album page keeps it as a "Spotify" row in
-the Album Details list, the musician page under its stat pills. A single or
-compilation earns one more `MusicStatChip` ("Single", "Compilation") at the
-head of the album's stat pills; a plain album gets no label. An explicit
-track wears a small outline `Badge` after its title in `TrackItem`: a visible
-"E" that is `aria-hidden`, with "Explicit" in an `sr-only` span, so the row
-reads as "Alabaster Explicit" and never as a bare letter.
+A catalog match shows up in three places, each absent when there is no
+match. An album is matched on Apple Music or on Spotify, never both; a
+musician only ever on Spotify. `CatalogLink` ("Open on Spotify" with the
+`SpotifyGlyph` in the brand green, or "Open in Apple Music" with the Apple
+Music mark in `text-foreground`, beside underlined primary text) opens the
+matched album's or artist's page in a new tab and, like the people page's
+external links, carries the destination and new-tab behaviour in its
+accessible name ("Blue Record on Spotify (opens in a new tab)", "Blue Record
+on Apple Music (opens in a new tab)"); the album page keeps it as an "Apple
+Music" or "Spotify" row in the Album Details list, the musician page under
+its stat pills. A single or compilation, as whichever catalog matched the
+album reports it, earns one more `MusicStatChip` ("Single", "Compilation") at
+the head of the album's stat pills; a plain album gets no label. An explicit
+track, flagged by the catalog that matched its album, wears a small outline
+`Badge` after its title in `TrackItem`: a visible "E" that is `aria-hidden`,
+with "Explicit" in an `sr-only` span, so the row reads as "Alabaster
+Explicit" and never as a bare letter.
 
 #### Seasons and episode rows
 
@@ -1403,6 +1414,12 @@ require the full playback test pass.
   theirs. Its on/off control is the shared `SwitchField` (a real
   `role="switch"` button with its description tied in by `aria-describedby`),
   the same row the General settings card uses.
+- **A service that needs no credentials gets a switch, not an empty
+  section.** In General → External Services each provider has a
+  `ServiceSection`; one without credentials (Apple Music) holds a
+  `SwitchField` instead of secret inputs, saved by the card's Save bar like
+  the fields around it. Its description says that no account is needed and
+  when the change applies ("applies from the next scan").
 - **A setting the server may not honor says what is in force.** Under the
   Server card's hardware acceleration select, a notice read from the saved
   settings (not the form) names the device transcodes actually run on:

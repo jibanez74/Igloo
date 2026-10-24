@@ -20,6 +20,7 @@ type generalSettingsResponse struct {
 	JellyfinApiKey      *string `json:"jellyfin_api_key"`
 	SpotifyClientID     *string `json:"spotify_client_id"`
 	SpotifyClientSecret *string `json:"spotify_client_secret"`
+	EnableAppleLookups  bool    `json:"enable_apple_lookups"`
 	EnableWatcher       bool    `json:"enable_watcher"`
 	DownloadImages      bool    `json:"download_images"`
 	StaticDir           string  `json:"static_dir"`
@@ -37,6 +38,7 @@ type updateGeneralSettingsRequest struct {
 	JellyfinApiKey      *string `json:"jellyfin_api_key"`
 	SpotifyClientID     *string `json:"spotify_client_id"`
 	SpotifyClientSecret *string `json:"spotify_client_secret"`
+	EnableAppleLookups  *bool   `json:"enable_apple_lookups"`
 	EnableWatcher       *bool   `json:"enable_watcher"`
 	DownloadImages      *bool   `json:"download_images"`
 	StaticDir           *string `json:"static_dir"`
@@ -47,7 +49,7 @@ type updateGeneralSettingsRequest struct {
 type generalSettingsValues struct {
 	tmdbKey, immichBaseURL, immichApiKey, jellyfinBaseURL, jellyfinApiKey string
 	spotifyClientID, spotifyClientSecret, staticDir, transcodeDir         string
-	enableWatcher, downloadImages                                         bool
+	enableAppleLookups, enableWatcher, downloadImages                     bool
 }
 
 // missingField names the first required field the request
@@ -72,6 +74,9 @@ func (req *updateGeneralSettingsRequest) missingField() string {
 			return field.name
 		}
 	}
+	if req.EnableAppleLookups == nil {
+		return "enable_apple_lookups"
+	}
 	if req.EnableWatcher == nil {
 		return "enable_watcher"
 	}
@@ -93,6 +98,7 @@ func (req *updateGeneralSettingsRequest) values() generalSettingsValues {
 		spotifyClientSecret: strings.TrimSpace(*req.SpotifyClientSecret),
 		staticDir:           strings.TrimSpace(*req.StaticDir),
 		transcodeDir:        strings.TrimSpace(*req.TranscodeDir),
+		enableAppleLookups:  *req.EnableAppleLookups,
 		enableWatcher:       *req.EnableWatcher,
 		downloadImages:      *req.DownloadImages,
 	}
@@ -114,6 +120,7 @@ func mapGeneralSettingsResponse(settings database.Setting) generalSettingsRespon
 		JellyfinApiKey:      helpers.StringPtrFromNull(settings.JellyfinApiKey),
 		SpotifyClientID:     helpers.StringPtrFromNull(settings.SpotifyClientID),
 		SpotifyClientSecret: helpers.StringPtrFromNull(settings.SpotifyClientSecret),
+		EnableAppleLookups:  settings.EnableAppleLookups,
 		EnableWatcher:       settings.EnableWatcher,
 		DownloadImages:      settings.DownloadImages,
 		StaticDir:           settings.StaticDir,
@@ -263,6 +270,7 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 			JellyfinApiKey:      helpers.NullString(values.jellyfinApiKey),
 			SpotifyClientID:     helpers.NullString(values.spotifyClientID),
 			SpotifyClientSecret: helpers.NullString(values.spotifyClientSecret),
+			EnableAppleLookups:  values.enableAppleLookups,
 			EnableWatcher:       values.enableWatcher,
 			DownloadImages:      values.downloadImages,
 			StaticDir:           values.staticDir,
@@ -292,8 +300,9 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 
 // generalSettingsRestartRequired reports whether a change only takes effect
 // after a restart: the TMDB and Spotify clients are built once at startup.
-// The static and transcode directories are read live, and the remaining
-// integration values are stored without a server feature that reads them.
+// The static and transcode directories are read live, Apple lookups are read
+// at each music scan start, and the remaining integration values are stored
+// without a server feature that reads them.
 func generalSettingsRestartRequired(previous *database.Setting, next database.Setting) bool {
 	return previous.TmdbKey != next.TmdbKey ||
 		previous.SpotifyClientID != next.SpotifyClientID ||

@@ -41,7 +41,6 @@ var ErrUnsupportedContainer = errors.New("keyframeindex: unsupported container")
 // read and a clean fallback, never an OOM or an unbounded network read.
 const (
 	maxCuesPayloadBytes = 16 << 20
-	maxMoovPayloadBytes = 32 << 20
 	maxSampleCount      = 4_000_000
 	// Beyond this many keyframes the source is effectively intra-only;
 	// storing megabyte rows buys nothing over the probing fallback.

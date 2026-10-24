@@ -8,6 +8,7 @@ import (
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffprobe"
+	"igloo/cmd/internal/itunes"
 	"igloo/cmd/internal/logger"
 	"igloo/cmd/internal/scanner"
 	spotifyapi "igloo/cmd/internal/spotify"
@@ -23,8 +24,16 @@ type SpotifyProvider interface {
 	GetAlbum(ctx context.Context, id spotifyapi.ID) (*spotifyapi.FullAlbum, error)
 }
 
+// AppleProvider is the part of the iTunes client the scanner uses: album
+// lookups by the collection ids iTunes purchases carry.
+type AppleProvider interface {
+	LookupAlbums(ctx context.Context, ids []int64) (map[int64]itunes.Album, error)
+}
+
 // Dependencies are the application services used by Scanner. DB, Queries,
-// Logger and Ffprobe are required. Spotify and shutdown tracking are optional.
+// Logger and Ffprobe are required. Spotify, Apple and shutdown tracking are
+// optional. AppleLookupsEnabled is read when each scan starts and defaults to
+// true.
 type Dependencies struct {
 	// Now controls quiet-period eligibility and defaults to time.Now.
 	Now                      func() time.Time
@@ -33,6 +42,8 @@ type Dependencies struct {
 	Logger                   logger.LoggerInterface
 	Ffprobe                  ffprobe.FfprobeInterface
 	Spotify                  SpotifyProvider
+	Apple                    AppleProvider
+	AppleLookupsEnabled      func() bool
 	ScanContext              context.Context
 	Wait                     *sync.WaitGroup
 	ScannerDBMu              *sync.Mutex
@@ -47,6 +58,8 @@ type Scanner struct {
 	logger                   logger.LoggerInterface
 	ffprobe                  ffprobe.FfprobeInterface
 	spotify                  SpotifyProvider
+	apple                    AppleProvider
+	appleLookupsEnabled      func() bool
 	scanContext              context.Context
 	launcher                 scanner.Launcher
 	tx                       scanner.TxRunner
@@ -73,13 +86,17 @@ func New(deps Dependencies) *Scanner {
 	if deps.CurrentMusicDirectory == nil {
 		deps.CurrentMusicDirectory = func() sql.NullString { return sql.NullString{} }
 	}
+	if deps.AppleLookupsEnabled == nil {
+		deps.AppleLookupsEnabled = func() bool { return true }
+	}
 	if deps.InvalidateCommittedTrack == nil {
 		deps.InvalidateCommittedTrack = func(int64) {}
 	}
 	return &Scanner{
 		now:     deps.Now,
 		queries: deps.Queries, logger: deps.Logger, ffprobe: deps.Ffprobe,
-		spotify: deps.Spotify, scanContext: deps.ScanContext, launcher: scanner.Launcher{Wait: deps.Wait},
+		spotify: deps.Spotify, apple: deps.Apple, appleLookupsEnabled: deps.AppleLookupsEnabled,
+		scanContext: deps.ScanContext, launcher: scanner.Launcher{Wait: deps.Wait},
 		tx:                       scanner.TxRunner{DB: deps.DB, Mu: deps.ScannerDBMu, Queries: deps.Queries},
 		currentMusicDirectory:    deps.CurrentMusicDirectory,
 		invalidateCommittedTrack: deps.InvalidateCommittedTrack,

@@ -42,7 +42,7 @@ func (app *Application) GetMusiciansAlphabetical(w http.ResponseWriter, r *http.
 }
 
 // musicianWithSpotify is the musician row plus its Spotify page, like
-// albumWithSpotify.
+// albumWithCatalogURLs.
 type musicianWithSpotify struct {
 	database.Musician
 	SpotifyURL *string `json:"spotify_url"`
@@ -96,7 +96,7 @@ func (app *Application) GetMusicianDetails(w http.ResponseWriter, r *http.Reques
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Data: map[string]any{
-			"musician":       musicianWithSpotify{Musician: musician, SpotifyURL: spotifyURLField(musician.SpotifyID, spotify.ArtistURL)},
+			"musician":       musicianWithSpotify{Musician: musician, SpotifyURL: catalogURLField(musician.SpotifyID.String, musician.SpotifyID.Valid, spotify.ArtistURL)},
 			"albums":         albums,
 			"tracks":         tracks,
 			"genres":         genres,

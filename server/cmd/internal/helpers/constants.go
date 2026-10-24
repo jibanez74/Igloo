@@ -11,8 +11,8 @@ const (
 )
 
 // PROVIDER_HTTP_TIMEOUT bounds a single request to an external metadata provider.
-// It is shared by the TMDB client and the YouTube thumbnail fetcher; Spotify keeps
-// its own longer timeout.
+// It is shared by the TMDB client, the iTunes lookup client and the YouTube
+// thumbnail fetcher; Spotify keeps its own longer timeout.
 const PROVIDER_HTTP_TIMEOUT = 10 * time.Second
 
 // HLS segment generation and remux validation settings shared across packages.

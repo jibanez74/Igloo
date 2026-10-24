@@ -27,7 +27,7 @@ func (q *Queries) DeleteAlbum(ctx context.Context, id int64) (string, error) {
 
 const getAlbumByID = `-- name: GetAlbumByID :one
 SELECT
-  id, title, sort_title, spotify_id, spotify_popularity, album_type, musician, release_date, year, total_tracks, cover, created_at, updated_at
+  id, title, sort_title, spotify_id, apple_id, spotify_popularity, album_type, musician, release_date, year, total_tracks, cover, created_at, updated_at
 FROM albums
 WHERE id = ?
 LIMIT 1
@@ -41,6 +41,7 @@ func (q *Queries) GetAlbumByID(ctx context.Context, id int64) (Album, error) {
 		&i.Title,
 		&i.SortTitle,
 		&i.SpotifyID,
+		&i.AppleID,
 		&i.SpotifyPopularity,
 		&i.AlbumType,
 		&i.Musician,
@@ -184,6 +185,45 @@ func (q *Queries) GetAlbumsBySpotifyIDs(ctx context.Context, spotifyIds []sql.Nu
 	return items, nil
 }
 
+const getAlbumsWithoutSpotifyIDByIdentityKeys = `-- name: GetAlbumsWithoutSpotifyIDByIdentityKeys :many
+SELECT i.title_key, i.artist_key, i.album_id
+FROM json_each(CAST(?1 AS TEXT)) AS k
+JOIN music_album_identity AS i
+  ON i.title_key = json_extract(k.value, '$[0]')
+  AND i.artist_key = json_extract(k.value, '$[1]')
+JOIN albums AS a
+  ON a.id = i.album_id
+WHERE a.spotify_id IS NULL
+`
+
+// Name fallback for the same mapper: library albums without a Spotify id, by
+// the (title, artist) alias keys derived from a page of results. The pairs
+// arrive as a JSON array of two-element arrays, like GetRandomTracks's
+// exclusions, so the statement stays preparable; each pair is a primary-key
+// probe of music_album_identity.
+func (q *Queries) GetAlbumsWithoutSpotifyIDByIdentityKeys(ctx context.Context, identityKeys string) ([]MusicAlbumIdentity, error) {
+	rows, err := q.query(ctx, q.getAlbumsWithoutSpotifyIDByIdentityKeysStmt, getAlbumsWithoutSpotifyIDByIdentityKeys, identityKeys)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []MusicAlbumIdentity{}
+	for rows.Next() {
+		var i MusicAlbumIdentity
+		if err := rows.Scan(&i.TitleKey, &i.ArtistKey, &i.AlbumID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getLatestAlbums = `-- name: GetLatestAlbums :many
 SELECT
   id,
@@ -233,7 +273,7 @@ func (q *Queries) GetLatestAlbums(ctx context.Context) ([]GetLatestAlbumsRow, er
 	return items, nil
 }
 
-const updateAlbumSpotifyCover = `-- name: UpdateAlbumSpotifyCover :one
+const updateAlbumCover = `-- name: UpdateAlbumCover :one
 UPDATE albums
 SET
   cover = ?,
@@ -242,20 +282,20 @@ WHERE id = ?
 RETURNING id, spotify_id, cover
 `
 
-type UpdateAlbumSpotifyCoverParams struct {
+type UpdateAlbumCoverParams struct {
 	Cover sql.NullString `json:"cover"`
 	ID    int64          `json:"id"`
 }
 
-type UpdateAlbumSpotifyCoverRow struct {
+type UpdateAlbumCoverRow struct {
 	ID        int64          `json:"id"`
 	SpotifyID sql.NullString `json:"spotify_id"`
 	Cover     sql.NullString `json:"cover"`
 }
 
-func (q *Queries) UpdateAlbumSpotifyCover(ctx context.Context, arg UpdateAlbumSpotifyCoverParams) (UpdateAlbumSpotifyCoverRow, error) {
-	row := q.queryRow(ctx, q.updateAlbumSpotifyCoverStmt, updateAlbumSpotifyCover, arg.Cover, arg.ID)
-	var i UpdateAlbumSpotifyCoverRow
+func (q *Queries) UpdateAlbumCover(ctx context.Context, arg UpdateAlbumCoverParams) (UpdateAlbumCoverRow, error) {
+	row := q.queryRow(ctx, q.updateAlbumCoverStmt, updateAlbumCover, arg.Cover, arg.ID)
+	var i UpdateAlbumCoverRow
 	err := row.Scan(&i.ID, &i.SpotifyID, &i.Cover)
 	return i, err
 }

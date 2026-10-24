@@ -404,7 +404,7 @@ func TestShutdownDuringSpotifyResolution(t *testing.T) {
 			if len(scan.spotifyArtistMisses) != 0 || len(scan.spotifyAlbumMisses) != 0 {
 				t.Fatal("cancellation cached as Spotify failure")
 			}
-			for _, table := range []string{"tracks", "musicians", "albums", "music_spotify_matches"} {
+			for _, table := range []string{"tracks", "musicians", "albums", "music_provider_matches"} {
 				count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM "+table)
 				if count != 0 {
 					t.Fatalf("canceled resolution wrote to %s", table)
@@ -475,6 +475,7 @@ func TestShutdownDuringTrackTransaction(t *testing.T) {
 	}
 	expected := newMusicScanContext(nil)
 	expected.breaker = scan.breaker
+	expected.appleBreaker = scan.appleBreaker
 	if !reflect.DeepEqual(scan, expected) {
 		t.Fatal("canceled transaction published caches")
 	}

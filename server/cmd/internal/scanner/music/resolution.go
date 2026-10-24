@@ -12,6 +12,7 @@ import (
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
+	"igloo/cmd/internal/itunes"
 	"igloo/cmd/internal/scanner"
 	spotifyapi "igloo/cmd/internal/spotify"
 )
@@ -25,10 +26,12 @@ type resolvedTrack struct {
 	// none of the track's credits carries that name; it is persisted with the
 	// track.
 	adoptedArtist *resolvedMusician
-	genreTag      string
-	artistTag     string
-	artistSort    string
-	albumSort     string
+	// catalog holds the Apple ids the file carries, kept for the Apple pass.
+	catalog    itunes.CatalogIDs
+	genreTag   string
+	artistTag  string
+	artistSort string
+	albumSort  string
 }
 
 type resolvedMusician struct {
@@ -40,7 +43,7 @@ type resolvedMusician struct {
 	// earlier credit may have merged its owner.
 	existing               *database.GetMusicianBySpotifyIDRow
 	spotifyArtist          *spotifyapi.FullArtist
-	spotifyMatch           *resolvedSpotifyMatch
+	spotifyMatch           *resolvedMatch
 	splitCompoundOnNoMatch bool
 	adoptionTarget         string
 	adoptionDone           bool
@@ -55,26 +58,26 @@ type resolvedAlbum struct {
 	// Persistence refreshes this identity inside the transaction.
 	existing     *database.GetAlbumBySpotifyIDRow
 	spotifyAlbum *spotifyapi.FullAlbum
-	spotifyMatch *resolvedSpotifyMatch
+	spotifyMatch *resolvedMatch
 }
 
 // resolvedMusicianMatch and resolvedAlbumMatch read the provider outcome off a
 // resolution that may be nil, which is how every error path returns.
-func resolvedMusicianMatch(resolved *resolvedMusician) *resolvedSpotifyMatch {
+func resolvedMusicianMatch(resolved *resolvedMusician) *resolvedMatch {
 	if resolved == nil {
 		return nil
 	}
 	return resolved.spotifyMatch
 }
 
-func resolvedAlbumMatch(resolved *resolvedAlbum) *resolvedSpotifyMatch {
+func resolvedAlbumMatch(resolved *resolvedAlbum) *resolvedMatch {
 	if resolved == nil {
 		return nil
 	}
 	return resolved.spotifyMatch
 }
 
-func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, file scanner.ScanFile) (*resolvedTrack, error) {
+func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, file scanner.ScanFile, catalog itunes.CatalogIDs) (*resolvedTrack, error) {
 	info, err := s.ffprobe.GetAudioMetadata(ctx, file.Path)
 	if err != nil {
 		return nil, fmt.Errorf("ffprobe failed: %w", err)
@@ -191,6 +194,7 @@ func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, 
 
 	resolved := &resolvedTrack{
 		params:    params,
+		catalog:   catalog,
 		genreTag:  strings.TrimSpace(tags.Genre),
 		artistTag: tags.Artist, artistSort: tags.SortArtist, albumSort: strings.TrimSpace(tags.SortAlbum),
 	}
@@ -216,7 +220,7 @@ func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, 
 			effectiveAlbumArtist = artistTag
 		}
 
-		query := albumQuery{title: tags.Album, sortTitle: sortAlbum, artist: effectiveAlbumArtist, totalTracks: int(trackTotal)}
+		query := albumQuery{title: tags.Album, sortTitle: sortAlbum, artist: effectiveAlbumArtist, totalTracks: int(trackTotal), appleAlbumID: catalog.Album}
 		if params.Year.Valid {
 			query.year = int(params.Year.Int64)
 		}
@@ -278,7 +282,7 @@ func (s *Scanner) resolveMusician(ctx context.Context, scan *musicScanContext, n
 	// Tally the outcome on every return path, cached ones included, so the scan
 	// summary counts artists rather than Spotify requests. Once the catalog row
 	// is known the tally keys on it, so aliases of one artist count once.
-	countKey := musicSpotifyEntityMusician + ":" + cacheKey
+	countKey := musicEntityMusician + ":" + cacheKey
 	defer func() { scan.countEnrichment(countKey, resolvedMusicianMatch(resolved)) }()
 	musicianID, ok := scan.musicianIDs.Get(cacheKey)
 	if ok {
@@ -315,7 +319,7 @@ func (s *Scanner) resolveMusician(ctx context.Context, scan *musicScanContext, n
 		return nil, err
 	}
 	if found {
-		countKey = musicSpotifyEntityMusician + ":" + strconv.FormatInt(existing.ID, 10)
+		countKey = musicEntityMusician + ":" + strconv.FormatInt(existing.ID, 10)
 		resolved.existingID = existing.ID
 		resolved.hasExistingID = true
 		resolved.existing = &existing
@@ -332,12 +336,12 @@ func (s *Scanner) resolveMusician(ctx context.Context, scan *musicScanContext, n
 			return s.resolveArtistAdoption(ctx, scan, resolved, target)
 		}
 
-		persisted, matchErr := s.queries.GetMusicSpotifyMatch(ctx, database.GetMusicSpotifyMatchParams{
-			EntityType: musicSpotifyEntityMusician,
+		persisted, matchErr := s.queries.GetMusicProviderMatch(ctx, database.GetMusicProviderMatchParams{
+			EntityType: musicEntityMusician,
 			EntityID:   existing.ID,
 		})
 		if matchErr == nil {
-			isFinal := musicSpotifyMatchStatusIsFinal(persisted.Status)
+			isFinal := musicMatchIsFinal(persisted)
 			if isFinal {
 				resolved.splitCompoundOnNoMatch = musicSpotifyMatchSplitsCompound(persisted.Status, persisted.Reason)
 				scan.compoundSplits[cacheKey] = resolved.splitCompoundOnNoMatch
@@ -393,8 +397,8 @@ func (s *Scanner) resolveMusician(ctx context.Context, scan *musicScanContext, n
 
 	if artist != nil {
 		resolved.spotifyArtist = artist
-		match := resolvedSpotifyMatch{
-			status: musicSpotifyStatusMatched,
+		match := resolvedMatch{
+			status: musicStatusMatched,
 		}
 		resolved.spotifyMatch = &match
 	}
@@ -403,10 +407,12 @@ func (s *Scanner) resolveMusician(ctx context.Context, scan *musicScanContext, n
 }
 
 // albumQuery is a local album as its tracks' tags describe it; year and
-// totalTracks are zero when untagged.
+// totalTracks are zero when untagged, appleAlbumID when the file carries no
+// Apple collection id.
 type albumQuery struct {
 	title, sortTitle, artist string
 	year, totalTracks        int
+	appleAlbumID             int64
 }
 
 func (s *Scanner) resolveAlbum(ctx context.Context, scan *musicScanContext, query albumQuery) (resolved *resolvedAlbum, err error) {
@@ -415,7 +421,7 @@ func (s *Scanner) resolveAlbum(ctx context.Context, scan *musicScanContext, quer
 	sortTitle := strings.TrimSpace(query.sortTitle)
 	cacheKey := scanner.NormalizedScanCacheKey(title, albumArtist)
 	// Same tally as resolveMusician, keyed on the catalog row once it is known.
-	countKey := musicSpotifyEntityAlbum + ":" + cacheKey
+	countKey := musicEntityAlbum + ":" + cacheKey
 	defer func() { scan.countEnrichment(countKey, resolvedAlbumMatch(resolved)) }()
 	// Whichever branch produced it, a resolution carrying the Spotify album
 	// leaves its track list for the album's tracks to pair with.
@@ -461,18 +467,20 @@ func (s *Scanner) resolveAlbum(ctx context.Context, scan *musicScanContext, quer
 	if err != nil {
 		return nil, err
 	}
+	hasOutcome := false
 	if found {
-		countKey = musicSpotifyEntityAlbum + ":" + strconv.FormatInt(existing.ID, 10)
+		countKey = musicEntityAlbum + ":" + strconv.FormatInt(existing.ID, 10)
 		resolved.existingID = existing.ID
 		resolved.hasExistingID = true
 		resolved.existing = &existing
 
-		persisted, matchErr := s.queries.GetMusicSpotifyMatch(ctx, database.GetMusicSpotifyMatchParams{
-			EntityType: musicSpotifyEntityAlbum,
+		persisted, matchErr := s.queries.GetMusicProviderMatch(ctx, database.GetMusicProviderMatchParams{
+			EntityType: musicEntityAlbum,
 			EntityID:   existing.ID,
 		})
 		if matchErr == nil {
-			isFinal := musicSpotifyMatchStatusIsFinal(persisted.Status)
+			hasOutcome = true
+			isFinal := musicMatchIsFinal(persisted)
 			if isFinal {
 				scan.albumIDs.Set(cacheKey, existing.ID)
 				return resolved, nil
@@ -493,7 +501,13 @@ func (s *Scanner) resolveAlbum(ctx context.Context, scan *musicScanContext, quer
 		}
 	}
 
-	if !s.spotifyReady(scan) {
+	// An album the Apple pass will look up is left unsettled here, and never
+	// recorded as attempted.
+	appleOwns, err := s.appleOwnsAlbum(ctx, scan, query.appleAlbumID, existing.ID, found, hasOutcome)
+	if err != nil {
+		return nil, err
+	}
+	if appleOwns || !s.spotifyReady(scan) {
 		if found {
 			scan.albumIDs.Set(cacheKey, existing.ID)
 		}
@@ -536,13 +550,30 @@ func (s *Scanner) resolveAlbum(ctx context.Context, scan *musicScanContext, quer
 
 	if albumDetails != nil {
 		resolved.spotifyAlbum = albumDetails
-		match := resolvedSpotifyMatch{
-			status: musicSpotifyStatusMatched,
+		match := resolvedMatch{
+			status: musicStatusMatched,
 		}
 		resolved.spotifyMatch = &match
 	}
 
 	return resolved, nil
+}
+
+// appleOwnsAlbum reports whether the album waits for the Apple pass rather
+// than a Spotify search: this scan looks albums up on Apple, nothing has
+// settled the album, and this file or one already in the album carries an
+// Apple collection id.
+func (s *Scanner) appleOwnsAlbum(ctx context.Context, scan *musicScanContext, appleAlbumID, albumID int64, found, hasOutcome bool) (bool, error) {
+	if !scan.appleEnabled || hasOutcome {
+		return false, nil
+	}
+	if appleAlbumID != 0 {
+		return true, nil
+	}
+	if !found {
+		return false, nil
+	}
+	return s.queries.MusicAlbumHasAppleHint(ctx, sql.NullInt64{Int64: albumID, Valid: true})
 }
 
 // knownArtistSpotifyID is the album artist's Spotify id when this scan or the
@@ -661,16 +692,16 @@ func (s *Scanner) resolveArtistAdoption(ctx context.Context, scan *musicScanCont
 	if attempted {
 		if result.err == nil && result.artist != nil {
 			resolved.spotifyArtist = result.artist
-			resolved.spotifyMatch = &resolvedSpotifyMatch{status: musicSpotifyStatusMatched}
+			resolved.spotifyMatch = &resolvedMatch{status: musicStatusMatched}
 			resolved.adoptionDone = true
 			resolved.splitCompoundOnNoMatch = false
 		} else {
 			gone := spotifyNotFound(result.err)
 			if gone {
-				resolved.spotifyMatch = &resolvedSpotifyMatch{status: musicSpotifyStatusUnmatched}
+				resolved.spotifyMatch = &resolvedMatch{status: musicStatusUnmatched}
 				resolved.adoptionDone = true
 			} else {
-				resolved.spotifyMatch = &resolvedSpotifyMatch{status: musicSpotifyStatusFailed}
+				resolved.spotifyMatch = &resolvedMatch{status: musicStatusFailed}
 			}
 		}
 	}
@@ -678,10 +709,10 @@ func (s *Scanner) resolveArtistAdoption(ctx context.Context, scan *musicScanCont
 	scan.artistAttempts[key] = resolved
 	delete(scan.spotifyArtistMisses, key)
 	scan.compoundSplits[key] = resolved.splitCompoundOnNoMatch
-	countKey := musicSpotifyEntityMusician + ":" + key
+	countKey := musicEntityMusician + ":" + key
 	if resolved.hasExistingID {
 		scan.artistAttemptsByID[resolved.existingID] = resolved
-		countKey = musicSpotifyEntityMusician + ":" + strconv.FormatInt(resolved.existingID, 10)
+		countKey = musicEntityMusician + ":" + strconv.FormatInt(resolved.existingID, 10)
 	}
 	if attempted {
 		scan.recountEnrichment(countKey, resolved.spotifyMatch.status)

@@ -27,6 +27,7 @@ SELECT
   copyright,
   language,
   spotify_id,
+  apple_id,
   explicit,
   album_id,
   musician_id,
@@ -51,8 +52,8 @@ FROM tracks c
 LEFT JOIN track_file_fingerprints f ON f.track_id = c.id;
 
 -- name: UpsertTrack :one
--- A changed file loses its Spotify pairing; the scan's link pass pairs it
--- again with the rest of its album.
+-- A changed file loses its provider pairing; the scan pairs it again with the
+-- rest of its album.
 INSERT INTO tracks (
   title,
   sort_title,
@@ -101,11 +102,23 @@ SET
   copyright = excluded.copyright,
   language = excluded.language,
   spotify_id = NULL,
+  apple_id = NULL,
   explicit = false,
   album_id = excluded.album_id,
   musician_id = excluded.musician_id,
   updated_at = CURRENT_TIMESTAMP
 RETURNING id;
+
+-- name: LinkMusicTrackApple :exec
+-- Guarded like LinkMusicTrackSpotify. iTunes files always carry their track
+-- number, so none is filled in.
+UPDATE tracks
+SET
+  apple_id = sqlc.arg(apple_id),
+  explicit = sqlc.arg(explicit),
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = sqlc.arg(id)
+  AND (apple_id IS NOT sqlc.arg(apple_id) OR explicit IS NOT sqlc.arg(explicit));
 
 -- name: LinkMusicTrackSpotify :exec
 -- Guarded so an unchanged link does not advance updated_at. A track number is

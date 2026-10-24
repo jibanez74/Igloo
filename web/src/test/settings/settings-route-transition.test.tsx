@@ -37,6 +37,7 @@ function generalSettings() {
     jellyfin_api_key: null,
     spotify_client_id: null,
     spotify_client_secret: null,
+    enable_apple_lookups: true,
     enable_watcher: false,
     download_images: true,
     static_dir: "/var/lib/igloo/static",

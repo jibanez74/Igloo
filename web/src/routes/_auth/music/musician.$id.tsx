@@ -28,7 +28,7 @@ import {
   SpotifyGlyph,
   SpotifyPopularityMeter,
 } from "@/components/music/SpotifyPopularity";
-import SpotifyLink from "@/components/music/SpotifyLink";
+import CatalogLink from "@/components/music/CatalogLink";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useTrackPlaybackMatcher } from "@/hooks/useTrackPlaybackMatcher";
 import TrackItem from "@/components/music/TrackItem";
@@ -308,7 +308,7 @@ function MusicianDetailsContent({
 
               {spotifyUrl && (
                 <div className="mt-4 flex justify-center lg:justify-start">
-                  <SpotifyLink href={spotifyUrl} name={musician.name} />
+                  <CatalogLink provider="spotify" href={spotifyUrl} name={musician.name} />
                 </div>
               )}
 

@@ -63,6 +63,8 @@ export const glacierSessions: AlbumDetails = {
     sort_title: "Glacier Sessions",
     musician: nullableString("Aurora Pines"),
     spotify_id: nullableString("spotify-glacier"),
+    apple_id: nullableInt64(),
+    apple_url: null,
     spotify_url: "https://open.spotify.com/album/spotify-glacier",
     spotify_popularity: nullableFloat64(73),
     album_type: nullableString("album"),

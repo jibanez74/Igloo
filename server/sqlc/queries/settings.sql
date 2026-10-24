@@ -11,6 +11,7 @@ INSERT INTO settings (
   jellyfin_api_key,
   spotify_client_id,
   spotify_client_secret,
+  enable_apple_lookups,
   hardware_acceleration_device,
   enable_watcher,
   download_images,
@@ -21,7 +22,7 @@ INSERT INTO settings (
   transcode_dir
 )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: UpdateGeneralSettings :one
@@ -34,6 +35,7 @@ SET
   jellyfin_api_key = ?,
   spotify_client_id = ?,
   spotify_client_secret = ?,
+  enable_apple_lookups = ?,
   enable_watcher = ?,
   download_images = ?,
   static_dir = ?,

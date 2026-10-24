@@ -6,12 +6,14 @@ import (
 	"path/filepath"
 
 	"igloo/cmd/internal/helpers"
+	"igloo/cmd/internal/itunes"
 	"igloo/cmd/internal/scanner"
 )
 
 const (
 	reasonFailed         = "Unable to inspect, probe, or save this track. Any previous record was preserved."
 	reasonSpotifyStopped = "Spotify lookups stopped after provider failures. Pending artists, albums and tracks will retry on a later scan."
+	reasonAppleStopped   = "Apple Music lookups stopped after provider failures. Pending albums will retry on a later scan."
 )
 
 // Start launches a scan asynchronously when configured and no music scan is running.
@@ -61,6 +63,7 @@ func (s *Scanner) runMusicScan(directory string) {
 		return
 	}
 	scan := newMusicScanContext(scanIndex)
+	scan.appleEnabled = s.apple != nil && s.appleLookupsEnabled()
 	report.scan = scan
 	reconciliation, err := scanner.NewReconciliation(ctx, directory, files)
 	if err != nil {
@@ -115,6 +118,11 @@ func (s *Scanner) runMusicScan(directory string) {
 	}
 
 	s.phase(report, scanner.PhaseEnrichment)
+	err = s.enrichFromApple(ctx, scan, report)
+	if err != nil {
+		fail(err, "Apple Music lookups stopped after an error; remaining albums are retried on the next scan.")
+		return
+	}
 	err = s.retrySpotify(ctx, scan, report)
 	if err != nil {
 		fail(err, "Spotify retries stopped after an error; remaining artists and albums are retried on the next scan.")
@@ -187,7 +195,8 @@ func (s *Scanner) processFile(ctx context.Context, scan *musicScanContext, file 
 		return outcome, existed, err
 	}
 	file.Size = inspection.Fingerprint.Size
-	resolved, resolveErr := s.resolveTrackFile(ctx, scan, file)
+	catalog := s.readCatalogIDs(ctx, file, inspection)
+	resolved, resolveErr := s.resolveTrackFile(ctx, scan, file, catalog)
 	err = inspection.Validate(ctx)
 	if err != nil {
 		return outcome, existed, err
@@ -198,6 +207,21 @@ func (s *Scanner) processFile(ctx context.Context, scan *musicScanContext, file 
 	resolved.inspection = inspection
 	_, err = s.persistResolvedTrack(ctx, scan, resolved)
 	return outcome, existed, err
+}
+
+// readCatalogIDs reads the Apple ids an iTunes purchase carries, whether or
+// not Apple lookups are on: an unchanged file is never read again. A file
+// whose metadata cannot be read has no ids.
+func (s *Scanner) readCatalogIDs(ctx context.Context, file scanner.ScanFile, inspection *scanner.FileInspection) itunes.CatalogIDs {
+	if file.Ext != "m4a" {
+		return itunes.CatalogIDs{}
+	}
+	ids, err := itunes.ReadCatalogIDs(ctx, inspection, inspection.Fingerprint.Size)
+	if err != nil {
+		s.logger.Debug("unreadable iTunes catalog ids", "path", file.Path, "error", err)
+		return itunes.CatalogIDs{}
+	}
+	return ids
 }
 
 func (s *Scanner) loadMusicScanIndex(ctx context.Context) (map[string]scanner.FileFingerprint, []scanner.CatalogFile, error) {

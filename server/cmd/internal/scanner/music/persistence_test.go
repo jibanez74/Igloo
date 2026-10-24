@@ -472,7 +472,7 @@ func TestRelationshipFailuresRollBackAndRetry(t *testing.T) {
 		{name: "track genre", table: "track_genres"},
 		{name: "musician genre", table: "musician_genres"},
 		{name: "album genre", table: "album_genres"},
-		{name: "Spotify bookkeeping", table: "music_spotify_matches", spotify: true},
+		{name: "Spotify bookkeeping", table: "music_provider_matches", spotify: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -500,7 +500,7 @@ func TestRelationshipFailuresRollBackAndRetry(t *testing.T) {
 			if scanned != 0 || failures != 1 || invalidations != 0 {
 				t.Fatalf("scanned=%d errors=%d invalidations=%d", scanned, failures, invalidations)
 			}
-			for _, table := range []string{"musicians", "albums", "genres", "musician_albums", "track_musicians", "track_genres", "musician_genres", "album_genres", "music_spotify_matches"} {
+			for _, table := range []string{"musicians", "albums", "genres", "musician_albums", "track_musicians", "track_genres", "musician_genres", "album_genres", "music_provider_matches"} {
 				count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM "+table)
 				if count != 0 {
 					t.Fatalf("rollback left %d rows in %s", count, table)
@@ -520,6 +520,7 @@ func TestRelationshipFailuresRollBackAndRetry(t *testing.T) {
 			expected.albumAttemptsByID = scan.albumAttemptsByID
 			expected.albumTracks = scan.albumTracks
 			expected.breaker = scan.breaker
+			expected.appleBreaker = scan.appleBreaker
 			if !reflect.DeepEqual(scan, expected) {
 				t.Fatalf("failed transaction published cache entries: %+v", scan)
 			}

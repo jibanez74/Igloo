@@ -147,7 +147,7 @@ func bootTestApp(t *testing.T, db *sql.DB, config RuntimeConfig) *Application {
 	initTestRuntime(app)
 	app.ScanContext, app.ScanCancel = context.WithCancel(context.Background())
 	stopBackgroundWork(t, app)
-	app.initScanners(nil)
+	app.initScanners(nil, nil)
 
 	return app
 }

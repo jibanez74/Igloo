@@ -21,7 +21,7 @@ func TestReconcilePendingCompoundCreditsSplitsCommittedMisses(t *testing.T) {
 	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musicians") != 1 {
 		t.Fatal("offline scan split the compound credit early")
 	}
-	_, err := s.tx.DB.Exec("INSERT INTO music_spotify_matches(entity_type, entity_id, status, reason) SELECT 'musician', id, 'unmatched', 'no_results' FROM musicians")
+	_, err := s.tx.DB.Exec("INSERT INTO music_provider_matches(provider, entity_type, entity_id, status, reason) SELECT 'spotify', 'musician', id, 'unmatched', 'no_results' FROM musicians")
 	if err != nil {
 		t.Fatal(err)
 	}

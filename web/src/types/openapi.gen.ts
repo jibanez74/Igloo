@@ -2007,13 +2007,13 @@ export interface paths {
         };
         /**
          * Get music scan progress
-         * @description Admin-only current/latest in-memory report. No persistent history. Discovery and processing are interleaved, so total grows while the local phase runs. Spotify tallies count unique artists and albums, one outcome each. Interrupted scans retain committed work and report canceled or failed, never successful completion.
+         * @description Admin-only current/latest in-memory report. No persistent history. Discovery and processing are interleaved, so total grows while the local phase runs. Enrichment tallies count unique artists and albums, one outcome each, across Apple Music and Spotify. Interrupted scans retain committed work and report canceled or failed, never successful completion.
          */
         get: operations["getMusicScanStatus"];
         put?: never;
         /**
          * Trigger a music library scan
-         * @description Admin-only endpoint. The scan runs asynchronously; returns 200 when started, 409 when already running, and 500 when no music directory is configured. Files are inspected by cleaned catalog path using persisted filesystem fingerprints and full-file SHA-256. Matching filesystem metadata skips hashing and probing; identical bytes with changed metadata update only the fingerprint. New or changed bytes are processed after a 60-second quiet period from the later of modification and status-change time. Recent, future-dated, or unstable files preserve their previous records and retry on the next startup or manual scan; deferred totals are logged separately from failures. When Spotify is available, missing or failed artist and album enrichment is retried from catalog metadata even for unchanged files, without probing them again; confirmed matches and non-matches are retained. Local sort tags and album dates are reconciled from current track contributions, with Spotify dates used only when no valid local date remains. Music identities normalize surrounding whitespace and case; Spotify collisions retain the existing owner and preserve track IDs. Track changes and deletions reconcile local artist, album, and genre relationships and derived sorting and dates. Missing-file cleanup runs before Spotify retries. Startup and manual scans remove confirmed missing catalog files, including broken symlink targets and rows without fingerprints, only within the directory captured at scan start. Cleanup follows a successful walk and final batch; files seen during the scan remain protected even if processing fails or is deferred. Cancellation, fatal walk failures, and unavailable or replaced roots prevent cleanup. Permission and I/O failures and symlink loops preserve records. Root accessibility and identity and file absence are rechecked before each deletion commits; runtime caches are invalidated after commit. Unreferenced shared metadata remains. Renames import the new path and delete the missing old path. No forced refresh is performed. GET returns the current/latest in-memory report; POST duplicate protection lasts for the entire run. Completion logs include local, cleanup and Spotify counts.
+         * @description Admin-only endpoint. The scan runs asynchronously; returns 200 when started, 409 when already running, and 500 when no music directory is configured. Files are inspected by cleaned catalog path using persisted filesystem fingerprints and full-file SHA-256. Matching filesystem metadata skips hashing and probing; identical bytes with changed metadata update only the fingerprint. New or changed bytes are processed after a 60-second quiet period from the later of modification and status-change time. Recent, future-dated, or unstable files preserve their previous records and retry on the next startup or manual scan; deferred totals are logged separately from failures. New and changed m4a files have the Apple catalog ids of an iTunes purchase read and kept. When Apple lookups are enabled, albums whose files carry an Apple collection id are looked up on Apple Music after the walk, in batches, and their tracks paired by catalog id; an album Apple no longer lists falls back to Spotify in the same scan. When Spotify is available, other missing or failed artist and album enrichment is retried from catalog metadata even for unchanged files, without probing them again; confirmed matches and non-matches are retained. Local sort tags and album dates are reconciled from current track contributions, with Spotify dates used only when no valid local date remains. Music identities normalize surrounding whitespace and case; Apple Music and Spotify id collisions retain the existing owner and preserve track IDs. Track changes and deletions reconcile local artist, album, and genre relationships and derived sorting and dates. Missing-file cleanup runs before the Apple Music and Spotify passes. Startup and manual scans remove confirmed missing catalog files, including broken symlink targets and rows without fingerprints, only within the directory captured at scan start. Cleanup follows a successful walk and final batch; files seen during the scan remain protected even if processing fails or is deferred. Cancellation, fatal walk failures, and unavailable or replaced roots prevent cleanup. Permission and I/O failures and symlink loops preserve records. Root accessibility and identity and file absence are rechecked before each deletion commits; runtime caches are invalidated after commit. Unreferenced shared metadata remains. Renames import the new path and delete the missing old path. No forced refresh is performed. GET returns the current/latest in-memory report; POST duplicate protection lasts for the entire run. Completion logs include local, cleanup and enrichment counts.
          */
         post: operations["triggerMusicScan"];
         delete?: never;
@@ -2881,6 +2881,8 @@ export interface components {
             spotify_client_id: string | null;
             /** @description Read when the server starts; a change takes effect after a restart. */
             spotify_client_secret: string | null;
+            /** @description Whether music scans look albums up on Apple Music by the catalog ids iTunes purchases carry. Needs no credentials; read when each music scan starts, so a change applies from the next scan without a restart. */
+            enable_apple_lookups: boolean;
             /** @description Stored only; no server feature reads this value. */
             enable_watcher: boolean;
             /** @description Stored only; no server feature reads this value. */
@@ -2903,6 +2905,8 @@ export interface components {
             jellyfin_api_key: string;
             spotify_client_id: string;
             spotify_client_secret: string;
+            /** @description Whether music scans look albums up on Apple Music by the catalog ids iTunes purchases carry. Needs no credentials; read when each music scan starts, so a change applies from the next scan without a restart. */
+            enable_apple_lookups: boolean;
             /** @description Stored only; no server feature reads this value. */
             enable_watcher: boolean;
             /** @description Stored only; no server feature reads this value. */
@@ -2920,7 +2924,7 @@ export interface components {
         };
         UpdateGeneralSettingsData: {
             settings: components["schemas"]["GeneralSettings"];
-            /** @description True when this request changed the stored TMDB key or Spotify credentials compared with the previous save. Those clients are built when the server starts, so the change takes effect after a restart. Every other general setting applies immediately. */
+            /** @description True when this request changed the stored TMDB key or Spotify credentials compared with the previous save. Those clients are built when the server starts, so the change takes effect after a restart. Every other general setting, Apple lookups included, applies without a restart. */
             restart_required: boolean;
         };
         UpdateGeneralSettingsEnvelope: components["schemas"]["JsonSuccess"] & {
@@ -3766,8 +3770,12 @@ export interface components {
             total_tracks: number;
             cover_url: string;
             spotify_url: string;
+            /** @description True when a library album has this Spotify id, or, for a library album matched on Apple Music or not at all, the same normalized title and album artist. */
             already_in_library: boolean;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description The library album already_in_library found; present only when it is true.
+             */
             library_album_id?: number;
         };
         SpotifyTrackSearchResult: {
@@ -3971,18 +3979,24 @@ export interface components {
             id: number;
             title: string;
             sort_title: string;
+            /** @description The matched Spotify album. Valid is false for an album matched on Apple Music: an album is matched by one provider, never both. */
             spotify_id: components["schemas"]["SqlNullString"];
+            /** @description The Apple Music collection the album matched, by the collection id its iTunes purchases carry. Valid is false unless the Apple catalog lists the album. */
+            apple_id: components["schemas"]["SqlNullInt64"];
+            /** @description The album's page on Apple Music, built from apple_id; null unless the album matched on Apple Music. */
+            apple_url: string | null;
             /** @description The album's page on Spotify, built from spotify_id; null until a Spotify match. */
             spotify_url: string | null;
             /** @description No longer written: Spotify stopped reporting popularity to this app in 2026, so Valid is false. */
             spotify_popularity: components["schemas"]["SqlNullFloat64"];
-            /** @description Spotify's album type: album, single or compilation. Valid is false until a Spotify match reports one. */
+            /** @description The matched provider's album type: album, single or compilation. Valid is false until a match reports one. */
             album_type: components["schemas"]["SqlNullString"];
             musician: components["schemas"]["SqlNullString"];
             release_date: components["schemas"]["SqlNullString"];
             year: components["schemas"]["SqlNullInt64"];
-            /** @description The track count Spotify reports for the matched album, not the number of local tracks. Valid is false until a Spotify match reports one. */
+            /** @description The track count the matched provider reports for the album, not the number of local tracks. Valid is false until a match reports one. */
             total_tracks: components["schemas"]["SqlNullInt64"];
+            /** @description The matched provider's cover art URL. Valid is false until a match supplies one. */
             cover: components["schemas"]["SqlNullString"];
             created_at: string;
             updated_at: string;
@@ -4017,9 +4031,11 @@ export interface components {
             composer: components["schemas"]["SqlNullString"];
             copyright: components["schemas"]["SqlNullString"];
             language: components["schemas"]["SqlNullString"];
-            /** @description The Spotify track this file was paired with through its album's track list. Valid is false until the album matches and a track pairs. */
+            /** @description The Spotify track this file was paired with through its album's track list. Valid is false until the album matches on Spotify and a track pairs. */
             spotify_id: components["schemas"]["SqlNullString"];
-            /** @description Spotify's explicit-lyrics flag for the paired track; false when unknown or unpaired. */
+            /** @description The Apple Music track this file is, by the track id its iTunes purchase carries. Valid is false unless the album matched on Apple Music and the catalog lists the track. */
+            apple_id: components["schemas"]["SqlNullInt64"];
+            /** @description The explicit-lyrics flag of the catalog track this file paired with, on Apple Music or Spotify, whichever matched the album; false when unknown or unpaired. */
             explicit: boolean;
             album_id: components["schemas"]["SqlNullInt64"];
             musician_id: components["schemas"]["SqlNullInt64"];
@@ -4765,7 +4781,7 @@ export interface components {
             channel_layout: string;
             /** Format: int64 */
             bit_rate: number;
-            /** @description Spotify's explicit-lyrics flag for the paired track; false when unknown or unpaired. */
+            /** @description The explicit-lyrics flag of the catalog track this file paired with, on Apple Music or Spotify, whichever matched the album; false when unknown or unpaired. */
             explicit: boolean;
             album_id: components["schemas"]["SqlNullInt64"];
             musician_id: components["schemas"]["SqlNullInt64"];
@@ -4897,15 +4913,15 @@ export interface components {
             deferred: number;
             /** @description Confirmed missing catalog files removed during cleanup. */
             deleted: number;
-            /** @description Artists and albums queued for the Spotify retry phase, counted when the phase starts. Zero when Spotify is not configured. */
+            /** @description Albums queued for the Apple Music pass, then artists and albums queued for the Spotify retry and track-pairing passes, each counted when its pass starts. Zero when no provider is available. */
             enrichment_total: number;
-            /** @description Spotify retry candidates handled so far in this run. */
+            /** @description Enrichment candidates handled so far in this run, across the Apple Music and Spotify passes. */
             enrichment_processed: number;
-            /** @description Unique artists and albums matched on Spotify during this run, one outcome each, across inline resolution and the retry phase. */
+            /** @description Unique artists and albums matched during this run, one outcome each: albums on Apple Music or Spotify, artists on Spotify, across inline resolution and the enrichment passes. */
             enriched: number;
-            /** @description Unique artists and albums whose Spotify lookup failed during this run. */
+            /** @description Unique artists and albums whose lookup failed during this run, on Apple Music or Spotify. */
             enrichment_failed: number;
-            /** @description Unique artists and albums with a definitive Spotify no-match during this run. */
+            /** @description Unique artists and albums with a definitive no-match during this run. An album Apple Music no longer lists is counted by its Spotify outcome. */
             enrichment_unmatched: number;
             issue_count: number;
             issues: components["schemas"]["ScanIssue"][];
