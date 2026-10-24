@@ -846,6 +846,51 @@ describe("VideoPlayer hls.js error routing", () => {
   // A 503 on a fragment means the encoder has not reached that segment yet, not
   // that the stream is broken. hls.js has spent its own retries by the time the
   // error is fatal, so the player grants a bounded number of fresh attempts.
+  // hls.js retried every 5xx four times before the error above saw it. On a
+  // segment 503 each retry was another 120 s long-poll, so the player's own
+  // three restarts hid about 40 minutes of waiting; on a manifest 503 each was
+  // another 15 s park that ignored the server's Retry-After.
+  it("leaves the server's deliberate 500 and 503 answers to the player's own retries", async () => {
+    type RetryPolicy = {
+      default: {
+        errorRetry: {
+          shouldRetry: (
+            config: unknown,
+            count: number,
+            isTimeout: boolean,
+            response: { code?: number } | undefined,
+            retry: boolean,
+          ) => boolean;
+        };
+      };
+    };
+    const hls = await renderHlsPlayer();
+    const config = hls.config as unknown as Record<string, RetryPolicy>;
+
+    for (const policy of [
+      "fragLoadPolicy",
+      "manifestLoadPolicy",
+      "playlistLoadPolicy",
+    ]) {
+      const { shouldRetry } = config[policy].default.errorRetry;
+      expect(shouldRetry(null, 0, false, { code: 503 }, true), policy).toBe(
+        false,
+      );
+      expect(shouldRetry(null, 0, false, { code: 500 }, true), policy).toBe(
+        false,
+      );
+      // A reverse proxy's 502 or 504 is no answer from Igloo at all.
+      expect(shouldRetry(null, 0, false, { code: 502 }, true), policy).toBe(
+        true,
+      );
+      expect(shouldRetry(null, 0, true, undefined, true), policy).toBe(true);
+      // Never past hls.js's own verdict, such as an exhausted budget.
+      expect(shouldRetry(null, 4, false, { code: 502 }, false), policy).toBe(
+        false,
+      );
+    }
+  });
+
   it("retries a not-yet-produced segment before reporting it", async () => {
     const onError = vi.fn();
     const hls = await renderHlsPlayer({ onError });

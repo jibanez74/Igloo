@@ -92,6 +92,18 @@ const HLS_NETWORK_ERROR = "networkError" as ErrorData["type"];
 const HLS_MEDIA_ERROR = "mediaError" as ErrorData["type"];
 
 /**
+ * Statuses the server answers deliberately, which hls.js's own retries only
+ * stack on top of. A 503 comes after the server already waited (a segment
+ * long-polls for up to 120 s, a manifest parks for a transcode permit) and
+ * names its own Retry-After; a segment 500 means FFmpeg died, which only a new
+ * manifest request replaces. The error handler below retries both on its own
+ * budgets. Left to hls.js, every attempt hid four more: a capacity refusal
+ * stayed silent for about 90 s, and a segment the encoder never reached took
+ * about 40 minutes to be reported.
+ */
+const HLS_SERVER_DECIDED_STATUSES: ReadonlySet<number> = new Set([500, 503]);
+
+/**
  * hls.js keeps its own retry defaults; only the budgets are ours. The server
  * answers a segment request by long-polling and sending nothing until it has
  * an answer, so time-to-first-byte needs the same budget as the whole load.
@@ -102,7 +114,20 @@ function loadPolicyForTimeout(timeoutMs: number) {
       maxTimeToFirstByteMs: timeoutMs,
       maxLoadTimeMs: timeoutMs,
       timeoutRetry: { maxNumRetry: 2, retryDelayMs: 0, maxRetryDelayMs: 0 },
-      errorRetry: { maxNumRetry: 4, retryDelayMs: 1000, maxRetryDelayMs: 8000 },
+      errorRetry: {
+        maxNumRetry: 4,
+        retryDelayMs: 1000,
+        maxRetryDelayMs: 8000,
+        shouldRetry: (
+          _retryConfig: unknown,
+          _retryCount: number,
+          _isTimeout: boolean,
+          loaderResponse: { code?: number } | undefined,
+          retry: boolean,
+        ) =>
+          retry &&
+          !HLS_SERVER_DECIDED_STATUSES.has(loaderResponse?.code ?? 0),
+      },
     },
   };
 }
