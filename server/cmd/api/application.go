@@ -81,6 +81,7 @@ type Application struct {
 	HLSMaxPersonalSessionsPerUser int
 	SubtitleVTTCache              *cache.Cache
 	SubtitleExtractGroup          singleflight.Group
+	KeyframeExtractGroup          singleflight.Group
 	RoomHLSTombstone              *cache.Cache
 	RoomHLSMu                     sync.Mutex
 	WatchRoomHub                  *WatchRoomHub

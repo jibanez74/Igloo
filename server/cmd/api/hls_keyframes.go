@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"sort"
 	"time"
@@ -201,9 +202,8 @@ func (app *Application) resolveHLSActualStart(parentCtx context.Context, p hlsAc
 	extractCtx, cancelExtract := context.WithTimeout(parentCtx, hlsStartProbeTimeout)
 	defer cancelExtract()
 
-	idx, err := app.extractKeyframeIndexFromFile(extractCtx, p.Source.FilePath, p.Source.Container)
+	idx, err := app.extractAndPersistKeyframeIndex(extractCtx, p)
 	if err == nil {
-		app.setKeyframeIndex(p.Source, p.StreamIndex, p.Fingerprint, idx)
 		if p.RequestedStartSec > 0 {
 			keyframe, ok := keyframeAtOrBefore(idx.KeyframeSec, p.RequestedStartSec)
 			if ok {
@@ -249,6 +249,31 @@ func (app *Application) resolveHLSActualStart(parentCtx context.Context, p hlsAc
 	}
 
 	p.Session.setActualStartSec(actualStartSec)
+}
+
+// extractAndPersistKeyframeIndex extracts and stores a file's index once for
+// every session waiting on it. A seek during a file's first copy-video play
+// starts a second session before the first one's extraction has persisted
+// anything, and each would otherwise read the container's seek tables again.
+// Joiners share the leader's deadline, which is the same budget theirs is.
+func (app *Application) extractAndPersistKeyframeIndex(ctx context.Context, p hlsActualStartParams) (keyframeindex.Index, error) {
+	key := fmt.Sprintf("%s:%d:%d:%s", p.Source.Ref.Kind, p.Source.FileID, p.StreamIndex, p.Fingerprint)
+	value, err, _ := app.KeyframeExtractGroup.Do(key, func() (any, error) {
+		idx, extractErr := app.extractKeyframeIndexFromFile(ctx, p.Source.FilePath, p.Source.Container)
+		if extractErr != nil {
+			return keyframeindex.Index{}, extractErr
+		}
+		app.setKeyframeIndex(p.Source, p.StreamIndex, p.Fingerprint, idx)
+		return idx, nil
+	})
+	if err != nil {
+		return keyframeindex.Index{}, err
+	}
+	idx, ok := value.(keyframeindex.Index)
+	if !ok {
+		return keyframeindex.Index{}, fmt.Errorf("singleflight returned unexpected keyframe index type %T for %q", value, key)
+	}
+	return idx, nil
 }
 
 func (app *Application) extractKeyframeIndexFromFile(
