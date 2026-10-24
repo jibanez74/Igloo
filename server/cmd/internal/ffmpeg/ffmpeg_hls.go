@@ -560,6 +560,7 @@ func (f *ffmpeg) RunHLS(
 
 	cmd := exec.CommandContext(ctx, f.bin, args...)
 	cmd.Dir = absOutDir
+	cmd.SysProcAttr = childProcessAttributes()
 
 	stderrPipe, err := cmd.StderrPipe()
 	if err != nil {
