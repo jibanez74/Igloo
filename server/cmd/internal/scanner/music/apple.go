@@ -128,17 +128,13 @@ func (s *Scanner) askAppleForCollections(ctx context.Context, scan *musicScanCon
 // longer lists is handed to Spotify.
 func (s *Scanner) settleAppleAlbum(ctx context.Context, scan *musicScanContext, album appleAlbum, answers map[int64]*itunes.Album) error {
 	countKey := musicEntityAlbum + ":" + strconv.FormatInt(album.id, 10)
-	catalog := make(map[int64]itunes.Track)
 	for _, id := range album.collections {
-		answer, answered := answers[id]
+		_, answered := answers[id]
 		if !answered {
 			if album.matched == 0 {
 				scan.countEnrichment(countKey, &resolvedMatch{status: musicStatusFailed})
 			}
 			return nil
-		}
-		if answer != nil {
-			maps.Copy(catalog, answer.Tracks)
 		}
 	}
 	var collection *itunes.Album
@@ -156,6 +152,22 @@ func (s *Scanner) settleAppleAlbum(ctx context.Context, scan *musicScanContext, 
 			owner, claimErr = s.claimAppleAlbum(ctx, qtx, txScan, album.id, *collection)
 			if claimErr != nil {
 				return claimErr
+			}
+		}
+		collections, err := qtx.MusicAlbumAppleCollections(ctx, sql.NullInt64{Int64: owner, Valid: true})
+		if err != nil {
+			return err
+		}
+		catalog := make(map[int64]itunes.Track)
+		for _, id := range collections {
+			answer, answered := answers[id.Int64]
+			if !answered {
+				// Keep the merge, but leave tracks pending until every owner
+				// collection is answered by a later candidate or scan.
+				return nil
+			}
+			if answer != nil {
+				maps.Copy(catalog, answer.Tracks)
 			}
 		}
 		return pairAppleTracks(ctx, qtx, txScan, owner, catalog)
