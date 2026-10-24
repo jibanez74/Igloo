@@ -309,10 +309,10 @@ Transcode mode sets `-b:v`, `-maxrate`, and `-bufsize` from the selected profile
 All video transcodes set `-profile:v high`, profile bitrate, maxrate, bufsize, SDR color metadata, and an H.264 encoder. CPU transcode uses:
 
 ```text
--c:v libx264 -preset fast -sc_threshold:v:0 0
+-c:v libx264 -preset veryfast -sc_threshold:v:0 0
 ```
 
-The `fast` preset is a practical default for self-hosted playback: it improves stream quality over faster x264 presets while keeping CPU use reasonable for home servers. Scene-cut insertion is disabled for CPU transcodes because Igloo aligns keyframes on the HLS segment cadence. Predictable keyframes make HLS segmentation and seeking more reliable.
+The `veryfast` preset is chosen for what a home server can carry. Measured with the embedded FFmpeg on 30-second clips of a real 1080p film (Gladiator, a dim scene and a battle scene), against `fast` at the profile bitrates: 1080p at 8 Mbps took 61 CPU-seconds instead of 128 (SSIM 0.9838 vs 0.9840), 1080p at 4 Mbps 53 instead of 104 (PSNR 31.14 vs 31.13 dB), and 720p at 3 Mbps 40 instead of 69 (PSNR 31.23 vs 31.22 dB), each also finishing 1.5–1.7x sooner. At bitrates this constrained the extra analysis `fast` spends buys nothing measurable, while halving the CPU per stream leaves the machine headroom and shortens time to first segment. The preset does not change how many transcodes run at once: `HLS_MAX_CPU_TRANSCODES` still caps that (see "Threads and Encoding Pressure"), and a host with spare cores can raise it. Scene-cut insertion is disabled for CPU transcodes because Igloo aligns keyframes on the HLS segment cadence. Predictable keyframes make HLS segmentation and seeking more reliable.
 
 When the source frame rate is known, Igloo sets a fixed 4-second GOP:
 
@@ -464,7 +464,7 @@ At startup, after the `-version` executability check, Igloo probes FFmpeg for en
 
 The device is a stored setting: `HARDWARE_ACCELERATION_DEVICE` seeds the settings row only when the database has none, and from then on Settings → Playback is the source of truth. Startup logs a warning when the two differ, because a server left on CPU by an edit silently outlives every later change to `.env`. `GET /api/settings/playback` reports the stored device alongside the one transcodes actually run on (`effective_hardware_acceleration_device`), `hardware_fallback_reason` (empty unless the stored device was refused by the probes or is unknown), and `max_transcode_height`, and the Settings page shows the effective device, the fallback reason when the stored one was refused, and the height cap when it excludes a profile.
 
-Software encoding is capped at 1080p (`HLS_CPU_MAX_TRANSCODE_HEIGHT`). Measured on an 8-core Ryzen 7 5800X with the embedded FFmpeg, `libx264 -preset fast` at 2160p with the software tone-map chain runs at 0.64x realtime — each 4-second segment takes about 6 seconds to produce, hls.js holds at most 30 seconds of forward buffer, and there is no lower rendition to switch to, so playback stalls for good — while the same source on NVENC with CUDA tone mapping runs above 4x. A request or fallback above the cap is lowered to the richest profile at 1080p (see Remux, Transcode, and Fallback), and the web client hides the 2160p mode when the reported `max_transcode_height` excludes it. Hardware encoders keep the full ladder.
+Software encoding is capped at 1080p (`HLS_CPU_MAX_TRANSCODE_HEIGHT`). Measured on an 8-core Ryzen 7 5800X with the embedded FFmpeg, `libx264 -preset fast` at 2160p with the software tone-map chain runs at 0.64x realtime (on a 16-core Intel Core Ultra 7 155H, 0.66x with `fast` and still only 0.87x with `veryfast`) — each 4-second segment takes about 6 seconds to produce, hls.js holds at most 30 seconds of forward buffer, and there is no lower rendition to switch to, so playback stalls for good — while the same source on NVENC with CUDA tone mapping runs above 4x. A request or fallback above the cap is lowered to the richest profile at 1080p (see Remux, Transcode, and Fallback), and the web client hides the 2160p mode when the reported `max_transcode_height` excludes it. Hardware encoders keep the full ladder.
 
 Hardware acceleration always depends on host drivers, device access, and matching FFmpeg build support; Apple VideoToolbox additionally requires a macOS build.
 
