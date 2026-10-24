@@ -318,6 +318,12 @@ export const WATCH_PROGRESS_COMPLETION_THRESHOLD = 0.95;
 export const HLS_FORWARD_REBASE_THRESHOLD_SEC = 120;
 /** Quiet time after the last seek event before the player reports where a run of seeks ended. */
 export const HLS_SEEK_SETTLE_MS = 250;
+/**
+ * An element seek this close to where playback rested is hls.js nudging past
+ * a stall or a buffer gap, not the viewer, so it never outranks the viewer's
+ * own last seek.
+ */
+export const HLS_SEEK_NUDGE_TOLERANCE_SEC = 1;
 /** Delay before the mid-playback buffering spinner appears, to avoid flicker on sub-perceptual stalls. */
 export const MOVIE_BUFFERING_SPINNER_DELAY_MS = 300;
 export const MEDIA_ERR_DECODE = 3;

@@ -404,12 +404,19 @@ export default function VideoPlaybackPage({
     }));
   };
 
-  const { requestRebase, cancelRebase, isRebasePending } = useSettledHlsRebase(
-    {
-      resetKey: sessionWindowKey,
-      onRebase: (targetTimeSec) => navigateToPlaybackPosition(targetTimeSec),
-    },
-  );
+  // VideoPlayer keeps here the order of a seek run it has not reported yet.
+  const pendingHlsSeekOrderRef = useRef<number | null>(null);
+  const {
+    requestRebase,
+    cancelRebase,
+    isRebasePending,
+    isRebasePendingAfter,
+  } = useSettledHlsRebase({
+    resetKey: sessionWindowKey,
+    onRebase: (targetTimeSec) => navigateToPlaybackPosition(targetTimeSec),
+    newerElementSeekPending: (requestOrder) =>
+      (pendingHlsSeekOrderRef.current ?? 0) > requestOrder,
+  });
 
   const { handleSessionLost, resetRecovery, recoveryAttempt } =
     useHlsSessionRecovery({
@@ -569,8 +576,13 @@ export default function VideoPlaybackPage({
   // would ask for a segment far past the encoder and wait minutes for it.
   // seek()'s own rebases never write currentTime, so they never land here.
   // The player reports a run of seeks once, after it settles, so a drag or a
-  // scrub arrives with its final target and costs one rebase.
-  const handleHlsSeeking = (fromTime: number, toTime: number) => {
+  // scrub arrives with its final target and costs one rebase. Whichever input
+  // came last wins: a far click made after this run is the viewer's newer
+  // choice, and its held rebase stands.
+  const handleHlsSeeking = (fromTime: number, toTime: number, order: number) => {
+    const supersededByControls = isRebasePendingAfter(order);
+    if (supersededByControls) return;
+
     const targetTime = clampTime(toAbsolutePlaybackTime(toTime, playbackTiming));
     const rebase = shouldRebaseHlsSession({
       isHlsPlayback,
@@ -580,7 +592,7 @@ export default function VideoPlaybackPage({
     });
     if (!rebase) return;
 
-    // The element's settled target wins over a controls rebase still waiting.
+    // A controls rebase still waiting is older than this run, which wins.
     cancelRebase();
     retractUpNext();
     navigateToPlaybackPosition(targetTime);
@@ -868,6 +880,7 @@ export default function VideoPlaybackPage({
       }
       onActualStart={handleActualHlsStart}
       onHlsSeeking={handleHlsSeeking}
+      pendingHlsSeekOrderRef={pendingHlsSeekOrderRef}
     />
   );
 

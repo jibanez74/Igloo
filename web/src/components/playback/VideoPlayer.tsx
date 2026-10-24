@@ -12,6 +12,7 @@ import {
   HLS_JS_FRAG_LOAD_TIMEOUT_MS,
   HLS_JS_LOAD_TIMEOUT_MS,
   HLS_NETWORK_RECOVERY_DELAYS_MS,
+  HLS_SEEK_NUDGE_TOLERANCE_SEC,
   HLS_SEEK_SETTLE_MS,
   HLS_SEGMENT_NOT_READY_MAX_RETRIES,
   HLS_SEGMENT_STATUS_HEADER,
@@ -20,7 +21,10 @@ import {
   MOVIE_BUFFERING_SPINNER_DELAY_MS,
 } from "@/lib/constants";
 import { prefersNativeHLS } from "@/lib/playback";
-import { releaseResponseBody } from "@/lib/video-playback";
+import {
+  nextHlsSeekInputOrder,
+  releaseResponseBody,
+} from "@/lib/video-playback";
 import { clearTimeoutRef, cn } from "@/lib/utils";
 
 type SubtitleTrackInfo = {
@@ -79,9 +83,17 @@ type VideoPlayerProps = {
    * measured from where playback last settled — including seeks the page
    * never issued, such as a picture-in-picture or native fullscreen scrubber.
    * A drag, a scrub, or held-down keys report once, after the element has
-   * been quiet for `HLS_SEEK_SETTLE_MS`.
+   * been quiet for `HLS_SEEK_SETTLE_MS`. `order` is the run's latest viewer
+   * seek in `nextHlsSeekInputOrder` order, or 0 when the run only nudged
+   * playback (`HLS_SEEK_NUDGE_TOLERANCE_SEC`).
    */
-  onHlsSeeking?: (fromTime: number, toTime: number) => void;
+  onHlsSeeking?: (fromTime: number, toTime: number, order: number) => void;
+  /**
+   * Holds the order of the latest viewer seek in a run still waiting for its
+   * report, or null when none is, so a rebase the page is holding for its own
+   * controls can yield to a seek made after it.
+   */
+  pendingHlsSeekOrderRef?: RefObject<number | null>;
 };
 
 function loadHlsLight() {
@@ -226,6 +238,15 @@ function isPastEndSegment(headers: ManifestHeaders | null): boolean {
   );
 }
 
+function publishHlsSeekOrder(
+  target: RefObject<number | null> | undefined,
+  order: number | null,
+) {
+  if (target) {
+    target.current = order;
+  }
+}
+
 export default function VideoPlayer({
   videoRef,
   src,
@@ -251,6 +272,7 @@ export default function VideoPlayer({
   onEffectiveProfile,
   onActualStart,
   onHlsSeeking,
+  pendingHlsSeekOrderRef,
 }: VideoPlayerProps) {
   const hlsRef = useRef<Hls | null>(null);
   // Where playback last came to rest in the current source: set by timeupdate
@@ -267,13 +289,22 @@ export default function VideoPlayer({
   // transcode.
   const hlsSeekReportTimerRef = useRef<number | null>(null);
   const hlsSeekTargetRef = useRef(0);
-  // The timer fires after later renders, so it reads the current handler and
-  // start rather than the ones the seek event closed over: an actual-start
-  // correction changes both without changing the source.
-  const hlsSeekReportRef = useRef({ onHlsSeeking, startSec });
+  const hlsSeekOrderRef = useRef(0);
+  // The timer fires after later renders, so it reads the current handler,
+  // start, and order ref rather than the ones the seek event closed over: an
+  // actual-start correction changes the first two without changing the source.
+  const hlsSeekReportRef = useRef({
+    onHlsSeeking,
+    startSec,
+    pendingHlsSeekOrderRef,
+  });
   useEffect(() => {
-    hlsSeekReportRef.current = { onHlsSeeking, startSec };
-  }, [onHlsSeeking, startSec]);
+    hlsSeekReportRef.current = {
+      onHlsSeeking,
+      startSec,
+      pendingHlsSeekOrderRef,
+    };
+  }, [onHlsSeeking, startSec, pendingHlsSeekOrderRef]);
   // True after a past-the-end segment 404 stopped hls.js loading. Loading has
   // to be re-armed on the next seek, or a jump back past the back buffer
   // never fetches again; a seek into the same tail just re-enters the branch.
@@ -307,18 +338,41 @@ export default function VideoPlayer({
   const reportHlsSeek = () => {
     const { onHlsSeeking: report, startSec: sourceStart } =
       hlsSeekReportRef.current;
+    const order = hlsSeekOrderRef.current;
+    hlsSeekOrderRef.current = 0;
+    publishHlsSeekOrder(hlsSeekReportRef.current.pendingHlsSeekOrderRef, null);
     // Before the source settles, the start it was built for is where the
     // viewer is.
-    report?.(settledTimeRef.current ?? sourceStart, hlsSeekTargetRef.current);
+    report?.(
+      settledTimeRef.current ?? sourceStart,
+      hlsSeekTargetRef.current,
+      order,
+    );
   };
 
-  const clearHlsSeekReport = () => {
+  const dropHlsSeekReport = () => {
     clearTimeoutRef(hlsSeekReportTimerRef);
+    hlsSeekOrderRef.current = 0;
+    publishHlsSeekOrder(hlsSeekReportRef.current.pendingHlsSeekOrderRef, null);
   };
 
   const scheduleHlsSeekReport = (targetTime: number) => {
     hlsSeekTargetRef.current = targetTime;
-    clearHlsSeekReport();
+    // hls.js nudging a stalled playhead or skipping a buffer gap moves it a
+    // fraction of a second; that is not the viewer, so it is not ordered
+    // against their seeks.
+    const restingTime =
+      settledTimeRef.current ?? hlsSeekReportRef.current.startSec;
+    const viewerSeek =
+      Math.abs(targetTime - restingTime) >= HLS_SEEK_NUDGE_TOLERANCE_SEC;
+    if (viewerSeek) {
+      hlsSeekOrderRef.current = nextHlsSeekInputOrder();
+      publishHlsSeekOrder(
+        hlsSeekReportRef.current.pendingHlsSeekOrderRef,
+        hlsSeekOrderRef.current,
+      );
+    }
+    clearTimeoutRef(hlsSeekReportTimerRef);
     hlsSeekReportTimerRef.current = window.setTimeout(() => {
       hlsSeekReportTimerRef.current = null;
       reportHlsSeek();
@@ -331,7 +385,7 @@ export default function VideoPlayer({
   useEffect(() => {
     return () => {
       clearBufferingIndicator();
-      clearHlsSeekReport();
+      dropHlsSeekReport();
     };
   }, [src]);
 

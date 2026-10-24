@@ -336,6 +336,20 @@ export function shouldRebaseHlsSession({
   );
 }
 
+let hlsSeekInputOrder = 0;
+
+/**
+ * Orders the viewer's seeks across the two ways they arrive: the page's own
+ * controls, which hold a rebase for the settle window, and seeks the element
+ * makes itself (a picture-in-picture or native scrubber), which the player
+ * reports once they settle. The two windows overlap, so whichever input is
+ * newer decides where playback goes, not whichever timer fires first.
+ */
+export function nextHlsSeekInputOrder(): number {
+  hlsSeekInputOrder += 1;
+  return hlsSeekInputOrder;
+}
+
 export function currentPlaybackTimestampMs() {
   return Date.now();
 }
