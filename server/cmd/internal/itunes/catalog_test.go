@@ -55,6 +55,39 @@ func TestReadCatalogIDsWithoutAtomsHasNoIDs(t *testing.T) {
 	}
 }
 
+func TestReadCatalogIDsReadsUnsignedFourByteIDs(t *testing.T) {
+	for _, atom := range []string{"cnID", "plID"} {
+		t.Run(atom, func(t *testing.T) {
+			for name, value := range map[string]uint32{
+				"max signed":   1<<31 - 1,
+				"above signed": 1 << 31,
+				"max unsigned": 1<<32 - 1,
+			} {
+				t.Run(name, func(t *testing.T) {
+					data := fmp4testutil.Box("data", fmp4testutil.U32(21), fmp4testutil.U32(0), fmp4testutil.U32(value))
+					meta := fmp4testutil.Box("meta", fmp4testutil.FullBoxPayload(0,
+						fmp4testutil.Box("ilst", fmp4testutil.Box(atom, data)),
+					))
+					file := fmp4testutil.Box("moov", fmp4testutil.Box("udta", meta))
+					var want itunes.CatalogIDs
+					if atom == "cnID" {
+						want.Track = int64(value)
+					} else {
+						want.Album = int64(value)
+					}
+					got, err := readCatalogIDs(t, file)
+					if err != nil {
+						t.Fatalf("ReadCatalogIDs returned error: %v", err)
+					}
+					if got != want {
+						t.Fatalf("ids = %+v, want %+v", got, want)
+					}
+				})
+			}
+		})
+	}
+}
+
 func TestReadCatalogIDsReadsQuickTimeMeta(t *testing.T) {
 	data := fmp4testutil.Box("data", fmp4testutil.U32(21), fmp4testutil.U32(0), fmp4testutil.U32(7))
 	file := fmp4testutil.Box("moov", fmp4testutil.Box("udta", fmp4testutil.Box("meta",

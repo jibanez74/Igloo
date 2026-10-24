@@ -171,12 +171,14 @@ describe("music scan progress", () => {
       enrichment_total: 4, enrichment_processed: 4, enriched: 120, enrichment_failed: 2, enrichment_unmatched: 9,
       issue_count: 7, issues: [{ filename: "copying.flac", phase: "local", reason: "The file is still changing." }],
     });
-    render(<ScanProgress library="music" status={status} unavailable={true} />);
+    const { rerender } = render(<ScanProgress library="music" status={{ ...status, state: "running" }} unavailable={false} />);
+    expect(screen.getByRole("status")).toHaveTextContent("Matching music metadata");
+    rerender(<ScanProgress library="music" status={status} unavailable={true} />);
     expect(screen.getByRole("status")).toHaveTextContent("Music scan completed with issues");
     expect(screen.getByRole("alert")).toHaveTextContent("Music scan status is unavailable");
     expect(screen.getByText(/2267 of 2267 files processed/)).toBeInTheDocument();
     expect(screen.getByText(/3 missing tracks removed/)).toBeInTheDocument();
-    expect(screen.getByText("Apple Music and Spotify: 4 of 4 processed · 120 matched · 2 failed · 9 unmatched")).toBeInTheDocument();
+    expect(screen.getByText("Catalog matching: 4 of 4 processed · 120 matched · 2 failed · 9 unmatched")).toBeInTheDocument();
     expect(screen.getByText(/retried on the next scan/)).toBeInTheDocument();
     expect(screen.queryByText(/two minutes/)).not.toBeInTheDocument();
     await user.click(screen.getByText("7 outstanding issues"));

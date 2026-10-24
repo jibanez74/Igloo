@@ -87,7 +87,7 @@ func integerItem(moov []byte, item isobmff.Box) (int64, error) {
 	var id int64
 	switch len(value) {
 	case 4:
-		id = int64(int32(binary.BigEndian.Uint32(value)))
+		id = int64(binary.BigEndian.Uint32(value))
 	case 8:
 		id = int64(binary.BigEndian.Uint64(value))
 	default:
