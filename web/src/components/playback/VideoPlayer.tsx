@@ -104,23 +104,33 @@ const HLS_NETWORK_ERROR = "networkError" as ErrorData["type"];
 const HLS_MEDIA_ERROR = "mediaError" as ErrorData["type"];
 
 /**
- * Statuses the server answers deliberately, which hls.js's own retries only
- * stack on top of. A 503 comes after the server already waited (a segment
- * long-polls for up to 120 s, a manifest parks for a transcode permit) and
- * names its own Retry-After; a segment 500 means FFmpeg died, which only a new
- * manifest request replaces. The error handler below retries both on its own
- * budgets. Left to hls.js, every attempt hid four more: a capacity refusal
+ * A 503 is answered deliberately and after the server already waited (a segment
+ * long-polls for up to 120 s, a manifest parks for a transcode permit), with
+ * its own Retry-After, and the error handler below retries it on its own
+ * budget. Left to hls.js, every attempt hid four more: a capacity refusal
  * stayed silent for about 90 s, and a segment the encoder never reached took
  * about 40 minutes to be reported.
  */
-const HLS_SERVER_DECIDED_STATUSES: ReadonlySet<number> = new Set([500, 503]);
+const HLS_PLAYLIST_SERVER_DECIDED_STATUSES: ReadonlySet<number> = new Set([503]);
+/**
+ * A segment 500 also means FFmpeg died, which every retry answers the same way
+ * and only the rebase's new manifest request replaces. A manifest or level 500
+ * keeps hls.js's retries: the server replaces a failed session on the next
+ * manifest request, so a retry can succeed.
+ */
+const HLS_FRAGMENT_SERVER_DECIDED_STATUSES: ReadonlySet<number> = new Set([
+  500, 503,
+]);
 
 /**
  * hls.js keeps its own retry defaults; only the budgets are ours. The server
  * answers a segment request by long-polling and sending nothing until it has
  * an answer, so time-to-first-byte needs the same budget as the whole load.
  */
-function loadPolicyForTimeout(timeoutMs: number) {
+function loadPolicyForTimeout(
+  timeoutMs: number,
+  serverDecidedStatuses: ReadonlySet<number>,
+) {
   return {
     default: {
       maxTimeToFirstByteMs: timeoutMs,
@@ -136,9 +146,7 @@ function loadPolicyForTimeout(timeoutMs: number) {
           _isTimeout: boolean,
           loaderResponse: { code?: number } | undefined,
           retry: boolean,
-        ) =>
-          retry &&
-          !HLS_SERVER_DECIDED_STATUSES.has(loaderResponse?.code ?? 0),
+        ) => retry && !serverDecidedStatuses.has(loaderResponse?.code ?? 0),
       },
     },
   };
@@ -523,9 +531,18 @@ export default function VideoPlayer({
           xhrSetup(xhr: XMLHttpRequest) {
             xhr.withCredentials = true;
           },
-          manifestLoadPolicy: loadPolicyForTimeout(HLS_JS_LOAD_TIMEOUT_MS),
-          playlistLoadPolicy: loadPolicyForTimeout(HLS_JS_LOAD_TIMEOUT_MS),
-          fragLoadPolicy: loadPolicyForTimeout(HLS_JS_FRAG_LOAD_TIMEOUT_MS),
+          manifestLoadPolicy: loadPolicyForTimeout(
+            HLS_JS_LOAD_TIMEOUT_MS,
+            HLS_PLAYLIST_SERVER_DECIDED_STATUSES,
+          ),
+          playlistLoadPolicy: loadPolicyForTimeout(
+            HLS_JS_LOAD_TIMEOUT_MS,
+            HLS_PLAYLIST_SERVER_DECIDED_STATUSES,
+          ),
+          fragLoadPolicy: loadPolicyForTimeout(
+            HLS_JS_FRAG_LOAD_TIMEOUT_MS,
+            HLS_FRAGMENT_SERVER_DECIDED_STATUSES,
+          ),
           backBufferLength: HLS_JS_BACK_BUFFER_LENGTH_SEC,
           // Always explicit, 0 included: hls.js's default (-1) joins a live
           // playlist at its edge, and a copy session's playlist is a live

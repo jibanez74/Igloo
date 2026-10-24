@@ -876,8 +876,11 @@ describe("VideoPlayer hls.js error routing", () => {
       expect(shouldRetry(null, 0, false, { code: 503 }, true), policy).toBe(
         false,
       );
+      // A segment 500 is FFmpeg dying, which only the rebase replaces; a
+      // manifest or level 500 keeps hls.js's retries, because the server
+      // replaces a failed session on the next manifest request.
       expect(shouldRetry(null, 0, false, { code: 500 }, true), policy).toBe(
-        false,
+        policy !== "fragLoadPolicy",
       );
       // A reverse proxy's 502 or 504 is no answer from Igloo at all.
       expect(shouldRetry(null, 0, false, { code: 502 }, true), policy).toBe(
