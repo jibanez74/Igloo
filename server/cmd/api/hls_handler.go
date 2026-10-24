@@ -154,8 +154,13 @@ func (app *Application) serveHLSManifest(w http.ResponseWriter, r *http.Request,
 		if clientGone {
 			return
 		}
+		// A refusal for capacity is the server working as designed, and
+		// logging it as "hls session failed" read like an FFmpeg failure.
 		evictedKeepalive := refreshOnly && errors.Is(err, errHLSSessionNotFound)
-		if !evictedKeepalive {
+		atCapacity := isHLSCapacityError(err)
+		if atCapacity {
+			app.Logger.Warn("hls session refused for capacity", "error", err, "media", params.Media.String())
+		} else if !evictedKeepalive {
 			app.Logger.Error("hls session failed", "error", err, "media", params.Media.String())
 		}
 		writeHLSSessionError(w, err)

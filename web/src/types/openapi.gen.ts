@@ -1779,7 +1779,7 @@ export interface paths {
         put?: never;
         /**
          * Create a watch room
-         * @description subtitle_track is null to disable subtitles, or a zero-based ordinal below the current subtitle count (ordered by stream_index); non-null selection is rejected when no subtitles exist. Direct mode requires video/mp4, a primary H.264/AVC video stream, and browser-safe scanned video metadata: no bit depth above 8, no interlacing, no 10-bit/4:2:2/4:4:4 profile, and a known nonempty pixel format must be yuv420p, yuvj420p, nv12, or nv21. Missing optional video metadata is tolerated. Embedded cover-art streams are skipped when selecting primary video if a real video stream exists. Direct audio_track must be 0; with multiple audio streams, either none may be marked default or exactly the first must be the sole default. The server does not check direct-play audio codec support at room creation. Invalid selections or direct-play eligibility return 400. An unknown movie_id returns 400. invited_user_ids drops the owner's own id and duplicates; an unknown id returns 400. audio_track defaults to 0, subtitle_track to null, and invited_user_ids to an empty list. HLS rooms start their session before responding, which can include a 30-second remux preflight; if it cannot start, including when transcode capacity or transcode storage is exhausted, the room is deleted and 500 is returned.
+         * @description subtitle_track is null to disable subtitles, or a zero-based ordinal below the current subtitle count (ordered by stream_index); non-null selection is rejected when no subtitles exist. Direct mode requires video/mp4, a primary H.264/AVC video stream, and browser-safe scanned video metadata: no bit depth above 8, no interlacing, no 10-bit/4:2:2/4:4:4 profile, and a known nonempty pixel format must be yuv420p, yuvj420p, nv12, or nv21. Missing optional video metadata is tolerated. Embedded cover-art streams are skipped when selecting primary video if a real video stream exists. Direct audio_track must be 0; with multiple audio streams, either none may be marked default or exactly the first must be the sole default. The server does not check direct-play audio codec support at room creation. Invalid selections or direct-play eligibility return 400. An unknown movie_id returns 400. invited_user_ids drops the owner's own id and duplicates; an unknown id returns 400. audio_track defaults to 0, subtitle_track to null, and invited_user_ids to an empty list. HLS rooms start their session before responding, which can include a 30-second remux preflight; if it cannot start, the room is deleted. A room start never waits for a transcode permit, so a full transcode pool, exhausted transcode storage, or a server that is shutting down returns a retryable 503 with Retry-After; any other failure returns 500.
          */
         post: operations["createWatchRoom"];
         delete?: never;
@@ -8948,6 +8948,17 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             500: components["responses"]["InternalServerError"];
+            /** @description The room's HLS session could not start for lack of transcode capacity or storage, or because the server is shutting down; the room was deleted. Retry after Retry-After seconds. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before creating the room again. */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     getWatchRoom: {

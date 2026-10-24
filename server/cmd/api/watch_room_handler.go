@@ -453,6 +453,15 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 				helpers.ErrorJSON(w, errors.New("failed to start playback session for this room and failed to roll back the room"), http.StatusInternalServerError)
 				return
 			}
+			// A room start never parks for a permit, so a full pool refuses it
+			// at once; that is a reason to try again shortly, not a failure.
+			atCapacity := isHLSCapacityError(warmErr)
+			if atCapacity {
+				app.Logger.Warn("hls warm-up refused for capacity; rolled back watch room", "warm_up_error", warmErr, "room_id", room.ID)
+				w.Header().Set("Retry-After", strconv.Itoa(hlsTranscodeBusyRetryAfterSec))
+				helpers.ErrorJSON(w, errors.New("the server has no room to start this stream right now; try again in a moment"), http.StatusServiceUnavailable)
+				return
+			}
 			app.Logger.Error("hls warm-up failed; rolled back watch room", "warm_up_error", warmErr, "room_id", room.ID)
 			helpers.ErrorJSON(w, errors.New("failed to start playback session for this room"), http.StatusInternalServerError)
 			return

@@ -121,7 +121,12 @@ func (app *Application) WatchRoomHLSManifest(w http.ResponseWriter, r *http.Requ
 		if clientGone {
 			return
 		}
-		app.Logger.Error("watch room hls session failed", "error", err, "room_id", room.ID)
+		atCapacity := isHLSCapacityError(err)
+		if atCapacity {
+			app.Logger.Warn("watch room hls session refused for capacity", "error", err, "room_id", room.ID)
+		} else {
+			app.Logger.Error("watch room hls session failed", "error", err, "room_id", room.ID)
+		}
 		writeHLSSessionError(w, err)
 		return
 	}
@@ -135,7 +140,12 @@ func (app *Application) WatchRoomHLSManifest(w http.ResponseWriter, r *http.Requ
 		if errors.Is(err, context.Canceled) {
 			return
 		}
-		app.Logger.Error("watch room hls playlist unavailable", "error", err, "room_id", room.ID)
+		// A session stopped mid-wait (a rescan, shutdown) is a race, not a
+		// server fault, as on the personal route.
+		lostSession := errors.Is(err, errHLSSessionNotFound)
+		if !lostSession {
+			app.Logger.Error("watch room hls playlist unavailable", "error", err, "room_id", room.ID)
+		}
 		writeHLSSessionError(w, err)
 		return
 	}
