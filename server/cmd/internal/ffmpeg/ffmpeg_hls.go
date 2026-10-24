@@ -312,8 +312,8 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 		case helpers.HARDWARE_ACCELERATION_DEVICE_CPU:
 			// veryfast rather than fast: on real 1080p and 720p film it halves the
 			// CPU each stream takes with no measurable quality loss at these
-			// bitrates (see docs/ffmpeg.md), which doubles how many CPU
-			// transcodes a home server can run.
+			// bitrates (see docs/ffmpeg.md). HLS_MAX_CPU_TRANSCODES still caps
+			// how many run; the saving is headroom under that cap.
 			args = append(args, "-preset", "veryfast")
 		}
 
