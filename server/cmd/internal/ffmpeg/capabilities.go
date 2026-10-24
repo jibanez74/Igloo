@@ -38,6 +38,7 @@ type Capabilities struct {
 	H264QSVRuntimeUsable           bool
 	H264QSVProbeError              string
 	QSVScaleRuntimeUsable          bool
+	AppleVTTonemapRuntimeUsable    bool
 }
 
 type HLSDeviceDecision struct {
@@ -150,6 +151,19 @@ func (c Capabilities) SupportsIntelQSVScale() bool {
 		c.SupportsHWAccel("qsv") &&
 		c.SupportsFilter("scale_qsv") &&
 		c.SupportsFilterOption("scale_qsv", "format")
+}
+
+// SupportsAppleVTTonemap reports whether HDR sources can be tone-mapped by
+// scale_vt. Listing the filter proves nothing about the chain, so the runtime
+// probe that ran it decides; without it Apple tone-maps in software.
+func (c Capabilities) SupportsAppleVTTonemap() bool {
+	if !c.Probed {
+		return false
+	}
+	return c.SupportsEncoder("h264_videotoolbox") &&
+		c.SupportsFilter("hwupload") &&
+		c.SupportsFilter("scale_vt") &&
+		c.AppleVTTonemapRuntimeUsable
 }
 
 func ResolveHLSDevice(configured string, caps Capabilities) HLSDeviceDecision {
@@ -271,6 +285,11 @@ func probeCapabilities(bin string, versionOutput string) Capabilities {
 			caps.SupportsFilterOption("scale_qsv", "format") {
 			caps.QSVScaleRuntimeUsable = probeQSVScale(bin)
 		}
+	}
+	if caps.SupportsEncoder("h264_videotoolbox") &&
+		caps.SupportsFilter("hwupload") &&
+		caps.SupportsFilter("scale_vt") {
+		caps.AppleVTTonemapRuntimeUsable = probeAppleVTTonemap(bin)
 	}
 
 	return caps
@@ -463,6 +482,31 @@ func probeQSVScale(bin string) bool {
 		"-frames:v", "1",
 		"-vf", "format=nv12,hwupload=extra_hw_frames=64,scale_qsv=w=-2:h=72:format=nv12",
 		"-c:v", "h264_qsv",
+		"-f", "null",
+		"-",
+	)
+	return err == nil
+}
+
+// appleProbeHeight matches the NVIDIA probe frame, which already clears the
+// hardware encoders' minimum frame sizes.
+const appleProbeHeight = 144
+
+// probeAppleVTTonemap runs the HDR chain the Apple transcode uses on a test
+// frame tagged the way an HDR10 source arrives, through the same encoder.
+func probeAppleVTTonemap(bin string) bool {
+	_, err := runFFmpegProbe(
+		bin,
+		"-v", "error",
+		"-init_hw_device", "videotoolbox="+hlsAppleVTDeviceName,
+		"-filter_hw_device", hlsAppleVTDeviceName,
+		"-f", "lavfi",
+		"-i", nvidiaProbeSource,
+		"-frames:v", "1",
+		"-vf", "setparams=color_primaries=bt2020:color_trc=smpte2084:colorspace=bt2020nc,"+
+			hlsAppleVTTonemapFilter(appleProbeHeight),
+		"-c:v", "h264_videotoolbox",
+		"-profile:v", "high",
 		"-f", "null",
 		"-",
 	)

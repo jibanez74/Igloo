@@ -257,6 +257,21 @@ func isInterlacedStream(stream *database.VideoStream) bool {
 	return false
 }
 
+// isBT601Stream reports whether the stream's pixels use the BT.601 matrix:
+// tagged NTSC (smpte170m) or PAL (bt470bg), or untagged at standard
+// definition, which is how players read an untagged stream (narrower than 1280
+// and no taller than 576). The transcode tags its output BT.709, so these get
+// their matrix converted rather than only relabelled.
+func isBT601Stream(stream *database.VideoStream) bool {
+	switch strings.ToLower(strings.TrimSpace(stream.ColorSpace.String)) {
+	case "smpte170m", "bt470bg":
+		return true
+	case "", "unknown":
+		return stream.Width < 1280 && stream.Height <= 576
+	}
+	return false
+}
+
 // hlsVFRRelativeTolerance separates real VFR from the rounding noise between
 // a container's nominal and average frame rates (e.g. 23.976 vs 24000/1001).
 const hlsVFRRelativeTolerance = 0.005
@@ -1030,6 +1045,7 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 	copyVideo := params.EffectiveProfile == helpers.HLS_PROFILE_REMUX
 	tonemapHDR := sourceIsHDR && params.EffectiveProfile != helpers.HLS_PROFILE_REMUX
 	deinterlace := !copyVideo && isInterlacedStream(params.PrimaryVideo)
+	convertBT601 := !copyVideo && !tonemapHDR && isBT601Stream(params.PrimaryVideo)
 	vfrDetected := isVFRStream(params.PrimaryVideo)
 
 	ffmpegCaps := app.FFmpeg.Capabilities()
@@ -1091,6 +1107,7 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 		Deinterlace:      deinterlace,
 		SourceFrameRate:  params.PrimaryVideo.FrameRate,
 		Capabilities:     ffmpegCaps,
+		ConvertBT601:     convertBT601,
 	}
 
 	runCtx, cancel := context.WithCancel(context.Background())
@@ -1195,6 +1212,8 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 		"tonemap_hdr", tonemapHDR,
 		"deinterlace", deinterlace,
 		"field_order", params.PrimaryVideo.FieldOrder.String,
+		"color_space", params.PrimaryVideo.ColorSpace.String,
+		"convert_bt601", convertBT601,
 		"rotation", rotationLogValue,
 		"vfr_detected", vfrDetected,
 		"configured_hw_device", deviceDecision.Configured,

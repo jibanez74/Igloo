@@ -20,6 +20,7 @@ import (
 const (
 	hlsIntelQSVDeviceName   = "igloo_qsv"
 	hlsNvidiaCUDADeviceName = "igloo_cuda"
+	hlsAppleVTDeviceName    = "igloo_vt"
 
 	// Keep FFmpeg roughly hlsReadrateSpeed times realtime after an initial
 	// burst that fills the player buffer. Applied only when supported.
@@ -29,6 +30,10 @@ const (
 	hlsStderrScannerBufferSize = 64 * 1024
 	hlsStderrScannerMaxToken   = 1024 * 1024
 	hlsSDRColorParams          = "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709"
+	// hlsBT601ToBT709Matrix converts pixels between the two matrices. The
+	// setparams tag above only relabels frames, so without this a BT.601
+	// source is shown through the BT.709 matrix and its reds and greens shift.
+	hlsBT601ToBT709Matrix = "in_color_matrix=bt601:out_color_matrix=bt709"
 )
 
 func isExpectedHLSStderrClose(err error) bool {
@@ -58,6 +63,9 @@ type HLSParams struct {
 	Deinterlace     bool // true when the scanned field_order marks the source interlaced
 	SourceFrameRate float64
 	Capabilities    Capabilities
+	// ConvertBT601 is true when the source's pixels use the BT.601 matrix, so
+	// an SDR transcode converts them to the BT.709 its output is tagged with.
+	ConvertBT601 bool
 }
 
 // hlsEncoderByDevice maps hardware acceleration device IDs to FFmpeg encoder
@@ -219,6 +227,19 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 		hwLower == helpers.HARDWARE_ACCELERATION_DEVICE_INTEL &&
 		!p.TonemapHDR &&
 		p.Capabilities.SupportsIntelQSVScale()
+	// The startup probe proves only the progressive chain, so interlaced HDR
+	// sources (vanishingly rare — interlacing is legacy broadcast SDR) take the
+	// software tone-map chain instead.
+	useAppleVTTonemap := !copyVideo &&
+		hwLower == helpers.HARDWARE_ACCELERATION_DEVICE_APPLE &&
+		p.TonemapHDR &&
+		!p.Deinterlace &&
+		p.Capabilities.SupportsAppleVTTonemap()
+	chain := hlsFilterChain{
+		cudaFilters:    useNvidiaCUDAFilters,
+		qsvScale:       useIntelQSVScale,
+		appleVTTonemap: useAppleVTTonemap,
+	}
 
 	if !copyVideo {
 		if useNvidiaCUDAFilters {
@@ -231,6 +252,12 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 			args = append(args,
 				"-init_hw_device", "qsv="+hlsIntelQSVDeviceName,
 				"-filter_hw_device", hlsIntelQSVDeviceName,
+			)
+		}
+		if useAppleVTTonemap {
+			args = append(args,
+				"-init_hw_device", "videotoolbox="+hlsAppleVTDeviceName,
+				"-filter_hw_device", hlsAppleVTDeviceName,
 			)
 		}
 		// -hwaccel without -hwaccel_output_format decodes on the GPU when the
@@ -292,8 +319,8 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 			"-bufsize", cfg.Bufsize,
 		)
 
-		args = append(args, "-vf", hlsVideoFilter(cfg, hwLower, p.TonemapHDR, p.Deinterlace, useNvidiaCUDAFilters, useIntelQSVScale))
-		if shouldSetHLSPixelFormat(encoder, useNvidiaCUDAFilters) {
+		args = append(args, "-vf", hlsVideoFilter(cfg, p, hwLower, chain))
+		if shouldSetHLSPixelFormat(encoder, chain) {
 			args = append(args, "-pix_fmt", "yuv420p")
 		}
 		args = append(args,
@@ -406,8 +433,19 @@ func appendHLSIntelEncoderArgs(args []string, caps Capabilities) []string {
 	return args
 }
 
-func shouldSetHLSPixelFormat(encoder string, useNvidiaCUDAFilters bool) bool {
-	if useNvidiaCUDAFilters {
+// hlsFilterChain records which hardware filter chain a transcode runs, each
+// already gated on the device and its probed capabilities.
+type hlsFilterChain struct {
+	cudaFilters    bool
+	qsvScale       bool
+	appleVTTonemap bool
+}
+
+// shouldSetHLSPixelFormat reports whether -pix_fmt yuv420p is passed. Chains
+// that end on hardware frames choose the pixel format inside the chain, and
+// a -pix_fmt after them asks for a software conversion the frames cannot reach.
+func shouldSetHLSPixelFormat(encoder string, chain hlsFilterChain) bool {
+	if chain.cudaFilters || chain.appleVTTonemap {
 		return false
 	}
 	return !strings.EqualFold(encoder, "h264_qsv")
@@ -420,16 +458,17 @@ func hlsSoftwareOutputPixelFormat(hwDevice string) string {
 	return "yuv420p"
 }
 
-func hlsVideoFilter(
-	cfg helpers.HLSProfileConfig,
-	hwDevice string,
-	tonemapHDR bool,
-	deinterlace bool,
-	useNvidiaCUDAFilters bool,
-	useIntelQSVScale bool,
-) string {
+func hlsVideoFilter(cfg helpers.HLSProfileConfig, p HLSParams, hwDevice string, chain hlsFilterChain) string {
+	deinterlace := p.Deinterlace
+	// The hardware SDR chains scale after the upload, so a BT.601 source gets
+	// its matrix converted by a software pass at native resolution before it.
+	matrixPrepass := ""
+	if p.ConvertBT601 && !p.TonemapHDR {
+		matrixPrepass = "scale=" + hlsBT601ToBT709Matrix + ","
+	}
+
 	switch {
-	case tonemapHDR && useNvidiaCUDAFilters:
+	case p.TonemapHDR && chain.cudaFilters:
 		return hlsMaybeDeinterlace(deinterlace, fmt.Sprintf(
 			"format=p010le,hwupload,scale_cuda=w=-2:h=%d:format=p010,"+
 				"tonemap_cuda=format=yuv420p:p=bt709:t=bt709:m=bt709:tonemap=hable:desat=0",
@@ -439,26 +478,22 @@ func hlsVideoFilter(
 	// theirs: with -hwaccel cuda decode of an untagged source, the -colorspace
 	// output option otherwise asks FFmpeg for a conversion it can only do in
 	// software, which CUDA frames cannot reach, and the session fails to start.
-	case useNvidiaCUDAFilters:
+	case chain.cudaFilters:
 		return hlsMaybeDeinterlace(deinterlace, fmt.Sprintf(
-			"format=nv12,%s,hwupload,scale_cuda=w=-2:h=%d:format=yuv420p",
+			"%sformat=nv12,%s,hwupload,scale_cuda=w=-2:h=%d:format=yuv420p",
+			matrixPrepass,
 			hlsSDRColorParams,
 			cfg.Height,
 		))
-	case useIntelQSVScale:
+	case chain.qsvScale:
 		return hlsMaybeDeinterlace(deinterlace, fmt.Sprintf(
-			"format=nv12,hwupload=extra_hw_frames=64,scale_qsv=w=-2:h=%d:format=nv12",
+			"%sformat=nv12,hwupload=extra_hw_frames=64,scale_qsv=w=-2:h=%d:format=nv12",
+			matrixPrepass,
 			cfg.Height,
 		))
-	// scale_vt consumes hardware frames, so a software yadif cannot be
-	// prepended; interlaced HDR sources (vanishingly rare — interlacing is
-	// legacy broadcast SDR) fall through to the software tonemap chain.
-	case tonemapHDR && hwDevice == helpers.HARDWARE_ACCELERATION_DEVICE_APPLE && !deinterlace:
-		return fmt.Sprintf(
-			"scale_vt=w=-2:h=%d:color_matrix=bt709:color_primaries=bt709:color_transfer=bt709",
-			cfg.Height,
-		)
-	case tonemapHDR:
+	case chain.appleVTTonemap:
+		return hlsAppleVTTonemapFilter(cfg.Height)
+	case p.TonemapHDR:
 		outputFormat := hlsSoftwareOutputPixelFormat(hwDevice)
 		return hlsMaybeDeinterlace(deinterlace, fmt.Sprintf(
 			"zscale=w=-2:h=%d:t=linear:npl=100,format=gbrpf32le,"+
@@ -469,10 +504,25 @@ func hlsVideoFilter(
 			hlsSDRColorParams,
 		))
 	default:
+		matrix := ""
+		if p.ConvertBT601 {
+			matrix = ":" + hlsBT601ToBT709Matrix
+		}
 		outputFormat := hlsSoftwareOutputPixelFormat(hwDevice)
 		return hlsMaybeDeinterlace(deinterlace,
-			fmt.Sprintf("scale=-2:%d,format=%s,%s", cfg.Height, outputFormat, hlsSDRColorParams))
+			fmt.Sprintf("scale=-2:%d%s,format=%s,%s", cfg.Height, matrix, outputFormat, hlsSDRColorParams))
 	}
+}
+
+// hlsAppleVTTonemapFilter scales and converts HDR to SDR in VideoToolbox. The
+// decoded frames are in system memory (no path sets -hwaccel_output_format),
+// and scale_vt only accepts hardware frames, so they are uploaded first. The
+// startup probe runs this exact chain, which is what gates it.
+func hlsAppleVTTonemapFilter(height int) string {
+	return fmt.Sprintf(
+		"format=p010le,hwupload,scale_vt=w=-2:h=%d:color_matrix=bt709:color_primaries=bt709:color_transfer=bt709",
+		height,
+	)
 }
 
 // hlsMaybeDeinterlace prepends a software yadif (send_frame, so the output
