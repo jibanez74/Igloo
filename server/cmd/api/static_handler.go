@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
 	"io/fs"
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -89,11 +91,16 @@ func (app *Application) ServeStaticFiles(w http.ResponseWriter, r *http.Request)
 
 // frontendAsset is one embedded SPA file, read and fingerprinted once so the
 // request path serves from memory with ETag revalidation instead of
-// re-reading the embedded filesystem on every hit.
+// re-reading the embedded filesystem on every hit. Text files also keep a
+// gzip copy, compressed once with them, which cuts the bundle to about a
+// third for a client off the LAN; gzipped is nil when it would not save
+// enough to be worth a second representation.
 type frontendAsset struct {
 	content     []byte
 	contentType string
 	etag        string
+	gzipped     []byte
+	gzipETag    string
 }
 
 // loadFrontendAssets walks the webdist tree of fsys once. webdist is ~3 MB, so
@@ -117,15 +124,78 @@ func loadFrontendAssets(fsys fs.FS) map[string]*frontendAsset {
 		contentType := frontendContentType(path)
 
 		sum := sha256.Sum256(content)
-		assets[path] = &frontendAsset{
+		fingerprint := hex.EncodeToString(sum[:16])
+		asset := &frontendAsset{
 			content:     content,
 			contentType: contentType,
-			etag:        `"` + hex.EncodeToString(sum[:16]) + `"`,
+			etag:        `"` + fingerprint + `"`,
 		}
+
+		compressible := frontendAssetCompresses(path)
+		if compressible {
+			gzipped, err := gzipFrontendAsset(content)
+			if err != nil {
+				return err
+			}
+			worthIt := len(gzipped) < len(content)*9/10
+			if worthIt {
+				asset.gzipped = gzipped
+				asset.gzipETag = `"` + fingerprint + `-gzip"`
+			}
+		}
+
+		assets[path] = asset
 		return nil
 	})
 
 	return assets
+}
+
+// frontendAssetCompresses reports whether a file is text, which gzip shrinks;
+// fonts and raster images are compressed already.
+func frontendAssetCompresses(path string) bool {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".js", ".mjs", ".cjs", ".css", ".map", ".html", ".svg", ".json", ".webmanifest", ".txt", ".ico":
+		return true
+	default:
+		return false
+	}
+}
+
+func gzipFrontendAsset(content []byte) ([]byte, error) {
+	var compressed bytes.Buffer
+	writer := gzip.NewWriter(&compressed)
+	_, err := writer.Write(content)
+	if err != nil {
+		return nil, err
+	}
+	err = writer.Close()
+	if err != nil {
+		return nil, err
+	}
+	return compressed.Bytes(), nil
+}
+
+// acceptsGzip reports whether the request's Accept-Encoding lists gzip
+// without refusing it through q=0.
+func acceptsGzip(r *http.Request) bool {
+	for _, header := range r.Header.Values("Accept-Encoding") {
+		for part := range strings.SplitSeq(header, ",") {
+			coding, params, _ := strings.Cut(part, ";")
+			isGzip := strings.EqualFold(strings.TrimSpace(coding), "gzip")
+			if !isGzip {
+				continue
+			}
+
+			_, quality, hasQuality := strings.Cut(strings.ReplaceAll(params, " ", ""), "q=")
+			if !hasQuality {
+				return true
+			}
+			weight, err := strconv.ParseFloat(quality, 64)
+			return err == nil && weight > 0
+		}
+	}
+	return false
 }
 
 // frontendContentType resolves an embedded file's Content-Type. The web
@@ -162,7 +232,9 @@ func frontendCacheControl(fsPath string) string {
 	case strings.HasSuffix(fsPath, ".html"):
 		return "no-cache, no-store, must-revalidate"
 	case strings.HasPrefix(fsPath, "webdist/assets/"):
-		return "public, max-age=31536000"
+		// immutable spares the revalidation Firefox and Safari otherwise
+		// send for every asset on a reload.
+		return "public, max-age=31536000, immutable"
 	default:
 		return "no-cache"
 	}
@@ -175,10 +247,25 @@ func serveFrontendAsset(w http.ResponseWriter, r *http.Request, asset *frontendA
 	// Igloo is a private server: keep every page and asset out of search
 	// indexes, including for crawlers that never run the SPA's robots meta.
 	w.Header().Set("X-Robots-Tag", "noindex, nofollow")
-	w.Header().Set("ETag", asset.etag)
+
+	content := asset.content
+	etag := asset.etag
+	if asset.gzipped != nil {
+		// Both encodings live at one URL, so a cache has to key on the header.
+		w.Header().Add("Vary", "Accept-Encoding")
+		if acceptsGzip(r) {
+			content = asset.gzipped
+			etag = asset.gzipETag
+			w.Header().Set("Content-Encoding", "gzip")
+			// ServeContent leaves Content-Length unset once Content-Encoding
+			// is, assuming the bytes are compressed as they are written.
+			w.Header().Set("Content-Length", strconv.Itoa(len(content)))
+		}
+	}
+	w.Header().Set("ETag", etag)
 
 	// Embedded files carry no modtime; the ETag drives conditional requests.
-	http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(asset.content))
+	http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(content))
 }
 
 // ServeFrontend serves the React SPA from embedded files, or redirects to the Vite dev
