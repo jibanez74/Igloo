@@ -212,16 +212,29 @@ func (t *tmdbClient) SearchMoviesByTitleAndYear(ctx context.Context, title strin
 }
 
 func (t *tmdbClient) GetMoviesInTheaters(ctx context.Context) ([]*TmdbMovie, error) {
-	params := url.Values{"language": {tmdbRequestLanguage}, "page": {"1"}, "region": {tmdbRequestRegion}}
+	cached, _ := t.movieCache.Get(inTheatersCacheKey)
+	results, found := cached.([]TmdbMovie)
+	if !found {
+		params := url.Values{"language": {tmdbRequestLanguage}, "page": {"1"}, "region": {tmdbRequestRegion}}
 
-	results, err := t.getMovieList(ctx, "/movie/now_playing", params, "unable to get movies in theaters from tmdb")
-	if err != nil {
-		return nil, err
+		fetched, err := t.getMovieList(ctx, "/movie/now_playing", params, "unable to get movies in theaters from tmdb")
+		if err != nil {
+			return nil, err
+		}
+
+		results = fetched
+		// An empty list is not kept, so the preroll pool's short retry for
+		// one reaches TMDB again.
+		if len(results) > 0 {
+			t.movieCache.Set(inTheatersCacheKey, results, tmdbInTheatersCacheTTL)
+		}
 	}
 
+	// Each call gets its own copies, so no caller can change the cached list.
 	pointers := make([]*TmdbMovie, len(results))
 	for i := range results {
-		pointers[i] = &results[i]
+		movie := results[i]
+		pointers[i] = &movie
 	}
 	return pointers, nil
 }

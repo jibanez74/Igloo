@@ -381,13 +381,56 @@ func TestGetMoviesInTheaters(t *testing.T) {
 // Nothing in theaters is an answer, not a failure: the handler lists it as an
 // empty page and the preroll pool retries it on its short TTL.
 func TestGetMoviesInTheaters_EmptyResultsAreEmpty(t *testing.T) {
+	var capture queryCapture
 	client := newServerClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capture.record(r)
 		_, _ = w.Write([]byte(`{"results":[]}`))
 	}))
 
-	movies, err := client.GetMoviesInTheaters(context.Background())
-	if err != nil || len(movies) != 0 {
-		t.Fatalf("movies = %v, err = %v; want none and no error", movies, err)
+	for range 2 {
+		movies, err := client.GetMoviesInTheaters(context.Background())
+		if err != nil || len(movies) != 0 {
+			t.Fatalf("movies = %v, err = %v; want none and no error", movies, err)
+		}
+	}
+	if len(capture.all()) != 2 {
+		t.Fatalf("request count = %d, want 2: an empty list is not cached", len(capture.all()))
+	}
+}
+
+// The home page loads the list every time it renders, so it comes from the
+// cache after the first request, and a caller's edits never reach it.
+func TestGetMoviesInTheaters_ServesCachedCopies(t *testing.T) {
+	var capture queryCapture
+	client := newServerClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capture.record(r)
+		_, _ = w.Write([]byte(`{"results":[{"id":1,"title":"One"},{"id":2,"title":"Two"}]}`))
+	}))
+
+	first, err := client.GetMoviesInTheaters(context.Background())
+	if err != nil || len(first) != 2 {
+		t.Fatalf("first call = %v, %v; want two movies", first, err)
+	}
+	first[0].Title = "Changed"
+
+	second, err := client.GetMoviesInTheaters(context.Background())
+	if err != nil || len(second) != 2 {
+		t.Fatalf("second call = %v, %v; want two movies", second, err)
+	}
+	if second[0].Title != "One" {
+		t.Fatalf("cached title = %q, want %q: a caller's edit reached the cache", second[0].Title, "One")
+	}
+	if len(capture.all()) != 1 {
+		t.Fatalf("request count = %d, want 1", len(capture.all()))
+	}
+
+	client.ClearCache()
+	_, err = client.GetMoviesInTheaters(context.Background())
+	if err != nil {
+		t.Fatalf("call after ClearCache: %v", err)
+	}
+	if len(capture.all()) != 2 {
+		t.Fatalf("request count after ClearCache = %d, want 2", len(capture.all()))
 	}
 }
 

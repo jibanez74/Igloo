@@ -10,6 +10,10 @@ import (
 const (
 	tmdbMovieCacheTTL     = 15 * time.Minute
 	tmdbMovieCacheCleanup = 5 * time.Minute
+	// The home page asks for the now-playing list on every load, and TMDB
+	// changes it weekly, so it is kept longer than a movie's details.
+	tmdbInTheatersCacheTTL = time.Hour
+	inTheatersCacheKey     = "movies:in-theaters"
 )
 
 func movieCacheKey(id int) string {
