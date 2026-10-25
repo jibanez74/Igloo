@@ -95,9 +95,8 @@ type spotifyTrackSearchResult struct {
 	SpotifyURL  string   `json:"spotify_url"`
 }
 
-// SearchSpotifyTracks backs the "Request Track" picker. Unlike albums, tracks
-// have no spotify_id in the library, so results omit an "already in library"
-// flag.
+// SearchSpotifyTracks backs the "Request Track" picker. Unlike album results,
+// track results carry no "already in library" flag.
 func (app *Application) SearchSpotifyTracks(w http.ResponseWriter, r *http.Request) {
 	title, ok := app.readSpotifySearchTitle(w, r)
 	if !ok {
