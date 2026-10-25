@@ -19,10 +19,24 @@ func OpenDB(t testing.TB, dsn string) (*sql.DB, *database.Queries) {
 	}
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
-	_, err = db.Exec(sqlc.Schema)
+	// One transaction: on a file database in the default rollback-journal mode,
+	// each schema statement would otherwise commit, and fsync, on its own,
+	// which took seconds per database.
+	tx, err := db.Begin()
 	if err != nil {
 		db.Close()
+		t.Fatalf("begin schema transaction: %v", err)
+	}
+	_, err = tx.Exec(sqlc.Schema)
+	if err != nil {
+		tx.Rollback()
+		db.Close()
 		t.Fatalf("initialize schema: %v", err)
+	}
+	err = tx.Commit()
+	if err != nil {
+		db.Close()
+		t.Fatalf("commit schema: %v", err)
 	}
 	queries, err := database.Prepare(context.Background(), db)
 	if err != nil {
