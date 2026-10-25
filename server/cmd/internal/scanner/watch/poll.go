@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"igloo/cmd/internal/helpers"
@@ -14,8 +15,8 @@ import (
 
 const (
 	// pollInterval spaces the directory stats of a polled library. Each poll
-	// costs one stat per directory, never per file, so a NAS can still spin
-	// its disks down between polls.
+	// stats directories, inspecting files only when their directory changed
+	// or they are still settling, so a NAS can spin down between polls.
 	pollInterval = 3 * time.Minute
 	// pollSettleInterval re-checks new files sooner while they settle.
 	pollSettleInterval = 30 * time.Second
@@ -65,6 +66,7 @@ type poller struct {
 	layout   layout
 	dirs     map[string]*polledDir
 	settling map[string]scanner.FileFingerprint
+	held     map[string]changeKind // absolute paths ready for the next report
 	offline  bool
 }
 
@@ -129,13 +131,34 @@ func (p *poller) poll() pollReport {
 	for path := range p.dirs {
 		paths = append(paths, path)
 	}
+	slices.Sort(paths) // Forget removed parents before visiting their children.
 	for _, path := range paths {
-		lost := p.diff(path, &report)
+		lost := p.diff(path)
 		if lost {
 			return p.goOffline()
 		}
 	}
-	p.settle(&report)
+	lost := p.settle()
+	if lost {
+		return p.goOffline()
+	}
+	// The session cannot see files still settling here. Its batching cap is
+	// shorter than our quiet period, so keep both sides of a rename here until
+	// they can be dispatched together, even across several polls.
+	if len(p.settling) > 0 {
+		for _, kind := range p.held {
+			if kind == changeRemoved {
+				return report
+			}
+		}
+	}
+	for path, kind := range p.held {
+		rel, ok := relative(p.root, path)
+		if ok {
+			report.changes = append(report.changes, polledChange{rel: rel, kind: kind})
+		}
+	}
+	clear(p.held)
 	return report
 }
 
@@ -153,6 +176,7 @@ func (p *poller) arm() pollReport {
 	p.layout = recorded
 	p.dirs = make(map[string]*polledDir)
 	p.settling = make(map[string]scanner.FileFingerprint)
+	p.held = make(map[string]changeKind)
 	err = p.snapshot(p.root, nil)
 	if err != nil {
 		return pollReport{}
@@ -164,6 +188,7 @@ func (p *poller) arm() pollReport {
 func (p *poller) goOffline() pollReport {
 	p.offline = true
 	p.dirs, p.settling = nil, nil
+	p.held = nil
 	return pollReport{offline: true}
 }
 
@@ -231,7 +256,7 @@ func (p *poller) entries(directory string, listing []fs.DirEntry) map[string]boo
 // are only reported from a successful listing of the same directory: a
 // replaced directory, such as an empty mount point, proves nothing. It
 // reports whether the share itself became unavailable.
-func (p *poller) diff(directory string, report *pollReport) bool {
+func (p *poller) diff(directory string) bool {
 	known, ok := p.dirs[directory]
 	if !ok {
 		return false
@@ -246,31 +271,23 @@ func (p *poller) diff(directory string, report *pollReport) bool {
 	if unchanged {
 		return false
 	}
+	if id != known.id {
+		// An old pending removal is no longer evidence after a directory
+		// replacement either; discard its whole snapshot before observing it.
+		p.forget(directory)
+		// Retain the old identity until snapshot succeeds so an unreadable
+		// replacement is retried on the next poll.
+		p.dirs[directory] = known
+		return p.observeTree(directory)
+	}
 	listing, err := os.ReadDir(directory)
 	if err != nil {
 		return unavailable(err)
 	}
 	current := p.entries(directory, listing)
-	replaced := id != known.id
-	for name, isDir := range current {
-		_, existed := known.entries[name]
-		if existed {
-			continue
-		}
-		path := filepath.Join(directory, name)
-		if isDir {
-			var files []string
-			_ = p.snapshot(path, &files)
-			for _, file := range files {
-				p.observe(file)
-			}
-			continue
-		}
-		p.observe(path)
-	}
 	for name, isDir := range known.entries {
-		_, exists := current[name]
-		if exists {
+		currentDir, exists := current[name]
+		if exists && currentDir == isDir {
 			continue
 		}
 		path := filepath.Join(directory, name)
@@ -278,23 +295,47 @@ func (p *poller) diff(directory string, report *pollReport) bool {
 			p.forget(path)
 		}
 		delete(p.settling, path)
-		if !replaced {
-			rel, ok := relative(p.root, path)
-			if ok {
-				report.changes = append(report.changes, polledChange{rel: rel, kind: changeRemoved})
+		p.held[path] = changeRemoved
+	}
+	for name, isDir := range current {
+		wasDir, existed := known.entries[name]
+		path := filepath.Join(directory, name)
+		if isDir {
+			if existed && wasDir {
+				continue
 			}
+			delete(p.held, path)
+			lost := p.observeTree(path)
+			if lost {
+				return true
+			}
+			continue
 		}
+		// An unchanged name can hide an atomic replacement. The scanner's
+		// fingerprint check skips any neighboring files that did not change.
+		p.observe(path)
 	}
 	known.id, known.mtime, known.entries = id, mtime, current
 	return false
 }
 
-func (p *poller) observe(path string) {
-	info, err := os.Stat(path)
-	if err != nil {
-		return
+func (p *poller) observeTree(directory string) bool {
+	var files []string
+	err := p.snapshot(directory, &files)
+	for _, file := range files {
+		p.observe(file)
 	}
-	p.settling[path] = scanner.FingerprintOf(info)
+	return unavailable(err)
+}
+
+func (p *poller) observe(path string) {
+	_, waiting := p.settling[path]
+	if !waiting {
+		// settle records the first observation this poll; only a subsequent
+		// poll may verify it, even when the file is already old enough.
+		p.settling[path] = scanner.FileFingerprint{}
+	}
+	delete(p.held, path)
 }
 
 func (p *poller) forget(directory string) {
@@ -308,32 +349,39 @@ func (p *poller) forget(directory string) {
 			delete(p.settling, path)
 		}
 	}
+	for path := range p.held {
+		if within(directory, path) {
+			delete(p.held, path)
+		}
+	}
 }
 
-// settle reports each new file whose metadata held still since the last poll
-// and is past the quiet period.
-func (p *poller) settle(report *pollReport) {
+// settle queues files whose metadata held still since the last poll and is
+// past the quiet period. It reports whether the share became unavailable.
+func (p *poller) settle() bool {
 	now := p.now()
 	for path, last := range p.settling {
 		info, err := os.Stat(path)
 		if errors.Is(err, fs.ErrNotExist) {
 			delete(p.settling, path)
+			p.held[path] = changeRemoved
 			continue
 		}
 		if err != nil {
+			if unavailable(err) {
+				return true
+			}
 			continue
 		}
 		observed := scanner.FingerprintOf(info)
-		stable := observed.Size == last.Size && observed.MtimeNS == last.MtimeNS && observed.CtimeNS == last.CtimeNS
+		stable := observed == last
 		quiet := !now.Before(observed.ChangedAt().Add(p.timing.quiet))
 		if !stable || !quiet {
 			p.settling[path] = observed
 			continue
 		}
 		delete(p.settling, path)
-		rel, ok := relative(p.root, path)
-		if ok {
-			report.changes = append(report.changes, polledChange{rel: rel, kind: changeSettled})
-		}
+		p.held[path] = changeSettled
 	}
+	return false
 }

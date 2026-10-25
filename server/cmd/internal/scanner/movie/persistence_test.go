@@ -66,6 +66,80 @@ func TestPersistResolvedMovieInvalidatesAfterCommit(t *testing.T) {
 	}
 }
 
+func TestLocalCommitReconcilesRetryState(t *testing.T) {
+	for _, mutation := range []string{"none", "identify", "identify-same", "rollback"} {
+		t.Run(mutation, func(t *testing.T) {
+			fixture := setupMovieScanner(t)
+			s := fixture.scanner
+			ctx := context.Background()
+			s.ffprobe = &scannertest.CountingProbe{Default: movieScannerMetadataFixture("120")}
+			root := t.TempDir()
+			path := scannertest.WriteFile(t, filepath.Join(root, "movie.mkv"), "original")
+			s.scan(root)
+			_, err := s.tx.DB.Exec("UPDATE movie_tmdb_retries SET attempts = 3, last_attempt_at = ?", s.now().Unix())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if mutation == "identify-same" {
+				_, err = s.tx.DB.Exec("UPDATE movies SET tmdb_id = 99")
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			scan := nextMovieScan(t, s)
+			baseline := scan.movieIndex[path]
+			seedMoviePlaybackWork(t, s, baseline.ID)
+			scannertest.WriteFile(t, path, "rewritten")
+			inspection, err := scanner.InspectFileMetadata(ctx, path, &baseline.FileFingerprint, s.now, scanner.FileQuietPeriod)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer inspection.Close()
+			resolved, err := s.resolveLocalMovie(ctx, scanner.ScanFile{Path: path, Ext: "mkv", Size: inspection.Fingerprint.Size}, baseline)
+			if err != nil {
+				t.Fatal(err)
+			}
+			resolved.inspection = inspection
+			if mutation == "identify" || mutation == "identify-same" {
+				err = s.tx.Run(ctx, func(qtx *database.Queries) error {
+					return ApplyTmdbMetadata(ctx, qtx, baseline.ID, &tmdb.TmdbMovie{TmdbID: 99, Title: "Identified"})
+				}, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			if mutation == "rollback" {
+				_, err = s.tx.DB.Exec("CREATE TRIGGER fail_local BEFORE INSERT ON movie_file_fingerprints BEGIN SELECT RAISE(ABORT, 'technical failure'); END")
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			invalidations := 0
+			s.invalidateCommittedMovie = func(int64) { invalidations++ }
+			err = s.persistLocalMovie(ctx, scan, resolved)
+			entry := scan.movieIndex[path]
+			stored := nextMovieScan(t, s).movieIndex[path]
+			if mutation == "rollback" {
+				if err == nil || entry != baseline || stored != baseline || invalidations != 0 {
+					t.Fatalf("rollback published state: entry=%+v stored=%+v invalidations=%d err=%v", entry, stored, invalidations, err)
+				}
+				assertMoviePlaybackWork(t, s)
+				return
+			}
+			if err != nil || entry != stored || invalidations != 1 || entry.FileFingerprint == baseline.FileFingerprint {
+				t.Fatalf("committed state mismatch: entry=%+v stored=%+v invalidations=%d err=%v", entry, stored, invalidations, err)
+			}
+			if mutation == "none" {
+				if entry.RetryAttempts != baseline.RetryAttempts || entry.LastAttemptAt != baseline.LastAttemptAt || !entry.PendingRetry {
+					t.Fatalf("technical commit lost backoff: %+v", entry)
+				}
+			} else if entry.RetryAttempts != 0 || entry.LastAttemptAt.Valid || entry.PendingRetry || entry.TmdbID.Int64 != 99 {
+				t.Fatalf("technical commit resurrected cleared retry: %+v", entry)
+			}
+		})
+	}
+}
+
 func TestMovieScannerUpsertPreservesDescriptiveMetadata(t *testing.T) {
 	testScanner := setupMovieScanner(t)
 

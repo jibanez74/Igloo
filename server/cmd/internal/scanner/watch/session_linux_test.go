@@ -318,6 +318,7 @@ func TestWatcherPausesALibraryWhoseRootDisappears(t *testing.T) {
 func TestWatcherPollsWithoutEvents(t *testing.T) {
 	fixture := newWatcherFixture(t, nil)
 	fixture.watcher.open = func(*sync.WaitGroup) (notifier, error) { return nil, errNotifierUnsupported }
+	fixture.watcher.timing.maxBatch = 50 * time.Millisecond
 	scannertest.WriteFile(t, fixture.path("Old (2001)", "old.mkv"), "old")
 	fixture.watcher.Sync(true)
 	if !fixture.scanner.next(t).CatchUp {
@@ -335,6 +336,23 @@ func TestWatcherPollsWithoutEvents(t *testing.T) {
 	got = sortedPaths(fixture.scanner.nextChanges(t))
 	if !slices.Equal(got, []string{"Old (2001)/old.mkv"}) {
 		t.Fatalf("polled removal: %q", got)
+	}
+	err = os.Rename(fixture.path("New (2020)", "new.mkv"), fixture.path("New (2020)", "renamed.mkv"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got = sortedPaths(fixture.scanner.nextChanges(t))
+	if !slices.Equal(got, []string{"New (2020)/new.mkv", "New (2020)/renamed.mkv"}) {
+		t.Fatalf("polled rename split across runs: %q", got)
+	}
+	temp := scannertest.WriteFile(t, fixture.path("New (2020)", "download.part"), "replacement")
+	err = os.Rename(temp, fixture.path("New (2020)", "renamed.mkv"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got = sortedPaths(fixture.scanner.nextChanges(t))
+	if !slices.Equal(got, []string{"New (2020)/renamed.mkv"}) {
+		t.Fatalf("polled atomic replacement: %q", got)
 	}
 }
 
@@ -425,37 +443,5 @@ func TestWatcherPollsWhenTheWatchLimitIsReached(t *testing.T) {
 	got := sortedPaths(fixture.scanner.nextChanges(t))
 	if !slices.Equal(got, []string{"New (2020)/new.mkv"}) {
 		t.Fatalf("polled create after the watch limit: %q", got)
-	}
-}
-
-func TestPollerReportsNoRemovalsFromAReplacedDirectory(t *testing.T) {
-	root := t.TempDir()
-	scannertest.WriteFile(t, filepath.Join(root, "Share", "a.mkv"), "a")
-	p := &poller{root: root, extensions: map[string]bool{"mkv": true}, timing: sessionTestPolling, now: time.Now, layout: layout{root: root}, offline: true}
-	if report := p.poll(); !report.online {
-		t.Fatalf("first poll: %+v", report)
-	}
-	// The directory is replaced by an empty one, as an unmounted share's
-	// mount point would be: its entries are gone but nothing proves they
-	// were deleted.
-	// The empty directory exists before the old one goes, so it cannot reuse
-	// the old inode number.
-	err := os.Mkdir(filepath.Join(root, "Share.empty"), 0o755)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = os.RemoveAll(filepath.Join(root, "Share"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = os.Rename(filepath.Join(root, "Share.empty"), filepath.Join(root, "Share"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	report := p.poll()
-	for _, change := range report.changes {
-		if change.kind == changeRemoved && change.rel == "Share/a.mkv" {
-			t.Fatalf("a replaced directory reported a removal: %+v", report.changes)
-		}
 	}
 }

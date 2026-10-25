@@ -1,6 +1,7 @@
 package movie
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -11,6 +12,7 @@ import (
 
 	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/scannertest"
+	"igloo/cmd/internal/tmdb"
 )
 
 func catalogPaths(t *testing.T, s *Scanner) []string {
@@ -191,31 +193,108 @@ func TestMovieCatchUpRefusesToEmptyALibraryThatLooksUnmounted(t *testing.T) {
 }
 
 func TestMovieReprobeKeepsTheTmdbMissBackoff(t *testing.T) {
+	for _, changesOnly := range []bool{false, true} {
+		t.Run(map[bool]string{false: "library", true: "changes"}[changesOnly], func(t *testing.T) {
+			fixture := setupMovieScanner(t)
+			s := fixture.scanner
+			probe := &scannertest.CountingProbe{Default: movieScannerMetadataFixture("120")}
+			s.ffprobe = probe
+			client := &stubMovieScannerTmdb{searchErr: tmdb.ErrNoMoviesFound}
+			s.tmdb = client
+			now := scannertest.SettledNow()
+			s.now = func() time.Time { return now }
+			root := t.TempDir()
+			path := scannertest.WriteFile(t, filepath.Join(root, "Unknown (1999).mkv"), "unknown")
+			scan := func() {
+				if changesOnly {
+					s.scanChanges(root, scanner.Changes{Paths: []string{"Unknown (1999).mkv"}})
+				} else {
+					s.scan(root)
+				}
+			}
+			// Two actual misses establish the backoff, with a configured client.
+			scan()
+			scan()
+			searches := len(client.searchCalls)
+			if searches != 2 {
+				t.Fatalf("searches before rewrite = %d", searches)
+			}
+			scannertest.WriteFile(t, path, "unknown, remuxed")
+			scan()
+			status := s.Status()
+			if status.Updated != 1 || status.EnrichmentTotal != 0 || status.PendingEnrichment != 1 || status.State != scanner.StateCompleted {
+				t.Fatalf("rewrite during backoff: %+v", status)
+			}
+			if probe.Calls() != 2 || len(client.searchCalls) != searches {
+				t.Fatalf("rewrite: probes=%d searches=%d", probe.Calls(), len(client.searchCalls))
+			}
+			var attempts, lastAttempt int64
+			err := s.tx.DB.QueryRow("SELECT attempts, last_attempt_at FROM movie_tmdb_retries").Scan(&attempts, &lastAttempt)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if attempts != 2 || lastAttempt != now.Unix() {
+				t.Fatalf("backoff changed: attempts=%d last=%d", attempts, lastAttempt)
+			}
+			now = now.Add(25 * time.Hour)
+			scan()
+			if len(client.searchCalls) != searches+1 || s.Status().EnrichmentTotal != 1 || probe.Calls() != 2 {
+				t.Fatalf("expired backoff: %+v searches=%d probes=%d", s.Status(), len(client.searchCalls), probe.Calls())
+			}
+		})
+	}
+}
+
+func TestMovieAtomicReplacementRefreshesOnlyChangedTechnicalState(t *testing.T) {
 	fixture := setupMovieScanner(t)
 	s := fixture.scanner
-	s.ffprobe = &scannertest.CountingProbe{Default: movieScannerMetadataFixture("120")}
+	probe := &scannertest.CountingProbe{Default: movieScannerMetadataFixture("120")}
+	s.ffprobe = probe
 	root := t.TempDir()
-	path := scannertest.WriteFile(t, filepath.Join(root, "Unknown (1999)", "unknown.mkv"), "unknown")
+	path := scannertest.WriteFile(t, filepath.Join(root, "movie.mkv"), "first")
+	neighbor := scannertest.WriteFile(t, filepath.Join(root, "neighbor.mkv"), "neighbor")
 	s.scan(root)
-	_, err := s.tx.DB.Exec("UPDATE movie_tmdb_retries SET attempts = 3, last_attempt_at = 1700000000")
+	before := nextMovieScan(t, s).movieIndex
+	id := before[path].ID
+	seedMoviePlaybackWork(t, s, id)
+	info, err := os.Stat(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	// A rewrite keeps the name the search is derived from, so the backoff
-	// earned by earlier misses stands.
-	scannertest.WriteFile(t, path, "unknown, remuxed")
-	s.scanChanges(root, scanner.Changes{Paths: []string{"Unknown (1999)/unknown.mkv"}})
-	if status := s.Status(); status.Updated != 1 {
-		t.Fatalf("counts = %+v", status.Counts)
-	}
-	var attempts int
-	var lastAttempt int64
-	err = s.tx.DB.QueryRow("SELECT attempts, last_attempt_at FROM movie_tmdb_retries").Scan(&attempts, &lastAttempt)
+	temp := scannertest.WriteFile(t, filepath.Join(root, "download.part"), "other")
+	err = os.Chtimes(temp, info.ModTime(), info.ModTime())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if attempts != 3 || lastAttempt != 1700000000 {
-		t.Fatalf("backoff reset to attempts=%d last=%d", attempts, lastAttempt)
+	err = os.Rename(temp, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	probe.Default = movieScannerMetadataFixture("240")
+	var invalidated []int64
+	s.invalidateCommittedMovie = func(movieID int64) {
+		invalidated = append(invalidated, movieID)
+		movie, err := s.queries.GetMovieByID(context.Background(), movieID)
+		if err != nil || movie.Duration.Float64 != 240 {
+			t.Errorf("cache invalidation preceded technical commit: duration=%v err=%v", movie.Duration, err)
+		}
+	}
+	// Polling reconsiders every media name in the changed directory.
+	s.scanChanges(root, scanner.Changes{Paths: []string{"movie.mkv", "neighbor.mkv"}})
+	status := s.Status()
+	if status.Updated != 1 || status.Unchanged != 1 || probe.Calls() != 3 {
+		t.Fatalf("replacement: %+v probes=%d", status, probe.Calls())
+	}
+	after := nextMovieScan(t, s).movieIndex
+	if after[path].ID != id || after[path].FileFingerprint == before[path].FileFingerprint || after[neighbor] != before[neighbor] {
+		t.Fatalf("replacement fingerprints: before=%+v after=%+v", before, after)
+	}
+	if !reflect.DeepEqual(invalidated, []int64{id}) {
+		t.Fatalf("invalidated movies: %v", invalidated)
+	}
+	for _, table := range []string{"keyframe_indexes", "remux_safety_verdicts"} {
+		if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM "+table) != 0 {
+			t.Fatalf("replacement retained %s", table)
+		}
 	}
 }

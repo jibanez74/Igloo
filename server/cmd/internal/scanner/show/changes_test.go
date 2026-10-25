@@ -9,13 +9,13 @@ import (
 	"igloo/cmd/internal/scanner/scannertest"
 )
 
-func episodeID(t *testing.T, s *Scanner, season, episode int) int64 {
+func episodeID(t *testing.T, s *Scanner, path string) int64 {
 	t.Helper()
 	var id int64
-	err := s.DB.QueryRow(`SELECT e.id FROM show_episodes e JOIN show_seasons s ON s.id = e.season_id
-		WHERE s.season_number = ? AND e.episode_number = ?`, season, episode).Scan(&id)
+	err := s.DB.QueryRow(`SELECT ef.episode_id FROM show_episode_files ef JOIN show_files f ON f.id = ef.file_id
+		WHERE f.file_path = ?`, path).Scan(&id)
 	if err != nil {
-		t.Fatalf("episode S%02dE%02d: %v", season, episode, err)
+		t.Fatalf("episode at %s: %v", path, err)
 	}
 	return id
 }
@@ -26,7 +26,15 @@ func TestShowChangesRunAppliesOnlyTheChangedPaths(t *testing.T) {
 	scannertest.WriteFile(t, filepath.Join(root, "Show (2020)/Season 1/S01E02.mkv"), "e2")
 	other := scannertest.WriteFile(t, filepath.Join(root, "Other (2021)/Season 1/S01E01.mkv"), "o1")
 	scanOK(t, s, root)
-	pilot := episodeID(t, s, 1, 1)
+	pilot := episodeID(t, s, e1)
+	_, err := s.DB.Exec("INSERT INTO users (id, name, email, password) VALUES (1, 'Viewer', 'viewer@example.test', 'unused')")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = s.DB.Exec("INSERT INTO show_episode_watch_progress (user_id, episode_id, progress_sec, duration_sec, save_session_id, save_sequence) VALUES (1, ?, 123, 1200, 'session', 7)", pilot)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if probe.Calls() != 3 {
 		t.Fatalf("library scan probes = %d", probe.Calls())
 	}
@@ -34,7 +42,7 @@ func TestShowChangesRunAppliesOnlyTheChangedPaths(t *testing.T) {
 	// Renaming an episode file lands both names in one run: the new name is
 	// processed before cleanup, so the episode and its progress survive.
 	renamed := filepath.Join(root, "Show (2020)/Season 1/S01E01 - Pilot.mkv")
-	err := os.Rename(e1, renamed)
+	err = os.Rename(e1, renamed)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,8 +71,19 @@ func TestShowChangesRunAppliesOnlyTheChangedPaths(t *testing.T) {
 	if probe.Calls() != 5 {
 		t.Fatalf("probes = %d", probe.Calls())
 	}
-	if episodeID(t, s, 1, 1) != pilot {
+	renamedEpisode := episodeID(t, s, renamed)
+	if renamedEpisode != pilot {
 		t.Fatal("renaming the episode file replaced the episode")
+	}
+	var progress, duration float64
+	var session string
+	var sequence int
+	err = s.DB.QueryRow("SELECT progress_sec, duration_sec, save_session_id, save_sequence FROM show_episode_watch_progress WHERE user_id = 1 AND episode_id = ?", pilot).Scan(&progress, &duration, &session, &sequence)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if progress != 123 || duration != 1200 || session != "session" || sequence != 7 {
+		t.Fatalf("rename changed watch progress: %v %v %q %d", progress, duration, session, sequence)
 	}
 	// The other show's file is gone but was not reported, so it stays.
 	if scannertest.CountRows(t, s.DB, "SELECT count(*) FROM show_files") != 4 {
