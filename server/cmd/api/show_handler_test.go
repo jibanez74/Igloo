@@ -408,6 +408,7 @@ func TestGetShowsLibrary_SortsAndClampsPerPage(t *testing.T) {
 	}{
 		{name: "asc default", query: "", wantPerPage: libraryDefaultPerPage, wantNames: []string{"Alpha", "beta", "gamma"}},
 		{name: "desc clamped", query: "?sort=desc&per_page=999", wantPerPage: libraryMaxPerPage, wantNames: []string{"gamma", "beta", "Alpha"}},
+		{name: "page past the last offset", query: "?page=9223372036854775807", wantPerPage: libraryDefaultPerPage, wantNames: []string{}},
 	}
 
 	for _, tc := range cases {

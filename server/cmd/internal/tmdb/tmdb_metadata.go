@@ -152,7 +152,7 @@ func (t *tmdbClient) GetTmdbMovieByID(ctx context.Context, movie *TmdbMovie) err
 	}
 
 	if cached, ok := t.getMovie(movie.TmdbID); ok {
-		*movie = *cached
+		*movie = cached.clone()
 		return nil
 	}
 
@@ -173,8 +173,8 @@ func (t *tmdbClient) GetTmdbMovieByID(ctx context.Context, movie *TmdbMovie) err
 		return err
 	}
 
-	movieCopy := *movie
-	t.setMovie(movie.TmdbID, &movieCopy)
+	cached := movie.clone()
+	t.setMovie(movie.TmdbID, &cached)
 
 	return nil
 }
