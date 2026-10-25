@@ -187,12 +187,16 @@ func acceptsGzip(r *http.Request) bool {
 				continue
 			}
 
-			_, quality, hasQuality := strings.Cut(strings.ReplaceAll(params, " ", ""), "q=")
-			if !hasQuality {
-				return true
+			// Parameter names are case-insensitive, so Q=0 refuses gzip too.
+			for param := range strings.SplitSeq(params, ";") {
+				name, quality, _ := strings.Cut(param, "=")
+				if !strings.EqualFold(strings.TrimSpace(name), "q") {
+					continue
+				}
+				weight, err := strconv.ParseFloat(strings.TrimSpace(quality), 64)
+				return err == nil && weight > 0
 			}
-			weight, err := strconv.ParseFloat(quality, 64)
-			return err == nil && weight > 0
+			return true
 		}
 	}
 	return false
