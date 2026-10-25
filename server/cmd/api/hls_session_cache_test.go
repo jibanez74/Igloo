@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -276,6 +278,8 @@ func TestReservePersonalHLSSession_UpdatesCapacityBeforeBlockingTeardown(t *test
 		t.Fatalf("reservePersonalHLSSession returned error: %v", reserveResult.err)
 	}
 	reserveResult.reservation.release()
+	// The victim's output is deleted in the background, off the start path.
+	app.Wait.Wait()
 	_, err := os.Stat(oldSession.TempDir)
 	if !os.IsNotExist(err) {
 		t.Fatalf("capacity victim temp dir still exists after cleanup: %v", err)
@@ -339,9 +343,53 @@ func TestPersonalHLSSessionReservationCommit_UpdatesAccountingBeforeBlockingTear
 
 	releaseCleanup()
 	waitForHLSSessionCleanupResult(t, commitDone)
+	// The superseded output is deleted in the background, off the start path.
+	app.Wait.Wait()
 	_, err := os.Stat(oldSession.TempDir)
 	if !os.IsNotExist(err) {
 		t.Fatalf("superseded session temp dir still exists after cleanup: %v", err)
+	}
+}
+
+// A start waits for the window it supersedes to stop, since that frees the
+// permit and the CPU the new FFmpeg needs, but not for its output to be
+// deleted, which the background teardown does with the same single stop.
+func TestRetireDisplacedHLSSessions_StopsInLineAndDeletesInTheBackground(t *testing.T) {
+	app := setupTestApp(t)
+
+	cmd := exec.Command(os.Args[0], "-test.run=^TestListenForShutdown_HLSProcessHelper$")
+	cmd.Env = append(os.Environ(), listenForShutdownHLSProcessHelperEnv+"=1")
+	err := cmd.Start()
+	if err != nil {
+		t.Fatalf("start stand-in FFmpeg: %v", err)
+	}
+	session := &HLSSession{TempDir: t.TempDir(), Cmd: cmd}
+	var cancels atomic.Int32
+	session.Cancel = func() {
+		cancels.Add(1)
+		_ = cmd.Process.Kill()
+	}
+	go func() {
+		waitErr := cmd.Wait()
+		session.ExitMu.Lock()
+		session.Exited = true
+		session.ExitErr = waitErr
+		session.ExitMu.Unlock()
+	}()
+
+	app.retireDisplacedHLSSessions([]*HLSSession{session, nil})
+
+	exited, _ := session.exitStatus()
+	if !exited || !session.stopped() {
+		t.Fatalf("retire returned with exited=%v stopped=%v, want a stopped and exited FFmpeg", exited, session.stopped())
+	}
+	app.Wait.Wait()
+	_, err = os.Stat(session.TempDir)
+	if !os.IsNotExist(err) {
+		t.Fatalf("superseded session temp dir still exists after the background teardown: %v", err)
+	}
+	if cancels.Load() != 1 {
+		t.Fatalf("FFmpeg was canceled %d times, want once", cancels.Load())
 	}
 }
 
