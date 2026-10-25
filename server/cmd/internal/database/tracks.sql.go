@@ -576,6 +576,64 @@ func (q *Queries) ListMusicTrackScanIndex(ctx context.Context) ([]ListMusicTrack
 	return items, nil
 }
 
+const listMusicTrackScanIndexUnder = `-- name: ListMusicTrackScanIndexUnder :many
+SELECT c.id, c.file_path, c.size, f.mtime_ns, f.ctime_ns, f.device, f.inode, f.sha256
+FROM tracks c
+LEFT JOIN track_file_fingerprints f ON f.track_id = c.id
+WHERE c.file_path = ?1 OR (c.file_path >= ?2 AND c.file_path < ?3)
+`
+
+type ListMusicTrackScanIndexUnderParams struct {
+	Path  string `json:"path"`
+	Lower string `json:"lower"`
+	Upper string `json:"upper"`
+}
+
+type ListMusicTrackScanIndexUnderRow struct {
+	ID       int64          `json:"id"`
+	FilePath string         `json:"file_path"`
+	Size     int64          `json:"size"`
+	MtimeNs  sql.NullInt64  `json:"mtime_ns"`
+	CtimeNs  sql.NullInt64  `json:"ctime_ns"`
+	Device   sql.NullString `json:"device"`
+	Inode    sql.NullString `json:"inode"`
+	Sha256   []byte         `json:"sha256"`
+}
+
+// ListMusicTrackScanIndex for one path a run of watcher-detected changes
+// covers; lower and upper bound its children as in GetMovieScanIndexUnder.
+func (q *Queries) ListMusicTrackScanIndexUnder(ctx context.Context, arg ListMusicTrackScanIndexUnderParams) ([]ListMusicTrackScanIndexUnderRow, error) {
+	rows, err := q.query(ctx, q.listMusicTrackScanIndexUnderStmt, listMusicTrackScanIndexUnder, arg.Path, arg.Lower, arg.Upper)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListMusicTrackScanIndexUnderRow{}
+	for rows.Next() {
+		var i ListMusicTrackScanIndexUnderRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FilePath,
+			&i.Size,
+			&i.MtimeNs,
+			&i.CtimeNs,
+			&i.Device,
+			&i.Inode,
+			&i.Sha256,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const trackExists = `-- name: TrackExists :one
 SELECT
   EXISTS (

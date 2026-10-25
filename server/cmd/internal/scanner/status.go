@@ -53,6 +53,8 @@ const (
 	ReasonDiscoveryInterrupted = "Library discovery was interrupted; missing files were not removed."
 	ReasonCleanupUnsafe        = "Cleanup stopped because the library could not be safely checked."
 	ReasonFileDeferredNextScan = "The file is still changing or has not been quiet for 60 seconds. It is retried on the next scan."
+	ReasonFileDeferredWatched  = "The file is still changing. The library watcher retries it once it is quiet."
+	ReasonCleanupSkippedEmpty  = "The library looked empty, so nothing was removed. If its files are really gone, run a library scan."
 )
 
 // MaxPublishedIssues caps the issue summaries carried by a status; IssueCount

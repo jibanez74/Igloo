@@ -31,11 +31,11 @@ func (s *Scanner) retryCatalog(ctx context.Context, scan *musicScanContext, repo
 	if stopped {
 		return nil
 	}
-	artists, err := s.queries.CountMusicArtistRetryCandidates(ctx)
+	artists, err := s.countArtistRetryCandidates(ctx, scan)
 	if err != nil {
 		return err
 	}
-	albums, err := s.queries.CountMusicAlbumRetryCandidates(ctx, scan.appleEnabled)
+	albums, err := s.countAlbumRetryCandidates(ctx, scan)
 	if err != nil {
 		return err
 	}
@@ -43,7 +43,7 @@ func (s *Scanner) retryCatalog(ctx context.Context, scan *musicScanContext, repo
 	s.publish(report)
 	var after int64
 	for {
-		candidates, err := s.queries.MusicArtistRetryCandidates(ctx, after)
+		candidates, err := s.artistRetryCandidates(ctx, scan, after)
 		if err != nil {
 			return err
 		}
@@ -80,7 +80,7 @@ func (s *Scanner) retryCatalog(ctx context.Context, scan *musicScanContext, repo
 	}
 	after = 0
 	for {
-		candidates, err := s.queries.MusicAlbumRetryCandidates(ctx, database.MusicAlbumRetryCandidatesParams{AfterID: after, AppleEnabled: scan.appleEnabled})
+		candidates, err := s.albumRetryCandidates(ctx, scan, after)
 		if err != nil {
 			return err
 		}
@@ -176,7 +176,7 @@ func (s *Scanner) persistEnrichment(ctx context.Context, scan *musicScanContext,
 // Each album costs at most one request, and only when this scan did not match
 // it.
 func (s *Scanner) linkAlbumTracks(ctx context.Context, scan *musicScanContext, report *scanReport) error {
-	pending, err := s.queries.CountMusicTrackLinkAlbumCandidates(ctx)
+	pending, err := s.countTrackLinkAlbumCandidates(ctx, scan)
 	if err != nil {
 		return err
 	}
@@ -184,7 +184,7 @@ func (s *Scanner) linkAlbumTracks(ctx context.Context, scan *musicScanContext, r
 	s.publish(report)
 	var after int64
 	for {
-		candidates, err := s.queries.MusicTrackLinkAlbumCandidates(ctx, after)
+		candidates, err := s.trackLinkAlbumCandidates(ctx, scan, after)
 		if err != nil {
 			return err
 		}
@@ -466,7 +466,7 @@ func (s *Scanner) reconcileCompoundCredits(ctx context.Context, scan *musicScanC
 func (s *Scanner) reconcilePendingCompoundCredits(ctx context.Context, scan *musicScanContext) error {
 	var after int64
 	for {
-		candidates, err := s.queries.MusicCompoundReconciliationCandidates(ctx, after)
+		candidates, err := s.compoundReconciliationCandidates(ctx, scan, after)
 		if err != nil {
 			return err
 		}

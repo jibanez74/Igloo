@@ -43,6 +43,8 @@ func (e movieScanEntry) enrichmentEligible(now time.Time) bool {
 }
 
 type movieScanContext struct {
+	// changes is nil for a library scan.
+	changes *scanner.Changes
 	// enriched and pending are derived from movieIndex and published by the
 	// scan report; they change only through setEntry and deleteEntry.
 	enriched int
@@ -103,6 +105,7 @@ func (scan *movieScanContext) deleteEntry(path string) {
 
 func (scan *movieScanContext) clone() *movieScanContext {
 	return &movieScanContext{
+		changes:    scan.changes,
 		movieIndex: scan.movieIndex, // shared; never written inside the transaction
 		genreIDs:   scan.genreIDs.Overlay(),
 		artistIDs:  scan.artistIDs.Overlay(),

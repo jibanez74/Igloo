@@ -1755,6 +1755,47 @@ func (q *Queries) GetShowScanEpisodeLinks(ctx context.Context) ([]GetShowScanEpi
 	return items, nil
 }
 
+const getShowScanEpisodeLinksUnder = `-- name: GetShowScanEpisodeLinksUnder :many
+SELECT l.file_id, l.episode_id FROM show_episode_files l JOIN show_files f ON f.id = l.file_id
+WHERE f.file_path = ?1 OR (f.file_path >= ?2 AND f.file_path < ?3)
+ORDER BY l.file_id, l.episode_order
+`
+
+type GetShowScanEpisodeLinksUnderParams struct {
+	Path  string `json:"path"`
+	Lower string `json:"lower"`
+	Upper string `json:"upper"`
+}
+
+type GetShowScanEpisodeLinksUnderRow struct {
+	FileID    int64 `json:"file_id"`
+	EpisodeID int64 `json:"episode_id"`
+}
+
+// GetShowScanEpisodeLinks for the files GetShowScanIndexUnder returns.
+func (q *Queries) GetShowScanEpisodeLinksUnder(ctx context.Context, arg GetShowScanEpisodeLinksUnderParams) ([]GetShowScanEpisodeLinksUnderRow, error) {
+	rows, err := q.query(ctx, q.getShowScanEpisodeLinksUnderStmt, getShowScanEpisodeLinksUnder, arg.Path, arg.Lower, arg.Upper)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetShowScanEpisodeLinksUnderRow{}
+	for rows.Next() {
+		var i GetShowScanEpisodeLinksUnderRow
+		if err := rows.Scan(&i.FileID, &i.EpisodeID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getShowScanIndex = `-- name: GetShowScanIndex :many
 SELECT f.id, f.season_id, f.file_path, f.size, fp.mtime_ns, fp.ctime_ns, fp.device, fp.inode FROM show_files f LEFT JOIN show_file_fingerprints fp ON fp.file_id = f.id
 `
@@ -1779,6 +1820,62 @@ func (q *Queries) GetShowScanIndex(ctx context.Context) ([]GetShowScanIndexRow, 
 	items := []GetShowScanIndexRow{}
 	for rows.Next() {
 		var i GetShowScanIndexRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SeasonID,
+			&i.FilePath,
+			&i.Size,
+			&i.MtimeNs,
+			&i.CtimeNs,
+			&i.Device,
+			&i.Inode,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getShowScanIndexUnder = `-- name: GetShowScanIndexUnder :many
+SELECT f.id, f.season_id, f.file_path, f.size, fp.mtime_ns, fp.ctime_ns, fp.device, fp.inode FROM show_files f LEFT JOIN show_file_fingerprints fp ON fp.file_id = f.id
+WHERE f.file_path = ?1 OR (f.file_path >= ?2 AND f.file_path < ?3)
+`
+
+type GetShowScanIndexUnderParams struct {
+	Path  string `json:"path"`
+	Lower string `json:"lower"`
+	Upper string `json:"upper"`
+}
+
+type GetShowScanIndexUnderRow struct {
+	ID       int64          `json:"id"`
+	SeasonID int64          `json:"season_id"`
+	FilePath string         `json:"file_path"`
+	Size     int64          `json:"size"`
+	MtimeNs  sql.NullInt64  `json:"mtime_ns"`
+	CtimeNs  sql.NullInt64  `json:"ctime_ns"`
+	Device   sql.NullString `json:"device"`
+	Inode    sql.NullString `json:"inode"`
+}
+
+// GetShowScanIndex for one path a run of watcher-detected changes covers;
+// lower and upper bound its children as in GetMovieScanIndexUnder.
+func (q *Queries) GetShowScanIndexUnder(ctx context.Context, arg GetShowScanIndexUnderParams) ([]GetShowScanIndexUnderRow, error) {
+	rows, err := q.query(ctx, q.getShowScanIndexUnderStmt, getShowScanIndexUnder, arg.Path, arg.Lower, arg.Upper)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetShowScanIndexUnderRow{}
+	for rows.Next() {
+		var i GetShowScanIndexUnderRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.SeasonID,

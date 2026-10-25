@@ -9,6 +9,11 @@ import (
 // Database caches use transaction overlays; lookup outcomes and splitting
 // decisions live for the scan and do not depend on transaction success.
 type musicScanContext struct {
+	// changes is nil for a library scan. A run of changes records the tracks
+	// it settled in touched, and its enrichment passes keep to scope.
+	changes           *scanner.Changes
+	touched           []string
+	scope             *musicScope
 	trackIndex        map[string]scanner.FileFingerprint
 	merged            bool
 	invalidatedTracks map[int64]bool
@@ -74,6 +79,13 @@ func newMusicScanContext(trackIndex map[string]scanner.FileFingerprint) *musicSc
 		artistIDAttempts:    make(map[spotifyapi.ID]artistIDResult),
 		breaker:             &scanner.ProviderBreaker{Classify: spotifyapi.ProviderFailure},
 		appleBreaker:        &scanner.ProviderBreaker{Classify: itunes.ProviderFailure},
+	}
+}
+
+// touch records a settled track for a run of changes' enrichment scope.
+func (scan *musicScanContext) touch(path string) {
+	if scan.changes.Scoped() {
+		scan.touched = append(scan.touched, path)
 	}
 }
 

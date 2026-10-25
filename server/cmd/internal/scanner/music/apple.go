@@ -32,7 +32,7 @@ func (s *Scanner) enrichFromApple(ctx context.Context, scan *musicScanContext, r
 	if !s.appleReady(scan) {
 		return nil
 	}
-	total, err := s.queries.CountMusicAppleAlbumCandidates(ctx)
+	total, err := s.countAppleAlbumCandidates(ctx, scan)
 	if err != nil {
 		return err
 	}
@@ -43,7 +43,7 @@ func (s *Scanner) enrichFromApple(ctx context.Context, scan *musicScanContext, r
 	answers := make(map[int64]*itunes.Album)
 	var after int64
 	for !scan.appleBreaker.Stopped {
-		rows, err := s.queries.MusicAppleAlbumCandidates(ctx, after)
+		rows, err := s.appleAlbumCandidates(ctx, scan, after)
 		if err != nil {
 			return err
 		}

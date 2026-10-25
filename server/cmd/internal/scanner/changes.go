@@ -35,18 +35,25 @@ type Changes struct {
 	OnDeferred func(path string, eligibleAt time.Time)
 }
 
+// A nil *Changes is a library scan: requested by an admin or run at startup.
+
+// Scoped reports a run limited to Paths.
+func (c *Changes) Scoped() bool {
+	return c != nil && !c.CatchUp
+}
+
 // QuietPeriod is how long a file must have been unchanged before this run
 // processes it.
-func (c Changes) QuietPeriod() time.Duration {
-	if c.CatchUp {
+func (c *Changes) QuietPeriod() time.Duration {
+	if c == nil || c.CatchUp {
 		return FileQuietPeriod
 	}
 	return ChangeQuietPeriod
 }
 
 // Deferred reports a deferred file to the watcher, as a path relative to root.
-func (c Changes) Deferred(root, path string, eligibleAt time.Time) {
-	if c.OnDeferred == nil {
+func (c *Changes) Deferred(root, path string, eligibleAt time.Time) {
+	if c == nil || c.OnDeferred == nil {
 		return
 	}
 	relative, err := filepath.Rel(root, path)
@@ -54,6 +61,12 @@ func (c Changes) Deferred(root, path string, eligibleAt time.Time) {
 		return
 	}
 	c.OnDeferred(relative, eligibleAt)
+}
+
+// RefusesEmptyCleanup reports a run that must not remove anything when its
+// walk found no file at all.
+func (c *Changes) RefusesEmptyCleanup() bool {
+	return c != nil && c.CatchUp
 }
 
 // Resolve joins the paths onto root, the same spelling of the root the run
@@ -80,6 +93,13 @@ func (c Changes) Resolve(root string) []string {
 		}
 	}
 	return collapsed
+}
+
+// ChildBounds returns the half-open range [lower, upper) of every path
+// beneath path in byte order, so a catalog query can seek its file_path index
+// for the files under a changed directory.
+func ChildBounds(path string) (lower, upper string) {
+	return path + string(filepath.Separator), path + string(filepath.Separator+1)
 }
 
 // pathWithin reports whether path is parent or lies beneath it.

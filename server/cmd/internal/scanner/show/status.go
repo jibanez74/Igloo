@@ -30,6 +30,8 @@ type showScanEntry struct {
 // seasons and episodes this run touched locally, which is what makes their
 // metadata eligible for enrichment.
 type showScanContext struct {
+	// changes is nil for a library scan.
+	changes  *scanner.Changes
 	index    map[string]showScanEntry
 	seasons  map[int64]bool
 	episodes map[int64]bool
@@ -74,10 +76,12 @@ func (s *Scanner) Status() Status {
 	return result
 }
 
-func (s *Scanner) beginReport() {
-	s.statusMu.Lock()
-	s.status = Status{Progress: scanner.BeginProgress(scanner.PhaseDiscovery, scanner.ScopeLibrary)}
-	s.statusMu.Unlock()
+func (s *Scanner) beginReport(scope scanner.ScanScope) func() {
+	return func() {
+		s.statusMu.Lock()
+		s.status = Status{Progress: scanner.BeginProgress(scanner.PhaseDiscovery, scope)}
+		s.statusMu.Unlock()
+	}
 }
 
 func (s *Scanner) publish(report *scanReport) {

@@ -14,6 +14,7 @@ import (
 type enrichmentJob struct {
 	file     scanner.ScanFile
 	baseline movieScanEntry
+	changes  *scanner.Changes
 }
 
 type enrichmentResult struct {
@@ -29,7 +30,7 @@ type enrichmentResult struct {
 func (s *Scanner) prepareEnrichment(ctx context.Context, job enrichmentJob) enrichmentResult {
 	defer s.logSlow("slow movie enrichment", time.Now(), "path", job.file.Path)
 	result := enrichmentResult{job: job}
-	result.inspection, result.err = scanner.InspectFileMetadata(ctx, job.file.Path, nil, s.now, scanner.FileQuietPeriod)
+	result.inspection, result.err = scanner.InspectFileMetadata(ctx, job.file.Path, nil, s.now, job.changes.QuietPeriod())
 	if result.err != nil {
 		return result
 	}
@@ -75,7 +76,7 @@ func (s *Scanner) enrichMovies(ctx context.Context, scan *movieScanContext, repo
 		}
 		entry := scan.movieIndex[file.file.Path]
 		if entry.ID != 0 && entry.enrichmentEligible(now) {
-			candidates = append(candidates, enrichmentJob{file: file.file, baseline: entry})
+			candidates = append(candidates, enrichmentJob{file: file.file, baseline: entry, changes: scan.changes})
 		}
 	}
 	// Publish the total only once there is a provider to work through it;

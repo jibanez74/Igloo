@@ -23,9 +23,19 @@ import (
 // way Start does before handing off to the scan goroutine. It reports
 // cancellation and fatal failures, which the scan goroutine records on the
 // run instead of returning.
+// scanChanges runs one run of watcher-detected changes synchronously.
+func (s *Scanner) scanChanges(directory string, changes scanner.Changes) {
+	scope := scanner.ScopeChanges
+	if changes.CatchUp {
+		scope = scanner.ScopeLibrary
+	}
+	s.beginReport(scope)()
+	s.runShowScan(directory, &changes)
+}
+
 func (s *Scanner) scan(directory string) error {
-	s.beginReport()
-	s.runShowScan(directory)
+	s.beginReport(scanner.ScopeLibrary)()
+	s.runShowScan(directory, nil)
 	contextErr := s.ScanContext.Err()
 	if contextErr != nil {
 		return contextErr

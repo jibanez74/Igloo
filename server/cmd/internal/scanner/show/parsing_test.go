@@ -126,14 +126,14 @@ func TestParseSeasonDirectoryAndAllowDirectory(t *testing.T) {
 			if ok != tc.ok || season != tc.season {
 				t.Fatalf("season=%d ok=%v", season, ok)
 			}
-			if allowDirectory("/tv", filepath.Join("/tv/Show", tc.name)) != tc.ok {
+			if AllowDirectory("/tv", filepath.Join("/tv/Show", tc.name)) != tc.ok {
 				t.Fatal("allowDirectory disagrees with parseSeasonDirectory")
 			}
 		})
 	}
 	for path, want := range map[string]bool{"Show": true, ".hidden": false, "Show/.git": false, "Show/Season 1/Sub": false, "Show/Specials": true} {
-		if allowDirectory("/tv", filepath.Join("/tv", path)) != want {
-			t.Fatalf("allowDirectory(%q) != %v", path, want)
+		if AllowDirectory("/tv", filepath.Join("/tv", path)) != want {
+			t.Fatalf("AllowDirectory(%q) != %v", path, want)
 		}
 	}
 }

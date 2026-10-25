@@ -51,6 +51,14 @@ SELECT c.id, c.file_path, c.size, f.mtime_ns, f.ctime_ns, f.device, f.inode, f.s
 FROM tracks c
 LEFT JOIN track_file_fingerprints f ON f.track_id = c.id;
 
+-- name: ListMusicTrackScanIndexUnder :many
+-- ListMusicTrackScanIndex for one path a run of watcher-detected changes
+-- covers; lower and upper bound its children as in GetMovieScanIndexUnder.
+SELECT c.id, c.file_path, c.size, f.mtime_ns, f.ctime_ns, f.device, f.inode, f.sha256
+FROM tracks c
+LEFT JOIN track_file_fingerprints f ON f.track_id = c.id
+WHERE c.file_path = sqlc.arg(path) OR (c.file_path >= sqlc.arg(lower) AND c.file_path < sqlc.arg(upper));
+
 -- name: UpsertTrack :one
 -- A changed file loses its provider pairing; the scan pairs it again with the
 -- rest of its album.

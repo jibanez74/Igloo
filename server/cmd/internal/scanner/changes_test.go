@@ -45,22 +45,29 @@ func TestChangesResolve(t *testing.T) {
 }
 
 func TestChangesQuietPeriodAndDeferred(t *testing.T) {
-	if (Changes{}).QuietPeriod() != ChangeQuietPeriod {
-		t.Fatal("a run of changes must use ChangeQuietPeriod")
+	var library *Changes
+	catchUp := &Changes{CatchUp: true}
+	scoped := &Changes{Paths: []string{"a.mkv"}}
+	if scoped.QuietPeriod() != ChangeQuietPeriod || !scoped.Scoped() || scoped.RefusesEmptyCleanup() {
+		t.Fatal("a run of changes must use ChangeQuietPeriod and be scoped")
 	}
-	if (Changes{CatchUp: true}).QuietPeriod() != FileQuietPeriod {
-		t.Fatal("a catch-up run must keep FileQuietPeriod")
+	if catchUp.QuietPeriod() != FileQuietPeriod || catchUp.Scoped() || !catchUp.RefusesEmptyCleanup() {
+		t.Fatal("a catch-up run must keep FileQuietPeriod, walk everything, and refuse empty cleanup")
 	}
+	if library.QuietPeriod() != FileQuietPeriod || library.Scoped() || library.RefusesEmptyCleanup() {
+		t.Fatal("a library scan keeps today's behavior")
+	}
+	library.Deferred("/library", "/library/a.mkv", time.Time{})
 	var got []string
 	eligible := time.Unix(100, 0)
-	changes := Changes{OnDeferred: func(path string, eligibleAt time.Time) {
+	changes := &Changes{OnDeferred: func(path string, eligibleAt time.Time) {
 		if !eligibleAt.Equal(eligible) {
 			t.Errorf("eligibleAt = %v", eligibleAt)
 		}
 		got = append(got, path)
 	}}
 	changes.Deferred("/library", "/library/Show/Season 1/e1.mkv", eligible)
-	Changes{}.Deferred("/library", "/library/ignored.mkv", eligible)
+	(&Changes{}).Deferred("/library", "/library/ignored.mkv", eligible)
 	if !reflect.DeepEqual(got, []string{"Show/Season 1/e1.mkv"}) {
 		t.Fatalf("deferred = %q", got)
 	}
@@ -290,5 +297,20 @@ func TestLauncherQueuesALibraryScanBehindChanges(t *testing.T) {
 	}
 	if launcher.LaunchChanges(sql.NullString{}, func() {}, func(string) {}).Status != StartNotConfigured {
 		t.Fatal("an unconfigured library must not start changes")
+	}
+}
+
+func TestChildBoundsCoverExactlyThePathsBeneath(t *testing.T) {
+	lower, upper := ChildBounds("/library/Movie (2020)")
+	within := func(path string) bool { return path >= lower && path < upper }
+	for _, path := range []string{"/library/Movie (2020)/m.mkv", "/library/Movie (2020)/Extras/x.mkv"} {
+		if !within(path) {
+			t.Errorf("%q should be beneath", path)
+		}
+	}
+	for _, path := range []string{"/library/Movie (2020)", "/library/Movie (2020) Extended.mkv", "/library/Movie (2020)0", "/library/Movie (2020)-x/m.mkv", "/library/Other/m.mkv"} {
+		if within(path) {
+			t.Errorf("%q should not be beneath", path)
+		}
 	}
 }

@@ -52,6 +52,7 @@ type probeJob struct {
 	index    int
 	file     scanner.ScanFile
 	baseline movieScanEntry
+	changes  *scanner.Changes
 }
 
 type probeResult struct {
@@ -86,7 +87,7 @@ func (s *Scanner) prepareFile(ctx context.Context, job probeJob) probeResult {
 	if job.baseline.HasFingerprint {
 		previous = &job.baseline.FileFingerprint
 	}
-	result.inspection, result.err = scanner.InspectFileMetadata(ctx, job.file.Path, previous, s.now, scanner.FileQuietPeriod)
+	result.inspection, result.err = scanner.InspectFileMetadata(ctx, job.file.Path, previous, s.now, job.changes.QuietPeriod())
 	if result.err != nil || result.inspection.Outcome != scanner.FileNeedsProcessing {
 		return result
 	}
@@ -103,7 +104,8 @@ func (s *Scanner) prepareFile(ctx context.Context, job probeJob) probeResult {
 }
 
 // runMovieScan expects beginReport to have published the run it continues.
-func (s *Scanner) runMovieScan(directory string) {
+// changes is nil for a library scan.
+func (s *Scanner) runMovieScan(directory string, changes *scanner.Changes) {
 	report := newScanReport(s.Status())
 	ctx := s.scanContext
 	stopProgressLog := scanner.StartProgressLog(scanner.ProgressLogInterval, func() {
@@ -138,12 +140,32 @@ func (s *Scanner) runMovieScan(directory string) {
 		report.Issue("", report.status.Phase, reason)
 	}
 	s.logger.Info("movie scan phase", "run", report.status.RunID, "phase", scanner.PhaseDiscovery, "directory", directory)
-	index, catalog, err := s.loadMovieScanIndex(ctx)
+	// A run of changes reads only the catalog rows beneath its paths, and the
+	// pending count it publishes from the database instead of the index.
+	var paths []string
+	var index map[string]movieScanEntry
+	var catalog []scanner.CatalogFile
+	var err error
+	if changes.Scoped() {
+		paths = changes.Resolve(directory)
+		index, catalog, err = s.loadMovieScanIndexUnder(ctx, paths)
+	} else {
+		index, catalog, err = s.loadMovieScanIndex(ctx)
+	}
 	if err != nil {
 		fail(err, "Unable to read the movie catalog.")
 		return
 	}
 	scan := newMovieScanContext(index)
+	scan.changes = changes
+	if changes.Scoped() {
+		pending, err := s.queries.CountMoviesPendingEnrichment(ctx)
+		if err != nil {
+			fail(err, "Unable to read the movie catalog.")
+			return
+		}
+		scan.pending = int(pending)
+	}
 	report.scan = scan
 	reconciliation, err := scanner.NewReconciliation(ctx, directory, catalog)
 	if err != nil {
@@ -151,21 +173,26 @@ func (s *Scanner) runMovieScan(directory string) {
 		return
 	}
 	files := make([]localFile, 0)
-	err = scanner.WalkMediaLibraryContext(ctx, directory, helpers.ValidVideoExtensions,
-		func(path string, err error) {
-			s.logger.Warn("movie discovery failed", "path", path, "error", err)
-			report.Issue(path, scanner.PhaseDiscovery, scanner.ReasonDiscoveryEntry)
-		},
-		func(file scanner.ScanFile) error {
-			file.Path = filepath.Clean(file.Path)
-			reconciliation.MarkSeen(file.Path)
-			files = append(files, localFile{file: file})
-			report.status.Total = len(files)
-			if len(files)%scanner.DiscoveryPublishInterval == 0 {
-				s.publish(report)
-			}
-			return nil
-		})
+	onError := func(path string, err error) {
+		s.logger.Warn("movie discovery failed", "path", path, "error", err)
+		report.Issue(path, scanner.PhaseDiscovery, scanner.ReasonDiscoveryEntry)
+	}
+	onFile := func(file scanner.ScanFile) error {
+		file.Path = filepath.Clean(file.Path)
+		reconciliation.MarkSeen(file.Path)
+		files = append(files, localFile{file: file})
+		report.status.Total = len(files)
+		if len(files)%scanner.DiscoveryPublishInterval == 0 {
+			s.publish(report)
+		}
+		return nil
+	}
+	if changes.Scoped() {
+		reconciliation.Limit(paths)
+		err = scanner.WalkChanges(ctx, directory, paths, helpers.ValidVideoExtensions, onError, onFile, nil)
+	} else {
+		err = scanner.WalkMediaLibraryContext(ctx, directory, helpers.ValidVideoExtensions, onError, onFile)
+	}
 	if err != nil {
 		fail(err, scanner.ReasonDiscoveryInterrupted)
 		return
@@ -180,16 +207,32 @@ func (s *Scanner) runMovieScan(directory string) {
 	if contextErr != nil {
 		return
 	}
-	s.retryDeferred(ctx, scan, report, files)
+	// A watcher run hands its deferred files back instead of holding the
+	// launcher through the retry window; the watcher retries them.
+	if changes == nil {
+		s.retryDeferred(ctx, scan, report, files)
+	} else {
+		for _, file := range files {
+			if file.state == fileDeferred {
+				changes.Deferred(directory, file.file.Path, file.eligible)
+			}
+		}
+	}
 	contextErr = ctx.Err()
 	if contextErr != nil {
 		return
 	}
 	s.phase(report, scanner.PhaseCleanup)
-	report.status.Deleted, err = s.cleanupMissingMovie(ctx, scan, reconciliation)
-	if err != nil {
-		fail(err, scanner.ReasonCleanupUnsafe)
-		return
+	refused := changes.RefusesEmptyCleanup() && reconciliation.SawNothing()
+	if refused {
+		s.logger.Warn("movie cleanup skipped: the library looked empty", "directory", directory)
+		report.Issue("", scanner.PhaseCleanup, scanner.ReasonCleanupSkippedEmpty)
+	} else {
+		report.status.Deleted, err = s.cleanupMissingMovie(ctx, scan, reconciliation)
+		if err != nil {
+			fail(err, scanner.ReasonCleanupUnsafe)
+			return
+		}
 	}
 	s.phase(report, scanner.PhaseEnrichment)
 	s.enrichMovies(ctx, scan, report, files)
@@ -201,7 +244,7 @@ func (s *Scanner) processLocal(ctx context.Context, scan *movieScanContext, repo
 	jobs := make([]probeJob, 0, len(indexes))
 	for _, index := range indexes {
 		file := files[index].file
-		jobs = append(jobs, probeJob{index: index, file: file, baseline: scan.movieIndex[file.Path]})
+		jobs = append(jobs, probeJob{index: index, file: file, baseline: scan.movieIndex[file.Path], changes: scan.changes})
 	}
 	withinWindow := func() bool {
 		return dispatchBefore.IsZero() || !s.now().After(dispatchBefore)
@@ -265,9 +308,13 @@ func (s *Scanner) recordLocal(report *scanReport, file *localFile, result probeR
 	if file.state == fileDeferred {
 		report.status.Deferred++
 		if file.eligible.IsZero() {
-			file.eligible = s.now().Add(scanner.FileQuietPeriod)
+			file.eligible = s.now().Add(result.job.changes.QuietPeriod())
 		}
-		report.Issue(file.file.Path, scanner.PhaseLocal, reasonDeferredInRun)
+		reason := reasonDeferredInRun
+		if result.job.changes != nil {
+			reason = scanner.ReasonFileDeferredWatched
+		}
+		report.Issue(file.file.Path, scanner.PhaseLocal, reason)
 		s.logger.Info("deferred movie", "path", file.file.Path, "eligible_at", file.eligible)
 	}
 }
