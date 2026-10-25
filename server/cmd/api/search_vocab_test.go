@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -22,6 +23,10 @@ func TestExactLevenshtein(t *testing.T) {
 		{a: "license", b: "licence", want: 1},
 		{a: "teh", b: "the", want: 2},
 		{a: "beyonce", b: "beyoncé", want: 1},
+		// The rows live on the stack up to searchVocabMaxTokenRunes; these
+		// sit on and past that boundary.
+		{a: strings.Repeat("a", searchVocabMaxTokenRunes), b: strings.Repeat("a", searchVocabMaxTokenRunes-1) + "b", want: 1},
+		{a: strings.Repeat("a", searchVocabMaxTokenRunes+1), b: strings.Repeat("b", searchVocabMaxTokenRunes+3), want: searchVocabMaxTokenRunes + 3},
 	}
 
 	for _, tt := range tests {

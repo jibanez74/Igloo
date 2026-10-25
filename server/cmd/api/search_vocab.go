@@ -88,8 +88,18 @@ func exactLevenshtein(a, b []rune) int {
 		a, b = b, a
 	}
 
-	previous := make([]int, len(a)+1)
-	current := make([]int, len(a)+1)
+	// The build and every lookup run this once per visited node, and one side
+	// is always a vocabulary term no longer than searchVocabMaxTokenRunes, so
+	// the rows fit on the stack.
+	var previousRow, currentRow [searchVocabMaxTokenRunes + 1]int
+	previous := previousRow[:]
+	current := currentRow[:]
+	if len(a) >= len(previousRow) {
+		previous = make([]int, len(a)+1)
+		current = make([]int, len(a)+1)
+	}
+	previous = previous[:len(a)+1]
+	current = current[:len(a)+1]
 	for i := range previous {
 		previous[i] = i
 	}
@@ -315,11 +325,14 @@ func (app *Application) searchVocabIndex(ctx context.Context, vocabTable string)
 		return nil, closeErr
 	}
 
-	index := newSearchVocabIndex(terms)
+	// The terms and their generation are read, so the connection, which every
+	// other request shares, is released before the tree over up to
+	// searchVocabMaxTerms terms is built.
 	err = tx.Commit()
 	if err != nil {
 		return nil, err
 	}
+	index := newSearchVocabIndex(terms)
 	app.SearchVocab.set(vocabTable, generation, index)
 
 	if truncated {
