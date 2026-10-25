@@ -320,7 +320,7 @@ func isOptionalHTTPURL(value string) bool {
 		return false
 	}
 
-	return parsed.Host != ""
+	return parsed.Hostname() != ""
 }
 
 // uploadedAvatarURLPrefix is the URL UploadUserAvatar publishes an avatar
