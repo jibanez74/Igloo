@@ -2,6 +2,8 @@ package scanner
 
 import (
 	"fmt"
+	"math/rand/v2"
+	"slices"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -80,6 +82,79 @@ func TestPublishCapsIssueSummaries(t *testing.T) {
 	}
 	if progress.Issues[0].Filename != "000.mkv" {
 		t.Fatalf("issues are not sorted: %+v", progress.Issues[0])
+	}
+}
+
+// A scan walks files in order, so once the published list is full, every new
+// issue sorts after it. Those must not rebuild it: when most files raise an
+// issue, a rebuild per file re-sorts every key once per file.
+func TestPublishSkipsIssuesPastAFullList(t *testing.T) {
+	report := NewReport()
+	progress := BeginProgress(PhaseLocal)
+	for i := 0; i < MaxPublishedIssues; i++ {
+		report.Issue(fmt.Sprintf("/library/%05d.mkv", i), PhaseLocal, "deferred")
+	}
+	report.Publish(&progress)
+	full := report.publishedIssues
+
+	for i := MaxPublishedIssues; i < 5*MaxPublishedIssues; i++ {
+		report.Issue(fmt.Sprintf("/library/%05d.mkv", i), PhaseLocal, "deferred")
+		report.Publish(&progress)
+	}
+	if report.publishedIssues != full {
+		t.Fatal("issues past a full published list rebuilt it")
+	}
+	if progress.IssueCount != 5*MaxPublishedIssues || progress.Issues[MaxPublishedIssues-1].Filename != "00099.mkv" {
+		t.Fatalf("issue_count=%d last published=%+v", progress.IssueCount, progress.Issues[MaxPublishedIssues-1])
+	}
+
+	report.DropIssue("/library/00000.mkv", PhaseLocal)
+	report.Publish(&progress)
+	if report.publishedIssues == full || progress.Issues[MaxPublishedIssues-1].Filename != "00100.mkv" {
+		t.Fatalf("dropping a published issue did not pull the next one in: %+v", progress.Issues[MaxPublishedIssues-1])
+	}
+}
+
+// Whatever Publish skips, what it publishes must equal a full sort of every
+// outstanding issue after any mix of additions, changes and removals.
+func TestPublishMatchesAFullSortAcrossChanges(t *testing.T) {
+	report := NewReport()
+	progress := BeginProgress(PhaseLocal)
+	random := rand.New(rand.NewPCG(1, 2))
+	rebuilds := 0
+	const steps = 3000
+	for step := 0; step < steps; step++ {
+		path := fmt.Sprintf("/library/%04d.mkv", random.IntN(400))
+		phase := PhaseLocal
+		if random.IntN(4) == 0 {
+			phase = PhaseDiscovery
+		}
+		if random.IntN(3) == 0 {
+			report.DropIssue(path, phase)
+		} else {
+			report.Issue(path, phase, fmt.Sprintf("reason %d", random.IntN(3)))
+		}
+		before := report.publishedIssues
+		report.Publish(&progress)
+		if report.publishedIssues != before {
+			rebuilds++
+		}
+
+		keys := make([]string, 0, len(report.issues))
+		for key := range report.issues {
+			keys = append(keys, key)
+		}
+		slices.Sort(keys)
+		want := make([]Issue, 0, MaxPublishedIssues)
+		for _, key := range keys[:min(MaxPublishedIssues, len(keys))] {
+			want = append(want, report.issues[key])
+		}
+		if progress.IssueCount != len(report.issues) || !slices.Equal(progress.Issues, want) {
+			t.Fatalf("step %d: published %d of %d issues, want the first %d of a full sort", step, len(progress.Issues), progress.IssueCount, len(want))
+		}
+	}
+	if rebuilds == steps {
+		t.Fatal("every change rebuilt the published list")
 	}
 }
 

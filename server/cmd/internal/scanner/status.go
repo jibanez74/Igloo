@@ -122,12 +122,19 @@ func (p Progress) Clone() Progress {
 type Report struct {
 	issues map[string]Issue
 	active map[string]bool
-	// issueVersion changes whenever issues is mutated; Publish rebuilds the
-	// sorted, truncated Issues slice only when it differs from publishedIssues.
-	// Most publishes report file progress and leave issues untouched, so this
-	// keeps Publish off an O(issues log issues) sort on every call.
+	// issueVersion changes whenever a mutation can change the published
+	// Issues; Publish rebuilds the sorted, truncated slice only when it differs
+	// from publishedIssues. Most publishes report file progress and leave
+	// issues untouched, and once the published slice is full, a key that sorts
+	// after its last entry cannot enter it. Either way Publish stays off an
+	// O(issues log issues) sort, which a scan where most files raise an issue
+	// (every file deferred after a recursive chmod) would otherwise pay once
+	// per file.
 	issueVersion    uint64
 	publishedIssues uint64
+	// publishedLast is the key of the last published issue while the
+	// published slice holds MaxPublishedIssues of them, and empty otherwise.
+	publishedLast string
 }
 
 func NewReport() Report {
@@ -148,7 +155,7 @@ func (r *Report) Issue(path string, phase ScanPhase, reason string) {
 		return
 	}
 	r.issues[key] = entry
-	r.issueVersion++
+	r.markIssueChanged(key)
 }
 
 func (r *Report) DropIssue(path string, phase ScanPhase) {
@@ -158,6 +165,17 @@ func (r *Report) DropIssue(path string, phase ScanPhase) {
 		return
 	}
 	delete(r.issues, key)
+	r.markIssueChanged(key)
+}
+
+// markIssueChanged records a change to key unless the published slice is full
+// and key sorts after its last entry: every published key is then still
+// present and still sorts first, so the slice Publish would build is the same.
+func (r *Report) markIssueChanged(key string) {
+	beyondPublished := r.publishedLast != "" && key > r.publishedLast
+	if beyondPublished {
+		return
+	}
 	r.issueVersion++
 }
 
@@ -194,6 +212,10 @@ func (r *Report) Publish(progress *Progress) {
 		progress.Issues = append(progress.Issues, r.issues[key])
 	}
 	r.publishedIssues = r.issueVersion
+	r.publishedLast = ""
+	if limit == MaxPublishedIssues {
+		r.publishedLast = keys[limit-1]
+	}
 }
 
 // Finish resolves the terminal state: cancellation wins, a failure set earlier
