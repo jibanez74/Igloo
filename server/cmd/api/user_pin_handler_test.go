@@ -136,6 +136,7 @@ func TestUpdateUserPin_InvalidFormatRejected(t *testing.T) {
 		`{"pin":"123"}`,
 		`{"pin":"12345"}`,
 		`{"pin":"12a4"}`,
+		`{"pin":"1234","current_pin":"ab"}`,
 	}
 
 	app := setupSessionTestApp(t)
@@ -170,6 +171,11 @@ func TestUpdateUserPin_ChangeRequiresCurrentPin(t *testing.T) {
 	missing := serveRequest(t, handler, http.MethodPut, "/api/user/pin", `{"pin":"5678"}`)
 	if missing.Code != http.StatusBadRequest {
 		t.Fatalf("missing current_pin: expected 400, got %d: %s", missing.Code, missing.Body.String())
+	}
+
+	malformed := serveRequest(t, handler, http.MethodPut, "/api/user/pin", `{"pin":"5678","current_pin":"12a4"}`)
+	if malformed.Code != http.StatusBadRequest {
+		t.Fatalf("malformed current_pin: expected 400, got %d: %s", malformed.Code, malformed.Body.String())
 	}
 
 	wrong := serveRequest(t, handler, http.MethodPut, "/api/user/pin", `{"pin":"5678","current_pin":"0000"}`)
