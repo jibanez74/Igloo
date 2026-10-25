@@ -470,17 +470,23 @@ type movieStartFunc func() scanner.StartResult
 
 func (f movieStartFunc) Start() scanner.StartResult { return f() }
 
+func (f movieStartFunc) StartChanges(scanner.Changes) scanner.StartResult { return f() }
+
 func (movieStartFunc) Status() movie.Status { return movie.Status{Progress: idleScanProgress()} }
 
 type showStartFunc func() scanner.StartResult
 
 func (f showStartFunc) Start() scanner.StartResult { return f() }
 
+func (f showStartFunc) StartChanges(scanner.Changes) scanner.StartResult { return f() }
+
 func (showStartFunc) Status() show.Status { return show.Status{Progress: idleScanProgress()} }
 
 type musicStartFunc func() scanner.StartResult
 
 func (f musicStartFunc) Start() scanner.StartResult { return f() }
+
+func (f musicStartFunc) StartChanges(scanner.Changes) scanner.StartResult { return f() }
 
 func (musicStartFunc) Status() music.Status { return music.Status{Progress: idleScanProgress()} }
 

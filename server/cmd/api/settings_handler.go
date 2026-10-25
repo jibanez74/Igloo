@@ -237,6 +237,7 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 		app.serverError(w, err, "failed to update general settings", "failed to update settings")
 		return
 	}
+	app.syncWatcher()
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Message: "Settings updated",
@@ -247,11 +248,22 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 	})
 }
 
+// syncWatcher applies the stored watcher setting and library roots, outside
+// the settings lock. It reads the stored settings rather than the caller's
+// copy, so concurrent writes settle on the last one. Turning the watcher off
+// returns once it has released its watches.
+func (app *Application) syncWatcher() {
+	if app.Watcher == nil {
+		return
+	}
+	app.Watcher.Sync(app.CurrentSettings().EnableWatcher)
+}
+
 // generalSettingsRestartRequired reports whether a change only takes effect
 // after a restart: the TMDB and Spotify clients are built once at startup.
 // The static and transcode directories are read live, Apple lookups are read
-// at each music scan start, and the watcher and image-download flags are
-// stored without a server feature that reads them.
+// at each music scan start, the watcher starts and stops with its flag, and
+// the image-download flag is stored without a server feature that reads it.
 func generalSettingsRestartRequired(previous *database.Setting, next database.Setting) bool {
 	return previous.TmdbKey != next.TmdbKey ||
 		previous.SpotifyClientID != next.SpotifyClientID ||
@@ -302,6 +314,7 @@ func (app *Application) UpdateLibrarySettings(w http.ResponseWriter, r *http.Req
 		app.serverError(w, err, "failed to update library settings", "failed to update library settings")
 		return
 	}
+	app.syncWatcher()
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Message: "Library settings updated",
@@ -362,6 +375,11 @@ func (app *Application) triggerScan(w http.ResponseWriter, library scanLibrary, 
 		return
 	case scanner.StartAlreadyRunning:
 		helpers.ErrorJSON(w, fmt.Errorf("%s library scan is already in progress", library.name), http.StatusConflict)
+		return
+	case scanner.StartQueued:
+		// The library watcher is applying changes; the scan follows it.
+		app.Logger.Info(library.name+" library scan queued via API", "path", result.Directory)
+		helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: library.title + " library scan queued"})
 		return
 	}
 

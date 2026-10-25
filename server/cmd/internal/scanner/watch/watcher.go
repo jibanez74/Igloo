@@ -80,17 +80,14 @@ func (w *Watcher) Sync(enabled bool) {
 		}
 		return
 	}
-	running := w.session != nil && w.session.ctx.Err() == nil
-	if running {
+	if w.active() {
 		w.session.reload()
 		return
 	}
 	w.session = startSession(w.deps, w.timing, w.polling, w.open)
 }
 
-// Running reports whether a session is active.
-func (w *Watcher) Running() bool {
-	w.mu.Lock()
-	defer w.mu.Unlock()
+// active reports a session that has not ended; the caller holds w.mu.
+func (w *Watcher) active() bool {
 	return w.session != nil && w.session.ctx.Err() == nil
 }

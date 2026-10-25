@@ -131,6 +131,12 @@ func sortedPaths(changes scanner.Changes) []string {
 	return paths
 }
 
+func running(w *Watcher) bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.active()
+}
+
 func inotifyDescriptors(t *testing.T) int {
 	t.Helper()
 	entries, err := os.ReadDir("/proc/self/fd")
@@ -151,7 +157,7 @@ func TestWatcherOffMeansNothingRuns(t *testing.T) {
 	before := inotifyDescriptors(t)
 	fixture := newWatcherFixture(t, nil)
 	fixture.watcher.Sync(false)
-	if fixture.watcher.Running() || inotifyDescriptors(t) != before {
+	if running(fixture.watcher) || inotifyDescriptors(t) != before {
 		t.Fatal("a watcher that was never enabled must hold nothing")
 	}
 
@@ -160,12 +166,12 @@ func TestWatcherOffMeansNothingRuns(t *testing.T) {
 	if !catchUp.CatchUp {
 		t.Fatalf("turning the watcher on must catch up first, got %+v", catchUp)
 	}
-	if !fixture.watcher.Running() || inotifyDescriptors(t) != before+1 {
+	if !running(fixture.watcher) || inotifyDescriptors(t) != before+1 {
 		t.Fatalf("running watcher: inotify descriptors %d, want %d", inotifyDescriptors(t), before+1)
 	}
 
 	fixture.watcher.Sync(false)
-	if fixture.watcher.Running() || inotifyDescriptors(t) != before {
+	if running(fixture.watcher) || inotifyDescriptors(t) != before {
 		t.Fatal("turning the watcher off must close its inotify instance before returning")
 	}
 	scannertest.WriteFile(t, fixture.path("Ignored (2020)", "ignored.mkv"), "x")

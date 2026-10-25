@@ -20,17 +20,21 @@ import (
 )
 
 func generalSettingsBody(staticDir string) string {
+	return generalSettingsBodyWithWatcher(staticDir, true)
+}
+
+func generalSettingsBodyWithWatcher(staticDir string, watcher bool) string {
 	transcodeDir := filepath.Join(filepath.Dir(staticDir), "transcode")
 	return fmt.Sprintf(`{
 		"tmdb_key": "tmdb-key",
 		"spotify_client_id": "spotify-id",
 		"spotify_client_secret": "spotify-secret",
 		"enable_apple_lookups": false,
-		"enable_watcher": true,
+		"enable_watcher": %t,
 		"download_images": true,
 		"static_dir": %q,
 		"transcode_dir": %q
-	}`, staticDir, transcodeDir)
+	}`, watcher, staticDir, transcodeDir)
 }
 
 func TestUpdateGeneralSettings_UpdatesDatabaseAndApplicationSettings(t *testing.T) {
@@ -118,7 +122,9 @@ func TestSettingsHandlers_ConformToOpenAPI(t *testing.T) {
 	serveOpenAPIExchange(t, handler, "getGeneralSettings", httptest.NewRequest(http.MethodGet, "/api/settings/general", nil), http.StatusOK)
 
 	staticDir := filepath.Join(t.TempDir(), "static")
-	generalReq := newOpenAPIJSONRequest(http.MethodPut, "/api/settings/general", generalSettingsBody(staticDir))
+	// The watcher stays off: on, it would walk the libraries saved below as
+	// they arm, and the scan triggers here would find that walk running.
+	generalReq := newOpenAPIJSONRequest(http.MethodPut, "/api/settings/general", generalSettingsBodyWithWatcher(staticDir, false))
 	serveOpenAPIExchange(t, handler, "updateGeneralSettings", generalReq, http.StatusOK)
 
 	mediaRoot := t.TempDir()
@@ -142,6 +148,18 @@ func TestSettingsHandlers_ConformToOpenAPI(t *testing.T) {
 	serveOpenAPIExchange(t, handler, "triggerShowScan", httptest.NewRequest(http.MethodPost, "/api/settings/scan/shows", nil), http.StatusOK)
 	serveOpenAPIExchange(t, handler, "getShowScanStatus", httptest.NewRequest(http.MethodGet, "/api/settings/scan/shows", nil), http.StatusOK)
 	app.Wait.Wait()
+}
+
+func TestTriggerScan_QueuesBehindARunOfChanges(t *testing.T) {
+	app := setupSessionTestApp(t)
+	admin := createTestUser(t, app, "Settings Admin", "settings-admin@example.com", true)
+	app.MovieScanner = movieStartFunc(func() scanner.StartResult {
+		return scanner.StartResult{Status: scanner.StartQueued, Directory: "/library/movies"}
+	})
+	w := serveAs(t, app, admin.ID, http.MethodPost, "/api/settings/scan/movies", "")
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Movie library scan queued") {
+		t.Fatalf("queued scan: status %d body %s", w.Code, w.Body.String())
+	}
 }
 
 func TestUpdateGeneralSettings_ClearsOptionalStringSettings(t *testing.T) {
