@@ -21,7 +21,6 @@ func clearRuntimeConfigEnv(t *testing.T) {
 		envDefaultAdminEmail,
 		envDefaultAdminPassword,
 		envTmdbAPIKey,
-		envJellyfinAPIKey,
 		envSpotifyClientID,
 		envSpotifyClientSecret,
 		envEnableAppleLookups,

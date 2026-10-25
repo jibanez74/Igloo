@@ -9461,10 +9461,6 @@
         "type": "object",
         "required": [
           "tmdb_key",
-          "immich_base_url",
-          "immich_api_key",
-          "jellyfin_base_url",
-          "jellyfin_api_key",
           "spotify_client_id",
           "spotify_client_secret",
           "enable_apple_lookups",
@@ -9480,34 +9476,6 @@
               "null"
             ],
             "description": "Read when the server starts; a change takes effect after a restart."
-          },
-          "immich_base_url": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Non-null values use http:// or https://. Stored only; no server feature reads this value."
-          },
-          "immich_api_key": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Stored only; no server feature reads this value."
-          },
-          "jellyfin_base_url": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Non-null values use http:// or https://. Stored only; no server feature reads this value."
-          },
-          "jellyfin_api_key": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Stored only; no server feature reads this value."
           },
           "spotify_client_id": {
             "type": [
@@ -9550,10 +9518,6 @@
         "type": "object",
         "required": [
           "tmdb_key",
-          "immich_base_url",
-          "immich_api_key",
-          "jellyfin_base_url",
-          "jellyfin_api_key",
           "spotify_client_id",
           "spotify_client_secret",
           "enable_apple_lookups",
@@ -9565,22 +9529,6 @@
         "properties": {
           "tmdb_key": {
             "type": "string"
-          },
-          "immich_base_url": {
-            "type": "string",
-            "description": "Blank clears the value; nonblank values must use http:// or https://. Stored only; no server feature reads this value."
-          },
-          "immich_api_key": {
-            "type": "string",
-            "description": "Stored only; no server feature reads this value."
-          },
-          "jellyfin_base_url": {
-            "type": "string",
-            "description": "Blank clears the value; nonblank values must use http:// or https://. Stored only; no server feature reads this value."
-          },
-          "jellyfin_api_key": {
-            "type": "string",
-            "description": "Stored only; no server feature reads this value."
           },
           "spotify_client_id": {
             "type": "string"

@@ -23,10 +23,6 @@ func generalSettingsBody(staticDir string) string {
 	transcodeDir := filepath.Join(filepath.Dir(staticDir), "transcode")
 	return fmt.Sprintf(`{
 		"tmdb_key": "tmdb-key",
-		"jellyfin_base_url": "https://jellyfin.local:8096/base",
-		"jellyfin_api_key": "jellyfin-api-key",
-		"immich_base_url": "http://immich.local:2283",
-		"immich_api_key": "immich-api-key",
 		"spotify_client_id": "spotify-id",
 		"spotify_client_secret": "spotify-secret",
 		"enable_apple_lookups": false,
@@ -56,17 +52,11 @@ func TestUpdateGeneralSettings_UpdatesDatabaseAndApplicationSettings(t *testing.
 	if settings.TmdbKey.String != "tmdb-key" || !settings.TmdbKey.Valid {
 		t.Fatalf("expected TMDB key to be saved, got %q valid=%v", settings.TmdbKey.String, settings.TmdbKey.Valid)
 	}
-	if settings.JellyfinBaseUrl.String != "https://jellyfin.local:8096/base" || !settings.JellyfinBaseUrl.Valid {
-		t.Fatalf("expected Jellyfin base URL to be saved, got %q valid=%v", settings.JellyfinBaseUrl.String, settings.JellyfinBaseUrl.Valid)
+	if settings.SpotifyClientID.String != "spotify-id" || !settings.SpotifyClientID.Valid {
+		t.Fatalf("expected Spotify client ID to be saved, got %q valid=%v", settings.SpotifyClientID.String, settings.SpotifyClientID.Valid)
 	}
-	if settings.JellyfinApiKey.String != "jellyfin-api-key" || !settings.JellyfinApiKey.Valid {
-		t.Fatalf("expected Jellyfin API key to be saved, got %q valid=%v", settings.JellyfinApiKey.String, settings.JellyfinApiKey.Valid)
-	}
-	if settings.ImmichBaseUrl.String != "http://immich.local:2283" || !settings.ImmichBaseUrl.Valid {
-		t.Fatalf("expected Immich base URL to be saved, got %q valid=%v", settings.ImmichBaseUrl.String, settings.ImmichBaseUrl.Valid)
-	}
-	if settings.ImmichApiKey.String != "immich-api-key" || !settings.ImmichApiKey.Valid {
-		t.Fatalf("expected Immich API key to be saved, got %q valid=%v", settings.ImmichApiKey.String, settings.ImmichApiKey.Valid)
+	if settings.SpotifyClientSecret.String != "spotify-secret" || !settings.SpotifyClientSecret.Valid {
+		t.Fatalf("expected Spotify client secret to be saved, got %q valid=%v", settings.SpotifyClientSecret.String, settings.SpotifyClientSecret.Valid)
 	}
 	if !settings.EnableWatcher || !settings.DownloadImages {
 		t.Fatal("expected boolean general settings to be enabled")
@@ -83,8 +73,8 @@ func TestUpdateGeneralSettings_UpdatesDatabaseAndApplicationSettings(t *testing.
 	if app.settings.StaticDir != staticDir {
 		t.Fatal("expected app.settings to reflect the saved general settings")
 	}
-	if app.settings.ImmichApiKey.String != "immich-api-key" || !app.settings.ImmichApiKey.Valid {
-		t.Fatalf("expected app.settings Immich API key to be saved, got %q valid=%v", app.settings.ImmichApiKey.String, app.settings.ImmichApiKey.Valid)
+	if app.settings.SpotifyClientSecret.String != "spotify-secret" || !app.settings.SpotifyClientSecret.Valid {
+		t.Fatalf("expected app.settings Spotify client secret to be saved, got %q valid=%v", app.settings.SpotifyClientSecret.String, app.settings.SpotifyClientSecret.Valid)
 	}
 }
 
@@ -104,10 +94,7 @@ func TestGeneralSettingsRestartRequired_OnlyForStartupClients(t *testing.T) {
 		{"spotify client secret", func(s *database.Setting) { s.SpotifyClientSecret = sql.NullString{String: "secret", Valid: true} }, true},
 		{"static dir", func(s *database.Setting) { s.StaticDir = "/elsewhere/static" }, false},
 		{"transcode dir", func(s *database.Setting) { s.TranscodeDir = "/elsewhere/transcode" }, false},
-		{"jellyfin api key", func(s *database.Setting) { s.JellyfinApiKey = sql.NullString{String: "key", Valid: true} }, false},
-		{"immich base url", func(s *database.Setting) {
-			s.ImmichBaseUrl = sql.NullString{String: "http://immich.local", Valid: true}
-		}, false},
+		{"download images flag", func(s *database.Setting) { s.DownloadImages = true }, false},
 		{"watcher flag", func(s *database.Setting) { s.EnableWatcher = true }, false},
 		{"apple lookups flag", func(s *database.Setting) { s.EnableAppleLookups = true }, false},
 	}
@@ -157,45 +144,6 @@ func TestSettingsHandlers_ConformToOpenAPI(t *testing.T) {
 	app.Wait.Wait()
 }
 
-func TestUpdateGeneralSettings_RejectsInvalidIntegrationBaseURLs(t *testing.T) {
-	cases := []struct {
-		name string
-		old  string
-		new  string
-	}{
-		{
-			name: "jellyfin invalid scheme",
-			old:  `"jellyfin_base_url": "https://jellyfin.local:8096/base"`,
-			new:  `"jellyfin_base_url": "ftp://jellyfin.local"`,
-		},
-		{
-			name: "jellyfin missing host",
-			old:  `"jellyfin_base_url": "https://jellyfin.local:8096/base"`,
-			new:  `"jellyfin_base_url": "https:///jellyfin"`,
-		},
-		{
-			name: "immich missing scheme",
-			old:  `"immich_base_url": "http://immich.local:2283"`,
-			new:  `"immich_base_url": "immich.local:2283"`,
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			app := setupSessionTestApp(t)
-			admin := createTestUser(t, app, "Settings Admin", "settings-admin@example.com", true)
-
-			staticDir := filepath.Join(t.TempDir(), "static")
-			body := strings.Replace(generalSettingsBody(staticDir), tc.old, tc.new, 1)
-			w := serveAs(t, app, admin.ID, http.MethodPut, "/api/settings/general", body)
-
-			if w.Code != http.StatusBadRequest {
-				t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
-			}
-		})
-	}
-}
-
 func TestUpdateGeneralSettings_ClearsOptionalStringSettings(t *testing.T) {
 	app := setupSessionTestApp(t)
 	admin := createTestUser(t, app, "Settings Admin", "settings-admin@example.com", true)
@@ -208,10 +156,6 @@ func TestUpdateGeneralSettings_ClearsOptionalStringSettings(t *testing.T) {
 
 	clearBody := fmt.Sprintf(`{
 		"tmdb_key": "",
-		"jellyfin_base_url": "",
-		"jellyfin_api_key": "",
-		"immich_base_url": "",
-		"immich_api_key": "",
 		"spotify_client_id": "",
 		"spotify_client_secret": "",
 		"enable_apple_lookups": true,
@@ -229,10 +173,7 @@ func TestUpdateGeneralSettings_ClearsOptionalStringSettings(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetSettings after clear: %v", err)
 	}
-	if settings.TmdbKey.Valid || settings.JellyfinApiKey.Valid ||
-		settings.JellyfinBaseUrl.Valid || settings.ImmichBaseUrl.Valid ||
-		settings.ImmichApiKey.Valid || settings.SpotifyClientID.Valid ||
-		settings.SpotifyClientSecret.Valid {
+	if settings.TmdbKey.Valid || settings.SpotifyClientID.Valid || settings.SpotifyClientSecret.Valid {
 		t.Fatal("expected optional string settings to be cleared")
 	}
 }

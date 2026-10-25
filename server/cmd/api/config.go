@@ -50,7 +50,6 @@ const (
 	envDefaultAdminEmail          = "DEFAULT_ADMIN_EMAIL"
 	envDefaultAdminPassword       = "DEFAULT_ADMIN_PASSWORD"
 	envTmdbAPIKey                 = "TMDB_API_KEY"
-	envJellyfinAPIKey             = "JELLYFIN_API_KEY"
 	envSpotifyClientID            = "SPOTIFY_CLIENT_ID"
 	envSpotifyClientSecret        = "SPOTIFY_CLIENT_SECRET"
 	envEnableAppleLookups         = "ENABLE_APPLE_LOOKUPS"
@@ -75,7 +74,6 @@ type RuntimeConfig struct {
 	DefaultAdminEmail          string
 	DefaultAdminPassword       string
 	TmdbAPIKey                 string
-	JellyfinAPIKey             string
 	SpotifyClientID            string
 	SpotifyClientSecret        string
 	EnableAppleLookups         bool
@@ -132,7 +130,6 @@ func NewRuntimeConfig() (RuntimeConfig, error) {
 		DefaultAdminEmail:          envString(envDefaultAdminEmail, defaultAdminEmail),
 		DefaultAdminPassword:       strings.TrimSpace(os.Getenv(envDefaultAdminPassword)),
 		TmdbAPIKey:                 strings.TrimSpace(os.Getenv(envTmdbAPIKey)),
-		JellyfinAPIKey:             strings.TrimSpace(os.Getenv(envJellyfinAPIKey)),
 		SpotifyClientID:            strings.TrimSpace(os.Getenv(envSpotifyClientID)),
 		SpotifyClientSecret:        strings.TrimSpace(os.Getenv(envSpotifyClientSecret)),
 		EnableAppleLookups:         envBool(envEnableAppleLookups, true),

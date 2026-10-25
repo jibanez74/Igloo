@@ -193,7 +193,6 @@ func (app *Application) InitSettings(ctx context.Context) error {
 
 	params := database.CreateSettingsParams{
 		TmdbKey:                    helpers.NullString(app.Config.TmdbAPIKey),
-		JellyfinApiKey:             helpers.NullString(app.Config.JellyfinAPIKey),
 		SpotifyClientID:            helpers.NullString(app.Config.SpotifyClientID),
 		SpotifyClientSecret:        helpers.NullString(app.Config.SpotifyClientSecret),
 		EnableAppleLookups:         app.Config.EnableAppleLookups,

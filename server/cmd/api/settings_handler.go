@@ -8,16 +8,11 @@ import (
 	"igloo/cmd/internal/helpers"
 	"igloo/cmd/internal/scanner"
 	"net/http"
-	"net/url"
 	"strings"
 )
 
 type generalSettingsResponse struct {
 	TmdbKey             *string `json:"tmdb_key"`
-	ImmichBaseURL       *string `json:"immich_base_url"`
-	ImmichApiKey        *string `json:"immich_api_key"`
-	JellyfinBaseURL     *string `json:"jellyfin_base_url"`
-	JellyfinApiKey      *string `json:"jellyfin_api_key"`
 	SpotifyClientID     *string `json:"spotify_client_id"`
 	SpotifyClientSecret *string `json:"spotify_client_secret"`
 	EnableAppleLookups  bool    `json:"enable_apple_lookups"`
@@ -32,10 +27,6 @@ type generalSettingsResponse struct {
 // would erase the stored value.
 type updateGeneralSettingsRequest struct {
 	TmdbKey             *string `json:"tmdb_key"`
-	ImmichBaseURL       *string `json:"immich_base_url"`
-	ImmichApiKey        *string `json:"immich_api_key"`
-	JellyfinBaseURL     *string `json:"jellyfin_base_url"`
-	JellyfinApiKey      *string `json:"jellyfin_api_key"`
 	SpotifyClientID     *string `json:"spotify_client_id"`
 	SpotifyClientSecret *string `json:"spotify_client_secret"`
 	EnableAppleLookups  *bool   `json:"enable_apple_lookups"`
@@ -47,9 +38,8 @@ type updateGeneralSettingsRequest struct {
 
 // generalSettingsValues is the request with every field present and trimmed.
 type generalSettingsValues struct {
-	tmdbKey, immichBaseURL, immichApiKey, jellyfinBaseURL, jellyfinApiKey string
-	spotifyClientID, spotifyClientSecret, staticDir, transcodeDir         string
-	enableAppleLookups, enableWatcher, downloadImages                     bool
+	tmdbKey, spotifyClientID, spotifyClientSecret, staticDir, transcodeDir string
+	enableAppleLookups, enableWatcher, downloadImages                      bool
 }
 
 // missingField names the first required field the request
@@ -60,10 +50,6 @@ func (req *updateGeneralSettingsRequest) missingField() string {
 		value *string
 	}{
 		{"tmdb_key", req.TmdbKey},
-		{"immich_base_url", req.ImmichBaseURL},
-		{"immich_api_key", req.ImmichApiKey},
-		{"jellyfin_base_url", req.JellyfinBaseURL},
-		{"jellyfin_api_key", req.JellyfinApiKey},
 		{"spotify_client_id", req.SpotifyClientID},
 		{"spotify_client_secret", req.SpotifyClientSecret},
 		{"static_dir", req.StaticDir},
@@ -90,10 +76,6 @@ func (req *updateGeneralSettingsRequest) missingField() string {
 func (req *updateGeneralSettingsRequest) values() generalSettingsValues {
 	return generalSettingsValues{
 		tmdbKey:             strings.TrimSpace(*req.TmdbKey),
-		immichBaseURL:       strings.TrimSpace(*req.ImmichBaseURL),
-		immichApiKey:        strings.TrimSpace(*req.ImmichApiKey),
-		jellyfinBaseURL:     strings.TrimSpace(*req.JellyfinBaseURL),
-		jellyfinApiKey:      strings.TrimSpace(*req.JellyfinApiKey),
 		spotifyClientID:     strings.TrimSpace(*req.SpotifyClientID),
 		spotifyClientSecret: strings.TrimSpace(*req.SpotifyClientSecret),
 		staticDir:           strings.TrimSpace(*req.StaticDir),
@@ -114,10 +96,6 @@ type librarySettings struct {
 func mapGeneralSettingsResponse(settings database.Setting) generalSettingsResponse {
 	return generalSettingsResponse{
 		TmdbKey:             helpers.StringPtrFromNull(settings.TmdbKey),
-		ImmichBaseURL:       helpers.StringPtrFromNull(settings.ImmichBaseUrl),
-		ImmichApiKey:        helpers.StringPtrFromNull(settings.ImmichApiKey),
-		JellyfinBaseURL:     helpers.StringPtrFromNull(settings.JellyfinBaseUrl),
-		JellyfinApiKey:      helpers.StringPtrFromNull(settings.JellyfinApiKey),
 		SpotifyClientID:     helpers.StringPtrFromNull(settings.SpotifyClientID),
 		SpotifyClientSecret: helpers.StringPtrFromNull(settings.SpotifyClientSecret),
 		EnableAppleLookups:  settings.EnableAppleLookups,
@@ -134,22 +112,6 @@ func mapLibrarySettingsResponse(settings database.Setting) librarySettings {
 		ShowsDir:  helpers.StringPtrFromNull(settings.ShowsDir),
 		MusicDir:  helpers.StringPtrFromNull(settings.MusicDir),
 	}
-}
-
-func isOptionalHTTPURL(value string) bool {
-	if value == "" {
-		return true
-	}
-
-	parsed, err := url.Parse(value)
-	if err != nil {
-		return false
-	}
-	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return false
-	}
-
-	return parsed.Host != ""
 }
 
 // CurrentSettings returns the in-memory settings copy that every write path
@@ -225,16 +187,6 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 
 	values := req.values()
 
-	if !isOptionalHTTPURL(values.jellyfinBaseURL) {
-		helpers.ErrorJSON(w, errors.New("jellyfin base URL must be a valid http or https URL"), http.StatusBadRequest)
-		return
-	}
-
-	if !isOptionalHTTPURL(values.immichBaseURL) {
-		helpers.ErrorJSON(w, errors.New("immich base URL must be a valid http or https URL"), http.StatusBadRequest)
-		return
-	}
-
 	if values.staticDir == "" {
 		helpers.ErrorJSON(w, errors.New("static directory is required"), http.StatusBadRequest)
 		return
@@ -265,10 +217,6 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 	updatedSettings, err := app.withSettingsWrite(func(current database.Setting) (database.Setting, error) {
 		updated, err := app.Queries.UpdateGeneralSettings(r.Context(), database.UpdateGeneralSettingsParams{
 			TmdbKey:             helpers.NullString(values.tmdbKey),
-			ImmichBaseUrl:       helpers.NullString(values.immichBaseURL),
-			ImmichApiKey:        helpers.NullString(values.immichApiKey),
-			JellyfinBaseUrl:     helpers.NullString(values.jellyfinBaseURL),
-			JellyfinApiKey:      helpers.NullString(values.jellyfinApiKey),
 			SpotifyClientID:     helpers.NullString(values.spotifyClientID),
 			SpotifyClientSecret: helpers.NullString(values.spotifyClientSecret),
 			EnableAppleLookups:  values.enableAppleLookups,
@@ -302,8 +250,8 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 // generalSettingsRestartRequired reports whether a change only takes effect
 // after a restart: the TMDB and Spotify clients are built once at startup.
 // The static and transcode directories are read live, Apple lookups are read
-// at each music scan start, and the remaining integration values are stored
-// without a server feature that reads them.
+// at each music scan start, and the watcher and image-download flags are
+// stored without a server feature that reads them.
 func generalSettingsRestartRequired(previous *database.Setting, next database.Setting) bool {
 	return previous.TmdbKey != next.TmdbKey ||
 		previous.SpotifyClientID != next.SpotifyClientID ||

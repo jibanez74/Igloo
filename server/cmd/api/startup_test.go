@@ -329,9 +329,6 @@ func TestInitSettings_CreatesDefaultSettings(t *testing.T) {
 	if app.settings.TmdbKey.Valid {
 		t.Error("Expected TmdbKey to be invalid when not set")
 	}
-	if app.settings.JellyfinApiKey.Valid {
-		t.Error("Expected JellyfinApiKey to be invalid when not set")
-	}
 	if app.settings.MoviesDir.Valid {
 		t.Errorf("Expected MoviesDir to be disabled by default, got %q", app.settings.MoviesDir.String)
 	}
@@ -359,7 +356,6 @@ func TestInitSettings_UsesEnvVars(t *testing.T) {
 	clearRuntimeConfigEnv(t)
 
 	t.Setenv("TMDB_API_KEY", "test-tmdb-key")
-	t.Setenv("JELLYFIN_API_KEY", "test-jellyfin-api-key")
 	t.Setenv("HARDWARE_ACCELERATION_DEVICE", "nvidia")
 	t.Setenv("ENABLE_WATCHER", "true")
 	t.Setenv("DOWNLOAD_IMAGES", "true")
@@ -383,9 +379,6 @@ func TestInitSettings_UsesEnvVars(t *testing.T) {
 
 	if app.settings.TmdbKey.String != "test-tmdb-key" || !app.settings.TmdbKey.Valid {
 		t.Errorf("Expected TmdbKey 'test-tmdb-key' (valid), got '%s' (valid=%v)", app.settings.TmdbKey.String, app.settings.TmdbKey.Valid)
-	}
-	if app.settings.JellyfinApiKey.String != "test-jellyfin-api-key" || !app.settings.JellyfinApiKey.Valid {
-		t.Errorf("Expected JellyfinApiKey 'test-jellyfin-api-key' (valid), got '%s' (valid=%v)", app.settings.JellyfinApiKey.String, app.settings.JellyfinApiKey.Valid)
 	}
 	if app.settings.HardwareAccelerationDevice.String != "nvidia" || !app.settings.HardwareAccelerationDevice.Valid {
 		t.Errorf("Expected HardwareAccelerationDevice 'nvidia' (valid), got '%s' (valid=%v)", app.settings.HardwareAccelerationDevice.String, app.settings.HardwareAccelerationDevice.Valid)
@@ -463,7 +456,6 @@ func TestInitSettings_ExistingSettingsIgnoreConfigSeeds(t *testing.T) {
 
 	params := database.CreateSettingsParams{
 		TmdbKey:                    sql.NullString{String: "existing-key", Valid: true},
-		JellyfinApiKey:             sql.NullString{String: "existing-jellyfin", Valid: true},
 		SpotifyClientID:            sql.NullString{String: "existing-spotify-id", Valid: true},
 		SpotifyClientSecret:        sql.NullString{String: "existing-spotify-secret", Valid: true},
 		HardwareAccelerationDevice: sql.NullString{String: "cpu", Valid: true},
@@ -484,7 +476,6 @@ func TestInitSettings_ExistingSettingsIgnoreConfigSeeds(t *testing.T) {
 	// Config carries the first-run seeds; with a row already present none of
 	// them may reach the loaded settings.
 	app.Config.TmdbAPIKey = "override-key"
-	app.Config.JellyfinAPIKey = "override-jellyfin"
 	app.Config.SpotifyClientID = "override-spotify-id"
 	app.Config.SpotifyClientSecret = "override-spotify-secret"
 	app.Config.HardwareAccelerationDevice = "nvidia"
@@ -504,9 +495,6 @@ func TestInitSettings_ExistingSettingsIgnoreConfigSeeds(t *testing.T) {
 
 	if app.settings.TmdbKey.String != "existing-key" {
 		t.Errorf("Expected existing tmdb key, got %q", app.settings.TmdbKey.String)
-	}
-	if app.settings.JellyfinApiKey.String != "existing-jellyfin" {
-		t.Errorf("Expected existing jellyfin api key, got %q", app.settings.JellyfinApiKey.String)
 	}
 	if app.settings.SpotifyClientID.String != "existing-spotify-id" {
 		t.Errorf("Expected existing spotify client id, got %q", app.settings.SpotifyClientID.String)

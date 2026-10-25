@@ -31,10 +31,6 @@ function authUser() {
 function generalSettings() {
   return {
     tmdb_key: null,
-    immich_base_url: null,
-    immich_api_key: null,
-    jellyfin_base_url: null,
-    jellyfin_api_key: null,
     spotify_client_id: null,
     spotify_client_secret: null,
     enable_apple_lookups: true,
@@ -298,26 +294,24 @@ describe("settings form query updates", () => {
     const user = userEvent.setup();
     await renderSettingsRoute("/settings");
 
-    const jellyfin = await screen.findByRole("textbox", {
-      name: "Jellyfin base URL",
-    });
-    const immich = screen.getByRole("textbox", { name: "Immich base URL" });
-    const message = "Jellyfin base URL must start with http:// or https://.";
+    const staticDirectory = await screen.findByLabelText("Static directory");
+    const transcodeDirectory = screen.getByLabelText("Transcode directory");
+    const message = "Static directory is required.";
 
-    await user.type(jellyfin, "ftp://not-valid.local");
+    await user.clear(staticDirectory);
     await user.click(screen.getByRole("button", { name: "Save Settings" }));
-    expect(jellyfin).toHaveAttribute("aria-invalid", "true");
+    expect(staticDirectory).toHaveAttribute("aria-invalid", "true");
     expect(screen.getAllByText(message).length).toBeGreaterThan(0);
 
     // An edit elsewhere leaves the flagged field's error alone.
-    await user.type(immich, "h");
-    expect(jellyfin).toHaveAttribute("aria-invalid", "true");
-    await user.clear(immich);
+    await user.type(transcodeDirectory, "x");
+    expect(staticDirectory).toHaveAttribute("aria-invalid", "true");
+    await user.type(transcodeDirectory, "{Backspace}");
 
-    // Restoring the saved (empty) value leaves nothing to save or reset, so
-    // the error has to go with the edit.
-    await user.clear(jellyfin);
-    expect(jellyfin).not.toHaveAttribute("aria-invalid", "true");
+    // Restoring the saved value leaves nothing to save or reset, so the
+    // error has to go with the edit.
+    await user.type(staticDirectory, "/var/lib/igloo/static");
+    expect(staticDirectory).not.toHaveAttribute("aria-invalid", "true");
     expect(screen.queryByText(message)).toBeNull();
     expect(screen.getByText("No unsaved changes")).toBeInTheDocument();
   });

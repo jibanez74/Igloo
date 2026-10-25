@@ -34,10 +34,6 @@ CREATE TABLE IF NOT EXISTS user_preferences (
 CREATE TABLE IF NOT EXISTS settings (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   tmdb_key TEXT,
-  immich_base_url TEXT,
-  immich_api_key TEXT,
-  jellyfin_base_url TEXT,
-  jellyfin_api_key TEXT,
   spotify_client_id TEXT,
   spotify_client_secret TEXT,
   -- Apple lookups need no credentials; this turns them off. Read at each music

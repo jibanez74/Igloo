@@ -2869,14 +2869,6 @@ export interface components {
         GeneralSettings: {
             /** @description Read when the server starts; a change takes effect after a restart. */
             tmdb_key: string | null;
-            /** @description Non-null values use http:// or https://. Stored only; no server feature reads this value. */
-            immich_base_url: string | null;
-            /** @description Stored only; no server feature reads this value. */
-            immich_api_key: string | null;
-            /** @description Non-null values use http:// or https://. Stored only; no server feature reads this value. */
-            jellyfin_base_url: string | null;
-            /** @description Stored only; no server feature reads this value. */
-            jellyfin_api_key: string | null;
             /** @description Read when the server starts; a change takes effect after a restart. */
             spotify_client_id: string | null;
             /** @description Read when the server starts; a change takes effect after a restart. */
@@ -2895,14 +2887,6 @@ export interface components {
         /** @description Replaces every general setting, so every field must be present: a missing or null field is rejected with 400 and nothing is saved. All strings are trimmed; a blank optional string clears that value. */
         UpdateGeneralSettingsRequest: {
             tmdb_key: string;
-            /** @description Blank clears the value; nonblank values must use http:// or https://. Stored only; no server feature reads this value. */
-            immich_base_url: string;
-            /** @description Stored only; no server feature reads this value. */
-            immich_api_key: string;
-            /** @description Blank clears the value; nonblank values must use http:// or https://. Stored only; no server feature reads this value. */
-            jellyfin_base_url: string;
-            /** @description Stored only; no server feature reads this value. */
-            jellyfin_api_key: string;
             spotify_client_id: string;
             spotify_client_secret: string;
             /** @description Whether music scans look albums up on Apple Music by the catalog ids iTunes purchases carry. Needs no credentials; read when each music scan starts, so a change applies from the next scan without a restart. */

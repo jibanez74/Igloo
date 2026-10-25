@@ -14,10 +14,6 @@ function requestFromSettings(
 ): UpdateGeneralSettingsRequest {
   return {
     tmdb_key: settings.tmdb_key ?? "",
-    immich_base_url: settings.immich_base_url ?? "",
-    immich_api_key: settings.immich_api_key ?? "",
-    jellyfin_base_url: settings.jellyfin_base_url ?? "",
-    jellyfin_api_key: settings.jellyfin_api_key ?? "",
     spotify_client_id: settings.spotify_client_id ?? "",
     spotify_client_secret: settings.spotify_client_secret ?? "",
     enable_apple_lookups: settings.enable_apple_lookups,
@@ -50,80 +46,62 @@ async function restoreGeneralSettings(
   expect(body.error, body.message).toBe(false);
 }
 
-async function integrationFieldValues(page: Page) {
+async function serviceFieldValues(page: Page) {
   return {
-    jellyfin_base_url: await page
-      .getByRole("textbox", { name: "Jellyfin base URL" })
+    spotify_client_id: await page
+      .getByRole("textbox", { name: "Spotify client ID" })
       .inputValue(),
-    jellyfin_api_key: await page
-      .getByRole("textbox", { name: "Jellyfin API key" })
-      .inputValue(),
-    immich_base_url: await page
-      .getByRole("textbox", { name: "Immich base URL" })
-      .inputValue(),
-    immich_api_key: await page
-      .getByRole("textbox", { name: "Immich API key" })
+    spotify_client_secret: await page
+      .getByRole("textbox", { name: "Spotify client secret" })
       .inputValue(),
   };
 }
 
-async function expectNewIntegrationControls(page: Page) {
+async function expectServiceControls(page: Page) {
   await expect(
     page.getByRole("heading", { name: "Appearance" }),
   ).toHaveCount(0);
   await expect(page.getByText("Dark mode")).toHaveCount(0);
-  await expect(
-    page.getByRole("textbox", { name: "Jellyfin base URL" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("textbox", { name: "Jellyfin API key" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("textbox", { name: "Immich base URL" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("textbox", { name: "Immich API key" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Show Jellyfin API key" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Show Immich API key" }),
-  ).toBeVisible();
+  for (const label of [
+    "TMDB API key",
+    "Spotify client ID",
+    "Spotify client secret",
+  ]) {
+    await expect(page.getByRole("textbox", { name: label })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: `Show ${label}` }),
+    ).toBeVisible();
+  }
   // Both wait, disabled, until something changes.
   await expect(page.getByRole("button", { name: "Reset" })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Save Settings" })).toBeDisabled();
 }
 
-async function expectScreenReaderSupport(page: Page) {
+async function expectScreenReaderSupport(page: Page, staticDir: string) {
   await expect(
-    page.getByRole("textbox", { name: "Jellyfin base URL" }),
-  ).toHaveAccessibleDescription(/http:\/\/ or https:\/\//);
-  await expect(
-    page.getByRole("textbox", { name: "Immich base URL" }),
-  ).toHaveAccessibleDescription(/http:\/\/ or https:\/\//);
-  await expect(
-    page.getByRole("textbox", { name: "Jellyfin API key" }),
+    page.getByRole("textbox", { name: "TMDB API key" }),
   ).toHaveAccessibleDescription(/Leave blank to clear/);
   await expect(
-    page.getByRole("textbox", { name: "Immich API key" }),
+    page.getByRole("textbox", { name: "Spotify client secret" }),
   ).toHaveAccessibleDescription(/Leave blank to clear/);
   await expect(
     page.getByRole("switch", { name: "Apple Music lookups" }),
   ).toHaveAccessibleDescription(/No account needed/);
 
-  await page.getByRole("textbox", { name: "Jellyfin base URL" }).fill(
-    "ftp://not-valid.local",
-  );
+  const staticDirectory = page.getByRole("textbox", {
+    name: "Static directory",
+  });
+  await staticDirectory.fill("");
   await page.getByRole("button", { name: "Save Settings" }).click();
   await expect(
     page
       .getByRole("tabpanel", { name: "General" })
-      .getByText("Jellyfin base URL must start with http:// or https://."),
+      .getByText("Static directory is required."),
   ).toBeVisible();
-  await expect(
-    page.getByRole("textbox", { name: "Jellyfin base URL" }),
-  ).toHaveAttribute("aria-invalid", "true");
+  await expect(staticDirectory).toHaveAttribute("aria-invalid", "true");
+
+  await staticDirectory.fill(staticDir);
+  await expect(staticDirectory).not.toHaveAttribute("aria-invalid", "true");
 }
 
 async function expectKeyboardFlow(page: Page) {
@@ -131,63 +109,50 @@ async function expectKeyboardFlow(page: Page) {
 
   for (const control of [
     page.getByRole("button", { name: "Show TMDB API key" }),
-    page.getByRole("textbox", { name: "Jellyfin base URL" }),
-    page.getByRole("textbox", { name: "Jellyfin API key" }),
-    page.getByRole("button", { name: "Show Jellyfin API key" }),
-    page.getByRole("textbox", { name: "Immich base URL" }),
-    page.getByRole("textbox", { name: "Immich API key" }),
-    page.getByRole("button", { name: "Show Immich API key" }),
     page.getByRole("switch", { name: "Apple Music lookups" }),
     page.getByRole("textbox", { name: "Spotify client ID" }),
+    page.getByRole("button", { name: "Show Spotify client ID" }),
+    page.getByRole("textbox", { name: "Spotify client secret" }),
   ]) {
     await page.keyboard.press("Tab");
     await expect(control).toBeFocused();
   }
 
-  await page.getByRole("button", { name: "Show Jellyfin API key" }).focus();
+  await page.getByRole("button", { name: "Show Spotify client ID" }).focus();
   await page.keyboard.press("Space");
   await expect(
-    page.getByRole("button", { name: "Hide Jellyfin API key" }),
+    page.getByRole("button", { name: "Hide Spotify client ID" }),
   ).toBeVisible();
   await expect(
-    page.getByRole("textbox", { name: "Jellyfin API key" }),
+    page.getByRole("textbox", { name: "Spotify client ID" }),
   ).toHaveAttribute("type", "text");
 
   await page.keyboard.press("Enter");
   await expect(
-    page.getByRole("button", { name: "Show Jellyfin API key" }),
+    page.getByRole("button", { name: "Show Spotify client ID" }),
   ).toBeVisible();
   await expect(
-    page.getByRole("textbox", { name: "Jellyfin API key" }),
+    page.getByRole("textbox", { name: "Spotify client ID" }),
   ).toHaveAttribute("type", "password");
 }
 
-async function fillIntegrationSettings(
+async function fillServiceSettings(
   page: Page,
   settings: Pick<
     UpdateGeneralSettingsRequest,
-    | "jellyfin_base_url"
-    | "jellyfin_api_key"
-    | "immich_base_url"
-    | "immich_api_key"
+    "spotify_client_id" | "spotify_client_secret"
   >,
 ) {
   await page
-    .getByRole("textbox", { name: "Jellyfin base URL" })
-    .fill(settings.jellyfin_base_url);
+    .getByRole("textbox", { name: "Spotify client ID" })
+    .fill(settings.spotify_client_id);
   await page
-    .getByRole("textbox", { name: "Jellyfin API key" })
-    .fill(settings.jellyfin_api_key);
-  await page
-    .getByRole("textbox", { name: "Immich base URL" })
-    .fill(settings.immich_base_url);
-  await page
-    .getByRole("textbox", { name: "Immich API key" })
-    .fill(settings.immich_api_key);
+    .getByRole("textbox", { name: "Spotify client secret" })
+    .fill(settings.spotify_client_secret);
 }
 
 test.describe("General settings", () => {
-  test("updates integration settings accessibly and optimistically", async ({
+  test("updates service settings accessibly and optimistically", async ({
     page,
   }) => {
     const tracker = trackBrowserIssues(page);
@@ -208,10 +173,8 @@ test.describe("General settings", () => {
     const stamp = Date.now();
     const nextSettings: UpdateGeneralSettingsRequest = {
       ...baselineRequest,
-      jellyfin_base_url: `https://jellyfin-playwright-${stamp}.local:8096`,
-      jellyfin_api_key: `playwright-jellyfin-key-${stamp}`,
-      immich_base_url: `http://immich-playwright-${stamp}.local:2283`,
-      immich_api_key: `playwright-immich-key-${stamp}`,
+      spotify_client_id: `playwright-spotify-id-${stamp}`,
+      spotify_client_secret: `playwright-spotify-secret-${stamp}`,
       enable_apple_lookups: !baselineRequest.enable_apple_lookups,
     };
 
@@ -222,17 +185,17 @@ test.describe("General settings", () => {
 
     try {
       await page.goto("/settings");
-      await expectNewIntegrationControls(page);
-      await expectScreenReaderSupport(page);
+      await expectServiceControls(page);
+      await expectScreenReaderSupport(page, baselineRequest.static_dir);
       await expectKeyboardFlow(page);
-      await fillIntegrationSettings(page, nextSettings);
+      await fillServiceSettings(page, nextSettings);
       const appleLookups = page.getByRole("switch", { name: "Apple Music lookups" });
       await appleLookups.click();
       await expect(appleLookups).toHaveAttribute(
         "aria-checked",
         String(nextSettings.enable_apple_lookups),
       );
-      // The invalid URL was rejected before the mutation: nothing was sent.
+      // The blank static directory was rejected before the mutation: nothing was sent.
       expect(settingsPutCount).toBe(0);
 
       await page.route("**/api/settings/general", async route => {
@@ -252,26 +215,22 @@ test.describe("General settings", () => {
         .toBe(true);
 
       expect(delayed.body).toMatchObject({
-        jellyfin_base_url: nextSettings.jellyfin_base_url,
-        jellyfin_api_key: nextSettings.jellyfin_api_key,
-        immich_base_url: nextSettings.immich_base_url,
-        immich_api_key: nextSettings.immich_api_key,
+        spotify_client_id: nextSettings.spotify_client_id,
+        spotify_client_secret: nextSettings.spotify_client_secret,
         enable_apple_lookups: nextSettings.enable_apple_lookups,
       });
 
       await page.getByRole("tab", { name: "Account" }).click();
       await page.getByRole("tab", { name: "General" }).click();
       await expect(
-        page.getByRole("textbox", { name: "Jellyfin base URL" }),
+        page.getByRole("textbox", { name: "Spotify client ID" }),
       ).toBeVisible();
 
       await expect
-        .poll(() => integrationFieldValues(page))
+        .poll(() => serviceFieldValues(page))
         .toMatchObject({
-          jellyfin_base_url: nextSettings.jellyfin_base_url,
-          jellyfin_api_key: nextSettings.jellyfin_api_key,
-          immich_base_url: nextSettings.immich_base_url,
-          immich_api_key: nextSettings.immich_api_key,
+          spotify_client_id: nextSettings.spotify_client_id,
+          spotify_client_secret: nextSettings.spotify_client_secret,
         });
 
       const putResponsePromise = page.waitForResponse(
@@ -290,14 +249,12 @@ test.describe("General settings", () => {
       await expect(page.getByText("Settings saved")).toBeVisible();
 
       const savedSettings = await fetchGeneralSettings(page);
-      expect(savedSettings.jellyfin_base_url).toBe(
-        nextSettings.jellyfin_base_url,
+      expect(savedSettings.spotify_client_id).toBe(
+        nextSettings.spotify_client_id,
       );
-      expect(savedSettings.jellyfin_api_key).toBe(
-        nextSettings.jellyfin_api_key,
+      expect(savedSettings.spotify_client_secret).toBe(
+        nextSettings.spotify_client_secret,
       );
-      expect(savedSettings.immich_base_url).toBe(nextSettings.immich_base_url);
-      expect(savedSettings.immich_api_key).toBe(nextSettings.immich_api_key);
       expect(savedSettings.enable_apple_lookups).toBe(
         nextSettings.enable_apple_lookups,
       );
