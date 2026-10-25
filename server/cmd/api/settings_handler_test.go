@@ -254,6 +254,31 @@ func TestUpdateLibrarySettings_ClearsMediaDirectories(t *testing.T) {
 	}
 }
 
+func TestUpdateLibrarySettings_RejectsANullBody(t *testing.T) {
+	app := setupSessionTestApp(t)
+	admin := createTestUser(t, app, "Settings Admin", "settings-admin@example.com", true)
+
+	moviesDir := t.TempDir()
+	body := fmt.Sprintf(`{"movies_dir": %q, "shows_dir": null, "music_dir": null}`, moviesDir)
+	w := serveAs(t, app, admin.ID, http.MethodPut, "/api/settings/libraries", body)
+	if w.Code != http.StatusOK {
+		t.Fatalf("seed: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	w = serveAs(t, app, admin.ID, http.MethodPut, "/api/settings/libraries", "null")
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+
+	settings, err := app.Queries.GetSettings(context.Background())
+	if err != nil {
+		t.Fatalf("GetSettings after rejected update: %v", err)
+	}
+	if !settings.MoviesDir.Valid || settings.MoviesDir.String != moviesDir {
+		t.Fatalf("expected movies dir %q to survive, got %q valid=%v", moviesDir, settings.MoviesDir.String, settings.MoviesDir.Valid)
+	}
+}
+
 func TestUpdateLibrarySettings_RejectsMissingMediaDirectory(t *testing.T) {
 	app := setupSessionTestApp(t)
 	admin := createTestUser(t, app, "Settings Admin", "settings-admin@example.com", true)

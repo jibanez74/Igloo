@@ -259,9 +259,11 @@ func generalSettingsRestartRequired(previous *database.Setting, next database.Se
 }
 
 func (app *Application) UpdateLibrarySettings(w http.ResponseWriter, r *http.Request) {
-	var req librarySettings
+	// A null body decodes without error and would clear every library, so the
+	// pointer tells it apart from an object.
+	var req *librarySettings
 	err := helpers.ReadJSON(w, r, &req)
-	if err != nil {
+	if err != nil || req == nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
 	}
