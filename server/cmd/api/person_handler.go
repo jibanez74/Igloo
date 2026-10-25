@@ -57,10 +57,6 @@ func (app *Application) GetPerson(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if id <= 0 {
-		helpers.ErrorJSON(w, errors.New("invalid person id"), http.StatusBadRequest)
-		return
-	}
 	ctx := r.Context()
 	artist, err := app.Queries.GetArtistByTmdbID(ctx, id)
 	local := err == nil

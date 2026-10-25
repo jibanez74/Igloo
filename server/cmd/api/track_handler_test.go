@@ -63,6 +63,7 @@ func TestToggleLikeTrack_HTTPPersistsLikeAndUnlike(t *testing.T) {
 
 	for name, target := range map[string]string{
 		"non-numeric id": "/api/music/tracks/abc/like",
+		"negative id":    "/api/music/tracks/-1/like",
 		"unknown track":  "/api/music/tracks/999999/like",
 	} {
 		t.Run(name, func(t *testing.T) {
