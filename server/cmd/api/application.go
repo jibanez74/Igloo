@@ -38,6 +38,9 @@ type Application struct {
 	// InitSettings fails the boot without a row, so it is never nil.
 	settingsMu sync.RWMutex
 	settings   *database.Setting
+	// settingsWriteMu serializes withSettingsWrite, so settingsMu is held only
+	// to swap the pointer.
+	settingsWriteMu sync.Mutex
 
 	Config RuntimeConfig
 	// FrontendAssets is the filesystem ServeFrontend serves the SPA from:

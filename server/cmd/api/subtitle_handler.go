@@ -14,6 +14,7 @@ import (
 	"igloo/cmd/internal/helpers"
 
 	"github.com/go-chi/chi/v5"
+	"golang.org/x/sync/singleflight"
 )
 
 const (
@@ -111,39 +112,81 @@ func (app *Application) serveSubtitleWebVTT(w http.ResponseWriter, r *http.Reque
 	cached, _ := app.SubtitleVTTCache.Get(cacheKey)
 	vtt, isVTT := cached.([]byte)
 	if isVTT {
+		// A track in use is asked for again on every rebase, so a hit restarts
+		// its TTL rather than letting a long film outlive it. Replace leaves
+		// alone an entry a rescan invalidated after the read.
+		_ = app.SubtitleVTTCache.Replace(cacheKey, vtt, subtitleCacheTTL)
 		writeSubtitleWebVTT(w, vtt, startSec)
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), subtitleExtractTimeout)
-	defer cancel()
-
-	// Collapse concurrent extractions of the same track (e.g. every watch-room
-	// participant requesting the same .vtt at once) into a single ffmpeg run.
-	v, err, _ := app.SubtitleExtractGroup.Do(cacheKey, func() (interface{}, error) {
-		if cached, found := app.SubtitleVTTCache.Get(cacheKey); found {
-			if vtt, ok := cached.([]byte); ok {
-				return vtt, nil
-			}
-		}
-
-		out, extractErr := app.FFmpeg.ExtractSubtitleAsWebVTT(ctx, source.FilePath, sub.StreamIndex)
-		if extractErr != nil {
-			return nil, extractErr
-		}
-
-		app.SubtitleVTTCache.Set(cacheKey, out, subtitleCacheTTL)
-		return out, nil
-	})
+	out, err := app.extractSubtitleWebVTT(r.Context(), cacheKey, source.FilePath, sub.StreamIndex)
 	if err != nil {
+		clientGone := r.Context().Err() != nil
+		if clientGone {
+			return
+		}
 		app.serverError(w, err, "subtitle extraction failed", "failed to extract subtitle track",
 			"media", media.String(), "stream_index", sub.StreamIndex, "codec", sub.Codec)
 		return
 	}
 
-	// The flight returns []byte whenever it succeeds.
-	out, _ := v.([]byte)
 	writeSubtitleWebVTT(w, out, startSec)
+}
+
+// extractSubtitleWebVTT converts a track once for every request waiting on it
+// (every watch-room member asks for the same .vtt at once) and caches the
+// result. The run is detached from the request that starts it: a player drops
+// its subtitle request whenever it rebuilds the track, which every rebase does,
+// and canceling the shared run would fail each request joined to it and throw
+// away work that, for Matroska, reads the whole file. It ends at its own
+// timeout or when shutdown begins. Each caller waits in a goroutine counted in
+// app.Wait before the caller can return, so shutdown never passes
+// app.Wait.Wait() with a run still to start; the caller stops waiting when its
+// own request ends.
+func (app *Application) extractSubtitleWebVTT(ctx context.Context, cacheKey string, filePath string, streamIndex int64) ([]byte, error) {
+	// Buffered, so the goroutine never blocks on a caller that stopped waiting.
+	results := make(chan singleflight.Result, 1)
+	app.Wait.Add(1)
+	go func() {
+		defer app.Wait.Done()
+
+		val, err, shared := app.SubtitleExtractGroup.Do(cacheKey, func() (interface{}, error) {
+			cached, found := app.SubtitleVTTCache.Get(cacheKey)
+			if found {
+				vtt, ok := cached.([]byte)
+				if ok {
+					return vtt, nil
+				}
+			}
+
+			extractCtx, cancel := context.WithTimeout(app.HLSShutdown, subtitleExtractTimeout)
+			defer cancel()
+
+			out, err := app.FFmpeg.ExtractSubtitleAsWebVTT(extractCtx, filePath, streamIndex)
+			if err != nil {
+				return nil, err
+			}
+
+			app.SubtitleVTTCache.Set(cacheKey, out, subtitleCacheTTL)
+			return out, nil
+		})
+		results <- singleflight.Result{Val: val, Err: err, Shared: shared}
+	}()
+
+	var result singleflight.Result
+	select {
+	case result = <-results:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	if result.Err != nil {
+		return nil, result.Err
+	}
+
+	// The flight returns []byte whenever it succeeds.
+	out, _ := result.Val.([]byte)
+	return out, nil
 }
 
 // parseSubtitleStartSec reads the optional `start` query parameter naming the

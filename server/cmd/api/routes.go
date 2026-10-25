@@ -26,25 +26,24 @@ func (app *Application) InitRouter() {
 		// The session middleware is where io.ReaderFrom is lost, so the
 		// capability is restored immediately inside it.
 		r.Use(restoreSendfile)
-		app.registerSessionRoutes(r)
+		app.registerAPIRoutes(r)
 	})
+
+	// The SPA's files are the same for everyone and never read the session,
+	// so they skip it too: loading one per asset was wasted work, and its
+	// Vary: Cookie had browsers revalidate year-cached assets whenever the
+	// cookie changed. /api paths still resolve to the API routes above.
+	// HEAD needs its own registration: chi resolves methods separately, so a
+	// GET-only route answers HEAD with 405. ServeFrontend serves HEAD correctly
+	// through http.ServeContent.
+	router.Get("/*", app.ServeFrontend)
+	router.Head("/*", app.ServeFrontend)
 
 	app.Router = router
 }
 
 func (app *Application) registerWebSocketRoutes(router chi.Router) {
 	router.With(app.DeviceTokenAuth, app.LoadSessionReadOnly, app.IsAuth).Get("/api/watch-rooms/{id}/ws", app.WatchRoomWebSocket)
-}
-
-func (app *Application) registerSessionRoutes(r chi.Router) {
-	app.registerAPIRoutes(r)
-
-	// Register SPA fallback after /api routes so API paths cannot be captured.
-	// HEAD needs its own registration: chi resolves methods separately, so a
-	// GET-only route answers HEAD with 405. ServeFrontend serves HEAD correctly
-	// through http.ServeContent.
-	r.Get("/*", app.ServeFrontend)
-	r.Head("/*", app.ServeFrontend)
 }
 
 func (app *Application) registerAPIRoutes(r chi.Router) {

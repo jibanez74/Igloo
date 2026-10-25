@@ -344,14 +344,11 @@ func buildHLSPlaylistBody(
 		return "", errHLSSessionNotFound
 	}
 
-	// The transcode check is a stat or two against page-cached directory
-	// entries and sits on the cold-start path, so it polls as tightly as the
-	// segment handler; reading the live playlist back is heavier.
-	pollInterval := hlsRemuxPreflightPoll
-	if !session.CopyVideo {
-		pollInterval = hlsSegmentPoll
-	}
-	ticker := time.NewTicker(pollInterval)
+	// Both checks sit on the cold-start and post-seek path, so they poll as
+	// tightly as the segment handler. The transcode check is a stat or two,
+	// and the copy-video one is a failed open until FFmpeg publishes the
+	// playlist with its first segment, after which the loop returns.
+	ticker := time.NewTicker(hlsSegmentPoll)
 	defer ticker.Stop()
 
 	deadline := time.Now().Add(hlsLivePlaylistWait)

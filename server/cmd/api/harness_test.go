@@ -20,7 +20,9 @@ import (
 	"igloo/cmd/internal/scanner/music"
 	"igloo/cmd/internal/scanner/show"
 
+	sqlite3 "github.com/mattn/go-sqlite3"
 	cache "github.com/patrickmn/go-cache"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func setupTestLogger(t *testing.T, app *Application) {
@@ -82,12 +84,76 @@ func newTestDBApp(t *testing.T) *Application {
 	app := &Application{DB: db}
 	setupTestLogger(t, app)
 
-	err = app.InitTables()
-	if err != nil {
-		t.Fatalf("InitTables failed: %v", err)
-	}
+	copyTestSchema(t, app)
 
 	return app
+}
+
+// Executing the schema costs every test application ~10 ms, so InitTables
+// builds it once per package into this template, and each test database
+// starts as a page-for-page copy of it.
+var (
+	testSchemaTemplateOnce sync.Once
+	testSchemaTemplate     *sql.DB
+	testSchemaTemplateErr  error
+)
+
+func copyTestSchema(t *testing.T, app *Application) {
+	t.Helper()
+
+	testSchemaTemplateOnce.Do(func() {
+		testSchemaTemplate, testSchemaTemplateErr = newTestSchemaTemplate(app.Logger)
+	})
+	if testSchemaTemplateErr != nil {
+		t.Fatalf("InitTables failed: %v", testSchemaTemplateErr)
+	}
+
+	ctx := context.Background()
+	destination, err := app.DB.Conn(ctx)
+	if err != nil {
+		t.Fatalf("reserve test database connection: %v", err)
+	}
+	defer destination.Close()
+	source, err := testSchemaTemplate.Conn(ctx)
+	if err != nil {
+		t.Fatalf("reserve schema template connection: %v", err)
+	}
+	defer source.Close()
+
+	err = destination.Raw(func(destinationConn any) error {
+		return source.Raw(func(sourceConn any) error {
+			backup, err := destinationConn.(*sqlite3.SQLiteConn).Backup("main", sourceConn.(*sqlite3.SQLiteConn), "main")
+			if err != nil {
+				return err
+			}
+			_, err = backup.Step(-1)
+			if err != nil {
+				backup.Finish()
+				return err
+			}
+			return backup.Finish()
+		})
+	})
+	if err != nil {
+		t.Fatalf("copy schema template: %v", err)
+	}
+}
+
+func newTestSchemaTemplate(logger applogger.LoggerInterface) (*sql.DB, error) {
+	db, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
+	if err != nil {
+		return nil, err
+	}
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+
+	err = (&Application{DB: db, Logger: logger}).InitTables()
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+
+	return db, nil
 }
 
 func setupTestApp(t *testing.T) *Application {
@@ -189,7 +255,9 @@ func setupSessionTestApp(t *testing.T) *Application {
 }
 
 // testUserPassword is the password every user createTestUser creates can log
-// in with. bcrypt is slow by design, so the hash is computed once per package.
+// in with. bcrypt is slow by design, so the hash is computed once per package,
+// at the minimum cost: a comparison reads the cost from the hash, and every
+// login against these users would otherwise pay the production cost.
 const testUserPassword = "correct horse"
 
 var (
@@ -202,7 +270,9 @@ func createTestUser(t *testing.T, app *Application, name, email string, isAdmin 
 	t.Helper()
 
 	testUserPasswordHashOnce.Do(func() {
-		testUserPasswordHash, testUserPasswordHashErr = helpers.HashPassword(testUserPassword)
+		var hash []byte
+		hash, testUserPasswordHashErr = bcrypt.GenerateFromPassword([]byte(testUserPassword), bcrypt.MinCost)
+		testUserPasswordHash = string(hash)
 	})
 	if testUserPasswordHashErr != nil {
 		t.Fatalf("hash test password: %v", testUserPasswordHashErr)

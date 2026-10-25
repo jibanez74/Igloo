@@ -48,6 +48,10 @@ const (
 	// be reclaimed to free a transcode permit. Active clients refresh the TTL on
 	// every segment fetch, so a session this idle is abandoned or backgrounded.
 	hlsIdlePermitReclaimThreshold = 30 * time.Second
+	// A seek waits on the window it supersedes, whose FFmpeg is killed and
+	// gone within milliseconds, so the exit check runs at that scale; it is a
+	// mutex-guarded flag read.
+	hlsSessionExitPoll = 5 * time.Millisecond
 )
 
 // HLSSession holds state for one HLS transcode session.
@@ -62,6 +66,7 @@ type HLSSession struct {
 	TempDir         string
 	Cmd             *exec.Cmd
 	Cancel          context.CancelFunc
+	StopOnce        sync.Once
 	CleanupOnce     sync.Once
 	// Logger lets cleanupHLSSession report teardown failures; nil (as in tests
 	// that build bare sessions) suppresses the reporting, never the cleanup.
@@ -575,6 +580,36 @@ func cleanupRemovedHLSSessions(sessions []*HLSSession) {
 	}
 }
 
+// retireDisplacedHLSSessions tears down the sessions a personal session start
+// removed from the cache. Their FFmpeg is stopped before the caller goes on,
+// which hands back the transcode permit and the CPU, but their output is
+// deleted in the background: a long session's directory holds gigabytes, and
+// removing it can take the better part of a second the seek would otherwise
+// wait out. On a nearly full disk the deletion stays in line, so the
+// free-space check the start makes next sees the space it frees.
+func (app *Application) retireDisplacedHLSSessions(sessions []*HLSSession) {
+	if len(sessions) == 0 {
+		return
+	}
+
+	freeBytes, err := freeDiskBytes(app.hlsTranscodeRoot())
+	lowOnSpace := err == nil && freeBytes < hlsMinFreeTranscodeBytes
+	if lowOnSpace {
+		cleanupRemovedHLSSessions(sessions)
+		return
+	}
+
+	for _, session := range sessions {
+		if session == nil {
+			continue
+		}
+		stopHLSSession(session)
+		app.Wait.Go(func() {
+			cleanupHLSSession(session)
+		})
+	}
+}
+
 // invalidateHLSSessionsForFile removes every live HLS session (personal and
 // room) built from a file whose stream rows were just rewritten by a rescan:
 // their ffmpeg mappings referenced the replaced file. The next manifest
@@ -701,7 +736,6 @@ func (reservation *hlsPersonalSessionReservation) commit(
 		shuttingDown := app.hlsShuttingDown()
 		if shuttingDown {
 			commitErr = errHLSShuttingDown
-			removed = []*HLSSession{session}
 		} else {
 			removed = app.cleanupPersonalHLSSessionsForOwnerLocked(
 				media,
@@ -720,7 +754,12 @@ func (reservation *hlsPersonalSessionReservation) commit(
 		}
 		app.PersonalHLSMu.Unlock()
 
-		cleanupRemovedHLSSessions(removed)
+		// The new session was never cached, so nothing else tears it down.
+		if shuttingDown {
+			cleanupHLSSession(session)
+			return
+		}
+		app.retireDisplacedHLSSessions(removed)
 	})
 	return commitErr
 }
@@ -756,7 +795,7 @@ func (app *Application) reservePersonalHLSSession(
 
 	if len(entries)+reserved >= limit {
 		app.PersonalHLSMu.Unlock()
-		cleanupRemovedHLSSessions(removed)
+		app.retireDisplacedHLSSessions(removed)
 		return nil, &hlsPersonalSessionCapacityError{MaxActive: limit}
 	}
 
@@ -767,7 +806,7 @@ func (app *Application) reservePersonalHLSSession(
 	}
 	app.PersonalHLSMu.Unlock()
 
-	cleanupRemovedHLSSessions(removed)
+	app.retireDisplacedHLSSessions(removed)
 	return reservation, nil
 }
 
@@ -915,6 +954,28 @@ func cleanupHLSSession(session *HLSSession) {
 	}
 
 	session.CleanupOnce.Do(func() {
+		stopHLSSession(session)
+
+		if session.TempDir != "" {
+			removeErr := os.RemoveAll(session.TempDir)
+			if removeErr != nil && session.Logger != nil {
+				// A leaked dir survives until the next boot sweep, so at least
+				// leave a trace of it.
+				session.Logger.Warn("failed to remove hls session temp dir",
+					"media", session.Media.String(),
+					"temp_dir", session.TempDir,
+					"error", removeErr,
+				)
+			}
+		}
+	})
+}
+
+// stopHLSSession marks the session stopped, cancels its FFmpeg and waits for
+// the process to exit, killing it when it outlives the grace period. Callers
+// that arrive while another one is stopping the session wait for that stop.
+func stopHLSSession(session *HLSSession) {
+	session.StopOnce.Do(func() {
 		session.ExitMu.Lock()
 		session.ExpectedStop = true
 		exited := session.Exited
@@ -930,19 +991,6 @@ func cleanupHLSSession(session *HLSSession) {
 			if !exited {
 				_ = session.Cmd.Process.Kill()
 				_ = waitForHLSSessionExit(session, 2*time.Second)
-			}
-		}
-
-		if session.TempDir != "" {
-			removeErr := os.RemoveAll(session.TempDir)
-			if removeErr != nil && session.Logger != nil {
-				// A leaked dir survives until the next boot sweep, so at least
-				// leave a trace of it.
-				session.Logger.Warn("failed to remove hls session temp dir",
-					"media", session.Media.String(),
-					"temp_dir", session.TempDir,
-					"error", removeErr,
-				)
 			}
 		}
 	})
@@ -963,7 +1011,7 @@ func waitForHLSSessionExit(session *HLSSession, timeout time.Duration) bool {
 		if exited {
 			return true
 		}
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(hlsSessionExitPoll)
 	}
 
 	exited, _ := session.exitStatus()

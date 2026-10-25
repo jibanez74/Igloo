@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"igloo/cmd/internal/helpers"
 )
@@ -164,5 +167,131 @@ func TestSubtitleWebVTT_TrackIndexOutOfRange(t *testing.T) {
 
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+// blockingSubtitleFFmpeg holds every extraction until release closes, and
+// records whether the extraction's context had been canceled by then.
+type blockingSubtitleFFmpeg struct {
+	*fakeFFmpeg
+	started  chan struct{}
+	release  chan struct{}
+	canceled atomic.Bool
+}
+
+func (f *blockingSubtitleFFmpeg) ExtractSubtitleAsWebVTT(ctx context.Context, path string, streamIndex int64) ([]byte, error) {
+	close(f.started)
+	<-f.release
+	if ctx.Err() != nil {
+		f.canceled.Store(true)
+		return nil, ctx.Err()
+	}
+	return f.fakeFFmpeg.ExtractSubtitleAsWebVTT(ctx, path, streamIndex)
+}
+
+// A player drops its subtitle request whenever it rebuilds the track, which
+// every rebase does. The extraction that request started is shared, so it has
+// to finish and be cached rather than die with the request.
+func TestSubtitleWebVTT_ExtractionOutlivesTheRequestThatStartedIt(t *testing.T) {
+	app := setupTestApp(t)
+	viewer := createTestUser(t, app, "Viewer", "viewer@example.com", false)
+	fake := &blockingSubtitleFFmpeg{
+		fakeFFmpeg: &fakeFFmpeg{},
+		started:    make(chan struct{}),
+		release:    make(chan struct{}),
+	}
+	app.FFmpeg = fake
+
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+	insertTestSubtitle(t, app, movieID, testSubtitleStreamIndex, "subrip", "eng")
+
+	router := authenticatedRouter(t, app, viewer.ID)
+	ctx, cancel := context.WithCancel(context.Background())
+	first := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/movies/%d/subtitles/0/web.vtt", movieID), nil).WithContext(ctx)
+	firstRecorder := httptest.NewRecorder()
+	served := make(chan struct{})
+	go func() {
+		router.ServeHTTP(firstRecorder, first)
+		close(served)
+	}()
+
+	select {
+	case <-fake.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the extraction never started")
+	}
+	cancel()
+	select {
+	case <-served:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the canceled request kept waiting on the extraction")
+	}
+	if firstRecorder.Body.Len() != 0 {
+		t.Fatalf("a request whose client left was answered: %d %q", firstRecorder.Code, firstRecorder.Body.String())
+	}
+
+	close(fake.release)
+	app.Wait.Wait()
+	if fake.canceled.Load() {
+		t.Fatal("the shared extraction was canceled with the request that started it")
+	}
+
+	second := serveSubtitleWebVTTWithQuery(t, app, viewer.ID, movieID, "0", "")
+	if second.Code != http.StatusOK || second.Body.String() != "WEBVTT\n" {
+		t.Fatalf("next request = %d %q, want the cached extraction", second.Code, second.Body.String())
+	}
+	if fake.SubtitleCallCount() != 1 {
+		t.Fatalf("extractor call count = %d, want 1", fake.SubtitleCallCount())
+	}
+}
+
+// The run is counted in app.Wait before its caller can return: counted only
+// once the shared goroutine got going, a caller that left first could let
+// shutdown pass app.Wait.Wait() with the extraction still to run.
+func TestExtractSubtitleWebVTT_ShutdownWaitsForARunItsCallerLeft(t *testing.T) {
+	app := setupTestApp(t)
+	fake := &fakeFFmpeg{}
+	app.FFmpeg = fake
+	cacheKey := helpers.SubtitleCacheKey("movie", 1, testSubtitleStreamIndex)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, _ = app.extractSubtitleWebVTT(ctx, cacheKey, "/media/movie.mkv", testSubtitleStreamIndex)
+
+	app.Wait.Wait()
+	if fake.SubtitleCallCount() != 1 {
+		t.Fatalf("extractor call count after app.Wait.Wait() = %d, want 1", fake.SubtitleCallCount())
+	}
+	_, found := app.SubtitleVTTCache.Get(cacheKey)
+	if !found {
+		t.Fatal("app.Wait.Wait() returned before the extraction was cached")
+	}
+}
+
+// Without a refresh, a track extracted at the start of a long film expires
+// mid-watch, and the next rebase pays for a whole extraction again.
+func TestSubtitleWebVTT_CacheHitRestartsTheTTL(t *testing.T) {
+	app := setupTestApp(t)
+	viewer := createTestUser(t, app, "Viewer", "viewer@example.com", false)
+	fake := &fakeFFmpeg{}
+	app.FFmpeg = fake
+
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+	insertTestSubtitle(t, app, movieID, testSubtitleStreamIndex, "subrip", "eng")
+
+	key := helpers.SubtitleCacheKey("movie", movieID, testSubtitleStreamIndex)
+	app.SubtitleVTTCache.Set(key, []byte("WEBVTT\n"), time.Minute)
+
+	recorder := serveSubtitleWebVTTWithQuery(t, app, viewer.ID, movieID, "0", "")
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	_, expiration, found := app.SubtitleVTTCache.GetWithExpiration(key)
+	if !found || time.Until(expiration) < subtitleCacheTTL-time.Minute {
+		t.Fatalf("cache entry expires in %s after a hit, want about %s", time.Until(expiration), subtitleCacheTTL)
+	}
+	if fake.SubtitleCallCount() != 0 {
+		t.Fatalf("extractor call count = %d, want 0 for a cache hit", fake.SubtitleCallCount())
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
@@ -511,5 +512,51 @@ func TestUpdateGeneralSettings_RejectsMissingRequiredFields(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// A save writes the database, whose one connection can be busy with a scanner
+// batch. Readers, among them every poster and HLS start, keep the current copy
+// meanwhile rather than waiting on the write.
+func TestWithSettingsWrite_ReadersKeepTheCurrentCopyDuringTheWrite(t *testing.T) {
+	app := setupTestApp(t)
+	before := app.CurrentSettings()
+
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	written := make(chan error, 1)
+	go func() {
+		_, err := app.withSettingsWrite(func(current database.Setting) (database.Setting, error) {
+			close(entered)
+			<-release
+			current.TranscodeDir = "/elsewhere"
+			return current, nil
+		})
+		written <- err
+	}()
+	<-entered
+
+	read := make(chan *database.Setting, 1)
+	go func() {
+		read <- app.CurrentSettings()
+	}()
+	select {
+	case got := <-read:
+		if got != before {
+			close(release)
+			t.Fatal("a reader saw a new copy before the write finished")
+		}
+	case <-time.After(2 * time.Second):
+		close(release)
+		t.Fatal("CurrentSettings waited for the settings write")
+	}
+
+	close(release)
+	err := <-written
+	if err != nil {
+		t.Fatalf("withSettingsWrite: %v", err)
+	}
+	if app.CurrentSettings().TranscodeDir != "/elsewhere" {
+		t.Fatalf("TranscodeDir = %q after the write, want /elsewhere", app.CurrentSettings().TranscodeDir)
 	}
 }
