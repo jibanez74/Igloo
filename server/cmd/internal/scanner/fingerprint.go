@@ -88,6 +88,18 @@ func (r *FileInspection) ReadAt(p []byte, off int64) (int, error) {
 	return r.file.ReadAt(p, off)
 }
 
+// FingerprintOf reads the metadata fingerprint of a stat result, without the
+// content hash.
+func FingerprintOf(info os.FileInfo) FileFingerprint {
+	return fingerprintFromInfo(info)
+}
+
+// ChangedAt is the later of a file's mtime and ctime, the moment the quiet
+// period counts from.
+func (f FileFingerprint) ChangedAt() time.Time {
+	return time.Unix(0, max(f.MtimeNS, f.CtimeNS))
+}
+
 func sameFileMetadata(a, b FileFingerprint) bool {
 	return a.Size == b.Size && a.MtimeNS == b.MtimeNS && a.CtimeNS == b.CtimeNS && a.Device == b.Device && a.Inode == b.Inode
 }
@@ -120,7 +132,7 @@ func inspectFile(ctx context.Context, path string, previous *FileFingerprint, no
 		return nil, fmt.Errorf("not a regular file: %s", path)
 	}
 	observed := fingerprintFromInfo(info)
-	eligible := time.Unix(0, max(observed.MtimeNS, observed.CtimeNS)).Add(quietPeriod)
+	eligible := observed.ChangedAt().Add(quietPeriod)
 	r := &FileInspection{path: path, Fingerprint: observed}
 	observedAt := now()
 	err = ctx.Err()

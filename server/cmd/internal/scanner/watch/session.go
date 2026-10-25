@@ -1,0 +1,730 @@
+package watch
+
+import (
+	"context"
+	"errors"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"sync"
+	"syscall"
+	"time"
+
+	"igloo/cmd/internal/helpers"
+	"igloo/cmd/internal/scanner"
+)
+
+// errNetworkMount aborts an inotify setup that walked into a mount inotify
+// cannot see into; the library polls instead.
+var errNetworkMount = errors.New("network or FUSE mount inside the library")
+
+type backendMode uint8
+
+const (
+	modeIdle backendMode = iota
+	modeInotify
+	modePoll
+)
+
+func (m backendMode) String() string {
+	switch m {
+	case modeInotify:
+		return "inotify"
+	case modePoll:
+		return "poll"
+	default:
+		return "idle"
+	}
+}
+
+// library is the session's state for one configured library.
+type library struct {
+	Library
+	// root is the configured directory, as the scanner walks it; resolved has
+	// its symlinks resolved, and watches, events and pending paths use it.
+	// A path relative to one is relative to the other.
+	root     string
+	resolved string
+	mode     backendMode
+	layout   layout
+	pending  *pending
+	// offline pauses a library whose root or a mount inside it went away;
+	// checkAt is the next look at its layout, offline or not.
+	offline bool
+	checkAt time.Time
+	// catchUp asks for a walk of the whole library, after the watcher could
+	// not see what changed: when it arms, after an overflow, after an outage.
+	catchUp bool
+	retryAt time.Time
+	// generation tells a stopped poller's late reports apart.
+	generation int
+	stopPoll   context.CancelFunc
+}
+
+type watchedDir struct {
+	path      string
+	libraries map[*library]bool
+}
+
+type deferral struct {
+	library    *library
+	rel        string
+	eligibleAt time.Time
+}
+
+// session is one enabled period of the watcher. A single goroutine owns all
+// of its state; the inotify reader and the pollers only hand it events.
+type session struct {
+	deps     Dependencies
+	timing   timing
+	polling  pollTiming
+	open     func(*sync.WaitGroup) (notifier, error)
+	ctx      context.Context
+	cancel   context.CancelFunc
+	done     chan struct{}
+	reloads  chan struct{}
+	notifier notifier
+	raw      <-chan rawEvent
+
+	libraries []*library
+	watches   map[int32]*watchedDir
+	dirs      map[string]int32
+	polls     chan pollReport
+
+	deferredMu     sync.Mutex
+	deferrals      []deferral
+	deferredSignal chan struct{}
+}
+
+func startSession(deps Dependencies, t timing, polling pollTiming, open func(*sync.WaitGroup) (notifier, error)) *session {
+	ctx, cancel := context.WithCancel(deps.Context)
+	s := &session{
+		deps: deps, timing: t, polling: polling, open: open, ctx: ctx, cancel: cancel,
+		done: make(chan struct{}), reloads: make(chan struct{}, 1),
+		watches: make(map[int32]*watchedDir), dirs: make(map[string]int32),
+		polls: make(chan pollReport), deferredSignal: make(chan struct{}, 1),
+	}
+	for _, configured := range deps.Libraries {
+		s.libraries = append(s.libraries, &library{Library: configured, pending: newPending(t)})
+	}
+	deps.Wait.Go(func() {
+		defer close(s.done)
+		s.run()
+	})
+	return s
+}
+
+// stop ends the session and waits until its watches are released.
+func (s *session) stop() {
+	s.cancel()
+	<-s.done
+}
+
+// reload re-reads the library roots; it never blocks.
+func (s *session) reload() {
+	select {
+	case s.reloads <- struct{}{}:
+	default:
+	}
+}
+
+func (s *session) now() time.Time {
+	return s.deps.Now()
+}
+
+func (s *session) run() {
+	defer s.release()
+	n, err := s.open(s.deps.Wait)
+	switch {
+	case err == nil:
+		s.notifier, s.raw = n, n.events()
+	case !errors.Is(err, errNotifierUnsupported):
+		s.deps.Logger.Warn("library watcher cannot use inotify; polling every library", "error", err)
+	}
+	for _, lib := range s.libraries {
+		s.arm(lib)
+	}
+	s.deps.Logger.Info("library watcher enabled")
+	s.dispatch(s.now())
+	timer := time.NewTimer(time.Hour)
+	defer timer.Stop()
+	for {
+		s.resetTimer(timer)
+		select {
+		case <-s.ctx.Done():
+			return
+		case event, ok := <-s.raw:
+			if !ok {
+				s.notifierFailed()
+				break
+			}
+			s.handle(event)
+		case report := <-s.polls:
+			s.handlePoll(report)
+		case <-s.deferredSignal:
+			s.drainDeferrals()
+		case <-s.reloads:
+			s.rearmChanged()
+		case <-timer.C:
+		}
+		s.dispatch(s.now())
+	}
+}
+
+func (s *session) release() {
+	for _, lib := range s.libraries {
+		if lib.stopPoll != nil {
+			lib.stopPoll()
+		}
+	}
+	if s.notifier != nil {
+		err := s.notifier.close()
+		if err != nil {
+			s.deps.Logger.Warn("close inotify", "error", err)
+		}
+	}
+	s.deps.Logger.Info("library watcher disabled")
+}
+
+func (s *session) resetTimer(timer *time.Timer) {
+	next := time.Time{}
+	for _, lib := range s.libraries {
+		for _, at := range s.wakeTimes(lib) {
+			if !at.IsZero() && (next.IsZero() || at.Before(next)) {
+				next = at
+			}
+		}
+	}
+	if next.IsZero() {
+		timer.Reset(time.Hour)
+		return
+	}
+	timer.Reset(max(next.Sub(s.now()), 0))
+}
+
+func (s *session) wakeTimes(lib *library) []time.Time {
+	if lib.mode == modeIdle {
+		return nil
+	}
+	var times []time.Time
+	// The poller watches its own layout.
+	if lib.mode == modeInotify {
+		times = append(times, lib.checkAt)
+	}
+	if lib.offline {
+		return times
+	}
+	times = append(times, lib.pending.due())
+	if lib.catchUp {
+		times = append(times, lib.retryAt)
+	}
+	return times
+}
+
+// arm sets a library up from its configured root: inotify where events can
+// be trusted, the poller otherwise, and a catch-up walk once it is present.
+func (s *session) arm(lib *library) {
+	directory := lib.Directory()
+	lib.root = ""
+	if directory.Valid {
+		lib.root = directory.String
+	}
+	lib.pending = newPending(s.timing)
+	lib.catchUp, lib.retryAt, lib.offline = false, time.Time{}, false
+	lib.layout = layout{root: lib.root}
+	lib.mode = modeIdle
+	if lib.root == "" {
+		return
+	}
+	lib.mode = modeInotify
+	resolved, err := filepath.EvalSymlinks(lib.root)
+	if err != nil {
+		s.goOffline(lib, "the library directory is unavailable", err)
+		return
+	}
+	lib.resolved = resolved
+	lib.layout.root = resolved
+	fsName, err := networkFilesystem(resolved)
+	if err != nil {
+		s.goOffline(lib, "the library directory is unavailable", err)
+		return
+	}
+	poll := s.notifier == nil || fsName != ""
+	if !poll {
+		err = s.watchLibrary(lib)
+		poll = errors.Is(err, errNetworkMount) || watchLimitReached(err)
+		if poll {
+			s.unwatchTree(lib, lib.resolved)
+		}
+		if watchLimitReached(err) {
+			s.deps.Logger.Warn("inotify watch limit reached; polling the library instead. Raise fs.inotify.max_user_watches to watch it with events",
+				"library", lib.Name, "error", err)
+		}
+		if err != nil && !poll {
+			s.goOffline(lib, "the library directory could not be watched", err)
+			return
+		}
+	}
+	if poll {
+		s.startPoll(lib)
+		s.deps.Logger.Info("library watcher armed", "library", lib.Name, "backend", lib.mode.String(), "filesystem", fsName)
+		return
+	}
+	lib.catchUp = true
+	lib.checkAt = s.now().Add(s.polling.recheck)
+	s.deps.Logger.Info("library watcher armed", "library", lib.Name, "backend", lib.mode.String(), "directories", s.countWatches(lib), "mounts", len(lib.layout.mounts))
+}
+
+func (s *session) disarm(lib *library) {
+	switch lib.mode {
+	case modeInotify:
+		if lib.resolved != "" {
+			s.unwatchTree(lib, lib.resolved)
+		}
+	case modePoll:
+		lib.stopPoll()
+		lib.stopPoll = nil
+	}
+	lib.mode, lib.offline, lib.catchUp = modeIdle, false, false
+	lib.pending = newPending(s.timing)
+}
+
+func (s *session) rearmChanged() {
+	for _, lib := range s.libraries {
+		directory := lib.Directory()
+		changed := directory.String != lib.root || !directory.Valid && lib.root != ""
+		// Saving the settings again also re-arms a library that stayed
+		// offline, so a layout that changed for good can be accepted.
+		if changed || lib.offline {
+			s.disarm(lib)
+			s.arm(lib)
+		}
+	}
+}
+
+func (s *session) watchLibrary(lib *library) error {
+	recorded, err := recordRoot(lib.resolved)
+	if err != nil {
+		return err
+	}
+	lib.layout = recorded
+	_, err = s.watchTree(lib, lib.resolved, false)
+	return err
+}
+
+// watchTree adds a watch to every directory at or beneath directory that the
+// scanner walks, each before it is listed so no entry created meanwhile is
+// missed. With collect set it returns the media files it passed, for a
+// directory that appeared with files already in it.
+func (s *session) watchTree(lib *library, directory string, collect bool) ([]string, error) {
+	var files []string
+	devices := make(map[string]string)
+	err := filepath.WalkDir(directory, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			if path == directory {
+				return err
+			}
+			return nil
+		}
+		if !entry.IsDir() {
+			isMedia := collect && lib.Extensions[helpers.FileExtension(path)]
+			if isMedia {
+				files = append(files, path)
+			}
+			return nil
+		}
+		allowed := path == lib.resolved || lib.AllowDirectory == nil || lib.AllowDirectory(lib.resolved, path)
+		if !allowed {
+			return fs.SkipDir
+		}
+		info, err := os.Stat(path)
+		if err != nil {
+			return nil
+		}
+		device := identityOf(info).device
+		devices[path] = device
+		parent, known := devices[filepath.Dir(path)]
+		if !known && path != lib.resolved {
+			parentInfo, statErr := os.Stat(filepath.Dir(path))
+			if statErr == nil {
+				parent, known = identityOf(parentInfo).device, true
+			}
+		}
+		isMount := path != lib.resolved && known && parent != device
+		if isMount {
+			fsName, statErr := networkFilesystem(path)
+			if statErr == nil && fsName != "" {
+				return errNetworkMount
+			}
+			lib.layout.mounts[path] = true
+		}
+		return s.addWatch(lib, path)
+	})
+	return files, err
+}
+
+func (s *session) addWatch(lib *library, path string) error {
+	wd, err := s.notifier.add(path)
+	raced := errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ENOTDIR)
+	if raced {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	watched, ok := s.watches[wd]
+	if !ok {
+		watched = &watchedDir{path: path, libraries: make(map[*library]bool)}
+		s.watches[wd] = watched
+	}
+	watched.libraries[lib] = true
+	s.dirs[path] = wd
+	return nil
+}
+
+// unwatchTree drops the library's watches at or beneath directory; a watch
+// another library still uses stays.
+func (s *session) unwatchTree(lib *library, directory string) {
+	for path, wd := range s.dirs {
+		if !within(directory, path) {
+			continue
+		}
+		watched := s.watches[wd]
+		if watched == nil {
+			delete(s.dirs, path)
+			continue
+		}
+		delete(watched.libraries, lib)
+		if len(watched.libraries) > 0 {
+			continue
+		}
+		// The kernel already dropped the watch of a deleted directory, so
+		// removing it again fails harmlessly.
+		_ = s.notifier.remove(wd)
+		delete(s.watches, wd)
+		delete(s.dirs, path)
+	}
+}
+
+func (s *session) countWatches(lib *library) int {
+	count := 0
+	for _, watched := range s.watches {
+		if watched.libraries[lib] {
+			count++
+		}
+	}
+	return count
+}
+
+func (s *session) forget(wd int32) {
+	watched, ok := s.watches[wd]
+	if !ok {
+		return
+	}
+	delete(s.watches, wd)
+	if s.dirs[watched.path] == wd {
+		delete(s.dirs, watched.path)
+	}
+}
+
+func (s *session) goOffline(lib *library, reason string, err error) {
+	if lib.offline {
+		return
+	}
+	if lib.mode == modeInotify && lib.resolved != "" {
+		s.unwatchTree(lib, lib.resolved)
+	}
+	lib.offline, lib.catchUp = true, false
+	lib.checkAt = s.now().Add(s.polling.recheck)
+	lib.pending = newPending(s.timing)
+	args := []any{"library", lib.Name, "reason", reason}
+	if err != nil {
+		args = append(args, "error", err)
+	}
+	s.deps.Logger.Warn("library watcher paused the library; nothing is removed until it is back", args...)
+}
+
+// checkLayout looks at an inotify library's layout: a missing part pauses
+// it, and a root that changed identity, or that is back after an outage, is
+// armed again, which walks the whole library once.
+func (s *session) checkLayout(lib *library) {
+	lib.checkAt = s.now().Add(s.polling.recheck)
+	present, changed := lib.layout.check()
+	if !present {
+		if !lib.offline {
+			s.goOffline(lib, "the library directory or a mount inside it is missing", nil)
+		}
+		return
+	}
+	if !lib.offline && !changed {
+		return
+	}
+	s.deps.Logger.Info("library watcher re-arming the library", "library", lib.Name, "after_outage", lib.offline)
+	s.disarm(lib)
+	s.arm(lib)
+}
+
+func (s *session) startPoll(lib *library) {
+	lib.mode = modePoll
+	lib.generation++
+	ctx, cancel := context.WithCancel(s.ctx)
+	lib.stopPoll = cancel
+	p := &poller{
+		library: lib, generation: lib.generation, root: lib.resolved, allow: lib.AllowDirectory,
+		extensions: lib.Extensions, timing: s.polling, now: s.deps.Now, layout: layout{root: lib.resolved},
+	}
+	// Not in the shutdown wait group: a hard-mounted share whose server is
+	// down can block a stat forever, and shutdown must not wait on it. The
+	// poller only reads the filesystem and exits once ctx ends.
+	go p.run(ctx, s.polls)
+}
+
+func (s *session) handlePoll(report pollReport) {
+	lib := report.library
+	stale := lib.mode != modePoll || report.generation != lib.generation
+	if stale {
+		return
+	}
+	now := s.now()
+	switch {
+	case report.offline:
+		lib.offline, lib.catchUp = true, false
+		lib.pending = newPending(s.timing)
+		s.deps.Logger.Warn("library watcher paused the library; nothing is removed until it is back", "library", lib.Name, "reason", "the share is unavailable")
+	case report.online:
+		lib.offline, lib.catchUp = false, true
+	}
+	for _, change := range report.changes {
+		lib.pending.note(change.rel, change.kind, now, change.kind == changeSettled)
+	}
+}
+
+func (s *session) handle(event rawEvent) {
+	if event.op&opOverflow != 0 {
+		s.overflow()
+		return
+	}
+	watched, ok := s.watches[event.wd]
+	if !ok {
+		return
+	}
+	libraries := make([]*library, 0, len(watched.libraries))
+	for lib := range watched.libraries {
+		libraries = append(libraries, lib)
+	}
+	lost := event.op&opUnmount != 0
+	if lost {
+		for _, lib := range libraries {
+			s.goOffline(lib, "a filesystem inside the library was unmounted", nil)
+		}
+		return
+	}
+	self := event.op&(opDeleteSelf|opMoveSelf|opIgnored) != 0
+	if self {
+		for _, lib := range libraries {
+			if watched.path == lib.resolved {
+				s.goOffline(lib, "the library directory was removed or moved", nil)
+			}
+		}
+		if event.op&opIgnored != 0 {
+			s.forget(event.wd)
+		}
+		return
+	}
+	path := filepath.Join(watched.path, event.name)
+	for _, lib := range libraries {
+		s.apply(lib, event, path)
+	}
+}
+
+func (s *session) apply(lib *library, event rawEvent, path string) {
+	if lib.offline || lib.mode != modeInotify {
+		return
+	}
+	rel, ok := relative(lib.resolved, path)
+	if !ok {
+		return
+	}
+	now := s.now()
+	if event.isDir {
+		allowed := lib.AllowDirectory == nil || lib.AllowDirectory(lib.resolved, path)
+		if !allowed {
+			return
+		}
+		switch {
+		case event.op&(opCreate|opMovedTo) != 0:
+			files, err := s.watchTree(lib, path, true)
+			if err != nil && !errors.Is(err, fs.ErrNotExist) {
+				s.fallBackToPolling(lib, err)
+				return
+			}
+			for _, file := range files {
+				fileRel, ok := relative(lib.resolved, file)
+				if ok {
+					lib.pending.note(fileRel, changeSettled, now, false)
+				}
+			}
+		case event.op&(opDelete|opMovedFrom) != 0:
+			s.unwatchTree(lib, path)
+			lib.pending.note(rel, changeRemoved, now, false)
+		}
+		return
+	}
+	if !lib.Extensions[helpers.FileExtension(path)] {
+		return
+	}
+	switch {
+	case event.op&(opDelete|opMovedFrom) != 0:
+		lib.pending.note(rel, changeRemoved, now, false)
+	case event.op&opWrite != 0:
+		lib.pending.note(rel, changeWritten, now, false)
+	case event.op&(opCreate|opCloseWrite|opMovedTo|opAttrib) != 0:
+		lib.pending.note(rel, changeSettled, now, false)
+	}
+}
+
+// fallBackToPolling switches a library to the poller after its watches
+// failed: the watch limit, or a network mount that appeared inside it.
+func (s *session) fallBackToPolling(lib *library, err error) {
+	s.deps.Logger.Warn("library watcher switched the library to polling", "library", lib.Name, "error", err)
+	s.unwatchTree(lib, lib.resolved)
+	lib.pending = newPending(s.timing)
+	lib.catchUp = false
+	s.startPoll(lib)
+}
+
+// overflow handles a full kernel queue: events were lost, so every inotify
+// library re-adds watches for directories it may have missed and walks
+// itself once.
+func (s *session) overflow() {
+	s.deps.Logger.Warn("library watcher lost events; catching up with a library scan")
+	for _, lib := range s.libraries {
+		if lib.mode != modeInotify || lib.offline {
+			continue
+		}
+		_, err := s.watchTree(lib, lib.resolved, false)
+		if err != nil {
+			s.fallBackToPolling(lib, err)
+			continue
+		}
+		lib.catchUp, lib.retryAt = true, time.Time{}
+	}
+}
+
+// notifierFailed moves every inotify library to the poller when the kernel
+// instance stops delivering events.
+func (s *session) notifierFailed() {
+	s.deps.Logger.Warn("library watcher stopped receiving inotify events; polling every library", "error", s.notifier.err())
+	_ = s.notifier.close()
+	s.notifier, s.raw = nil, nil
+	s.watches, s.dirs = make(map[int32]*watchedDir), make(map[string]int32)
+	for _, lib := range s.libraries {
+		if lib.mode == modeInotify {
+			lib.mode = modeIdle
+			s.arm(lib)
+		}
+	}
+}
+
+func (s *session) onDeferred(lib *library) func(string, time.Time) {
+	return func(rel string, eligibleAt time.Time) {
+		s.deferredMu.Lock()
+		s.deferrals = append(s.deferrals, deferral{library: lib, rel: rel, eligibleAt: eligibleAt})
+		s.deferredMu.Unlock()
+		select {
+		case s.deferredSignal <- struct{}{}:
+		default:
+		}
+	}
+}
+
+func (s *session) drainDeferrals() {
+	s.deferredMu.Lock()
+	deferrals := s.deferrals
+	s.deferrals = nil
+	s.deferredMu.Unlock()
+	now := s.now()
+	for _, d := range deferrals {
+		if d.library.mode == modeIdle || d.library.offline {
+			continue
+		}
+		d.library.pending.deferred(d.rel, d.eligibleAt, now)
+	}
+}
+
+func (s *session) inspector(lib *library) inspectFunc {
+	if lib.mode == modePoll {
+		// The poller settled the file already, and a stat here could block
+		// on a share that hangs.
+		return func(string) (time.Time, bool) { return time.Time{}, true }
+	}
+	return func(rel string) (time.Time, bool) {
+		info, err := os.Stat(filepath.Join(lib.resolved, rel))
+		if errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ENOTDIR) {
+			return time.Time{}, false
+		}
+		if err != nil {
+			// The scanner reports a file it cannot read.
+			return time.Time{}, true
+		}
+		return scanner.FingerprintOf(info).ChangedAt(), true
+	}
+}
+
+func (s *session) dispatch(now time.Time) {
+	for _, lib := range s.libraries {
+		if lib.mode == modeIdle {
+			continue
+		}
+		checkDue := lib.mode == modeInotify && !now.Before(lib.checkAt)
+		if checkDue {
+			s.checkLayout(lib)
+		}
+		if lib.offline || lib.mode == modeIdle {
+			continue
+		}
+		catchUpDue := lib.catchUp && !now.Before(lib.retryAt)
+		if catchUpDue {
+			s.startCatchUp(lib, now)
+		}
+		due := lib.pending.due()
+		if due.IsZero() || now.Before(due) {
+			continue
+		}
+		items := lib.pending.take(now, s.inspector(lib))
+		if len(items) == 0 {
+			continue
+		}
+		s.startChanges(lib, items, now)
+	}
+}
+
+func (s *session) startCatchUp(lib *library, now time.Time) {
+	result := lib.StartChanges(scanner.Changes{CatchUp: true, OnDeferred: s.onDeferred(lib)})
+	switch result.Status {
+	case scanner.StartAlreadyRunning:
+		lib.retryAt = now.Add(s.timing.retry)
+	case scanner.StartNotConfigured:
+		lib.catchUp = false
+	default:
+		lib.catchUp = false
+		s.deps.Logger.Info("library watcher walking the whole library", "library", lib.Name)
+	}
+}
+
+func (s *session) startChanges(lib *library, items []batchItem, now time.Time) {
+	paths := make([]string, 0, len(items))
+	for _, item := range items {
+		paths = append(paths, item.rel)
+	}
+	result := lib.StartChanges(scanner.Changes{Paths: paths, OnDeferred: s.onDeferred(lib)})
+	switch result.Status {
+	case scanner.StartAlreadyRunning, scanner.StartQueued:
+		for _, item := range items {
+			lib.pending.hold(item.rel, item.entry, now.Add(s.timing.retry))
+		}
+	case scanner.StartNotConfigured:
+	default:
+		s.deps.Logger.Info("library watcher applying changes", "library", lib.Name, "paths", len(paths), "backend", lib.mode.String())
+	}
+}
