@@ -2,6 +2,7 @@ package watch
 
 import (
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 )
@@ -205,5 +206,49 @@ func TestPendingHoldAndDeferral(t *testing.T) {
 	p.deferred("a.mkv", time.Time{}, start.Add(time.Minute))
 	if due := p.due(); !due.Equal(start.Add(time.Minute + 5*time.Second)) {
 		t.Fatalf("due = %v", due)
+	}
+}
+
+func TestPendingDispatchesFilesCopiedAMomentApartTogether(t *testing.T) {
+	start := time.Unix(1000, 0)
+	files := fakeFiles{}
+	p := newPending(testTiming)
+	for i, rel := range []string{"Album/01.flac", "Album/02.flac", "Album/03.flac"} {
+		at := start.Add(time.Duration(i) * time.Second)
+		files[rel] = at
+		p.note(rel, changeSettled, at, false)
+	}
+	// 01 is ready at 5s, 03 only at 7s: 01 waits for the others.
+	if got := p.take(start.Add(5*time.Second), files.inspect); got != nil {
+		t.Fatalf("dispatched %q while the rest of the album was settling", rels(got))
+	}
+	if due := p.due(); !due.Equal(start.Add(7 * time.Second)) {
+		t.Fatalf("due = %v, want when the last track is quiet", due)
+	}
+	got := rels(p.take(start.Add(7*time.Second), files.inspect))
+	if !reflect.DeepEqual(got, []string{"Album/01.flac", "Album/02.flac", "Album/03.flac"}) {
+		t.Fatalf("batch = %q, want the whole album", got)
+	}
+}
+
+func TestPendingHoldForSettlingFilesEndsAtTheCap(t *testing.T) {
+	start := time.Unix(1000, 0)
+	files := fakeFiles{"first.mkv": start}
+	p := newPending(testTiming)
+	p.note("first.mkv", changeSettled, start, false)
+	// A new file lands every four seconds, each still quiet when the
+	// previous one is ready.
+	var dispatched []string
+	for i := 1; i <= 12 && len(dispatched) == 0; i++ {
+		now := start.Add(time.Duration(i) * 4 * time.Second)
+		rel := "next-" + string(rune('a'+i)) + ".mkv"
+		files[rel] = now
+		p.note(rel, changeSettled, now, false)
+		for check := now; check.Before(now.Add(4 * time.Second)); check = check.Add(time.Second) {
+			dispatched = append(dispatched, rels(p.take(check, files.inspect))...)
+		}
+	}
+	if !slices.Contains(dispatched, "first.mkv") {
+		t.Fatalf("a steady trickle starved the first file: dispatched %q", dispatched)
 	}
 }

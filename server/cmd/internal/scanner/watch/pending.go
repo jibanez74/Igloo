@@ -72,6 +72,9 @@ type pending struct {
 	last   time.Time
 	// wakeAt is when a held path can next become ready.
 	wakeAt time.Time
+	// heldSince is when take first held back ready paths for others that
+	// were about to settle; the hold ends maxBatch later at the latest.
+	heldSince time.Time
 }
 
 func newPending(t timing) *pending {
@@ -155,7 +158,11 @@ type batchItem struct {
 // take removes and returns the paths ready to dispatch, sorted. A file is
 // ready once it is not being written and has been unchanged for the quiet
 // period; a removal waits while another path in the library is still
-// settling, within maxBatch, so both names of a rename land in one run.
+// settling, within maxBatch, so both names of a rename land in one run. Ready
+// paths also wait for files that only need to finish their quiet period, so
+// files copied a moment apart, an album's tracks, dispatch as one run; the
+// hold lasts maxBatch at most, so a steady trickle of new files cannot starve
+// them.
 func (p *pending) take(now time.Time, inspect inspectFunc) []batchItem {
 	if p.empty() {
 		return nil
@@ -167,6 +174,7 @@ func (p *pending) take(now time.Time, inspect inspectFunc) []batchItem {
 	var ready []batchItem
 	var removals []string
 	settling := false
+	quieting := time.Time{}
 	for rel, entry := range p.paths {
 		if entry.removal {
 			removals = append(removals, rel)
@@ -181,6 +189,9 @@ func (p *pending) take(now time.Time, inspect inspectFunc) []batchItem {
 		if at.After(now) {
 			settling = true
 			p.wake(at)
+			if !entry.writing && at.After(quieting) {
+				quieting = at
+			}
 			continue
 		}
 		ready = append(ready, batchItem{rel: rel, entry: *entry})
@@ -199,6 +210,18 @@ func (p *pending) take(now time.Time, inspect inspectFunc) []batchItem {
 		}
 		ready = append(ready, batchItem{rel: rel, entry: *entry})
 	}
+	if len(ready) > 0 && !quieting.IsZero() {
+		if p.heldSince.IsZero() {
+			p.heldSince = now
+		}
+		released := p.heldSince.Add(p.timing.maxBatch)
+		if now.Before(released) {
+			// Wake once the last of them is quiet rather than at each one.
+			p.wakeAt = minTime(quieting, released)
+			return nil
+		}
+	}
+	p.heldSince = time.Time{}
 	for _, item := range ready {
 		delete(p.paths, item.rel)
 	}
