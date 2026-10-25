@@ -245,6 +245,29 @@ func TestSubtitleWebVTT_ExtractionOutlivesTheRequestThatStartedIt(t *testing.T) 
 	}
 }
 
+// The run is counted in app.Wait before its caller can return: counted only
+// once the shared goroutine got going, a caller that left first could let
+// shutdown pass app.Wait.Wait() with the extraction still to run.
+func TestExtractSubtitleWebVTT_ShutdownWaitsForARunItsCallerLeft(t *testing.T) {
+	app := setupTestApp(t)
+	fake := &fakeFFmpeg{}
+	app.FFmpeg = fake
+	cacheKey := helpers.SubtitleCacheKey("movie", 1, testSubtitleStreamIndex)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, _ = app.extractSubtitleWebVTT(ctx, cacheKey, "/media/movie.mkv", testSubtitleStreamIndex)
+
+	app.Wait.Wait()
+	if fake.SubtitleCallCount() != 1 {
+		t.Fatalf("extractor call count after app.Wait.Wait() = %d, want 1", fake.SubtitleCallCount())
+	}
+	_, found := app.SubtitleVTTCache.Get(cacheKey)
+	if !found {
+		t.Fatal("app.Wait.Wait() returned before the extraction was cached")
+	}
+}
+
 // Without a refresh, a track extracted at the start of a long film expires
 // mid-watch, and the next rebase pays for a whole extraction again.
 func TestSubtitleWebVTT_CacheHitRestartsTheTTL(t *testing.T) {

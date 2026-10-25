@@ -140,36 +140,39 @@ func (app *Application) serveSubtitleWebVTT(w http.ResponseWriter, r *http.Reque
 // its subtitle request whenever it rebuilds the track, which every rebase does,
 // and canceling the shared run would fail each request joined to it and throw
 // away work that, for Matroska, reads the whole file. It ends at its own
-// timeout or when shutdown begins, tracked by app.Wait, which the caller holds
-// meanwhile so the count the run adds to is not zero; each caller stops
-// waiting when its own request ends.
+// timeout or when shutdown begins. Each caller waits in a goroutine counted in
+// app.Wait before the caller can return, so shutdown never passes
+// app.Wait.Wait() with a run still to start; the caller stops waiting when its
+// own request ends.
 func (app *Application) extractSubtitleWebVTT(ctx context.Context, cacheKey string, filePath string, streamIndex int64) ([]byte, error) {
+	// Buffered, so the goroutine never blocks on a caller that stopped waiting.
+	results := make(chan singleflight.Result, 1)
 	app.Wait.Add(1)
-	defer app.Wait.Done()
-
-	results := app.SubtitleExtractGroup.DoChan(cacheKey, func() (interface{}, error) {
-		app.Wait.Add(1)
+	go func() {
 		defer app.Wait.Done()
 
-		cached, found := app.SubtitleVTTCache.Get(cacheKey)
-		if found {
-			vtt, ok := cached.([]byte)
-			if ok {
-				return vtt, nil
+		val, err, shared := app.SubtitleExtractGroup.Do(cacheKey, func() (interface{}, error) {
+			cached, found := app.SubtitleVTTCache.Get(cacheKey)
+			if found {
+				vtt, ok := cached.([]byte)
+				if ok {
+					return vtt, nil
+				}
 			}
-		}
 
-		extractCtx, cancel := context.WithTimeout(app.HLSShutdown, subtitleExtractTimeout)
-		defer cancel()
+			extractCtx, cancel := context.WithTimeout(app.HLSShutdown, subtitleExtractTimeout)
+			defer cancel()
 
-		out, err := app.FFmpeg.ExtractSubtitleAsWebVTT(extractCtx, filePath, streamIndex)
-		if err != nil {
-			return nil, err
-		}
+			out, err := app.FFmpeg.ExtractSubtitleAsWebVTT(extractCtx, filePath, streamIndex)
+			if err != nil {
+				return nil, err
+			}
 
-		app.SubtitleVTTCache.Set(cacheKey, out, subtitleCacheTTL)
-		return out, nil
-	})
+			app.SubtitleVTTCache.Set(cacheKey, out, subtitleCacheTTL)
+			return out, nil
+		})
+		results <- singleflight.Result{Val: val, Err: err, Shared: shared}
+	}()
 
 	var result singleflight.Result
 	select {
