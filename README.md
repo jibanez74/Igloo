@@ -25,7 +25,7 @@ The web app includes light and dark themes. The Go server serves it in a product
 - The server targets **Linux x64** and **macOS 13 Ventura or newer on ARM64**. Windows, Docker deployment, and other Linux architectures are not supported at present.
 - HLS transcoding and decoding are still works in progress. What plays smoothly depends on the source file, browser, FFmpeg build, and host hardware. See the [media guide](docs/ffmpeg.md) for supported paths and troubleshooting.
 - Watch rooms support movies, not TV episodes.
-- Photos are a coming-soon page. The Jellyfin and Immich fields in Settings are stored, but those integrations do not run yet.
+- Photos are a coming-soon page.
 - Automatic filesystem watching is not implemented, even though Settings has an `ENABLE_WATCHER` option. Use a startup or manual scan after adding files.
 - TMDB and Spotify are optional. Local scanning still works without their credentials, with less descriptive metadata and artwork. Apple Music lookups need no credentials and are on by default; they contact Apple only for files that carry iTunes catalog IDs. Turn them off in Settings, or set `ENABLE_APPLE_LOOKUPS=false` before the first start.
 
@@ -87,7 +87,7 @@ Other values seed **Settings only when the database has no Settings row**. After
 - `MOVIES_DIR`, `SHOWS_DIR`, and `MUSIC_DIR` choose library paths. `STATIC_DIR` and `TRANSCODE_DIR` choose artwork/upload storage and temporary HLS storage.
 - `TMDB_API_KEY` enables movie and TV metadata enrichment. `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` enable music enrichment and Spotify search. `ENABLE_APPLE_LOOKUPS` (default `true`) controls matching iTunes Store purchases on Apple Music, which needs no credentials.
 - `HARDWARE_ACCELERATION_DEVICE` defaults to `cpu`; `apple`, `intel`, and `nvidia` select supported host acceleration when FFmpeg and drivers allow it.
-- `DOWNLOAD_IMAGES`, `ENABLE_WATCHER`, and `JELLYFIN_API_KEY` are stored settings. The watcher and Jellyfin integration are not implemented. Immich and Jellyfin URLs and keys can also be saved in the General Settings page, but there is no active integration.
+- `DOWNLOAD_IMAGES` and `ENABLE_WATCHER` are stored settings. The watcher is not implemented.
 
 The `DEFAULT_ADMIN_*` values are used when there is no administrator; changing them later does not reset an existing account. Igloo creates application storage directories as needed, but it does not create media library directories. Make sure the process can write its database, static files, logs, and transcode directory.
 
