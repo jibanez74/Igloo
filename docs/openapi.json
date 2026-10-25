@@ -5015,7 +5015,7 @@
             "$ref": "#/components/responses/InternalServerError"
           }
         },
-        "description": "Sorted by title, case-insensitively. Titles that do not start with a letter A-Z are grouped under # and listed first."
+        "description": "Sorted by title, case-insensitively, with id breaking ties. Titles that do not start with a letter A-Z are grouped under # and listed first."
       }
     },
     "/api/music/albums/details/{id}": {

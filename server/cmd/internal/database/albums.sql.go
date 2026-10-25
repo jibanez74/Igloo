@@ -88,7 +88,8 @@ ORDER BY
     WHEN UPPER(SUBSTR(title, 1, 1)) BETWEEN 'A' AND 'Z' THEN UPPER(SUBSTR(title, 1, 1))
     ELSE '#'
   END,
-  UPPER(title)
+  UPPER(title),
+  id
 LIMIT ?
 OFFSET ?
 `
