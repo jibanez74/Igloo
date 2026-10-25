@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 
@@ -58,6 +59,37 @@ func NewReconciliation(ctx context.Context, directory string, files []CatalogFil
 		}
 	}
 	return r, nil
+}
+
+// Limit keeps only the candidates at or beneath one of paths, for a run that
+// walks just those paths; the root identity checks are unchanged.
+func (r *Reconciliation) Limit(paths []string) {
+	scope := make([]string, 0, len(paths))
+	for _, path := range paths {
+		absolute, err := filepath.Abs(path)
+		if err == nil {
+			scope = append(scope, absolute)
+		}
+	}
+	limited := make([]CatalogFile, 0)
+	for _, file := range r.candidates {
+		absolute, err := filepath.Abs(file.Path)
+		if err != nil {
+			continue
+		}
+		within := slices.ContainsFunc(scope, func(path string) bool { return pathWithin(path, absolute) })
+		if within {
+			limited = append(limited, file)
+		}
+	}
+	r.candidates = limited
+}
+
+// SawNothing reports a walk that found no file while the catalog holds some
+// under the root: what a dropped mount looks like, since the empty mount
+// point stays readable.
+func (r *Reconciliation) SawNothing() bool {
+	return len(r.seen) == 0 && len(r.candidates) > 0
 }
 
 func (r *Reconciliation) MarkSeen(path string) {

@@ -29,7 +29,7 @@ type enrichmentResult struct {
 func (s *Scanner) prepareEnrichment(ctx context.Context, job enrichmentJob) enrichmentResult {
 	defer s.logSlow("slow movie enrichment", time.Now(), "path", job.file.Path)
 	result := enrichmentResult{job: job}
-	result.inspection, result.err = scanner.InspectFileMetadata(ctx, job.file.Path, nil, s.now)
+	result.inspection, result.err = scanner.InspectFileMetadata(ctx, job.file.Path, nil, s.now, scanner.FileQuietPeriod)
 	if result.err != nil {
 		return result
 	}

@@ -214,7 +214,7 @@ func TestAudioWithArtworkSelectsFirstAudioStream(t *testing.T) {
 		t.Fatalf("audio selection: %+v", resolved.params)
 	}
 	prepareMusicFixtures(t, []scanner.ScanFile{{Path: resolved.params.FilePath, Size: resolved.params.Size}})
-	resolved.inspection, err = scanner.InspectFile(context.Background(), resolved.params.FilePath, nil, s.now)
+	resolved.inspection, err = scanner.InspectFile(context.Background(), resolved.params.FilePath, nil, s.now, scanner.FileQuietPeriod)
 	if err != nil {
 		t.Fatal(err)
 	}

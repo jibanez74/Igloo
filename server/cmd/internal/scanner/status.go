@@ -32,6 +32,15 @@ const (
 	PhaseEnrichment ScanPhase = "enrichment"
 )
 
+// ScanScope tells a library scan apart from a run that applies only the
+// changes the library watcher detected.
+type ScanScope string
+
+const (
+	ScopeLibrary ScanScope = "library"
+	ScopeChanges ScanScope = "changes"
+)
+
 // Issue texts published by more than one scanner. They are user-facing and
 // contain no directory paths or raw errors. A scanner that needs to say
 // something different keeps its own local constant instead.
@@ -56,6 +65,7 @@ type Progress struct {
 	RunID       string     `json:"run_id"`
 	State       ScanState  `json:"state"`
 	Phase       ScanPhase  `json:"phase"`
+	Scope       ScanScope  `json:"scope"`
 	StartedAt   *time.Time `json:"started_at"`
 	UpdatedAt   *time.Time `json:"updated_at"`
 	FinishedAt  *time.Time `json:"finished_at"`
@@ -88,10 +98,10 @@ type Issue struct {
 	Reason   string    `json:"reason"`
 }
 
-// BeginProgress starts a new run in the given phase.
-func BeginProgress(phase ScanPhase) Progress {
+// BeginProgress starts a new run in the given phase and scope.
+func BeginProgress(phase ScanPhase, scope ScanScope) Progress {
 	now := time.Now().UTC()
-	return Progress{RunID: rand.Text(), State: StateRunning, Phase: phase, StartedAt: &now, UpdatedAt: &now}
+	return Progress{RunID: rand.Text(), State: StateRunning, Phase: phase, Scope: scope, StartedAt: &now, UpdatedAt: &now}
 }
 
 // Clone returns a copy that shares nothing with p. A zero value reports idle so
@@ -112,7 +122,7 @@ func (p Progress) Clone() Progress {
 	p.ActiveFiles = append([]string{}, p.ActiveFiles...)
 	p.Issues = append([]Issue{}, p.Issues...)
 	if p.State == "" {
-		p.State, p.Phase = StateIdle, PhaseIdle
+		p.State, p.Phase, p.Scope = StateIdle, PhaseIdle, ScopeLibrary
 	}
 	return p
 }

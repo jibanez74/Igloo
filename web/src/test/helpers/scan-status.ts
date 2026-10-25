@@ -9,7 +9,7 @@ import type {
 // counters only that library reports.
 function runningScan(total: number): MusicScanStatus {
   return {
-    run_id: "test-run", state: "running", phase: "local",
+    run_id: "test-run", state: "running", phase: "local", scope: "library",
     started_at: "2026-09-10T10:00:00Z", updated_at: "2026-09-10T10:00:00Z", finished_at: null,
     active_files: [], total, processed: 0, imported: 0, updated: 0, unchanged: 0,
     failed: 0, deferred: 0, deleted: 0, enrichment_total: 0, enrichment_processed: 0,

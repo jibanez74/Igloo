@@ -54,7 +54,7 @@ func (s *Scanner) Status() Status {
 
 func (s *Scanner) beginReport() {
 	s.statusMu.Lock()
-	s.status = Status{Progress: scanner.BeginProgress(scanner.PhaseLocal)}
+	s.status = Status{Progress: scanner.BeginProgress(scanner.PhaseLocal, scanner.ScopeLibrary)}
 	s.statusMu.Unlock()
 }
 

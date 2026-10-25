@@ -86,7 +86,7 @@ func (s *Scanner) prepareFile(ctx context.Context, job probeJob) probeResult {
 	if job.baseline.HasFingerprint {
 		previous = &job.baseline.FileFingerprint
 	}
-	result.inspection, result.err = scanner.InspectFileMetadata(ctx, job.file.Path, previous, s.now)
+	result.inspection, result.err = scanner.InspectFileMetadata(ctx, job.file.Path, previous, s.now, scanner.FileQuietPeriod)
 	if result.err != nil || result.inspection.Outcome != scanner.FileNeedsProcessing {
 		return result
 	}

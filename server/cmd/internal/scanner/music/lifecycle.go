@@ -177,7 +177,7 @@ func (s *Scanner) processFile(ctx context.Context, scan *musicScanContext, file 
 	if existed {
 		previous = &baseline
 	}
-	inspection, err := scanner.InspectFile(ctx, file.Path, previous, s.now)
+	inspection, err := scanner.InspectFile(ctx, file.Path, previous, s.now, scanner.FileQuietPeriod)
 	if err != nil {
 		return outcome, existed, err
 	}

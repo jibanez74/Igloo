@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"sync/atomic"
 )
 
 // BatchSize is how many files a library scan buffers before flushing them to
@@ -87,12 +86,15 @@ func (c ScanCache[K, V]) MergeFrom(other ScanCache[K, V]) {
 type StartStatus int
 
 const (
-	// Callers only branch on the two failure statuses and let the success case
-	// fall through, so StartStarted is never named outside tests. It is the
-	// zero value and cannot be dropped.
+	// Callers only branch on the failure and queued statuses and let the
+	// success case fall through, so StartStarted is never named outside tests.
+	// It is the zero value and cannot be dropped.
 	StartStarted StartStatus = iota
 	StartNotConfigured
 	StartAlreadyRunning
+	// StartQueued means a library scan was requested while a run of
+	// watcher-detected changes was in progress; it starts when that run ends.
+	StartQueued
 )
 
 // StartResult records the observed directory and start outcome.
@@ -102,31 +104,77 @@ type StartResult struct {
 }
 
 // Launcher admits one scan goroutine at a time and tracks it in the shutdown
-// wait group, so every scanner shares one start lifecycle.
+// wait group, so every scanner shares one start lifecycle. Library scans and
+// runs of watcher-detected changes share it, so the two never overlap and the
+// scan state keeps a single owner.
 type Launcher struct {
-	Wait    *sync.WaitGroup
-	running atomic.Bool
+	Wait *sync.WaitGroup
+
+	mu      sync.Mutex
+	running bool
+	changes bool
+	queued  func()
 }
 
-// Launch runs run(directory) on a new goroutine when directory is configured
-// and no scan is in progress. begin runs before the goroutine starts so a
-// status poll right after the request already sees the run.
+// Launch starts a library scan: run(directory) on a new goroutine when
+// directory is configured and no scan is in progress. begin runs before the
+// goroutine starts so a status poll right after the request already sees the
+// run. While a run of changes is in progress the scan is queued behind it
+// rather than refused, so a busy watcher can never starve a requested scan.
 func (l *Launcher) Launch(directory sql.NullString, begin func(), run func(directory string)) StartResult {
+	return l.launch(directory, begin, run, false)
+}
+
+// LaunchChanges starts a run of watcher-detected changes under the same rule
+// as Launch, except that it is refused, never queued, while any scan runs.
+func (l *Launcher) LaunchChanges(directory sql.NullString, begin func(), run func(directory string)) StartResult {
+	return l.launch(directory, begin, run, true)
+}
+
+func (l *Launcher) launch(directory sql.NullString, begin func(), run func(directory string), changes bool) StartResult {
 	result := StartResult{Directory: directory.String}
 	if !directory.Valid || directory.String == "" {
 		result.Status = StartNotConfigured
 		return result
 	}
-	if !l.running.CompareAndSwap(false, true) {
-		result.Status = StartAlreadyRunning
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.running {
+		queueable := !changes && l.changes
+		if !queueable {
+			result.Status = StartAlreadyRunning
+			return result
+		}
+		if l.queued == nil {
+			l.queued = func() { l.start(begin, func() { run(directory.String) }, false) }
+		}
+		result.Status = StartQueued
 		return result
 	}
+	l.start(begin, func() { run(directory.String) }, changes)
+	return result
+}
+
+// start runs with l.mu held.
+func (l *Launcher) start(begin func(), run func(), changes bool) {
+	l.running, l.changes = true, changes
 	begin()
 	l.Wait.Go(func() {
-		defer l.running.Store(false)
-		run(directory.String)
+		run()
+		l.finish()
 	})
-	return result
+}
+
+func (l *Launcher) finish() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	next := l.queued
+	l.queued = nil
+	if next == nil {
+		l.running, l.changes = false, false
+		return
+	}
+	next()
 }
 
 // WalkMediaLibraryContext walks root until it completes or ctx is canceled,

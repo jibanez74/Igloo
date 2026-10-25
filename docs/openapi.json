@@ -16698,6 +16698,7 @@
           "run_id",
           "state",
           "phase",
+          "scope",
           "started_at",
           "updated_at",
           "finished_at",
@@ -16745,6 +16746,14 @@
               "cleanup",
               "enrichment"
             ]
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "library",
+              "changes"
+            ],
+            "description": "library: a scan of the whole library, requested or run by the server; changes: a run that applies only the changes the library watcher detected. Idle reports library."
           },
           "started_at": {
             "type": [
@@ -16870,6 +16879,7 @@
           "run_id",
           "state",
           "phase",
+          "scope",
           "started_at",
           "updated_at",
           "finished_at",
@@ -16917,6 +16927,14 @@
               "cleanup",
               "enrichment"
             ]
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "library",
+              "changes"
+            ],
+            "description": "library: a scan of the whole library, requested or run by the server; changes: a run that applies only the changes the library watcher detected. Idle reports library."
           },
           "started_at": {
             "type": [
@@ -17052,6 +17070,7 @@
           "run_id",
           "state",
           "phase",
+          "scope",
           "started_at",
           "updated_at",
           "finished_at",
@@ -17097,6 +17116,14 @@
               "enrichment"
             ],
             "description": "Discovery and processing are interleaved in the local phase; there is no separate discovery or retry-wait phase."
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "library",
+              "changes"
+            ],
+            "description": "library: a scan of the whole library, requested or run by the server; changes: a run that applies only the changes the library watcher detected. Idle reports library."
           },
           "started_at": {
             "type": [

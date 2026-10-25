@@ -627,7 +627,7 @@ func TestWorkersPrepareWithoutDatabase(t *testing.T) {
 	}
 	probed.inspection.Close()
 
-	inspection, err := scanner.InspectFileMetadata(context.Background(), path, nil, s.now)
+	inspection, err := scanner.InspectFileMetadata(context.Background(), path, nil, s.now, scanner.FileQuietPeriod)
 	if err != nil {
 		t.Fatal(err)
 	}

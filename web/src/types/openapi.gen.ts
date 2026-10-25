@@ -4804,6 +4804,11 @@ export interface components {
             state: "idle" | "running" | "completed" | "completed-with-issues" | "canceled" | "failed";
             /** @enum {string} */
             phase: "idle" | "discovery" | "local" | "retry-wait" | "cleanup" | "enrichment";
+            /**
+             * @description library: a scan of the whole library, requested or run by the server; changes: a run that applies only the changes the library watcher detected. Idle reports library.
+             * @enum {string}
+             */
+            scope: "library" | "changes";
             /** Format: date-time */
             started_at: string | null;
             /** Format: date-time */
@@ -4841,6 +4846,11 @@ export interface components {
             state: "idle" | "running" | "completed" | "completed-with-issues" | "canceled" | "failed";
             /** @enum {string} */
             phase: "idle" | "discovery" | "local" | "cleanup" | "enrichment";
+            /**
+             * @description library: a scan of the whole library, requested or run by the server; changes: a run that applies only the changes the library watcher detected. Idle reports library.
+             * @enum {string}
+             */
+            scope: "library" | "changes";
             /** Format: date-time */
             started_at: string | null;
             /** Format: date-time */
@@ -4888,6 +4898,11 @@ export interface components {
              * @enum {string}
              */
             phase: "idle" | "local" | "cleanup" | "enrichment";
+            /**
+             * @description library: a scan of the whole library, requested or run by the server; changes: a run that applies only the changes the library watcher detected. Idle reports library.
+             * @enum {string}
+             */
+            scope: "library" | "changes";
             /** Format: date-time */
             started_at: string | null;
             /** Format: date-time */
