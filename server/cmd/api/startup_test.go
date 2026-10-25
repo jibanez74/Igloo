@@ -152,6 +152,53 @@ func TestInitDB(t *testing.T) {
 	}
 }
 
+// database/sql discards the pinned connection whenever a transaction's context
+// is canceled, and the one it opens in its place must not run on SQLite's
+// defaults. A second connection stands in for that replacement.
+func TestInitDB_EveryConnectionGetsTheConnectionSettings(t *testing.T) {
+	app := &Application{Config: RuntimeConfig{DBPath: filepath.Join(t.TempDir(), "test.db")}}
+	setupTestLogger(t, app)
+
+	err := app.InitDB()
+	if err != nil {
+		t.Fatalf("InitDB failed: %v", err)
+	}
+	defer app.DB.Close()
+
+	app.DB.SetMaxOpenConns(2)
+	ctx := context.Background()
+	first, err := app.DB.Conn(ctx)
+	if err != nil {
+		t.Fatalf("reserve first connection: %v", err)
+	}
+	defer first.Close()
+	second, err := app.DB.Conn(ctx)
+	if err != nil {
+		t.Fatalf("open second connection: %v", err)
+	}
+	defer second.Close()
+
+	for _, setting := range []struct {
+		pragma string
+		want   int
+	}{
+		{"synchronous", 1},
+		{"temp_store", 2},
+		{"cache_size", -16000},
+		{"foreign_keys", 1},
+		{"busy_timeout", 5000},
+	} {
+		var got int
+		err = second.QueryRowContext(ctx, "PRAGMA "+setting.pragma).Scan(&got)
+		if err != nil {
+			t.Fatalf("read %s: %v", setting.pragma, err)
+		}
+		if got != setting.want {
+			t.Errorf("new connection %s = %d, want %d", setting.pragma, got, setting.want)
+		}
+	}
+}
+
 func TestRefreshQueryPlannerStats(t *testing.T) {
 	app := newTestDBApp(t)
 	db := app.DB

@@ -18,7 +18,7 @@ import (
 
 	"github.com/alexedwards/scs/sqlite3store"
 	"github.com/alexedwards/scs/v2"
-	_ "github.com/mattn/go-sqlite3" // SQLite driver for database/sql
+	sqlite3 "github.com/mattn/go-sqlite3"
 )
 
 func (app *Application) InitDB() error {
@@ -44,7 +44,7 @@ func (app *Application) InitDB() error {
 		return err
 	}
 
-	db, err := sql.Open("sqlite3", "file:"+dbPath+"?_foreign_keys=on&_busy_timeout=5000")
+	db, err := sql.Open(sqliteDriverName, "file:"+dbPath+"?_foreign_keys=on&_busy_timeout=5000")
 	if err != nil {
 		return fmt.Errorf("failed to open database %s: %w", dbPath, err)
 	}
@@ -64,27 +64,33 @@ func (app *Application) InitDB() error {
 		return fmt.Errorf("failed to enable WAL journal mode for database %s: %w", dbPath, err)
 	}
 
-	// Connection-scoped, which is safe because the pool is pinned to a single
-	// connection. synchronous=NORMAL pairs with WAL so a commit skips the fsync
-	// (only an OS-level crash can lose the latest commits), and temp_store=MEMORY
-	// keeps the listings' sorters off the disk.
-	pragmas := []string{
-		"PRAGMA synchronous=NORMAL;",
-		"PRAGMA temp_store=MEMORY;",
-		"PRAGMA cache_size=-16000;",
-	}
-
-	for _, pragma := range pragmas {
-		_, err = db.Exec(pragma)
-		if err != nil {
-			db.Close()
-			return fmt.Errorf("failed to apply %q to database %s: %w", pragma, dbPath, err)
-		}
-	}
-
 	app.DB = db
 
 	return nil
+}
+
+// sqliteDriverName is go-sqlite3 with sqliteConnectionPragmas applied to every
+// connection it opens. They are connection-scoped, and although the pool holds
+// a single connection, database/sql discards it whenever a transaction's
+// context is canceled, as when a client hangs up mid-request; the connection
+// that replaces it would otherwise run on SQLite's defaults until a restart.
+const sqliteDriverName = "sqlite3_igloo"
+
+// synchronous=NORMAL pairs with WAL so a commit skips the fsync (only an
+// OS-level crash can lose the latest commits), and temp_store=MEMORY keeps the
+// listings' sorters off the disk.
+const sqliteConnectionPragmas = "PRAGMA synchronous=NORMAL; PRAGMA temp_store=MEMORY; PRAGMA cache_size=-16000;"
+
+func init() {
+	sql.Register(sqliteDriverName, &sqlite3.SQLiteDriver{
+		ConnectHook: func(conn *sqlite3.SQLiteConn) error {
+			_, err := conn.Exec(sqliteConnectionPragmas, nil)
+			if err != nil {
+				return fmt.Errorf("apply connection pragmas: %w", err)
+			}
+			return nil
+		},
+	})
 }
 
 func ensureDatabasePathWritable(dbPath string, databaseExists bool) error {
