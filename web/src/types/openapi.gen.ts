@@ -6366,7 +6366,7 @@ export interface components {
         /** @description Zero-based index into the media's subtitle rows ordered by stream_index. An index past the last subtitle returns 400. */
         TrackIndexPath: number;
         SeasonNumberPath: number;
-        /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. */
+        /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. A page so large that its row offset would overflow is clamped to the largest page whose offset fits; the response page reports the effective value. */
         PageQuery: number;
         /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
         PerPageQuery: number;
@@ -7387,7 +7387,7 @@ export interface operations {
         parameters: {
             query?: {
                 q?: components["parameters"]["SearchQuery"];
-                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. */
+                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. A page so large that its row offset would overflow is clamped to the largest page whose offset fits; the response page reports the effective value. */
                 page?: components["parameters"]["PageQuery"];
                 /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
@@ -7407,7 +7407,7 @@ export interface operations {
         parameters: {
             query?: {
                 q?: components["parameters"]["SearchQuery"];
-                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. */
+                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. A page so large that its row offset would overflow is clamped to the largest page whose offset fits; the response page reports the effective value. */
                 page?: components["parameters"]["PageQuery"];
                 /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
@@ -7427,7 +7427,7 @@ export interface operations {
         parameters: {
             query?: {
                 q?: components["parameters"]["SearchQuery"];
-                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. */
+                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. A page so large that its row offset would overflow is clamped to the largest page whose offset fits; the response page reports the effective value. */
                 page?: components["parameters"]["PageQuery"];
                 /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
@@ -7447,7 +7447,7 @@ export interface operations {
         parameters: {
             query?: {
                 q?: components["parameters"]["SearchQuery"];
-                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. */
+                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. A page so large that its row offset would overflow is clamped to the largest page whose offset fits; the response page reports the effective value. */
                 page?: components["parameters"]["PageQuery"];
                 /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
@@ -7467,7 +7467,7 @@ export interface operations {
         parameters: {
             query?: {
                 q?: components["parameters"]["SearchQuery"];
-                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. */
+                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. A page so large that its row offset would overflow is clamped to the largest page whose offset fits; the response page reports the effective value. */
                 page?: components["parameters"]["PageQuery"];
                 /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
@@ -7514,7 +7514,7 @@ export interface operations {
     getShowsLibrary: {
         parameters: {
             query?: {
-                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. */
+                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. A page so large that its row offset would overflow is clamped to the largest page whose offset fits; the response page reports the effective value. */
                 page?: components["parameters"]["PageQuery"];
                 /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
@@ -7563,7 +7563,7 @@ export interface operations {
     getShowsByGenreLibrary: {
         parameters: {
             query?: {
-                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. */
+                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. A page so large that its row offset would overflow is clamped to the largest page whose offset fits; the response page reports the effective value. */
                 page?: components["parameters"]["PageQuery"];
                 /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
@@ -8030,7 +8030,7 @@ export interface operations {
     getMoviesLibrary: {
         parameters: {
             query?: {
-                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. */
+                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. A page so large that its row offset would overflow is clamped to the largest page whose offset fits; the response page reports the effective value. */
                 page?: components["parameters"]["PageQuery"];
                 /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
@@ -8065,7 +8065,7 @@ export interface operations {
     getLikedMovies: {
         parameters: {
             query?: {
-                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. */
+                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. A page so large that its row offset would overflow is clamped to the largest page whose offset fits; the response page reports the effective value. */
                 page?: components["parameters"]["PageQuery"];
                 /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
@@ -8117,7 +8117,7 @@ export interface operations {
     getMoviesByGenreLibrary: {
         parameters: {
             query?: {
-                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. */
+                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. A page so large that its row offset would overflow is clamped to the largest page whose offset fits; the response page reports the effective value. */
                 page?: components["parameters"]["PageQuery"];
                 /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
@@ -8141,7 +8141,7 @@ export interface operations {
     getMoviePlaylistMovies: {
         parameters: {
             query?: {
-                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. */
+                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. A page so large that its row offset would overflow is clamped to the largest page whose offset fits; the response page reports the effective value. */
                 page?: components["parameters"]["PageQuery"];
                 /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
@@ -9514,7 +9514,7 @@ export interface operations {
     getAlbumsAlphabetical: {
         parameters: {
             query?: {
-                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. */
+                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. A page so large that its row offset would overflow is clamped to the largest page whose offset fits; the response page reports the effective value. */
                 page?: components["parameters"]["PageQuery"];
                 /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
@@ -9584,7 +9584,7 @@ export interface operations {
     getMusiciansAlphabetical: {
         parameters: {
             query?: {
-                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. */
+                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. A page so large that its row offset would overflow is clamped to the largest page whose offset fits; the response page reports the effective value. */
                 page?: components["parameters"]["PageQuery"];
                 /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
@@ -9847,7 +9847,7 @@ export interface operations {
     getLikedTracks: {
         parameters: {
             query?: {
-                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. */
+                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. A page so large that its row offset would overflow is clamped to the largest page whose offset fits; the response page reports the effective value. */
                 page?: components["parameters"]["PageQuery"];
                 /** @description Default 50; clamped to 100. Larger values are clamped rather than rejected; missing, non-integer, and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["MusicPerPageQuery"];

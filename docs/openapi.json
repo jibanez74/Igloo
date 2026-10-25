@@ -6395,7 +6395,7 @@
           "minimum": 1,
           "default": 1
         },
-        "description": "1-based page number. Missing, non-integer, and nonpositive values use page 1."
+        "description": "1-based page number. Missing, non-integer, and nonpositive values use page 1. A page so large that its row offset would overflow is clamped to the largest page whose offset fits; the response page reports the effective value."
       },
       "PerPageQuery": {
         "name": "per_page",

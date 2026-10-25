@@ -228,15 +228,19 @@ func TestGetTmdbMovieByID_CachedCopiesAreIsolated(t *testing.T) {
 	var attempts atomic.Int32
 	client := newServerClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
-		_, _ = w.Write([]byte(`{"id":603,"title":"The Matrix"}`))
+		_, _ = w.Write([]byte(`{"id":603,"title":"The Matrix","genres":[{"id":28,"name":"Action"}],"credits":{"cast":[{"id":6384,"name":"Keanu Reeves"}]}}`))
 	}))
 
+	// The first caller's edits test the copy that is stored; the second
+	// caller's test the copy that is served.
 	first := &TmdbMovie{TmdbID: 603}
 	err := client.GetTmdbMovieByID(context.Background(), first)
 	if err != nil {
 		t.Fatalf("first GetTmdbMovieByID: %v", err)
 	}
 	first.Title = "mutated by caller"
+	first.Genres[0].Name = "mutated by caller"
+	first.Credits.Cast[0].Name = "mutated by caller"
 
 	second := &TmdbMovie{TmdbID: 603}
 	err = client.GetTmdbMovieByID(context.Background(), second)
@@ -245,6 +249,20 @@ func TestGetTmdbMovieByID_CachedCopiesAreIsolated(t *testing.T) {
 	}
 	if second.Title != "The Matrix" {
 		t.Fatalf("cached title = %q, want The Matrix after caller mutation", second.Title)
+	}
+	second.Genres[0].Name = "mutated by second caller"
+	second.Credits.Cast[0].Name = "mutated by second caller"
+
+	third := &TmdbMovie{TmdbID: 603}
+	err = client.GetTmdbMovieByID(context.Background(), third)
+	if err != nil {
+		t.Fatalf("third GetTmdbMovieByID: %v", err)
+	}
+	if third.Genres[0].Name != "Action" {
+		t.Fatalf("cached genre = %q, want Action: a caller's edit reached the cache", third.Genres[0].Name)
+	}
+	if third.Credits.Cast[0].Name != "Keanu Reeves" {
+		t.Fatalf("cached cast name = %q, want Keanu Reeves: a caller's edit reached the cache", third.Credits.Cast[0].Name)
 	}
 	if attempts.Load() != 1 {
 		t.Fatalf("expected cached call to avoid HTTP, got %d attempts", attempts.Load())

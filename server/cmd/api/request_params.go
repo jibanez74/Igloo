@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -34,10 +35,12 @@ func positiveQueryInt(r *http.Request, name string, fallback int64) int64 {
 
 // parsePageAndPerPage reads the page and per_page query parameters every
 // paginated listing shares, clamping per_page to maxPerPage; docs/openapi.json
-// documents that on PerPageQuery.
+// documents that on PerPageQuery. The page is clamped so the handlers'
+// (page-1)*perPage offset cannot overflow: SQLite reads a negative OFFSET as 0
+// and would serve the first page.
 func parsePageAndPerPage(r *http.Request, defaultPerPage, maxPerPage int64) (page, perPage int64) {
-	page = positiveQueryInt(r, "page", 1)
 	perPage = min(positiveQueryInt(r, "per_page", defaultPerPage), maxPerPage)
+	page = min(positiveQueryInt(r, "page", 1), math.MaxInt64/perPage)
 	return page, perPage
 }
 
