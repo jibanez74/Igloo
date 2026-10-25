@@ -323,7 +323,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
           <SwitchField
             id={enableWatcherId}
             label="Library watcher"
-            description="Watch configured libraries for file changes."
+            description="Apply added, changed, and removed library files as they happen."
             checked={form.enable_watcher}
             onCheckedChange={checked =>
               handleToggleChange("enable_watcher", checked)

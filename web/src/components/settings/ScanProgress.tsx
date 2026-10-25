@@ -15,6 +15,8 @@ type LibraryCopy<Phase extends string> = {
   removed: string;
   unavailable: string;
   deferred: string;
+  // A run of the changes the library watcher detected, rather than a scan.
+  changes: { running: string; completed: string };
 };
 
 // lower is passed rather than derived: "TV shows" keeps its capitals
@@ -44,6 +46,7 @@ const MOVIE_COPY: LibraryCopy<MovieScanStatus["phase"]> = {
   removed: "missing movies removed",
   unavailable: "Movie scan status is unavailable. Showing the last known progress; updates will retry automatically.",
   deferred: "Files must be quiet for 60 seconds. The scan retries deferred files up to twice within two minutes; unresolved files can be retried in a later scan.",
+  changes: { running: "Applying detected movie changes", completed: "Detected movie changes applied" },
 };
 
 const MUSIC_COPY: LibraryCopy<MusicScanStatus["phase"]> = {
@@ -60,6 +63,7 @@ const MUSIC_COPY: LibraryCopy<MusicScanStatus["phase"]> = {
   removed: "missing tracks removed",
   unavailable: "Music scan status is unavailable. Showing the last known progress; updates will retry automatically.",
   deferred: "Files must be quiet for 60 seconds. Deferred files are retried on the next scan.",
+  changes: { running: "Applying detected music changes", completed: "Detected music changes applied" },
 };
 
 const SHOW_COPY: LibraryCopy<ShowScanStatus["phase"]> = {
@@ -77,7 +81,11 @@ const SHOW_COPY: LibraryCopy<ShowScanStatus["phase"]> = {
   removed: "missing episodes removed",
   unavailable: "TV shows scan status is unavailable. Showing the last known progress; updates will retry automatically.",
   deferred: "Files must be quiet for 60 seconds. Deferred files are retried on the next scan.",
+  changes: { running: "Applying detected TV show changes", completed: "Detected TV show changes applied" },
 };
+
+// A watcher run defers a file still being written and retries it itself.
+const WATCHED_DEFERRED = "Files still being written are retried by the library watcher once they are quiet.";
 
 type Props = { unavailable: boolean } & (
   | { library: "movies"; status?: MovieScanStatus }
@@ -110,12 +118,21 @@ const enrichmentLine = (props: Props) => {
   return `${provider}: ${status.enrichment_processed} of ${status.enrichment_total} ${attempted} · ${status.enriched} ${enriched} · ${status.enrichment_failed} failed · ${status.enrichment_unmatched} unmatched${pending}`;
 };
 
+const announcementFor = (props: Props) => {
+  const { status } = props;
+  const copy = copyFor(props);
+  if (!status) return `Loading ${copy.lower} scan status`;
+  const watched = status.scope === "changes";
+  if (status.state === "running") return watched ? copy.changes.running : phaseLabel(props);
+  if (watched && status.state === "completed") return copy.changes.completed;
+  return copy.states[status.state];
+};
+
 export default function ScanProgress(props: Props) {
   const { status, unavailable } = props;
   const copy = copyFor(props);
-  const announcement = status?.state === "running"
-    ? phaseLabel(props)
-    : status ? copy.states[status.state] : `Loading ${copy.lower} scan status`;
+  const announcement = announcementFor(props);
+  const watched = status?.scope === "changes";
   return (
     <div className="space-y-2 text-sm text-muted-foreground">
       <p role="status" aria-live="polite" aria-atomic="true">{announcement}</p>
@@ -124,10 +141,10 @@ export default function ScanProgress(props: Props) {
         <>
           <p>{status.processed} of {status.total} files processed · {status.imported} imported · {status.updated} updated · {status.unchanged} unchanged</p>
           <p>{status.failed} failed · {status.deferred} deferred · {status.deleted} {copy.removed}</p>
-          {props.library === "shows" && <p>{props.status?.episodes} local episodes</p>}
+          {props.library === "shows" && !watched && <p>{props.status?.episodes} local episodes</p>}
           {status.active_files.length > 0 && <p className="wrap-anywhere">Working on: {status.active_files.join(", ")}</p>}
           <p>{enrichmentLine(props)}</p>
-          {status.deferred > 0 && <p>{copy.deferred}</p>}
+          {status.deferred > 0 && <p>{watched ? WATCHED_DEFERRED : copy.deferred}</p>}
           {status.issue_count > 0 && (
             <details>
               <summary className={cn("cursor-pointer rounded-sm", FOCUS_VISIBLE_RING_CLASS)}>

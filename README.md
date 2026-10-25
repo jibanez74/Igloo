@@ -26,7 +26,7 @@ The web app includes light and dark themes. The Go server serves it in a product
 - HLS transcoding and decoding are still works in progress. What plays smoothly depends on the source file, browser, FFmpeg build, and host hardware. See the [media guide](docs/ffmpeg.md) for supported paths and troubleshooting.
 - Watch rooms support movies, not TV episodes.
 - Photos are a coming-soon page.
-- Automatic filesystem watching is not implemented, even though Settings has an `ENABLE_WATCHER` option. Use a startup or manual scan after adding files.
+- The library watcher (**Settings → General**) applies added, changed, moved, and deleted files within seconds on local Linux disks; libraries on network shares or FUSE mounts, and every library on macOS, are polled every few minutes instead. With it off, use a startup or manual scan after adding files.
 - TMDB and Spotify are optional. Local scanning still works without their credentials, with less descriptive metadata and artwork. Apple Music lookups need no credentials and are on by default; they contact Apple only for files that carry iTunes catalog IDs. Turn them off in Settings, or set `ENABLE_APPLE_LOOKUPS=false` before the first start.
 
 ## Get started from source
@@ -67,7 +67,7 @@ make dev
 
 Open [http://localhost:3000](http://localhost:3000) and sign in with your administrator email and password. Vite proxies `/api` to the Go server on port 8080. `make dev` generates database code, builds the development server, and runs it with Vite enabled.
 
-In **Settings → Libraries**, save your movie, TV show, and music paths, then start a scan for each library you want to use. Configured libraries also scan when the server starts. A scan can take time, and files being written are deferred until they have been quiet for 60 seconds. Run another scan after adding or changing files. Saving a path by itself does not start a scan.
+In **Settings → Libraries**, save your movie, TV show, and music paths, then start a scan for each library you want to use. Configured libraries also scan when the server starts. A scan can take time, and files being written are deferred until they have been quiet for 60 seconds. Run another scan after adding or changing files, or turn on the library watcher to apply changes as they happen. Saving a path by itself does not start a scan unless the watcher is on.
 
 For TV files, use a layout such as `Show Name/Season 1/S01E02 - Episode Title.mkv`. `Specials` is supported for season zero. Combined episode files are catalogued as separate episodes, but playback runs the whole file because Igloo does not guess episode boundaries. More filename rules are in the [media guide](docs/ffmpeg.md#tv-show-scanning).
 
@@ -87,7 +87,7 @@ Other values seed **Settings only when the database has no Settings row**. After
 - `MOVIES_DIR`, `SHOWS_DIR`, and `MUSIC_DIR` choose library paths. `STATIC_DIR` and `TRANSCODE_DIR` choose artwork/upload storage and temporary HLS storage.
 - `TMDB_API_KEY` enables movie and TV metadata enrichment. `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` enable music enrichment and Spotify search. `ENABLE_APPLE_LOOKUPS` (default `true`) controls matching iTunes Store purchases on Apple Music, which needs no credentials.
 - `HARDWARE_ACCELERATION_DEVICE` defaults to `cpu`; `apple`, `intel`, and `nvidia` select supported host acceleration when FFmpeg and drivers allow it.
-- `DOWNLOAD_IMAGES` and `ENABLE_WATCHER` are stored settings. The watcher is not implemented.
+- `ENABLE_WATCHER` turns on the library watcher for a new database; afterwards the Settings switch decides. `DOWNLOAD_IMAGES` is a stored setting.
 
 The `DEFAULT_ADMIN_*` values are used when there is no administrator; changing them later does not reset an existing account. Igloo creates application storage directories as needed, but it does not create media library directories. Make sure the process can write its database, static files, logs, and transcode directory.
 

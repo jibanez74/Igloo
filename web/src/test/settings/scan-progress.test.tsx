@@ -255,3 +255,40 @@ describe("TV shows scan progress", () => {
     client.clear();
   });
 });
+
+describe("runs of watcher-detected changes", () => {
+  it("words a watcher run apart from a scan and drops the episode count", () => {
+    const running = showScanStatus({ scope: "changes", total: 1, episodes: 1 });
+    const { rerender } = render(<ScanProgress library="shows" status={running} unavailable={false} />);
+    expect(screen.getByRole("status")).toHaveTextContent("Applying detected TV show changes");
+    expect(screen.queryByText(/local episodes/)).not.toBeInTheDocument();
+
+    const done = showScanStatus({ scope: "changes", state: "completed", total: 1, processed: 1, deferred: 1 });
+    rerender(<ScanProgress library="shows" status={done} unavailable={false} />);
+    expect(screen.getByRole("status")).toHaveTextContent("Detected TV show changes applied");
+    expect(screen.getByText(/retried by the library watcher/)).toBeInTheDocument();
+    expect(screen.queryByText(/Files must be quiet for 60 seconds/)).not.toBeInTheDocument();
+  });
+
+  it("refreshes the library lists once a watcher run commits something, and not for one that changed nothing", async () => {
+    vi.useFakeTimers();
+    let status = movieScanStatus({ scope: "changes", total: 1 });
+    const fetchMock = vi.fn(() => jsonResponse({ error: false, data: status }));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createTestQueryClient();
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    renderWithQueryClient(<ScanView />, { queryClient: client });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(invalidate).not.toHaveBeenCalledWith({ queryKey: [MOVIES_LIBRARY_KEY] });
+
+    status = movieScanStatus({ scope: "changes", state: "completed", phase: "enrichment", total: 1, processed: 1, unchanged: 1 });
+    await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
+    expect(screen.getByRole("status")).toHaveTextContent("Detected movie changes applied");
+    expect(invalidate).not.toHaveBeenCalledWith({ queryKey: [MOVIES_LIBRARY_KEY] });
+
+    status = movieScanStatus({ run_id: "second-run", scope: "changes", state: "completed", phase: "enrichment", total: 1, processed: 1, imported: 1 });
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: [MOVIES_LIBRARY_KEY] });
+    client.clear();
+  });
+});
