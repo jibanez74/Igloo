@@ -55,22 +55,14 @@ export const Route = createFileRoute("/_auth/settings/")({
 
 type SecretField =
   | "tmdb_key"
-  | "immich_api_key"
-  | "jellyfin_api_key"
   | "spotify_client_id"
   | "spotify_client_secret";
-
-type BaseURLField = "immich_base_url" | "jellyfin_base_url";
 
 function formFromSettings(
   settings: GeneralSettingsType,
 ): UpdateGeneralSettingsRequest {
   return {
     tmdb_key: settings.tmdb_key ?? "",
-    immich_base_url: settings.immich_base_url ?? "",
-    immich_api_key: settings.immich_api_key ?? "",
-    jellyfin_base_url: settings.jellyfin_base_url ?? "",
-    jellyfin_api_key: settings.jellyfin_api_key ?? "",
     spotify_client_id: settings.spotify_client_id ?? "",
     spotify_client_secret: settings.spotify_client_secret ?? "",
     enable_apple_lookups: settings.enable_apple_lookups,
@@ -88,10 +80,6 @@ function formsMatchSettings(
   const settingsForm = formFromSettings(settings);
   return (
     form.tmdb_key === settingsForm.tmdb_key &&
-    form.immich_base_url === settingsForm.immich_base_url &&
-    form.immich_api_key === settingsForm.immich_api_key &&
-    form.jellyfin_base_url === settingsForm.jellyfin_base_url &&
-    form.jellyfin_api_key === settingsForm.jellyfin_api_key &&
     form.spotify_client_id === settingsForm.spotify_client_id &&
     form.spotify_client_secret === settingsForm.spotify_client_secret &&
     form.enable_apple_lookups === settingsForm.enable_apple_lookups &&
@@ -100,23 +88,6 @@ function formsMatchSettings(
     form.static_dir === settingsForm.static_dir &&
     form.transcode_dir === settingsForm.transcode_dir
   );
-}
-
-function isOptionalHTTPBaseURL(value: string) {
-  const trimmed = value.trim();
-  if (trimmed === "") {
-    return true;
-  }
-
-  try {
-    const url = new URL(trimmed);
-    return (
-      (url.protocol === "http:" || url.protocol === "https:") &&
-      url.host !== ""
-    );
-  } catch {
-    return false;
-  }
 }
 
 function GeneralSettings() {
@@ -153,10 +124,6 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   const queryClient = useQueryClient();
   const isMiniPlayerVisible = useIsMiniPlayerVisible();
   const tmdbKeyId = useId();
-  const jellyfinBaseUrlId = useId();
-  const jellyfinApiKeyId = useId();
-  const immichBaseUrlId = useId();
-  const immichApiKeyId = useId();
   const spotifyClientIdId = useId();
   const spotifyClientSecretId = useId();
   const appleLookupsId = useId();
@@ -207,10 +174,6 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
             settings: {
               ...previousData.data.settings,
               tmdb_key: trimmedOrNull(nextSettings.tmdb_key),
-              immich_base_url: trimmedOrNull(nextSettings.immich_base_url),
-              immich_api_key: trimmedOrNull(nextSettings.immich_api_key),
-              jellyfin_base_url: trimmedOrNull(nextSettings.jellyfin_base_url),
-              jellyfin_api_key: trimmedOrNull(nextSettings.jellyfin_api_key),
               spotify_client_id: trimmedOrNull(nextSettings.spotify_client_id),
               spotify_client_secret: trimmedOrNull(
                 nextSettings.spotify_client_secret,
@@ -272,11 +235,6 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
     setValidationMessage("");
   };
 
-  const handleBaseURLChange = (field: BaseURLField, value: string) => {
-    setForm(current => ({ ...current, [field]: value }));
-    clearFieldError(field);
-  };
-
   const handleTextChange = (
     field: "static_dir" | "transcode_dir",
     value: string,
@@ -301,20 +259,6 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   };
 
   const validateForm = (): { field: string | null; message: string } => {
-    if (!isOptionalHTTPBaseURL(form.jellyfin_base_url)) {
-      return {
-        field: "jellyfin_base_url",
-        message: "Jellyfin base URL must start with http:// or https://.",
-      };
-    }
-
-    if (!isOptionalHTTPBaseURL(form.immich_base_url)) {
-      return {
-        field: "immich_base_url",
-        message: "Immich base URL must start with http:// or https://.",
-      };
-    }
-
     if (form.static_dir.trim() === "") {
       return { field: "static_dir", message: "Static directory is required." };
     }
@@ -346,10 +290,6 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
     updateMutation.mutate({
       ...form,
       tmdb_key: form.tmdb_key.trim(),
-      immich_base_url: form.immich_base_url.trim(),
-      immich_api_key: form.immich_api_key.trim(),
-      jellyfin_base_url: form.jellyfin_base_url.trim(),
-      jellyfin_api_key: form.jellyfin_api_key.trim(),
       spotify_client_id: form.spotify_client_id.trim(),
       spotify_client_secret: form.spotify_client_secret.trim(),
       static_dir: form.static_dir.trim(),
@@ -452,7 +392,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
         <SettingsCardHeader
           icon={KeyRound}
           title="External Services"
-          description="Manage the services and credentials used for metadata and interoperability."
+          description="Manage the services and credentials used for metadata."
         />
         <CardContent className="divide-y divide-border/50">
           <ServiceSection title="TMDB">
@@ -462,46 +402,6 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
               label="TMDB API key"
               value={form.tmdb_key}
               onChange={value => handleSecretChange("tmdb_key", value)}
-              disabled={updateMutation.isPending}
-            />
-          </ServiceSection>
-          <ServiceSection title="Jellyfin">
-            <URLInput
-              id={jellyfinBaseUrlId}
-              name="jellyfin_base_url"
-              label="Jellyfin base URL"
-              value={form.jellyfin_base_url}
-              onChange={value =>
-                handleBaseURLChange("jellyfin_base_url", value)
-              }
-              disabled={updateMutation.isPending}
-              invalid={validationField === "jellyfin_base_url"}
-            />
-            <SecretInput
-              id={jellyfinApiKeyId}
-              name="jellyfin_api_key"
-              label="Jellyfin API key"
-              value={form.jellyfin_api_key}
-              onChange={value => handleSecretChange("jellyfin_api_key", value)}
-              disabled={updateMutation.isPending}
-            />
-          </ServiceSection>
-          <ServiceSection title="Immich">
-            <URLInput
-              id={immichBaseUrlId}
-              name="immich_base_url"
-              label="Immich base URL"
-              value={form.immich_base_url}
-              onChange={value => handleBaseURLChange("immich_base_url", value)}
-              disabled={updateMutation.isPending}
-              invalid={validationField === "immich_base_url"}
-            />
-            <SecretInput
-              id={immichApiKeyId}
-              name="immich_api_key"
-              label="Immich API key"
-              value={form.immich_api_key}
-              onChange={value => handleSecretChange("immich_api_key", value)}
               disabled={updateMutation.isPending}
             />
           </ServiceSection>
@@ -582,50 +482,6 @@ type SecretInputProps = {
   onChange: (value: string) => void;
   disabled: boolean;
 };
-
-type URLInputProps = {
-  id: string;
-  name: string;
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  disabled: boolean;
-  invalid: boolean;
-};
-
-function URLInput({
-  id,
-  name,
-  label,
-  value,
-  onChange,
-  disabled,
-  invalid,
-}: URLInputProps) {
-  const descriptionId = `${id}-description`;
-
-  return (
-    <div className="grid gap-2">
-      <Label htmlFor={id}>{label}</Label>
-      <Input
-        id={id}
-        name={name}
-        type="url"
-        inputMode="url"
-        value={value}
-        onChange={event => onChange(event.target.value)}
-        disabled={disabled}
-        aria-describedby={descriptionId}
-        aria-invalid={invalid || undefined}
-        autoComplete="off"
-        className={SETTINGS_INPUT_CLASS}
-      />
-      <p id={descriptionId} className="text-sm text-muted-foreground">
-        Use http:// or https://. Leave blank to clear this value.
-      </p>
-    </div>
-  );
-}
 
 function SecretInput({
   id,

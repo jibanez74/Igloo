@@ -145,10 +145,6 @@ let librarySettings: SettingsType = {
 
 let generalSettings: GeneralSettingsType = {
   tmdb_key: null,
-  immich_base_url: null,
-  immich_api_key: null,
-  jellyfin_base_url: null,
-  jellyfin_api_key: null,
   spotify_client_id: null,
   spotify_client_secret: null,
   enable_apple_lookups: true,
@@ -874,10 +870,6 @@ async function handleSettingsRoutes(
     const current = generalSettings;
     generalSettings = {
       tmdb_key: nullableStringField(body, "tmdb_key", current.tmdb_key),
-      immich_base_url: nullableStringField(body, "immich_base_url", current.immich_base_url),
-      immich_api_key: nullableStringField(body, "immich_api_key", current.immich_api_key),
-      jellyfin_base_url: nullableStringField(body, "jellyfin_base_url", current.jellyfin_base_url),
-      jellyfin_api_key: nullableStringField(body, "jellyfin_api_key", current.jellyfin_api_key),
       spotify_client_id: nullableStringField(body, "spotify_client_id", current.spotify_client_id),
       spotify_client_secret: nullableStringField(
         body,

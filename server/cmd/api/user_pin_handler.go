@@ -70,6 +70,14 @@ func (app *Application) UpdateUserPin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if req.CurrentPin != "" {
+		err := validatePin(req.CurrentPin)
+		if err != nil {
+			helpers.ErrorJSON(w, errors.New("current PIN must be exactly 4 digits"), http.StatusBadRequest)
+			return
+		}
+	}
+
 	currentPin, err := app.Queries.GetUserPin(r.Context(), userID)
 	if err != nil {
 		app.userLookupFailed(w, err, "failed to fetch user for pin update", userID)

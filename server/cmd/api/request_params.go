@@ -12,11 +12,11 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// parseIDParam parses the named URL parameter as an int64, answering 400 with
-// message when it is not one.
+// parseIDParam parses the named URL parameter as a positive int64, answering
+// 400 with message when it is not one.
 func parseIDParam(w http.ResponseWriter, r *http.Request, name, message string) (int64, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, name), 10, 64)
-	if err != nil {
+	if err != nil || id <= 0 {
 		helpers.ErrorJSON(w, errors.New(message), http.StatusBadRequest)
 		return 0, false
 	}

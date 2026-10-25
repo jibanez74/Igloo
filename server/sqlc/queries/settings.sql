@@ -8,7 +8,6 @@ LIMIT 1;
 -- name: CreateSettings :one
 INSERT INTO settings (
   tmdb_key,
-  jellyfin_api_key,
   spotify_client_id,
   spotify_client_secret,
   enable_apple_lookups,
@@ -22,17 +21,13 @@ INSERT INTO settings (
   transcode_dir
 )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: UpdateGeneralSettings :one
 UPDATE settings
 SET
   tmdb_key = ?,
-  immich_base_url = ?,
-  immich_api_key = ?,
-  jellyfin_base_url = ?,
-  jellyfin_api_key = ?,
   spotify_client_id = ?,
   spotify_client_secret = ?,
   enable_apple_lookups = ?,

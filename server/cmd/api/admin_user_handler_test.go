@@ -50,6 +50,14 @@ func TestAdminUserListCreateAndPasswordReset_ConformToOpenAPI(t *testing.T) {
 
 	missingReq := newOpenAPIJSONRequest(http.MethodPut, "/api/admin/users/999999/password", passwordBody)
 	serveOpenAPIExchange(t, handler, "adminResetUserPassword", missingReq, http.StatusNotFound)
+
+	zeroReq := newOpenAPIJSONRequest(http.MethodPut, "/api/admin/users/0/password", passwordBody)
+	zeroResponse := httptest.NewRecorder()
+	handler.ServeHTTP(zeroResponse, zeroReq)
+	if zeroResponse.Code != http.StatusBadRequest {
+		t.Fatalf("zero id status = %d, body = %s", zeroResponse.Code, zeroResponse.Body.String())
+	}
+	assertOpenAPIResponse(t, "adminResetUserPassword", zeroReq, zeroResponse)
 }
 
 func TestAdminUpdateUser_RejectsDemotingLastAdmin(t *testing.T) {

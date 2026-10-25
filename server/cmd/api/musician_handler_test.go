@@ -25,6 +25,7 @@ func TestGetMusicianDetails_RejectsBadIDsAndUnknownRows(t *testing.T) {
 		wantMessage string
 	}{
 		{"non-numeric id", "/api/music/musicians/abc", http.StatusBadRequest, "invalid musician id"},
+		{"zero id", "/api/music/musicians/0", http.StatusBadRequest, "invalid musician id"},
 		{"unknown musician", "/api/music/musicians/999999", http.StatusNotFound, "musician not found"},
 	}
 	for _, tt := range tests {

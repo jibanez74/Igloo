@@ -29,9 +29,11 @@ func TestAlbumHandlers_RejectBadIDsUnknownRowsAndNonAdmins(t *testing.T) {
 		wantMessage string
 	}{
 		{"details with a non-numeric id", member.ID, http.MethodGet, "/api/music/albums/details/abc", http.StatusBadRequest, "invalid album id"},
+		{"details with a zero id", member.ID, http.MethodGet, "/api/music/albums/details/0", http.StatusBadRequest, "invalid album id"},
 		{"details for an unknown album", member.ID, http.MethodGet, "/api/music/albums/details/999999", http.StatusNotFound, "album not found"},
 		{"delete by a member", member.ID, http.MethodDelete, "/api/music/albums/1", http.StatusForbidden, ""},
 		{"delete with a non-numeric id", admin.ID, http.MethodDelete, "/api/music/albums/abc", http.StatusBadRequest, "invalid album id"},
+		{"delete with a negative id", admin.ID, http.MethodDelete, "/api/music/albums/-1", http.StatusBadRequest, "invalid album id"},
 		{"delete an unknown album", admin.ID, http.MethodDelete, "/api/music/albums/999999", http.StatusNotFound, "album not found"},
 	}
 	for _, tt := range tests {

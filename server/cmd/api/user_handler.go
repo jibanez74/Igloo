@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -304,6 +305,22 @@ func (app *Application) UpdateUserAvatar(w http.ResponseWriter, r *http.Request)
 			"user": newUserResponse(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.Pin.Valid, user.CreatedAt, user.UpdatedAt),
 		},
 	})
+}
+
+func isOptionalHTTPURL(value string) bool {
+	if value == "" {
+		return true
+	}
+
+	parsed, err := url.Parse(value)
+	if err != nil {
+		return false
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return false
+	}
+
+	return parsed.Hostname() != ""
 }
 
 // uploadedAvatarURLPrefix is the URL UploadUserAvatar publishes an avatar

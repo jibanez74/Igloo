@@ -373,6 +373,8 @@ func TestUpdateUserAvatar_RejectsValuesThatAreNotExternalURLs(t *testing.T) {
 		"javascript:alert(1)",
 		"ftp://example.com/avatar.png",
 		"example.com/avatar.png",
+		"https:///avatar.png",
+		"http://:80",
 	} {
 		req := newOpenAPIJSONRequest(http.MethodPut, "/api/user/avatar", fmt.Sprintf(`{"avatar":%q}`, avatar))
 		serveOpenAPIExchange(t, handler, "updateUserAvatar", req, http.StatusBadRequest)

@@ -864,6 +864,7 @@ func TestMoviePlaylistUpdateAndRemove_ErrorPaths(t *testing.T) {
 		wantMessage string
 	}{
 		{"update with a non-numeric id", fixtures.owner.ID, http.MethodPut, "/api/movies/playlists/abc", `{"name":"Renamed"}`, http.StatusBadRequest, invalidPlaylistIDMessage},
+		{"update with a zero id", fixtures.owner.ID, http.MethodPut, "/api/movies/playlists/0", `{"name":"Renamed"}`, http.StatusBadRequest, invalidPlaylistIDMessage},
 		{"update an unknown playlist", fixtures.owner.ID, http.MethodPut, "/api/movies/playlists/999999", `{"name":"Renamed"}`, http.StatusNotFound, playlistNotFoundMessage},
 		{"update by an editor", fixtures.editor.ID, http.MethodPut, playlistPath, `{"name":"Renamed"}`, http.StatusForbidden, "only the playlist owner can update metadata"},
 		{"update with a malformed body", fixtures.owner.ID, http.MethodPut, playlistPath, `{"name":`, http.StatusBadRequest, invalidRequestBodyMessage},
@@ -871,6 +872,7 @@ func TestMoviePlaylistUpdateAndRemove_ErrorPaths(t *testing.T) {
 		{"update with an unknown movie", fixtures.owner.ID, http.MethodPut, playlistPath, `{"name":"Renamed","movie_id":999999}`, http.StatusBadRequest, movieNotFoundMessage},
 		{"remove with a non-numeric playlist id", fixtures.owner.ID, http.MethodDelete, "/api/movies/playlists/abc/movies/" + movieID, "", http.StatusBadRequest, invalidPlaylistIDMessage},
 		{"remove with a non-numeric movie id", fixtures.owner.ID, http.MethodDelete, playlistPath + "/movies/abc", "", http.StatusBadRequest, invalidMovieIDMessage},
+		{"remove with a zero movie id", fixtures.owner.ID, http.MethodDelete, playlistPath + "/movies/0", "", http.StatusBadRequest, invalidMovieIDMessage},
 		{"remove from an unknown playlist", fixtures.owner.ID, http.MethodDelete, "/api/movies/playlists/999999/movies/" + movieID, "", http.StatusNotFound, playlistNotFoundMessage},
 		{"remove by a viewer", fixtures.viewer.ID, http.MethodDelete, playlistPath + "/movies/" + movieID, "", http.StatusForbidden, "you don't have permission to edit this playlist"},
 	}
