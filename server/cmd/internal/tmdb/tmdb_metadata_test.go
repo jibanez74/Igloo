@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -404,7 +405,7 @@ func TestGetMoviesInTheaters_ServesCachedCopies(t *testing.T) {
 	var capture queryCapture
 	client := newServerClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		capture.record(r)
-		_, _ = w.Write([]byte(`{"results":[{"id":1,"title":"One"},{"id":2,"title":"Two"}]}`))
+		_, _ = w.Write([]byte(`{"results":[{"id":1,"title":"One","genre_ids":[28,12]},{"id":2,"title":"Two"}]}`))
 	}))
 
 	first, err := client.GetMoviesInTheaters(context.Background())
@@ -412,6 +413,7 @@ func TestGetMoviesInTheaters_ServesCachedCopies(t *testing.T) {
 		t.Fatalf("first call = %v, %v; want two movies", first, err)
 	}
 	first[0].Title = "Changed"
+	first[0].GenreIDs[0] = 99
 
 	second, err := client.GetMoviesInTheaters(context.Background())
 	if err != nil || len(second) != 2 {
@@ -419,6 +421,9 @@ func TestGetMoviesInTheaters_ServesCachedCopies(t *testing.T) {
 	}
 	if second[0].Title != "One" {
 		t.Fatalf("cached title = %q, want %q: a caller's edit reached the cache", second[0].Title, "One")
+	}
+	if !slices.Equal(second[0].GenreIDs, []int{28, 12}) {
+		t.Fatalf("cached genre ids = %v, want [28 12]: a caller's edit reached the cache", second[0].GenreIDs)
 	}
 	if len(capture.all()) != 1 {
 		t.Fatalf("request count = %d, want 1", len(capture.all()))

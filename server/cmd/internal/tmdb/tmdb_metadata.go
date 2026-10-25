@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -233,10 +234,26 @@ func (t *tmdbClient) GetMoviesInTheaters(ctx context.Context) ([]*TmdbMovie, err
 	// Each call gets its own copies, so no caller can change the cached list.
 	pointers := make([]*TmdbMovie, len(results))
 	for i := range results {
-		movie := results[i]
+		movie := results[i].clone()
 		pointers[i] = &movie
 	}
 	return pointers, nil
+}
+
+// clone copies m together with every slice it holds, so the copy shares no
+// backing array with m.
+func (m TmdbMovie) clone() TmdbMovie {
+	m.GenreIDs = slices.Clone(m.GenreIDs)
+	m.ProductionCompanies = slices.Clone(m.ProductionCompanies)
+	m.Genres = slices.Clone(m.Genres)
+	m.Credits.Cast = slices.Clone(m.Credits.Cast)
+	m.Credits.Crew = slices.Clone(m.Credits.Crew)
+	m.Videos.Results = slices.Clone(m.Videos.Results)
+	m.ReleaseDates.Results = slices.Clone(m.ReleaseDates.Results)
+	for i := range m.ReleaseDates.Results {
+		m.ReleaseDates.Results[i].ReleaseDates = slices.Clone(m.ReleaseDates.Results[i].ReleaseDates)
+	}
+	return m
 }
 
 func (t *tmdbClient) requestURL(path string, params url.Values) string {
