@@ -171,25 +171,26 @@ func (app *Application) SetSettings(settings *database.Setting) {
 	app.settings = settings
 }
 
-// withSettingsWrite runs a read-modify-write against the settings row while
-// holding the write lock, so two concurrent admin updates cannot both read the
-// same row and then each write back the other's omitted fields. fn receives the
-// current row and returns the updated one; the cache is refreshed on success.
+// withSettingsWrite runs read-modify-writes against the settings row one at a
+// time, so two concurrent admin updates cannot both read the same row and then
+// each write back the other's omitted fields. fn receives the current row and
+// returns the updated one; the cache is refreshed on success. Readers keep the
+// current copy until then: fn writes the database, whose one connection can
+// be busy with a scanner batch, and holding settingsMu meanwhile stalled every
+// CurrentSettings caller, every poster and HLS start among them.
 //
 // Anything that touches the filesystem or the network must be validated before
-// calling this -- the lock is held for the whole callback.
+// calling this -- other writers wait for the whole callback.
 func (app *Application) withSettingsWrite(fn func(current database.Setting) (database.Setting, error)) (database.Setting, error) {
-	app.settingsMu.Lock()
-	defer app.settingsMu.Unlock()
+	app.settingsWriteMu.Lock()
+	defer app.settingsWriteMu.Unlock()
 
-	// Reads the field directly: the write lock is already held, and RLock on a
-	// sync.RWMutex is not reentrant.
-	updated, err := fn(*app.settings)
+	updated, err := fn(*app.CurrentSettings())
 	if err != nil {
 		return database.Setting{}, err
 	}
 
-	app.settings = &updated
+	app.SetSettings(&updated)
 
 	return updated, nil
 }
