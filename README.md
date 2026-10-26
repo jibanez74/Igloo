@@ -67,7 +67,7 @@ make dev
 
 Open [http://localhost:3000](http://localhost:3000) and sign in with your administrator email and password. Vite proxies `/api` to the Go server on port 8080. `make dev` generates database code, builds the development server, and runs it with Vite enabled.
 
-In **Settings → Libraries**, save your movie, TV show, and music paths, then start a scan for each library you want to use. Configured libraries also scan when the server starts. A scan can take time, and files being written are deferred until they have been quiet for 60 seconds. Run another scan after adding or changing files, or turn on the library watcher to apply changes as they happen. Saving a path by itself does not start a scan unless the watcher is on.
+In **Settings → Libraries**, save your movie, TV show, and music paths, then start a scan for each library you want to use. Configured libraries also scan when the server starts; with the watcher on, it walks them instead. A scan can take time, and files being written are deferred until they have been quiet for 60 seconds. Run another scan after adding or changing files, or turn on the library watcher to apply changes as they happen. Saving a path by itself does not start a scan unless the watcher is on.
 
 For TV files, use a layout such as `Show Name/Season 1/S01E02 - Episode Title.mkv`. `Specials` is supported for season zero. Combined episode files are catalogued as separate episodes, but playback runs the whole file because Igloo does not guess episode boundaries. More filename rules are in the [media guide](docs/ffmpeg.md#tv-show-scanning).
 
