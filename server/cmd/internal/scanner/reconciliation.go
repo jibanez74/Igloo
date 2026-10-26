@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"syscall"
 
 	"igloo/cmd/internal/database"
@@ -52,12 +51,20 @@ func NewReconciliation(ctx context.Context, directory string, files []CatalogFil
 		if err != nil {
 			return nil, err
 		}
-		contained := relative != "." && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) && !filepath.IsAbs(relative)
+		contained := relative != "." && !escapesRoot(relative)
 		if contained {
 			r.candidates = append(r.candidates, file)
 		}
 	}
 	return r, nil
+}
+
+// RefusesCleanup reports a catch-up whose walk found no file while the
+// catalog holds some under the root: what a dropped mount looks like, since
+// the empty mount point stays readable. Such a run must not remove anything.
+func (r *Reconciliation) RefusesCleanup(changes *Changes) bool {
+	catchUp := changes != nil && changes.CatchUp
+	return catchUp && len(r.seen) == 0 && len(r.candidates) > 0
 }
 
 func (r *Reconciliation) MarkSeen(path string) {

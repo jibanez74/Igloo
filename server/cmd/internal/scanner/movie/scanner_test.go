@@ -193,8 +193,14 @@ func tmdbMovieFromJSON(t *testing.T, payload string) tmdb.TmdbMovie {
 // scan runs one complete library scan synchronously, publishing the run the
 // way Start does before handing off to the scan goroutine.
 func (s *Scanner) scan(directory string) {
-	s.beginReport()
-	s.runMovieScan(directory)
+	s.beginReport(scanner.ScopeLibrary)
+	s.runMovieScan(directory, nil)
+}
+
+// scanChanges runs one run of watcher-detected changes synchronously.
+func (s *Scanner) scanChanges(directory string, changes scanner.Changes) {
+	s.beginReport(changes.Scope())
+	s.runMovieScan(directory, &changes)
 }
 
 // processBatchReport runs files through the production local and enrichment
@@ -266,7 +272,7 @@ func (s *Scanner) lastLoggedFailure() error {
 
 func nextMovieScan(t *testing.T, s *Scanner) *movieScanContext {
 	t.Helper()
-	index, _, err := s.loadMovieScanIndex(context.Background())
+	index, _, err := s.loadMovieScanIndex(context.Background(), nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

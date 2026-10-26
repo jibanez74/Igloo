@@ -8,6 +8,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
 
 const clearMusicAlbumSpotify = `-- name: ClearMusicAlbumSpotify :exec
@@ -478,6 +479,60 @@ func (q *Queries) MusicAlbumRetryCandidates(ctx context.Context, arg MusicAlbumR
 	return items, nil
 }
 
+const musicAlbumRetryCandidatesIn = `-- name: MusicAlbumRetryCandidatesIn :many
+SELECT e.id, e.title, e.musician, e.year FROM albums e LEFT JOIN music_provider_matches m ON m.entity_id=e.id AND m.entity_type='album'
+WHERE e.id IN (SELECT value FROM json_each(CAST(?1 AS TEXT)))
+AND (m.status='failed' OR (m.provider='apple' AND m.reason='not_listed')
+OR (m.status IS NULL AND NOT (CAST(?2 AS BOOLEAN) AND EXISTS(SELECT 1 FROM tracks t
+    JOIN music_track_metadata h ON h.track_id=t.id WHERE t.album_id=e.id AND h.apple_album_id IS NOT NULL))))
+AND EXISTS(SELECT 1 FROM tracks t WHERE t.album_id=e.id)
+ORDER BY e.id
+`
+
+type MusicAlbumRetryCandidatesInParams struct {
+	Ids          string `json:"ids"`
+	AppleEnabled bool   `json:"apple_enabled"`
+}
+
+type MusicAlbumRetryCandidatesInRow struct {
+	ID       int64          `json:"id"`
+	Title    string         `json:"title"`
+	Musician sql.NullString `json:"musician"`
+	Year     sql.NullInt64  `json:"year"`
+}
+
+// MusicAlbumRetryCandidates limited to the albums a run of watcher-detected
+// changes touched. The ids arrive as a JSON array rather than sqlc.slice():
+// sqlc numbers apple_enabled ?2, and an expanded slice renumbers the
+// anonymous placeholders before it, so ?2 would bind the second album id.
+func (q *Queries) MusicAlbumRetryCandidatesIn(ctx context.Context, arg MusicAlbumRetryCandidatesInParams) ([]MusicAlbumRetryCandidatesInRow, error) {
+	rows, err := q.query(ctx, q.musicAlbumRetryCandidatesInStmt, musicAlbumRetryCandidatesIn, arg.Ids, arg.AppleEnabled)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []MusicAlbumRetryCandidatesInRow{}
+	for rows.Next() {
+		var i MusicAlbumRetryCandidatesInRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Musician,
+			&i.Year,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const musicAlbumTrackIDs = `-- name: MusicAlbumTrackIDs :many
 SELECT id FROM tracks WHERE album_id=?
 `
@@ -634,6 +689,57 @@ func (q *Queries) MusicAppleAlbumCandidates(ctx context.Context, afterID int64) 
 	return items, nil
 }
 
+const musicAppleAlbumCandidatesIn = `-- name: MusicAppleAlbumCandidatesIn :many
+SELECT e.id, e.apple_id FROM albums e
+LEFT JOIN music_provider_matches m ON m.entity_type='album' AND m.entity_id=e.id
+WHERE e.id IN (/*SLICE:ids*/?)
+AND ((m.entity_id IS NULL AND EXISTS(SELECT 1 FROM tracks t JOIN music_track_metadata h ON h.track_id=t.id
+    WHERE t.album_id=e.id AND h.apple_album_id IS NOT NULL))
+OR (e.apple_id IS NOT NULL AND EXISTS(SELECT 1 FROM tracks t LEFT JOIN music_provider_matches tm
+    ON tm.entity_type='track' AND tm.entity_id=t.id WHERE t.album_id=e.id AND tm.entity_id IS NULL)))
+ORDER BY e.id
+`
+
+type MusicAppleAlbumCandidatesInRow struct {
+	ID      int64         `json:"id"`
+	AppleID sql.NullInt64 `json:"apple_id"`
+}
+
+// MusicAppleAlbumCandidates limited to the albums a run of watcher-detected
+// changes touched.
+func (q *Queries) MusicAppleAlbumCandidatesIn(ctx context.Context, ids []int64) ([]MusicAppleAlbumCandidatesInRow, error) {
+	query := musicAppleAlbumCandidatesIn
+	var queryParams []interface{}
+	if len(ids) > 0 {
+		for _, v := range ids {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(ids))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
+	}
+	rows, err := q.query(ctx, nil, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []MusicAppleAlbumCandidatesInRow{}
+	for rows.Next() {
+		var i MusicAppleAlbumCandidatesInRow
+		if err := rows.Scan(&i.ID, &i.AppleID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const musicArtistRetryCandidates = `-- name: MusicArtistRetryCandidates :many
 SELECT e.id, e.name FROM musicians e LEFT JOIN music_provider_matches m ON m.entity_id=e.id AND m.entity_type='musician'
 WHERE e.id>?1 AND (m.status IS NULL OR m.status='failed' OR EXISTS(SELECT 1 FROM music_spotify_adoptions p WHERE p.musician_id=e.id))
@@ -659,6 +765,57 @@ func (q *Queries) MusicArtistRetryCandidates(ctx context.Context, afterID int64)
 	items := []MusicArtistRetryCandidatesRow{}
 	for rows.Next() {
 		var i MusicArtistRetryCandidatesRow
+		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const musicArtistRetryCandidatesIn = `-- name: MusicArtistRetryCandidatesIn :many
+SELECT e.id, e.name FROM musicians e LEFT JOIN music_provider_matches m ON m.entity_id=e.id AND m.entity_type='musician'
+WHERE e.id IN (/*SLICE:ids*/?) AND (m.status IS NULL OR m.status='failed' OR EXISTS(SELECT 1 FROM music_spotify_adoptions p WHERE p.musician_id=e.id))
+AND (EXISTS(SELECT 1 FROM track_musicians t WHERE t.musician_id=e.id)
+OR EXISTS(SELECT 1 FROM music_spotify_adoptions p
+    JOIN music_artist_identity ai ON ai.musician_id=p.musician_id
+    JOIN music_album_identity al ON al.artist_key=ai.identity_key
+    JOIN tracks t ON t.album_id=al.album_id WHERE p.musician_id=e.id))
+ORDER BY e.id
+`
+
+type MusicArtistRetryCandidatesInRow struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
+// MusicArtistRetryCandidates limited to the artists a run of watcher-detected
+// changes touched; the set is small, so it is one unpaged query.
+func (q *Queries) MusicArtistRetryCandidatesIn(ctx context.Context, ids []int64) ([]MusicArtistRetryCandidatesInRow, error) {
+	query := musicArtistRetryCandidatesIn
+	var queryParams []interface{}
+	if len(ids) > 0 {
+		for _, v := range ids {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(ids))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
+	}
+	rows, err := q.query(ctx, nil, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []MusicArtistRetryCandidatesInRow{}
+	for rows.Next() {
+		var i MusicArtistRetryCandidatesInRow
 		if err := rows.Scan(&i.ID, &i.Name); err != nil {
 			return nil, err
 		}
@@ -777,6 +934,52 @@ func (q *Queries) MusicCompoundReconciliationCandidates(ctx context.Context, aft
 	return items, nil
 }
 
+const musicCompoundReconciliationCandidatesIn = `-- name: MusicCompoundReconciliationCandidatesIn :many
+SELECT e.id FROM musicians e
+WHERE e.id IN (/*SLICE:ids*/?)
+AND EXISTS (SELECT 1 FROM music_provider_matches m WHERE m.entity_type='musician' AND m.entity_id=e.id
+AND m.status='unmatched' AND m.reason IN ('no_results','score_below_threshold'))
+AND EXISTS (SELECT 1 FROM track_musicians tm JOIN music_track_metadata local ON local.track_id=tm.track_id
+JOIN music_artist_identity i ON i.musician_id=tm.musician_id AND i.identity_key=local.artist_key
+WHERE tm.musician_id=e.id AND (instr(local.artist_tag,' & ')>0 OR instr(local.artist_tag,',')>0))
+ORDER BY e.id
+`
+
+// MusicCompoundReconciliationCandidates limited to the artists a run of
+// watcher-detected changes touched.
+func (q *Queries) MusicCompoundReconciliationCandidatesIn(ctx context.Context, ids []int64) ([]int64, error) {
+	query := musicCompoundReconciliationCandidatesIn
+	var queryParams []interface{}
+	if len(ids) > 0 {
+		for _, v := range ids {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(ids))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
+	}
+	rows, err := q.query(ctx, nil, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const musicTrackAffected = `-- name: MusicTrackAffected :many
 SELECT t.album_id, tm.musician_id FROM tracks t LEFT JOIN track_musicians tm ON tm.track_id=t.id
 WHERE t.file_path=? ORDER BY tm.musician_id
@@ -840,6 +1043,61 @@ func (q *Queries) MusicTrackLinkAlbumCandidates(ctx context.Context, afterID int
 	items := []MusicTrackLinkAlbumCandidatesRow{}
 	for rows.Next() {
 		var i MusicTrackLinkAlbumCandidatesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Musician,
+			&i.SpotifyID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const musicTrackLinkAlbumCandidatesIn = `-- name: MusicTrackLinkAlbumCandidatesIn :many
+SELECT e.id, e.title, e.musician, e.spotify_id FROM albums e
+WHERE e.id IN (/*SLICE:ids*/?) AND e.spotify_id IS NOT NULL
+AND EXISTS(SELECT 1 FROM tracks t LEFT JOIN music_provider_matches m ON m.entity_type='track' AND m.entity_id=t.id
+WHERE t.album_id=e.id AND (m.status IS NULL OR m.status='failed'))
+ORDER BY e.id
+`
+
+type MusicTrackLinkAlbumCandidatesInRow struct {
+	ID        int64          `json:"id"`
+	Title     string         `json:"title"`
+	Musician  sql.NullString `json:"musician"`
+	SpotifyID sql.NullString `json:"spotify_id"`
+}
+
+// MusicTrackLinkAlbumCandidates limited to the albums a run of
+// watcher-detected changes touched.
+func (q *Queries) MusicTrackLinkAlbumCandidatesIn(ctx context.Context, ids []int64) ([]MusicTrackLinkAlbumCandidatesInRow, error) {
+	query := musicTrackLinkAlbumCandidatesIn
+	var queryParams []interface{}
+	if len(ids) > 0 {
+		for _, v := range ids {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(ids))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
+	}
+	rows, err := q.query(ctx, nil, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []MusicTrackLinkAlbumCandidatesInRow{}
+	for rows.Next() {
+		var i MusicTrackLinkAlbumCandidatesInRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Title,

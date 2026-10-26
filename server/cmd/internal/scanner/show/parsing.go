@@ -178,7 +178,9 @@ func parseShowTitle(folder string) (string, int, string) {
 	return name, 0, ""
 }
 
-func allowDirectory(root, path string) bool {
+// AllowDirectory reports whether the scan descends into path: a show folder
+// directly under root, or a season folder inside one, neither hidden.
+func AllowDirectory(root, path string) bool {
 	relative, err := filepath.Rel(root, path)
 	if err != nil {
 		return false

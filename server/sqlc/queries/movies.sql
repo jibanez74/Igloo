@@ -41,6 +41,22 @@ FROM movies c
 LEFT JOIN movie_file_fingerprints f ON f.movie_id = c.id
 LEFT JOIN movie_tmdb_retries r ON r.movie_id = c.id;
 
+-- name: GetMovieScanIndexUnder :many
+-- GetMovieScanIndex for one path a run of watcher-detected changes covers:
+-- the file at path, or every file beneath it. lower and upper bound the
+-- children, path + '/' and path + '0' ('/' + 1), so the UNIQUE index seeks.
+SELECT c.id, c.file_path, c.tmdb_id, r.movie_id IS NOT NULL AS pending_retry, r.attempts AS retry_attempts, r.last_attempt_at, c.size, f.mtime_ns, f.ctime_ns, f.device, f.inode
+FROM movies c
+LEFT JOIN movie_file_fingerprints f ON f.movie_id = c.id
+LEFT JOIN movie_tmdb_retries r ON r.movie_id = c.id
+WHERE c.file_path = sqlc.arg(path) OR (c.file_path >= sqlc.arg(lower) AND c.file_path < sqlc.arg(upper));
+
+-- name: CountMoviesPendingEnrichment :one
+-- The pending_enrichment a scan reports when it reads only part of the index:
+-- a movie with no TMDB match or a queued retry.
+SELECT COUNT(*) FROM movies c
+WHERE c.tmdb_id IS NULL OR EXISTS (SELECT 1 FROM movie_tmdb_retries r WHERE r.movie_id = c.id);
+
 -- name: GetLatestMovies :many
 -- The home section renders title, poster and year only; certification is
 -- deliberately absent so the row matches the documented LatestMovie exactly.
@@ -556,9 +572,11 @@ DELETE FROM movies WHERE id = ? AND file_path = ?;
 -- name: GetMovieByPath :one
 SELECT id, file_path, tmdb_id FROM movies WHERE file_path = ?;
 
+-- A reprobe keeps an existing miss backoff: the search is derived from the
+-- file name, which a technical change to the same path leaves alone.
 -- name: MarkMovieTmdbRetry :exec
 INSERT INTO movie_tmdb_retries (movie_id) VALUES (?)
-ON CONFLICT (movie_id) DO UPDATE SET attempts = 0, last_attempt_at = NULL;
+ON CONFLICT (movie_id) DO NOTHING;
 
 -- name: RecordMovieTmdbMiss :exec
 INSERT INTO movie_tmdb_retries (movie_id, attempts, last_attempt_at) VALUES (?, 1, ?)

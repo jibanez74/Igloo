@@ -28,7 +28,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	startLibraryScansAtStartup(app)
+	startLibraryWork(app)
 
 	app.Server = &http.Server{
 		Addr:    fmt.Sprintf(":%d", app.Config.Port),
@@ -67,6 +67,21 @@ func main() {
 		app.cleanupStartupResources()
 		os.Exit(1)
 	}
+}
+
+// startLibraryWork follows the stored enable_watcher setting, which the
+// ENABLE_WATCHER environment value seeds only for a new database. With the
+// watcher on, each library is walked once as soon as its watches are in place,
+// so no change made during that walk is missed; otherwise the startup scans
+// run as before and nothing watches the libraries.
+func startLibraryWork(app *Application) {
+	enabled := app.CurrentSettings().EnableWatcher
+	if enabled {
+		app.Watcher.Sync(true)
+		return
+	}
+	app.Logger.Info("library watcher is off; libraries change only through scans")
+	startLibraryScansAtStartup(app)
 }
 
 func startLibraryScansAtStartup(app *Application) {

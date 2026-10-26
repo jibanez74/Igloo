@@ -48,7 +48,7 @@ func TestReportIssueWithoutPathHasNoFilename(t *testing.T) {
 // per-file progress publishes stay off an O(n log n) sort.
 func TestPublishSkipsUnchangedIssues(t *testing.T) {
 	report := NewReport()
-	progress := BeginProgress(PhaseLocal)
+	progress := BeginProgress(PhaseLocal, ScopeLibrary)
 
 	report.Issue("/library/a.mkv", PhaseLocal, "unreadable")
 	report.Publish(&progress)
@@ -72,7 +72,7 @@ func TestPublishSkipsUnchangedIssues(t *testing.T) {
 
 func TestPublishCapsIssueSummaries(t *testing.T) {
 	report := NewReport()
-	progress := BeginProgress(PhaseLocal)
+	progress := BeginProgress(PhaseLocal, ScopeLibrary)
 	for i := 0; i < MaxPublishedIssues+10; i++ {
 		report.Issue(fmt.Sprintf("/library/%03d.mkv", i), PhaseLocal, "unreadable")
 	}
@@ -90,7 +90,7 @@ func TestPublishCapsIssueSummaries(t *testing.T) {
 // issue, a rebuild per file re-sorts every key once per file.
 func TestPublishSkipsIssuesPastAFullList(t *testing.T) {
 	report := NewReport()
-	progress := BeginProgress(PhaseLocal)
+	progress := BeginProgress(PhaseLocal, ScopeLibrary)
 	for i := 0; i < MaxPublishedIssues; i++ {
 		report.Issue(fmt.Sprintf("/library/%05d.mkv", i), PhaseLocal, "deferred")
 	}
@@ -119,7 +119,7 @@ func TestPublishSkipsIssuesPastAFullList(t *testing.T) {
 // outstanding issue after any mix of additions, changes and removals.
 func TestPublishMatchesAFullSortAcrossChanges(t *testing.T) {
 	report := NewReport()
-	progress := BeginProgress(PhaseLocal)
+	progress := BeginProgress(PhaseLocal, ScopeLibrary)
 	random := rand.New(rand.NewPCG(1, 2))
 	rebuilds := 0
 	const steps = 3000
@@ -166,7 +166,7 @@ func TestCloneIsolatesAndReportsIdle(t *testing.T) {
 	}
 
 	report := NewReport()
-	progress := BeginProgress(PhaseDiscovery)
+	progress := BeginProgress(PhaseDiscovery, ScopeLibrary)
 	report.Issue("/library/a.mkv", PhaseLocal, "unreadable")
 	report.Activate("/library/b.mkv")
 	report.Publish(&progress)
@@ -199,7 +199,7 @@ func TestFinishResolvesTerminalState(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			report := NewReport()
-			progress := BeginProgress(PhaseLocal)
+			progress := BeginProgress(PhaseLocal, ScopeLibrary)
 			progress.State = tc.state
 			for i := 0; i < tc.issues; i++ {
 				report.Issue(fmt.Sprintf("/library/%d.mkv", i), PhaseLocal, "unreadable")
@@ -236,5 +236,35 @@ func TestStartProgressLogStopsAndWaits(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 	if final < 1 || calls.Load() != final {
 		t.Fatalf("progress log fired after stop: %d then %d", final, calls.Load())
+	}
+}
+
+func TestRevisionCountsChangesAcrossRuns(t *testing.T) {
+	var revision Revision
+	stamp := func(progress *Progress, counts Counts) int64 {
+		revision.Stamp(progress, counts, 0)
+		return progress.CatalogRevision
+	}
+	first := BeginProgress(PhaseLocal, ScopeChanges)
+	if got := stamp(&first, Counts{}); got != 0 {
+		t.Fatalf("a run that starts changed nothing: %d", got)
+	}
+	if got := stamp(&first, Counts{Imported: 1}); got != 1 {
+		t.Fatalf("one import: %d", got)
+	}
+	if got := stamp(&first, Counts{Imported: 1}); got != 1 {
+		t.Fatalf("publishing the same counts again: %d", got)
+	}
+	// A run that commits as much as the one before still moves the revision.
+	second := BeginProgress(PhaseLocal, ScopeChanges)
+	if got := stamp(&second, Counts{}); got != 1 {
+		t.Fatalf("a new run starts from the total: %d", got)
+	}
+	if got := stamp(&second, Counts{Updated: 1, Enriched: 1}); got != 3 {
+		t.Fatalf("an update and an enrichment: %d", got)
+	}
+	noop := BeginProgress(PhaseLocal, ScopeChanges)
+	if got := stamp(&noop, Counts{Unchanged: 4, Deferred: 2, Failed: 1}); got != 3 {
+		t.Fatalf("a run that changed nothing: %d", got)
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffmpeg"
 	"igloo/cmd/internal/ffprobe"
+	"igloo/cmd/internal/helpers"
 	"igloo/cmd/internal/itunes"
 	applogger "igloo/cmd/internal/logger"
 	"igloo/cmd/internal/preroll"
@@ -19,6 +20,7 @@ import (
 	"igloo/cmd/internal/scanner/movie"
 	"igloo/cmd/internal/scanner/music"
 	"igloo/cmd/internal/scanner/show"
+	"igloo/cmd/internal/scanner/watch"
 	"igloo/cmd/internal/spotify"
 	"igloo/cmd/internal/tmdb"
 
@@ -101,16 +103,22 @@ type Application struct {
 	ScanContext                   context.Context
 	MovieScanner                  interface {
 		Start() scanner.StartResult
+		StartChanges(scanner.Changes) scanner.StartResult
 		Status() movie.Status
 	}
 	ShowScanner interface {
 		Start() scanner.StartResult
+		StartChanges(scanner.Changes) scanner.StartResult
 		Status() show.Status
 	}
 	MusicScanner interface {
 		Start() scanner.StartResult
+		StartChanges(scanner.Changes) scanner.StartResult
 		Status() music.Status
 	}
+	// Watcher follows the library roots while enable_watcher is on; Sync
+	// starts and stops it.
+	Watcher *watch.Watcher
 }
 
 //go:embed all:webdist
@@ -296,6 +304,35 @@ func (app *Application) initScanners(musicSpotify music.SpotifyProvider, musicAp
 		},
 		InvalidateCommittedMovie:    app.invalidateCommittedMovie,
 		InvalidateDeletedWatchRooms: app.invalidateDeletedWatchRooms,
+	})
+
+	// The watcher reads the scanner fields at each run, so a test that swaps
+	// a scanner after this still feeds the new one.
+	app.Watcher = watch.New(watch.Dependencies{
+		Context: app.ScanContext,
+		Wait:    app.Wait,
+		Logger:  app.Logger,
+		Libraries: []watch.Library{
+			{
+				Name:         movieLibrary.directory,
+				Directory:    func() sql.NullString { return app.CurrentSettings().MoviesDir },
+				Extensions:   helpers.ValidVideoExtensions,
+				StartChanges: func(changes scanner.Changes) scanner.StartResult { return app.MovieScanner.StartChanges(changes) },
+			},
+			{
+				Name:           showLibrary.directory,
+				Directory:      func() sql.NullString { return app.CurrentSettings().ShowsDir },
+				Extensions:     helpers.ValidVideoExtensions,
+				AllowDirectory: show.AllowDirectory,
+				StartChanges:   func(changes scanner.Changes) scanner.StartResult { return app.ShowScanner.StartChanges(changes) },
+			},
+			{
+				Name:         musicLibrary.directory,
+				Directory:    func() sql.NullString { return app.CurrentSettings().MusicDir },
+				Extensions:   helpers.ValidAudioExtensions,
+				StartChanges: func(changes scanner.Changes) scanner.StartResult { return app.MusicScanner.StartChanges(changes) },
+			},
+		},
 	})
 }
 

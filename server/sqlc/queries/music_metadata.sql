@@ -84,6 +84,18 @@ OR EXISTS(SELECT 1 FROM music_spotify_adoptions p
     JOIN tracks t ON t.album_id=al.album_id WHERE p.musician_id=e.id))
 ORDER BY e.id LIMIT 100;
 
+-- name: MusicArtistRetryCandidatesIn :many
+-- MusicArtistRetryCandidates limited to the artists a run of watcher-detected
+-- changes touched; the set is small, so it is one unpaged query.
+SELECT e.id, e.name FROM musicians e LEFT JOIN music_provider_matches m ON m.entity_id=e.id AND m.entity_type='musician'
+WHERE e.id IN (sqlc.slice(ids)) AND (m.status IS NULL OR m.status='failed' OR EXISTS(SELECT 1 FROM music_spotify_adoptions p WHERE p.musician_id=e.id))
+AND (EXISTS(SELECT 1 FROM track_musicians t WHERE t.musician_id=e.id)
+OR EXISTS(SELECT 1 FROM music_spotify_adoptions p
+    JOIN music_artist_identity ai ON ai.musician_id=p.musician_id
+    JOIN music_album_identity al ON al.artist_key=ai.identity_key
+    JOIN tracks t ON t.album_id=al.album_id WHERE p.musician_id=e.id))
+ORDER BY e.id;
+
 -- name: CountMusicArtistRetryCandidates :one
 SELECT COUNT(*) FROM musicians e LEFT JOIN music_provider_matches m ON m.entity_id=e.id AND m.entity_type='musician'
 WHERE (m.status IS NULL OR m.status='failed' OR EXISTS(SELECT 1 FROM music_spotify_adoptions p WHERE p.musician_id=e.id))
@@ -118,6 +130,19 @@ OR (m.status IS NULL AND NOT (CAST(sqlc.arg(apple_enabled) AS BOOLEAN) AND EXIST
     JOIN music_track_metadata h ON h.track_id=t.id WHERE t.album_id=e.id AND h.apple_album_id IS NOT NULL))))
 AND EXISTS(SELECT 1 FROM tracks t WHERE t.album_id=e.id)
 ORDER BY e.id LIMIT 100;
+
+-- name: MusicAlbumRetryCandidatesIn :many
+-- MusicAlbumRetryCandidates limited to the albums a run of watcher-detected
+-- changes touched. The ids arrive as a JSON array rather than sqlc.slice():
+-- sqlc numbers apple_enabled ?2, and an expanded slice renumbers the
+-- anonymous placeholders before it, so ?2 would bind the second album id.
+SELECT e.id, e.title, e.musician, e.year FROM albums e LEFT JOIN music_provider_matches m ON m.entity_id=e.id AND m.entity_type='album'
+WHERE e.id IN (SELECT value FROM json_each(CAST(sqlc.arg(ids) AS TEXT)))
+AND (m.status='failed' OR (m.provider='apple' AND m.reason='not_listed')
+OR (m.status IS NULL AND NOT (CAST(sqlc.arg(apple_enabled) AS BOOLEAN) AND EXISTS(SELECT 1 FROM tracks t
+    JOIN music_track_metadata h ON h.track_id=t.id WHERE t.album_id=e.id AND h.apple_album_id IS NOT NULL))))
+AND EXISTS(SELECT 1 FROM tracks t WHERE t.album_id=e.id)
+ORDER BY e.id;
 
 -- name: CountMusicAlbumRetryCandidates :one
 SELECT COUNT(*) FROM albums e LEFT JOIN music_provider_matches m ON m.entity_id=e.id AND m.entity_type='album'
@@ -173,6 +198,15 @@ AND EXISTS(SELECT 1 FROM tracks t LEFT JOIN music_provider_matches m ON m.entity
 WHERE t.album_id=e.id AND (m.status IS NULL OR m.status='failed'))
 ORDER BY e.id LIMIT 100;
 
+-- name: MusicTrackLinkAlbumCandidatesIn :many
+-- MusicTrackLinkAlbumCandidates limited to the albums a run of
+-- watcher-detected changes touched.
+SELECT e.id, e.title, e.musician, e.spotify_id FROM albums e
+WHERE e.id IN (sqlc.slice(ids)) AND e.spotify_id IS NOT NULL
+AND EXISTS(SELECT 1 FROM tracks t LEFT JOIN music_provider_matches m ON m.entity_type='track' AND m.entity_id=t.id
+WHERE t.album_id=e.id AND (m.status IS NULL OR m.status='failed'))
+ORDER BY e.id;
+
 -- name: CountMusicTrackLinkAlbumCandidates :one
 SELECT COUNT(*) FROM albums e
 WHERE e.spotify_id IS NOT NULL
@@ -215,6 +249,18 @@ JOIN music_artist_identity i ON i.musician_id=tm.musician_id AND i.identity_key=
 WHERE tm.musician_id=e.id AND (instr(local.artist_tag,' & ')>0 OR instr(local.artist_tag,',')>0))
 ORDER BY e.id LIMIT 100;
 
+-- name: MusicCompoundReconciliationCandidatesIn :many
+-- MusicCompoundReconciliationCandidates limited to the artists a run of
+-- watcher-detected changes touched.
+SELECT e.id FROM musicians e
+WHERE e.id IN (sqlc.slice(ids))
+AND EXISTS (SELECT 1 FROM music_provider_matches m WHERE m.entity_type='musician' AND m.entity_id=e.id
+AND m.status='unmatched' AND m.reason IN ('no_results','score_below_threshold'))
+AND EXISTS (SELECT 1 FROM track_musicians tm JOIN music_track_metadata local ON local.track_id=tm.track_id
+JOIN music_artist_identity i ON i.musician_id=tm.musician_id AND i.identity_key=local.artist_key
+WHERE tm.musician_id=e.id AND (instr(local.artist_tag,' & ')>0 OR instr(local.artist_tag,',')>0))
+ORDER BY e.id;
+
 -- name: SetMusicArtistSpotifyID :exec
 UPDATE musicians SET spotify_id=?, updated_at = CURRENT_TIMESTAMP WHERE id=?;
 
@@ -246,6 +292,18 @@ AND ((m.entity_id IS NULL AND EXISTS(SELECT 1 FROM tracks t JOIN music_track_met
 OR (e.apple_id IS NOT NULL AND EXISTS(SELECT 1 FROM tracks t LEFT JOIN music_provider_matches tm
     ON tm.entity_type='track' AND tm.entity_id=t.id WHERE t.album_id=e.id AND tm.entity_id IS NULL)))
 ORDER BY e.id LIMIT 100;
+
+-- name: MusicAppleAlbumCandidatesIn :many
+-- MusicAppleAlbumCandidates limited to the albums a run of watcher-detected
+-- changes touched.
+SELECT e.id, e.apple_id FROM albums e
+LEFT JOIN music_provider_matches m ON m.entity_type='album' AND m.entity_id=e.id
+WHERE e.id IN (sqlc.slice(ids))
+AND ((m.entity_id IS NULL AND EXISTS(SELECT 1 FROM tracks t JOIN music_track_metadata h ON h.track_id=t.id
+    WHERE t.album_id=e.id AND h.apple_album_id IS NOT NULL))
+OR (e.apple_id IS NOT NULL AND EXISTS(SELECT 1 FROM tracks t LEFT JOIN music_provider_matches tm
+    ON tm.entity_type='track' AND tm.entity_id=t.id WHERE t.album_id=e.id AND tm.entity_id IS NULL)))
+ORDER BY e.id;
 
 -- name: CountMusicAppleAlbumCandidates :one
 SELECT COUNT(*) FROM albums e

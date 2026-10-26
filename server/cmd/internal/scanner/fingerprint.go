@@ -88,24 +88,36 @@ func (r *FileInspection) ReadAt(p []byte, off int64) (int, error) {
 	return r.file.ReadAt(p, off)
 }
 
+// FingerprintOf reads the metadata fingerprint of a stat result, without the
+// content hash.
+func FingerprintOf(info os.FileInfo) FileFingerprint {
+	return fingerprintFromInfo(info)
+}
+
+// ChangedAt is the later of a file's mtime and ctime, the moment the quiet
+// period counts from.
+func (f FileFingerprint) ChangedAt() time.Time {
+	return time.Unix(0, max(f.MtimeNS, f.CtimeNS))
+}
+
 func sameFileMetadata(a, b FileFingerprint) bool {
 	return a.Size == b.Size && a.MtimeNS == b.MtimeNS && a.CtimeNS == b.CtimeNS && a.Device == b.Device && a.Inode == b.Inode
 }
 
 // InspectFile compares metadata first, then hashes the entire file if necessary.
-// A future event handler can use the separate hashing operation internally even
-// when metadata matches; notifications themselves are never successful baselines.
-func InspectFile(ctx context.Context, path string, previous *FileFingerprint, now func() time.Time) (*FileInspection, error) {
-	return inspectFile(ctx, path, previous, now, true)
+// A file changed within quietPeriod of now is deferred: FileQuietPeriod for a
+// library scan, ChangeQuietPeriod for a run of watcher-detected changes.
+func InspectFile(ctx context.Context, path string, previous *FileFingerprint, now func() time.Time, quietPeriod time.Duration) (*FileInspection, error) {
+	return inspectFile(ctx, path, previous, now, quietPeriod, true)
 }
 
 // InspectFileMetadata inspects and pins a file without reading its content.
 // Changed filesystem metadata always requires processing, even for identical bytes.
-func InspectFileMetadata(ctx context.Context, path string, previous *FileFingerprint, now func() time.Time) (*FileInspection, error) {
-	return inspectFile(ctx, path, previous, now, false)
+func InspectFileMetadata(ctx context.Context, path string, previous *FileFingerprint, now func() time.Time, quietPeriod time.Duration) (*FileInspection, error) {
+	return inspectFile(ctx, path, previous, now, quietPeriod, false)
 }
 
-func inspectFile(ctx context.Context, path string, previous *FileFingerprint, now func() time.Time, hashContent bool) (*FileInspection, error) {
+func inspectFile(ctx context.Context, path string, previous *FileFingerprint, now func() time.Time, quietPeriod time.Duration, hashContent bool) (*FileInspection, error) {
 	err := ctx.Err()
 	if err != nil {
 		return nil, err
@@ -120,7 +132,7 @@ func inspectFile(ctx context.Context, path string, previous *FileFingerprint, no
 		return nil, fmt.Errorf("not a regular file: %s", path)
 	}
 	observed := fingerprintFromInfo(info)
-	eligible := time.Unix(0, max(observed.MtimeNS, observed.CtimeNS)).Add(FileQuietPeriod)
+	eligible := observed.ChangedAt().Add(quietPeriod)
 	r := &FileInspection{path: path, Fingerprint: observed}
 	observedAt := now()
 	err = ctx.Err()

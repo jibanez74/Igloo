@@ -35,7 +35,6 @@ func (s *Scanner) persistLocalMovie(ctx context.Context, scan *movieScanContext,
 	if movie.inspection == nil {
 		return fmt.Errorf("missing file inspection")
 	}
-	txScan := scan.clone()
 	var movieID int64
 	var tmdbID sql.NullInt64
 	var pending bool
@@ -119,11 +118,14 @@ func (s *Scanner) persistLocalMovie(ctx context.Context, scan *movieScanContext,
 	// movieIndex is shared (never written inside the transaction) and is only
 	// updated here, after a successful commit, so a movie whose transaction
 	// failed is never recorded as scanned/unchanged.
-	scan.setEntry(filepath.Clean(movie.params.FilePath), movieScanEntry{
-		FileFingerprint: movie.inspection.Fingerprint, ID: movieID, FilePath: movie.params.FilePath,
-		TmdbID: tmdbID, PendingRetry: pending, HasFingerprint: true,
-	})
-	scan.mergeFrom(txScan)
+	entry := movie.baseline
+	entry.FileFingerprint, entry.HasFingerprint = movie.inspection.Fingerprint, true
+	entry.ID, entry.FilePath = movieID, movie.params.FilePath
+	entry.TmdbID, entry.PendingRetry = tmdbID, pending
+	if !pending || tmdbID != movie.baseline.TmdbID {
+		entry.RetryAttempts, entry.LastAttemptAt = 0, sql.NullInt64{}
+	}
+	scan.setEntry(filepath.Clean(movie.params.FilePath), entry)
 	return nil
 }
 

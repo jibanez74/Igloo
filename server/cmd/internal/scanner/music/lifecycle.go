@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"time"
 
+	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"igloo/cmd/internal/itunes"
 	"igloo/cmd/internal/scanner"
@@ -18,11 +20,17 @@ const (
 
 // Start launches a scan asynchronously when configured and no music scan is running.
 func (s *Scanner) Start() scanner.StartResult {
-	return s.launcher.Launch(s.currentMusicDirectory(), s.beginReport, s.runMusicScan)
+	return s.launcher.Start(s.currentMusicDirectory, nil, s.beginReport, s.runMusicScan)
+}
+
+// StartChanges applies what the library watcher saw change.
+func (s *Scanner) StartChanges(changes scanner.Changes) scanner.StartResult {
+	return s.launcher.Start(s.currentMusicDirectory, &changes, s.beginReport, s.runMusicScan)
 }
 
 // runMusicScan expects beginReport to have published the run it continues.
-func (s *Scanner) runMusicScan(directory string) {
+// changes is nil for a library scan.
+func (s *Scanner) runMusicScan(directory string, changes *scanner.Changes) {
 	report := newScanReport(s.Status())
 	ctx := s.scanContext
 	stopProgressLog := scanner.StartProgressLog(scanner.ProgressLogInterval, func() {
@@ -57,12 +65,14 @@ func (s *Scanner) runMusicScan(directory string) {
 		report.Issue("", report.status.Phase, reason)
 	}
 	s.logger.Info("music scan phase", "run", report.status.RunID, "phase", scanner.PhaseLocal, "directory", directory)
-	scanIndex, files, err := s.loadMusicScanIndex(ctx)
+	paths := changes.Resolve(directory)
+	scanIndex, files, err := s.loadMusicScanIndex(ctx, changes, paths)
 	if err != nil {
 		fail(err, "Unable to read the music catalog.")
 		return
 	}
 	scan := newMusicScanContext(scanIndex)
+	scan.changes = changes
 	scan.appleEnabled = s.apple != nil && s.appleLookupsEnabled()
 	report.scan = scan
 	reconciliation, err := scanner.NewReconciliation(ctx, directory, files)
@@ -75,30 +85,26 @@ func (s *Scanner) runMusicScan(directory string) {
 		if len(batch) == 0 {
 			return
 		}
-		s.processMusicBatch(ctx, scan, report, batch)
+		s.processMusicBatch(ctx, scan, report, directory, batch)
 		batch = batch[:0]
 	}
 
-	err = scanner.WalkMediaLibraryContext(
-		ctx,
-		directory,
-		helpers.ValidAudioExtensions,
-		func(path string, err error) {
-			s.logger.Warn("music discovery failed", "path", path, "error", err)
-			report.Issue(path, scanner.PhaseLocal, scanner.ReasonDiscoveryEntry)
-		},
-		func(file scanner.ScanFile) error {
-			reconciliation.MarkSeen(file.Path)
-			batch = append(batch, file)
-			report.status.Total++
+	onError := func(path string, err error) {
+		s.logger.Warn("music discovery failed", "path", path, "error", err)
+		report.Issue(path, scanner.PhaseLocal, scanner.ReasonDiscoveryEntry)
+	}
+	onFile := func(file scanner.ScanFile) error {
+		reconciliation.MarkSeen(file.Path)
+		batch = append(batch, file)
+		report.status.Total++
 
-			if len(batch) >= scanner.BatchSize {
-				flushBatch()
-			}
+		if len(batch) >= scanner.BatchSize {
+			flushBatch()
+		}
 
-			return nil
-		},
-	)
+		return nil
+	}
+	err = scanner.WalkRun(ctx, directory, changes, paths, helpers.ValidAudioExtensions, onError, onFile, nil)
 	if err != nil {
 		fail(err, scanner.ReasonDiscoveryInterrupted)
 		return
@@ -111,10 +117,25 @@ func (s *Scanner) runMusicScan(directory string) {
 	}
 
 	s.phase(report, scanner.PhaseCleanup)
-	report.status.Deleted, err = s.cleanupMissingMusic(ctx, scan, reconciliation)
-	if err != nil {
-		fail(err, scanner.ReasonCleanupUnsafe)
-		return
+	if reconciliation.RefusesCleanup(changes) {
+		s.logger.Warn("music cleanup skipped: the library looked empty", "directory", directory)
+		report.Issue("", scanner.PhaseCleanup, scanner.ReasonCleanupSkippedEmpty)
+	} else {
+		report.status.Deleted, err = s.cleanupMissingMusic(ctx, scan, reconciliation)
+		if err != nil {
+			fail(err, scanner.ReasonCleanupUnsafe)
+			return
+		}
+	}
+
+	if changes.Scoped() {
+		scan.scope, err = s.touchedScope(ctx, scan.touched)
+		if err != nil {
+			fail(err, "Unable to read the touched albums and artists.")
+			return
+		}
+		// Merges of the local phase are already in the scope.
+		scan.merged = false
 	}
 
 	s.phase(report, scanner.PhaseEnrichment)
@@ -131,7 +152,8 @@ func (s *Scanner) runMusicScan(directory string) {
 
 // processMusicBatch records one local outcome per file on the report. A file
 // interrupted by cancellation is left unrecorded.
-func (s *Scanner) processMusicBatch(ctx context.Context, scan *musicScanContext, report *scanReport, files []scanner.ScanFile) {
+func (s *Scanner) processMusicBatch(ctx context.Context, scan *musicScanContext, report *scanReport, root string, files []scanner.ScanFile) {
+	deferredReason := scan.changes.DeferredReason(scanner.ReasonFileDeferredNextScan)
 	for _, file := range files {
 		report.Activate(file.Path)
 		s.publish(report)
@@ -147,21 +169,27 @@ func (s *Scanner) processMusicBatch(ctx context.Context, scan *musicScanContext,
 		switch {
 		case isDeferred:
 			report.status.Deferred++
-			report.Issue(file.Path, scanner.PhaseLocal, scanner.ReasonFileDeferredNextScan)
+			report.Issue(file.Path, scanner.PhaseLocal, deferredReason)
 			s.logger.Debug("deferred track", "path", file.Path, "reason", deferred.Reason)
+			// The watcher re-reads the file to learn when it is quiet.
+			scan.changes.Deferred(root, file.Path, time.Time{})
 		case err != nil:
 			report.status.Failed++
 			report.Issue(file.Path, scanner.PhaseLocal, reasonFailed)
 			s.logger.Warn("failed to process track", "path", file.Path, "error", err)
 		case outcome == scanner.FileDeferred:
 			report.status.Deferred++
-			report.Issue(file.Path, scanner.PhaseLocal, scanner.ReasonFileDeferredNextScan)
+			report.Issue(file.Path, scanner.PhaseLocal, deferredReason)
+			scan.changes.Deferred(root, file.Path, time.Time{})
 		case outcome == scanner.FileUnchanged, outcome == scanner.FileFingerprintOnly:
 			report.status.Unchanged++
+			scan.touch(file.Path)
 		case existed:
 			report.status.Updated++
+			scan.touch(file.Path)
 		default:
 			report.status.Imported++
+			scan.touch(file.Path)
 		}
 		s.noteSpotifyStop(scan, report)
 		s.publish(report)
@@ -177,7 +205,7 @@ func (s *Scanner) processFile(ctx context.Context, scan *musicScanContext, file 
 	if existed {
 		previous = &baseline
 	}
-	inspection, err := scanner.InspectFile(ctx, file.Path, previous, s.now)
+	inspection, err := scanner.InspectFile(ctx, file.Path, previous, s.now, scan.changes.QuietPeriod())
 	if err != nil {
 		return outcome, existed, err
 	}
@@ -224,11 +252,28 @@ func (s *Scanner) readCatalogIDs(ctx context.Context, file scanner.ScanFile, ins
 	return ids
 }
 
-func (s *Scanner) loadMusicScanIndex(ctx context.Context) (map[string]scanner.FileFingerprint, []scanner.CatalogFile, error) {
-	rows, err := s.queries.ListMusicTrackScanIndex(ctx)
+// loadMusicScanIndex reads the catalog tracks the run covers: all of them,
+// or for a run of changes only those at or beneath paths.
+func (s *Scanner) loadMusicScanIndex(ctx context.Context, changes *scanner.Changes, paths []string) (map[string]scanner.FileFingerprint, []scanner.CatalogFile, error) {
+	var rows []database.ListMusicTrackScanIndexRow
+	var err error
+	if changes.Scoped() {
+		rows, err = scanner.LoadUnder(ctx, paths, func(ctx context.Context, path, lower, upper string) ([]database.ListMusicTrackScanIndexUnderRow, error) {
+			return s.queries.ListMusicTrackScanIndexUnder(ctx, database.ListMusicTrackScanIndexUnderParams{Path: path, Lower: lower, Upper: upper})
+		}, func(row database.ListMusicTrackScanIndexUnderRow) database.ListMusicTrackScanIndexRow {
+			return database.ListMusicTrackScanIndexRow(row)
+		})
+	} else {
+		rows, err = s.queries.ListMusicTrackScanIndex(ctx)
+	}
 	if err != nil {
 		return nil, nil, err
 	}
+	index, files := musicScanIndex(rows)
+	return index, files, nil
+}
+
+func musicScanIndex(rows []database.ListMusicTrackScanIndexRow) (map[string]scanner.FileFingerprint, []scanner.CatalogFile) {
 	index := make(map[string]scanner.FileFingerprint, len(rows))
 	files := make([]scanner.CatalogFile, 0, len(rows))
 	for _, row := range rows {
@@ -242,5 +287,5 @@ func (s *Scanner) loadMusicScanIndex(ctx context.Context) (map[string]scanner.Fi
 		}
 		index[filepath.Clean(row.FilePath)] = fingerprint
 	}
-	return index, files, nil
+	return index, files
 }

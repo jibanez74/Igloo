@@ -34,6 +34,20 @@ func (q *Queries) CountMoviesForGenre(ctx context.Context, genreID int64) (int64
 	return count, err
 }
 
+const countMoviesPendingEnrichment = `-- name: CountMoviesPendingEnrichment :one
+SELECT COUNT(*) FROM movies c
+WHERE c.tmdb_id IS NULL OR EXISTS (SELECT 1 FROM movie_tmdb_retries r WHERE r.movie_id = c.id)
+`
+
+// The pending_enrichment a scan reports when it reads only part of the index:
+// a movie with no TMDB match or a queued retry.
+func (q *Queries) CountMoviesPendingEnrichment(ctx context.Context) (int64, error) {
+	row := q.queryRow(ctx, q.countMoviesPendingEnrichmentStmt, countMoviesPendingEnrichment)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createMovieExtraVideo = `-- name: CreateMovieExtraVideo :exec
 INSERT INTO movie_extra_videos (
   movie_id,
@@ -824,6 +838,72 @@ func (q *Queries) GetMovieScanIndex(ctx context.Context) ([]GetMovieScanIndexRow
 	return items, nil
 }
 
+const getMovieScanIndexUnder = `-- name: GetMovieScanIndexUnder :many
+SELECT c.id, c.file_path, c.tmdb_id, r.movie_id IS NOT NULL AS pending_retry, r.attempts AS retry_attempts, r.last_attempt_at, c.size, f.mtime_ns, f.ctime_ns, f.device, f.inode
+FROM movies c
+LEFT JOIN movie_file_fingerprints f ON f.movie_id = c.id
+LEFT JOIN movie_tmdb_retries r ON r.movie_id = c.id
+WHERE c.file_path = ?1 OR (c.file_path >= ?2 AND c.file_path < ?3)
+`
+
+type GetMovieScanIndexUnderParams struct {
+	Path  string `json:"path"`
+	Lower string `json:"lower"`
+	Upper string `json:"upper"`
+}
+
+type GetMovieScanIndexUnderRow struct {
+	ID            int64          `json:"id"`
+	FilePath      string         `json:"file_path"`
+	TmdbID        sql.NullInt64  `json:"tmdb_id"`
+	PendingRetry  bool           `json:"pending_retry"`
+	RetryAttempts sql.NullInt64  `json:"retry_attempts"`
+	LastAttemptAt sql.NullInt64  `json:"last_attempt_at"`
+	Size          int64          `json:"size"`
+	MtimeNs       sql.NullInt64  `json:"mtime_ns"`
+	CtimeNs       sql.NullInt64  `json:"ctime_ns"`
+	Device        sql.NullString `json:"device"`
+	Inode         sql.NullString `json:"inode"`
+}
+
+// GetMovieScanIndex for one path a run of watcher-detected changes covers:
+// the file at path, or every file beneath it. lower and upper bound the
+// children, path + '/' and path + '0' ('/' + 1), so the UNIQUE index seeks.
+func (q *Queries) GetMovieScanIndexUnder(ctx context.Context, arg GetMovieScanIndexUnderParams) ([]GetMovieScanIndexUnderRow, error) {
+	rows, err := q.query(ctx, q.getMovieScanIndexUnderStmt, getMovieScanIndexUnder, arg.Path, arg.Lower, arg.Upper)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetMovieScanIndexUnderRow{}
+	for rows.Next() {
+		var i GetMovieScanIndexUnderRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FilePath,
+			&i.TmdbID,
+			&i.PendingRetry,
+			&i.RetryAttempts,
+			&i.LastAttemptAt,
+			&i.Size,
+			&i.MtimeNs,
+			&i.CtimeNs,
+			&i.Device,
+			&i.Inode,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getMoviesByGenreAsc = `-- name: GetMoviesByGenreAsc :many
 SELECT
   m.id,
@@ -1529,9 +1609,11 @@ func (q *Queries) InsertVideoStream(ctx context.Context, arg InsertVideoStreamPa
 
 const markMovieTmdbRetry = `-- name: MarkMovieTmdbRetry :exec
 INSERT INTO movie_tmdb_retries (movie_id) VALUES (?)
-ON CONFLICT (movie_id) DO UPDATE SET attempts = 0, last_attempt_at = NULL
+ON CONFLICT (movie_id) DO NOTHING
 `
 
+// A reprobe keeps an existing miss backoff: the search is derived from the
+// file name, which a technical change to the same path leaves alone.
 func (q *Queries) MarkMovieTmdbRetry(ctx context.Context, movieID int64) error {
 	_, err := q.exec(ctx, q.markMovieTmdbRetryStmt, markMovieTmdbRetry, movieID)
 	return err

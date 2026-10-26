@@ -111,7 +111,7 @@ func TestMissingMovieDeletionTransaction(t *testing.T) {
 			if imported != 1 || failures != 0 {
 				t.Fatalf("import=%d errors=%d", imported, failures)
 			}
-			_, files, err := s.loadMovieScanIndex(ctx)
+			_, files, err := s.loadMovieScanIndex(ctx, nil, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

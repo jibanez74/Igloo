@@ -40,9 +40,10 @@ func (s *Scanner) Status() Status {
 	return result
 }
 
-func (s *Scanner) beginReport() {
+func (s *Scanner) beginReport(scope scanner.ScanScope) {
 	s.statusMu.Lock()
-	s.status = Status{Progress: scanner.BeginProgress(scanner.PhaseDiscovery)}
+	s.status = Status{Progress: scanner.BeginProgress(scanner.PhaseDiscovery, scope)}
+	s.revision.Stamp(&s.status.Progress, s.status.Counts, 0)
 	s.statusMu.Unlock()
 }
 
@@ -51,6 +52,7 @@ func (s *Scanner) publish(report *scanReport) {
 	report.Publish(&report.status.Progress)
 	s.statusMu.Lock()
 	s.status = report.status
+	s.revision.Stamp(&s.status.Progress, s.status.Counts, 0)
 	s.statusMu.Unlock()
 }
 

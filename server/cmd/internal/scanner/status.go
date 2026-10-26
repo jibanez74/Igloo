@@ -32,6 +32,15 @@ const (
 	PhaseEnrichment ScanPhase = "enrichment"
 )
 
+// ScanScope tells a library scan apart from a run that applies only the
+// changes the library watcher detected.
+type ScanScope string
+
+const (
+	ScopeLibrary ScanScope = "library"
+	ScopeChanges ScanScope = "changes"
+)
+
 // Issue texts published by more than one scanner. They are user-facing and
 // contain no directory paths or raw errors. A scanner that needs to say
 // something different keeps its own local constant instead.
@@ -44,6 +53,8 @@ const (
 	ReasonDiscoveryInterrupted = "Library discovery was interrupted; missing files were not removed."
 	ReasonCleanupUnsafe        = "Cleanup stopped because the library could not be safely checked."
 	ReasonFileDeferredNextScan = "The file is still changing or has not been quiet for 60 seconds. It is retried on the next scan."
+	ReasonFileDeferredWatched  = "The file is still changing. The library watcher retries it once it is quiet."
+	ReasonCleanupSkippedEmpty  = "The library looked empty, so nothing was removed. If its files are really gone, run a library scan."
 )
 
 // MaxPublishedIssues caps the issue summaries carried by a status; IssueCount
@@ -56,12 +67,15 @@ type Progress struct {
 	RunID       string     `json:"run_id"`
 	State       ScanState  `json:"state"`
 	Phase       ScanPhase  `json:"phase"`
+	Scope       ScanScope  `json:"scope"`
 	StartedAt   *time.Time `json:"started_at"`
 	UpdatedAt   *time.Time `json:"updated_at"`
 	FinishedAt  *time.Time `json:"finished_at"`
 	ActiveFiles []string   `json:"active_files"`
 	IssueCount  int        `json:"issue_count"`
 	Issues      []Issue    `json:"issues"`
+	// CatalogRevision is the scanner's Revision when the report was published.
+	CatalogRevision int64 `json:"catalog_revision"`
 }
 
 // Counts are the file and enrichment counters every scanner's status carries;
@@ -82,16 +96,45 @@ type Counts struct {
 	EnrichmentUnmatched int `json:"enrichment_unmatched"`
 }
 
+// Revision counts the catalog changes a scanner made across its runs: every
+// file imported, updated or deleted, every entry enriched, and additional
+// committed metadata changes supplied by the scanner. A client that
+// compares it sees a change even from runs it never saw a report of. Each
+// scanner keeps one beside its status, under the same lock.
+type Revision struct {
+	total   int64
+	run     string
+	counted int
+}
+
+// Stamp counts what progress's run changed since its last stamp and sets the
+// running total on progress. A new run starts counting from zero, so the total
+// only grows. additionalChanges is cumulative for this run, like counts, and
+// their sum must never shrink within a run: a change that lowers a counter,
+// such as a match taken back out of Enriched, must add as much back through
+// additionalChanges, or the changes after it are not counted.
+func (r *Revision) Stamp(progress *Progress, counts Counts, additionalChanges int) {
+	if progress.RunID != r.run {
+		r.run, r.counted = progress.RunID, 0
+	}
+	changed := counts.Imported + counts.Updated + counts.Deleted + counts.Enriched + additionalChanges
+	if changed > r.counted {
+		r.total += int64(changed - r.counted)
+		r.counted = changed
+	}
+	progress.CatalogRevision = r.total
+}
+
 type Issue struct {
 	Filename string    `json:"filename"`
 	Phase    ScanPhase `json:"phase"`
 	Reason   string    `json:"reason"`
 }
 
-// BeginProgress starts a new run in the given phase.
-func BeginProgress(phase ScanPhase) Progress {
+// BeginProgress starts a new run in the given phase and scope.
+func BeginProgress(phase ScanPhase, scope ScanScope) Progress {
 	now := time.Now().UTC()
-	return Progress{RunID: rand.Text(), State: StateRunning, Phase: phase, StartedAt: &now, UpdatedAt: &now}
+	return Progress{RunID: rand.Text(), State: StateRunning, Phase: phase, Scope: scope, StartedAt: &now, UpdatedAt: &now}
 }
 
 // Clone returns a copy that shares nothing with p. A zero value reports idle so
@@ -112,7 +155,7 @@ func (p Progress) Clone() Progress {
 	p.ActiveFiles = append([]string{}, p.ActiveFiles...)
 	p.Issues = append([]Issue{}, p.Issues...)
 	if p.State == "" {
-		p.State, p.Phase = StateIdle, PhaseIdle
+		p.State, p.Phase, p.Scope = StateIdle, PhaseIdle, ScopeLibrary
 	}
 	return p
 }

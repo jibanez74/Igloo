@@ -98,7 +98,7 @@ func TestNewDefaultsOptionalDependencies(t *testing.T) {
 		t.Fatalf("resolve movie with bare dependencies: %v", err)
 	}
 
-	resolved.inspection, err = scanner.InspectFileMetadata(context.Background(), path, nil, testScanner.scanner.now)
+	resolved.inspection, err = scanner.InspectFileMetadata(context.Background(), path, nil, testScanner.scanner.now, scanner.FileQuietPeriod)
 	if err != nil {
 		t.Fatal(err)
 	}

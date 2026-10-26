@@ -361,7 +361,7 @@ func TestProcessMusicBatchDoesNotMergeFailedPersistIntoScanContext(t *testing.T)
 		}),
 	})
 
-	scanIndex, _, err := app.loadMusicScanIndex(context.Background())
+	scanIndex, _, err := app.loadMusicScanIndex(context.Background(), nil, nil)
 	if err != nil {
 		t.Fatalf("load scan index: %v", err)
 	}
@@ -403,7 +403,7 @@ func TestPersistResolvedTrackInvalidatesOnlyAfterCommitBeforeMergingCaches(t *te
 		musicians: []resolvedMusician{{name: "Artist", sortName: "Artist"}},
 	}
 	prepareMusicFixtures(t, []scanner.ScanFile{{Path: resolved.params.FilePath, Size: resolved.params.Size}})
-	inspection, inspectErr := scanner.InspectFile(ctx, resolved.params.FilePath, nil, s.now)
+	inspection, inspectErr := scanner.InspectFile(ctx, resolved.params.FilePath, nil, s.now, scanner.FileQuietPeriod)
 	if inspectErr != nil {
 		t.Fatal(inspectErr)
 	}

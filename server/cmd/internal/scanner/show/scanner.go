@@ -60,6 +60,7 @@ type Scanner struct {
 	tx       scanner.TxRunner
 	statusMu sync.RWMutex
 	status   Status
+	revision scanner.Revision
 }
 
 func New(deps Dependencies) *Scanner {
@@ -90,11 +91,17 @@ func New(deps Dependencies) *Scanner {
 
 // Start launches a scan asynchronously when configured and no show scan is running.
 func (s *Scanner) Start() scanner.StartResult {
-	return s.launcher.Launch(s.CurrentShowsDirectory(), s.beginReport, s.runShowScan)
+	return s.launcher.Start(s.CurrentShowsDirectory, nil, s.beginReport, s.runShowScan)
+}
+
+// StartChanges applies what the library watcher saw change.
+func (s *Scanner) StartChanges(changes scanner.Changes) scanner.StartResult {
+	return s.launcher.Start(s.CurrentShowsDirectory, &changes, s.beginReport, s.runShowScan)
 }
 
 // runShowScan expects beginReport to have published the run it continues.
-func (s *Scanner) runShowScan(directory string) {
+// changes is nil for a library scan.
+func (s *Scanner) runShowScan(directory string, changes *scanner.Changes) {
 	report := newScanReport(s.Status())
 	ctx := s.ScanContext
 	stopProgressLog := scanner.StartProgressLog(scanner.ProgressLogInterval, func() {
@@ -136,12 +143,14 @@ func (s *Scanner) runShowScan(directory string) {
 	}
 	s.Logger.Info("show scan phase", "run", report.status.RunID, "phase", scanner.PhaseDiscovery, "directory", root)
 
-	index, catalog, err := s.loadScanIndex(ctx)
+	paths := changes.Resolve(root)
+	index, catalog, err := s.loadScanIndex(ctx, changes, paths)
 	if err != nil {
 		fail(err, "Unable to read the TV catalog.")
 		return
 	}
 	scan := newShowScanContext(index)
+	scan.changes = changes
 	report.scan = scan
 
 	reconciliation, err := scanner.NewReconciliation(ctx, root, catalog)
@@ -151,10 +160,11 @@ func (s *Scanner) runShowScan(directory string) {
 	}
 
 	files := make([]scanner.ScanFile, 0)
-	err = scanner.WalkMediaLibraryContext(ctx, root, helpers.ValidVideoExtensions, func(path string, err error) {
+	onError := func(path string, err error) {
 		s.Logger.Warn("show walk error", "path", path, "error", err)
 		report.Issue(path, scanner.PhaseDiscovery, scanner.ReasonDiscoveryEntry)
-	}, func(file scanner.ScanFile) error {
+	}
+	onFile := func(file scanner.ScanFile) error {
 		file.Path = filepath.Clean(file.Path)
 		reconciliation.MarkSeen(file.Path)
 		if strings.HasPrefix(filepath.Base(file.Path), ".") {
@@ -166,7 +176,9 @@ func (s *Scanner) runShowScan(directory string) {
 			s.publish(report)
 		}
 		return nil
-	}, func(path string) bool { return allowDirectory(root, path) })
+	}
+	allowed := func(path string) bool { return AllowDirectory(root, path) }
+	err = scanner.WalkRun(ctx, root, changes, paths, helpers.ValidVideoExtensions, onError, onFile, allowed)
 	if err != nil {
 		fail(err, "The library directory could not be read.")
 		return
@@ -179,10 +191,15 @@ func (s *Scanner) runShowScan(directory string) {
 	}
 
 	s.phase(report, scanner.PhaseCleanup)
-	err = s.cleanup(ctx, reconciliation, report)
-	if err != nil {
-		fail(err, "Missing TV files could not be reconciled.")
-		return
+	if reconciliation.RefusesCleanup(changes) {
+		s.Logger.Warn("show cleanup skipped: the library looked empty", "directory", root)
+		report.Issue("", scanner.PhaseCleanup, scanner.ReasonCleanupSkippedEmpty)
+	} else {
+		err = s.cleanup(ctx, reconciliation, report)
+		if err != nil {
+			fail(err, "Missing TV files could not be reconciled.")
+			return
+		}
 	}
 	if ctx.Err() != nil {
 		return
@@ -204,17 +221,42 @@ func (s *Scanner) runShowScan(directory string) {
 	s.publish(report)
 }
 
-// loadScanIndex reads the catalog files with their fingerprint baselines and
-// episode links in two queries, so unchanged files need no query at all.
-func (s *Scanner) loadScanIndex(ctx context.Context) (map[string]showScanEntry, []scanner.CatalogFile, error) {
-	rows, err := s.Queries.GetShowScanIndex(ctx)
+// loadScanIndex reads the catalog files the run covers, all of them or for a
+// run of changes only those at or beneath paths, with their fingerprint
+// baselines and episode links, so unchanged files need no query at all.
+func (s *Scanner) loadScanIndex(ctx context.Context, changes *scanner.Changes, paths []string) (map[string]showScanEntry, []scanner.CatalogFile, error) {
+	var rows []database.GetShowScanIndexRow
+	var links []database.GetShowScanEpisodeLinksRow
+	var err error
+	if changes.Scoped() {
+		rows, err = scanner.LoadUnder(ctx, paths, func(ctx context.Context, path, lower, upper string) ([]database.GetShowScanIndexUnderRow, error) {
+			return s.Queries.GetShowScanIndexUnder(ctx, database.GetShowScanIndexUnderParams{Path: path, Lower: lower, Upper: upper})
+		}, func(row database.GetShowScanIndexUnderRow) database.GetShowScanIndexRow {
+			return database.GetShowScanIndexRow(row)
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+		links, err = scanner.LoadUnder(ctx, paths, func(ctx context.Context, path, lower, upper string) ([]database.GetShowScanEpisodeLinksUnderRow, error) {
+			return s.Queries.GetShowScanEpisodeLinksUnder(ctx, database.GetShowScanEpisodeLinksUnderParams{Path: path, Lower: lower, Upper: upper})
+		}, func(link database.GetShowScanEpisodeLinksUnderRow) database.GetShowScanEpisodeLinksRow {
+			return database.GetShowScanEpisodeLinksRow(link)
+		})
+	} else {
+		rows, err = s.Queries.GetShowScanIndex(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		links, err = s.Queries.GetShowScanEpisodeLinks(ctx)
+	}
 	if err != nil {
 		return nil, nil, err
 	}
-	links, err := s.Queries.GetShowScanEpisodeLinks(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
+	index, catalog := showScanIndex(rows, links)
+	return index, catalog, nil
+}
+
+func showScanIndex(rows []database.GetShowScanIndexRow, links []database.GetShowScanEpisodeLinksRow) (map[string]showScanEntry, []scanner.CatalogFile) {
 	episodes := make(map[int64][]int64, len(rows))
 	for _, link := range links {
 		episodes[link.FileID] = append(episodes[link.FileID], link.EpisodeID)
@@ -229,13 +271,14 @@ func (s *Scanner) loadScanIndex(ctx context.Context) (map[string]showScanEntry, 
 		index[filepath.Clean(row.FilePath)] = entry
 		catalog = append(catalog, scanner.CatalogFile{ID: row.ID, Path: row.FilePath})
 	}
-	return index, catalog, nil
+	return index, catalog
 }
 
 // probeJob is one walked file; a zero baseline.ID means it is not cataloged yet.
 type probeJob struct {
 	file     scanner.ScanFile
 	baseline showScanEntry
+	changes  *scanner.Changes
 }
 
 // probeResult carries a worker's parse, inspection, and probe. info is set
@@ -261,7 +304,7 @@ func (s *Scanner) prepareFile(ctx context.Context, root string, job probeJob) pr
 	if job.baseline.HasFingerprint {
 		previous = &job.baseline.FileFingerprint
 	}
-	result.inspection, result.err = scanner.InspectFileMetadata(ctx, job.file.Path, previous, s.Now)
+	result.inspection, result.err = scanner.InspectFileMetadata(ctx, job.file.Path, previous, s.Now, job.changes.QuietPeriod())
 	if result.err != nil || result.inspection.Outcome != scanner.FileNeedsProcessing {
 		return result
 	}
@@ -286,7 +329,7 @@ func (s *Scanner) prepareFile(ctx context.Context, root string, job probeJob) pr
 func (s *Scanner) processLocal(ctx context.Context, scan *showScanContext, report *scanReport, root string, files []scanner.ScanFile) {
 	jobs := make([]probeJob, 0, len(files))
 	for _, file := range files {
-		jobs = append(jobs, probeJob{file: file, baseline: scan.index[file.Path]})
+		jobs = append(jobs, probeJob{file: file, baseline: scan.index[file.Path], changes: scan.changes})
 	}
 	scanner.RunWorkers(ctx, scanWorkers, jobs, func() bool { return true },
 		func(ctx context.Context, job probeJob) probeResult { return s.prepareFile(ctx, root, job) },
@@ -303,7 +346,7 @@ func (s *Scanner) processLocal(ctx context.Context, scan *showScanContext, repor
 				}
 				canceledDuringPersist := result.err != nil && ctx.Err() != nil
 				if !canceledDuringPersist {
-					s.recordLocal(report, scan, result)
+					s.recordLocal(report, scan, root, result)
 				}
 			}
 			closeErr := result.inspection.Close()
@@ -316,7 +359,7 @@ func (s *Scanner) processLocal(ctx context.Context, scan *showScanContext, repor
 
 // recordLocal classifies one finished file. A stale catalog row is left to
 // the next scan and counts as nothing.
-func (s *Scanner) recordLocal(report *scanReport, scan *showScanContext, result probeResult) {
+func (s *Scanner) recordLocal(report *scanReport, scan *showScanContext, root string, result probeResult) {
 	path := result.job.file.Path
 	report.status.Processed++
 	var deferral *scanner.FileDeferral
@@ -328,7 +371,12 @@ func (s *Scanner) recordLocal(report *scanReport, scan *showScanContext, result 
 	switch {
 	case deferred:
 		report.status.Deferred++
-		report.Issue(path, scanner.PhaseLocal, scanner.ReasonFileDeferredNextScan)
+		var eligibleAt time.Time
+		if result.inspection != nil {
+			eligibleAt = result.inspection.EligibleAt
+		}
+		scan.changes.Deferred(root, path, eligibleAt)
+		report.Issue(path, scanner.PhaseLocal, scan.changes.DeferredReason(scanner.ReasonFileDeferredNextScan))
 		s.Logger.Debug("deferred show file", "path", path, "reason", deferral.Reason)
 	case errors.Is(result.err, errStaleCatalogRow):
 	case result.err != nil:

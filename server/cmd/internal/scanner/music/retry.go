@@ -31,11 +31,15 @@ func (s *Scanner) retryCatalog(ctx context.Context, scan *musicScanContext, repo
 	if stopped {
 		return nil
 	}
-	artists, err := s.queries.CountMusicArtistRetryCandidates(ctx)
+	err := s.refreshScope(ctx, scan)
 	if err != nil {
 		return err
 	}
-	albums, err := s.queries.CountMusicAlbumRetryCandidates(ctx, scan.appleEnabled)
+	artists, err := s.countArtistRetryCandidates(ctx, scan)
+	if err != nil {
+		return err
+	}
+	albums, err := s.countAlbumRetryCandidates(ctx, scan)
 	if err != nil {
 		return err
 	}
@@ -43,7 +47,7 @@ func (s *Scanner) retryCatalog(ctx context.Context, scan *musicScanContext, repo
 	s.publish(report)
 	var after int64
 	for {
-		candidates, err := s.queries.MusicArtistRetryCandidates(ctx, after)
+		candidates, err := s.artistRetryCandidates(ctx, scan, after)
 		if err != nil {
 			return err
 		}
@@ -78,9 +82,13 @@ func (s *Scanner) retryCatalog(ctx context.Context, scan *musicScanContext, repo
 			s.publish(report)
 		}
 	}
+	err = s.refreshScope(ctx, scan)
+	if err != nil {
+		return err
+	}
 	after = 0
 	for {
-		candidates, err := s.queries.MusicAlbumRetryCandidates(ctx, database.MusicAlbumRetryCandidatesParams{AfterID: after, AppleEnabled: scan.appleEnabled})
+		candidates, err := s.albumRetryCandidates(ctx, scan, after)
 		if err != nil {
 			return err
 		}
@@ -176,7 +184,11 @@ func (s *Scanner) persistEnrichment(ctx context.Context, scan *musicScanContext,
 // Each album costs at most one request, and only when this scan did not match
 // it.
 func (s *Scanner) linkAlbumTracks(ctx context.Context, scan *musicScanContext, report *scanReport) error {
-	pending, err := s.queries.CountMusicTrackLinkAlbumCandidates(ctx)
+	err := s.refreshScope(ctx, scan)
+	if err != nil {
+		return err
+	}
+	pending, err := s.countTrackLinkAlbumCandidates(ctx, scan)
 	if err != nil {
 		return err
 	}
@@ -184,7 +196,7 @@ func (s *Scanner) linkAlbumTracks(ctx context.Context, scan *musicScanContext, r
 	s.publish(report)
 	var after int64
 	for {
-		candidates, err := s.queries.MusicTrackLinkAlbumCandidates(ctx, after)
+		candidates, err := s.trackLinkAlbumCandidates(ctx, scan, after)
 		if err != nil {
 			return err
 		}
@@ -325,6 +337,7 @@ func dropAlbumMatch(ctx context.Context, qtx *database.Queries, txScan *musicSca
 	for _, row := range rows {
 		txScan.invalidatedTracks[row.ID] = true
 	}
+	txScan.matchesDropped++
 	return saveMusicMatch(ctx, qtx, musicProviderSpotify, musicEntityAlbum, albumID, &resolvedMatch{
 		status: musicStatusUnmatched,
 		reason: sql.NullString{String: musicSpotifyReasonTracksDisagree, Valid: true},
@@ -464,9 +477,13 @@ func (s *Scanner) reconcileCompoundCredits(ctx context.Context, scan *musicScanC
 // A previous scan may have committed the match before cancellation interrupted
 // credit reconciliation. Final non-matches still need to finish those credits.
 func (s *Scanner) reconcilePendingCompoundCredits(ctx context.Context, scan *musicScanContext) error {
+	err := s.refreshScope(ctx, scan)
+	if err != nil {
+		return err
+	}
 	var after int64
 	for {
-		candidates, err := s.queries.MusicCompoundReconciliationCandidates(ctx, after)
+		candidates, err := s.compoundReconciliationCandidates(ctx, scan, after)
 		if err != nil {
 			return err
 		}

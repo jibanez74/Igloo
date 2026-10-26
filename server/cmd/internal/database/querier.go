@@ -30,6 +30,9 @@ type Querier interface {
 	ClearShowSeasonRetry(ctx context.Context, seasonID int64) error
 	CountAdmins(ctx context.Context) (int64, error)
 	CountMoviesForGenre(ctx context.Context, genreID int64) (int64, error)
+	// The pending_enrichment a scan reports when it reads only part of the index:
+	// a movie with no TMDB match or a queued retry.
+	CountMoviesPendingEnrichment(ctx context.Context) (int64, error)
 	CountMusicAlbumRetryCandidates(ctx context.Context, appleEnabled bool) (int64, error)
 	CountMusicAppleAlbumCandidates(ctx context.Context) (int64, error)
 	CountMusicArtistRetryCandidates(ctx context.Context) (int64, error)
@@ -245,6 +248,10 @@ type Querier interface {
 	// The movie twin of GetPlaylistsWithCollaboratorAccess; see the notes there.
 	GetMoviePlaylistsWithCollaboratorAccess(ctx context.Context, requestingUserID int64) ([]GetMoviePlaylistsWithCollaboratorAccessRow, error)
 	GetMovieScanIndex(ctx context.Context) ([]GetMovieScanIndexRow, error)
+	// GetMovieScanIndex for one path a run of watcher-detected changes covers:
+	// the file at path, or every file beneath it. lower and upper bound the
+	// children, path + '/' and path + '0' ('/' + 1), so the UNIQUE index seeks.
+	GetMovieScanIndexUnder(ctx context.Context, arg GetMovieScanIndexUnderParams) ([]GetMovieScanIndexUnderRow, error)
 	GetMovieWatchProgress(ctx context.Context, arg GetMovieWatchProgressParams) (GetMovieWatchProgressRow, error)
 	GetMoviesByGenreAsc(ctx context.Context, arg GetMoviesByGenreAscParams) ([]GetMoviesByGenreAscRow, error)
 	GetMoviesByGenreDesc(ctx context.Context, arg GetMoviesByGenreDescParams) ([]GetMoviesByGenreDescRow, error)
@@ -404,7 +411,12 @@ type Querier interface {
 	// caller compares the stored fingerprint and treats a mismatch as a miss.
 	GetShowRemuxSafetyVerdict(ctx context.Context, arg GetShowRemuxSafetyVerdictParams) (GetShowRemuxSafetyVerdictRow, error)
 	GetShowScanEpisodeLinks(ctx context.Context) ([]GetShowScanEpisodeLinksRow, error)
+	// GetShowScanEpisodeLinks for the files GetShowScanIndexUnder returns.
+	GetShowScanEpisodeLinksUnder(ctx context.Context, arg GetShowScanEpisodeLinksUnderParams) ([]GetShowScanEpisodeLinksUnderRow, error)
 	GetShowScanIndex(ctx context.Context) ([]GetShowScanIndexRow, error)
+	// GetShowScanIndex for one path a run of watcher-detected changes covers;
+	// lower and upper bound its children as in GetMovieScanIndexUnder.
+	GetShowScanIndexUnder(ctx context.Context, arg GetShowScanIndexUnderParams) ([]GetShowScanIndexUnderRow, error)
 	GetShowSeason(ctx context.Context, id int64) (ShowSeason, error)
 	// Seasons with the count of episodes actually present. Pruning deletes episodes
 	// that lost their last file, so a stored episode always has one and the stored
@@ -514,6 +526,9 @@ type Querier interface {
 	LinkMusicTrackSpotify(ctx context.Context, arg LinkMusicTrackSpotifyParams) error
 	LinkShowEpisodeFile(ctx context.Context, arg LinkShowEpisodeFileParams) error
 	ListMusicTrackScanIndex(ctx context.Context) ([]ListMusicTrackScanIndexRow, error)
+	// ListMusicTrackScanIndex for one path a run of watcher-detected changes
+	// covers; lower and upper bound its children as in GetMovieScanIndexUnder.
+	ListMusicTrackScanIndexUnder(ctx context.Context, arg ListMusicTrackScanIndexUnderParams) ([]ListMusicTrackScanIndexUnderRow, error)
 	// The shared admin request queue, newest first. Visibility is admin-only and
 	// enforced by the handlers; user_id here only selects the viewer's read state
 	// from notification_reads.
@@ -525,6 +540,8 @@ type Querier interface {
 	// SQLite needs a WHERE clause before an upsert's ON CONFLICT in INSERT ... SELECT,
 	// or it parses ON as a join constraint.
 	MarkAllNotificationsReadForUser(ctx context.Context, userID int64) error
+	// A reprobe keeps an existing miss backoff: the search is derived from the
+	// file name, which a technical change to the same path leaves alone.
 	MarkMovieTmdbRetry(ctx context.Context, movieID int64) error
 	MarkMovieUnwatched(ctx context.Context, arg MarkMovieUnwatchedParams) error
 	MarkMovieWatched(ctx context.Context, arg MarkMovieWatchedParams) error
@@ -558,6 +575,11 @@ type Querier interface {
 	// one waits for Apple: lookups are on and one of its files carries an Apple
 	// collection id.
 	MusicAlbumRetryCandidates(ctx context.Context, arg MusicAlbumRetryCandidatesParams) ([]MusicAlbumRetryCandidatesRow, error)
+	// MusicAlbumRetryCandidates limited to the albums a run of watcher-detected
+	// changes touched. The ids arrive as a JSON array rather than sqlc.slice():
+	// sqlc numbers apple_enabled ?2, and an expanded slice renumbers the
+	// anonymous placeholders before it, so ?2 would bind the second album id.
+	MusicAlbumRetryCandidatesIn(ctx context.Context, arg MusicAlbumRetryCandidatesInParams) ([]MusicAlbumRetryCandidatesInRow, error)
 	MusicAlbumTrackIDs(ctx context.Context, albumID sql.NullInt64) ([]int64, error)
 	// Every track of the album with its outcome: one without an outcome, or with
 	// a failed one, is paired; a matched one holds its Spotify track.
@@ -569,7 +591,13 @@ type Querier interface {
 	// Apple collection id, and an Apple-matched one with tracks still to pair
 	// (files added or changed since it matched).
 	MusicAppleAlbumCandidates(ctx context.Context, afterID int64) ([]MusicAppleAlbumCandidatesRow, error)
+	// MusicAppleAlbumCandidates limited to the albums a run of watcher-detected
+	// changes touched.
+	MusicAppleAlbumCandidatesIn(ctx context.Context, ids []int64) ([]MusicAppleAlbumCandidatesInRow, error)
 	MusicArtistRetryCandidates(ctx context.Context, afterID int64) ([]MusicArtistRetryCandidatesRow, error)
+	// MusicArtistRetryCandidates limited to the artists a run of watcher-detected
+	// changes touched; the set is small, so it is one unpaged query.
+	MusicArtistRetryCandidatesIn(ctx context.Context, ids []int64) ([]MusicArtistRetryCandidatesInRow, error)
 	MusicArtistTrackIDs(ctx context.Context, musicianID int64) ([]int64, error)
 	// The range and order ride idx_track_musicians_musician_track, so keep them on tm.
 	MusicArtistTrackMetadata(ctx context.Context, arg MusicArtistTrackMetadataParams) ([]MusicArtistTrackMetadataRow, error)
@@ -577,6 +605,9 @@ type Querier interface {
 	// MusicArtistRetryCandidates. Joining from music_provider_matches instead forced
 	// a temp b-tree sort of every remaining candidate on each 100-row page.
 	MusicCompoundReconciliationCandidates(ctx context.Context, afterID int64) ([]int64, error)
+	// MusicCompoundReconciliationCandidates limited to the artists a run of
+	// watcher-detected changes touched.
+	MusicCompoundReconciliationCandidatesIn(ctx context.Context, ids []int64) ([]int64, error)
 	// The album and artists a track contributes to, read before a rewrite or delete
 	// so both sides can be reconciled. One row per artist (album_id repeats); a
 	// single row with a NULL musician_id means no artists; no rows means no track.
@@ -585,6 +616,9 @@ type Querier interface {
 	// 'track' outcome yet, or a failed one. Unmatched tracks are final, so an
 	// album whose extras are not on Spotify drops out once they are recorded.
 	MusicTrackLinkAlbumCandidates(ctx context.Context, afterID int64) ([]MusicTrackLinkAlbumCandidatesRow, error)
+	// MusicTrackLinkAlbumCandidates limited to the albums a run of
+	// watcher-detected changes touched.
+	MusicTrackLinkAlbumCandidatesIn(ctx context.Context, ids []int64) ([]MusicTrackLinkAlbumCandidatesInRow, error)
 	PruneShow(ctx context.Context, id int64) error
 	PruneShowSeason(ctx context.Context, id int64) (int64, error)
 	// Pruning is scoped to the season a file change touched: cascades leave the

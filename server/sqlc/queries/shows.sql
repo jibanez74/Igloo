@@ -153,12 +153,24 @@ DELETE FROM show_episode_files WHERE file_id = ?;
 -- name: GetShowScanEpisodeLinks :many
 SELECT file_id, episode_id FROM show_episode_files ORDER BY file_id, episode_order;
 
+-- name: GetShowScanEpisodeLinksUnder :many
+-- GetShowScanEpisodeLinks for the files GetShowScanIndexUnder returns.
+SELECT l.file_id, l.episode_id FROM show_episode_files l JOIN show_files f ON f.id = l.file_id
+WHERE f.file_path = sqlc.arg(path) OR (f.file_path >= sqlc.arg(lower) AND f.file_path < sqlc.arg(upper))
+ORDER BY l.file_id, l.episode_order;
+
 -- name: UpsertShowFingerprint :exec
 INSERT INTO show_file_fingerprints (file_id, mtime_ns, ctime_ns, device, inode) VALUES (?, ?, ?, ?, ?)
 ON CONFLICT (file_id) DO UPDATE SET mtime_ns = excluded.mtime_ns, ctime_ns = excluded.ctime_ns, device = excluded.device, inode = excluded.inode;
 
 -- name: GetShowScanIndex :many
 SELECT f.id, f.season_id, f.file_path, f.size, fp.mtime_ns, fp.ctime_ns, fp.device, fp.inode FROM show_files f LEFT JOIN show_file_fingerprints fp ON fp.file_id = f.id;
+
+-- name: GetShowScanIndexUnder :many
+-- GetShowScanIndex for one path a run of watcher-detected changes covers;
+-- lower and upper bound its children as in GetMovieScanIndexUnder.
+SELECT f.id, f.season_id, f.file_path, f.size, fp.mtime_ns, fp.ctime_ns, fp.device, fp.inode FROM show_files f LEFT JOIN show_file_fingerprints fp ON fp.file_id = f.id
+WHERE f.file_path = sqlc.arg(path) OR (f.file_path >= sqlc.arg(lower) AND f.file_path < sqlc.arg(upper));
 
 -- name: DeleteMissingShowFile :one
 DELETE FROM show_files WHERE id = ? AND file_path = ? RETURNING season_id;

@@ -335,7 +335,7 @@ func TestFailedMovieProbeValidation(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					baseline, _, err := s.loadMovieScanIndex(context.Background())
+					baseline, _, err := s.loadMovieScanIndex(context.Background(), nil, nil)
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -345,7 +345,7 @@ func TestFailedMovieProbeValidation(t *testing.T) {
 						if err != nil || !reflect.DeepEqual(before, after) {
 							t.Errorf("failed probe changed catalog: before=%+v after=%+v err=%v", before, after, err)
 						}
-						stored, _, err := s.loadMovieScanIndex(context.Background())
+						stored, _, err := s.loadMovieScanIndex(context.Background(), nil, nil)
 						if err != nil || !reflect.DeepEqual(baseline, stored) {
 							t.Errorf("failed probe changed fingerprint: %v", err)
 						}
@@ -627,7 +627,7 @@ func TestWorkersPrepareWithoutDatabase(t *testing.T) {
 	}
 	probed.inspection.Close()
 
-	inspection, err := scanner.InspectFileMetadata(context.Background(), path, nil, s.now)
+	inspection, err := scanner.InspectFileMetadata(context.Background(), path, nil, s.now, scanner.FileQuietPeriod)
 	if err != nil {
 		t.Fatal(err)
 	}

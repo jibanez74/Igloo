@@ -67,6 +67,7 @@ type Scanner struct {
 	invalidateCommittedTrack func(int64)
 	statusMu                 sync.RWMutex
 	status                   Status
+	revision                 scanner.Revision
 }
 
 // New constructs a scanner and defaults optional lifecycle and cache callbacks.

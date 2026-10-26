@@ -9,7 +9,15 @@ import (
 // Database caches use transaction overlays; lookup outcomes and splitting
 // decisions live for the scan and do not depend on transaction success.
 type musicScanContext struct {
-	trackIndex        map[string]scanner.FileFingerprint
+	// changes is nil for a library scan. A run of changes records the tracks
+	// it settled in touched, and its enrichment passes keep to scope.
+	changes    *scanner.Changes
+	touched    []string
+	scope      *musicScope
+	trackIndex map[string]scanner.FileFingerprint
+	// merged is set by a merge: a transaction clone's tells its caller the
+	// ids it collected may point at deleted rows, and the scan's that scope
+	// must be read again before the next enrichment pass.
 	merged            bool
 	invalidatedTracks map[int64]bool
 	artistAttempts    map[string]*resolvedMusician
@@ -36,6 +44,14 @@ type musicScanContext struct {
 	// tracksLinked counts the tracks paired with an Apple Music or Spotify
 	// track; a clone counts its own transaction and mergeFrom adds it.
 	tracksLinked int
+	// matchesDropped counts the album matches undone because their tracks
+	// contradicted them; a clone counts its own transaction and mergeFrom
+	// adds it.
+	matchesDropped int
+	// matchesRevoked counts the tallies moved away from matched. Enriched
+	// drops with each one, so the catalog revision adds it back: the changes
+	// it counts in a run must never shrink.
+	matchesRevoked int
 	// breaker stops Spotify lookups for the rest of the scan once the provider
 	// is failing; stopReported keeps the scan-wide issue to one.
 	breaker      *scanner.ProviderBreaker
@@ -77,6 +93,13 @@ func newMusicScanContext(trackIndex map[string]scanner.FileFingerprint) *musicSc
 	}
 }
 
+// touch records a settled track for a run of changes' enrichment scope.
+func (scan *musicScanContext) touch(path string) {
+	if scan.changes.Scoped() {
+		scan.touched = append(scan.touched, path)
+	}
+}
+
 func (scan *musicScanContext) clone() *musicScanContext {
 	return &musicScanContext{
 		compoundSplits:      scan.compoundSplits,
@@ -105,7 +128,9 @@ func (scan *musicScanContext) clone() *musicScanContext {
 func (scan *musicScanContext) mergeFrom(other *musicScanContext) {
 	scan.genreIDs.MergeFrom(other.genreIDs)
 	scan.tracksLinked += other.tracksLinked
+	scan.matchesDropped += other.matchesDropped
 	if other.merged {
+		scan.merged = true
 		scan.musicianIDs = scanner.NewScanCache[string, int64]()
 		scan.albumIDs = scanner.NewScanCache[string, int64]()
 		return
@@ -139,6 +164,9 @@ func (scan *musicScanContext) recountEnrichment(key, status string) {
 			return
 		}
 		scan.enrichmentCounts[previous]--
+		if previous == musicStatusMatched {
+			scan.matchesRevoked++
+		}
 	}
 	scan.enrichmentOutcome[key] = status
 	scan.enrichmentCounts[status]++

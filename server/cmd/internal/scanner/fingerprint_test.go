@@ -18,7 +18,7 @@ import (
 
 func inspectTestFile(t testing.TB, path string, previous *FileFingerprint) *FileInspection {
 	t.Helper()
-	result, err := InspectFile(context.Background(), path, previous, func() time.Time { return time.Now().Add(time.Hour) })
+	result, err := InspectFile(context.Background(), path, previous, func() time.Time { return time.Now().Add(time.Hour) }, FileQuietPeriod)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +99,7 @@ func TestInspectQuietPeriod(t *testing.T) {
 	eligible := time.Unix(0, max(baseline.MtimeNS, baseline.CtimeNS)).Add(FileQuietPeriod)
 	for _, delta := range []time.Duration{-time.Nanosecond, 0, time.Nanosecond} {
 		now := func() time.Time { return eligible.Add(delta) }
-		r, err := InspectFile(context.Background(), path, nil, now)
+		r, err := InspectFile(context.Background(), path, nil, now, FileQuietPeriod)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -117,7 +117,7 @@ func TestInspectQuietPeriod(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, err := InspectFile(context.Background(), path, &baseline, time.Now)
+	r, err := InspectFile(context.Background(), path, &baseline, time.Now, FileQuietPeriod)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +130,7 @@ func TestInspectQuietPeriod(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, err = InspectFile(context.Background(), path, &baseline, time.Now)
+	r, err = InspectFile(context.Background(), path, &baseline, time.Now, FileQuietPeriod)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,7 +219,7 @@ func TestInspectionRacedOpenAndFailures(t *testing.T) {
 		}
 		return time.Now().Add(time.Hour)
 	}
-	r, err := InspectFile(context.Background(), path, nil, clock)
+	r, err := InspectFile(context.Background(), path, nil, clock, FileQuietPeriod)
 	if err != nil || r.Outcome != FileDeferred {
 		t.Fatalf("raced FIFO: %+v %v", r, err)
 	}
@@ -227,17 +227,17 @@ func TestInspectionRacedOpenAndFailures(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = InspectFile(context.Background(), path, nil, time.Now)
+	_, err = InspectFile(context.Background(), path, nil, time.Now, FileQuietPeriod)
 	if err == nil {
 		t.Fatal("accepted special file")
 	}
-	_, err = InspectFile(context.Background(), path+".missing", nil, time.Now)
+	_, err = InspectFile(context.Background(), path+".missing", nil, time.Now, FileQuietPeriod)
 	if !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("missing: %v", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, err = InspectFile(ctx, path, nil, time.Now)
+	_, err = InspectFile(ctx, path, nil, time.Now, FileQuietPeriod)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancellation: %v", err)
 	}
@@ -251,7 +251,7 @@ func TestInspectionRacedOpenAndFailures(t *testing.T) {
 		t.Fatal(err)
 	}
 	if os.Geteuid() != 0 {
-		_, err = InspectFile(context.Background(), path, nil, func() time.Time { return time.Now().Add(time.Hour) })
+		_, err = InspectFile(context.Background(), path, nil, func() time.Time { return time.Now().Add(time.Hour) }, FileQuietPeriod)
 		if !errors.Is(err, os.ErrPermission) {
 			t.Fatalf("unreadable: %v", err)
 		}
@@ -309,7 +309,7 @@ func BenchmarkInspectUnchanged(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for b.Loop() {
-		r, err := InspectFile(context.Background(), path, &baseline, now)
+		r, err := InspectFile(context.Background(), path, &baseline, now, FileQuietPeriod)
 		if err != nil || r.Outcome != FileUnchanged {
 			b.Fatalf("%+v %v", r, err)
 		}
@@ -352,7 +352,7 @@ func TestMetadataInspectionReadsNoContent(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			inspection, err := InspectFileMetadata(context.Background(), path, nil, func() time.Time { return time.Now().Add(time.Hour) })
+			inspection, err := InspectFileMetadata(context.Background(), path, nil, func() time.Time { return time.Now().Add(time.Hour) }, FileQuietPeriod)
 			if err != nil {
 				t.Fatal(err)
 			}

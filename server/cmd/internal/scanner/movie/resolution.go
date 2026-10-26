@@ -43,6 +43,8 @@ func (e movieScanEntry) enrichmentEligible(now time.Time) bool {
 }
 
 type movieScanContext struct {
+	// changes is nil for a library scan.
+	changes *scanner.Changes
 	// enriched and pending are derived from movieIndex and published by the
 	// scan report; they change only through setEntry and deleteEntry.
 	enriched int
