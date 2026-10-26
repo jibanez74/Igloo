@@ -9,42 +9,30 @@ import (
 )
 
 func (s *Scanner) Start() scanner.StartResult {
-	return s.launcher.Launch(s.currentMoviesDirectory(), s.beginReport(scanner.ScopeLibrary), func(directory string) {
-		s.runMovieScan(directory, nil)
-	})
+	return s.launcher.Start(s.currentMoviesDirectory(), nil, s.beginReport, s.runMovieScan)
 }
 
-// StartChanges applies what the library watcher saw change. A catch-up walks
-// the whole library, so it starts like a library scan.
+// StartChanges applies what the library watcher saw change.
 func (s *Scanner) StartChanges(changes scanner.Changes) scanner.StartResult {
-	run := func(directory string) { s.runMovieScan(directory, &changes) }
-	if changes.CatchUp {
-		return s.launcher.Launch(s.currentMoviesDirectory(), s.beginReport(scanner.ScopeLibrary), run)
-	}
-	return s.launcher.LaunchChanges(s.currentMoviesDirectory(), s.beginReport(scanner.ScopeChanges), run)
+	return s.launcher.Start(s.currentMoviesDirectory(), &changes, s.beginReport, s.runMovieScan)
 }
 
-func (s *Scanner) loadMovieScanIndex(ctx context.Context) (map[string]movieScanEntry, []scanner.CatalogFile, error) {
-	rows, err := s.queries.GetMovieScanIndex(ctx)
+// loadMovieScanIndex reads the catalog rows the run covers: all of them, or
+// for a run of changes only those at or beneath paths.
+func (s *Scanner) loadMovieScanIndex(ctx context.Context, changes *scanner.Changes, paths []string) (map[string]movieScanEntry, []scanner.CatalogFile, error) {
+	var rows []database.GetMovieScanIndexRow
+	var err error
+	if changes.Scoped() {
+		rows, err = scanner.LoadUnder(ctx, paths, func(ctx context.Context, path, lower, upper string) ([]database.GetMovieScanIndexUnderRow, error) {
+			return s.queries.GetMovieScanIndexUnder(ctx, database.GetMovieScanIndexUnderParams{Path: path, Lower: lower, Upper: upper})
+		}, func(row database.GetMovieScanIndexUnderRow) database.GetMovieScanIndexRow {
+			return database.GetMovieScanIndexRow(row)
+		})
+	} else {
+		rows, err = s.queries.GetMovieScanIndex(ctx)
+	}
 	if err != nil {
 		return nil, nil, err
-	}
-	return movieScanIndex(rows)
-}
-
-// loadMovieScanIndexUnder reads only the catalog rows at or beneath paths,
-// for a run of changes.
-func (s *Scanner) loadMovieScanIndexUnder(ctx context.Context, paths []string) (map[string]movieScanEntry, []scanner.CatalogFile, error) {
-	rows := make([]database.GetMovieScanIndexRow, 0)
-	for _, path := range paths {
-		lower, upper := scanner.ChildBounds(path)
-		under, err := s.queries.GetMovieScanIndexUnder(ctx, database.GetMovieScanIndexUnderParams{Path: path, Lower: lower, Upper: upper})
-		if err != nil {
-			return nil, nil, err
-		}
-		for _, row := range under {
-			rows = append(rows, database.GetMovieScanIndexRow(row))
-		}
 	}
 	return movieScanIndex(rows)
 }

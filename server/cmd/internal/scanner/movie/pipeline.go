@@ -142,16 +142,8 @@ func (s *Scanner) runMovieScan(directory string, changes *scanner.Changes) {
 	s.logger.Info("movie scan phase", "run", report.status.RunID, "phase", scanner.PhaseDiscovery, "directory", directory)
 	// A run of changes reads only the catalog rows beneath its paths, and the
 	// pending count it publishes from the database instead of the index.
-	var paths []string
-	var index map[string]movieScanEntry
-	var catalog []scanner.CatalogFile
-	var err error
-	if changes.Scoped() {
-		paths = changes.Resolve(directory)
-		index, catalog, err = s.loadMovieScanIndexUnder(ctx, paths)
-	} else {
-		index, catalog, err = s.loadMovieScanIndex(ctx)
-	}
+	paths := changes.Resolve(directory)
+	index, catalog, err := s.loadMovieScanIndex(ctx, changes, paths)
 	if err != nil {
 		fail(err, "Unable to read the movie catalog.")
 		return
@@ -187,12 +179,7 @@ func (s *Scanner) runMovieScan(directory string, changes *scanner.Changes) {
 		}
 		return nil
 	}
-	if changes.Scoped() {
-		reconciliation.Limit(paths)
-		err = scanner.WalkChanges(ctx, directory, paths, helpers.ValidVideoExtensions, onError, onFile, nil)
-	} else {
-		err = scanner.WalkMediaLibraryContext(ctx, directory, helpers.ValidVideoExtensions, onError, onFile)
-	}
+	err = scanner.WalkRun(ctx, directory, changes, paths, helpers.ValidVideoExtensions, onError, onFile, nil)
 	if err != nil {
 		fail(err, scanner.ReasonDiscoveryInterrupted)
 		return
@@ -223,8 +210,7 @@ func (s *Scanner) runMovieScan(directory string, changes *scanner.Changes) {
 		return
 	}
 	s.phase(report, scanner.PhaseCleanup)
-	refused := changes.RefusesEmptyCleanup() && reconciliation.SawNothing()
-	if refused {
+	if reconciliation.RefusesCleanup(changes) {
 		s.logger.Warn("movie cleanup skipped: the library looked empty", "directory", directory)
 		report.Issue("", scanner.PhaseCleanup, scanner.ReasonCleanupSkippedEmpty)
 	} else {
@@ -310,11 +296,7 @@ func (s *Scanner) recordLocal(report *scanReport, file *localFile, result probeR
 		if file.eligible.IsZero() {
 			file.eligible = s.now().Add(result.job.changes.QuietPeriod())
 		}
-		reason := reasonDeferredInRun
-		if result.job.changes != nil {
-			reason = scanner.ReasonFileDeferredWatched
-		}
-		report.Issue(file.file.Path, scanner.PhaseLocal, reason)
+		report.Issue(file.file.Path, scanner.PhaseLocal, result.job.changes.DeferredReason(reasonDeferredInRun))
 		s.logger.Info("deferred movie", "path", file.file.Path, "eligible_at", file.eligible)
 	}
 }

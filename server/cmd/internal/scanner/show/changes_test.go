@@ -3,7 +3,9 @@ package show
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
+	"time"
 
 	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/scannertest"
@@ -119,5 +121,35 @@ func TestShowCatchUpRefusesToEmptyALibraryThatLooksUnmounted(t *testing.T) {
 	}
 	if status.IssueCount != 1 || status.Issues[0].Reason != scanner.ReasonCleanupSkippedEmpty {
 		t.Fatalf("issues = %+v", status.Issues)
+	}
+}
+
+func TestShowChangesRunHandsBackDeferredFiles(t *testing.T) {
+	s, _, root := setupScanner(t)
+	path := scannertest.WriteFile(t, filepath.Join(root, "Show (2020)/Season 1/S01E01.mkv"), "fresh")
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Now = func() time.Time { return info.ModTime().Add(time.Second) }
+	var deferred []string
+	var eligibleAt time.Time
+	s.scanChanges(root, scanner.Changes{
+		Paths: []string{"Show (2020)/Season 1/S01E01.mkv"},
+		OnDeferred: func(path string, eligible time.Time) {
+			deferred = append(deferred, path)
+			eligibleAt = eligible
+		},
+	})
+	status := s.Status()
+	if status.Deferred != 1 || status.Imported != 0 || !reflect.DeepEqual(deferred, []string{"Show (2020)/Season 1/S01E01.mkv"}) {
+		t.Fatalf("deferred=%q %+v", deferred, status.Counts)
+	}
+	// Eligible ChangeQuietPeriod after the later of mtime and ctime.
+	if eligibleAt.Before(info.ModTime().Add(scanner.ChangeQuietPeriod)) || eligibleAt.After(time.Now().Add(scanner.ChangeQuietPeriod)) {
+		t.Fatalf("eligible at %v", eligibleAt)
+	}
+	if status.Issues[0].Reason != scanner.ReasonFileDeferredWatched {
+		t.Fatalf("issue = %+v", status.Issues)
 	}
 }

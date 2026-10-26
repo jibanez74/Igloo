@@ -48,13 +48,14 @@ func TestChangesQuietPeriodAndDeferred(t *testing.T) {
 	var library *Changes
 	catchUp := &Changes{CatchUp: true}
 	scoped := &Changes{Paths: []string{"a.mkv"}}
-	if scoped.QuietPeriod() != ChangeQuietPeriod || !scoped.Scoped() || scoped.RefusesEmptyCleanup() {
-		t.Fatal("a run of changes must use ChangeQuietPeriod and be scoped")
+	const libraryReason = "retried on the next scan"
+	if scoped.QuietPeriod() != ChangeQuietPeriod || !scoped.Scoped() || scoped.Scope() != ScopeChanges || scoped.DeferredReason(libraryReason) != ReasonFileDeferredWatched {
+		t.Fatal("a run of changes must use ChangeQuietPeriod, be scoped, and leave deferred files to the watcher")
 	}
-	if catchUp.QuietPeriod() != FileQuietPeriod || catchUp.Scoped() || !catchUp.RefusesEmptyCleanup() {
-		t.Fatal("a catch-up run must keep FileQuietPeriod, walk everything, and refuse empty cleanup")
+	if catchUp.QuietPeriod() != FileQuietPeriod || catchUp.Scoped() || catchUp.Scope() != ScopeLibrary || catchUp.DeferredReason(libraryReason) != ReasonFileDeferredWatched {
+		t.Fatal("a catch-up run must keep FileQuietPeriod and walk everything, and the watcher retries what it defers")
 	}
-	if library.QuietPeriod() != FileQuietPeriod || library.Scoped() || library.RefusesEmptyCleanup() {
+	if library.QuietPeriod() != FileQuietPeriod || library.Scoped() || library.Scope() != ScopeLibrary || library.DeferredReason(libraryReason) != libraryReason || library.Resolve("/library") != nil {
 		t.Fatal("a library scan keeps today's behavior")
 	}
 	library.Deferred("/library", "/library/a.mkv", time.Time{})
@@ -76,14 +77,14 @@ func TestChangesQuietPeriodAndDeferred(t *testing.T) {
 func walkChangesPaths(t *testing.T, root string, paths []string, filter func(string) bool) ([]string, []string) {
 	t.Helper()
 	var files, failures []string
-	err := WalkChanges(context.Background(), root, paths, map[string]bool{"mkv": true},
+	err := walkChanges(context.Background(), root, paths, map[string]bool{"mkv": true},
 		func(path string, _ error) { failures = append(failures, path) },
 		func(file ScanFile) error {
 			files = append(files, file.Path)
 			return nil
 		}, filter)
 	if err != nil {
-		t.Fatalf("WalkChanges: %v", err)
+		t.Fatalf("walkChanges: %v", err)
 	}
 	sort.Strings(files)
 	return files, failures
@@ -106,7 +107,7 @@ func TestWalkChangesVisitsOnlyChangedPaths(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	paths := Changes{Paths: []string{"A", "B/c.mkv", "B/subtitle.srt", "missing.mkv", "Missing Dir", "link.mkv", "broken.mkv"}}.Resolve(root)
+	paths := (&Changes{Paths: []string{"A", "B/c.mkv", "B/subtitle.srt", "missing.mkv", "Missing Dir", "link.mkv", "broken.mkv"}}).Resolve(root)
 	files, failures := walkChangesPaths(t, root, paths, nil)
 	want := []string{
 		filepath.Join(root, "A", "a.mkv"),
@@ -133,12 +134,12 @@ func TestWalkChangesAppliesDirectoryFilterToAncestors(t *testing.T) {
 		relative, _ := filepath.Rel(root, path)
 		return relative == "Show" || relative == filepath.Join("Show", "Season 1")
 	}
-	paths := Changes{Paths: []string{
+	paths := (&Changes{Paths: []string{
 		"Show/Season 1/e1.mkv",
 		"Show/Season 1/Extras/x.mkv",
 		"Show/Season 1/Extras",
 		"Show/Extras",
-	}}.Resolve(root)
+	}}).Resolve(root)
 	files, failures := walkChangesPaths(t, root, paths, filter)
 	if !reflect.DeepEqual(files, []string{filepath.Join(root, "Show", "Season 1", "e1.mkv")}) {
 		t.Fatalf("files = %q", files)
@@ -148,7 +149,7 @@ func TestWalkChangesAppliesDirectoryFilterToAncestors(t *testing.T) {
 	}
 
 	// A changed show directory is walked with the same filter beneath it.
-	files, _ = walkChangesPaths(t, root, Changes{Paths: []string{"Show"}}.Resolve(root), filter)
+	files, _ = walkChangesPaths(t, root, (&Changes{Paths: []string{"Show"}}).Resolve(root), filter)
 	if !reflect.DeepEqual(files, []string{filepath.Join(root, "Show", "Season 1", "e1.mkv")}) {
 		t.Fatalf("directory files = %q", files)
 	}
@@ -157,55 +158,78 @@ func TestWalkChangesAppliesDirectoryFilterToAncestors(t *testing.T) {
 func TestWalkChangesStopsOnCancelAndVisitError(t *testing.T) {
 	root := t.TempDir()
 	scannertest.WriteFile(t, filepath.Join(root, "A", "a.mkv"), "a")
-	paths := Changes{Paths: []string{"A"}}.Resolve(root)
+	paths := (&Changes{Paths: []string{"A"}}).Resolve(root)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	err := WalkChanges(ctx, root, paths, map[string]bool{"mkv": true}, func(string, error) {}, func(ScanFile) error { return nil }, nil)
+	err := walkChanges(ctx, root, paths, map[string]bool{"mkv": true}, func(string, error) {}, func(ScanFile) error { return nil }, nil)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("canceled walk error = %v", err)
 	}
 
 	stop := errors.New("stop")
-	err = WalkChanges(context.Background(), root, paths, map[string]bool{"mkv": true}, func(string, error) {}, func(ScanFile) error { return stop }, nil)
+	err = walkChanges(context.Background(), root, paths, map[string]bool{"mkv": true}, func(string, error) {}, func(ScanFile) error { return stop }, nil)
 	if !errors.Is(err, stop) {
 		t.Fatalf("visit error = %v, want %v", err, stop)
 	}
 }
 
-func TestReconciliationLimitKeepsOnlyChangedRows(t *testing.T) {
+func TestReconciliationRefusesCleanupOnlyForAnEmptyCatchUp(t *testing.T) {
 	root := t.TempDir()
-	files := []CatalogFile{
-		{1, filepath.Join(root, "A", "a.mkv")},
-		{2, filepath.Join(root, "A", "nested", "b.mkv")},
-		{3, filepath.Join(root, "AB", "c.mkv")},
-		{4, filepath.Join(root, "B", "d.mkv")},
-		{5, filepath.Join(root, "e.mkv")},
-	}
+	files := []CatalogFile{{1, filepath.Join(root, "A", "a.mkv")}}
 	r, err := NewReconciliation(context.Background(), root, files)
 	if err != nil {
 		t.Fatal(err)
 	}
-	r.Limit(Changes{Paths: []string{"A", "e.mkv"}}.Resolve(root))
-	got := r.Unseen()
-	want := []CatalogFile{files[0], files[1], files[4]}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("unseen = %+v, want %+v", got, want)
+	catchUp := &Changes{CatchUp: true}
+	if !r.RefusesCleanup(catchUp) {
+		t.Fatal("a catch-up that saw nothing under a populated catalog must not clean up")
 	}
-	if !r.SawNothing() {
-		t.Fatal("a walk that saw nothing under a populated catalog must say so")
+	if r.RefusesCleanup(nil) || r.RefusesCleanup(&Changes{Paths: []string{"A"}}) {
+		t.Fatal("only a catch-up refuses: a library scan and a run of changes clean up")
 	}
 	r.MarkSeen(files[0].Path)
-	if r.SawNothing() {
-		t.Fatal("a walk that saw a file must not report SawNothing")
+	if r.RefusesCleanup(catchUp) {
+		t.Fatal("a catch-up that saw a file cleans up")
 	}
 
 	empty, err := NewReconciliation(context.Background(), root, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if empty.SawNothing() {
+	if empty.RefusesCleanup(catchUp) {
 		t.Fatal("an empty catalog has nothing to protect")
+	}
+}
+
+func TestWalkRunWalksWhatTheRunCovers(t *testing.T) {
+	root := t.TempDir()
+	scannertest.WriteFile(t, filepath.Join(root, "A", "a.mkv"), "a")
+	scannertest.WriteFile(t, filepath.Join(root, "B", "b.mkv"), "b")
+	walk := func(changes *Changes) []string {
+		var files []string
+		err := WalkRun(context.Background(), root, changes, changes.Resolve(root), map[string]bool{"mkv": true},
+			func(string, error) {}, func(file ScanFile) error {
+				files = append(files, file.Path)
+				return nil
+			}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sort.Strings(files)
+		return files
+	}
+	all := []string{filepath.Join(root, "A", "a.mkv"), filepath.Join(root, "B", "b.mkv")}
+	for name, changes := range map[string]*Changes{"library scan": nil, "catch-up": {CatchUp: true}} {
+		if got := walk(changes); !reflect.DeepEqual(got, all) {
+			t.Errorf("%s walked %q, want %q", name, got, all)
+		}
+	}
+	if got := walk(&Changes{Paths: []string{"B"}}); !reflect.DeepEqual(got, all[1:]) {
+		t.Errorf("run of changes walked %q", got)
+	}
+	if got := walk(&Changes{Paths: []string{".."}}); len(got) != 0 {
+		t.Errorf("a run whose every path was dropped must walk nothing, walked %q", got)
 	}
 }
 
@@ -240,62 +264,71 @@ func TestLauncherQueuesALibraryScanBehindChanges(t *testing.T) {
 	var scans sync.WaitGroup
 	launcher := Launcher{Wait: &scans}
 	directory := sql.NullString{String: "/library", Valid: true}
+	scoped := &Changes{Paths: []string{"a.mkv"}}
+	catchUp := &Changes{CatchUp: true}
 	release := make(chan struct{})
 	var mu sync.Mutex
 	var order []string
-	record := func(name string) func(string) {
-		return func(string) {
+	record := func(name string) func(string, *Changes) {
+		return func(string, *Changes) {
 			mu.Lock()
 			order = append(order, name)
 			mu.Unlock()
 		}
 	}
-	begun := 0
-	begin := func() { begun++ }
+	var scopes []ScanScope
+	begin := func(scope ScanScope) { scopes = append(scopes, scope) }
 
-	result := launcher.LaunchChanges(directory, begin, func(string) {
+	result := launcher.Start(directory, scoped, begin, func(directory string, changes *Changes) {
 		<-release
-		record("changes")("")
+		record("changes")(directory, changes)
 	})
 	if result.Status != StartStarted {
 		t.Fatalf("changes status = %d", result.Status)
 	}
 	// A second run of changes is refused; the watcher retries it.
-	result = launcher.LaunchChanges(directory, begin, record("second changes"))
+	result = launcher.Start(directory, scoped, begin, record("second changes"))
 	if result.Status != StartAlreadyRunning {
 		t.Fatalf("second changes status = %d, want already running", result.Status)
 	}
-	// A library scan is queued behind it, and a repeat request joins the queue.
-	result = launcher.Launch(directory, begin, record("library"))
+	// A library scan is queued behind it, and a repeat request or a catch-up
+	// joins the queue.
+	result = launcher.Start(directory, nil, begin, record("library"))
 	if result.Status != StartQueued {
 		t.Fatalf("library status = %d, want queued", result.Status)
 	}
-	result = launcher.Launch(directory, begin, record("duplicate library"))
-	if result.Status != StartQueued {
-		t.Fatalf("repeat library status = %d, want queued", result.Status)
+	for _, changes := range []*Changes{nil, catchUp} {
+		result = launcher.Start(directory, changes, begin, record("duplicate"))
+		if result.Status != StartQueued {
+			t.Fatalf("repeat status = %d, want queued", result.Status)
+		}
 	}
 	close(release)
 	scans.Wait()
-	if strings.Join(order, ",") != "changes,library" || begun != 2 {
-		t.Fatalf("order = %q, begun = %d", order, begun)
+	if strings.Join(order, ",") != "changes,library" || !reflect.DeepEqual(scopes, []ScanScope{ScopeChanges, ScopeLibrary}) {
+		t.Fatalf("order = %q, scopes = %q", order, scopes)
 	}
 
-	// While a library scan runs, both kinds are refused rather than queued.
-	block := make(chan struct{})
-	launcher.Launch(directory, func() {}, func(string) { <-block })
-	library := launcher.Launch(directory, func() {}, func(string) {})
-	changes := launcher.LaunchChanges(directory, func() {}, func(string) {})
-	close(block)
-	scans.Wait()
-	if library.Status != StartAlreadyRunning || changes.Status != StartAlreadyRunning {
-		t.Fatalf("during a library scan: library %d, changes %d", library.Status, changes.Status)
+	// While a library scan or a catch-up runs, every start is refused rather
+	// than queued.
+	for _, running := range []*Changes{nil, catchUp} {
+		block := make(chan struct{})
+		launcher.Start(directory, running, func(ScanScope) {}, func(string, *Changes) { <-block })
+		for _, changes := range []*Changes{nil, catchUp, scoped} {
+			status := launcher.Start(directory, changes, func(ScanScope) {}, func(string, *Changes) {}).Status
+			if status != StartAlreadyRunning {
+				t.Fatalf("during %+v: start %+v status %d, want already running", running, changes, status)
+			}
+		}
+		close(block)
+		scans.Wait()
 	}
-	result = launcher.LaunchChanges(directory, func() {}, func(string) {})
+	result = launcher.Start(directory, scoped, func(ScanScope) {}, func(string, *Changes) {})
 	scans.Wait()
 	if result.Status != StartStarted {
 		t.Fatalf("after the queue drained: %d", result.Status)
 	}
-	if launcher.LaunchChanges(sql.NullString{}, func() {}, func(string) {}).Status != StartNotConfigured {
+	if launcher.Start(sql.NullString{}, scoped, func(ScanScope) {}, func(string, *Changes) {}).Status != StartNotConfigured {
 		t.Fatal("an unconfigured library must not start changes")
 	}
 }
@@ -311,6 +344,25 @@ func TestChildBoundsCoverExactlyThePathsBeneath(t *testing.T) {
 	for _, path := range []string{"/library/Movie (2020)", "/library/Movie (2020) Extended.mkv", "/library/Movie (2020)0", "/library/Movie (2020)-x/m.mkv", "/library/Other/m.mkv"} {
 		if within(path) {
 			t.Errorf("%q should not be beneath", path)
+		}
+	}
+}
+
+func TestPathWithin(t *testing.T) {
+	tests := []struct {
+		parent, path string
+		want         bool
+	}{
+		{"/library", "/library", true},
+		{"/library", "/library/a.mkv", true},
+		{"/library", "/library2/a.mkv", false},
+		{"/library", "/", false},
+		{"/", "/library/a.mkv", true},
+		{"/", "/", true},
+	}
+	for _, tc := range tests {
+		if got := PathWithin(tc.parent, tc.path); got != tc.want {
+			t.Errorf("PathWithin(%q, %q) = %t, want %t", tc.parent, tc.path, got, tc.want)
 		}
 	}
 }

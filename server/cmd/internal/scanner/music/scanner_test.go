@@ -34,7 +34,7 @@ func setupMusicScannerDatabase(t testing.TB, source string) *Scanner {
 
 func (app *Scanner) processMusicBatchForTest(t testing.TB, ctx context.Context, files []scanner.ScanFile) (scanned, skipped, errCount int) {
 	t.Helper()
-	scanIndex, _, err := app.loadMusicScanIndex(ctx)
+	scanIndex, _, err := app.loadMusicScanIndex(ctx, nil, nil)
 	if err != nil {
 		t.Fatalf("load music scan index: %v", err)
 	}
@@ -261,7 +261,7 @@ var entityLookupFailure = &spotifyapi.StatusError{StatusCode: http.StatusNotFoun
 // scan runs one complete library scan synchronously, publishing the run the
 // way Start does.
 func (s *Scanner) scan(directory string) {
-	s.beginReport(scanner.ScopeLibrary)()
+	s.beginReport(scanner.ScopeLibrary)
 	s.runMusicScan(directory, nil)
 }
 

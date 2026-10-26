@@ -20,19 +20,12 @@ const (
 
 // Start launches a scan asynchronously when configured and no music scan is running.
 func (s *Scanner) Start() scanner.StartResult {
-	return s.launcher.Launch(s.currentMusicDirectory(), s.beginReport(scanner.ScopeLibrary), func(directory string) {
-		s.runMusicScan(directory, nil)
-	})
+	return s.launcher.Start(s.currentMusicDirectory(), nil, s.beginReport, s.runMusicScan)
 }
 
-// StartChanges applies what the library watcher saw change. A catch-up walks
-// the whole library, so it starts like a library scan.
+// StartChanges applies what the library watcher saw change.
 func (s *Scanner) StartChanges(changes scanner.Changes) scanner.StartResult {
-	run := func(directory string) { s.runMusicScan(directory, &changes) }
-	if changes.CatchUp {
-		return s.launcher.Launch(s.currentMusicDirectory(), s.beginReport(scanner.ScopeLibrary), run)
-	}
-	return s.launcher.LaunchChanges(s.currentMusicDirectory(), s.beginReport(scanner.ScopeChanges), run)
+	return s.launcher.Start(s.currentMusicDirectory(), &changes, s.beginReport, s.runMusicScan)
 }
 
 // runMusicScan expects beginReport to have published the run it continues.
@@ -72,16 +65,8 @@ func (s *Scanner) runMusicScan(directory string, changes *scanner.Changes) {
 		report.Issue("", report.status.Phase, reason)
 	}
 	s.logger.Info("music scan phase", "run", report.status.RunID, "phase", scanner.PhaseLocal, "directory", directory)
-	var paths []string
-	var scanIndex map[string]scanner.FileFingerprint
-	var files []scanner.CatalogFile
-	var err error
-	if changes.Scoped() {
-		paths = changes.Resolve(directory)
-		scanIndex, files, err = s.loadMusicScanIndexUnder(ctx, paths)
-	} else {
-		scanIndex, files, err = s.loadMusicScanIndex(ctx)
-	}
+	paths := changes.Resolve(directory)
+	scanIndex, files, err := s.loadMusicScanIndex(ctx, changes, paths)
 	if err != nil {
 		fail(err, "Unable to read the music catalog.")
 		return
@@ -119,12 +104,7 @@ func (s *Scanner) runMusicScan(directory string, changes *scanner.Changes) {
 
 		return nil
 	}
-	if changes.Scoped() {
-		reconciliation.Limit(paths)
-		err = scanner.WalkChanges(ctx, directory, paths, helpers.ValidAudioExtensions, onError, onFile, nil)
-	} else {
-		err = scanner.WalkMediaLibraryContext(ctx, directory, helpers.ValidAudioExtensions, onError, onFile)
-	}
+	err = scanner.WalkRun(ctx, directory, changes, paths, helpers.ValidAudioExtensions, onError, onFile, nil)
 	if err != nil {
 		fail(err, scanner.ReasonDiscoveryInterrupted)
 		return
@@ -137,8 +117,7 @@ func (s *Scanner) runMusicScan(directory string, changes *scanner.Changes) {
 	}
 
 	s.phase(report, scanner.PhaseCleanup)
-	refused := changes.RefusesEmptyCleanup() && reconciliation.SawNothing()
-	if refused {
+	if reconciliation.RefusesCleanup(changes) {
 		s.logger.Warn("music cleanup skipped: the library looked empty", "directory", directory)
 		report.Issue("", scanner.PhaseCleanup, scanner.ReasonCleanupSkippedEmpty)
 	} else {
@@ -172,6 +151,7 @@ func (s *Scanner) runMusicScan(directory string, changes *scanner.Changes) {
 // processMusicBatch records one local outcome per file on the report. A file
 // interrupted by cancellation is left unrecorded.
 func (s *Scanner) processMusicBatch(ctx context.Context, scan *musicScanContext, report *scanReport, root string, files []scanner.ScanFile) {
+	deferredReason := scan.changes.DeferredReason(scanner.ReasonFileDeferredNextScan)
 	for _, file := range files {
 		report.Activate(file.Path)
 		s.publish(report)
@@ -184,10 +164,6 @@ func (s *Scanner) processMusicBatch(ctx context.Context, scan *musicScanContext,
 		report.status.Processed++
 		var deferred *scanner.FileDeferral
 		isDeferred := errors.As(err, &deferred)
-		deferredReason := scanner.ReasonFileDeferredNextScan
-		if scan.changes != nil {
-			deferredReason = scanner.ReasonFileDeferredWatched
-		}
 		switch {
 		case isDeferred:
 			report.status.Deferred++
@@ -274,28 +250,22 @@ func (s *Scanner) readCatalogIDs(ctx context.Context, file scanner.ScanFile, ins
 	return ids
 }
 
-func (s *Scanner) loadMusicScanIndex(ctx context.Context) (map[string]scanner.FileFingerprint, []scanner.CatalogFile, error) {
-	rows, err := s.queries.ListMusicTrackScanIndex(ctx)
+// loadMusicScanIndex reads the catalog tracks the run covers: all of them,
+// or for a run of changes only those at or beneath paths.
+func (s *Scanner) loadMusicScanIndex(ctx context.Context, changes *scanner.Changes, paths []string) (map[string]scanner.FileFingerprint, []scanner.CatalogFile, error) {
+	var rows []database.ListMusicTrackScanIndexRow
+	var err error
+	if changes.Scoped() {
+		rows, err = scanner.LoadUnder(ctx, paths, func(ctx context.Context, path, lower, upper string) ([]database.ListMusicTrackScanIndexUnderRow, error) {
+			return s.queries.ListMusicTrackScanIndexUnder(ctx, database.ListMusicTrackScanIndexUnderParams{Path: path, Lower: lower, Upper: upper})
+		}, func(row database.ListMusicTrackScanIndexUnderRow) database.ListMusicTrackScanIndexRow {
+			return database.ListMusicTrackScanIndexRow(row)
+		})
+	} else {
+		rows, err = s.queries.ListMusicTrackScanIndex(ctx)
+	}
 	if err != nil {
 		return nil, nil, err
-	}
-	index, files := musicScanIndex(rows)
-	return index, files, nil
-}
-
-// loadMusicScanIndexUnder reads only the catalog tracks at or beneath paths,
-// for a run of changes.
-func (s *Scanner) loadMusicScanIndexUnder(ctx context.Context, paths []string) (map[string]scanner.FileFingerprint, []scanner.CatalogFile, error) {
-	rows := make([]database.ListMusicTrackScanIndexRow, 0)
-	for _, path := range paths {
-		lower, upper := scanner.ChildBounds(path)
-		under, err := s.queries.ListMusicTrackScanIndexUnder(ctx, database.ListMusicTrackScanIndexUnderParams{Path: path, Lower: lower, Upper: upper})
-		if err != nil {
-			return nil, nil, err
-		}
-		for _, row := range under {
-			rows = append(rows, database.ListMusicTrackScanIndexRow(row))
-		}
 	}
 	index, files := musicScanIndex(rows)
 	return index, files, nil

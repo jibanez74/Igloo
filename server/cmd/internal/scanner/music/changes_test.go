@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
+	"time"
 
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/scanner"
@@ -13,11 +14,7 @@ import (
 
 // scanChanges runs one run of watcher-detected changes synchronously.
 func (s *Scanner) scanChanges(directory string, changes scanner.Changes) {
-	scope := scanner.ScopeChanges
-	if changes.CatchUp {
-		scope = scanner.ScopeLibrary
-	}
-	s.beginReport(scope)()
+	s.beginReport(changes.Scope())
 	s.runMusicScan(directory, &changes)
 }
 
@@ -96,5 +93,34 @@ func TestMusicChangesRunRemovesOnlyTheReportedTracks(t *testing.T) {
 	status := s.Status()
 	if status.Deleted != 0 || status.IssueCount != 1 || status.Issues[0].Reason != scanner.ReasonCleanupSkippedEmpty {
 		t.Fatalf("catch-up over an empty root: %+v", status)
+	}
+}
+
+func TestMusicChangesRunHandsBackDeferredTracks(t *testing.T) {
+	s := setupMusicScanner(t)
+	root := t.TempDir()
+	path := scannertest.WriteFile(t, filepath.Join(root, "Album", "01.flac"), "fresh")
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadata()}
+	s.now = func() time.Time { return info.ModTime().Add(time.Second) }
+	var deferred []string
+	s.scanChanges(root, scanner.Changes{
+		Paths: []string{"Album/01.flac"},
+		OnDeferred: func(path string, eligible time.Time) {
+			if !eligible.IsZero() {
+				t.Errorf("music hands back no eligible time; got %v", eligible)
+			}
+			deferred = append(deferred, path)
+		},
+	})
+	status := s.Status()
+	if status.Deferred != 1 || status.Imported != 0 || !slices.Equal(deferred, []string{"Album/01.flac"}) {
+		t.Fatalf("deferred=%q %+v", deferred, status.Counts)
+	}
+	if status.Issues[0].Reason != scanner.ReasonFileDeferredWatched {
+		t.Fatalf("issue = %+v", status.Issues)
 	}
 }

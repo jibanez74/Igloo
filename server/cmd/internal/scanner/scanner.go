@@ -116,53 +116,45 @@ type Launcher struct {
 	queued  func()
 }
 
-// Launch starts a library scan: run(directory) on a new goroutine when
-// directory is configured and no scan is in progress. begin runs before the
-// goroutine starts so a status poll right after the request already sees the
-// run. While a run of changes is in progress the scan is queued behind it
-// rather than refused, so a busy watcher can never starve a requested scan.
-func (l *Launcher) Launch(directory sql.NullString, begin func(), run func(directory string)) StartResult {
-	return l.launch(directory, begin, run, false)
-}
-
-// LaunchChanges starts a run of watcher-detected changes under the same rule
-// as Launch, except that it is refused, never queued, while any scan runs.
-func (l *Launcher) LaunchChanges(directory sql.NullString, begin func(), run func(directory string)) StartResult {
-	return l.launch(directory, begin, run, true)
-}
-
-func (l *Launcher) launch(directory sql.NullString, begin func(), run func(directory string), changes bool) StartResult {
+// Start runs run(directory, changes) on a new goroutine when directory is
+// configured and no run is in progress. changes is nil for a library scan; a
+// catch-up walks the whole library, so it starts like one. begin runs first,
+// with the run's scope, so a status poll right after the request already sees
+// the run. A library scan requested while a run of changes is in progress is
+// queued behind it rather than refused, so a busy watcher can never starve a
+// requested scan; a run of changes is refused while any run is in progress,
+// and the watcher retries it.
+func (l *Launcher) Start(directory sql.NullString, changes *Changes, begin func(ScanScope), run func(directory string, changes *Changes)) StartResult {
 	result := StartResult{Directory: directory.String}
 	if !directory.Valid || directory.String == "" {
 		result.Status = StartNotConfigured
 		return result
 	}
+	scoped := changes.Scoped()
+	launch := func() {
+		begin(changes.Scope())
+		l.Wait.Go(func() {
+			run(directory.String, changes)
+			l.finish()
+		})
+	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.running {
-		queueable := !changes && l.changes
+		queueable := !scoped && l.changes
 		if !queueable {
 			result.Status = StartAlreadyRunning
 			return result
 		}
 		if l.queued == nil {
-			l.queued = func() { l.start(begin, func() { run(directory.String) }, false) }
+			l.queued = launch
 		}
 		result.Status = StartQueued
 		return result
 	}
-	l.start(begin, func() { run(directory.String) }, changes)
+	l.running, l.changes = true, scoped
+	launch()
 	return result
-}
-
-// start runs with l.mu held.
-func (l *Launcher) start(begin func(), run func(), changes bool) {
-	l.running, l.changes = true, changes
-	begin()
-	l.Wait.Go(func() {
-		run()
-		l.finish()
-	})
 }
 
 func (l *Launcher) finish() {
@@ -170,8 +162,10 @@ func (l *Launcher) finish() {
 	defer l.mu.Unlock()
 	next := l.queued
 	l.queued = nil
+	// Only a library scan is ever queued.
+	l.changes = false
 	if next == nil {
-		l.running, l.changes = false, false
+		l.running = false
 		return
 	}
 	next()

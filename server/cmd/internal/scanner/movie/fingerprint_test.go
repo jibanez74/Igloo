@@ -57,7 +57,7 @@ func TestFileFingerprintLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reloaded, _, err := s.loadMovieScanIndex(ctx)
+	reloaded, _, err := s.loadMovieScanIndex(ctx, nil, nil)
 	if err != nil || !reflect.DeepEqual(reloaded, scan.movieIndex) {
 		t.Fatalf("reload: %+v %v", reloaded, err)
 	}
@@ -119,7 +119,7 @@ func TestFileFingerprintLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reloaded, _, err = s.loadMovieScanIndex(ctx)
+	reloaded, _, err = s.loadMovieScanIndex(ctx, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +182,7 @@ func TestFingerprintRollbackPreservesBaseline(t *testing.T) {
 				if !failedProbe {
 					t.Fatalf("probe error: %v", err)
 				}
-				stored, _, err := s.loadMovieScanIndex(ctx)
+				stored, _, err := s.loadMovieScanIndex(ctx, nil, nil)
 				if err != nil || stored[path] != baseline || scan.movieIndex[path] != baseline || invalidations != 1 {
 					t.Fatalf("probe failure changed baseline: %v", err)
 				}
@@ -196,7 +196,7 @@ func TestFingerprintRollbackPreservesBaseline(t *testing.T) {
 			if err == nil {
 				t.Fatal("expected persistence failure")
 			}
-			stored, _, err := s.loadMovieScanIndex(ctx)
+			stored, _, err := s.loadMovieScanIndex(ctx, nil, nil)
 			if err != nil || stored[path] != baseline || scan.movieIndex[path] != baseline || invalidations != 1 {
 				t.Fatalf("baseline changed on rollback: %v", err)
 			}
@@ -282,7 +282,7 @@ func TestFileChangesDuringResolutionAndCommit(t *testing.T) {
 			if scanned != 0 || skipped != 0 || failures != 0 || deferred != 1 || invalidations != 0 {
 				t.Fatalf("unstable: %d/%d/%d deferred=%d invalidations=%d", scanned, skipped, failures, deferred, invalidations)
 			}
-			stored, _, err := s.loadMovieScanIndex(ctx)
+			stored, _, err := s.loadMovieScanIndex(ctx, nil, nil)
 			if err != nil || stored[path] != baseline || scan.movieIndex[path] != baseline {
 				t.Fatalf("unstable baseline published: %v", err)
 			}

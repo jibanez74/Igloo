@@ -186,7 +186,7 @@ func TestMissingMusicDeletionTransaction(t *testing.T) {
 			if imported != 1 || failures != 0 {
 				t.Fatalf("import=%d errors=%d", imported, failures)
 			}
-			_, files, err := s.loadMusicScanIndex(ctx)
+			_, files, err := s.loadMusicScanIndex(ctx, nil, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -425,7 +425,7 @@ func TestMusicCleanupReconcilesMetadataAndCascades(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, files, err := s.loadMusicScanIndex(context.Background())
+	_, files, err := s.loadMusicScanIndex(context.Background(), nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -105,7 +105,6 @@ func (scan *movieScanContext) deleteEntry(path string) {
 
 func (scan *movieScanContext) clone() *movieScanContext {
 	return &movieScanContext{
-		changes:    scan.changes,
 		movieIndex: scan.movieIndex, // shared; never written inside the transaction
 		genreIDs:   scan.genreIDs.Overlay(),
 		artistIDs:  scan.artistIDs.Overlay(),

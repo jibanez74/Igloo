@@ -56,7 +56,7 @@ func TestFileFingerprintLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reloaded, _, err := s.loadMusicScanIndex(ctx)
+	reloaded, _, err := s.loadMusicScanIndex(ctx, nil, nil)
 	if err != nil || !reflect.DeepEqual(reloaded, scan.trackIndex) {
 		t.Fatalf("reload: %+v %v", reloaded, err)
 	}
@@ -107,7 +107,7 @@ func TestFileFingerprintLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reloaded, _, err = s.loadMusicScanIndex(ctx)
+	reloaded, _, err = s.loadMusicScanIndex(ctx, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +169,7 @@ func TestFingerprintRollbackPreservesBaseline(t *testing.T) {
 				if !failedProbe {
 					t.Fatalf("probe error: %v", err)
 				}
-				stored, _, err := s.loadMusicScanIndex(ctx)
+				stored, _, err := s.loadMusicScanIndex(ctx, nil, nil)
 				if err != nil || stored[path] != baseline || scan.trackIndex[path] != baseline || invalidations != 1 {
 					t.Fatalf("probe failure changed baseline: %v", err)
 				}
@@ -183,7 +183,7 @@ func TestFingerprintRollbackPreservesBaseline(t *testing.T) {
 			if err == nil {
 				t.Fatal("expected persistence failure")
 			}
-			stored, _, err := s.loadMusicScanIndex(ctx)
+			stored, _, err := s.loadMusicScanIndex(ctx, nil, nil)
 			if err != nil || stored[path] != baseline || scan.trackIndex[path] != baseline || invalidations != 1 {
 				t.Fatalf("baseline changed on rollback: %v", err)
 			}
@@ -268,7 +268,7 @@ func TestFileChangesDuringResolutionAndCommit(t *testing.T) {
 			if unstable.Imported != 0 || unstable.Unchanged != 0 || unstable.Failed != 0 || unstable.Deferred != 1 || invalidations != 0 {
 				t.Fatalf("unstable: %+v invalidations=%d", unstable, invalidations)
 			}
-			stored, _, err := s.loadMusicScanIndex(ctx)
+			stored, _, err := s.loadMusicScanIndex(ctx, nil, nil)
 			if err != nil || stored[path] != baseline || scan.trackIndex[path] != baseline {
 				t.Fatalf("unstable baseline published: %v", err)
 			}

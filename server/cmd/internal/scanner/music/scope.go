@@ -41,104 +41,120 @@ func (s *Scanner) touchedScope(ctx context.Context, paths []string) (*musicScope
 	return scope, nil
 }
 
-func (s *Scanner) appleAlbumCandidates(ctx context.Context, scan *musicScanContext, after int64) ([]database.MusicAppleAlbumCandidatesRow, error) {
-	if scan.scope == nil {
-		return s.queries.MusicAppleAlbumCandidates(ctx, after)
+// scopedPage returns one page of an enrichment pass's candidates: the page
+// after `after` from all for a library scan, or for a run of changes the
+// candidates among its scope from in, which is its only page.
+func scopedPage[Row, In any](scope *musicScope, after int64, all func() ([]Row, error), in func(*musicScope) ([]In, error), convert func(In) Row) ([]Row, error) {
+	if scope == nil {
+		return all()
 	}
 	if after != 0 {
 		return nil, nil
 	}
-	rows, err := s.queries.MusicAppleAlbumCandidatesIn(ctx, scan.scope.albums)
-	candidates := make([]database.MusicAppleAlbumCandidatesRow, 0, len(rows))
-	for _, row := range rows {
-		candidates = append(candidates, database.MusicAppleAlbumCandidatesRow(row))
+	rows, err := in(scope)
+	if err != nil {
+		return nil, err
 	}
-	return candidates, err
+	page := make([]Row, 0, len(rows))
+	for _, row := range rows {
+		page = append(page, convert(row))
+	}
+	return page, nil
+}
+
+// scopedCount counts an enrichment pass's candidates: countAll for a library
+// scan, or the size of the only page for a run of changes.
+func scopedCount[Row any](scope *musicScope, countAll func() (int64, error), firstPage func() ([]Row, error)) (int64, error) {
+	if scope == nil {
+		return countAll()
+	}
+	rows, err := firstPage()
+	return int64(len(rows)), err
+}
+
+func (s *Scanner) appleAlbumCandidates(ctx context.Context, scan *musicScanContext, after int64) ([]database.MusicAppleAlbumCandidatesRow, error) {
+	return scopedPage(scan.scope, after,
+		func() ([]database.MusicAppleAlbumCandidatesRow, error) {
+			return s.queries.MusicAppleAlbumCandidates(ctx, after)
+		},
+		func(scope *musicScope) ([]database.MusicAppleAlbumCandidatesInRow, error) {
+			return s.queries.MusicAppleAlbumCandidatesIn(ctx, scope.albums)
+		},
+		func(row database.MusicAppleAlbumCandidatesInRow) database.MusicAppleAlbumCandidatesRow {
+			return database.MusicAppleAlbumCandidatesRow(row)
+		})
 }
 
 func (s *Scanner) countAppleAlbumCandidates(ctx context.Context, scan *musicScanContext) (int64, error) {
-	if scan.scope == nil {
-		return s.queries.CountMusicAppleAlbumCandidates(ctx)
-	}
-	rows, err := s.appleAlbumCandidates(ctx, scan, 0)
-	return int64(len(rows)), err
+	return scopedCount(scan.scope,
+		func() (int64, error) { return s.queries.CountMusicAppleAlbumCandidates(ctx) },
+		func() ([]database.MusicAppleAlbumCandidatesRow, error) { return s.appleAlbumCandidates(ctx, scan, 0) })
 }
 
 func (s *Scanner) artistRetryCandidates(ctx context.Context, scan *musicScanContext, after int64) ([]database.MusicArtistRetryCandidatesRow, error) {
-	if scan.scope == nil {
-		return s.queries.MusicArtistRetryCandidates(ctx, after)
-	}
-	if after != 0 {
-		return nil, nil
-	}
-	rows, err := s.queries.MusicArtistRetryCandidatesIn(ctx, scan.scope.musicians)
-	candidates := make([]database.MusicArtistRetryCandidatesRow, 0, len(rows))
-	for _, row := range rows {
-		candidates = append(candidates, database.MusicArtistRetryCandidatesRow(row))
-	}
-	return candidates, err
+	return scopedPage(scan.scope, after,
+		func() ([]database.MusicArtistRetryCandidatesRow, error) {
+			return s.queries.MusicArtistRetryCandidates(ctx, after)
+		},
+		func(scope *musicScope) ([]database.MusicArtistRetryCandidatesInRow, error) {
+			return s.queries.MusicArtistRetryCandidatesIn(ctx, scope.musicians)
+		},
+		func(row database.MusicArtistRetryCandidatesInRow) database.MusicArtistRetryCandidatesRow {
+			return database.MusicArtistRetryCandidatesRow(row)
+		})
 }
 
 func (s *Scanner) countArtistRetryCandidates(ctx context.Context, scan *musicScanContext) (int64, error) {
-	if scan.scope == nil {
-		return s.queries.CountMusicArtistRetryCandidates(ctx)
-	}
-	rows, err := s.artistRetryCandidates(ctx, scan, 0)
-	return int64(len(rows)), err
+	return scopedCount(scan.scope,
+		func() (int64, error) { return s.queries.CountMusicArtistRetryCandidates(ctx) },
+		func() ([]database.MusicArtistRetryCandidatesRow, error) { return s.artistRetryCandidates(ctx, scan, 0) })
 }
 
 func (s *Scanner) albumRetryCandidates(ctx context.Context, scan *musicScanContext, after int64) ([]database.MusicAlbumRetryCandidatesRow, error) {
-	if scan.scope == nil {
-		return s.queries.MusicAlbumRetryCandidates(ctx, database.MusicAlbumRetryCandidatesParams{AfterID: after, AppleEnabled: scan.appleEnabled})
-	}
-	if after != 0 {
-		return nil, nil
-	}
-	rows, err := s.queries.MusicAlbumRetryCandidatesIn(ctx, database.MusicAlbumRetryCandidatesInParams{AppleEnabled: scan.appleEnabled, Ids: scan.scope.albums})
-	candidates := make([]database.MusicAlbumRetryCandidatesRow, 0, len(rows))
-	for _, row := range rows {
-		candidates = append(candidates, database.MusicAlbumRetryCandidatesRow(row))
-	}
-	return candidates, err
+	return scopedPage(scan.scope, after,
+		func() ([]database.MusicAlbumRetryCandidatesRow, error) {
+			return s.queries.MusicAlbumRetryCandidates(ctx, database.MusicAlbumRetryCandidatesParams{AfterID: after, AppleEnabled: scan.appleEnabled})
+		},
+		func(scope *musicScope) ([]database.MusicAlbumRetryCandidatesInRow, error) {
+			return s.queries.MusicAlbumRetryCandidatesIn(ctx, database.MusicAlbumRetryCandidatesInParams{AppleEnabled: scan.appleEnabled, Ids: scope.albums})
+		},
+		func(row database.MusicAlbumRetryCandidatesInRow) database.MusicAlbumRetryCandidatesRow {
+			return database.MusicAlbumRetryCandidatesRow(row)
+		})
 }
 
 func (s *Scanner) countAlbumRetryCandidates(ctx context.Context, scan *musicScanContext) (int64, error) {
-	if scan.scope == nil {
-		return s.queries.CountMusicAlbumRetryCandidates(ctx, scan.appleEnabled)
-	}
-	rows, err := s.albumRetryCandidates(ctx, scan, 0)
-	return int64(len(rows)), err
+	return scopedCount(scan.scope,
+		func() (int64, error) { return s.queries.CountMusicAlbumRetryCandidates(ctx, scan.appleEnabled) },
+		func() ([]database.MusicAlbumRetryCandidatesRow, error) { return s.albumRetryCandidates(ctx, scan, 0) })
 }
 
 func (s *Scanner) trackLinkAlbumCandidates(ctx context.Context, scan *musicScanContext, after int64) ([]database.MusicTrackLinkAlbumCandidatesRow, error) {
-	if scan.scope == nil {
-		return s.queries.MusicTrackLinkAlbumCandidates(ctx, after)
-	}
-	if after != 0 {
-		return nil, nil
-	}
-	rows, err := s.queries.MusicTrackLinkAlbumCandidatesIn(ctx, scan.scope.albums)
-	candidates := make([]database.MusicTrackLinkAlbumCandidatesRow, 0, len(rows))
-	for _, row := range rows {
-		candidates = append(candidates, database.MusicTrackLinkAlbumCandidatesRow(row))
-	}
-	return candidates, err
+	return scopedPage(scan.scope, after,
+		func() ([]database.MusicTrackLinkAlbumCandidatesRow, error) {
+			return s.queries.MusicTrackLinkAlbumCandidates(ctx, after)
+		},
+		func(scope *musicScope) ([]database.MusicTrackLinkAlbumCandidatesInRow, error) {
+			return s.queries.MusicTrackLinkAlbumCandidatesIn(ctx, scope.albums)
+		},
+		func(row database.MusicTrackLinkAlbumCandidatesInRow) database.MusicTrackLinkAlbumCandidatesRow {
+			return database.MusicTrackLinkAlbumCandidatesRow(row)
+		})
 }
 
 func (s *Scanner) countTrackLinkAlbumCandidates(ctx context.Context, scan *musicScanContext) (int64, error) {
-	if scan.scope == nil {
-		return s.queries.CountMusicTrackLinkAlbumCandidates(ctx)
-	}
-	rows, err := s.trackLinkAlbumCandidates(ctx, scan, 0)
-	return int64(len(rows)), err
+	return scopedCount(scan.scope,
+		func() (int64, error) { return s.queries.CountMusicTrackLinkAlbumCandidates(ctx) },
+		func() ([]database.MusicTrackLinkAlbumCandidatesRow, error) {
+			return s.trackLinkAlbumCandidates(ctx, scan, 0)
+		})
 }
 
 func (s *Scanner) compoundReconciliationCandidates(ctx context.Context, scan *musicScanContext, after int64) ([]int64, error) {
-	if scan.scope == nil {
-		return s.queries.MusicCompoundReconciliationCandidates(ctx, after)
-	}
-	if after != 0 {
-		return nil, nil
-	}
-	return s.queries.MusicCompoundReconciliationCandidatesIn(ctx, scan.scope.musicians)
+	return scopedPage(scan.scope, after,
+		func() ([]int64, error) { return s.queries.MusicCompoundReconciliationCandidates(ctx, after) },
+		func(scope *musicScope) ([]int64, error) {
+			return s.queries.MusicCompoundReconciliationCandidatesIn(ctx, scope.musicians)
+		},
+		func(id int64) int64 { return id })
 }

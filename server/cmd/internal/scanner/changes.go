@@ -42,6 +42,15 @@ func (c *Changes) Scoped() bool {
 	return c != nil && !c.CatchUp
 }
 
+// Scope is what the run's status reports: a catch-up walks the whole library,
+// so it reports as a library scan.
+func (c *Changes) Scope() ScanScope {
+	if c.Scoped() {
+		return ScopeChanges
+	}
+	return ScopeLibrary
+}
+
 // QuietPeriod is how long a file must have been unchanged before this run
 // processes it.
 func (c *Changes) QuietPeriod() time.Duration {
@@ -63,22 +72,27 @@ func (c *Changes) Deferred(root, path string, eligibleAt time.Time) {
 	c.OnDeferred(relative, eligibleAt)
 }
 
-// RefusesEmptyCleanup reports a run that must not remove anything when its
-// walk found no file at all.
-func (c *Changes) RefusesEmptyCleanup() bool {
-	return c != nil && c.CatchUp
+// DeferredReason is the issue text for a deferred file: the watcher retries
+// what its runs defer, while a library scan words its own retry.
+func (c *Changes) DeferredReason(libraryScan string) string {
+	if c == nil {
+		return libraryScan
+	}
+	return ReasonFileDeferredWatched
 }
 
 // Resolve joins the paths onto root, the same spelling of the root the run
 // walks, so lookups in the catalog index match exactly. Paths that are empty,
 // name the root itself, or escape it are dropped, as are paths beneath
-// another one; the result is sorted.
-func (c Changes) Resolve(root string) []string {
+// another one; the result is sorted. A run that is not Scoped has none.
+func (c *Changes) Resolve(root string) []string {
+	if !c.Scoped() {
+		return nil
+	}
 	resolved := make([]string, 0, len(c.Paths))
 	for _, path := range c.Paths {
 		relative := filepath.Clean(path)
-		escapes := relative == "." || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) || filepath.IsAbs(relative)
-		if path == "" || escapes {
+		if path == "" || relative == "." || escapesRoot(relative) {
 			continue
 		}
 		resolved = append(resolved, filepath.Join(root, relative))
@@ -87,7 +101,7 @@ func (c Changes) Resolve(root string) []string {
 	resolved = slices.Compact(resolved)
 	collapsed := resolved[:0]
 	for _, path := range resolved {
-		covered := len(collapsed) > 0 && pathWithin(collapsed[len(collapsed)-1], path)
+		covered := len(collapsed) > 0 && PathWithin(collapsed[len(collapsed)-1], path)
 		if !covered {
 			collapsed = append(collapsed, path)
 		}
@@ -102,18 +116,78 @@ func ChildBounds(path string) (lower, upper string) {
 	return path + string(filepath.Separator), path + string(filepath.Separator+1)
 }
 
-// pathWithin reports whether path is parent or lies beneath it.
-func pathWithin(parent, path string) bool {
-	return path == parent || strings.HasPrefix(path, parent+string(filepath.Separator))
+// LoadUnder reads the catalog rows at or beneath each of paths, which
+// Changes.Resolve built: query receives a path and the ChildBounds of its
+// children, and convert turns its rows into the library scan's index rows.
+func LoadUnder[Under, Row any](
+	ctx context.Context,
+	paths []string,
+	query func(ctx context.Context, path, lower, upper string) ([]Under, error),
+	convert func(Under) Row,
+) ([]Row, error) {
+	rows := make([]Row, 0)
+	for _, path := range paths {
+		lower, upper := ChildBounds(path)
+		under, err := query(ctx, path, lower, upper)
+		if err != nil {
+			return nil, err
+		}
+		for _, row := range under {
+			rows = append(rows, convert(row))
+		}
+	}
+	return rows, nil
 }
 
-// WalkChanges is the scoped counterpart of WalkMediaLibraryContext: it visits
-// only the media files at or beneath paths, which Changes.Resolve built from
-// root. A missing path visits nothing, so its catalog rows stay unseen. The
-// directory filter is applied to every directory between root and a path,
-// and to a directory path itself, so a path the full walk would never reach
-// is skipped the same way.
-func WalkChanges(
+// PathWithin reports whether path is parent or lies beneath it. Both are
+// clean; a parent of "/" holds every absolute path.
+func PathWithin(parent, path string) bool {
+	prefix := parent
+	if !strings.HasSuffix(prefix, string(filepath.Separator)) {
+		prefix += string(filepath.Separator)
+	}
+	return path == parent || strings.HasPrefix(path, prefix)
+}
+
+// escapesRoot reports whether a cleaned relative path leaves its root.
+func escapesRoot(relative string) bool {
+	return relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) || filepath.IsAbs(relative)
+}
+
+// WalkRun walks what a run covers: the whole library for a library scan or a
+// catch-up, and only paths, which Changes.Resolve built from root, for a run
+// of changes. directoryFilter may be nil.
+func WalkRun(
+	ctx context.Context,
+	root string,
+	changes *Changes,
+	paths []string,
+	validExts map[string]bool,
+	onError func(path string, err error),
+	onFile func(ScanFile) error,
+	directoryFilter func(string) bool,
+) error {
+	if changes.Scoped() {
+		return walkChanges(ctx, root, paths, validExts, onError, onFile, directoryFilter)
+	}
+	return WalkMediaLibraryContext(ctx, root, validExts, onError, onFile, optionalFilter(directoryFilter)...)
+}
+
+// optionalFilter adapts a directory filter that may be nil to
+// WalkMediaLibraryContext's variadic filters.
+func optionalFilter(directoryFilter func(string) bool) []func(string) bool {
+	if directoryFilter == nil {
+		return nil
+	}
+	return []func(string) bool{directoryFilter}
+}
+
+// walkChanges is the scoped counterpart of WalkMediaLibraryContext: it visits
+// only the media files at or beneath paths. A missing path visits nothing, so
+// its catalog rows stay unseen. The directory filter is applied to every
+// directory between root and a path, and to a directory path itself, so a
+// path the full walk would never reach is skipped the same way.
+func walkChanges(
 	ctx context.Context,
 	root string,
 	paths []string,
@@ -160,7 +234,7 @@ func WalkChanges(
 }
 
 func ancestorsAllowed(root, path string, directoryFilter func(string) bool) bool {
-	for directory := filepath.Dir(path); pathWithin(root, directory) && directory != root; directory = filepath.Dir(directory) {
+	for directory := filepath.Dir(path); PathWithin(root, directory) && directory != root; directory = filepath.Dir(directory) {
 		allowed := directoryFilter(directory)
 		if !allowed {
 			return false
@@ -181,15 +255,11 @@ func walkChangedDirectory(
 	onFile func(ScanFile) error,
 	directoryFilter func(string) bool,
 ) error {
-	var filters []func(string) bool
-	if directoryFilter != nil {
-		filters = append(filters, directoryFilter)
-	}
 	visitErr := error(nil)
 	err := WalkMediaLibraryContext(ctx, directory, validExts, onError, func(file ScanFile) error {
 		visitErr = onFile(file)
 		return visitErr
-	}, filters...)
+	}, optionalFilter(directoryFilter)...)
 	if err == nil || visitErr != nil || ctx.Err() != nil {
 		return err
 	}
