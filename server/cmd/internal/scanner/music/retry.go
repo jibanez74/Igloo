@@ -31,6 +31,10 @@ func (s *Scanner) retryCatalog(ctx context.Context, scan *musicScanContext, repo
 	if stopped {
 		return nil
 	}
+	err := s.refreshScope(ctx, scan)
+	if err != nil {
+		return err
+	}
 	artists, err := s.countArtistRetryCandidates(ctx, scan)
 	if err != nil {
 		return err
@@ -77,6 +81,10 @@ func (s *Scanner) retryCatalog(ctx context.Context, scan *musicScanContext, repo
 			report.status.EnrichmentProcessed++
 			s.publish(report)
 		}
+	}
+	err = s.refreshScope(ctx, scan)
+	if err != nil {
+		return err
 	}
 	after = 0
 	for {
@@ -176,6 +184,10 @@ func (s *Scanner) persistEnrichment(ctx context.Context, scan *musicScanContext,
 // Each album costs at most one request, and only when this scan did not match
 // it.
 func (s *Scanner) linkAlbumTracks(ctx context.Context, scan *musicScanContext, report *scanReport) error {
+	err := s.refreshScope(ctx, scan)
+	if err != nil {
+		return err
+	}
 	pending, err := s.countTrackLinkAlbumCandidates(ctx, scan)
 	if err != nil {
 		return err
@@ -464,6 +476,10 @@ func (s *Scanner) reconcileCompoundCredits(ctx context.Context, scan *musicScanC
 // A previous scan may have committed the match before cancellation interrupted
 // credit reconciliation. Final non-matches still need to finish those credits.
 func (s *Scanner) reconcilePendingCompoundCredits(ctx context.Context, scan *musicScanContext) error {
+	err := s.refreshScope(ctx, scan)
+	if err != nil {
+		return err
+	}
 	var after int64
 	for {
 		candidates, err := s.compoundReconciliationCandidates(ctx, scan, after)

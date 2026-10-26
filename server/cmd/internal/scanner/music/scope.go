@@ -41,6 +41,21 @@ func (s *Scanner) touchedScope(ctx context.Context, paths []string) (*musicScope
 	return scope, nil
 }
 
+// refreshScope reads the scope again after a merge: the pass that merged a
+// touched album or artist into an existing owner left the scope holding the
+// deleted id, and the next pass would miss the owner.
+func (s *Scanner) refreshScope(ctx context.Context, scan *musicScanContext) error {
+	if scan.scope == nil || !scan.merged {
+		return nil
+	}
+	scope, err := s.touchedScope(ctx, scan.touched)
+	if err != nil {
+		return err
+	}
+	scan.scope, scan.merged = scope, false
+	return nil
+}
+
 // scopedPage returns one page of an enrichment pass's candidates: the page
 // after `after` from all for a library scan, or for a run of changes the
 // candidates among its scope from in, which is its only page.

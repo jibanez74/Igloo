@@ -10,6 +10,7 @@ import (
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/scannertest"
+	spotifyapi "igloo/cmd/internal/spotify"
 )
 
 // scanChanges runs one run of watcher-detected changes synchronously.
@@ -123,4 +124,52 @@ func TestMusicChangesRunHandsBackDeferredTracks(t *testing.T) {
 	if status.Issues[0].Reason != scanner.ReasonFileDeferredWatched {
 		t.Fatalf("issue = %+v", status.Issues)
 	}
+}
+
+func TestMusicChangesRunFollowsAlbumMergesIntoTheOwner(t *testing.T) {
+	s := setupMusicScanner(t)
+	root := t.TempDir()
+	tags := func(title, album, track string) *ffprobe.FfprobeResult {
+		return testMusicMetadataWithTags(ffprobe.FormatTags{Title: title, Artist: "Artist A", Album: album, Track: track})
+	}
+	a1 := scannertest.WriteFile(t, filepath.Join(root, "Artist A", "Album A", "01.flac"), "a1")
+	a2 := scannertest.WriteFile(t, filepath.Join(root, "Artist A", "Album A (Deluxe)", "02.flac"), "a2")
+	s.ffprobe = newMusicScannerFfprobeByPath(map[string]*ffprobe.FfprobeResult{
+		a1: tags("One", "Album A", "1"),
+		a2: tags("Two", "Album A (Deluxe)", "2"),
+	})
+	release := &spotifyapi.FullAlbum{
+		SimpleAlbum: spotifyapi.SimpleAlbum{ID: "album", Name: "Album A", AlbumType: "album", Artists: []spotifyapi.SimpleArtist{{ID: "artist", Name: "Artist A"}}},
+		Tracks: []spotifyapi.SimpleTrack{
+			spotifyTrack("t1", "One", 1, 1, 180250, false),
+			spotifyTrack("t2", "Two", 1, 2, 180250, false),
+		},
+	}
+	// The deluxe title misses the way a 404 does in the library scan, so its
+	// album stays a retry candidate.
+	stub := &musicScannerSpotifyStub{
+		artist:        &spotifyapi.FullArtist{SimpleArtist: spotifyapi.SimpleArtist{ID: "artist", Name: "Artist A"}},
+		albumsByTitle: map[string]*spotifyapi.FullAlbum{"album a": release},
+	}
+	s.spotify = stub
+	s.scan(root)
+	if albums := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM albums"); albums != 2 {
+		t.Fatalf("library scan albums = %d, want the two local albums", albums)
+	}
+	assertLinked(t, trackLinkFor(t, s, a1), "t1", false, 1)
+
+	// The run reconsiders the deluxe folder unchanged; its retry pass now
+	// matches the album to the owner's release, which merges the two.
+	stub.albumsByTitle["album a (deluxe)"] = release
+	s.scanChanges(root, scanner.Changes{Paths: []string{"Artist A/Album A (Deluxe)"}})
+	status := s.Status()
+	if status.Scope != scanner.ScopeChanges || status.Unchanged != 1 || status.State != scanner.StateCompleted {
+		t.Fatalf("changes run: scope=%s state=%s %+v", status.Scope, status.State, status.Counts)
+	}
+	if albums := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM albums"); albums != 1 {
+		t.Fatalf("albums after the merge = %d, want one owner", albums)
+	}
+	// The merge moved the track to the owner; the run's track pairing must
+	// follow it there rather than keep to the album it deleted.
+	assertLinked(t, trackLinkFor(t, s, a2), "t2", false, 2)
 }

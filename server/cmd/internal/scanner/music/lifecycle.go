@@ -134,6 +134,8 @@ func (s *Scanner) runMusicScan(directory string, changes *scanner.Changes) {
 			fail(err, "Unable to read the touched albums and artists.")
 			return
 		}
+		// Merges of the local phase are already in the scope.
+		scan.merged = false
 	}
 
 	s.phase(report, scanner.PhaseEnrichment)

@@ -11,10 +11,13 @@ import (
 type musicScanContext struct {
 	// changes is nil for a library scan. A run of changes records the tracks
 	// it settled in touched, and its enrichment passes keep to scope.
-	changes           *scanner.Changes
-	touched           []string
-	scope             *musicScope
-	trackIndex        map[string]scanner.FileFingerprint
+	changes    *scanner.Changes
+	touched    []string
+	scope      *musicScope
+	trackIndex map[string]scanner.FileFingerprint
+	// merged is set by a merge: a transaction clone's tells its caller the
+	// ids it collected may point at deleted rows, and the scan's that scope
+	// must be read again before the next enrichment pass.
 	merged            bool
 	invalidatedTracks map[int64]bool
 	artistAttempts    map[string]*resolvedMusician
@@ -118,6 +121,7 @@ func (scan *musicScanContext) mergeFrom(other *musicScanContext) {
 	scan.genreIDs.MergeFrom(other.genreIDs)
 	scan.tracksLinked += other.tracksLinked
 	if other.merged {
+		scan.merged = true
 		scan.musicianIDs = scanner.NewScanCache[string, int64]()
 		scan.albumIDs = scanner.NewScanCache[string, int64]()
 		return
