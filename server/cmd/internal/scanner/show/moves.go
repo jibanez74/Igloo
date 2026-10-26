@@ -34,6 +34,10 @@ type showMove struct {
 // is processed again regardless, which links it to them.
 func (s *Scanner) applyMoves(ctx context.Context, scan *showScanContext, report *scanReport, reconciliation *scanner.Reconciliation, root string, files []scanner.ScanFile) {
 	groups := make(map[string][]showMove)
+	// destinations holds the show folders every paired file of a folder went
+	// to, those moved to another season included: a folder split across two
+	// does not move.
+	destinations := make(map[string][]string)
 	var folders []string
 	for _, file := range files {
 		_, cataloged := scan.index[file.Path]
@@ -49,7 +53,11 @@ func (s *Scanner) applyMoves(ctx context.Context, scan *showScanContext, report 
 			continue
 		}
 		after, err := parseFile(root, file.Path)
-		if err != nil || after.season != before.season {
+		if err != nil {
+			continue
+		}
+		destinations[before.showPath] = append(destinations[before.showPath], after.showPath)
+		if after.season != before.season {
 			continue
 		}
 		_, grouped := groups[before.showPath]
@@ -66,7 +74,7 @@ func (s *Scanner) applyMoves(ctx context.Context, scan *showScanContext, report 
 		}
 		moves := groups[folder]
 		target := moves[0].local
-		split := slices.ContainsFunc(moves, func(move showMove) bool { return move.local.showPath != target.showPath })
+		split := slices.ContainsFunc(destinations[folder], func(destination string) bool { return destination != target.showPath })
 		if split {
 			continue
 		}

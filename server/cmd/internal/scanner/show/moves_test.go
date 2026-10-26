@@ -2,8 +2,10 @@ package show
 
 import (
 	"database/sql"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"igloo/cmd/internal/scanner"
@@ -119,19 +121,27 @@ func TestShowFolderMovesOnlyWhenTheWholeFolderWasRenamed(t *testing.T) {
 		name   string
 		layout []string
 		move   func(t *testing.T, root string)
+		// owners maps each show folder afterwards to the folder whose show it
+		// keeps, or "" for a new show.
+		owners map[string]string
 	}{
 		{"one episode moved out of a folder that remains", []string{"Show/Season 1/S01E01.mkv", "Show/Season 1/S01E02.mkv"}, func(t *testing.T, root string) {
 			rename(t, root, "Show/Season 1/S01E02.mkv", "Spin-off/Season 1/S01E02.mkv")
-		}},
+		}, map[string]string{"Show": "Show", "Spin-off": ""}},
 		{"a folder split in two", []string{"Show/Season 1/S01E01.mkv", "Show/Season 1/S01E02.mkv"}, func(t *testing.T, root string) {
 			rename(t, root, "Show/Season 1/S01E01.mkv", "A/Season 1/S01E01.mkv")
 			rename(t, root, "Show/Season 1/S01E02.mkv", "B/Season 1/S01E02.mkv")
 			removeAll(t, root, "Show")
-		}},
+		}, map[string]string{"A": "", "B": ""}},
+		{"a folder split in two with a season change", []string{"Show/Season 1/S01E01.mkv", "Show/Season 2/S02E01.mkv"}, func(t *testing.T, root string) {
+			rename(t, root, "Show/Season 1/S01E01.mkv", "A/Season 1/S01E01.mkv")
+			rename(t, root, "Show/Season 2/S02E01.mkv", "B/Season 1/S01E01.mkv")
+			removeAll(t, root, "Show")
+		}, map[string]string{"A": "", "B": ""}},
 		{"a folder renamed onto another show's", []string{"Show/Season 1/S01E01.mkv", "Other/Season 2/S02E01.mkv"}, func(t *testing.T, root string) {
 			rename(t, root, "Show/Season 1/S01E01.mkv", "Other/Season 1/S01E01.mkv")
 			removeAll(t, root, "Show")
-		}},
+		}, map[string]string{"Other": "Other"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s, _, root := setupScanner(t)
@@ -139,22 +149,53 @@ func TestShowFolderMovesOnlyWhenTheWholeFolderWasRenamed(t *testing.T) {
 				scannertest.WriteFile(t, filepath.Join(root, path), path)
 			}
 			scanOK(t, s, root)
-			original := filepath.Join(root, "Show")
+			before := showIDs(t, s, root)
 			tc.move(t, root)
 			scanOK(t, s, root)
 			if s.Status().Failed != 0 {
 				t.Fatalf("after the move: %+v", s.Status().Counts)
 			}
-			folderStays := scannertest.CountRows(t, s.DB, "SELECT count(*) FROM shows WHERE directory_path = '"+original+"'")
-			_, err := os.Stat(original)
-			if err == nil && folderStays != 1 {
-				t.Fatal("the show of a folder that remains moved")
+			after := showIDs(t, s, root)
+			if len(after) != len(tc.owners) {
+				t.Fatalf("shows after the move: %v, want folders %v", after, tc.owners)
+			}
+			for folder, owner := range tc.owners {
+				id, exists := after[folder]
+				kept := owner != "" && id == before[owner]
+				fresh := owner == "" && !slices.Contains(slices.Collect(maps.Values(before)), id)
+				if !exists || (!kept && !fresh) {
+					t.Fatalf("folder %s has show %d (before %v), want the show of %q", folder, id, before, owner)
+				}
 			}
 			if scannertest.CountRows(t, s.DB, "SELECT count(*) FROM show_files") != len(tc.layout) {
 				t.Fatal("a moved file was lost or duplicated")
 			}
 		})
 	}
+}
+
+// showIDs maps each show's folder, relative to root, to its id.
+func showIDs(t *testing.T, s *Scanner, root string) map[string]int64 {
+	t.Helper()
+	rows, err := s.DB.Query("SELECT id, directory_path FROM shows")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	ids := make(map[string]int64)
+	for rows.Next() {
+		var id int64
+		var directory string
+		err = rows.Scan(&id, &directory)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids[filepath.Base(directory)] = id
+	}
+	if rows.Err() != nil {
+		t.Fatal(rows.Err())
+	}
+	return ids
 }
 
 // A matched show keeps its match through a folder rename that still names it,
