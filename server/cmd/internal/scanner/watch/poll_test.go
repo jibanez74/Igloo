@@ -32,7 +32,7 @@ func armPollFixture(t *testing.T, root string) *pollFixture {
 		t.Fatal(err)
 	}
 	f := &pollFixture{now: time.Now()}
-	f.p = &poller{root: resolved, configuredRoot: root, extensions: map[string]bool{"mkv": true}, timing: defaultPollTiming,
+	f.p = &poller{root: resolved, configuredRoot: root, resolve: resolveRoot, extensions: map[string]bool{"mkv": true}, timing: defaultPollTiming,
 		now: func() time.Time { return f.now }, layout: layout{root: resolved}, offline: true}
 	report := f.p.poll()
 	if !report.online {

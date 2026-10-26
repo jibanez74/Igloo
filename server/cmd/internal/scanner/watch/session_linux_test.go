@@ -627,10 +627,10 @@ func TestWatcherPausesALibraryWhoseRootDoesNotAnswer(t *testing.T) {
 	hang := make(chan struct{})
 	t.Cleanup(func() { close(hang) })
 	probes := make(chan struct{}, 10)
-	fixture.watcher.probe = func(root string) rootProbe {
+	fixture.watcher.resolve = func(root string) (string, error) {
 		probes <- struct{}{}
 		<-hang
-		return probeRoot(root)
+		return resolveRoot(root)
 	}
 	fixture.watcher.Sync(true)
 	scannertest.WaitForSignal(t, probes, 5*time.Second, "the root probe")
@@ -752,7 +752,7 @@ func TestProbeRootResolvesARelativeRoot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	probe := probeRoot("lib")
+	probe := probeRoot(resolveRoot, "lib")
 	if probe.err != nil || probe.resolved != want {
 		t.Fatalf("probeRoot(lib) = %+v, want %s", probe, want)
 	}
@@ -817,7 +817,7 @@ func TestSessionRearmsRetargetedPollBeforeApplyingChanges(t *testing.T) {
 	lib.pending.note("obsolete.mkv", changeRemoved, time.Now(), false)
 	s := &session{
 		ctx: context.Background(), deps: Dependencies{Now: time.Now, Logger: &scannertest.Logger{}},
-		timing: defaultTiming, polling: defaultPollTiming, probe: probeRoot,
+		timing: defaultTiming, polling: defaultPollTiming, resolve: resolveRoot,
 		notifier: newScriptedNotifier(), watches: make(map[int32]*watchedDir), dirs: make(map[string]int32),
 	}
 	s.handlePoll(pollReport{
@@ -901,5 +901,35 @@ func TestWatcherSkipsDirectoriesItCannotRead(t *testing.T) {
 	}
 	if !logger.WarnMentions("library watcher cannot read a directory; changes inside it need a library scan", "Locked (2021)") {
 		t.Fatal("the unreadable directory was not logged")
+	}
+}
+
+func TestWatcherPausesALibraryWhoseLayoutCheckHangs(t *testing.T) {
+	fixture := newWatcherFixture(t, nil)
+	hang := make(chan struct{})
+	t.Cleanup(func() { close(hang) })
+	var hanging atomic.Bool
+	entered := make(chan struct{}, 10)
+	fixture.watcher.resolve = func(root string) (string, error) {
+		if hanging.Load() {
+			entered <- struct{}{}
+			<-hang
+		}
+		return resolveRoot(root)
+	}
+	fixture.watcher.Sync(true)
+	if !fixture.scanner.next(t).CatchUp {
+		t.Fatal("expected the catch-up first")
+	}
+	hanging.Store(true)
+	scannertest.WaitForSignal(t, entered, 5*time.Second, "the layout check's root resolution")
+	// The check gives up after the probe timeout and pauses the library;
+	// nothing is dispatched for it meanwhile.
+	scannertest.WriteFile(t, fixture.path("New (2020)", "new.mkv"), "new")
+	fixture.scanner.quiet(t, sessionTestTiming.probe+500*time.Millisecond)
+	started := time.Now()
+	fixture.watcher.Sync(false)
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("turning the watcher off waited %s on a layout check that hangs", elapsed)
 	}
 }

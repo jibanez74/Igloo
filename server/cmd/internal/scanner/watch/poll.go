@@ -68,6 +68,7 @@ type poller struct {
 	generation     int
 	root           string
 	configuredRoot string
+	resolve        func(root string) (string, error)
 	allow          func(root, path string) bool
 	extensions     map[string]bool
 	timing         pollTiming
@@ -172,7 +173,7 @@ func (p *poller) nextDelay() time.Duration {
 }
 
 func (p *poller) poll() pollReport {
-	resolved, err := resolveRoot(p.configuredRoot)
+	resolved, err := p.resolve(p.configuredRoot)
 	if err != nil {
 		if p.offline {
 			return pollReport{}
