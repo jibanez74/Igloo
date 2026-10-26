@@ -133,9 +133,11 @@ ORDER BY e.id LIMIT 100;
 
 -- name: MusicAlbumRetryCandidatesIn :many
 -- MusicAlbumRetryCandidates limited to the albums a run of watcher-detected
--- changes touched.
+-- changes touched. The ids arrive as a JSON array rather than sqlc.slice():
+-- sqlc numbers apple_enabled ?2, and an expanded slice renumbers the
+-- anonymous placeholders before it, so ?2 would bind the second album id.
 SELECT e.id, e.title, e.musician, e.year FROM albums e LEFT JOIN music_provider_matches m ON m.entity_id=e.id AND m.entity_type='album'
-WHERE e.id IN (sqlc.slice(ids))
+WHERE e.id IN (SELECT value FROM json_each(CAST(sqlc.arg(ids) AS TEXT)))
 AND (m.status='failed' OR (m.provider='apple' AND m.reason='not_listed')
 OR (m.status IS NULL AND NOT (CAST(sqlc.arg(apple_enabled) AS BOOLEAN) AND EXISTS(SELECT 1 FROM tracks t
     JOIN music_track_metadata h ON h.track_id=t.id WHERE t.album_id=e.id AND h.apple_album_id IS NOT NULL))))

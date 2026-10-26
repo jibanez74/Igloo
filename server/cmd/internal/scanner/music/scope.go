@@ -2,6 +2,7 @@ package music
 
 import (
 	"context"
+	"encoding/json"
 	"slices"
 
 	"igloo/cmd/internal/database"
@@ -131,7 +132,14 @@ func (s *Scanner) albumRetryCandidates(ctx context.Context, scan *musicScanConte
 			return s.queries.MusicAlbumRetryCandidates(ctx, database.MusicAlbumRetryCandidatesParams{AfterID: after, AppleEnabled: scan.appleEnabled})
 		},
 		func(scope *musicScope) ([]database.MusicAlbumRetryCandidatesInRow, error) {
-			return s.queries.MusicAlbumRetryCandidatesIn(ctx, database.MusicAlbumRetryCandidatesInParams{AppleEnabled: scan.appleEnabled, Ids: scope.albums})
+			if len(scope.albums) == 0 {
+				return nil, nil
+			}
+			ids, err := json.Marshal(scope.albums)
+			if err != nil {
+				return nil, err
+			}
+			return s.queries.MusicAlbumRetryCandidatesIn(ctx, database.MusicAlbumRetryCandidatesInParams{AppleEnabled: scan.appleEnabled, Ids: string(ids)})
 		},
 		func(row database.MusicAlbumRetryCandidatesInRow) database.MusicAlbumRetryCandidatesRow {
 			return database.MusicAlbumRetryCandidatesRow(row)

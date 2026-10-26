@@ -1,6 +1,7 @@
 package music
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"slices"
@@ -172,4 +173,64 @@ func TestMusicChangesRunFollowsAlbumMergesIntoTheOwner(t *testing.T) {
 	// The merge moved the track to the owner; the run's track pairing must
 	// follow it there rather than keep to the album it deleted.
 	assertLinked(t, trackLinkFor(t, s, a2), "t2", false, 2)
+}
+
+func TestAlbumRetryCandidatesInBindsEveryTouchedAlbum(t *testing.T) {
+	s := setupMusicScanner(t)
+	// Three pending albums; the last two carry Apple catalog hints, so they
+	// wait for Apple only while Apple lookups are enabled.
+	_, err := s.tx.DB.Exec(`
+		INSERT INTO albums(id, title, sort_title) VALUES (1, 'One', 'One'), (2, 'Two', 'Two'), (3, 'Three', 'Three');
+		INSERT INTO tracks(title, sort_title, file_path, file_name, container, mime_type, codec, size, track_index, duration, disc, channels, channel_layout, bit_rate, profile, album_id)
+		SELECT 'Track', 'Track', '/music/' || id || '.m4a', id || '.m4a', 'm4a', 'audio/mp4', 'aac', 1, 1, 1, 1, '2', 'stereo', 1, 'LC', id FROM albums;
+		INSERT INTO music_track_metadata(track_id, artist_tag, artist_key, artist_sort, album_sort, apple_album_id)
+		SELECT id, '', '', '', '', 1000 + id FROM tracks WHERE album_id > 1;`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	candidates := func(appleEnabled bool, albums []int64) []int64 {
+		t.Helper()
+		scan := newMusicScanContext(nil)
+		scan.appleEnabled = appleEnabled
+		scan.scope = &musicScope{albums: albums}
+		rows, err := s.albumRetryCandidates(context.Background(), scan, 0)
+		if err != nil {
+			t.Fatalf("retry candidates of %v: %v", albums, err)
+		}
+		ids := make([]int64, 0, len(rows))
+		for _, row := range rows {
+			ids = append(ids, row.ID)
+		}
+		return ids
+	}
+	got := candidates(false, []int64{1, 2, 3})
+	if !slices.Equal(got, []int64{1, 2, 3}) {
+		t.Fatalf("with Apple off, every touched album is a Spotify candidate; got %v", got)
+	}
+	got = candidates(true, []int64{1, 2, 3})
+	if !slices.Equal(got, []int64{1}) {
+		t.Fatalf("with Apple on, hinted albums wait for Apple; got %v", got)
+	}
+	got = candidates(false, nil)
+	if len(got) != 0 {
+		t.Fatalf("a run that touched no album has no candidates; got %v", got)
+	}
+}
+
+func TestMusicChangesRunThatOnlyRemovesTracksCompletes(t *testing.T) {
+	s := setupMusicScanner(t)
+	root := t.TempDir()
+	path := scannertest.WriteFile(t, filepath.Join(root, "Album", "01.flac"), "a1")
+	s.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadata()}
+	s.spotify = &musicScannerSpotifyStub{artistErr: entityLookupFailure, albumErr: entityLookupFailure}
+	s.scan(root)
+	err := os.Remove(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.scanChanges(root, scanner.Changes{Paths: []string{"Album/01.flac"}})
+	status := s.Status()
+	if status.State != scanner.StateCompleted || status.Deleted != 1 {
+		t.Fatalf("deletion-only run with Spotify configured: state=%s %+v issues=%+v", status.State, status.Counts, status.Issues)
+	}
 }

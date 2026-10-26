@@ -481,7 +481,7 @@ func (q *Queries) MusicAlbumRetryCandidates(ctx context.Context, arg MusicAlbumR
 
 const musicAlbumRetryCandidatesIn = `-- name: MusicAlbumRetryCandidatesIn :many
 SELECT e.id, e.title, e.musician, e.year FROM albums e LEFT JOIN music_provider_matches m ON m.entity_id=e.id AND m.entity_type='album'
-WHERE e.id IN (/*SLICE:ids*/?)
+WHERE e.id IN (SELECT value FROM json_each(CAST(?1 AS TEXT)))
 AND (m.status='failed' OR (m.provider='apple' AND m.reason='not_listed')
 OR (m.status IS NULL AND NOT (CAST(?2 AS BOOLEAN) AND EXISTS(SELECT 1 FROM tracks t
     JOIN music_track_metadata h ON h.track_id=t.id WHERE t.album_id=e.id AND h.apple_album_id IS NOT NULL))))
@@ -490,8 +490,8 @@ ORDER BY e.id
 `
 
 type MusicAlbumRetryCandidatesInParams struct {
-	Ids          []int64 `json:"ids"`
-	AppleEnabled bool    `json:"apple_enabled"`
+	Ids          string `json:"ids"`
+	AppleEnabled bool   `json:"apple_enabled"`
 }
 
 type MusicAlbumRetryCandidatesInRow struct {
@@ -502,20 +502,11 @@ type MusicAlbumRetryCandidatesInRow struct {
 }
 
 // MusicAlbumRetryCandidates limited to the albums a run of watcher-detected
-// changes touched.
+// changes touched. The ids arrive as a JSON array rather than sqlc.slice():
+// sqlc numbers apple_enabled ?2, and an expanded slice renumbers the
+// anonymous placeholders before it, so ?2 would bind the second album id.
 func (q *Queries) MusicAlbumRetryCandidatesIn(ctx context.Context, arg MusicAlbumRetryCandidatesInParams) ([]MusicAlbumRetryCandidatesInRow, error) {
-	query := musicAlbumRetryCandidatesIn
-	var queryParams []interface{}
-	if len(arg.Ids) > 0 {
-		for _, v := range arg.Ids {
-			queryParams = append(queryParams, v)
-		}
-		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(arg.Ids))[1:], 1)
-	} else {
-		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
-	}
-	queryParams = append(queryParams, arg.AppleEnabled)
-	rows, err := q.query(ctx, nil, query, queryParams...)
+	rows, err := q.query(ctx, q.musicAlbumRetryCandidatesInStmt, musicAlbumRetryCandidatesIn, arg.Ids, arg.AppleEnabled)
 	if err != nil {
 		return nil, err
 	}

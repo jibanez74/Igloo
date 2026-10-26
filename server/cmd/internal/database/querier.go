@@ -576,7 +576,9 @@ type Querier interface {
 	// collection id.
 	MusicAlbumRetryCandidates(ctx context.Context, arg MusicAlbumRetryCandidatesParams) ([]MusicAlbumRetryCandidatesRow, error)
 	// MusicAlbumRetryCandidates limited to the albums a run of watcher-detected
-	// changes touched.
+	// changes touched. The ids arrive as a JSON array rather than sqlc.slice():
+	// sqlc numbers apple_enabled ?2, and an expanded slice renumbers the
+	// anonymous placeholders before it, so ?2 would bind the second album id.
 	MusicAlbumRetryCandidatesIn(ctx context.Context, arg MusicAlbumRetryCandidatesInParams) ([]MusicAlbumRetryCandidatesInRow, error)
 	MusicAlbumTrackIDs(ctx context.Context, albumID sql.NullInt64) ([]int64, error)
 	// Every track of the album with its outcome: one without an outcome, or with
