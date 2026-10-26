@@ -776,8 +776,6 @@ func TestWatcherFollowsRetargetedParentSymlink(t *testing.T) {
 				if polling {
 					fixture.watcher.open = func(*sync.WaitGroup) (notifier, error) { return nil, errNotifierUnsupported }
 				}
-				// Pending old-target changes must wait longer than a layout check.
-				fixture.watcher.timing.settle = time.Second
 				fixture.watcher.Sync(true)
 				catchUp := fixture.scanner.next(t)
 				if !catchUp.CatchUp {
@@ -931,5 +929,34 @@ func TestWatcherPausesALibraryWhoseLayoutCheckHangs(t *testing.T) {
 	fixture.watcher.Sync(false)
 	if elapsed := time.Since(started); elapsed > time.Second {
 		t.Fatalf("turning the watcher off waited %s on a layout check that hangs", elapsed)
+	}
+}
+
+// A retargeted inotify root is noticed before its next run of changes
+// dispatches, not only at the next layout check: the old target's watches
+// still report changes, which the scanner would resolve against the new one.
+func TestWatcherChecksASymlinkedRootBeforeDispatching(t *testing.T) {
+	oldRoot, newRoot := t.TempDir(), t.TempDir()
+	scannertest.WriteFile(t, filepath.Join(newRoot, "existing.mkv"), "existing")
+	link := filepath.Join(t.TempDir(), "library")
+	retargetSymlink(t, link, oldRoot)
+	fixture := newWatcherFixture(t, func(lib *Library) {
+		lib.Directory = func() sql.NullString { return sql.NullString{String: link, Valid: true} }
+	})
+	fixture.watcher.polling.recheck = time.Hour
+	fixture.watcher.Sync(true)
+	if !fixture.scanner.next(t).CatchUp {
+		t.Fatal("expected the catch-up first")
+	}
+	retargetSymlink(t, link, newRoot)
+	scannertest.WriteFile(t, filepath.Join(oldRoot, "obsolete.mkv"), "obsolete")
+	got := fixture.scanner.next(t)
+	if !got.CatchUp {
+		t.Fatalf("a change from the old target dispatched after the retarget: %+v", got)
+	}
+	scannertest.WriteFile(t, filepath.Join(newRoot, "fresh.mkv"), "fresh")
+	got = fixture.scanner.next(t)
+	if got.CatchUp || !slices.Equal(got.Paths, []string{"fresh.mkv"}) {
+		t.Fatalf("after the retarget: %+v", got)
 	}
 }

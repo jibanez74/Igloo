@@ -47,9 +47,12 @@ type library struct {
 	// A path relative to one is relative to the other.
 	root     string
 	resolved string
-	mode     backendMode
-	layout   layout
-	pending  *pending
+	// linked is set when the root resolves through a symlink, which can be
+	// retargeted between two layout checks.
+	linked  bool
+	mode    backendMode
+	layout  layout
+	pending *pending
 	// offline pauses a library whose root or a mount inside it went away;
 	// checkAt is the next look at its layout, offline or not.
 	offline bool
@@ -321,6 +324,8 @@ func (s *session) arm(lib *library) {
 	}
 	lib.resolved = probe.resolved
 	lib.layout.root = probe.resolved
+	absolute, err := filepath.Abs(lib.root)
+	lib.linked = err != nil || absolute != probe.resolved
 	poll := s.notifier == nil || probe.fsName != ""
 	if !poll {
 		err := s.watchLibrary(lib)
@@ -835,12 +840,48 @@ func (s *session) dispatch(now time.Time) {
 		if due.IsZero() || now.Before(due) {
 			continue
 		}
+		retargeted := lib.mode == modeInotify && s.retargeted(lib)
+		if retargeted {
+			continue
+		}
 		items := lib.pending.take(now, s.inspector(lib))
 		if len(items) == 0 {
 			continue
 		}
 		s.startChanges(lib, items, now)
 	}
+}
+
+// retargeted resolves a symlinked inotify root again before a run of changes
+// dispatches: the changes were seen under the target it had, the layout check
+// that notices a retarget runs only every 30 seconds, and the scanner would
+// apply them under the new target. A changed target arms the library again,
+// which drops them and walks it once; a root that does not resolve or answer
+// pauses it.
+func (s *session) retargeted(lib *library) bool {
+	if !lib.linked {
+		return false
+	}
+	root, resolved := lib.root, lib.resolved
+	probe, answered := bounded(s.ctx, &lib.probing, s.timing.probe, func() rootProbe {
+		current, err := s.resolve(root)
+		return rootProbe{resolved: current, err: err}
+	})
+	if !answered {
+		s.notAnswered(lib)
+		return true
+	}
+	if probe.err != nil {
+		s.goOffline(lib, "the library directory is unavailable", probe.err)
+		return true
+	}
+	if probe.resolved == resolved {
+		return false
+	}
+	s.deps.Logger.Info("library watcher re-arming the library", "library", lib.Name, "reason", "the root's symlink target changed")
+	s.disarm(lib)
+	s.arm(lib)
+	return true
 }
 
 func (s *session) startCatchUp(lib *library, now time.Time) {
