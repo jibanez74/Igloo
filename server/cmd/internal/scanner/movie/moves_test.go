@@ -137,3 +137,33 @@ func TestMovieRenameClearsTheMissBackoffOfAnUnmatchedMovie(t *testing.T) {
 		t.Fatalf("title after the rename = %q %d (%v)", title, year, err)
 	}
 }
+
+// A move that keeps the file name keeps an unmatched movie's title, edited
+// or not; only a rename takes the new name's.
+func TestMovieMovedToAnotherFolderKeepsItsTitle(t *testing.T) {
+	fixture := setupMovieScanner(t)
+	s := fixture.scanner
+	s.ffprobe = &scannertest.CountingProbe{Default: movieScannerMetadataFixture("120")}
+	root := t.TempDir()
+	old := scannertest.WriteFile(t, filepath.Join(root, "Home", "VID_20190612.mkv"), "video")
+	s.scan(root)
+	_, err := fixture.db.Exec("UPDATE movies SET title = 'Grandma 80th'")
+	if err != nil {
+		t.Fatal(err)
+	}
+	moved := filepath.Join(root, "Family", "VID_20190612.mkv")
+	err = os.MkdirAll(filepath.Dir(moved), 0o755)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = os.Rename(old, moved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.scan(root)
+	var title string
+	err = fixture.db.QueryRow("SELECT title FROM movies WHERE file_path = ?", moved).Scan(&title)
+	if err != nil || title != "Grandma 80th" {
+		t.Fatalf("title after the move = %q (%v)", title, err)
+	}
+}

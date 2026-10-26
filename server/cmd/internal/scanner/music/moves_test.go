@@ -70,3 +70,47 @@ func TestMusicRenameKeepsTheTrackAndItsLike(t *testing.T) {
 		})
 	}
 }
+
+// A rename that keeps the bytes only records the new fingerprint, while a
+// tagger that rewrote the file in place, keeping its size and modification
+// time, and moved it has it processed again.
+func TestMusicMoveReprocessesATrackRewrittenWithItsTimestampKept(t *testing.T) {
+	for _, rewritten := range []bool{false, true} {
+		t.Run(map[bool]string{false: "rename", true: "retag and rename"}[rewritten], func(t *testing.T) {
+			s := setupMusicScanner(t)
+			probe := &scannertest.CountingProbe{Default: testMusicMetadata()}
+			s.ffprobe = probe
+			root := t.TempDir()
+			old := scannertest.WriteFile(t, filepath.Join(root, "Album", "01.flac"), "tags-v1")
+			s.scan(root)
+			calls := probe.Calls()
+			info, err := os.Stat(old)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if rewritten {
+				err = os.WriteFile(old, []byte("tags-v2"), 0o644)
+				if err != nil {
+					t.Fatal(err)
+				}
+				err = os.Chtimes(old, info.ModTime(), info.ModTime())
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			renamed := filepath.Join(root, "Album", "01 Intro.flac")
+			err = os.Rename(old, renamed)
+			if err != nil {
+				t.Fatal(err)
+			}
+			s.scan(root)
+			if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM tracks") != 1 {
+				t.Fatal("the rename left a second track")
+			}
+			reprocessed := probe.Calls() > calls
+			if reprocessed != rewritten {
+				t.Fatalf("probed again: %v, want %v", reprocessed, rewritten)
+			}
+		})
+	}
+}

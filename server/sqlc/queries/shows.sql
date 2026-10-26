@@ -782,10 +782,7 @@ WHERE id = sqlc.arg(id) AND file_path = sqlc.arg(file_path);
 -- name: MoveShowDirectory :one
 -- A renamed show folder keeps its show, seasons and episodes, and with them
 -- watch progress. Its local name follows the folder, and so does an unmatched
--- show's display name. A matched show moves only while the folder names the
--- same title and year: renaming it otherwise is how a wrong match is fixed,
--- since shows have no Identify, so it is imported as a new show and searched
--- again. A folder that already has a show is left alone.
+-- show's display name. A folder that already has a show is left alone.
 UPDATE shows SET
  directory_path = sqlc.arg(new_path),
  local_name = sqlc.arg(local_name),
@@ -793,6 +790,27 @@ UPDATE shows SET
  name = CASE WHEN tmdb_id IS NULL THEN sqlc.arg(local_name) ELSE name END,
  updated_at = CURRENT_TIMESTAMP
 WHERE shows.directory_path = sqlc.arg(directory_path)
- AND (shows.tmdb_id IS NULL OR (shows.local_name = sqlc.arg(local_name) AND shows.premiere_year IS sqlc.arg(premiere_year)))
  AND NOT EXISTS (SELECT 1 FROM shows AS taken WHERE taken.directory_path = sqlc.arg(new_path))
 RETURNING id, tmdb_id;
+
+-- name: ForgetShowMatch :exec
+-- A matched show whose folder now names another title or year is searched
+-- again: shows have no Identify, so renaming the folder is how a wrong match
+-- is fixed. Its seasons and episodes forget theirs too, since a season or
+-- episode whose stored identity disagrees with the new match is refused, and
+-- all of them are queued, so the new match fills them.
+UPDATE shows SET tmdb_id = NULL, imdb_id = NULL, name = local_name, updated_at = CURRENT_TIMESTAMP WHERE id = ?;
+
+-- name: ForgetShowSeasonMatches :exec
+UPDATE show_seasons SET tmdb_id = NULL WHERE show_id = ?;
+
+-- name: ForgetShowEpisodeMatches :exec
+UPDATE show_episodes SET tmdb_id = NULL WHERE season_id IN (SELECT id FROM show_seasons WHERE show_id = ?);
+
+-- name: MarkShowSeasonsRetry :exec
+INSERT INTO show_season_tmdb_retries (season_id) SELECT id FROM show_seasons WHERE show_id = ? ON CONFLICT DO NOTHING;
+
+-- name: MarkShowEpisodesRetry :exec
+INSERT INTO show_episode_tmdb_retries (episode_id)
+SELECT e.id FROM show_episodes e JOIN show_seasons ss ON ss.id = e.season_id WHERE ss.show_id = ?
+ON CONFLICT DO NOTHING;

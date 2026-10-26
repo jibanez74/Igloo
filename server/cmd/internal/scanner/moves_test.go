@@ -53,7 +53,7 @@ func TestMovedFromPairsARenamedFileWithItsCatalogRow(t *testing.T) {
 	}
 
 	move, found := r.MovedFrom(renamed)
-	if !found || move.From.ID != 1 || move.To != renamed || move.Fingerprint.Inode != files[0].Fingerprint.Inode {
+	if !found || move.From.ID != 1 || move.To != renamed {
 		t.Fatalf("MovedFrom(renamed) = %+v, %v", move, found)
 	}
 	other, found := r.MovedFrom(moved)
@@ -110,5 +110,40 @@ func TestMoveConfirmedLeavesAFileStillAtItsOldPath(t *testing.T) {
 	}, nil)
 	if err != nil || committed {
 		t.Fatalf("MoveConfirmed = %v, %v", committed, err)
+	}
+}
+
+// Music pairs while the walk is still seeing files, so a cataloged twin the
+// walk sees after the index was built no longer blocks the pairing.
+func TestMovedFromLeavesOutTwinsTheWalkSawLater(t *testing.T) {
+	root, _ := guardFixture(t)
+	original := scannertest.WriteFile(t, filepath.Join(root, "A", "a.flac"), "a")
+	twin := filepath.Join(root, "B", "a.flac")
+	err := os.MkdirAll(filepath.Dir(twin), 0o755)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = os.Link(original, twin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := []CatalogFile{cataloged(t, 1, original), cataloged(t, 2, twin)}
+	renamed := filepath.Join(root, "A", "01 a.flac")
+	err = os.Rename(original, renamed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := NewReconciliation(context.Background(), root, files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, found := r.MovedFrom(renamed)
+	if found {
+		t.Fatal("paired while both catalog rows were candidates")
+	}
+	r.MarkSeen(twin)
+	move, found := r.MovedFrom(renamed)
+	if !found || move.From.ID != 1 {
+		t.Fatalf("after the twin was seen: %+v, %v", move, found)
 	}
 }

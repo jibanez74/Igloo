@@ -158,26 +158,69 @@ func TestShowFolderMovesOnlyWhenTheWholeFolderWasRenamed(t *testing.T) {
 }
 
 // A matched show whose folder now names another title is how a wrong match
-// is fixed, since shows have no Identify: it is imported as a new show and
-// searched again, as before.
+// is fixed, since shows have no Identify: the show keeps its episodes and
+// watch progress, forgets its match and its seasons' and episodes', and is
+// searched again.
 func TestMatchedShowRenamedToAnotherTitleIsSearchedAgain(t *testing.T) {
 	s, _, root := setupScanner(t)
 	scannertest.WriteFile(t, filepath.Join(root, "The Office/Season 1/S01E01.mkv"), "e1")
 	scanOK(t, s, root)
-	_, err := s.DB.Exec("UPDATE shows SET tmdb_id = 2316, name = 'The Office'")
-	if err != nil {
-		t.Fatal(err)
+	showID, episodeID := episodeWatched(t, s)
+	for _, statement := range []string{
+		"UPDATE shows SET tmdb_id = 2316, name = 'The Office (US)'",
+		"UPDATE show_seasons SET tmdb_id = 1",
+		"UPDATE show_episodes SET tmdb_id = 1",
+		"DELETE FROM show_tmdb_retries", "DELETE FROM show_season_tmdb_retries", "DELETE FROM show_episode_tmdb_retries",
+	} {
+		_, err := s.DB.Exec(statement)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	rename(t, root, "The Office", "The Office UK (2001)")
 	scanOK(t, s, root)
+	var id int64
 	var tmdbID sql.NullInt64
-	var directory string
-	err = s.DB.QueryRow("SELECT tmdb_id, directory_path FROM shows").Scan(&tmdbID, &directory)
+	var name string
+	err := s.DB.QueryRow("SELECT id, tmdb_id, name FROM shows").Scan(&id, &tmdbID, &name)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tmdbID.Valid || directory != filepath.Join(root, "The Office UK (2001)") {
-		t.Fatalf("show after the rename: tmdb %v, folder %q", tmdbID, directory)
+	if id != showID || tmdbID.Valid || name != "The Office UK" {
+		t.Fatalf("show after the rename: id %d (want %d), tmdb %v, name %q", id, showID, tmdbID, name)
+	}
+	matched := scannertest.CountRows(t, s.DB, "SELECT (SELECT count(*) FROM show_seasons WHERE tmdb_id IS NOT NULL) + (SELECT count(*) FROM show_episodes WHERE tmdb_id IS NOT NULL)")
+	queued := scannertest.CountRows(t, s.DB, "SELECT (SELECT count(*) FROM show_tmdb_retries) + (SELECT count(*) FROM show_season_tmdb_retries) + (SELECT count(*) FROM show_episode_tmdb_retries)")
+	if matched != 0 || queued != 3 {
+		t.Fatalf("after the rename %d seasons and episodes keep a match, %d entities are queued", matched, queued)
+	}
+	var progress int
+	err = s.DB.QueryRow("SELECT count(*) FROM show_episode_watch_progress WHERE episode_id = ?", episodeID).Scan(&progress)
+	if err != nil || progress != 1 {
+		t.Fatalf("the rename lost the episode's watch progress: %d %v", progress, err)
+	}
+}
+
+// An episode file renamed to other episode numbers keeps its row and is
+// linked to them, as a Sonarr rename after a renumbering does.
+func TestShowFileRenamedToAnotherEpisodeIsRelinked(t *testing.T) {
+	s, _, root := setupScanner(t)
+	scannertest.WriteFile(t, filepath.Join(root, "Show/Season 1/S01E01.mkv"), "e1")
+	scanOK(t, s, root)
+	var fileID int64
+	err := s.DB.QueryRow("SELECT id FROM show_files").Scan(&fileID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rename(t, root, "Show/Season 1/S01E01.mkv", "Show/Season 1/S01E02.mkv")
+	scanOK(t, s, root)
+	var movedID, episode int64
+	err = s.DB.QueryRow("SELECT f.id, e.episode_number FROM show_files f JOIN show_episode_files l ON l.file_id = f.id JOIN show_episodes e ON e.id = l.episode_id").Scan(&movedID, &episode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if movedID != fileID || episode != 2 {
+		t.Fatalf("after the rename: file %d (want %d) linked to episode %d (want 2)", movedID, fileID, episode)
 	}
 }
 

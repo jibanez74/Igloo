@@ -622,12 +622,12 @@ LIMIT 1;
 
 -- name: MoveMovieFile :execrows
 -- A file renamed or moved within the library keeps its row, and everything
--- that refers to it. An unmatched movie's title and year follow the file name,
--- as an import's do. updated_at stays: the file's content is unchanged, and it
--- keys the playback caches.
+-- that refers to it. A renamed unmatched movie's title and year follow the
+-- new file name, as an import's do; a move that keeps the name keeps them,
+-- edits included. SET reads the row as it was, so file_name is the old name.
 UPDATE movies SET
   file_path = sqlc.arg(new_path),
   file_name = sqlc.arg(file_name),
-  title = CASE WHEN tmdb_id IS NULL THEN sqlc.arg(title) ELSE title END,
-  year = CASE WHEN tmdb_id IS NULL THEN sqlc.arg(year) ELSE year END
+  title = CASE WHEN tmdb_id IS NULL AND file_name != sqlc.arg(file_name) THEN sqlc.arg(title) ELSE title END,
+  year = CASE WHEN tmdb_id IS NULL AND file_name != sqlc.arg(file_name) THEN sqlc.arg(year) ELSE year END
 WHERE id = sqlc.arg(id) AND file_path = sqlc.arg(file_path);

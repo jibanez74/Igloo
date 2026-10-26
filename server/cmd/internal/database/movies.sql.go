@@ -1623,8 +1623,8 @@ const moveMovieFile = `-- name: MoveMovieFile :execrows
 UPDATE movies SET
   file_path = ?1,
   file_name = ?2,
-  title = CASE WHEN tmdb_id IS NULL THEN ?3 ELSE title END,
-  year = CASE WHEN tmdb_id IS NULL THEN ?4 ELSE year END
+  title = CASE WHEN tmdb_id IS NULL AND file_name != ?2 THEN ?3 ELSE title END,
+  year = CASE WHEN tmdb_id IS NULL AND file_name != ?2 THEN ?4 ELSE year END
 WHERE id = ?5 AND file_path = ?6
 `
 
@@ -1638,9 +1638,9 @@ type MoveMovieFileParams struct {
 }
 
 // A file renamed or moved within the library keeps its row, and everything
-// that refers to it. An unmatched movie's title and year follow the file name,
-// as an import's do. updated_at stays: the file's content is unchanged, and it
-// keys the playback caches.
+// that refers to it. A renamed unmatched movie's title and year follow the
+// new file name, as an import's do; a move that keeps the name keeps them,
+// edits included. SET reads the row as it was, so file_name is the old name.
 func (q *Queries) MoveMovieFile(ctx context.Context, arg MoveMovieFileParams) (int64, error) {
 	result, err := q.exec(ctx, q.moveMovieFileStmt, moveMovieFile,
 		arg.NewPath,

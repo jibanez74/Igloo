@@ -31,7 +31,7 @@ type Reconciliation struct {
 	stat       func(string) (os.FileInfo, error)
 	// moves indexes the candidates by what a move keeps, built on first use;
 	// moved holds the ids of those re-keyed to a new path, out of the cleanup.
-	moves map[moveKey]int
+	moves map[moveKey][]int
 	moved map[int64]bool
 }
 

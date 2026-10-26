@@ -12,8 +12,10 @@ import (
 // not hold, when it is a cataloged file renamed or moved within the library,
 // so it keeps its row: likes, playlist entries and its provider pairing. It
 // runs on each batch before it is processed, so the rename is not imported
-// as a new track. The move records the file's fingerprint at its new path,
-// with its stored content hash, so processing finds it unchanged.
+// as a new track. Processing then checks the file at its new path like any
+// other: a renamed file's new ctime hashes it again, which records only the
+// new fingerprint when its bytes are the same and reprocesses it when a
+// tagger rewrote it, even with its modification time kept.
 func (s *Scanner) applyMoves(ctx context.Context, scan *musicScanContext, report *scanReport, reconciliation *scanner.Reconciliation, files []scanner.ScanFile) {
 	moved := 0
 	for _, file := range files {
@@ -30,14 +32,9 @@ func (s *Scanner) applyMoves(ctx context.Context, scan *musicScanContext, report
 		if !found {
 			continue
 		}
-		f := move.Fingerprint
-		f.SHA256 = move.From.Fingerprint.SHA256
 		committed, err := reconciliation.MoveConfirmed(ctx, s.tx, move, &report.Report, func(q *database.Queries) (bool, error) {
 			rows, err := q.MoveTrackFile(ctx, database.MoveTrackFileParams{NewPath: path, FileName: filepath.Base(path), ID: move.From.ID, FilePath: move.From.Path})
-			if err != nil || rows == 0 {
-				return false, err
-			}
-			return true, storeTrackFingerprint(ctx, q, path, f)
+			return rows > 0, err
 		}, func() {
 			s.invalidateCommittedTrack(move.From.ID)
 		})
@@ -52,8 +49,9 @@ func (s *Scanner) applyMoves(ctx context.Context, scan *musicScanContext, report
 		if !committed {
 			continue
 		}
-		delete(scan.trackIndex, filepath.Clean(move.From.Path))
-		scan.trackIndex[path] = f
+		old := filepath.Clean(move.From.Path)
+		scan.trackIndex[path] = scan.trackIndex[old]
+		delete(scan.trackIndex, old)
 		moved++
 		s.logger.Debug("track file moved", "from", move.From.Path, "to", path)
 	}
