@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"syscall"
 
 	"igloo/cmd/internal/database"
@@ -59,12 +60,160 @@ func NewReconciliation(ctx context.Context, directory string, files []CatalogFil
 	return r, nil
 }
 
-// RefusesCleanup reports a catch-up whose walk found no file while the
-// catalog holds some under the root: what a dropped mount looks like, since
-// the empty mount point stays readable. Such a run must not remove anything.
-func (r *Reconciliation) RefusesCleanup(changes *Changes) bool {
-	catchUp := changes != nil && changes.CatchUp
-	return catchUp && len(r.seen) == 0 && len(r.candidates) > 0
+// Kept is what a cleanup guard held back.
+type Kept struct {
+	// Files counts the missing files kept.
+	Files int
+	// Reason is the issue to report for them.
+	Reason string
+	// MountPoints are the absolute paths of the recorded mount points, not
+	// mounted now, that the kept files sit beneath; none when the walk found
+	// no file at all.
+	MountPoints []string
+}
+
+// Guard prepares a run's cleanup. A walk of the whole library the server
+// started on its own, a catch-up, keeps files that look unmounted rather than
+// deleted, since a filesystem that is not mounted leaves an empty, readable
+// mount point: every file when the walk found none, and otherwise the missing
+// files beneath a mount point an earlier run recorded that is not mounted
+// now, such as a disk that came up late after a power cut. Mount points are
+// recorded by path, since device numbers follow probe order and change across
+// boots. Every run that reaches cleanup adds the mount points beneath the
+// root it walked through to the record, a run of changes too, which may have
+// imported a disk's first files, so a disk still missing stays protected; a
+// library scan an admin asked for deletes every missing file and records only
+// what it walked through.
+func (r *Reconciliation) Guard(ctx context.Context, tx TxRunner, changes *Changes, mountPoints func() ([]string, error)) (Kept, error) {
+	points, err := mountPoints()
+	if err != nil {
+		return Kept{}, err
+	}
+	resolved, err := filepath.EvalSymlinks(r.root)
+	if err != nil {
+		return Kept{}, err
+	}
+	mounted := MountPointsBeneath(points, resolved)
+	recorded, err := tx.Queries.ListLibraryMountPoints(ctx, r.root)
+	if err != nil {
+		return Kept{}, err
+	}
+	walked := r.walked(mounted)
+	record := append(slices.Clone(recorded), walked...)
+	manual := changes == nil || changes.Manual
+	if manual {
+		record = walked
+	}
+	kept := Kept{}
+	guarded := changes.Guarded()
+	if guarded {
+		kept = r.keep(recorded, mounted)
+	}
+	slices.Sort(record)
+	record = slices.Compact(record)
+	unchanged := slices.Equal(record, recorded)
+	if unchanged {
+		return kept, nil
+	}
+	err = tx.Run(ctx, func(q *database.Queries) error {
+		err := q.DeleteLibraryMountPoints(ctx, r.root)
+		if err != nil {
+			return err
+		}
+		for _, point := range record {
+			err = q.InsertLibraryMountPoint(ctx, database.InsertLibraryMountPointParams{Root: r.root, MountPoint: point})
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}, nil)
+	return kept, err
+}
+
+// walked returns the mount points among points that the run walked through:
+// the root, or one beneath which it saw a file. Mounts it never reaches, such
+// as the snapshots ZFS mounts beneath its hidden .zfs directory, are left
+// out of the record.
+func (r *Reconciliation) walked(points []string) []string {
+	var relatives []string
+	for path := range r.seen {
+		relative, err := filepath.Rel(r.root, path)
+		if err == nil {
+			relatives = append(relatives, relative)
+		}
+	}
+	var walked []string
+	for _, point := range points {
+		reached := point == "."
+		for _, relative := range relatives {
+			reached = reached || PathWithin(point, relative)
+		}
+		if reached {
+			walked = append(walked, point)
+		}
+	}
+	return walked
+}
+
+// keep takes the files a catch-up keeps out of the cleanup.
+func (r *Reconciliation) keep(recorded, mounted []string) Kept {
+	if len(r.candidates) == 0 {
+		return Kept{}
+	}
+	if len(r.seen) == 0 {
+		kept := Kept{Files: len(r.candidates), Reason: ReasonCleanupSkippedEmpty}
+		r.candidates = nil
+		return kept
+	}
+	var unmounted []string
+	for _, point := range recorded {
+		stillMounted := slices.Contains(mounted, point)
+		if !stillMounted {
+			unmounted = append(unmounted, point)
+		}
+	}
+	if len(unmounted) == 0 {
+		return Kept{}
+	}
+	kept := Kept{Reason: ReasonCleanupKeptUnmounted}
+	held := make(map[string]bool)
+	remaining := make([]CatalogFile, 0, len(r.candidates))
+	for _, file := range r.candidates {
+		point := r.mountPointOf(file, unmounted)
+		seen := r.saw(file)
+		if point == "" || seen {
+			remaining = append(remaining, file)
+			continue
+		}
+		kept.Files++
+		if !held[point] {
+			held[point] = true
+			kept.MountPoints = append(kept.MountPoints, filepath.Join(r.root, point))
+		}
+	}
+	r.candidates = remaining
+	return kept
+}
+
+// mountPointOf returns the mount point among points, relative to the root,
+// that file sits beneath, or "".
+func (r *Reconciliation) mountPointOf(file CatalogFile, points []string) string {
+	absolute, err := filepath.Abs(file.Path)
+	if err != nil {
+		return ""
+	}
+	relative, err := filepath.Rel(r.root, absolute)
+	if err != nil {
+		return ""
+	}
+	for _, point := range points {
+		beneath := point == "." || PathWithin(point, relative)
+		if beneath {
+			return point
+		}
+	}
+	return ""
 }
 
 func (r *Reconciliation) MarkSeen(path string) {
@@ -74,11 +223,16 @@ func (r *Reconciliation) MarkSeen(path string) {
 	}
 }
 
+func (r *Reconciliation) saw(file CatalogFile) bool {
+	absolute, err := filepath.Abs(file.Path)
+	return err == nil && r.seen[absolute]
+}
+
 func (r *Reconciliation) Unseen() []CatalogFile {
 	files := make([]CatalogFile, 0)
 	for _, file := range r.candidates {
-		absolute, err := filepath.Abs(file.Path)
-		if err == nil && !r.seen[absolute] {
+		seen := r.saw(file)
+		if !seen {
 			files = append(files, file)
 		}
 	}

@@ -254,9 +254,14 @@ func TestMovieStatusIssueLimitAndFatalDiscovery(t *testing.T) {
 	}
 }
 
+// A library scan and a startup catch-up, which no watcher takes deferred files
+// from, retry their own.
 func TestDeferredRetryEligibilityAndAccounting(t *testing.T) {
-	for _, unstable := range []bool{false, true} {
-		t.Run(fmt.Sprint(unstable), func(t *testing.T) {
+	for _, tc := range []struct {
+		unstable, startup bool
+	}{{false, false}, {true, false}, {false, true}, {true, true}} {
+		unstable := tc.unstable
+		t.Run(fmt.Sprintf("unstable=%v/startup=%v", tc.unstable, tc.startup), func(t *testing.T) {
 			fixture := setupMovieScanner(t)
 			s := fixture.scanner
 			root := createMovieLibrary(t, 1)
@@ -279,7 +284,11 @@ func TestDeferredRetryEligibilityAndAccounting(t *testing.T) {
 				}
 				return movieScannerMetadataFixture("120"), nil
 			}}
-			s.scan(root)
+			if tc.startup {
+				s.scanChanges(root, scanner.Changes{CatchUp: true})
+			} else {
+				s.scan(root)
+			}
 			status := s.Status()
 			if status.Total != 1 || status.Processed != 1 || status.Failed != 0 {
 				t.Fatalf("retry counted a file twice: %+v", status)

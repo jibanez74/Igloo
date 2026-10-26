@@ -69,6 +69,7 @@ type poller struct {
 	root           string
 	configuredRoot string
 	resolve        func(root string) (string, error)
+	mountPoints    func() ([]string, error)
 	allow          func(root, path string) bool
 	extensions     map[string]bool
 	timing         pollTiming
@@ -190,6 +191,12 @@ func (p *poller) poll() pollReport {
 	if !present {
 		return p.goOffline()
 	}
+	if !changed {
+		changed = p.layout.mountAppeared(func(directory string) bool {
+			_, known := p.dirs[directory]
+			return known
+		})
+	}
 	if changed {
 		p.offline = true
 		return p.arm()
@@ -255,7 +262,7 @@ func (p *poller) arm() pollReport {
 	if !present {
 		return pollReport{}
 	}
-	recorded, err := recordRoot(p.root)
+	recorded, err := recordRoot(p.root, p.mountPoints)
 	if err != nil {
 		return pollReport{}
 	}
@@ -268,6 +275,7 @@ func (p *poller) arm() pollReport {
 	if err != nil {
 		return pollReport{}
 	}
+	p.layout.noteWalkedMounts()
 	p.offline = false
 	return pollReport{online: true}
 }

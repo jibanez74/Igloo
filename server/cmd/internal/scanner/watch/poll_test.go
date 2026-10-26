@@ -448,3 +448,22 @@ func TestSessionRejectsStalePollReports(t *testing.T) {
 		}
 	}
 }
+
+// A disk mounted inside a polled library after it armed, as one that came up
+// late does, arms the poller again, once.
+func TestPollerArmsAgainWhenADiskMountsInTheLibrary(t *testing.T) {
+	f := newPollFixture(t, "a.mkv")
+	points := []string{"/"}
+	f.p.mountPoints = func() ([]string, error) { return points, nil }
+	report := f.p.arm()
+	if !report.online {
+		t.Fatalf("arm: %+v", report)
+	}
+	f.poll(t, time.Minute, nil)
+	points = append(points, filepath.Join(f.p.root, "disk2"))
+	report = f.p.poll()
+	if !report.online {
+		t.Fatalf("a disk mounted in the library did not arm the poller again: %+v", report)
+	}
+	f.poll(t, time.Minute, nil)
+}

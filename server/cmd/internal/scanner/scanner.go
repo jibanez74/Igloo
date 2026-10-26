@@ -130,10 +130,11 @@ type launchRequest struct {
 // already sees the run. A library scan requested while a run of changes is in
 // progress is queued behind it rather than refused, so a busy watcher can
 // never starve a requested scan; it reads the directory again when it
-// launches, so it walks the root configured then. Queued requests coalesce,
-// and a catch-up replaces a queued scan, since it hands deferred files back to
-// the watcher and guards an empty root. A run of changes is refused while any
-// run is in progress, and the watcher retries it.
+// launches, so it walks the root configured then. Queued requests coalesce
+// into one walk: a catch-up, since it hands deferred files back to the
+// watcher, that cleans up as a library scan does once an admin asked for one,
+// since the admin asked to remove what is missing. A run of changes is
+// refused while any run is in progress, and the watcher retries it.
 func (l *Launcher) Start(directory func() sql.NullString, changes *Changes, begin func(ScanScope), run func(directory string, changes *Changes)) StartResult {
 	configured := directory()
 	result := StartResult{Directory: configured.String}
@@ -151,17 +152,32 @@ func (l *Launcher) Start(directory func() sql.NullString, changes *Changes, begi
 			result.Status = StartAlreadyRunning
 			return result
 		}
-		catchUp := changes != nil && changes.CatchUp
-		replaces := l.queued == nil || catchUp
-		if replaces {
-			l.queued = request
-		}
+		l.queue(request)
 		result.Status = StartQueued
 		return result
 	}
 	l.running, l.changes = true, scoped
 	l.launch(request, configured.String)
 	return result
+}
+
+// queue coalesces a library scan or catch-up with the queued request; the
+// caller holds l.mu.
+func (l *Launcher) queue(request *launchRequest) {
+	queued := l.queued
+	if queued == nil {
+		l.queued = request
+		return
+	}
+	manual := !queued.changes.Guarded() || !request.changes.Guarded()
+	if request.changes != nil {
+		l.queued = request
+	}
+	if l.queued.changes != nil && manual {
+		merged := *l.queued.changes
+		merged.Manual = true
+		l.queued.changes = &merged
+	}
 }
 
 func (l *Launcher) launch(request *launchRequest, directory string) {

@@ -153,14 +153,15 @@ type session struct {
 	polling pollTiming
 	open    func(*sync.WaitGroup) (notifier, error)
 	// resolve resolves a library root wherever the session or its pollers
-	// look at one.
-	resolve  func(root string) (string, error)
-	ctx      context.Context
-	cancel   context.CancelFunc
-	done     chan struct{}
-	reloads  chan struct{}
-	notifier notifier
-	raw      <-chan rawEvent
+	// look at one; mountPoints reads the mount table for their layouts.
+	resolve     func(root string) (string, error)
+	mountPoints func() ([]string, error)
+	ctx         context.Context
+	cancel      context.CancelFunc
+	done        chan struct{}
+	reloads     chan struct{}
+	notifier    notifier
+	raw         <-chan rawEvent
 
 	libraries []*library
 	watches   map[int32]*watchedDir
@@ -182,10 +183,10 @@ type session struct {
 	deferredSignal chan struct{}
 }
 
-func startSession(deps Dependencies, t timing, polling pollTiming, open func(*sync.WaitGroup) (notifier, error), resolve func(string) (string, error)) *session {
+func startSession(deps Dependencies, t timing, polling pollTiming, open func(*sync.WaitGroup) (notifier, error), resolve func(string) (string, error), mountPoints func() ([]string, error)) *session {
 	ctx, cancel := context.WithCancel(deps.Context)
 	s := &session{
-		deps: deps, timing: t, polling: polling, open: open, resolve: resolve, ctx: ctx, cancel: cancel,
+		deps: deps, timing: t, polling: polling, open: open, resolve: resolve, mountPoints: mountPoints, ctx: ctx, cancel: cancel,
 		done: make(chan struct{}), reloads: make(chan struct{}, 1),
 		watches: make(map[int32]*watchedDir), dirs: make(map[string]int32),
 		polls: make(chan pollReport), deferredSignal: make(chan struct{}, 1),
@@ -432,6 +433,13 @@ func (s *session) releaseWatch(lib *library, wd int32, watched *watchedDir) {
 	}
 }
 
+// watchedBy reports a directory the library watches.
+func (s *session) watchedBy(lib *library, directory string) bool {
+	wd, ok := s.dirs[directory]
+	watched := s.watches[wd]
+	return ok && watched != nil && watched.libraries[lib]
+}
+
 func (s *session) countWatches(lib *library) int {
 	count := 0
 	for _, watched := range s.watches {
@@ -514,6 +522,9 @@ func (s *session) checkLayout(lib *library) {
 		return
 	}
 	if !lib.offline && !changed {
+		changed = lib.layout.mountAppeared(func(directory string) bool { return s.watchedBy(lib, directory) })
+	}
+	if !lib.offline && !changed {
 		return
 	}
 	s.deps.Logger.Info("library watcher re-arming the library", "library", lib.Name, "after_outage", lib.offline)
@@ -527,7 +538,7 @@ func (s *session) startPoll(lib *library) {
 	ctx, cancel := context.WithCancel(s.ctx)
 	lib.stopPoll = cancel
 	p := &poller{
-		library: lib, generation: lib.generation, root: lib.resolved, configuredRoot: lib.root, resolve: s.resolve, allow: lib.AllowDirectory,
+		library: lib, generation: lib.generation, root: lib.resolved, configuredRoot: lib.root, resolve: s.resolve, mountPoints: s.mountPoints, allow: lib.AllowDirectory,
 		extensions: lib.Extensions, timing: s.polling, now: s.deps.Now, layout: layout{root: lib.resolved},
 		resettleSignal: make(chan struct{}, 1),
 	}

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"syscall"
 
 	"igloo/cmd/internal/scanner"
@@ -29,6 +30,12 @@ type layout struct {
 	rootID    identity
 	rootMount bool
 	mounts    map[string]bool
+	// table holds the mount points beneath the root, relative to it, that
+	// mountPoints listed when the layout was recorded or that its walk passed;
+	// tableRead is unset when the mount table could not be read then.
+	table       []string
+	tableRead   bool
+	mountPoints func() ([]string, error)
 }
 
 // check reports whether the layout is present, and whether the root changed
@@ -58,6 +65,44 @@ func (l layout) check() (present, changed bool) {
 	return true, identityOf(info) != l.rootID
 }
 
+// mountAppeared reports a filesystem mounted since the layout was recorded on
+// a directory the library's walk reached, or on one beneath such a directory,
+// such as a disk that came up late after a power cut: mounting over a watched
+// directory sends no event, and its watch no longer sees the directories the
+// disk brings. Mounts the walk never reaches, such as the snapshots ZFS
+// mounts beneath its hidden .zfs directory, are ignored. It reads the mount
+// table, so it never touches a share whose server is down.
+func (l layout) mountAppeared(walked func(directory string) bool) bool {
+	if l.mountPoints == nil || !l.tableRead {
+		return false
+	}
+	points, err := l.mountPoints()
+	if err != nil {
+		return false
+	}
+	for _, point := range scanner.MountPointsBeneath(points, l.root) {
+		known := slices.Contains(l.table, point)
+		path := filepath.Join(l.root, point)
+		reached := point == "." || walked(path) || walked(filepath.Dir(path))
+		if !known && reached {
+			return true
+		}
+	}
+	return false
+}
+
+// noteWalkedMounts adds the mount points the walk passed to the table, such
+// as automounts the walk itself set off after the table was read.
+func (l *layout) noteWalkedMounts() {
+	for mount := range l.mounts {
+		point, err := filepath.Rel(l.root, mount)
+		known := slices.Contains(l.table, point)
+		if err == nil && !known {
+			l.table = append(l.table, point)
+		}
+	}
+}
+
 // mounted reports whether path, whose stat is info, sits on another device
 // than its parent.
 func mounted(path string, info os.FileInfo) bool {
@@ -68,13 +113,20 @@ func mounted(path string, info os.FileInfo) bool {
 	return identityOf(parent).device != identityOf(info).device
 }
 
-// recordRoot fills the root half of a layout from the directory as it is now.
-func recordRoot(root string) (layout, error) {
+// recordRoot fills the root half of a layout from the directory as it is now,
+// with the mount points beneath it that mountPoints lists.
+func recordRoot(root string, mountPoints func() ([]string, error)) (layout, error) {
 	info, err := os.Stat(root)
 	if err != nil {
 		return layout{}, err
 	}
-	return layout{root: root, rootID: identityOf(info), rootMount: mounted(root, info), mounts: make(map[string]bool)}, nil
+	recorded := layout{root: root, rootID: identityOf(info), rootMount: mounted(root, info), mounts: make(map[string]bool), mountPoints: mountPoints}
+	if mountPoints != nil {
+		points, err := mountPoints()
+		recorded.tableRead = err == nil
+		recorded.table = scanner.MountPointsBeneath(points, root)
+	}
+	return recorded, nil
 }
 
 // unavailable reports errors that mean a share or disk went away rather than

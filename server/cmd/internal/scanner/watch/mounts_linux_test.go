@@ -1,6 +1,10 @@
 package watch
 
-import "testing"
+import (
+	"testing"
+
+	"igloo/cmd/internal/scanner"
+)
 
 const testMountInfo = `22 1 8:2 / / rw,relatime shared:1 - ext4 /dev/sda2 rw
 30 22 0:40 / /srv/media rw,relatime shared:5 - ext4 /dev/sdb1 rw
@@ -25,23 +29,9 @@ func TestNetworkFilesystemReadsTheMountTable(t *testing.T) {
 		{"/srv/media2", ""},
 	}
 	for _, tc := range tests {
-		got := networkFilesystemIn([]byte(testMountInfo), tc.root)
+		got := networkFilesystemIn(scanner.ParseMountInfo([]byte(testMountInfo)), tc.root)
 		if got != tc.want {
 			t.Errorf("networkFilesystemIn(%q) = %q, want %q", tc.root, got, tc.want)
-		}
-	}
-}
-
-func TestUnescapeMountPoint(t *testing.T) {
-	for field, want := range map[string]string{
-		`/mnt/a\040b`:        "/mnt/a b",
-		`/mnt/tab\011`:       "/mnt/tab\t",
-		`/mnt/back\134slash`: `/mnt/back\slash`,
-		`/mnt/plain`:         "/mnt/plain",
-		`/mnt/short\04`:      `/mnt/short\04`,
-	} {
-		if got := unescapeMountPoint(field); got != want {
-			t.Errorf("unescapeMountPoint(%q) = %q, want %q", field, got, want)
 		}
 	}
 }

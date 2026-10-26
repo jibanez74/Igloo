@@ -4,10 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -54,14 +54,19 @@ func TestChangesResolve(t *testing.T) {
 
 func TestChangesQuietPeriodAndDeferred(t *testing.T) {
 	var library *Changes
-	catchUp := &Changes{CatchUp: true}
-	scoped := &Changes{Paths: []string{"a.mkv"}}
+	onDeferred := func(string, time.Time) {}
+	catchUp := &Changes{CatchUp: true, OnDeferred: onDeferred}
+	scoped := &Changes{Paths: []string{"a.mkv"}, OnDeferred: onDeferred}
+	startup := &Changes{CatchUp: true}
 	const libraryReason = "retried on the next scan"
 	if scoped.QuietPeriod() != ChangeQuietPeriod || !scoped.Scoped() || scoped.Scope() != ScopeChanges || scoped.DeferredReason(libraryReason) != ReasonFileDeferredWatched {
 		t.Fatal("a run of changes must use ChangeQuietPeriod, be scoped, and leave deferred files to the watcher")
 	}
 	if catchUp.QuietPeriod() != FileQuietPeriod || catchUp.Scoped() || catchUp.Scope() != ScopeLibrary || catchUp.DeferredReason(libraryReason) != ReasonFileDeferredWatched {
 		t.Fatal("a catch-up run must keep FileQuietPeriod and walk everything, and the watcher retries what it defers")
+	}
+	if startup.HandsBackDeferred() || startup.DeferredReason(libraryReason) != libraryReason {
+		t.Fatal("a startup catch-up has no watcher to hand its deferred files to")
 	}
 	if library.QuietPeriod() != FileQuietPeriod || library.Scoped() || library.Scope() != ScopeLibrary || library.DeferredReason(libraryReason) != libraryReason || library.Resolve("/library") != nil {
 		t.Fatal("a library scan keeps today's behavior")
@@ -182,31 +187,214 @@ func TestWalkChangesStopsOnCancelAndVisitError(t *testing.T) {
 	}
 }
 
-func TestReconciliationRefusesCleanupOnlyForAnEmptyCatchUp(t *testing.T) {
-	root := t.TempDir()
+// guardFixture is a resolved library root with a database to record its
+// mount points in.
+func guardFixture(t *testing.T) (string, TxRunner) {
+	t.Helper()
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	db, queries := scannertest.OpenDB(t, ":memory:")
+	return root, TxRunner{DB: db, Mu: &sync.Mutex{}, Queries: queries}
+}
+
+// mountTable answers MountPoints with the given mount points.
+func mountTable(points ...string) func() ([]string, error) {
+	return func() ([]string, error) { return points, nil }
+}
+
+func TestReconciliationGuardKeepsEverythingAfterACatchUpThatFoundNothing(t *testing.T) {
+	root, tx := guardFixture(t)
 	files := []CatalogFile{{1, filepath.Join(root, "A", "a.mkv")}}
+	for _, tc := range []struct {
+		changes *Changes
+		kept    int
+	}{
+		{&Changes{CatchUp: true}, 1},
+		{nil, 0},
+		{&Changes{CatchUp: true, Manual: true}, 0},
+		{&Changes{Paths: []string{"A"}}, 0},
+	} {
+		r, err := NewReconciliation(context.Background(), root, files)
+		if err != nil {
+			t.Fatal(err)
+		}
+		kept, err := r.Guard(context.Background(), tx, tc.changes, mountTable())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if kept.Files != tc.kept || len(r.Unseen()) != 1-tc.kept {
+			t.Fatalf("%+v: kept %+v, unseen %v", tc.changes, kept, r.Unseen())
+		}
+		if tc.kept > 0 && (kept.Reason != ReasonCleanupSkippedEmpty || kept.MountPoints != nil) {
+			t.Fatalf("an empty walk keeps the whole library: %+v", kept)
+		}
+	}
+}
+
+// A disk mounted inside the library that has not come up, as after a power
+// cut, leaves an empty mount point. Its missing files are kept by every
+// catch-up until it is back, whatever device numbers the disks get, while a
+// file deleted from a mounted disk still goes; a library scan an admin asks
+// for deletes them and forgets the mount point.
+func TestReconciliationGuardKeepsFilesBeneathAMountPointThatIsNotMounted(t *testing.T) {
+	root, tx := guardFixture(t)
+	disk1, disk2 := filepath.Join(root, "disk1"), filepath.Join(root, "disk2")
+	files := []CatalogFile{
+		{1, filepath.Join(disk1, "seen.mkv")},
+		{2, filepath.Join(disk1, "gone.mkv")},
+		{3, filepath.Join(disk2, "a.mkv")},
+		{4, filepath.Join(disk2, "b.mkv")},
+		{5, filepath.Join(root, "gone.mkv")},
+	}
+	// guard runs the guard over a walk that saw files[0] and the files with
+	// the extra ids.
+	guard := func(changes *Changes, mounts func() ([]string, error), extra ...int64) (Kept, []int64) {
+		t.Helper()
+		r, err := NewReconciliation(context.Background(), root, files)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r.MarkSeen(files[0].Path)
+		for _, file := range files {
+			if slices.Contains(extra, file.ID) {
+				r.MarkSeen(file.Path)
+			}
+		}
+		kept, err := r.Guard(context.Background(), tx, changes, mounts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var ids []int64
+		for _, file := range r.Unseen() {
+			ids = append(ids, file.ID)
+		}
+		return kept, ids
+	}
+	recorded := func() []string {
+		t.Helper()
+		points, err := tx.Queries.ListLibraryMountPoints(context.Background(), root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return points
+	}
+
+	// A snapshot ZFS mounted beneath its hidden .zfs directory is never
+	// walked, so it is not recorded.
+	snapshot := filepath.Join(root, ".zfs", "snapshot", "daily")
+	kept, _ := guard(nil, mountTable(disk1, disk2, snapshot), 3, 4)
+	if kept.Files != 0 || !slices.Equal(recorded(), []string{"disk1", "disk2"}) {
+		t.Fatalf("a library scan with both disks mounted: kept %+v, recorded %q", kept, recorded())
+	}
+	for range 2 {
+		kept, ids := guard(&Changes{CatchUp: true}, mountTable(disk1))
+		if kept.Files != 2 || kept.Reason != ReasonCleanupKeptUnmounted || !slices.Equal(kept.MountPoints, []string{disk2}) {
+			t.Fatalf("catch-up with disk2 missing kept %+v", kept)
+		}
+		if !slices.Equal(ids, []int64{2, 5}) {
+			t.Fatalf("cleanup candidates %v, want the files deleted from mounted filesystems", ids)
+		}
+		if !slices.Equal(recorded(), []string{"disk1", "disk2"}) {
+			t.Fatalf("a catch-up forgot a mount point: %q", recorded())
+		}
+	}
+	kept, ids := guard(&Changes{CatchUp: true, Manual: true}, mountTable(disk1))
+	if kept.Files != 0 || !slices.Equal(ids, []int64{2, 3, 4, 5}) || !slices.Equal(recorded(), []string{"disk1"}) {
+		t.Fatalf("an admin's scan: kept %+v, candidates %v, recorded %q", kept, ids, recorded())
+	}
+	kept, _ = guard(&Changes{CatchUp: true}, mountTable(disk1))
+	if kept.Files != 0 {
+		t.Fatalf("a forgotten mount point still kept files: %+v", kept)
+	}
+
+	// A run of changes keeps nothing, but records a disk that mounted since,
+	// whose first files it may import.
+	disk3 := filepath.Join(root, "disk3")
+	files = append(files, CatalogFile{6, filepath.Join(disk3, "c.mkv")})
+	kept, _ = guard(&Changes{Paths: []string{"disk3"}}, mountTable(disk1, disk3), 6)
+	if kept.Files != 0 || !slices.Equal(recorded(), []string{"disk1", "disk3"}) {
+		t.Fatalf("a run of changes: kept %+v, recorded %q", kept, recorded())
+	}
+	kept, _ = guard(&Changes{CatchUp: true}, mountTable(disk1))
+	if kept.Files != 1 || !slices.Equal(kept.MountPoints, []string{disk3}) {
+		t.Fatalf("a disk a run of changes recorded was not kept: %+v", kept)
+	}
+}
+
+// A library whose root is itself a mount point keeps every missing file
+// while it is not mounted, even when something left in the empty mount point
+// is found.
+func TestReconciliationGuardKeepsTheFilesOfARootThatIsNotMounted(t *testing.T) {
+	root, tx := guardFixture(t)
+	files := []CatalogFile{{1, filepath.Join(root, "stray.mkv")}, {2, filepath.Join(root, "A", "a.mkv")}}
+	for _, tc := range []struct {
+		mounts func() ([]string, error)
+		kept   int
+	}{{mountTable(root), 0}, {mountTable(), 1}} {
+		r, err := NewReconciliation(context.Background(), root, files)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r.MarkSeen(files[0].Path)
+		kept, err := r.Guard(context.Background(), tx, &Changes{CatchUp: true}, tc.mounts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if kept.Files != tc.kept {
+			t.Fatalf("kept %+v, want %d", kept, tc.kept)
+		}
+	}
+}
+
+// A library configured through a symlink records and checks its mount points
+// under the resolved root, the paths the mount table holds.
+func TestReconciliationGuardResolvesASymlinkedRoot(t *testing.T) {
+	resolved, tx := guardFixture(t)
+	link := filepath.Join(t.TempDir(), "library")
+	err := os.Symlink(resolved, link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	disk := filepath.Join(resolved, "disk")
+	files := []CatalogFile{{1, filepath.Join(link, "seen.mkv")}, {2, filepath.Join(link, "disk", "a.mkv")}}
+	for _, tc := range []struct {
+		mounts func() ([]string, error)
+		seen   []CatalogFile
+		kept   int
+	}{{mountTable(disk), files, 0}, {mountTable(), files[:1], 1}} {
+		r, err := NewReconciliation(context.Background(), link, files)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, file := range tc.seen {
+			r.MarkSeen(file.Path)
+		}
+		kept, err := r.Guard(context.Background(), tx, &Changes{CatchUp: true}, tc.mounts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if kept.Files != tc.kept || len(r.Unseen()) != len(files)-len(tc.seen)-tc.kept {
+			t.Fatalf("kept %+v, want %d; unseen %v", kept, tc.kept, r.Unseen())
+		}
+	}
+}
+
+// A mount table that cannot be read fails the guard before anything is
+// recorded or deleted.
+func TestReconciliationGuardFailsWithoutAMountTable(t *testing.T) {
+	root, tx := guardFixture(t)
+	files := []CatalogFile{{1, filepath.Join(root, "seen.mkv")}, {2, filepath.Join(root, "gone.mkv")}}
 	r, err := NewReconciliation(context.Background(), root, files)
 	if err != nil {
 		t.Fatal(err)
 	}
-	catchUp := &Changes{CatchUp: true}
-	if !r.RefusesCleanup(catchUp) {
-		t.Fatal("a catch-up that saw nothing under a populated catalog must not clean up")
-	}
-	if r.RefusesCleanup(nil) || r.RefusesCleanup(&Changes{Paths: []string{"A"}}) {
-		t.Fatal("only a catch-up refuses: a library scan and a run of changes clean up")
-	}
 	r.MarkSeen(files[0].Path)
-	if r.RefusesCleanup(catchUp) {
-		t.Fatal("a catch-up that saw a file cleans up")
-	}
-
-	empty, err := NewReconciliation(context.Background(), root, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if empty.RefusesCleanup(catchUp) {
-		t.Fatal("an empty catalog has nothing to protect")
+	unreadable := errors.New("mount table unreadable")
+	_, err = r.Guard(context.Background(), tx, &Changes{CatchUp: true}, func() ([]string, error) { return nil, unreadable })
+	if !errors.Is(err, unreadable) {
+		t.Fatalf("Guard error = %v", err)
 	}
 }
 
@@ -385,16 +573,16 @@ func TestLauncherQueuedScanReadsTheRootAtLaunch(t *testing.T) {
 	manual := func() *Changes { return nil }
 	catchUp := func() *Changes { return &Changes{CatchUp: true} }
 	for _, tc := range []struct {
-		name      string
-		requests  []func() *Changes
-		root      string
-		want      string
-		wantCatch bool
+		name     string
+		requests []func() *Changes
+		root     string
+		want     string
 	}{
-		{"root changed while queued", []func() *Changes{manual}, "B", "B", false},
-		{"catch-up replaces a queued scan", []func() *Changes{manual, catchUp}, "A", "A", true},
-		{"a scan joins a queued catch-up", []func() *Changes{catchUp, manual}, "A", "A", true},
-		{"cleared while queued", []func() *Changes{manual}, "", "", false},
+		{"root changed while queued", []func() *Changes{manual}, "B", "B:library"},
+		{"catch-up takes in a queued scan", []func() *Changes{manual, catchUp}, "A", "A:manual catch-up"},
+		{"a scan joins a queued catch-up", []func() *Changes{catchUp, manual}, "A", "A:manual catch-up"},
+		{"catch-ups coalesce", []func() *Changes{catchUp, catchUp}, "A", "A:catch-up"},
+		{"cleared while queued", []func() *Changes{manual}, "", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var scans sync.WaitGroup
@@ -416,7 +604,14 @@ func TestLauncherQueuedScanReadsTheRootAtLaunch(t *testing.T) {
 			completed := make(chan string, len(tc.requests))
 			for _, request := range tc.requests {
 				result := launcher.Start(directory, request(), func(ScanScope) {}, func(directory string, changes *Changes) {
-					completed <- fmt.Sprintf("%s:%v", directory, changes != nil && changes.CatchUp)
+					kind := "library"
+					switch {
+					case changes.Guarded():
+						kind = "catch-up"
+					case changes != nil:
+						kind = "manual catch-up"
+					}
+					completed <- directory + ":" + kind
 				})
 				if result.Status != StartQueued || result.Directory != "A" {
 					t.Fatalf("request: %+v", result)
@@ -435,9 +630,9 @@ func TestLauncherQueuedScanReadsTheRootAtLaunch(t *testing.T) {
 				if len(completed) != 1 {
 					t.Fatalf("%d queued scans ran, want one", len(completed))
 				}
-				got, want := <-completed, fmt.Sprintf("%s:%v", tc.want, tc.wantCatch)
-				if got != want {
-					t.Fatalf("ran %q, want %q", got, want)
+				got := <-completed
+				if got != tc.want {
+					t.Fatalf("ran %q, want %q", got, tc.want)
 				}
 			}
 			if launcher.queued != nil || launcher.running {

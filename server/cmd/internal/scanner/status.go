@@ -55,6 +55,7 @@ const (
 	ReasonFileDeferredNextScan = "The file is still changing or has not been quiet for 60 seconds. It is retried on the next scan."
 	ReasonFileDeferredWatched  = "The file is still changing. The library watcher retries it once it is quiet."
 	ReasonCleanupSkippedEmpty  = "The library looked empty, so nothing was removed. If its files are really gone, run a library scan."
+	ReasonCleanupKeptUnmounted = "This disk or share was not mounted, so its missing files were kept. If they are really gone, run a library scan."
 )
 
 // MaxPublishedIssues caps the issue summaries carried by a status; IssueCount
@@ -182,6 +183,22 @@ type Report struct {
 
 func NewReport() Report {
 	return Report{issues: make(map[string]Issue), active: make(map[string]bool)}
+}
+
+// Kept records the issues of a cleanup that kept files: one for each mount
+// point that was not mounted, or one for the library when its walk found no
+// file at all.
+func (r *Report) Kept(kept Kept) {
+	if kept.Files == 0 {
+		return
+	}
+	if len(kept.MountPoints) == 0 {
+		r.Issue("", PhaseCleanup, kept.Reason)
+		return
+	}
+	for _, point := range kept.MountPoints {
+		r.Issue(point, PhaseCleanup, kept.Reason)
+	}
 }
 
 // Issue records one issue per phase and path. A scan-wide issue carries no

@@ -45,11 +45,12 @@ type Watcher struct {
 	deps    Dependencies
 	timing  timing
 	polling pollTiming
-	// open opens the kernel instance and resolve resolves a library root, the
-	// one filesystem call that can hang on a share; tests substitute
-	// scripted ones.
-	open    func(*sync.WaitGroup) (notifier, error)
-	resolve func(root string) (string, error)
+	// open opens the kernel instance, resolve resolves a library root, the
+	// one filesystem call that can hang on a share, and mountPoints reads the
+	// mount table; tests substitute scripted ones.
+	open        func(*sync.WaitGroup) (notifier, error)
+	resolve     func(root string) (string, error)
+	mountPoints func() ([]string, error)
 
 	mu      sync.Mutex
 	session *session
@@ -66,7 +67,7 @@ func New(deps Dependencies) *Watcher {
 	if deps.Now == nil {
 		deps.Now = time.Now
 	}
-	return &Watcher{deps: deps, timing: defaultTiming, polling: defaultPollTiming, open: newNotifier, resolve: resolveRoot}
+	return &Watcher{deps: deps, timing: defaultTiming, polling: defaultPollTiming, open: newNotifier, resolve: resolveRoot, mountPoints: scanner.MountPoints}
 }
 
 // Sync brings the watcher in line with the setting. Turning it on arms every
@@ -88,7 +89,7 @@ func (w *Watcher) Sync(enabled bool) {
 		w.session.reload()
 		return
 	}
-	w.session = startSession(w.deps, w.timing, w.polling, w.open, w.resolve)
+	w.session = startSession(w.deps, w.timing, w.polling, w.open, w.resolve, w.mountPoints)
 }
 
 // active reports a session that has not ended; the caller holds w.mu.

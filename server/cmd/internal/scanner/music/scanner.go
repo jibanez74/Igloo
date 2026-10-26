@@ -63,6 +63,7 @@ type Scanner struct {
 	scanContext              context.Context
 	launcher                 scanner.Launcher
 	tx                       scanner.TxRunner
+	mountPoints              func() ([]string, error)
 	currentMusicDirectory    func() sql.NullString
 	invalidateCommittedTrack func(int64)
 	statusMu                 sync.RWMutex
@@ -99,6 +100,7 @@ func New(deps Dependencies) *Scanner {
 		spotify: deps.Spotify, apple: deps.Apple, appleLookupsEnabled: deps.AppleLookupsEnabled,
 		scanContext: deps.ScanContext, launcher: scanner.Launcher{Wait: deps.Wait},
 		tx:                       scanner.TxRunner{DB: deps.DB, Mu: deps.ScannerDBMu, Queries: deps.Queries},
+		mountPoints:              scanner.MountPoints,
 		currentMusicDirectory:    deps.CurrentMusicDirectory,
 		invalidateCommittedTrack: deps.InvalidateCommittedTrack,
 	}

@@ -71,7 +71,10 @@ func (r *changesRecorder) record(library string, changes scanner.Changes) scanne
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	kind := "changes"
-	if changes.CatchUp {
+	switch {
+	case changes.CatchUp && !changes.HandsBackDeferred():
+		kind = "startup catch-up"
+	case changes.CatchUp:
 		kind = "catch-up"
 	}
 	r.runs = append(r.runs, library+" "+kind)
@@ -105,14 +108,16 @@ func TestStartLibraryWorkFollowsTheStoredWatcherSetting(t *testing.T) {
 			if enabled {
 				waitForInotifyInstances(t, before+1)
 			}
+			if len(started) != 0 {
+				t.Fatalf("startup must not request a library scan, which cleans up without the catch-up's guard: %q", started)
+			}
 			if !enabled {
-				if !slices.Equal(started, []string{"movie"}) {
-					t.Fatalf("with the watcher off the startup scans must run, got %q", started)
+				// A startup scan is a catch-up that retries its own deferred
+				// files, since nothing watches the library.
+				if !slices.Equal(recorder.runs, []string{"movie startup catch-up"}) {
+					t.Fatalf("with the watcher off the startup scans must run, got %q", recorder.runs)
 				}
 				return
-			}
-			if len(started) != 0 {
-				t.Fatalf("with the watcher on its catch-up replaces the startup scans, got %q", started)
 			}
 			deadline := time.Now().Add(5 * time.Second)
 			for {

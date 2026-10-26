@@ -1347,3 +1347,33 @@ type eventsOf struct {
 }
 
 func (e *eventsOf) events() <-chan rawEvent { return e.out }
+
+// A disk that mounts beneath an inotify library after it armed, as one that
+// came up late after a power cut does, covers watched directories without an
+// event; the layout check arms the library again, once, which watches and
+// walks what the disk brings.
+func TestWatcherArmsAgainWhenADiskMountsBeneathTheRoot(t *testing.T) {
+	fixture := newWatcherFixture(t, nil)
+	root := resolvedTempDir(t)
+	fixture.watcher.deps.Libraries[0].Directory = func() sql.NullString { return sql.NullString{String: root, Valid: true} }
+	var mu sync.Mutex
+	points := []string{"/"}
+	fixture.watcher.mountPoints = func() ([]string, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		return slices.Clone(points), nil
+	}
+	fixture.watcher.Sync(true)
+	if !fixture.scanner.next(t).CatchUp {
+		t.Fatal("expected the first catch-up")
+	}
+	fixture.scanner.quiet(t, 300*time.Millisecond)
+
+	mu.Lock()
+	points = append(points, filepath.Join(root, "disk2"))
+	mu.Unlock()
+	if !fixture.scanner.next(t).CatchUp {
+		t.Fatal("a disk mounted beneath the root must arm the library again")
+	}
+	fixture.scanner.quiet(t, 500*time.Millisecond)
+}

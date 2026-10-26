@@ -117,15 +117,19 @@ func (s *Scanner) runMusicScan(directory string, changes *scanner.Changes) {
 	}
 
 	s.phase(report, scanner.PhaseCleanup)
-	if reconciliation.RefusesCleanup(changes) {
-		s.logger.Warn("music cleanup skipped: the library looked empty", "directory", directory)
-		report.Issue("", scanner.PhaseCleanup, scanner.ReasonCleanupSkippedEmpty)
-	} else {
-		report.status.Deleted, err = s.cleanupMissingMusic(ctx, scan, reconciliation)
-		if err != nil {
-			fail(err, scanner.ReasonCleanupUnsafe)
-			return
-		}
+	kept, err := reconciliation.Guard(ctx, s.tx, changes, s.mountPoints)
+	if err != nil {
+		fail(err, scanner.ReasonCleanupUnsafe)
+		return
+	}
+	if kept.Files > 0 {
+		s.logger.Warn("music cleanup kept files that looked unmounted", "directory", directory, "files", kept.Files, "mount_points", kept.MountPoints)
+		report.Kept(kept)
+	}
+	report.status.Deleted, err = s.cleanupMissingMusic(ctx, scan, reconciliation)
+	if err != nil {
+		fail(err, scanner.ReasonCleanupUnsafe)
+		return
 	}
 
 	if changes.Scoped() {

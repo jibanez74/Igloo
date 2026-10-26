@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"sync"
 	"testing"
@@ -189,6 +190,63 @@ func TestMovieCatchUpRefusesToEmptyALibraryThatLooksUnmounted(t *testing.T) {
 	s.scan(root)
 	if len(catalogPaths(t, s)) != 0 {
 		t.Fatal("a requested library scan must still remove missing movies")
+	}
+}
+
+// A disk mounted inside the library that has not come up, after a power cut
+// on a server whose disks are mounted one per folder, leaves its empty mount
+// point. Every catch-up keeps its movies until it is back, while a movie
+// deleted from a disk that is mounted still goes; a library scan an admin
+// asks for deletes them.
+func TestMovieCatchUpKeepsTheMoviesOfADiskThatIsNotMounted(t *testing.T) {
+	fixture := setupMovieScanner(t)
+	s := fixture.scanner
+	s.ffprobe = &scannertest.CountingProbe{Default: movieScannerMetadataFixture("120")}
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	disk1, disk2 := filepath.Join(root, "disk1"), filepath.Join(root, "disk2")
+	kept := filepath.Join(disk1, "A (2001)", "a.mkv")
+	deleted := filepath.Join(disk1, "D (2004)", "d.mkv")
+	unmounted := []string{filepath.Join(disk2, "B (2002)", "b.mkv"), filepath.Join(disk2, "C (2003)", "c.mkv")}
+	for _, path := range append([]string{kept, deleted}, unmounted...) {
+		scannertest.WriteFile(t, path, filepath.Base(path))
+	}
+	// A test cannot mount a filesystem, so the mount table is scripted.
+	mounted := func(points ...string) func() ([]string, error) {
+		return func() ([]string, error) { return points, nil }
+	}
+	s.mountPoints = mounted(disk1, disk2)
+	s.scan(root)
+	for _, directory := range []string{disk2, filepath.Dir(deleted)} {
+		err = os.RemoveAll(directory)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	err = os.Mkdir(disk2, 0o755)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.mountPoints = mounted(disk1)
+
+	for run := range 2 {
+		s.scanChanges(root, scanner.Changes{CatchUp: true})
+		status := s.Status()
+		got, want := catalogPaths(t, s), append([]string{kept}, unmounted...)
+		if !slices.Equal(got, want) {
+			t.Fatalf("after catch-up %d: %q, want %q", run+1, got, want)
+		}
+		if status.IssueCount != 1 || status.Issues[0].Reason != scanner.ReasonCleanupKeptUnmounted || status.Issues[0].Filename != "disk2" {
+			t.Fatalf("catch-up %d issues = %+v", run+1, status.Issues)
+		}
+	}
+
+	s.scan(root)
+	got := catalogPaths(t, s)
+	if !slices.Equal(got, []string{kept}) {
+		t.Fatalf("after the library scan: %q", got)
 	}
 }
 

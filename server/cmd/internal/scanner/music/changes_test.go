@@ -98,6 +98,37 @@ func TestMusicChangesRunRemovesOnlyTheReportedTracks(t *testing.T) {
 	}
 }
 
+// A disk mounted inside the library that has not come up leaves its empty
+// mount point; the catch-up keeps its tracks, with their likes and playlist
+// entries.
+func TestMusicCatchUpKeepsTheTracksOfADiskThatIsNotMounted(t *testing.T) {
+	s := setupMusicScanner(t)
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	disk := filepath.Join(root, "disk2")
+	scannertest.WriteFile(t, filepath.Join(root, "disk1", "Album A", "01.flac"), "a1")
+	scannertest.WriteFile(t, filepath.Join(disk, "Album B", "01.flac"), "b1")
+	s.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadata()}
+	s.mountPoints = func() ([]string, error) { return []string{disk}, nil }
+	s.scan(root)
+	err = os.RemoveAll(filepath.Join(disk, "Album B"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.mountPoints = func() ([]string, error) { return nil, nil }
+
+	s.scanChanges(root, scanner.Changes{CatchUp: true})
+	status := s.Status()
+	if status.Deleted != 0 || scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM tracks") != 2 {
+		t.Fatalf("catch-up removed tracks: deleted=%d", status.Deleted)
+	}
+	if status.IssueCount != 1 || status.Issues[0].Reason != scanner.ReasonCleanupKeptUnmounted {
+		t.Fatalf("issues = %+v", status.Issues)
+	}
+}
+
 func TestMusicChangesRunHandsBackDeferredTracks(t *testing.T) {
 	s := setupMusicScanner(t)
 	root := t.TempDir()

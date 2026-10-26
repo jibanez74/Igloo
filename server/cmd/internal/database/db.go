@@ -189,6 +189,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.deleteDevicesUnusedSinceStmt, err = db.PrepareContext(ctx, deleteDevicesUnusedSince); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteDevicesUnusedSince: %w", err)
 	}
+	if q.deleteLibraryMountPointsStmt, err = db.PrepareContext(ctx, deleteLibraryMountPoints); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteLibraryMountPoints: %w", err)
+	}
 	if q.deleteMergedMusicAlbumStmt, err = db.PrepareContext(ctx, deleteMergedMusicAlbum); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteMergedMusicAlbum: %w", err)
 	}
@@ -780,6 +783,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.insertChapterStmt, err = db.PrepareContext(ctx, insertChapter); err != nil {
 		return nil, fmt.Errorf("error preparing query InsertChapter: %w", err)
 	}
+	if q.insertLibraryMountPointStmt, err = db.PrepareContext(ctx, insertLibraryMountPoint); err != nil {
+		return nil, fmt.Errorf("error preparing query InsertLibraryMountPoint: %w", err)
+	}
 	if q.insertShowAudioStreamStmt, err = db.PrepareContext(ctx, insertShowAudioStream); err != nil {
 		return nil, fmt.Errorf("error preparing query InsertShowAudioStream: %w", err)
 	}
@@ -818,6 +824,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.linkShowEpisodeFileStmt, err = db.PrepareContext(ctx, linkShowEpisodeFile); err != nil {
 		return nil, fmt.Errorf("error preparing query LinkShowEpisodeFile: %w", err)
+	}
+	if q.listLibraryMountPointsStmt, err = db.PrepareContext(ctx, listLibraryMountPoints); err != nil {
+		return nil, fmt.Errorf("error preparing query ListLibraryMountPoints: %w", err)
 	}
 	if q.listMusicTrackScanIndexStmt, err = db.PrepareContext(ctx, listMusicTrackScanIndex); err != nil {
 		return nil, fmt.Errorf("error preparing query ListMusicTrackScanIndex: %w", err)
@@ -1466,6 +1475,11 @@ func (q *Queries) Close() error {
 	if q.deleteDevicesUnusedSinceStmt != nil {
 		if cerr := q.deleteDevicesUnusedSinceStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing deleteDevicesUnusedSinceStmt: %w", cerr)
+		}
+	}
+	if q.deleteLibraryMountPointsStmt != nil {
+		if cerr := q.deleteLibraryMountPointsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteLibraryMountPointsStmt: %w", cerr)
 		}
 	}
 	if q.deleteMergedMusicAlbumStmt != nil {
@@ -2453,6 +2467,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing insertChapterStmt: %w", cerr)
 		}
 	}
+	if q.insertLibraryMountPointStmt != nil {
+		if cerr := q.insertLibraryMountPointStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing insertLibraryMountPointStmt: %w", cerr)
+		}
+	}
 	if q.insertShowAudioStreamStmt != nil {
 		if cerr := q.insertShowAudioStreamStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing insertShowAudioStreamStmt: %w", cerr)
@@ -2516,6 +2535,11 @@ func (q *Queries) Close() error {
 	if q.linkShowEpisodeFileStmt != nil {
 		if cerr := q.linkShowEpisodeFileStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing linkShowEpisodeFileStmt: %w", cerr)
+		}
+	}
+	if q.listLibraryMountPointsStmt != nil {
+		if cerr := q.listLibraryMountPointsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listLibraryMountPointsStmt: %w", cerr)
 		}
 	}
 	if q.listMusicTrackScanIndexStmt != nil {
@@ -3227,6 +3251,7 @@ type Queries struct {
 	deleteDeviceForUserStmt                     *sql.Stmt
 	deleteDevicesForUserStmt                    *sql.Stmt
 	deleteDevicesUnusedSinceStmt                *sql.Stmt
+	deleteLibraryMountPointsStmt                *sql.Stmt
 	deleteMergedMusicAlbumStmt                  *sql.Stmt
 	deleteMergedMusicArtistStmt                 *sql.Stmt
 	deleteMissingMovieStmt                      *sql.Stmt
@@ -3424,6 +3449,7 @@ type Queries struct {
 	hasMovieTmdbRetryStmt                       *sql.Stmt
 	insertAudioStreamStmt                       *sql.Stmt
 	insertChapterStmt                           *sql.Stmt
+	insertLibraryMountPointStmt                 *sql.Stmt
 	insertShowAudioStreamStmt                   *sql.Stmt
 	insertShowChapterStmt                       *sql.Stmt
 	insertShowSubtitleStmt                      *sql.Stmt
@@ -3437,6 +3463,7 @@ type Queries struct {
 	linkMusicTrackAppleStmt                     *sql.Stmt
 	linkMusicTrackSpotifyStmt                   *sql.Stmt
 	linkShowEpisodeFileStmt                     *sql.Stmt
+	listLibraryMountPointsStmt                  *sql.Stmt
 	listMusicTrackScanIndexStmt                 *sql.Stmt
 	listMusicTrackScanIndexUnderStmt            *sql.Stmt
 	listNotificationsForUserStmt                *sql.Stmt
@@ -3621,6 +3648,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		deleteDeviceForUserStmt:                     q.deleteDeviceForUserStmt,
 		deleteDevicesForUserStmt:                    q.deleteDevicesForUserStmt,
 		deleteDevicesUnusedSinceStmt:                q.deleteDevicesUnusedSinceStmt,
+		deleteLibraryMountPointsStmt:                q.deleteLibraryMountPointsStmt,
 		deleteMergedMusicAlbumStmt:                  q.deleteMergedMusicAlbumStmt,
 		deleteMergedMusicArtistStmt:                 q.deleteMergedMusicArtistStmt,
 		deleteMissingMovieStmt:                      q.deleteMissingMovieStmt,
@@ -3818,6 +3846,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		hasMovieTmdbRetryStmt:                       q.hasMovieTmdbRetryStmt,
 		insertAudioStreamStmt:                       q.insertAudioStreamStmt,
 		insertChapterStmt:                           q.insertChapterStmt,
+		insertLibraryMountPointStmt:                 q.insertLibraryMountPointStmt,
 		insertShowAudioStreamStmt:                   q.insertShowAudioStreamStmt,
 		insertShowChapterStmt:                       q.insertShowChapterStmt,
 		insertShowSubtitleStmt:                      q.insertShowSubtitleStmt,
@@ -3831,6 +3860,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		linkMusicTrackAppleStmt:                     q.linkMusicTrackAppleStmt,
 		linkMusicTrackSpotifyStmt:                   q.linkMusicTrackSpotifyStmt,
 		linkShowEpisodeFileStmt:                     q.linkShowEpisodeFileStmt,
+		listLibraryMountPointsStmt:                  q.listLibraryMountPointsStmt,
 		listMusicTrackScanIndexStmt:                 q.listMusicTrackScanIndexStmt,
 		listMusicTrackScanIndexUnderStmt:            q.listMusicTrackScanIndexUnderStmt,
 		listNotificationsForUserStmt:                q.listNotificationsForUserStmt,
