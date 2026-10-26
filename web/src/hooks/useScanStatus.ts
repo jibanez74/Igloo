@@ -55,10 +55,11 @@ function useScanStatus<T extends ScanStatusLike & Record<string, unknown>>(
       if (!visible) return false;
       // A failing report (the server restarting, the session gone) keeps its
       // last "running" data; retrying that every two seconds for as long as
-      // the failure lasts helps nobody, so it backs off to the idle pace.
-      const idle = background ? 60_000 : 10_000;
-      if (query.state.status === "error") return idle;
-      return query.state.data?.state === "running" ? 2_000 : idle;
+      // the failure lasts helps nobody, so it backs off to ten seconds, also
+      // in the background, where a scan it shows running may finish.
+      if (query.state.status === "error") return 10_000;
+      if (query.state.data?.state === "running") return 2_000;
+      return background ? 60_000 : 10_000;
     },
     refetchIntervalInBackground: false,
   });
