@@ -97,7 +97,8 @@ type Counts struct {
 }
 
 // Revision counts the catalog changes a scanner made across its runs: every
-// file imported, updated or deleted, and every entry enriched. A client that
+// file imported, updated or deleted, every entry enriched, and additional
+// committed metadata changes supplied by the scanner. A client that
 // compares it sees a change even from runs it never saw a report of. Each
 // scanner keeps one beside its status, under the same lock.
 type Revision struct {
@@ -108,12 +109,12 @@ type Revision struct {
 
 // Stamp counts what progress's run changed since its last stamp and sets the
 // running total on progress. A new run starts counting from zero, so the total
-// only grows.
-func (r *Revision) Stamp(progress *Progress, counts Counts) {
+// only grows. additionalChanges is cumulative for this run, like counts.
+func (r *Revision) Stamp(progress *Progress, counts Counts, additionalChanges int) {
 	if progress.RunID != r.run {
 		r.run, r.counted = progress.RunID, 0
 	}
-	changed := counts.Imported + counts.Updated + counts.Deleted + counts.Enriched
+	changed := counts.Imported + counts.Updated + counts.Deleted + counts.Enriched + additionalChanges
 	if changed > r.counted {
 		r.total += int64(changed - r.counted)
 		r.counted = changed

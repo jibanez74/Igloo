@@ -4,12 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -364,5 +366,72 @@ func TestPathWithin(t *testing.T) {
 		if got := PathWithin(tc.parent, tc.path); got != tc.want {
 			t.Errorf("PathWithin(%q, %q) = %t, want %t", tc.parent, tc.path, got, tc.want)
 		}
+	}
+}
+
+func TestLauncherQueuesLatestDirectory(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		roots []string
+		want  string
+	}{
+		{"same root", []string{"A", "A"}, "A:0"},
+		{"replacement", []string{"A", "B"}, "B:1"},
+		{"latest replacement", []string{"A", "B", "C", "C"}, "C:2"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var scans sync.WaitGroup
+			launcher := Launcher{Wait: &scans}
+			release := make(chan struct{})
+			defer scans.Wait()
+			defer close(release)
+			var active atomic.Bool
+			var overlapped atomic.Bool
+			started := make(chan struct{})
+			completed := make(chan string, len(tc.roots))
+			launcher.Start(sql.NullString{String: "original", Valid: true}, &Changes{Paths: []string{"file.mkv"}}, func(ScanScope) {}, func(string, *Changes) {
+				active.Store(true)
+				close(started)
+				<-release
+				active.Store(false)
+			})
+			<-started
+			for i, root := range tc.roots {
+				// The first request is manual; catch-ups for later settings supersede it.
+				var changes *Changes
+				if i > 0 {
+					changes = &Changes{CatchUp: true}
+				}
+				result := launcher.Start(sql.NullString{String: root, Valid: true}, changes, func(ScanScope) {}, func(directory string, _ *Changes) {
+					wasActive := active.Swap(true)
+					if wasActive {
+						overlapped.Store(true)
+					}
+					completed <- fmt.Sprintf("%s:%d", directory, i)
+					active.Store(false)
+				})
+				if result.Status != StartQueued {
+					t.Fatalf("request %s: %+v", root, result)
+				}
+			}
+			select {
+			case got := <-completed:
+				t.Fatalf("queued run started before scoped run finished: %s", got)
+			default:
+			}
+			// The deferred close also releases the run on assertion failures.
+			release <- struct{}{}
+			scans.Wait()
+			if overlapped.Load() || len(completed) != 1 {
+				t.Fatalf("overlap=%v completed=%d", overlapped.Load(), len(completed))
+			}
+			got := <-completed
+			if got != tc.want {
+				t.Fatalf("ran %q, want %q", got, tc.want)
+			}
+			if launcher.queued != nil || launcher.queuedDirectory != "" || launcher.running {
+				t.Fatal("launcher retained queued or running state")
+			}
+		})
 	}
 }

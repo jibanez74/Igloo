@@ -110,10 +110,11 @@ type StartResult struct {
 type Launcher struct {
 	Wait *sync.WaitGroup
 
-	mu      sync.Mutex
-	running bool
-	changes bool
-	queued  func()
+	mu              sync.Mutex
+	running         bool
+	changes         bool
+	queued          func()
+	queuedDirectory string
 }
 
 // Start runs run(directory, changes) on a new goroutine when directory is
@@ -122,8 +123,9 @@ type Launcher struct {
 // with the run's scope, so a status poll right after the request already sees
 // the run. A library scan requested while a run of changes is in progress is
 // queued behind it rather than refused, so a busy watcher can never starve a
-// requested scan; a run of changes is refused while any run is in progress,
-// and the watcher retries it.
+// requested scan. Same-directory requests coalesce; a different directory
+// replaces queued work. A run of changes is refused while any run is in
+// progress, and the watcher retries it.
 func (l *Launcher) Start(directory sql.NullString, changes *Changes, begin func(ScanScope), run func(directory string, changes *Changes)) StartResult {
 	result := StartResult{Directory: directory.String}
 	if !directory.Valid || directory.String == "" {
@@ -146,8 +148,9 @@ func (l *Launcher) Start(directory sql.NullString, changes *Changes, begin func(
 			result.Status = StartAlreadyRunning
 			return result
 		}
-		if l.queued == nil {
+		if l.queued == nil || l.queuedDirectory != directory.String {
 			l.queued = launch
+			l.queuedDirectory = directory.String
 		}
 		result.Status = StartQueued
 		return result
@@ -162,6 +165,7 @@ func (l *Launcher) finish() {
 	defer l.mu.Unlock()
 	next := l.queued
 	l.queued = nil
+	l.queuedDirectory = ""
 	// Only a library scan is ever queued.
 	l.changes = false
 	if next == nil {

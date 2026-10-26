@@ -3,6 +3,7 @@ package watch
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -754,5 +755,96 @@ func TestProbeRootResolvesARelativeRoot(t *testing.T) {
 	probe := probeRoot("lib")
 	if probe.err != nil || probe.resolved != want {
 		t.Fatalf("probeRoot(lib) = %+v, want %s", probe, want)
+	}
+}
+
+func TestWatcherFollowsRetargetedParentSymlink(t *testing.T) {
+	for _, polling := range []bool{false, true} {
+		for _, broken := range []bool{false, true} {
+			t.Run(fmt.Sprintf("polling=%v/broken=%v", polling, broken), func(t *testing.T) {
+				oldParent, newParent := t.TempDir(), t.TempDir()
+				oldRoot, newRoot := filepath.Join(oldParent, "media"), filepath.Join(newParent, "media")
+				scannertest.WriteFile(t, filepath.Join(oldRoot, "old.mkv"), "old")
+				scannertest.WriteFile(t, filepath.Join(newRoot, "Existing", "new.mkv"), "new")
+				link := filepath.Join(t.TempDir(), "library")
+				retargetSymlink(t, link, oldParent)
+				fixture := newWatcherFixture(t, func(lib *Library) {
+					lib.Directory = func() sql.NullString {
+						return sql.NullString{String: filepath.Join(link, "media"), Valid: true}
+					}
+				})
+				if polling {
+					fixture.watcher.open = func(*sync.WaitGroup) (notifier, error) { return nil, errNotifierUnsupported }
+				}
+				// Pending old-target changes must wait longer than a layout check.
+				fixture.watcher.timing.settle = time.Second
+				fixture.watcher.Sync(true)
+				catchUp := fixture.scanner.next(t)
+				if !catchUp.CatchUp {
+					t.Fatal("expected initial catch-up")
+				}
+				fixture.scanner.quiet(t, 3*sessionTestPolling.interval)
+				scannertest.WriteFile(t, filepath.Join(oldRoot, "pending.mkv"), "obsolete")
+				if broken {
+					retargetSymlink(t, link, filepath.Join(t.TempDir(), "missing"))
+					fixture.scanner.quiet(t, 5*sessionTestPolling.recheck)
+				}
+				retargetSymlink(t, link, newParent)
+				catchUp = fixture.scanner.next(t)
+				if !catchUp.CatchUp {
+					t.Fatal("retargeting must catch up before dispatching changes")
+				}
+				scannertest.WriteFile(t, filepath.Join(oldRoot, "obsolete.mkv"), "obsolete")
+				scannertest.WriteFile(t, filepath.Join(newRoot, "fresh.mkv"), "fresh")
+				got := fixture.scanner.next(t)
+				if got.CatchUp || !slices.Equal(got.Paths, []string{"fresh.mkv"}) {
+					t.Fatalf("after retargeting: %+v", got)
+				}
+				fixture.scanner.quiet(t, 3*sessionTestPolling.interval)
+			})
+		}
+	}
+}
+
+func TestSessionRearmsRetargetedPollBeforeApplyingChanges(t *testing.T) {
+	root := t.TempDir()
+	stopped := false
+	lib := &library{
+		Library: Library{Directory: func() sql.NullString { return sql.NullString{String: root, Valid: true} }},
+		root:    root, resolved: t.TempDir(), mode: modePoll, generation: 2,
+		pending: newPending(defaultTiming), stopPoll: func() { stopped = true },
+	}
+	lib.pending.note("obsolete.mkv", changeRemoved, time.Now(), false)
+	s := &session{
+		ctx: context.Background(), deps: Dependencies{Now: time.Now, Logger: &scannertest.Logger{}},
+		timing: defaultTiming, polling: defaultPollTiming, probe: probeRoot,
+		notifier: newScriptedNotifier(), watches: make(map[int32]*watchedDir), dirs: make(map[string]int32),
+	}
+	s.handlePoll(pollReport{
+		library: lib, generation: 2, retargeted: true,
+		changes: []polledChange{{rel: "also-obsolete.mkv", kind: changeRemoved}},
+	})
+	if !stopped || lib.mode != modeInotify || lib.resolved != root || !lib.catchUp || !lib.pending.empty() {
+		t.Fatalf("retarget did not replace the poller and discard old changes: %+v", lib)
+	}
+	// Even a matching generation is stale after switching to inotify.
+	s.handlePoll(pollReport{library: lib, generation: 2, offline: true})
+	if lib.offline {
+		t.Fatal("old poller paused the new inotify backend")
+	}
+}
+
+func TestLayoutCheckPausesWhileAnEarlierProbeStillHangs(t *testing.T) {
+	root := t.TempDir()
+	lib := &library{root: root, resolved: root, mode: modeInotify, catchUp: true, pending: newPending(defaultTiming)}
+	lib.pending.note("pending.mkv", changeRemoved, time.Now(), false)
+	lib.probing.Store(true)
+	s := &session{
+		ctx: context.Background(), deps: Dependencies{Now: time.Now, Logger: &scannertest.Logger{}},
+		timing: defaultTiming, polling: defaultPollTiming,
+	}
+	s.checkLayout(lib)
+	if !lib.offline || lib.catchUp || !lib.pending.empty() {
+		t.Fatal("a check that could not resolve the root left work eligible for dispatch")
 	}
 }

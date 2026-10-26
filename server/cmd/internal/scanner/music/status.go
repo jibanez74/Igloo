@@ -36,7 +36,7 @@ func (r *scanReport) syncCounts() {
 }
 
 // tracksLinked is the number of tracks paired with an Apple Music or Spotify
-// track this run, for the completion log.
+// track this run, for catalog revisions and the completion log.
 func (r *scanReport) tracksLinked() int {
 	if r.scan == nil {
 		return 0
@@ -55,7 +55,7 @@ func (s *Scanner) Status() Status {
 func (s *Scanner) beginReport(scope scanner.ScanScope) {
 	s.statusMu.Lock()
 	s.status = Status{Progress: scanner.BeginProgress(scanner.PhaseLocal, scope)}
-	s.revision.Stamp(&s.status.Progress, s.status.Counts)
+	s.revision.Stamp(&s.status.Progress, s.status.Counts, 0)
 	s.statusMu.Unlock()
 }
 
@@ -64,7 +64,7 @@ func (s *Scanner) publish(report *scanReport) {
 	report.Publish(&report.status.Progress)
 	s.statusMu.Lock()
 	s.status = report.status
-	s.revision.Stamp(&s.status.Progress, s.status.Counts)
+	s.revision.Stamp(&s.status.Progress, s.status.Counts, report.tracksLinked())
 	s.statusMu.Unlock()
 }
 

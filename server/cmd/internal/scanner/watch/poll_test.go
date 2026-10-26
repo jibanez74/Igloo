@@ -27,9 +27,13 @@ func newPollFixture(t *testing.T, files ...string) *pollFixture {
 
 func armPollFixture(t *testing.T, root string) *pollFixture {
 	t.Helper()
+	resolved, err := resolveRoot(root)
+	if err != nil {
+		t.Fatal(err)
+	}
 	f := &pollFixture{now: time.Now()}
-	f.p = &poller{root: root, extensions: map[string]bool{"mkv": true}, timing: defaultPollTiming,
-		now: func() time.Time { return f.now }, layout: layout{root: root}, offline: true}
+	f.p = &poller{root: resolved, configuredRoot: root, extensions: map[string]bool{"mkv": true}, timing: defaultPollTiming,
+		now: func() time.Time { return f.now }, layout: layout{root: resolved}, offline: true}
 	report := f.p.poll()
 	if !report.online {
 		t.Fatalf("arm: %+v", report)
@@ -52,7 +56,7 @@ func (f *pollFixture) poll(t *testing.T, advance time.Duration, want map[string]
 	if want == nil {
 		want = map[string]changeKind{}
 	}
-	if report.online || report.offline || !reflect.DeepEqual(got, want) {
+	if report.online || report.offline || report.retargeted || !reflect.DeepEqual(got, want) {
 		t.Fatalf("poll: %+v, want changes %v", report, want)
 	}
 }
@@ -400,4 +404,47 @@ func TestPollRetriesADirectoryThatCouldNotBeListed(t *testing.T) {
 		f.poll(t, 70*time.Second, map[string]changeKind{"Sub/a.mkv": changeSettled})
 		f.poll(t, time.Minute, nil)
 	})
+}
+
+func retargetSymlink(t *testing.T, link, target string) {
+	t.Helper()
+	err := os.Symlink(target, link+".next")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = os.Rename(link+".next", link)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPollReportsRetargetBeforeOldChanges(t *testing.T) {
+	f := newPollFixture(t, "old.mkv")
+	link := filepath.Join(t.TempDir(), "library")
+	retargetSymlink(t, link, f.p.root)
+	f.p.configuredRoot = link
+	f.poll(t, time.Minute, nil)
+	f.p.held[filepath.Join(f.p.root, "obsolete.mkv")] = changeRemoved
+	retargetSymlink(t, link, t.TempDir())
+	report := f.p.poll()
+	if !report.retargeted || report.online || report.offline || len(report.changes) != 0 {
+		t.Fatalf("retarget must be reported without old-target changes: %+v", report)
+	}
+}
+
+func TestSessionRejectsStalePollReports(t *testing.T) {
+	for _, mode := range []backendMode{modePoll, modeInotify, modeIdle} {
+		lib := &library{mode: mode, generation: 2, pending: newPending(defaultTiming)}
+		s := &session{}
+		for _, report := range []pollReport{
+			{online: true}, {offline: true}, {retargeted: true},
+			{changes: []polledChange{{rel: "obsolete.mkv", kind: changeRemoved}}},
+		} {
+			report.library, report.generation = lib, 1
+			s.handlePoll(report)
+			if lib.mode != mode || lib.offline || lib.catchUp || !lib.pending.empty() {
+				t.Fatalf("stale report changed library: %+v", report)
+			}
+		}
+	}
 }

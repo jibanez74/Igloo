@@ -4,13 +4,16 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"igloo/cmd/internal/ffprobe"
+	"igloo/cmd/internal/itunes"
 	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/scannertest"
 	spotifyapi "igloo/cmd/internal/spotify"
@@ -197,5 +200,104 @@ func TestMusicScanStatusSpotifyTallies(t *testing.T) {
 	}
 	if stub.artistCalls != 0 || stub.albumCalls != 0 || stub.albumFetches != 1 {
 		t.Fatalf("third scan requests: artist=%d album=%d fetches=%d, want only one track-list fetch", stub.artistCalls, stub.albumCalls, stub.albumFetches)
+	}
+}
+
+func TestMusicRevisionCountsCommittedPairingRetries(t *testing.T) {
+	for _, provider := range []string{musicProviderApple, musicProviderSpotify} {
+		for _, fingerprintOnly := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/fingerprintOnly=%v", provider, fingerprintOnly), func(t *testing.T) {
+				dir := t.TempDir()
+				s := setupMusicScanner(t)
+				probe := newMusicScannerFfprobeByPath(map[string]*ffprobe.FfprobeResult{})
+				s.ffprobe = probe
+				paths := []string{filepath.Join(dir, "first.m4a"), filepath.Join(dir, "second.m4a")}
+				for i, path := range paths {
+					tags := albumTags(fmt.Sprintf("Song %d", i+1), strconv.Itoa(i+1))
+					writePurchase(t, probe, path, itunes.CatalogIDs{Track: int64(i + 1), Album: 11}, tags)
+				}
+				album := testAlbum(spotifyTrack("t1", "Song 1", 1, 1, 180250, true), spotifyTrack("t2", "Song 2", 1, 2, 180250, true))
+				s.spotify = &musicScannerSpotifyStub{artist: testArtist(), album: album, albumsByID: map[spotifyapi.ID]*spotifyapi.FullAlbum{"album": album}}
+				if provider == musicProviderApple {
+					s.apple = &appleStub{albums: map[int64]itunes.Album{11: cryPretty(map[int64]bool{1: true, 2: true})}}
+				}
+				s.scan(dir)
+				initial := s.Status()
+				if initial.Imported != 2 || initial.CatalogRevision != int64(4+initial.Enriched) {
+					t.Fatalf("initial imports and pairings: %+v", initial)
+				}
+				// Keep matched artists and albums, with pending track pairings as
+				// left by an interrupted or failed pairing pass.
+				_, err := s.tx.DB.Exec(`DELETE FROM music_provider_matches WHERE entity_type = 'track';
+					UPDATE tracks SET apple_id = NULL, spotify_id = NULL, explicit = 0;
+					CREATE TRIGGER reject_pairing BEFORE INSERT ON music_provider_matches
+					WHEN NEW.entity_type = 'track' AND NEW.entity_id = (SELECT max(id) FROM tracks)
+					BEGIN SELECT RAISE(ABORT, 'pairing failure'); END;`)
+				if err != nil {
+					t.Fatal(err)
+				}
+				s.scan(dir)
+				rolledBack := s.Status()
+				if rolledBack.State != scanner.StateFailed || rolledBack.CatalogRevision != initial.CatalogRevision || rolledBack.Enriched != 0 {
+					t.Fatalf("rolled-back pairings changed revision: %+v", rolledBack)
+				}
+				linked := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM tracks WHERE apple_id IS NOT NULL OR spotify_id IS NOT NULL OR explicit != 0")
+				if linked != 0 {
+					t.Fatalf("rollback left %d linked tracks", linked)
+				}
+				_, err = s.tx.DB.Exec("DROP TRIGGER reject_pairing")
+				if err != nil {
+					t.Fatal(err)
+				}
+				baseline, _, err := s.loadMusicScanIndex(context.Background(), nil, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if fingerprintOnly {
+					for _, path := range paths {
+						err = os.Chmod(path, 0600)
+						if err != nil {
+							t.Fatal(err)
+						}
+					}
+				}
+				s.scan(dir)
+				retried := s.Status()
+				if retried.State != scanner.StateCompleted || retried.Imported != 0 || retried.Updated != 0 || retried.Deleted != 0 || retried.Enriched != 0 || retried.Unchanged != 2 || retried.CatalogRevision != initial.CatalogRevision+2 {
+					t.Fatalf("committed pairing-only retry: %+v", retried)
+				}
+				current, _, err := s.loadMusicScanIndex(context.Background(), nil, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for i, path := range paths {
+					fingerprintChanged := current[path] != baseline[path]
+					if fingerprintChanged != fingerprintOnly {
+						t.Fatalf("unexpected fingerprint change for %s", path)
+					}
+					if provider == musicProviderApple {
+						assertApplePaired(t, appleTrackFor(t, s, path), int64(i+1), true)
+					} else {
+						assertLinked(t, trackLinkFor(t, s, path), fmt.Sprintf("t%d", i+1), true, int64(i+1))
+					}
+				}
+				// Publishing the committed cumulative tally again adds nothing.
+				report := newScanReport(retried)
+				report.scan = newMusicScanContext(nil)
+				report.scan.tracksLinked = 2
+				s.publish(report)
+				s.publish(report)
+				republished := s.Status()
+				if republished.CatalogRevision != retried.CatalogRevision {
+					t.Fatal("repeated publication counted pairings twice")
+				}
+				s.scan(dir)
+				settled := s.Status()
+				probeCalls := probe.totalAudioCalls()
+				if settled.CatalogRevision != retried.CatalogRevision || probeCalls != 2 {
+					t.Fatal("settled rescan changed revision or re-probed unchanged bytes")
+				}
+			})
+		}
 	}
 }

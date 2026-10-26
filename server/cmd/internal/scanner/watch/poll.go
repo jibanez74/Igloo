@@ -50,6 +50,7 @@ type pollReport struct {
 	changes    []polledChange
 	offline    bool
 	online     bool
+	retargeted bool
 }
 
 // poller watches one library by polling, for filesystems inotify cannot see
@@ -63,13 +64,14 @@ type pollReport struct {
 // Limitation: rewriting a file in place changes no directory, so it is only
 // picked up by a library scan.
 type poller struct {
-	library    *library
-	generation int
-	root       string
-	allow      func(root, path string) bool
-	extensions map[string]bool
-	timing     pollTiming
-	now        func() time.Time
+	library        *library
+	generation     int
+	root           string
+	configuredRoot string
+	allow          func(root, path string) bool
+	extensions     map[string]bool
+	timing         pollTiming
+	now            func() time.Time
 
 	layout   layout
 	dirs     map[string]*polledDir
@@ -143,7 +145,7 @@ func (p *poller) run(ctx context.Context, out chan<- pollReport) {
 		case <-timer.C:
 		}
 		report := p.poll()
-		hasNews := report.offline || report.online || len(report.changes) > 0
+		hasNews := report.offline || report.online || report.retargeted || len(report.changes) > 0
 		if hasNews {
 			report.library, report.generation = p.library, p.generation
 			select {
@@ -151,6 +153,9 @@ func (p *poller) run(ctx context.Context, out chan<- pollReport) {
 			case <-ctx.Done():
 				return
 			}
+		}
+		if report.retargeted {
+			return
 		}
 		timer.Reset(p.nextDelay())
 	}
@@ -167,6 +172,16 @@ func (p *poller) nextDelay() time.Duration {
 }
 
 func (p *poller) poll() pollReport {
+	resolved, err := resolveRoot(p.configuredRoot)
+	if err != nil {
+		if p.offline {
+			return pollReport{}
+		}
+		return p.goOffline()
+	}
+	if resolved != p.root {
+		return pollReport{retargeted: true}
+	}
 	if p.offline {
 		return p.arm()
 	}

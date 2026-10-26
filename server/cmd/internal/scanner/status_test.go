@@ -242,7 +242,7 @@ func TestStartProgressLogStopsAndWaits(t *testing.T) {
 func TestRevisionCountsChangesAcrossRuns(t *testing.T) {
 	var revision Revision
 	stamp := func(progress *Progress, counts Counts) int64 {
-		revision.Stamp(progress, counts)
+		revision.Stamp(progress, counts, 0)
 		return progress.CatalogRevision
 	}
 	first := BeginProgress(PhaseLocal, ScopeChanges)

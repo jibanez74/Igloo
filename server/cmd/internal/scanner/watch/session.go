@@ -76,18 +76,22 @@ type rootProbe struct {
 }
 
 func probeRoot(root string) rootProbe {
-	// The mount table holds absolute mount points, so a relative root must be
-	// absolute before it is compared with them.
-	absolute, err := filepath.Abs(root)
-	if err != nil {
-		return rootProbe{err: err}
-	}
-	resolved, err := filepath.EvalSymlinks(absolute)
+	resolved, err := resolveRoot(root)
 	if err != nil {
 		return rootProbe{err: err}
 	}
 	fsName, err := networkFilesystem(resolved)
 	return rootProbe{resolved: resolved, fsName: fsName, err: err}
+}
+
+func resolveRoot(root string) (string, error) {
+	// The mount table holds absolute mount points, so a relative root must be
+	// absolute before it is compared with them.
+	absolute, err := filepath.Abs(root)
+	if err != nil {
+		return "", err
+	}
+	return filepath.EvalSymlinks(absolute)
 }
 
 // bounded runs check off the session goroutine and waits for it at most
@@ -535,16 +539,24 @@ func (s *session) notAnswered(lib *library) {
 }
 
 // checkLayout looks at an inotify library's layout: a missing part pauses
-// it, and a root that changed identity, or that is back after an outage, is
-// armed again, which walks the whole library once.
+// it, and a root that changed target or identity, or that is back after an
+// outage, is armed again, which walks the whole library once.
 func (s *session) checkLayout(lib *library) {
 	lib.checkAt = s.now().Add(s.polling.recheck)
 	// The check reads its own copy: a check that hangs outlives this call,
 	// and the session may change the layout meanwhile.
 	recorded := lib.layout
 	recorded.mounts = maps.Clone(recorded.mounts)
+	root, resolved := lib.root, lib.resolved
 	type layoutState struct{ present, changed bool }
 	state, answered := bounded(s.ctx, &lib.probing, s.timing.probe, func() layoutState {
+		current, err := resolveRoot(root)
+		if err != nil {
+			return layoutState{}
+		}
+		if current != resolved {
+			return layoutState{present: true, changed: true}
+		}
 		present, changed := recorded.check()
 		return layoutState{present, changed}
 	})
@@ -573,7 +585,7 @@ func (s *session) startPoll(lib *library) {
 	ctx, cancel := context.WithCancel(s.ctx)
 	lib.stopPoll = cancel
 	p := &poller{
-		library: lib, generation: lib.generation, root: lib.resolved, allow: lib.AllowDirectory,
+		library: lib, generation: lib.generation, root: lib.resolved, configuredRoot: lib.root, allow: lib.AllowDirectory,
 		extensions: lib.Extensions, timing: s.polling, now: s.deps.Now, layout: layout{root: lib.resolved},
 		resettleSignal: make(chan struct{}, 1),
 	}
@@ -588,6 +600,11 @@ func (s *session) handlePoll(report pollReport) {
 	lib := report.library
 	stale := lib.mode != modePoll || report.generation != lib.generation
 	if stale {
+		return
+	}
+	if report.retargeted {
+		s.disarm(lib)
+		s.arm(lib)
 		return
 	}
 	now := s.now()
