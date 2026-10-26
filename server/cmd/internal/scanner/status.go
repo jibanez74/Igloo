@@ -74,6 +74,8 @@ type Progress struct {
 	ActiveFiles []string   `json:"active_files"`
 	IssueCount  int        `json:"issue_count"`
 	Issues      []Issue    `json:"issues"`
+	// CatalogRevision is the scanner's Revision when the report was published.
+	CatalogRevision int64 `json:"catalog_revision"`
 }
 
 // Counts are the file and enrichment counters every scanner's status carries;
@@ -92,6 +94,31 @@ type Counts struct {
 	Enriched            int `json:"enriched"`
 	EnrichmentFailed    int `json:"enrichment_failed"`
 	EnrichmentUnmatched int `json:"enrichment_unmatched"`
+}
+
+// Revision counts the catalog changes a scanner made across its runs: every
+// file imported, updated or deleted, and every entry enriched. A client that
+// compares it sees a change even from runs it never saw a report of. Each
+// scanner keeps one beside its status, under the same lock.
+type Revision struct {
+	total   int64
+	run     string
+	counted int
+}
+
+// Stamp counts what progress's run changed since its last stamp and sets the
+// running total on progress. A new run starts counting from zero, so the total
+// only grows.
+func (r *Revision) Stamp(progress *Progress, counts Counts) {
+	if progress.RunID != r.run {
+		r.run, r.counted = progress.RunID, 0
+	}
+	changed := counts.Imported + counts.Updated + counts.Deleted + counts.Enriched
+	if changed > r.counted {
+		r.total += int64(changed - r.counted)
+		r.counted = changed
+	}
+	progress.CatalogRevision = r.total
 }
 
 type Issue struct {

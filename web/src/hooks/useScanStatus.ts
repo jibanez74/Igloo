@@ -1,4 +1,4 @@
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { movieScanStatusQueryOpts, musicScanStatusQueryOpts, showScanStatusQueryOpts } from "@/lib/query-opts";
 import type { ScanStatusQueryOpts } from "@/lib/query-opts";
@@ -14,7 +14,7 @@ const isVisible = () => document.visibilityState !== "hidden";
 
 type ScanStatusLike = Pick<
   MovieScanStatus,
-  "state" | "phase" | "scope" | "run_id" | "imported" | "updated" | "deleted" | "enriched"
+  "state" | "phase" | "scope" | "run_id" | "catalog_revision"
 >;
 
 type ScanStatusOptions = {
@@ -33,12 +33,13 @@ type ScanStatusConfig<T extends ScanStatusLike & Record<string, unknown>> = {
 // Polls a scan report every two seconds while it runs and every ten seconds
 // otherwise (or while the report keeps failing), pausing in hidden tabs. Without watchIdle the first request still
 // goes out, so a scan started elsewhere is discovered on any route; polling
-// then continues only while it runs. Committed work refreshes the library
-// statistics; a new run, phase or terminal state refreshes the library lists.
-// A run of watcher-detected changes is often one file and over within a poll,
-// so it refreshes the lists once, when it ends, and only if it changed
-// anything: a file, or the metadata an enrichment retry brought in for a run
-// whose files were all unchanged.
+// then continues only while it runs. A new catalog revision refreshes the
+// library statistics; a new run, phase or terminal state of a library scan
+// refreshes the library lists. A run of watcher-detected changes is often one
+// file and over within a poll, and several can finish between two polls, so
+// the report seen may not be the run that changed anything. Such runs refresh
+// the lists once one has ended and the revision, which counts every change
+// across runs, moved since the last refresh.
 function useScanStatus<T extends ScanStatusLike & Record<string, unknown>>(
   config: ScanStatusConfig<T>,
   { enabled = true, watchIdle = true }: ScanStatusOptions,
@@ -61,24 +62,30 @@ function useScanStatus<T extends ScanStatusLike & Record<string, unknown>>(
     refetchIntervalInBackground: false,
   });
   const status = query.data;
-  const committed = status ? status.imported + status.updated + status.deleted : 0;
+  const revision = status?.catalog_revision ?? 0;
   const statsKey = config.statsKey;
 
   useEffect(() => {
-    if (committed > 0 && statsKey) {
+    if (revision > 0 && statsKey) {
       void queryClient.invalidateQueries({ queryKey: [statsKey] });
     }
-  }, [queryClient, statsKey, committed]);
+  }, [queryClient, statsKey, revision]);
 
   const phase = status?.phase;
   const state = status?.state;
   const runId = status?.run_id;
   const library = config.library;
-  const enriched = status?.enriched ?? 0;
-  const refreshesLists = status?.scope !== "changes" || (state !== "running" && (committed > 0 || enriched > 0));
+  const watcherRun = status?.scope === "changes";
+  const settledRevision = watcherRun && state !== "running" ? revision : undefined;
+  const listedRevision = useRef(0);
   useEffect(() => {
-    if (runId && refreshesLists) invalidateLibraryQueries(queryClient, library);
-  }, [queryClient, library, phase, state, runId, refreshesLists]);
+    if (!runId) return;
+    if (watcherRun) {
+      if (settledRevision === undefined || settledRevision === listedRevision.current) return;
+      listedRevision.current = settledRevision;
+    }
+    invalidateLibraryQueries(queryClient, library);
+  }, [queryClient, library, phase, state, runId, watcherRun, settledRevision]);
 
   return query;
 }

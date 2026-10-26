@@ -81,7 +81,7 @@ describe("movie scan progress", () => {
     const view = renderWithQueryClient(<ScanView />, { queryClient: client });
     await act(async () => { await vi.advanceTimersByTimeAsync(1); });
     expect(screen.getByRole("status")).toHaveTextContent("Inspecting and importing movies");
-    status = movieScanStatus({ processed: 2, imported: 2 });
+    status = movieScanStatus({ processed: 2, imported: 2, catalog_revision: 2 });
     await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
     expect(screen.getByText(/2 of 418 files processed/)).toBeInTheDocument();
     expect(invalidate).toHaveBeenCalledWith({ queryKey: [MOVIES_STATS_KEY] });
@@ -96,7 +96,7 @@ describe("movie scan progress", () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(20_000); });
     expect(fetchMock).toHaveBeenCalledTimes(beforeHidden);
     failed = false;
-    status = movieScanStatus({ phase: "enrichment", imported: 418, processed: 418 });
+    status = movieScanStatus({ phase: "enrichment", imported: 418, processed: 418, catalog_revision: 418 });
     visibility.mockReturnValue("visible");
     act(() => { document.dispatchEvent(new Event("visibilitychange")); });
     await act(async () => { await vi.advanceTimersByTimeAsync(1); });
@@ -199,12 +199,12 @@ describe("music scan progress", () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(1); });
     expect(screen.getByRole("status")).toHaveTextContent("Discovering and importing tracks");
     expect(invalidate).toHaveBeenCalledWith({ queryKey: [ALBUMS_PAGINATED_KEY] });
-    status = musicScanStatus({ processed: 54, imported: 54, active_files: ["01 Intro.m4a"] });
+    status = musicScanStatus({ processed: 54, imported: 54, active_files: ["01 Intro.m4a"], catalog_revision: 54 });
     await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
     expect(screen.getByText(/54 of 2267 files processed/)).toBeInTheDocument();
     expect(screen.getByText("Working on: 01 Intro.m4a")).toBeInTheDocument();
     expect(invalidate).toHaveBeenCalledWith({ queryKey: [MUSIC_STATS_KEY] });
-    status = musicScanStatus({ state: "completed", phase: "enrichment", processed: 2267, imported: 2267, enriched: 300 });
+    status = musicScanStatus({ state: "completed", phase: "enrichment", processed: 2267, imported: 2267, enriched: 300, catalog_revision: 2567 });
     await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
     expect(screen.getByRole("status")).toHaveTextContent("Music scan completed");
     client.clear();
@@ -286,16 +286,57 @@ describe("runs of watcher-detected changes", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Detected movie changes applied");
     expect(invalidate).not.toHaveBeenCalledWith({ queryKey: [MOVIES_LIBRARY_KEY] });
 
-    status = movieScanStatus({ run_id: "second-run", scope: "changes", state: "completed", phase: "enrichment", total: 1, processed: 1, imported: 1 });
+    status = movieScanStatus({ run_id: "second-run", scope: "changes", state: "completed", phase: "enrichment", total: 1, processed: 1, imported: 1, catalog_revision: 1 });
     await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: [MOVIES_LIBRARY_KEY] });
 
     // A run whose files were all unchanged still refreshes the lists when an
     // enrichment retry brought metadata in.
     invalidate.mockClear();
-    status = movieScanStatus({ run_id: "third-run", scope: "changes", state: "completed", phase: "enrichment", total: 1, processed: 1, unchanged: 1, enriched: 1 });
+    status = movieScanStatus({ run_id: "third-run", scope: "changes", state: "completed", phase: "enrichment", total: 1, processed: 1, unchanged: 1, enriched: 1, catalog_revision: 2 });
     await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: [MOVIES_LIBRARY_KEY] });
+    client.clear();
+  });
+
+  it("refreshes for watcher runs that finished between two polls", async () => {
+    vi.useFakeTimers();
+    const run = (run_id: string, overrides: Parameters<typeof movieScanStatus>[0] = {}) => movieScanStatus({
+      run_id, scope: "changes", state: "completed", phase: "enrichment", total: 1, processed: 1, unchanged: 1, ...overrides,
+    });
+    let status = run("idle-run", { catalog_revision: 4 });
+    vi.stubGlobal("fetch", vi.fn(() => jsonResponse({ error: false, data: status })));
+    const client = createTestQueryClient();
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    renderWithQueryClient(<ScanView />, { queryClient: client });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    invalidate.mockClear();
+
+    // An importing run, then a run that changed nothing: only the second
+    // report is seen, but the revision counts the first.
+    status = run("noop-after-import", { catalog_revision: 5 });
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: [MOVIES_LIBRARY_KEY] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: [MOVIES_STATS_KEY] });
+
+    // A run whose end is hidden by the next run: the lists refresh once that
+    // one ends.
+    invalidate.mockClear();
+    status = run("hidden-end", { state: "running", phase: "local", processed: 0, unchanged: 0, catalog_revision: 5 });
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+    status = run("hides-it", { state: "running", phase: "local", processed: 0, unchanged: 0, catalog_revision: 6 });
+    await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
+    expect(invalidate).not.toHaveBeenCalledWith({ queryKey: [MOVIES_LIBRARY_KEY] });
+    status = run("hides-it", { catalog_revision: 6 });
+    await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: [MOVIES_LIBRARY_KEY] });
+
+    // A run that changed nothing leaves the revision, and the lists, alone.
+    invalidate.mockClear();
+    status = run("noop", { catalog_revision: 6 });
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+    expect(invalidate).not.toHaveBeenCalledWith({ queryKey: [MOVIES_LIBRARY_KEY] });
+    expect(invalidate).not.toHaveBeenCalledWith({ queryKey: [MOVIES_STATS_KEY] });
     client.clear();
   });
 });

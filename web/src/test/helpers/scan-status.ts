@@ -14,7 +14,7 @@ function runningScan(total: number): MusicScanStatus {
     active_files: [], total, processed: 0, imported: 0, updated: 0, unchanged: 0,
     failed: 0, deferred: 0, deleted: 0, enrichment_total: 0, enrichment_processed: 0,
     enriched: 0, enrichment_failed: 0, enrichment_unmatched: 0,
-    issue_count: 0, issues: [],
+    issue_count: 0, issues: [], catalog_revision: 0,
   };
 }
 

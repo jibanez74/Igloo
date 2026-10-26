@@ -60,6 +60,7 @@ type Scanner struct {
 	tx       scanner.TxRunner
 	statusMu sync.RWMutex
 	status   Status
+	revision scanner.Revision
 }
 
 func New(deps Dependencies) *Scanner {

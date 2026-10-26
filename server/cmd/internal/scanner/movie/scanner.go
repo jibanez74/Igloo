@@ -53,6 +53,7 @@ type Scanner struct {
 	invalidateDeletedWatchRooms func([]int64)
 	statusMu                    sync.RWMutex
 	status                      Status
+	revision                    scanner.Revision
 }
 
 // New constructs a scanner, defaulting the optional dependencies so the rest

@@ -16718,7 +16718,8 @@
           "enrichment_unmatched",
           "pending_enrichment",
           "issue_count",
-          "issues"
+          "issues",
+          "catalog_revision"
         ],
         "properties": {
           "run_id": {
@@ -16851,6 +16852,12 @@
             "items": {
               "$ref": "#/components/schemas/ScanIssue"
             }
+          },
+          "catalog_revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Running count of the catalog changes this scanner has made since the server started: files imported, updated or deleted, and entries enriched, summed across runs. It changes even when the run that made the change finished between two reads of this report, so a client compares it to tell whether the catalog changed. Compare it for change only; it restarts from 0 with the server."
           }
         },
         "additionalProperties": false
@@ -16900,7 +16907,8 @@
           "enrichment_unmatched",
           "pending_enrichment",
           "issue_count",
-          "issues"
+          "issues",
+          "catalog_revision"
         ],
         "properties": {
           "run_id": {
@@ -17042,6 +17050,12 @@
             "items": {
               "$ref": "#/components/schemas/ScanIssue"
             }
+          },
+          "catalog_revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Running count of the catalog changes this scanner has made since the server started: files imported, updated or deleted, and entries enriched, summed across runs. It changes even when the run that made the change finished between two reads of this report, so a client compares it to tell whether the catalog changed. Compare it for change only; it restarts from 0 with the server."
           }
         },
         "additionalProperties": false
@@ -17089,7 +17103,8 @@
           "enrichment_failed",
           "enrichment_unmatched",
           "issue_count",
-          "issues"
+          "issues",
+          "catalog_revision"
         ],
         "properties": {
           "run_id": {
@@ -17227,6 +17242,12 @@
             "items": {
               "$ref": "#/components/schemas/ScanIssue"
             }
+          },
+          "catalog_revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Running count of the catalog changes this scanner has made since the server started: files imported, updated or deleted, and entries enriched, summed across runs. It changes even when the run that made the change finished between two reads of this report, so a client compares it to tell whether the catalog changed. Compare it for change only; it restarts from 0 with the server."
           }
         },
         "additionalProperties": false

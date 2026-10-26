@@ -4835,6 +4835,11 @@ export interface components {
             pending_enrichment: number;
             issue_count: number;
             issues: components["schemas"]["ScanIssue"][];
+            /**
+             * Format: int64
+             * @description Running count of the catalog changes this scanner has made since the server started: files imported, updated or deleted, and entries enriched, summed across runs. It changes even when the run that made the change finished between two reads of this report, so a client compares it to tell whether the catalog changed. Compare it for change only; it restarts from 0 with the server.
+             */
+            catalog_revision: number;
         };
         MovieScanStatusResponse: components["schemas"]["JsonSuccess"] & {
             data: components["schemas"]["MovieScanStatusData"];
@@ -4884,6 +4889,11 @@ export interface components {
             pending_enrichment: number;
             issue_count: number;
             issues: components["schemas"]["ScanIssue"][];
+            /**
+             * Format: int64
+             * @description Running count of the catalog changes this scanner has made since the server started: files imported, updated or deleted, and entries enriched, summed across runs. It changes even when the run that made the change finished between two reads of this report, so a client compares it to tell whether the catalog changed. Compare it for change only; it restarts from 0 with the server.
+             */
+            catalog_revision: number;
         };
         ShowScanStatusResponse: components["schemas"]["JsonSuccess"] & {
             data: components["schemas"]["ShowScanStatusData"];
@@ -4938,6 +4948,11 @@ export interface components {
             enrichment_unmatched: number;
             issue_count: number;
             issues: components["schemas"]["ScanIssue"][];
+            /**
+             * Format: int64
+             * @description Running count of the catalog changes this scanner has made since the server started: files imported, updated or deleted, and entries enriched, summed across runs. It changes even when the run that made the change finished between two reads of this report, so a client compares it to tell whether the catalog changed. Compare it for change only; it restarts from 0 with the server.
+             */
+            catalog_revision: number;
         };
         MusicScanStatusResponse: components["schemas"]["JsonSuccess"] & {
             data: components["schemas"]["MusicScanStatusData"];

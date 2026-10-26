@@ -238,3 +238,33 @@ func TestStartProgressLogStopsAndWaits(t *testing.T) {
 		t.Fatalf("progress log fired after stop: %d then %d", final, calls.Load())
 	}
 }
+
+func TestRevisionCountsChangesAcrossRuns(t *testing.T) {
+	var revision Revision
+	stamp := func(progress *Progress, counts Counts) int64 {
+		revision.Stamp(progress, counts)
+		return progress.CatalogRevision
+	}
+	first := BeginProgress(PhaseLocal, ScopeChanges)
+	if got := stamp(&first, Counts{}); got != 0 {
+		t.Fatalf("a run that starts changed nothing: %d", got)
+	}
+	if got := stamp(&first, Counts{Imported: 1}); got != 1 {
+		t.Fatalf("one import: %d", got)
+	}
+	if got := stamp(&first, Counts{Imported: 1}); got != 1 {
+		t.Fatalf("publishing the same counts again: %d", got)
+	}
+	// A run that commits as much as the one before still moves the revision.
+	second := BeginProgress(PhaseLocal, ScopeChanges)
+	if got := stamp(&second, Counts{}); got != 1 {
+		t.Fatalf("a new run starts from the total: %d", got)
+	}
+	if got := stamp(&second, Counts{Updated: 1, Enriched: 1}); got != 3 {
+		t.Fatalf("an update and an enrichment: %d", got)
+	}
+	noop := BeginProgress(PhaseLocal, ScopeChanges)
+	if got := stamp(&noop, Counts{Unchanged: 4, Deferred: 2, Failed: 1}); got != 3 {
+		t.Fatalf("a run that changed nothing: %d", got)
+	}
+}
