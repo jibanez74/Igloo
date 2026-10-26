@@ -81,10 +81,6 @@ type poller struct {
 	// heldSince is when a held removal first waited for settling files.
 	heldSince time.Time
 	offline   bool
-	// unresolved is set after one failed root resolution while online: a
-	// symlink caught mid-swap or a parent briefly unreadable fails once, and
-	// going offline for it would re-list the whole share and walk it again.
-	unresolved bool
 
 	// resettling holds the files the scanner deferred, handed back by the
 	// session; they are observed again from scratch. The session never waits
@@ -170,7 +166,7 @@ func (p *poller) nextDelay() time.Duration {
 	if p.offline {
 		return p.timing.recheck
 	}
-	if p.unresolved || len(p.settling) > 0 {
+	if len(p.settling) > 0 {
 		return min(p.timing.interval, p.timing.settle)
 	}
 	return p.timing.interval
@@ -182,13 +178,8 @@ func (p *poller) poll() pollReport {
 		if p.offline {
 			return pollReport{}
 		}
-		if !p.unresolved {
-			p.unresolved = true
-			return pollReport{}
-		}
 		return p.goOffline()
 	}
-	p.unresolved = false
 	if resolved != p.root {
 		return pollReport{retargeted: true}
 	}
@@ -282,7 +273,7 @@ func (p *poller) arm() pollReport {
 }
 
 func (p *poller) goOffline() pollReport {
-	p.offline, p.unresolved = true, false
+	p.offline = true
 	p.dirs, p.settling, p.held = nil, nil, nil
 	p.heldSince = time.Time{}
 	return pollReport{offline: true}

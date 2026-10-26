@@ -274,13 +274,7 @@ func TestPollerPausesWhileTheRootIsGoneAndReportsNoRemovals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// One failed resolution could be a symlink caught mid-swap; the second in
-	// a row pauses the library.
 	report := f.p.poll()
-	if report.offline || report.online || len(report.changes) != 0 {
-		t.Fatalf("root first gone: %+v", report)
-	}
-	report = f.p.poll()
 	if !report.offline || len(report.changes) != 0 {
 		t.Fatalf("root gone: %+v", report)
 	}
@@ -453,27 +447,4 @@ func TestSessionRejectsStalePollReports(t *testing.T) {
 			}
 		}
 	}
-}
-
-func TestPollerRidesOutOneFailedRootResolution(t *testing.T) {
-	f := newPollFixture(t, "a.mkv")
-	failures := 1
-	f.p.resolve = func(root string) (string, error) {
-		if failures > 0 {
-			failures--
-			return "", os.ErrNotExist
-		}
-		return resolveRoot(root)
-	}
-	// The failed resolution reports nothing and is checked again at the
-	// settling cadence rather than after a full poll interval.
-	f.poll(t, time.Minute, nil)
-	if f.p.nextDelay() != min(f.p.timing.interval, f.p.timing.settle) {
-		t.Fatalf("next poll after a failed resolution in %s", f.p.nextDelay())
-	}
-	// The root answers again: no outage and no full re-snapshot, and a new
-	// file is picked up as usual; its changed directory reconsiders a.mkv.
-	scannertest.WriteFile(t, filepath.Join(f.p.root, "b.mkv"), "media")
-	f.poll(t, time.Minute, nil)
-	f.poll(t, 70*time.Second, map[string]changeKind{"a.mkv": changeSettled, "b.mkv": changeSettled})
 }
