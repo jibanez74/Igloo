@@ -20,7 +20,8 @@ import (
 // and Validate still rejects any write that lands while it is processed.
 const ChangeQuietPeriod = 5 * time.Second
 
-// Changes scopes a run to what the library watcher saw change.
+// Changes scopes a run to what the library watcher saw change, or marks a
+// catch-up: a walk of the whole library the server starts on its own.
 type Changes struct {
 	// Paths are relative to the library root. A path that no longer exists
 	// removes the catalog rows at or beneath it.
@@ -30,6 +31,10 @@ type Changes struct {
 	// FileQuietPeriod, and its cleanup keeps files that look unmounted rather
 	// than deleted; see Reconciliation.Guard.
 	CatchUp bool
+	// Manual marks a catch-up that took in a library scan an admin asked for
+	// while both waited: its cleanup deletes every missing file, as the scan's
+	// does.
+	Manual bool
 	// OnDeferred hands back each file the run deferred, with the time it
 	// becomes eligible when known, so the watcher can retry it. It runs on the
 	// scan goroutine and must not block.
@@ -37,6 +42,12 @@ type Changes struct {
 }
 
 // A nil *Changes is a library scan an admin requested.
+
+// Guarded reports a catch-up no admin asked for, whose cleanup keeps files
+// that look unmounted.
+func (c *Changes) Guarded() bool {
+	return c != nil && c.CatchUp && !c.Manual
+}
 
 // HandsBackDeferred reports a run whose deferred files the watcher retries;
 // any other run words and retries its own.
@@ -69,7 +80,8 @@ func (c *Changes) QuietPeriod() time.Duration {
 
 // Deferred reports a deferred file to the watcher, as a path relative to root.
 func (c *Changes) Deferred(root, path string, eligibleAt time.Time) {
-	if !c.HandsBackDeferred() {
+	handsBack := c.HandsBackDeferred()
+	if !handsBack {
 		return
 	}
 	relative, err := filepath.Rel(root, path)
@@ -82,7 +94,8 @@ func (c *Changes) Deferred(root, path string, eligibleAt time.Time) {
 // DeferredReason is the issue text for a deferred file: the watcher retries
 // what its runs defer, while a library scan words its own retry.
 func (c *Changes) DeferredReason(libraryScan string) string {
-	if !c.HandsBackDeferred() {
+	handsBack := c.HandsBackDeferred()
+	if !handsBack {
 		return libraryScan
 	}
 	return ReasonFileDeferredWatched

@@ -195,49 +195,53 @@ func TestMovieCatchUpRefusesToEmptyALibraryThatLooksUnmounted(t *testing.T) {
 
 // A disk mounted inside the library that has not come up, after a power cut
 // on a server whose disks are mounted one per folder, leaves its empty mount
-// point. The catch-up keeps its movies, while a movie deleted from a disk that
-// is mounted still goes.
+// point. Every catch-up keeps its movies until it is back, while a movie
+// deleted from a disk that is mounted still goes; a library scan an admin
+// asks for deletes them.
 func TestMovieCatchUpKeepsTheMoviesOfADiskThatIsNotMounted(t *testing.T) {
 	fixture := setupMovieScanner(t)
 	s := fixture.scanner
 	s.ffprobe = &scannertest.CountingProbe{Default: movieScannerMetadataFixture("120")}
-	root := t.TempDir()
-	kept := filepath.Join(root, "disk1", "A (2001)", "a.mkv")
-	deleted := filepath.Join(root, "disk1", "D (2004)", "d.mkv")
-	unmounted := []string{filepath.Join(root, "disk2", "B (2002)", "b.mkv"), filepath.Join(root, "disk2", "C (2003)", "c.mkv")}
-	for _, path := range append([]string{kept, deleted}, unmounted...) {
-		scannertest.WriteFile(t, path, filepath.Base(path))
-	}
-	s.scan(root)
-	// A test cannot mount a filesystem, so disk2's movies are recorded on a
-	// device of their own, as they would be.
-	_, err := fixture.db.Exec(`UPDATE movie_file_fingerprints SET device = 'disk2'
-		WHERE movie_id IN (SELECT id FROM movies WHERE file_path LIKE ?)`, filepath.Join(root, "disk2")+"/%")
+	root, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, directory := range []string{filepath.Join(root, "disk2"), filepath.Dir(deleted)} {
+	disk1, disk2 := filepath.Join(root, "disk1"), filepath.Join(root, "disk2")
+	kept := filepath.Join(disk1, "A (2001)", "a.mkv")
+	deleted := filepath.Join(disk1, "D (2004)", "d.mkv")
+	unmounted := []string{filepath.Join(disk2, "B (2002)", "b.mkv"), filepath.Join(disk2, "C (2003)", "c.mkv")}
+	for _, path := range append([]string{kept, deleted}, unmounted...) {
+		scannertest.WriteFile(t, path, filepath.Base(path))
+	}
+	// A test cannot mount a filesystem, so the mount table is scripted.
+	mounted := func(points ...string) func() ([]string, error) {
+		return func() ([]string, error) { return points, nil }
+	}
+	s.mountPoints = mounted(disk1, disk2)
+	s.scan(root)
+	for _, directory := range []string{disk2, filepath.Dir(deleted)} {
 		err = os.RemoveAll(directory)
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
-	err = os.Mkdir(filepath.Join(root, "disk2"), 0o755)
+	err = os.Mkdir(disk2, 0o755)
 	if err != nil {
 		t.Fatal(err)
 	}
+	s.mountPoints = mounted(disk1)
 
-	s.scanChanges(root, scanner.Changes{CatchUp: true})
-	status := s.Status()
-	if got, want := catalogPaths(t, s), append([]string{kept}, unmounted...); !slices.Equal(got, want) {
-		t.Fatalf("after the catch-up: %q, want %q", got, want)
-	}
-	if status.Deleted != 1 || status.IssueCount != 1 || status.Issues[0].Reason != scanner.ReasonCleanupKeptUnmounted {
-		t.Fatalf("deleted=%d issues=%+v", status.Deleted, status.Issues)
+	for run := range 2 {
+		s.scanChanges(root, scanner.Changes{CatchUp: true})
+		status := s.Status()
+		if got, want := catalogPaths(t, s), append([]string{kept}, unmounted...); !slices.Equal(got, want) {
+			t.Fatalf("after catch-up %d: %q, want %q", run+1, got, want)
+		}
+		if status.IssueCount != 1 || status.Issues[0].Reason != scanner.ReasonCleanupKeptUnmounted || status.Issues[0].Filename != "disk2" {
+			t.Fatalf("catch-up %d issues = %+v", run+1, status.Issues)
+		}
 	}
 
-	// A library scan an admin asked for deletes them, for a disk removed for
-	// good.
 	s.scan(root)
 	if got := catalogPaths(t, s); !slices.Equal(got, []string{kept}) {
 		t.Fatalf("after the library scan: %q", got)

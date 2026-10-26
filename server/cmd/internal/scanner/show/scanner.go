@@ -56,11 +56,12 @@ var errStaleCatalogRow = errors.New("show catalog row changed during the scan")
 // Scanner scans and persists the configured TV library.
 type Scanner struct {
 	Dependencies
-	launcher scanner.Launcher
-	tx       scanner.TxRunner
-	statusMu sync.RWMutex
-	status   Status
-	revision scanner.Revision
+	launcher    scanner.Launcher
+	tx          scanner.TxRunner
+	mountPoints func() ([]string, error)
+	statusMu    sync.RWMutex
+	status      Status
+	revision    scanner.Revision
 }
 
 func New(deps Dependencies) *Scanner {
@@ -86,6 +87,7 @@ func New(deps Dependencies) *Scanner {
 		Dependencies: deps,
 		launcher:     scanner.Launcher{Wait: deps.Wait},
 		tx:           scanner.TxRunner{DB: deps.DB, Mu: deps.ScannerDBMu, Queries: deps.Queries},
+		mountPoints:  scanner.MountPoints,
 	}
 }
 
@@ -191,10 +193,14 @@ func (s *Scanner) runShowScan(directory string, changes *scanner.Changes) {
 	}
 
 	s.phase(report, scanner.PhaseCleanup)
-	kept, reason := reconciliation.Guard(changes)
-	if reason != "" {
-		s.Logger.Warn("show cleanup kept files that looked unmounted", "directory", root, "files", kept)
-		report.Issue("", scanner.PhaseCleanup, reason)
+	kept, err := reconciliation.Guard(ctx, s.tx, changes, s.mountPoints)
+	if err != nil {
+		fail(err, "Missing TV files could not be reconciled.")
+		return
+	}
+	if kept.Files > 0 {
+		s.Logger.Warn("show cleanup kept files that looked unmounted", "directory", root, "files", kept.Files, "mount_points", kept.MountPoints)
+		report.Kept(kept)
 	}
 	err = s.cleanup(ctx, reconciliation, report)
 	if err != nil {
@@ -269,7 +275,7 @@ func showScanIndex(rows []database.GetShowScanIndexRow, links []database.GetShow
 			entry.FileFingerprint = scanner.StoredFingerprint(row.Size, row.MtimeNs, row.CtimeNs, row.Device, row.Inode)
 		}
 		index[filepath.Clean(row.FilePath)] = entry
-		catalog = append(catalog, scanner.CatalogFile{ID: row.ID, Path: row.FilePath, Device: row.Device.String})
+		catalog = append(catalog, scanner.CatalogFile{ID: row.ID, Path: row.FilePath})
 	}
 	return index, catalog
 }

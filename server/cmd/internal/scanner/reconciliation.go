@@ -7,18 +7,16 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"syscall"
 
 	"igloo/cmd/internal/database"
 )
 
-// CatalogFile retains the original database identity even when paths need
-// cleaning. Device is the filesystem its stored fingerprint recorded; empty
-// without one.
+// CatalogFile retains the original database identity even when paths need cleaning.
 type CatalogFile struct {
-	ID     int64
-	Path   string
-	Device string
+	ID   int64
+	Path string
 }
 
 // Reconciliation owns filesystem decisions for one completed library walk.
@@ -62,45 +60,134 @@ func NewReconciliation(ctx context.Context, directory string, files []CatalogFil
 	return r, nil
 }
 
-// Guard keeps a catch-up from deleting files that look unmounted rather than
-// deleted: a filesystem that is not mounted, such as a disk that came up late
-// after a power cut, leaves an empty, readable mount point. A walk that found
-// no file at all keeps every file. Otherwise a missing file is kept when the
-// walk found nothing of the filesystem its fingerprint recorded: it is not the
-// root's, and no cataloged file the walk saw recorded it either, which also
-// holds across a share mounted again under another device number. Guard
-// returns how many files it kept and the issue to report, empty when it kept
-// none. A library scan an admin requests deletes them, for a disk removed for
-// good.
-func (r *Reconciliation) Guard(changes *Changes) (int, string) {
-	catchUp := changes != nil && changes.CatchUp
-	if !catchUp || len(r.candidates) == 0 {
-		return 0, ""
+// Kept is what a cleanup guard held back.
+type Kept struct {
+	// Files counts the missing files kept.
+	Files int
+	// Reason is the issue to report for them.
+	Reason string
+	// MountPoints are the absolute paths of the recorded mount points, not
+	// mounted now, that the kept files sit beneath; none when the walk found
+	// no file at all.
+	MountPoints []string
+}
+
+// Guard prepares the cleanup of a walk of the whole library. A walk the
+// server started on its own, a catch-up, keeps files that look unmounted
+// rather than deleted, since a filesystem that is not mounted leaves an
+// empty, readable mount point: every file when the walk found none, and
+// otherwise the missing files beneath a mount point an earlier walk recorded
+// that is not mounted now, such as a disk that came up late after a power
+// cut. Mount points are recorded by path, since device numbers follow probe
+// order and change across boots. A catch-up adds the mount points mounted
+// now to the record, so a disk still missing stays protected; a library scan
+// an admin asked for deletes every missing file and records only what is
+// mounted. A run of changes has nothing to guard or record.
+func (r *Reconciliation) Guard(ctx context.Context, tx TxRunner, changes *Changes, mountPoints func() ([]string, error)) (Kept, error) {
+	scoped := changes.Scoped()
+	if scoped {
+		return Kept{}, nil
+	}
+	points, err := mountPoints()
+	if err != nil {
+		return Kept{}, err
+	}
+	resolved, err := filepath.EvalSymlinks(r.root)
+	if err != nil {
+		return Kept{}, err
+	}
+	mounted := MountPointsBeneath(points, resolved)
+	recorded, err := tx.Queries.ListLibraryMountPoints(ctx, r.root)
+	if err != nil {
+		return Kept{}, err
+	}
+	record := mounted
+	kept := Kept{}
+	guarded := changes.Guarded()
+	if guarded {
+		record = append(slices.Clone(recorded), mounted...)
+		kept = r.keep(recorded, mounted)
+	}
+	slices.Sort(record)
+	record = slices.Compact(record)
+	unchanged := slices.Equal(record, recorded)
+	if unchanged {
+		return kept, nil
+	}
+	err = tx.Run(ctx, func(q *database.Queries) error {
+		err := q.DeleteLibraryMountPoints(ctx, r.root)
+		if err != nil {
+			return err
+		}
+		for _, point := range record {
+			err = q.InsertLibraryMountPoint(ctx, database.InsertLibraryMountPointParams{Root: r.root, MountPoint: point})
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}, nil)
+	return kept, err
+}
+
+// keep takes the files a catch-up keeps out of the cleanup.
+func (r *Reconciliation) keep(recorded, mounted []string) Kept {
+	if len(r.candidates) == 0 {
+		return Kept{}
 	}
 	if len(r.seen) == 0 {
-		kept := len(r.candidates)
+		kept := Kept{Files: len(r.candidates), Reason: ReasonCleanupSkippedEmpty}
 		r.candidates = nil
-		return kept, ReasonCleanupSkippedEmpty
+		return kept
 	}
-	present := map[string]bool{FingerprintOf(r.identity).Device: true}
-	for _, file := range r.candidates {
-		if r.saw(file) {
-			present[file.Device] = true
+	var unmounted []string
+	for _, point := range recorded {
+		stillMounted := slices.Contains(mounted, point)
+		if !stillMounted {
+			unmounted = append(unmounted, point)
 		}
 	}
+	if len(unmounted) == 0 {
+		return Kept{}
+	}
+	kept := Kept{Reason: ReasonCleanupKeptUnmounted}
+	held := make(map[string]bool)
 	remaining := make([]CatalogFile, 0, len(r.candidates))
 	for _, file := range r.candidates {
-		unmounted := file.Device != "" && !present[file.Device]
-		if !unmounted {
+		point := r.mountPointOf(file, unmounted)
+		seen := r.saw(file)
+		if point == "" || seen {
 			remaining = append(remaining, file)
+			continue
+		}
+		kept.Files++
+		if !held[point] {
+			held[point] = true
+			kept.MountPoints = append(kept.MountPoints, filepath.Join(r.root, point))
 		}
 	}
-	kept := len(r.candidates) - len(remaining)
 	r.candidates = remaining
-	if kept == 0 {
-		return 0, ""
+	return kept
+}
+
+// mountPointOf returns the mount point among points, relative to the root,
+// that file sits beneath, or "".
+func (r *Reconciliation) mountPointOf(file CatalogFile, points []string) string {
+	absolute, err := filepath.Abs(file.Path)
+	if err != nil {
+		return ""
 	}
-	return kept, ReasonCleanupKeptUnmounted
+	relative, err := filepath.Rel(r.root, absolute)
+	if err != nil {
+		return ""
+	}
+	for _, point := range points {
+		beneath := point == "." || PathWithin(point, relative)
+		if beneath {
+			return point
+		}
+	}
+	return ""
 }
 
 func (r *Reconciliation) MarkSeen(path string) {
@@ -118,7 +205,8 @@ func (r *Reconciliation) saw(file CatalogFile) bool {
 func (r *Reconciliation) Unseen() []CatalogFile {
 	files := make([]CatalogFile, 0)
 	for _, file := range r.candidates {
-		if !r.saw(file) {
+		seen := r.saw(file)
+		if !seen {
 			files = append(files, file)
 		}
 	}

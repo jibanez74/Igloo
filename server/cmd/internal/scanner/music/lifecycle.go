@@ -117,10 +117,14 @@ func (s *Scanner) runMusicScan(directory string, changes *scanner.Changes) {
 	}
 
 	s.phase(report, scanner.PhaseCleanup)
-	kept, reason := reconciliation.Guard(changes)
-	if reason != "" {
-		s.logger.Warn("music cleanup kept files that looked unmounted", "directory", directory, "files", kept)
-		report.Issue("", scanner.PhaseCleanup, reason)
+	kept, err := reconciliation.Guard(ctx, s.tx, changes, s.mountPoints)
+	if err != nil {
+		fail(err, scanner.ReasonCleanupUnsafe)
+		return
+	}
+	if kept.Files > 0 {
+		s.logger.Warn("music cleanup kept files that looked unmounted", "directory", directory, "files", kept.Files, "mount_points", kept.MountPoints)
+		report.Kept(kept)
 	}
 	report.status.Deleted, err = s.cleanupMissingMusic(ctx, scan, reconciliation)
 	if err != nil {
@@ -277,7 +281,7 @@ func musicScanIndex(rows []database.ListMusicTrackScanIndexRow) (map[string]scan
 	index := make(map[string]scanner.FileFingerprint, len(rows))
 	files := make([]scanner.CatalogFile, 0, len(rows))
 	for _, row := range rows {
-		files = append(files, scanner.CatalogFile{ID: row.ID, Path: row.FilePath, Device: row.Device.String})
+		files = append(files, scanner.CatalogFile{ID: row.ID, Path: row.FilePath})
 		// A catalog row without a baseline still exists, so its file counts as
 		// updated rather than imported; the zero fingerprint never matches, which
 		// forces the reprobe that records a real one.

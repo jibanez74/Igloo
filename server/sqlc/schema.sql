@@ -1623,3 +1623,14 @@ CREATE INDEX IF NOT EXISTS idx_show_season_crew_artist ON show_season_crew (arti
 CREATE INDEX IF NOT EXISTS idx_show_episode_crew_artist ON show_episode_crew (artist_id, episode_id);
 CREATE INDEX IF NOT EXISTS idx_show_episode_guest_cast_artist ON show_episode_guest_cast (artist_id, episode_id);
 CREATE INDEX IF NOT EXISTS idx_shows_tmdb_id ON shows (tmdb_id);
+
+-- The mount points found beneath each library root, relative to it ("." is
+-- the root itself), by path: device numbers follow probe order and change
+-- across boots. A walk the server starts on its own keeps the missing files
+-- beneath a recorded mount point that is not mounted, which leaves an empty,
+-- readable directory rather than deleted files.
+CREATE TABLE IF NOT EXISTS library_mount_points (
+ root TEXT NOT NULL,
+ mount_point TEXT NOT NULL,
+ PRIMARY KEY (root, mount_point)
+) WITHOUT ROWID;

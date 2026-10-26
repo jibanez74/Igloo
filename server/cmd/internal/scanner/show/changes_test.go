@@ -124,6 +124,39 @@ func TestShowCatchUpRefusesToEmptyALibraryThatLooksUnmounted(t *testing.T) {
 	}
 }
 
+// A disk mounted inside the library that has not come up leaves its empty
+// mount point; the catch-up keeps its episodes, and their progress.
+func TestShowCatchUpKeepsTheEpisodesOfADiskThatIsNotMounted(t *testing.T) {
+	s, _, root := setupScanner(t)
+	resolved, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	disk := filepath.Join(resolved, "Disk Show (2021)")
+	scannertest.WriteFile(t, filepath.Join(root, "Show (2020)/Season 1/S01E01.mkv"), "e1")
+	scannertest.WriteFile(t, filepath.Join(disk, "Season 1/S01E01.mkv"), "d1")
+	s.mountPoints = func() ([]string, error) { return []string{disk}, nil }
+	scanOK(t, s, root)
+	err = os.RemoveAll(disk)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = os.Mkdir(disk, 0o755)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.mountPoints = func() ([]string, error) { return nil, nil }
+
+	s.scanChanges(root, scanner.Changes{CatchUp: true})
+	status := s.Status()
+	if scannertest.CountRows(t, s.DB, "SELECT count(*) FROM show_files") != 2 || status.Deleted != 0 {
+		t.Fatalf("catch-up removed rows: %+v", status.Counts)
+	}
+	if status.IssueCount != 1 || status.Issues[0].Reason != scanner.ReasonCleanupKeptUnmounted {
+		t.Fatalf("issues = %+v", status.Issues)
+	}
+}
+
 func TestShowChangesRunHandsBackDeferredFiles(t *testing.T) {
 	s, _, root := setupScanner(t)
 	path := scannertest.WriteFile(t, filepath.Join(root, "Show (2020)/Season 1/S01E01.mkv"), "fresh")

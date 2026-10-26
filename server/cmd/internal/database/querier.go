@@ -78,6 +78,7 @@ type Querier interface {
 	// A password change or reset revokes every device token the user holds.
 	DeleteDevicesForUser(ctx context.Context, userID int64) error
 	DeleteDevicesUnusedSince(ctx context.Context, cutoff string) (int64, error)
+	DeleteLibraryMountPoints(ctx context.Context, root string) error
 	DeleteMergedMusicAlbum(ctx context.Context, id int64) error
 	DeleteMergedMusicArtist(ctx context.Context, id int64) error
 	DeleteMissingMovie(ctx context.Context, arg DeleteMissingMovieParams) (int64, error)
@@ -507,6 +508,7 @@ type Querier interface {
 	HasMovieTmdbRetry(ctx context.Context, movieID int64) (bool, error)
 	InsertAudioStream(ctx context.Context, arg InsertAudioStreamParams) error
 	InsertChapter(ctx context.Context, arg InsertChapterParams) error
+	InsertLibraryMountPoint(ctx context.Context, arg InsertLibraryMountPointParams) error
 	InsertShowAudioStream(ctx context.Context, arg InsertShowAudioStreamParams) error
 	InsertShowChapter(ctx context.Context, arg InsertShowChapterParams) error
 	InsertShowSubtitle(ctx context.Context, arg InsertShowSubtitleParams) error
@@ -525,6 +527,7 @@ type Querier interface {
 	// only ever filled in, never replaced: the file's own tag wins when it has one.
 	LinkMusicTrackSpotify(ctx context.Context, arg LinkMusicTrackSpotifyParams) error
 	LinkShowEpisodeFile(ctx context.Context, arg LinkShowEpisodeFileParams) error
+	ListLibraryMountPoints(ctx context.Context, root string) ([]string, error)
 	ListMusicTrackScanIndex(ctx context.Context) ([]ListMusicTrackScanIndexRow, error)
 	// ListMusicTrackScanIndex for one path a run of watcher-detected changes
 	// covers; lower and upper bound its children as in GetMovieScanIndexUnder.
