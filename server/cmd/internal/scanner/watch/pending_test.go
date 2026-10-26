@@ -108,6 +108,26 @@ func TestPendingReleasesAStalledWriter(t *testing.T) {
 	}
 }
 
+func TestPendingKeepsAWriterOpenThroughAnAttributeChange(t *testing.T) {
+	start := time.Unix(1000, 0)
+	files := fakeFiles{"paused.mkv": start}
+	p := newPending(testTiming)
+	p.note("paused.mkv", changeWritten, start, false)
+	// A transfer that pauses and sets the file's timestamps or permissions
+	// has still not closed it.
+	p.note("paused.mkv", changeAttributes, start.Add(time.Second), false)
+	if got := p.take(start.Add(10*time.Second), files.inspect); got != nil {
+		t.Fatalf("took a file still open for writing: %q", rels(got))
+	}
+	closedAt := start.Add(20 * time.Second)
+	files["paused.mkv"] = closedAt
+	p.note("paused.mkv", changeSettled, closedAt, false)
+	got := rels(p.take(closedAt.Add(testTiming.quiet), files.inspect))
+	if !reflect.DeepEqual(got, []string{"paused.mkv"}) {
+		t.Fatalf("batch after the close = %q", got)
+	}
+}
+
 func TestPendingHoldsARemovalUntilTheRenamedFileSettles(t *testing.T) {
 	start := time.Unix(1000, 0)
 	// rename(2) updates ctime, so the new name is fresh while the old one is

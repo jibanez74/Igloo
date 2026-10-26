@@ -681,8 +681,10 @@ func (s *session) apply(lib *library, event rawEvent, path string) {
 		lib.pending.note(rel, changeRemoved, now, false)
 	case event.op&opWrite != 0:
 		lib.pending.note(rel, changeWritten, now, false)
-	case event.op&(opCreate|opCloseWrite|opMovedTo|opAttrib) != 0:
+	case event.op&(opCreate|opCloseWrite|opMovedTo) != 0:
 		lib.pending.note(rel, changeSettled, now, false)
+	case event.op&opAttrib != 0:
+		lib.pending.note(rel, changeAttributes, now, false)
 	}
 }
 

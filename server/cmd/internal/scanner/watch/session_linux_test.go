@@ -233,6 +233,36 @@ func TestWatcherAppliesCreatesWritesRenamesAndRemovals(t *testing.T) {
 	}
 }
 
+func TestWatcherWaitsForAWriterThatChangedTheFileAttributes(t *testing.T) {
+	fixture := newWatcherFixture(t, nil)
+	path := scannertest.WriteFile(t, fixture.path("Movie (2001)", "movie.mkv"), "start")
+	fixture.watcher.Sync(true)
+	if !fixture.scanner.next(t).CatchUp {
+		t.Fatal("expected the catch-up first")
+	}
+	handle, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = handle.WriteString(" more")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = os.Chmod(path, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture.scanner.quiet(t, sessionTestTiming.writeIdle/2)
+	err = handle.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := sortedPaths(fixture.scanner.nextChanges(t))
+	if !slices.Equal(got, []string{"Movie (2001)/movie.mkv"}) {
+		t.Fatalf("after the close: %q", got)
+	}
+}
+
 func TestWatcherRetriesABusyScannerAndDeferredFiles(t *testing.T) {
 	fixture := newWatcherFixture(t, nil)
 	fixture.scanner.script = []scanner.StartStatus{scanner.StartAlreadyRunning, scanner.StartStarted, scanner.StartAlreadyRunning}

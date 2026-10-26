@@ -12,11 +12,13 @@ type changeKind uint8
 const (
 	// changeWritten is content still being written: IN_MODIFY.
 	changeWritten changeKind = iota
-	// changeSettled is a file created, closed after writing, moved in, or
-	// given new permissions.
+	// changeSettled is a file created, closed after writing or moved in.
 	changeSettled
 	// changeRemoved is a file or directory deleted or moved out.
 	changeRemoved
+	// changeAttributes is a file given new permissions or timestamps: IN_ATTRIB.
+	// It says nothing about its writer, so a file still being written stays so.
+	changeAttributes
 )
 
 // timing holds the coalescer's delays; tests shorten them.
@@ -98,7 +100,7 @@ func (p *pending) note(rel string, kind changeKind, now time.Time, verified bool
 	}
 	entry.lastEvent = now
 	entry.notBefore = time.Time{}
-	entry.writing = kind == changeWritten
+	entry.writing = kind == changeWritten || (kind == changeAttributes && entry.writing)
 	entry.removal = kind == changeRemoved
 	entry.verified = kind == changeSettled && verified
 	if !p.dirty {
