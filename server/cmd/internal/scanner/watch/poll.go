@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sync"
 	"time"
 
 	"igloo/cmd/internal/helpers"
@@ -74,6 +75,41 @@ type poller struct {
 	// heldSince is when a held removal first waited for settling files.
 	heldSince time.Time
 	offline   bool
+
+	// resettling holds the files the scanner deferred, handed back by the
+	// session; they are observed again from scratch. The session never waits
+	// on the poller, which may be stuck on a share that hangs.
+	resettleMu     sync.Mutex
+	resettling     []string
+	resettleSignal chan struct{}
+}
+
+// resettle hands a deferred file back to the poller: the scanner saw it still
+// changing after the poller had settled it, so it is settled again under the
+// polling rules before it dispatches. It never blocks.
+func (p *poller) resettle(rel string) {
+	p.resettleMu.Lock()
+	p.resettling = append(p.resettling, filepath.Join(p.root, rel))
+	p.resettleMu.Unlock()
+	select {
+	case p.resettleSignal <- struct{}{}:
+	default:
+	}
+}
+
+// drainResettling observes the handed-back files again. While offline they are
+// dropped: the catch-up walk after re-arming covers them.
+func (p *poller) drainResettling() {
+	p.resettleMu.Lock()
+	paths := p.resettling
+	p.resettling = nil
+	p.resettleMu.Unlock()
+	if p.offline {
+		return
+	}
+	for _, path := range paths {
+		p.observe(path)
+	}
 }
 
 type pollTiming struct {
@@ -95,6 +131,12 @@ func (p *poller) run(ctx context.Context, out chan<- pollReport) {
 		select {
 		case <-ctx.Done():
 			return
+		case <-p.resettleSignal:
+			p.drainResettling()
+			// Record the first observation at the settling cadence rather
+			// than at the next full poll.
+			timer.Reset(p.nextDelay())
+			continue
 		case <-timer.C:
 		}
 		report := p.poll()

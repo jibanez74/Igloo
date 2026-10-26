@@ -319,3 +319,29 @@ func TestPollHoldForSettlingFilesEndsAtTheCap(t *testing.T) {
 	// the removal goes alone.
 	f.poll(t, 2*time.Second, map[string]changeKind{"a.mkv": changeRemoved})
 }
+
+func TestPollResettlesADeferredFile(t *testing.T) {
+	f := newPollFixture(t, "a.mkv")
+	path := filepath.Join(f.p.root, "a.mkv")
+	f.p.resettleSignal = make(chan struct{}, 1)
+	// The scanner saw the file change after the poller had settled it.
+	err := os.WriteFile(path, []byte("still copying"), 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.p.resettle("a.mkv")
+	f.p.drainResettling()
+	if _, settling := f.p.settling[path]; !settling {
+		t.Fatal("a handed-back file is observed again")
+	}
+	// A first observation, then the quiet period, before it is reported.
+	f.poll(t, 0, nil)
+	f.poll(t, 30*time.Second, nil)
+	err = os.WriteFile(path, []byte("still copying, more"), 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Changed metadata starts the wait over, as for any settling file.
+	f.poll(t, 70*time.Second, nil)
+	f.poll(t, 70*time.Second, map[string]changeKind{"a.mkv": changeSettled})
+}

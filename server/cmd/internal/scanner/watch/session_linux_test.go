@@ -591,3 +591,47 @@ func TestWatcherAppliesNothingDuringALibraryScan(t *testing.T) {
 		}
 	}
 }
+
+func TestWatcherSettlesPolledDeferralsAgain(t *testing.T) {
+	fixture := newWatcherFixture(t, nil)
+	fixture.watcher.open = func(*sync.WaitGroup) (notifier, error) { return nil, errNotifierUnsupported }
+	fixture.watcher.Sync(true)
+	if !fixture.scanner.next(t).CatchUp {
+		t.Fatal("a polled library catches up once its snapshot is taken")
+	}
+	path := scannertest.WriteFile(t, fixture.path("New (2020)", "new.mkv"), "new")
+	changes := fixture.scanner.nextChanges(t)
+	if !slices.Equal(changes.Paths, []string{"New (2020)/new.mkv"}) {
+		t.Fatalf("polled create: %q", changes.Paths)
+	}
+	// The scanner found the file changing again and deferred it; the
+	// poller must see it hold still through its own quiet period before
+	// the batch's shorter one may dispatch it.
+	err := os.WriteFile(path, []byte("new, resumed"), 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changes.OnDeferred("New (2020)/new.mkv", time.Time{})
+	fixture.scanner.quiet(t, sessionTestPolling.quiet*3/4)
+	again := fixture.scanner.nextChanges(t)
+	if !slices.Equal(again.Paths, []string{"New (2020)/new.mkv"}) {
+		t.Fatalf("deferred polled file: %q", again.Paths)
+	}
+}
+
+func TestProbeRootResolvesARelativeRoot(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	err := os.Mkdir(filepath.Join(dir, "lib"), 0o755)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := filepath.EvalSymlinks(filepath.Join(dir, "lib"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	probe := probeRoot("lib")
+	if probe.err != nil || probe.resolved != want {
+		t.Fatalf("probeRoot(lib) = %+v, want %s", probe, want)
+	}
+}

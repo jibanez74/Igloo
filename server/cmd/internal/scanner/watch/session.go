@@ -60,6 +60,7 @@ type library struct {
 	retryAt time.Time
 	// generation tells a stopped poller's late reports apart.
 	generation int
+	poller     *poller
 	stopPoll   context.CancelFunc
 	// probing is set while a bounded check of the root is still running.
 	probing atomic.Bool
@@ -75,7 +76,13 @@ type rootProbe struct {
 }
 
 func probeRoot(root string) rootProbe {
-	resolved, err := filepath.EvalSymlinks(root)
+	// The mount table holds absolute mount points, so a relative root must be
+	// absolute before it is compared with them.
+	absolute, err := filepath.Abs(root)
+	if err != nil {
+		return rootProbe{err: err}
+	}
+	resolved, err := filepath.EvalSymlinks(absolute)
 	if err != nil {
 		return rootProbe{err: err}
 	}
@@ -338,7 +345,7 @@ func (s *session) disarm(lib *library) {
 		}
 	case modePoll:
 		lib.stopPoll()
-		lib.stopPoll = nil
+		lib.stopPoll, lib.poller = nil, nil
 	}
 	lib.mode, lib.offline, lib.catchUp = modeIdle, false, false
 	lib.pending = newPending(s.timing)
@@ -520,7 +527,9 @@ func (s *session) startPoll(lib *library) {
 	p := &poller{
 		library: lib, generation: lib.generation, root: lib.resolved, allow: lib.AllowDirectory,
 		extensions: lib.Extensions, timing: s.polling, now: s.deps.Now, layout: layout{root: lib.resolved},
+		resettleSignal: make(chan struct{}, 1),
 	}
+	lib.poller = p
 	// Not in the shutdown wait group: a hard-mounted share whose server is
 	// down can block a stat forever, and shutdown must not wait on it. The
 	// poller only reads the filesystem and exits once ctx ends.
@@ -691,16 +700,24 @@ func (s *session) drainDeferrals() {
 	s.deferredMu.Unlock()
 	now := s.now()
 	for _, d := range deferrals {
-		if d.library.mode == modeIdle || d.library.offline {
-			continue
+		lib := d.library
+		switch {
+		case lib.mode == modeIdle || lib.offline:
+		case lib.mode == modePoll:
+			// The scanner saw the file change after the poller had settled
+			// it; a poll cannot see a writer close a file, so the poller must
+			// watch it hold still again before it dispatches.
+			lib.poller.resettle(d.rel)
+		default:
+			lib.pending.deferred(d.rel, d.eligibleAt, now)
 		}
-		d.library.pending.deferred(d.rel, d.eligibleAt, now)
 	}
 }
 
 func (s *session) inspector(lib *library) inspectFunc {
 	if lib.mode == modePoll {
-		// The poller settled the file already, and a stat here could block
+		// Every pending file of a polled library came from the poller, which
+		// settled it; deferred files go back to it. A stat here could block
 		// on a share that hangs.
 		return func(string) (time.Time, bool) { return time.Time{}, true }
 	}
