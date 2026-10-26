@@ -12,7 +12,10 @@ const subscribeVisibility = (onChange: () => void) => {
 };
 const isVisible = () => document.visibilityState !== "hidden";
 
-type ScanStatusLike = Pick<MovieScanStatus, "state" | "phase" | "scope" | "run_id" | "imported" | "updated" | "deleted">;
+type ScanStatusLike = Pick<
+  MovieScanStatus,
+  "state" | "phase" | "scope" | "run_id" | "imported" | "updated" | "deleted" | "enriched"
+>;
 
 type ScanStatusOptions = {
   enabled?: boolean;
@@ -34,7 +37,8 @@ type ScanStatusConfig<T extends ScanStatusLike & Record<string, unknown>> = {
 // statistics; a new run, phase or terminal state refreshes the library lists.
 // A run of watcher-detected changes is often one file and over within a poll,
 // so it refreshes the lists once, when it ends, and only if it changed
-// anything.
+// anything: a file, or the metadata an enrichment retry brought in for a run
+// whose files were all unchanged.
 function useScanStatus<T extends ScanStatusLike & Record<string, unknown>>(
   config: ScanStatusConfig<T>,
   { enabled = true, watchIdle = true }: ScanStatusOptions,
@@ -70,7 +74,8 @@ function useScanStatus<T extends ScanStatusLike & Record<string, unknown>>(
   const state = status?.state;
   const runId = status?.run_id;
   const library = config.library;
-  const refreshesLists = status?.scope !== "changes" || (state !== "running" && committed > 0);
+  const enriched = status?.enriched ?? 0;
+  const refreshesLists = status?.scope !== "changes" || (state !== "running" && (committed > 0 || enriched > 0));
   useEffect(() => {
     if (runId && refreshesLists) invalidateLibraryQueries(queryClient, library);
   }, [queryClient, library, phase, state, runId, refreshesLists]);

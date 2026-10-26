@@ -289,6 +289,13 @@ describe("runs of watcher-detected changes", () => {
     status = movieScanStatus({ run_id: "second-run", scope: "changes", state: "completed", phase: "enrichment", total: 1, processed: 1, imported: 1 });
     await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: [MOVIES_LIBRARY_KEY] });
+
+    // A run whose files were all unchanged still refreshes the lists when an
+    // enrichment retry brought metadata in.
+    invalidate.mockClear();
+    status = movieScanStatus({ run_id: "third-run", scope: "changes", state: "completed", phase: "enrichment", total: 1, processed: 1, unchanged: 1, enriched: 1 });
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: [MOVIES_LIBRARY_KEY] });
     client.clear();
   });
 });
