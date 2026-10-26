@@ -411,6 +411,14 @@ func (s *session) addWatch(lib *library, path string, reached map[int32]bool) er
 	if raced {
 		return nil
 	}
+	// The scanner walk skips a directory it cannot read, so the watcher does
+	// too rather than pausing the whole library.
+	unreadable := errors.Is(err, fs.ErrPermission)
+	if unreadable {
+		s.deps.Logger.Warn("library watcher cannot read a directory; changes inside it need a library scan",
+			"library", lib.Name, "path", path, "error", err)
+		return nil
+	}
 	if err != nil {
 		return err
 	}

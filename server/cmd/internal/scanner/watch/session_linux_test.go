@@ -864,3 +864,42 @@ func TestBoundedIsFreeAgainOnceItReturns(t *testing.T) {
 		}
 	}
 }
+
+// lockedDirectory creates a directory the server cannot read, so inotify
+// cannot watch it.
+func lockedDirectory(t *testing.T, path string) {
+	t.Helper()
+	if os.Geteuid() == 0 {
+		t.Skip("root reads every directory")
+	}
+	err := os.Mkdir(path, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(path, 0o755) })
+}
+
+func TestWatcherSkipsDirectoriesItCannotRead(t *testing.T) {
+	fixture := newWatcherFixture(t, nil)
+	logger := fixture.watcher.deps.Logger.(*scannertest.Logger)
+	scannertest.WriteFile(t, fixture.path("Open (2020)", "open.mkv"), "open")
+	lockedDirectory(t, fixture.path("Locked (2019)"))
+	fixture.watcher.Sync(true)
+	if !fixture.scanner.next(t).CatchUp {
+		t.Fatal("a library with an unreadable directory must still be armed and walked")
+	}
+
+	// A new directory nobody lets the server read is skipped too.
+	lockedDirectory(t, fixture.path("Locked (2021)"))
+	scannertest.WriteFile(t, fixture.path("Open (2020)", "new.mkv"), "new")
+	got := sortedPaths(fixture.scanner.nextChanges(t))
+	if !slices.Equal(got, []string{"Open (2020)/new.mkv"}) {
+		t.Fatalf("create beside an unreadable directory: %q", got)
+	}
+	if logger.WarnMentions("library watcher switched the library to polling", "movies") {
+		t.Fatal("an unreadable directory moved the library to polling")
+	}
+	if !logger.WarnMentions("library watcher cannot read a directory; changes inside it need a library scan", "Locked (2021)") {
+		t.Fatal("the unreadable directory was not logged")
+	}
+}

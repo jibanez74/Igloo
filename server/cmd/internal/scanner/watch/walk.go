@@ -1,6 +1,7 @@
 package watch
 
 import (
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -12,7 +13,8 @@ import (
 // scanner walks under root, with its stat and whether it is a mount point: on
 // another device than its parent. With files set it also collects the media
 // files it passes. An error reading directory itself, or from visit, stops
-// the walk; an entry below directory that cannot be read is skipped.
+// the walk, unless directory is below root and only unreadable; an entry
+// below directory that cannot be read is skipped.
 func walkLibraryDirs(
 	root, directory string,
 	allow func(root, path string) bool,
@@ -23,7 +25,10 @@ func walkLibraryDirs(
 	devices := make(map[string]string)
 	return filepath.WalkDir(directory, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
-			if path == directory {
+			// A directory that appeared unreadable inside the library is
+			// skipped like any other; only an unreadable root fails the walk.
+			unreadableSubtree := directory != root && errors.Is(err, fs.ErrPermission)
+			if path == directory && !unreadableSubtree {
 				return err
 			}
 			return nil
