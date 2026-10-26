@@ -191,6 +191,12 @@ func (p *poller) poll() pollReport {
 	if !present {
 		return p.goOffline()
 	}
+	if !changed {
+		changed = p.layout.mountAppeared(func(directory string) bool {
+			_, known := p.dirs[directory]
+			return known
+		})
+	}
 	if changed {
 		p.offline = true
 		return p.arm()
@@ -269,6 +275,7 @@ func (p *poller) arm() pollReport {
 	if err != nil {
 		return pollReport{}
 	}
+	p.layout.noteWalkedMounts()
 	p.offline = false
 	return pollReport{online: true}
 }

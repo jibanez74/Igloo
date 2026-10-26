@@ -31,15 +31,16 @@ type layout struct {
 	rootMount bool
 	mounts    map[string]bool
 	// table holds the mount points beneath the root, relative to it, that
-	// mountPoints listed when the layout was recorded.
+	// mountPoints listed when the layout was recorded or that its walk passed;
+	// tableRead is unset when the mount table could not be read then.
 	table       []string
+	tableRead   bool
 	mountPoints func() ([]string, error)
 }
 
 // check reports whether the layout is present, and whether the root changed
-// identity or a filesystem was mounted beneath it since it was recorded,
-// which calls for arming the library again: a filesystem mounted over it or
-// inside it, a remount, or a recreated directory. A mount
+// identity since it was recorded, which calls for arming the library again: a
+// filesystem mounted over it, a remount, or a recreated directory. A mount
 // point counts as mounted while its device differs from its parent's; a
 // remount may bring a new device number, so the old one is not compared. A
 // layout that was never recorded only needs the root to exist.
@@ -61,17 +62,18 @@ func (l layout) check() (present, changed bool) {
 			return false, false
 		}
 	}
-	appeared := l.mountAppeared()
-	return true, appeared || identityOf(info) != l.rootID
+	return true, identityOf(info) != l.rootID
 }
 
-// mountAppeared reports a filesystem mounted beneath the root since the layout
-// was recorded, such as a disk that came up late after a power cut: mounting
-// over a watched directory sends no event, and its watch no longer sees the
-// directories the disk brings. It reads the mount table, so it never touches
-// a share whose server is down.
-func (l layout) mountAppeared() bool {
-	if l.mountPoints == nil {
+// mountAppeared reports a filesystem mounted since the layout was recorded on
+// a directory the library's walk reached, or on one beneath such a directory,
+// such as a disk that came up late after a power cut: mounting over a watched
+// directory sends no event, and its watch no longer sees the directories the
+// disk brings. Mounts the walk never reaches, such as the snapshots ZFS
+// mounts beneath its hidden .zfs directory, are ignored. It reads the mount
+// table, so it never touches a share whose server is down.
+func (l layout) mountAppeared(walked func(directory string) bool) bool {
+	if l.mountPoints == nil || !l.tableRead {
 		return false
 	}
 	points, err := l.mountPoints()
@@ -80,11 +82,25 @@ func (l layout) mountAppeared() bool {
 	}
 	for _, point := range scanner.MountPointsBeneath(points, l.root) {
 		known := slices.Contains(l.table, point)
-		if !known {
+		path := filepath.Join(l.root, point)
+		reached := point == "." || walked(path) || walked(filepath.Dir(path))
+		if !known && reached {
 			return true
 		}
 	}
 	return false
+}
+
+// noteWalkedMounts adds the mount points the walk passed to the table, such
+// as automounts the walk itself set off after the table was read.
+func (l *layout) noteWalkedMounts() {
+	for mount := range l.mounts {
+		point, err := filepath.Rel(l.root, mount)
+		known := slices.Contains(l.table, point)
+		if err == nil && !known {
+			l.table = append(l.table, point)
+		}
+	}
 }
 
 // mounted reports whether path, whose stat is info, sits on another device
@@ -107,9 +123,8 @@ func recordRoot(root string, mountPoints func() ([]string, error)) (layout, erro
 	recorded := layout{root: root, rootID: identityOf(info), rootMount: mounted(root, info), mounts: make(map[string]bool), mountPoints: mountPoints}
 	if mountPoints != nil {
 		points, err := mountPoints()
-		if err == nil {
-			recorded.table = scanner.MountPointsBeneath(points, root)
-		}
+		recorded.tableRead = err == nil
+		recorded.table = scanner.MountPointsBeneath(points, root)
 	}
 	return recorded, nil
 }

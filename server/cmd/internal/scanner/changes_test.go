@@ -248,13 +248,20 @@ func TestReconciliationGuardKeepsFilesBeneathAMountPointThatIsNotMounted(t *test
 		{4, filepath.Join(disk2, "b.mkv")},
 		{5, filepath.Join(root, "gone.mkv")},
 	}
-	guard := func(changes *Changes, mounts func() ([]string, error)) (Kept, []int64) {
+	// guard runs the guard over a walk that saw files[0] and the files with
+	// the extra ids.
+	guard := func(changes *Changes, mounts func() ([]string, error), extra ...int64) (Kept, []int64) {
 		t.Helper()
 		r, err := NewReconciliation(context.Background(), root, files)
 		if err != nil {
 			t.Fatal(err)
 		}
 		r.MarkSeen(files[0].Path)
+		for _, file := range files {
+			if slices.Contains(extra, file.ID) {
+				r.MarkSeen(file.Path)
+			}
+		}
 		kept, err := r.Guard(context.Background(), tx, changes, mounts)
 		if err != nil {
 			t.Fatal(err)
@@ -274,7 +281,10 @@ func TestReconciliationGuardKeepsFilesBeneathAMountPointThatIsNotMounted(t *test
 		return points
 	}
 
-	kept, _ := guard(nil, mountTable(disk1, disk2))
+	// A snapshot ZFS mounted beneath its hidden .zfs directory is never
+	// walked, so it is not recorded.
+	snapshot := filepath.Join(root, ".zfs", "snapshot", "daily")
+	kept, _ := guard(nil, mountTable(disk1, disk2, snapshot), 3, 4)
 	if kept.Files != 0 || !slices.Equal(recorded(), []string{"disk1", "disk2"}) {
 		t.Fatalf("a library scan with both disks mounted: kept %+v, recorded %q", kept, recorded())
 	}
@@ -303,7 +313,7 @@ func TestReconciliationGuardKeepsFilesBeneathAMountPointThatIsNotMounted(t *test
 	// whose first files it may import.
 	disk3 := filepath.Join(root, "disk3")
 	files = append(files, CatalogFile{6, filepath.Join(disk3, "c.mkv")})
-	kept, _ = guard(&Changes{Paths: []string{"disk3"}}, mountTable(disk1, disk3))
+	kept, _ = guard(&Changes{Paths: []string{"disk3"}}, mountTable(disk1, disk3), 6)
 	if kept.Files != 0 || !slices.Equal(recorded(), []string{"disk1", "disk3"}) {
 		t.Fatalf("a run of changes: kept %+v, recorded %q", kept, recorded())
 	}
@@ -351,18 +361,21 @@ func TestReconciliationGuardResolvesASymlinkedRoot(t *testing.T) {
 	files := []CatalogFile{{1, filepath.Join(link, "seen.mkv")}, {2, filepath.Join(link, "disk", "a.mkv")}}
 	for _, tc := range []struct {
 		mounts func() ([]string, error)
+		seen   []CatalogFile
 		kept   int
-	}{{mountTable(disk), 0}, {mountTable(), 1}} {
+	}{{mountTable(disk), files, 0}, {mountTable(), files[:1], 1}} {
 		r, err := NewReconciliation(context.Background(), link, files)
 		if err != nil {
 			t.Fatal(err)
 		}
-		r.MarkSeen(files[0].Path)
+		for _, file := range tc.seen {
+			r.MarkSeen(file.Path)
+		}
 		kept, err := r.Guard(context.Background(), tx, &Changes{CatchUp: true}, tc.mounts)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if kept.Files != tc.kept || len(r.Unseen()) != 1-tc.kept {
+		if kept.Files != tc.kept || len(r.Unseen()) != len(files)-len(tc.seen)-tc.kept {
 			t.Fatalf("kept %+v, want %d; unseen %v", kept, tc.kept, r.Unseen())
 		}
 	}

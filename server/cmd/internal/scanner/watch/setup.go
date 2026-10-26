@@ -97,6 +97,7 @@ func setUp(n notifier, log logger.LoggerInterface, name, root string, allow func
 		return recorded, nil, err
 	}
 	watches, err := collectWatches(n, log, name, root, root, allow, extensions, nil, recorded.mounts)
+	recorded.noteWalkedMounts()
 	return recorded, watches, err
 }
 

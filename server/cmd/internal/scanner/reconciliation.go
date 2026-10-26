@@ -79,10 +79,11 @@ type Kept struct {
 // files beneath a mount point an earlier run recorded that is not mounted
 // now, such as a disk that came up late after a power cut. Mount points are
 // recorded by path, since device numbers follow probe order and change across
-// boots. Every run adds the mount points beneath the root mounted now to the
-// record, a run of changes too, which may have imported a disk's first files,
-// so a disk still missing stays protected; a library scan an admin asked for
-// deletes every missing file and records only what is mounted.
+// boots. Every run that reaches cleanup adds the mount points beneath the
+// root it walked through to the record, a run of changes too, which may have
+// imported a disk's first files, so a disk still missing stays protected; a
+// library scan an admin asked for deletes every missing file and records only
+// what it walked through.
 func (r *Reconciliation) Guard(ctx context.Context, tx TxRunner, changes *Changes, mountPoints func() ([]string, error)) (Kept, error) {
 	points, err := mountPoints()
 	if err != nil {
@@ -97,10 +98,11 @@ func (r *Reconciliation) Guard(ctx context.Context, tx TxRunner, changes *Change
 	if err != nil {
 		return Kept{}, err
 	}
-	record := append(slices.Clone(recorded), mounted...)
+	walked := r.walked(mounted)
+	record := append(slices.Clone(recorded), walked...)
 	manual := changes == nil || changes.Manual
 	if manual {
-		record = mounted
+		record = walked
 	}
 	kept := Kept{}
 	guarded := changes.Guarded()
@@ -127,6 +129,31 @@ func (r *Reconciliation) Guard(ctx context.Context, tx TxRunner, changes *Change
 		return nil
 	}, nil)
 	return kept, err
+}
+
+// walked returns the mount points among points that the run walked through:
+// the root, or one beneath which it saw a file. Mounts it never reaches, such
+// as the snapshots ZFS mounts beneath its hidden .zfs directory, are left
+// out of the record.
+func (r *Reconciliation) walked(points []string) []string {
+	var relatives []string
+	for path := range r.seen {
+		relative, err := filepath.Rel(r.root, path)
+		if err == nil {
+			relatives = append(relatives, relative)
+		}
+	}
+	var walked []string
+	for _, point := range points {
+		reached := point == "."
+		for _, relative := range relatives {
+			reached = reached || PathWithin(point, relative)
+		}
+		if reached {
+			walked = append(walked, point)
+		}
+	}
+	return walked
 }
 
 // keep takes the files a catch-up keeps out of the cleanup.

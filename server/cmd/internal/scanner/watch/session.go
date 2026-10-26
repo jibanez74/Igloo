@@ -433,6 +433,13 @@ func (s *session) releaseWatch(lib *library, wd int32, watched *watchedDir) {
 	}
 }
 
+// watchedBy reports a directory the library watches.
+func (s *session) watchedBy(lib *library, directory string) bool {
+	wd, ok := s.dirs[directory]
+	watched := s.watches[wd]
+	return ok && watched != nil && watched.libraries[lib]
+}
+
 func (s *session) countWatches(lib *library) int {
 	count := 0
 	for _, watched := range s.watches {
@@ -513,6 +520,9 @@ func (s *session) checkLayout(lib *library) {
 			s.goOffline(lib, "the library directory or a mount inside it is missing", nil)
 		}
 		return
+	}
+	if !lib.offline && !changed {
+		changed = lib.layout.mountAppeared(func(directory string) bool { return s.watchedBy(lib, directory) })
 	}
 	if !lib.offline && !changed {
 		return
