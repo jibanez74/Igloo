@@ -21,8 +21,8 @@ const watchMask = syscall.IN_CREATE | syscall.IN_DELETE | syscall.IN_MOVED_FROM 
 const readBuffer = 256 * (syscall.SizeofInotifyEvent + syscall.NAME_MAX + 1)
 
 type inotify struct {
-	fd       int
 	file     *os.File
+	conn     syscall.RawConn
 	out      chan rawEvent
 	done     chan struct{}
 	closeErr sync.Once
@@ -37,23 +37,44 @@ func newNotifier(wait *sync.WaitGroup) (notifier, error) {
 	if err != nil {
 		return nil, os.NewSyscallError("inotify_init1", err)
 	}
-	n := &inotify{fd: fd, file: os.NewFile(uintptr(fd), "inotify"), out: make(chan rawEvent, 4096), done: make(chan struct{})}
+	file := os.NewFile(uintptr(fd), "inotify")
+	conn, err := file.SyscallConn()
+	if err != nil {
+		_ = file.Close()
+		return nil, err
+	}
+	n := &inotify{file: file, conn: conn, out: make(chan rawEvent, 4096), done: make(chan struct{})}
 	wait.Go(n.read)
 	return n, nil
 }
 
 func (n *inotify) add(path string) (int32, error) {
-	wd, err := syscall.InotifyAddWatch(n.fd, path, watchMask)
-	if err != nil {
-		return 0, os.NewSyscallError("inotify_add_watch", err)
-	}
-	return int32(wd), nil
+	var wd int
+	err := n.control("inotify_add_watch", func(fd int) (err error) {
+		wd, err = syscall.InotifyAddWatch(fd, path, watchMask)
+		return err
+	})
+	return int32(wd), err
 }
 
 func (n *inotify) remove(wd int32) error {
-	_, err := syscall.InotifyRmWatch(n.fd, uint32(wd))
+	return n.control("inotify_rm_watch", func(fd int) error {
+		_, err := syscall.InotifyRmWatch(fd, uint32(wd))
+		return err
+	})
+}
+
+// control runs call on the descriptor while holding it open. A setup walk
+// outlives its session, so once the instance is closed it must fail rather
+// than reach whatever instance reused the descriptor's number.
+func (n *inotify) control(name string, call func(fd int) error) error {
+	var callErr error
+	err := n.conn.Control(func(fd uintptr) { callErr = call(int(fd)) })
 	if err != nil {
-		return os.NewSyscallError("inotify_rm_watch", err)
+		return err
+	}
+	if callErr != nil {
+		return os.NewSyscallError(name, callErr)
 	}
 	return nil
 }
