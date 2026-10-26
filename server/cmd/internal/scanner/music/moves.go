@@ -12,35 +12,52 @@ import (
 // not hold, when it is a cataloged file renamed or moved within the library,
 // so it keeps its row: likes, playlist entries and its provider pairing. It
 // runs on each batch before it is processed, so the rename is not imported
-// as a new track; the bytes are unchanged, so processing only records the new
-// fingerprint.
-func (s *Scanner) applyMoves(ctx context.Context, scan *musicScanContext, reconciliation *scanner.Reconciliation, files []scanner.ScanFile) {
+// as a new track. The move records the file's fingerprint at its new path,
+// with its stored content hash, so processing finds it unchanged.
+func (s *Scanner) applyMoves(ctx context.Context, scan *musicScanContext, report *scanReport, reconciliation *scanner.Reconciliation, files []scanner.ScanFile) {
+	moved := 0
 	for _, file := range files {
+		contextErr := ctx.Err()
+		if contextErr != nil {
+			return
+		}
 		path := filepath.Clean(file.Path)
 		_, cataloged := scan.trackIndex[path]
 		if cataloged {
 			continue
 		}
-		from, found := reconciliation.MovedFrom(path)
+		move, found := reconciliation.MovedFrom(path)
 		if !found {
 			continue
 		}
-		moved, err := reconciliation.MoveConfirmed(ctx, s.tx, from, func(q *database.Queries) (bool, error) {
-			rows, err := q.MoveTrackFile(ctx, database.MoveTrackFileParams{NewPath: path, FileName: filepath.Base(path), ID: from.ID, FilePath: from.Path})
-			return rows > 0, err
+		f := move.Fingerprint
+		f.SHA256 = move.From.Fingerprint.SHA256
+		committed, err := reconciliation.MoveConfirmed(ctx, s.tx, move, &report.Report, func(q *database.Queries) (bool, error) {
+			rows, err := q.MoveTrackFile(ctx, database.MoveTrackFileParams{NewPath: path, FileName: filepath.Base(path), ID: move.From.ID, FilePath: move.From.Path})
+			if err != nil || rows == 0 {
+				return false, err
+			}
+			return true, storeTrackFingerprint(ctx, q, path, f)
 		}, func() {
-			s.invalidateCommittedTrack(from.ID)
+			s.invalidateCommittedTrack(move.From.ID)
 		})
+		contextErr = ctx.Err()
+		if contextErr != nil {
+			return
+		}
 		if err != nil {
-			s.logger.Warn("track move failed; the file is imported as new", "from", from.Path, "to", path, "error", err)
+			s.logger.Warn("track move failed; the file is imported as new", "from", move.From.Path, "to", path, "error", err)
 			continue
 		}
-		if !moved {
+		if !committed {
 			continue
 		}
-		old := filepath.Clean(from.Path)
-		scan.trackIndex[path] = scan.trackIndex[old]
-		delete(scan.trackIndex, old)
-		s.logger.Info("track file moved", "from", from.Path, "to", path)
+		delete(scan.trackIndex, filepath.Clean(move.From.Path))
+		scan.trackIndex[path] = f
+		moved++
+		s.logger.Debug("track file moved", "from", move.From.Path, "to", path)
+	}
+	if moved > 0 {
+		s.logger.Info("track files moved", "files", moved)
 	}
 }

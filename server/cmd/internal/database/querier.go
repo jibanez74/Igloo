@@ -558,7 +558,9 @@ type Querier interface {
 	MarkShowRetry(ctx context.Context, showID int64) error
 	MarkShowSeasonRetry(ctx context.Context, seasonID int64) error
 	// A file renamed or moved within the library keeps its row, and everything
-	// that refers to it.
+	// that refers to it. An unmatched movie's title and year follow the file name,
+	// as an import's do. updated_at stays: the file's content is unchanged, and it
+	// keys the playback caches.
 	MoveMovieFile(ctx context.Context, arg MoveMovieFileParams) (int64, error)
 	MoveMusicAlbumAliases(ctx context.Context, arg MoveMusicAlbumAliasesParams) error
 	MoveMusicAlbumFallback(ctx context.Context, arg MoveMusicAlbumFallbackParams) error
@@ -570,11 +572,15 @@ type Querier interface {
 	MoveMusicArtistGenres(ctx context.Context, arg MoveMusicArtistGenresParams) error
 	MoveMusicArtistTracks(ctx context.Context, arg MoveMusicArtistTracksParams) error
 	// A renamed show folder keeps its show, seasons and episodes, and with them
-	// watch progress. Its local name follows the folder; an unmatched show's
-	// display name does too, while a matched one keeps TMDB's. A folder that
-	// already has a show is left alone.
+	// watch progress. Its local name follows the folder, and so does an unmatched
+	// show's display name. A matched show moves only while the folder names the
+	// same title and year: renaming it otherwise is how a wrong match is fixed,
+	// since shows have no Identify, so it is imported as a new show and searched
+	// again. A folder that already has a show is left alone.
 	MoveShowDirectory(ctx context.Context, arg MoveShowDirectoryParams) (MoveShowDirectoryRow, error)
 	// A file renamed or moved within its season keeps its row and episode links.
+	// updated_at stays: the file's content is unchanged, and it keys the playback
+	// caches.
 	MoveShowFile(ctx context.Context, arg MoveShowFileParams) (int64, error)
 	// A file renamed or moved within the library keeps its row, and with it its
 	// likes and playlist entries.

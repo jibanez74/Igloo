@@ -29,9 +29,9 @@ func movieWatchedAt(t *testing.T, fixture *movieScannerTestContext, path string)
 	return id
 }
 
-// A movie renamed or moved within the library, as Radarr does on an upgrade
-// or a folder rename, keeps its row and with it its watch progress, whether a
-// run of changes or a library scan sees the rename.
+// A movie renamed or moved within the library, as Radarr's rename or a folder
+// reorganization does, keeps its row and with it its watch progress, whether
+// a run of changes or a library scan sees the rename.
 func TestMovieRenameKeepsTheMovieAndItsProgress(t *testing.T) {
 	for _, watched := range []bool{false, true} {
 		t.Run(map[bool]string{false: "library scan", true: "run of changes"}[watched], func(t *testing.T) {
@@ -42,6 +42,7 @@ func TestMovieRenameKeepsTheMovieAndItsProgress(t *testing.T) {
 			old := scannertest.WriteFile(t, filepath.Join(root, "Heat (1995)", "Heat 720p.mkv"), "heat")
 			s.scan(root)
 			id := movieWatchedAt(t, fixture, old)
+			revision := s.Status().CatalogRevision
 
 			renamed := filepath.Join(root, "Heat (1995) [Remux]", "Heat 1080p.mkv")
 			err := os.MkdirAll(filepath.Dir(renamed), 0o755)
@@ -77,6 +78,10 @@ func TestMovieRenameKeepsTheMovieAndItsProgress(t *testing.T) {
 			status := s.Status()
 			if status.Deleted != 0 || status.Imported != 0 {
 				t.Fatalf("a rename counted as a removal and an import: %+v", status.Counts)
+			}
+			// The web client refreshes its lists when the revision moves.
+			if status.CatalogRevision <= revision {
+				t.Fatalf("catalog revision %d after the rename, was %d", status.CatalogRevision, revision)
 			}
 		})
 	}
@@ -120,8 +125,15 @@ func TestMovieRenameClearsTheMissBackoffOfAnUnmatchedMovie(t *testing.T) {
 	}
 	s.scan(root)
 	var attempts int
-	err = fixture.db.QueryRow("SELECT attempts FROM movie_tmdb_retries").Scan(&attempts)
+	err = fixture.db.QueryRow("SELECT coalesce(max(attempts), 0) FROM movie_tmdb_retries").Scan(&attempts)
 	if err != nil || attempts != 0 {
-		t.Fatalf("attempts after the rename = %d (%v), want 0", attempts, err)
+		t.Fatalf("attempts after the rename = %d (%v), want none", attempts, err)
+	}
+	// An unmatched movie's title and year follow its file name.
+	var title string
+	var year int
+	err = fixture.db.QueryRow("SELECT title, year FROM movies").Scan(&title, &year)
+	if err != nil || title != "Heat" || year != 1995 {
+		t.Fatalf("title after the rename = %q %d (%v)", title, year, err)
 	}
 }

@@ -6,60 +6,91 @@ import (
 	"path/filepath"
 
 	"igloo/cmd/internal/database"
+	"igloo/cmd/internal/helpers"
 	"igloo/cmd/internal/scanner"
 )
 
 // applyMoves re-keys each movie the walk found under a path the catalog does
 // not hold, when it is a cataloged file renamed or moved within the library,
 // so it keeps its row: watch progress, playlists, watch rooms and its TMDB
-// match. Processing then sees the file at its new path as changed metadata.
-func (s *Scanner) applyMoves(ctx context.Context, scan *movieScanContext, reconciliation *scanner.Reconciliation, files []localFile) {
+// match. The move records the file's fingerprint at its new path, so
+// processing finds it unchanged rather than probing it again.
+func (s *Scanner) applyMoves(ctx context.Context, scan *movieScanContext, report *scanReport, reconciliation *scanner.Reconciliation, files []localFile) {
+	moved := 0
 	for _, file := range files {
+		contextErr := ctx.Err()
+		if contextErr != nil {
+			return
+		}
 		path := file.file.Path
 		_, cataloged := scan.movieIndex[path]
 		if cataloged {
 			continue
 		}
-		from, found := reconciliation.MovedFrom(path)
-		if found {
-			s.moveMovie(ctx, scan, reconciliation, from, path)
+		move, found := reconciliation.MovedFrom(path)
+		if !found {
+			continue
 		}
+		committed := s.moveMovie(ctx, scan, report, reconciliation, move)
+		if committed {
+			moved++
+		}
+	}
+	if moved > 0 {
+		s.logger.Info("movie files moved", "files", moved)
 	}
 }
 
-// moveMovie re-keys one movie. An unmatched movie whose new name searches
-// differently is searched again at once rather than after its miss backoff,
-// since a rename is how a wrong or missing match is fixed.
-func (s *Scanner) moveMovie(ctx context.Context, scan *movieScanContext, reconciliation *scanner.Reconciliation, from scanner.CatalogFile, to string) {
-	old := filepath.Clean(from.Path)
+// moveMovie re-keys one movie. An unmatched movie's title and year follow the
+// new name, and when it searches differently it is searched again at once
+// rather than after its miss backoff, since a rename is how a wrong or
+// missing match is fixed.
+func (s *Scanner) moveMovie(ctx context.Context, scan *movieScanContext, report *scanReport, reconciliation *scanner.Reconciliation, move scanner.Move) bool {
+	old := filepath.Clean(move.From.Path)
 	entry := scan.movieIndex[old]
 	oldTitle, oldYear := tmdbSearchTitle(old)
-	newTitle, newYear := tmdbSearchTitle(to)
+	newTitle, newYear := tmdbSearchTitle(move.To)
 	searchAgain := !entry.TmdbID.Valid && (oldTitle != newTitle || oldYear != newYear)
-	moved, err := reconciliation.MoveConfirmed(ctx, s.tx, from, func(q *database.Queries) (bool, error) {
-		rows, err := q.MoveMovieFile(ctx, database.MoveMovieFileParams{NewPath: to, FileName: filepath.Base(to), ID: from.ID, FilePath: from.Path})
+	titleYear := movieTitleYear(move.To)
+	f := move.Fingerprint
+	moved, err := reconciliation.MoveConfirmed(ctx, s.tx, move, &report.Report, func(q *database.Queries) (bool, error) {
+		rows, err := q.MoveMovieFile(ctx, database.MoveMovieFileParams{
+			NewPath: move.To, FileName: filepath.Base(move.To), Title: titleYear.Title, Year: helpers.NullInt64(int64(titleYear.Year)),
+			ID: move.From.ID, FilePath: move.From.Path,
+		})
 		if err != nil || rows == 0 {
 			return false, err
 		}
+		_, err = q.UpsertMovieFileFingerprint(ctx, database.UpsertMovieFileFingerprintParams{MtimeNs: f.MtimeNS, CtimeNs: f.CtimeNS, Device: f.Device, Inode: f.Inode, FilePath: move.To})
+		if err != nil {
+			return false, err
+		}
 		if searchAgain {
-			err = q.ClearMovieTmdbRetry(ctx, from.ID)
+			err = q.ClearMovieTmdbRetry(ctx, move.From.ID)
 		}
 		return true, err
 	}, func() {
-		s.invalidateCommittedMovie(from.ID)
+		s.invalidateCommittedMovie(move.From.ID)
 	})
+	contextErr := ctx.Err()
+	if contextErr != nil {
+		return false
+	}
 	if err != nil {
-		s.logger.Warn("movie move failed; the file is imported as new", "from", from.Path, "to", to, "error", err)
-		return
+		s.logger.Warn("movie move failed; the file is imported as new", "from", move.From.Path, "to", move.To, "error", err)
+		return false
 	}
 	if !moved {
-		return
+		return false
 	}
 	scan.deleteEntry(old)
-	entry.FilePath = to
+	entry.FilePath = move.To
+	entry.FileFingerprint = f
+	entry.HasFingerprint = true
 	if searchAgain {
 		entry.PendingRetry, entry.RetryAttempts, entry.LastAttemptAt = false, 0, sql.NullInt64{}
 	}
-	scan.setEntry(to, entry)
-	s.logger.Info("movie file moved", "from", from.Path, "to", to)
+	scan.setEntry(move.To, entry)
+	s.logger.Debug("movie file moved", "from", move.From.Path, "to", move.To)
+	return true
 }

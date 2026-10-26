@@ -278,5 +278,5 @@ DELETE FROM tracks WHERE id = ? AND file_path = ?;
 -- name: MoveTrackFile :execrows
 -- A file renamed or moved within the library keeps its row, and with it its
 -- likes and playlist entries.
-UPDATE tracks SET file_path = sqlc.arg(new_path), file_name = sqlc.arg(file_name), updated_at = CURRENT_TIMESTAMP
+UPDATE tracks SET file_path = sqlc.arg(new_path), file_name = sqlc.arg(file_name)
 WHERE id = sqlc.arg(id) AND file_path = sqlc.arg(file_path);

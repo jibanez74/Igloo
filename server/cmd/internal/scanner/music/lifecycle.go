@@ -85,7 +85,7 @@ func (s *Scanner) runMusicScan(directory string, changes *scanner.Changes) {
 		if len(batch) == 0 {
 			return
 		}
-		s.applyMoves(ctx, scan, reconciliation, batch)
+		s.applyMoves(ctx, scan, report, reconciliation, batch)
 		s.processMusicBatch(ctx, scan, report, directory, batch)
 		batch = batch[:0]
 	}

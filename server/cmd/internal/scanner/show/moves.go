@@ -17,8 +17,7 @@ import (
 // showMove is a cataloged episode file found again under a new path, with
 // what that path says of it.
 type showMove struct {
-	from  scanner.CatalogFile
-	to    string
+	scanner.Move
 	local localEpisodeFile
 }
 
@@ -28,9 +27,11 @@ type showMove struct {
 // keeps its show too, and with it its seasons, episodes and their watch
 // progress, once the old folder is gone and the new one has no show of its
 // own; every file that left a show folder must have gone to the same new one.
-// A file moved to another season, or a show folder split in two, is imported
-// anew and its old row cleaned up, as before.
-func (s *Scanner) applyMoves(ctx context.Context, scan *showScanContext, reconciliation *scanner.Reconciliation, root string, files []scanner.ScanFile) {
+// A file moved to another season, a show folder split in two, and a matched
+// show whose folder now names another title or year are imported anew and
+// their old rows cleaned up, as before. A move records the file's fingerprint
+// at its new path, so processing finds it unchanged.
+func (s *Scanner) applyMoves(ctx context.Context, scan *showScanContext, report *scanReport, reconciliation *scanner.Reconciliation, root string, files []scanner.ScanFile) {
 	groups := make(map[string][]showMove)
 	var folders []string
 	for _, file := range files {
@@ -38,11 +39,11 @@ func (s *Scanner) applyMoves(ctx context.Context, scan *showScanContext, reconci
 		if cataloged {
 			continue
 		}
-		from, found := reconciliation.MovedFrom(file.Path)
+		move, found := reconciliation.MovedFrom(file.Path)
 		if !found {
 			continue
 		}
-		before, err := parseFile(root, filepath.Clean(from.Path))
+		before, err := parseFile(root, filepath.Clean(move.From.Path))
 		if err != nil {
 			continue
 		}
@@ -54,9 +55,14 @@ func (s *Scanner) applyMoves(ctx context.Context, scan *showScanContext, reconci
 		if !grouped {
 			folders = append(folders, before.showPath)
 		}
-		groups[before.showPath] = append(groups[before.showPath], showMove{from: from, to: file.Path, local: after})
+		groups[before.showPath] = append(groups[before.showPath], showMove{Move: move, local: after})
 	}
+	moved := 0
 	for _, folder := range folders {
+		contextErr := ctx.Err()
+		if contextErr != nil {
+			return
+		}
 		moves := groups[folder]
 		target := moves[0].local
 		split := slices.ContainsFunc(moves, func(move showMove) bool { return move.local.showPath != target.showPath })
@@ -64,12 +70,21 @@ func (s *Scanner) applyMoves(ctx context.Context, scan *showScanContext, reconci
 			continue
 		}
 		renamed := target.showPath != folder
-		if renamed && !s.moveShow(ctx, folder, target) {
-			continue
+		if renamed {
+			followed := s.moveShow(ctx, folder, target)
+			if !followed {
+				continue
+			}
 		}
 		for _, move := range moves {
-			s.moveFile(ctx, scan, reconciliation, move)
+			committed := s.moveFile(ctx, scan, report, reconciliation, move)
+			if committed {
+				moved++
+			}
 		}
+	}
+	if moved > 0 {
+		s.Logger.Info("episode files moved", "files", moved)
 	}
 }
 
@@ -92,7 +107,8 @@ func (s *Scanner) moveShow(ctx context.Context, folder string, target localEpiso
 		}
 		return nil
 	}, nil)
-	// No show had the old folder, or the new folder already has one.
+	// No show had the old folder, a matched one is named anew, or the new
+	// folder already has a show.
 	unmoved := errors.Is(err, sql.ErrNoRows)
 	if unmoved {
 		return false
@@ -106,24 +122,36 @@ func (s *Scanner) moveShow(ctx context.Context, folder string, target localEpiso
 }
 
 // moveFile re-keys one episode file.
-func (s *Scanner) moveFile(ctx context.Context, scan *showScanContext, reconciliation *scanner.Reconciliation, move showMove) {
-	old := filepath.Clean(move.from.Path)
+func (s *Scanner) moveFile(ctx context.Context, scan *showScanContext, report *scanReport, reconciliation *scanner.Reconciliation, move showMove) bool {
+	old := filepath.Clean(move.From.Path)
 	entry := scan.index[old]
-	moved, err := reconciliation.MoveConfirmed(ctx, s.tx, move.from, func(q *database.Queries) (bool, error) {
-		rows, err := q.MoveShowFile(ctx, database.MoveShowFileParams{NewPath: move.to, FileName: filepath.Base(move.to), ID: move.from.ID, FilePath: move.from.Path})
-		return rows > 0, err
+	f := move.Fingerprint
+	moved, err := reconciliation.MoveConfirmed(ctx, s.tx, move.Move, &report.Report, func(q *database.Queries) (bool, error) {
+		rows, err := q.MoveShowFile(ctx, database.MoveShowFileParams{NewPath: move.To, FileName: filepath.Base(move.To), ID: move.From.ID, FilePath: move.From.Path})
+		if err != nil || rows == 0 {
+			return false, err
+		}
+		err = q.UpsertShowFingerprint(ctx, database.UpsertShowFingerprintParams{FileID: move.From.ID, MtimeNs: f.MtimeNS, CtimeNs: f.CtimeNS, Device: f.Device, Inode: f.Inode})
+		return err == nil, err
 	}, func() {
 		s.InvalidateCommittedShowFile(entry.ID, entry.Episodes)
 	})
+	contextErr := ctx.Err()
+	if contextErr != nil {
+		return false
+	}
 	if err != nil {
-		s.Logger.Warn("episode move failed; the file is imported as new", "from", move.from.Path, "to", move.to, "error", err)
-		return
+		s.Logger.Warn("episode move failed; the file is imported as new", "from", move.From.Path, "to", move.To, "error", err)
+		return false
 	}
 	if !moved {
-		return
+		return false
 	}
 	delete(scan.index, old)
-	entry.FilePath = move.to
-	scan.index[move.to] = entry
-	s.Logger.Info("episode file moved", "from", move.from.Path, "to", move.to)
+	entry.FilePath = move.To
+	entry.FileFingerprint = f
+	entry.HasFingerprint = true
+	scan.index[move.To] = entry
+	s.Logger.Debug("episode file moved", "from", move.From.Path, "to", move.To)
+	return true
 }

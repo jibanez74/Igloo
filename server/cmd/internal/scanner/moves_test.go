@@ -52,26 +52,27 @@ func TestMovedFromPairsARenamedFileWithItsCatalogRow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	from, found := r.MovedFrom(renamed)
-	if !found || from.ID != 1 {
-		t.Fatalf("MovedFrom(renamed) = %+v, %v", from, found)
+	move, found := r.MovedFrom(renamed)
+	if !found || move.From.ID != 1 || move.To != renamed || move.Fingerprint.Inode != files[0].Fingerprint.Inode {
+		t.Fatalf("MovedFrom(renamed) = %+v, %v", move, found)
 	}
-	from, found = r.MovedFrom(moved)
+	other, found := r.MovedFrom(moved)
 	if found {
-		t.Fatalf("a fingerprint two rows share matched %+v", from)
+		t.Fatalf("a fingerprint two rows share matched %+v", other)
 	}
-	from, found = r.MovedFrom(filepath.Join(root, "missing.mkv"))
+	other, found = r.MovedFrom(filepath.Join(root, "missing.mkv"))
 	if found {
-		t.Fatalf("a file that cannot be stat'ed matched %+v", from)
+		t.Fatalf("a file that cannot be stat'ed matched %+v", other)
 	}
 
 	rekeyed := false
-	committed, err := r.MoveConfirmed(context.Background(), tx, files[0], func(*database.Queries) (bool, error) {
+	report := NewReport()
+	committed, err := r.MoveConfirmed(context.Background(), tx, move, &report, func(*database.Queries) (bool, error) {
 		rekeyed = true
 		return true, nil
 	}, nil)
-	if err != nil || !committed || !rekeyed {
-		t.Fatalf("MoveConfirmed = %v, %v (re-keyed %v)", committed, err, rekeyed)
+	if err != nil || !committed || !rekeyed || report.Moves() != 1 {
+		t.Fatalf("MoveConfirmed = %v, %v (re-keyed %v, moves %d)", committed, err, rekeyed, report.Moves())
 	}
 	for _, file := range r.Unseen() {
 		if file.ID == 1 {
@@ -98,11 +99,12 @@ func TestMoveConfirmedLeavesAFileStillAtItsOldPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	from, found := r.MovedFrom(link)
+	move, found := r.MovedFrom(link)
 	if !found {
 		t.Fatal("the link was not paired with its catalog row")
 	}
-	committed, err := r.MoveConfirmed(context.Background(), tx, from, func(*database.Queries) (bool, error) {
+	report := NewReport()
+	committed, err := r.MoveConfirmed(context.Background(), tx, move, &report, func(*database.Queries) (bool, error) {
 		t.Fatal("a file still at its old path was re-keyed")
 		return true, nil
 	}, nil)

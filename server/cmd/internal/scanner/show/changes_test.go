@@ -67,10 +67,11 @@ func TestShowChangesRunAppliesOnlyTheChangedPaths(t *testing.T) {
 	if status.Scope != scanner.ScopeChanges || status.State != scanner.StateCompleted {
 		t.Fatalf("scope=%s state=%s issues=%+v", status.Scope, status.State, status.Issues)
 	}
-	if status.Total != 2 || status.Imported != 1 || status.Updated != 1 || status.Deleted != 0 || status.Failed != 0 {
+	// The renamed file is unchanged: its move recorded its fingerprint.
+	if status.Total != 2 || status.Imported != 1 || status.Unchanged != 1 || status.Deleted != 0 || status.Failed != 0 {
 		t.Fatalf("counts = %+v", status.Counts)
 	}
-	if probe.Calls() != 5 {
+	if probe.Calls() != 4 {
 		t.Fatalf("probes = %d", probe.Calls())
 	}
 	renamedEpisode := episodeID(t, s, renamed)

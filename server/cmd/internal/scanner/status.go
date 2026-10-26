@@ -179,6 +179,15 @@ type Report struct {
 	// publishedLast is the key of the last published issue while the
 	// published slice holds MaxPublishedIssues of them, and empty otherwise.
 	publishedLast string
+	// moves counts the files the run re-keyed to a new path.
+	moves int
+}
+
+// Moves counts the files this run re-keyed to a new path. A move leaves the
+// file's content alone, so no counter shows it, but the catalog changed: the
+// revision counts it.
+func (r *Report) Moves() int {
+	return r.moves
 }
 
 func NewReport() Report {

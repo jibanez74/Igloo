@@ -1620,23 +1620,33 @@ func (q *Queries) MarkMovieTmdbRetry(ctx context.Context, movieID int64) error {
 }
 
 const moveMovieFile = `-- name: MoveMovieFile :execrows
-UPDATE movies SET file_path = ?1, file_name = ?2, updated_at = CURRENT_TIMESTAMP
-WHERE id = ?3 AND file_path = ?4
+UPDATE movies SET
+  file_path = ?1,
+  file_name = ?2,
+  title = CASE WHEN tmdb_id IS NULL THEN ?3 ELSE title END,
+  year = CASE WHEN tmdb_id IS NULL THEN ?4 ELSE year END
+WHERE id = ?5 AND file_path = ?6
 `
 
 type MoveMovieFileParams struct {
-	NewPath  string `json:"new_path"`
-	FileName string `json:"file_name"`
-	ID       int64  `json:"id"`
-	FilePath string `json:"file_path"`
+	NewPath  string        `json:"new_path"`
+	FileName string        `json:"file_name"`
+	Title    string        `json:"title"`
+	Year     sql.NullInt64 `json:"year"`
+	ID       int64         `json:"id"`
+	FilePath string        `json:"file_path"`
 }
 
 // A file renamed or moved within the library keeps its row, and everything
-// that refers to it.
+// that refers to it. An unmatched movie's title and year follow the file name,
+// as an import's do. updated_at stays: the file's content is unchanged, and it
+// keys the playback caches.
 func (q *Queries) MoveMovieFile(ctx context.Context, arg MoveMovieFileParams) (int64, error) {
 	result, err := q.exec(ctx, q.moveMovieFileStmt, moveMovieFile,
 		arg.NewPath,
 		arg.FileName,
+		arg.Title,
+		arg.Year,
 		arg.ID,
 		arg.FilePath,
 	)

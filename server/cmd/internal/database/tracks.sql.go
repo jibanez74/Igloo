@@ -635,7 +635,7 @@ func (q *Queries) ListMusicTrackScanIndexUnder(ctx context.Context, arg ListMusi
 }
 
 const moveTrackFile = `-- name: MoveTrackFile :execrows
-UPDATE tracks SET file_path = ?1, file_name = ?2, updated_at = CURRENT_TIMESTAMP
+UPDATE tracks SET file_path = ?1, file_name = ?2
 WHERE id = ?3 AND file_path = ?4
 `
 

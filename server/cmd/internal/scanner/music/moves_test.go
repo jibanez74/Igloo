@@ -9,7 +9,8 @@ import (
 	"igloo/cmd/internal/scanner/scannertest"
 )
 
-// An album folder renamed within the library, as Picard or Lidarr does, keeps
+// An album folder renamed within the library, as Picard's or Lidarr's
+// renaming does when it leaves the tags alone, keeps
 // its tracks' rows and with them their likes, whether a run of changes or a
 // library scan sees the rename.
 func TestMusicRenameKeepsTheTrackAndItsLike(t *testing.T) {
@@ -22,6 +23,7 @@ func TestMusicRenameKeepsTheTrackAndItsLike(t *testing.T) {
 			s.scan(root)
 			db := s.tx.DB
 			var id int64
+			revision := s.Status().CatalogRevision
 			err := db.QueryRow("SELECT id FROM tracks WHERE file_path = ?", old).Scan(&id)
 			if err != nil {
 				t.Fatal(err)
@@ -60,6 +62,10 @@ func TestMusicRenameKeepsTheTrackAndItsLike(t *testing.T) {
 			status := s.Status()
 			if status.Deleted != 0 || status.Imported != 0 {
 				t.Fatalf("a rename counted as a removal and an import: %+v", status.Counts)
+			}
+			// The web client refreshes its lists when the revision moves.
+			if status.CatalogRevision <= revision {
+				t.Fatalf("catalog revision %d after the rename, was %d", status.CatalogRevision, revision)
 			}
 		})
 	}

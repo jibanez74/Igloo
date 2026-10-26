@@ -185,7 +185,7 @@ func (s *Scanner) runMovieScan(directory string, changes *scanner.Changes) {
 		return
 	}
 	s.phase(report, scanner.PhaseLocal)
-	s.applyMoves(ctx, scan, reconciliation, files)
+	s.applyMoves(ctx, scan, report, reconciliation, files)
 	indexes := make([]int, len(files))
 	for i := range files {
 		indexes[i] = i

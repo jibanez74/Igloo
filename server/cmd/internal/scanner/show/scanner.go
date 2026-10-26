@@ -187,7 +187,7 @@ func (s *Scanner) runShowScan(directory string, changes *scanner.Changes) {
 	}
 
 	s.phase(report, scanner.PhaseLocal)
-	s.applyMoves(ctx, scan, reconciliation, root, files)
+	s.applyMoves(ctx, scan, report, reconciliation, root, files)
 	s.processLocal(ctx, scan, report, root, files)
 	if ctx.Err() != nil {
 		return

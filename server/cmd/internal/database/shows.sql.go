@@ -2735,6 +2735,7 @@ UPDATE shows SET
  name = CASE WHEN tmdb_id IS NULL THEN ?2 ELSE name END,
  updated_at = CURRENT_TIMESTAMP
 WHERE shows.directory_path = ?4
+ AND (shows.tmdb_id IS NULL OR (shows.local_name = ?2 AND shows.premiere_year IS ?3))
  AND NOT EXISTS (SELECT 1 FROM shows AS taken WHERE taken.directory_path = ?1)
 RETURNING id, tmdb_id
 `
@@ -2752,9 +2753,11 @@ type MoveShowDirectoryRow struct {
 }
 
 // A renamed show folder keeps its show, seasons and episodes, and with them
-// watch progress. Its local name follows the folder; an unmatched show's
-// display name does too, while a matched one keeps TMDB's. A folder that
-// already has a show is left alone.
+// watch progress. Its local name follows the folder, and so does an unmatched
+// show's display name. A matched show moves only while the folder names the
+// same title and year: renaming it otherwise is how a wrong match is fixed,
+// since shows have no Identify, so it is imported as a new show and searched
+// again. A folder that already has a show is left alone.
 func (q *Queries) MoveShowDirectory(ctx context.Context, arg MoveShowDirectoryParams) (MoveShowDirectoryRow, error) {
 	row := q.queryRow(ctx, q.moveShowDirectoryStmt, moveShowDirectory,
 		arg.NewPath,
@@ -2768,7 +2771,7 @@ func (q *Queries) MoveShowDirectory(ctx context.Context, arg MoveShowDirectoryPa
 }
 
 const moveShowFile = `-- name: MoveShowFile :execrows
-UPDATE show_files SET file_path = ?1, file_name = ?2, updated_at = CURRENT_TIMESTAMP
+UPDATE show_files SET file_path = ?1, file_name = ?2
 WHERE id = ?3 AND file_path = ?4
 `
 
@@ -2780,6 +2783,8 @@ type MoveShowFileParams struct {
 }
 
 // A file renamed or moved within its season keeps its row and episode links.
+// updated_at stays: the file's content is unchanged, and it keys the playback
+// caches.
 func (q *Queries) MoveShowFile(ctx context.Context, arg MoveShowFileParams) (int64, error) {
 	result, err := q.exec(ctx, q.moveShowFileStmt, moveShowFile,
 		arg.NewPath,
