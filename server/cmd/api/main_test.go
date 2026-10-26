@@ -5,26 +5,53 @@ import (
 	"testing"
 
 	"igloo/cmd/internal/scanner"
+	"igloo/cmd/internal/scanner/movie"
+	"igloo/cmd/internal/scanner/music"
 	"igloo/cmd/internal/scanner/scannertest"
+	"igloo/cmd/internal/scanner/show"
 )
 
+// startupFake records which kind of run startup asks a scanner for.
+type startupFake[S any] struct {
+	run func(kind string) scanner.StartResult
+}
+
+func (f startupFake[S]) Start() scanner.StartResult { return f.run("library scan") }
+
+func (f startupFake[S]) StartChanges(changes scanner.Changes) scanner.StartResult {
+	kind := "changes"
+	guarded := changes.Guarded()
+	if guarded {
+		kind = "catch-up"
+	}
+	return f.run(kind)
+}
+
+func (startupFake[S]) Status() S {
+	var status S
+	return status
+}
+
+// Startup walks every library as a catch-up, whose cleanup keeps the files of
+// a disk that has not mounted yet, rather than as a library scan.
 func TestStartLibraryScansAtStartupStartsMovieShowThenMusic(t *testing.T) {
 	app := setupTestApp(t)
 
 	var order []string
-	started := func(library string) func() scanner.StartResult {
-		return func() scanner.StartResult {
-			order = append(order, library)
+	started := func(library string) func(string) scanner.StartResult {
+		return func(kind string) scanner.StartResult {
+			order = append(order, library+" "+kind)
 			return scanner.StartResult{Status: scanner.StartStarted}
 		}
 	}
-	app.MovieScanner = movieStartFunc(started("movie"))
-	app.ShowScanner = showStartFunc(started("show"))
-	app.MusicScanner = musicStartFunc(started("music"))
+	app.MovieScanner = startupFake[movie.Status]{run: started("movie")}
+	app.ShowScanner = startupFake[show.Status]{run: started("show")}
+	app.MusicScanner = startupFake[music.Status]{run: started("music")}
 
 	startLibraryScansAtStartup(app)
 
-	if want := []string{"movie", "show", "music"}; !slices.Equal(order, want) {
+	want := []string{"movie catch-up", "show catch-up", "music catch-up"}
+	if !slices.Equal(order, want) {
 		t.Fatalf("start order = %v, want %v", order, want)
 	}
 }

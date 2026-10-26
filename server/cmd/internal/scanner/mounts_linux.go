@@ -1,7 +1,6 @@
 package scanner
 
 import (
-	"bufio"
 	"bytes"
 	"os"
 	"strconv"
@@ -23,9 +22,10 @@ func Mounts() ([]Mount, error) {
 // fields. Malformed lines are skipped.
 func ParseMountInfo(table []byte) []Mount {
 	var mounts []Mount
-	lines := bufio.NewScanner(bytes.NewReader(table))
-	for lines.Scan() {
-		fields := strings.Fields(lines.Text())
+	// Split rather than scanned: an overlay mount's line can outgrow a
+	// Scanner's token limit, which would drop every mount after it.
+	for _, line := range bytes.Split(table, []byte("\n")) {
+		fields := strings.Fields(string(line))
 		if len(fields) < 5 {
 			continue
 		}

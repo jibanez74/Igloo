@@ -72,22 +72,18 @@ type Kept struct {
 	MountPoints []string
 }
 
-// Guard prepares the cleanup of a walk of the whole library. A walk the
-// server started on its own, a catch-up, keeps files that look unmounted
-// rather than deleted, since a filesystem that is not mounted leaves an
-// empty, readable mount point: every file when the walk found none, and
-// otherwise the missing files beneath a mount point an earlier walk recorded
-// that is not mounted now, such as a disk that came up late after a power
-// cut. Mount points are recorded by path, since device numbers follow probe
-// order and change across boots. A catch-up adds the mount points mounted
-// now to the record, so a disk still missing stays protected; a library scan
-// an admin asked for deletes every missing file and records only what is
-// mounted. A run of changes has nothing to guard or record.
+// Guard prepares a run's cleanup. A walk of the whole library the server
+// started on its own, a catch-up, keeps files that look unmounted rather than
+// deleted, since a filesystem that is not mounted leaves an empty, readable
+// mount point: every file when the walk found none, and otherwise the missing
+// files beneath a mount point an earlier run recorded that is not mounted
+// now, such as a disk that came up late after a power cut. Mount points are
+// recorded by path, since device numbers follow probe order and change across
+// boots. Every run adds the mount points beneath the root mounted now to the
+// record, a run of changes too, which may have imported a disk's first files,
+// so a disk still missing stays protected; a library scan an admin asked for
+// deletes every missing file and records only what is mounted.
 func (r *Reconciliation) Guard(ctx context.Context, tx TxRunner, changes *Changes, mountPoints func() ([]string, error)) (Kept, error) {
-	scoped := changes.Scoped()
-	if scoped {
-		return Kept{}, nil
-	}
 	points, err := mountPoints()
 	if err != nil {
 		return Kept{}, err
@@ -101,11 +97,14 @@ func (r *Reconciliation) Guard(ctx context.Context, tx TxRunner, changes *Change
 	if err != nil {
 		return Kept{}, err
 	}
-	record := mounted
+	record := append(slices.Clone(recorded), mounted...)
+	manual := changes == nil || changes.Manual
+	if manual {
+		record = mounted
+	}
 	kept := Kept{}
 	guarded := changes.Guarded()
 	if guarded {
-		record = append(slices.Clone(recorded), mounted...)
 		kept = r.keep(recorded, mounted)
 	}
 	slices.Sort(record)

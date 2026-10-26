@@ -234,7 +234,8 @@ func TestMovieCatchUpKeepsTheMoviesOfADiskThatIsNotMounted(t *testing.T) {
 	for run := range 2 {
 		s.scanChanges(root, scanner.Changes{CatchUp: true})
 		status := s.Status()
-		if got, want := catalogPaths(t, s), append([]string{kept}, unmounted...); !slices.Equal(got, want) {
+		got, want := catalogPaths(t, s), append([]string{kept}, unmounted...)
+		if !slices.Equal(got, want) {
 			t.Fatalf("after catch-up %d: %q, want %q", run+1, got, want)
 		}
 		if status.IssueCount != 1 || status.Issues[0].Reason != scanner.ReasonCleanupKeptUnmounted || status.Issues[0].Filename != "disk2" {
@@ -243,7 +244,8 @@ func TestMovieCatchUpKeepsTheMoviesOfADiskThatIsNotMounted(t *testing.T) {
 	}
 
 	s.scan(root)
-	if got := catalogPaths(t, s); !slices.Equal(got, []string{kept}) {
+	got := catalogPaths(t, s)
+	if !slices.Equal(got, []string{kept}) {
 		t.Fatalf("after the library scan: %q", got)
 	}
 }

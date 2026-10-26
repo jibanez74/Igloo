@@ -274,7 +274,8 @@ func TestReconciliationGuardKeepsFilesBeneathAMountPointThatIsNotMounted(t *test
 		return points
 	}
 
-	if kept, _ := guard(nil, mountTable(disk1, disk2)); kept.Files != 0 || !slices.Equal(recorded(), []string{"disk1", "disk2"}) {
+	kept, _ := guard(nil, mountTable(disk1, disk2))
+	if kept.Files != 0 || !slices.Equal(recorded(), []string{"disk1", "disk2"}) {
 		t.Fatalf("a library scan with both disks mounted: kept %+v, recorded %q", kept, recorded())
 	}
 	for range 2 {
@@ -293,8 +294,22 @@ func TestReconciliationGuardKeepsFilesBeneathAMountPointThatIsNotMounted(t *test
 	if kept.Files != 0 || !slices.Equal(ids, []int64{2, 3, 4, 5}) || !slices.Equal(recorded(), []string{"disk1"}) {
 		t.Fatalf("an admin's scan: kept %+v, candidates %v, recorded %q", kept, ids, recorded())
 	}
-	if kept, _ := guard(&Changes{CatchUp: true}, mountTable(disk1)); kept.Files != 0 {
+	kept, _ = guard(&Changes{CatchUp: true}, mountTable(disk1))
+	if kept.Files != 0 {
 		t.Fatalf("a forgotten mount point still kept files: %+v", kept)
+	}
+
+	// A run of changes keeps nothing, but records a disk that mounted since,
+	// whose first files it may import.
+	disk3 := filepath.Join(root, "disk3")
+	files = append(files, CatalogFile{6, filepath.Join(disk3, "c.mkv")})
+	kept, _ = guard(&Changes{Paths: []string{"disk3"}}, mountTable(disk1, disk3))
+	if kept.Files != 0 || !slices.Equal(recorded(), []string{"disk1", "disk3"}) {
+		t.Fatalf("a run of changes: kept %+v, recorded %q", kept, recorded())
+	}
+	kept, _ = guard(&Changes{CatchUp: true}, mountTable(disk1))
+	if kept.Files != 1 || !slices.Equal(kept.MountPoints, []string{disk3}) {
+		t.Fatalf("a disk a run of changes recorded was not kept: %+v", kept)
 	}
 }
 
@@ -320,6 +335,53 @@ func TestReconciliationGuardKeepsTheFilesOfARootThatIsNotMounted(t *testing.T) {
 		if kept.Files != tc.kept {
 			t.Fatalf("kept %+v, want %d", kept, tc.kept)
 		}
+	}
+}
+
+// A library configured through a symlink records and checks its mount points
+// under the resolved root, the paths the mount table holds.
+func TestReconciliationGuardResolvesASymlinkedRoot(t *testing.T) {
+	resolved, tx := guardFixture(t)
+	link := filepath.Join(t.TempDir(), "library")
+	err := os.Symlink(resolved, link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	disk := filepath.Join(resolved, "disk")
+	files := []CatalogFile{{1, filepath.Join(link, "seen.mkv")}, {2, filepath.Join(link, "disk", "a.mkv")}}
+	for _, tc := range []struct {
+		mounts func() ([]string, error)
+		kept   int
+	}{{mountTable(disk), 0}, {mountTable(), 1}} {
+		r, err := NewReconciliation(context.Background(), link, files)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r.MarkSeen(files[0].Path)
+		kept, err := r.Guard(context.Background(), tx, &Changes{CatchUp: true}, tc.mounts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if kept.Files != tc.kept || len(r.Unseen()) != 1-tc.kept {
+			t.Fatalf("kept %+v, want %d; unseen %v", kept, tc.kept, r.Unseen())
+		}
+	}
+}
+
+// A mount table that cannot be read fails the guard before anything is
+// recorded or deleted.
+func TestReconciliationGuardFailsWithoutAMountTable(t *testing.T) {
+	root, tx := guardFixture(t)
+	files := []CatalogFile{{1, filepath.Join(root, "seen.mkv")}, {2, filepath.Join(root, "gone.mkv")}}
+	r, err := NewReconciliation(context.Background(), root, files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.MarkSeen(files[0].Path)
+	unreadable := errors.New("mount table unreadable")
+	_, err = r.Guard(context.Background(), tx, &Changes{CatchUp: true}, func() ([]string, error) { return nil, unreadable })
+	if !errors.Is(err, unreadable) {
+		t.Fatalf("Guard error = %v", err)
 	}
 }
 
@@ -555,7 +617,8 @@ func TestLauncherQueuedScanReadsTheRootAtLaunch(t *testing.T) {
 				if len(completed) != 1 {
 					t.Fatalf("%d queued scans ran, want one", len(completed))
 				}
-				if got := <-completed; got != tc.want {
+				got := <-completed
+				if got != tc.want {
 					t.Fatalf("ran %q, want %q", got, tc.want)
 				}
 			}

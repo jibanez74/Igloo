@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -21,8 +22,20 @@ malformed line
 	if !reflect.DeepEqual(beneath, []string{".", "nas share"}) {
 		t.Fatalf("MountPointsBeneath = %q", beneath)
 	}
-	if beneath := MountPointsBeneath(points, "/srv/media2"); beneath != nil {
+	beneath = MountPointsBeneath(points, "/srv/media2")
+	if beneath != nil {
 		t.Fatalf("a name that only shares a prefix is not beneath: %q", beneath)
+	}
+}
+
+// An overlay mount with many layers writes one very long line; the mounts
+// after it are still read.
+func TestParseMountInfoReadsPastAVeryLongLine(t *testing.T) {
+	long := "40 22 0:50 / /var/lib/docker/overlay rw - overlay overlay rw,lowerdir=" + strings.Repeat("/l", 40000) + "\n"
+	table := "22 1 8:2 / / rw - ext4 /dev/sda2 rw\n" + long + "41 22 8:33 / /srv/media/disk2 rw - ext4 /dev/sdc1 rw\n"
+	got := ParseMountInfo([]byte(table))
+	if len(got) != 3 || got[2].Point != "/srv/media/disk2" {
+		t.Fatalf("ParseMountInfo = %d mounts, last %+v", len(got), got[len(got)-1])
 	}
 }
 
@@ -34,7 +47,8 @@ func TestUnescapeMountPoint(t *testing.T) {
 		`/mnt/plain`:         "/mnt/plain",
 		`/mnt/short\04`:      `/mnt/short\04`,
 	} {
-		if got := unescapeMountPoint(field); got != want {
+		got := unescapeMountPoint(field)
+		if got != want {
 			t.Errorf("unescapeMountPoint(%q) = %q, want %q", field, got, want)
 		}
 	}
