@@ -110,36 +110,39 @@ type StartResult struct {
 type Launcher struct {
 	Wait *sync.WaitGroup
 
-	mu              sync.Mutex
-	running         bool
-	changes         bool
-	queued          func()
-	queuedDirectory string
+	mu      sync.Mutex
+	running bool
+	changes bool
+	queued  *launchRequest
 }
 
-// Start runs run(directory, changes) on a new goroutine when directory is
-// configured and no run is in progress. changes is nil for a library scan; a
-// catch-up walks the whole library, so it starts like one. begin runs first,
-// with the run's scope, so a status poll right after the request already sees
-// the run. A library scan requested while a run of changes is in progress is
-// queued behind it rather than refused, so a busy watcher can never starve a
-// requested scan. Same-directory requests coalesce; a different directory
-// replaces queued work. A run of changes is refused while any run is in
-// progress, and the watcher retries it.
-func (l *Launcher) Start(directory sql.NullString, changes *Changes, begin func(ScanScope), run func(directory string, changes *Changes)) StartResult {
-	result := StartResult{Directory: directory.String}
-	if !directory.Valid || directory.String == "" {
+type launchRequest struct {
+	directory func() sql.NullString
+	changes   *Changes
+	begin     func(ScanScope)
+	run       func(directory string, changes *Changes)
+}
+
+// Start runs run(directory, changes) on a new goroutine when the configured
+// directory is set and no run is in progress. changes is nil for a library
+// scan; a catch-up walks the whole library, so it starts like one. begin runs
+// first, with the run's scope, so a status poll right after the request
+// already sees the run. A library scan requested while a run of changes is in
+// progress is queued behind it rather than refused, so a busy watcher can
+// never starve a requested scan; it reads the directory again when it
+// launches, so it walks the root configured then. Queued requests coalesce,
+// and a catch-up replaces a queued scan, since it hands deferred files back to
+// the watcher and guards an empty root. A run of changes is refused while any
+// run is in progress, and the watcher retries it.
+func (l *Launcher) Start(directory func() sql.NullString, changes *Changes, begin func(ScanScope), run func(directory string, changes *Changes)) StartResult {
+	configured := directory()
+	result := StartResult{Directory: configured.String}
+	if !configured.Valid || configured.String == "" {
 		result.Status = StartNotConfigured
 		return result
 	}
+	request := &launchRequest{directory: directory, changes: changes, begin: begin, run: run}
 	scoped := changes.Scoped()
-	launch := func() {
-		begin(changes.Scope())
-		l.Wait.Go(func() {
-			run(directory.String, changes)
-			l.finish()
-		})
-	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.running {
@@ -148,31 +151,55 @@ func (l *Launcher) Start(directory sql.NullString, changes *Changes, begin func(
 			result.Status = StartAlreadyRunning
 			return result
 		}
-		if l.queued == nil || l.queuedDirectory != directory.String {
-			l.queued = launch
-			l.queuedDirectory = directory.String
+		catchUp := changes != nil && changes.CatchUp
+		replaces := l.queued == nil || catchUp
+		if replaces {
+			l.queued = request
 		}
 		result.Status = StartQueued
 		return result
 	}
 	l.running, l.changes = true, scoped
-	launch()
+	l.launch(request, configured.String)
 	return result
 }
 
+func (l *Launcher) launch(request *launchRequest, directory string) {
+	request.begin(request.changes.Scope())
+	l.Wait.Go(func() {
+		request.run(directory, request.changes)
+		l.finish()
+	})
+}
+
+// finish launches the queued library scan, if any, with the directory
+// configured now. The directory is read outside the lock: reading the
+// settings must never wait on a launcher that a settings save may be calling.
 func (l *Launcher) finish() {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	next := l.queued
-	l.queued = nil
-	l.queuedDirectory = ""
-	// Only a library scan is ever queued.
-	l.changes = false
-	if next == nil {
-		l.running = false
+	for {
+		l.mu.Lock()
+		next := l.queued
+		l.queued = nil
+		// Only a library scan is ever queued.
+		l.changes = false
+		if next == nil {
+			l.running = false
+			l.mu.Unlock()
+			return
+		}
+		l.mu.Unlock()
+		configured := next.directory()
+		unset := !configured.Valid || configured.String == ""
+		if unset {
+			// The library was cleared while its scan waited; a request queued
+			// meanwhile still gets its turn.
+			continue
+		}
+		l.mu.Lock()
+		l.launch(next, configured.String)
+		l.mu.Unlock()
 		return
 	}
-	next()
 }
 
 // WalkMediaLibraryContext walks root until it completes or ctx is canceled,

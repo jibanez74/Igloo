@@ -20,12 +20,12 @@ const (
 
 // Start launches a scan asynchronously when configured and no music scan is running.
 func (s *Scanner) Start() scanner.StartResult {
-	return s.launcher.Start(s.currentMusicDirectory(), nil, s.beginReport, s.runMusicScan)
+	return s.launcher.Start(s.currentMusicDirectory, nil, s.beginReport, s.runMusicScan)
 }
 
 // StartChanges applies what the library watcher saw change.
 func (s *Scanner) StartChanges(changes scanner.Changes) scanner.StartResult {
-	return s.launcher.Start(s.currentMusicDirectory(), &changes, s.beginReport, s.runMusicScan)
+	return s.launcher.Start(s.currentMusicDirectory, &changes, s.beginReport, s.runMusicScan)
 }
 
 // runMusicScan expects beginReport to have published the run it continues.

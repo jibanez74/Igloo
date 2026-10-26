@@ -91,12 +91,12 @@ func New(deps Dependencies) *Scanner {
 
 // Start launches a scan asynchronously when configured and no show scan is running.
 func (s *Scanner) Start() scanner.StartResult {
-	return s.launcher.Start(s.CurrentShowsDirectory(), nil, s.beginReport, s.runShowScan)
+	return s.launcher.Start(s.CurrentShowsDirectory, nil, s.beginReport, s.runShowScan)
 }
 
 // StartChanges applies what the library watcher saw change.
 func (s *Scanner) StartChanges(changes scanner.Changes) scanner.StartResult {
-	return s.launcher.Start(s.CurrentShowsDirectory(), &changes, s.beginReport, s.runShowScan)
+	return s.launcher.Start(s.CurrentShowsDirectory, &changes, s.beginReport, s.runShowScan)
 }
 
 // runShowScan expects beginReport to have published the run it continues.

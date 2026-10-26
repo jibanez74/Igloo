@@ -48,7 +48,7 @@ func TestLauncherAdmitsOneScanAtATime(t *testing.T) {
 	var callers sync.WaitGroup
 	for i := 0; i < 50; i++ {
 		callers.Go(func() {
-			result := launcher.Start(directory, nil, func(ScanScope) {}, func(string, *Changes) { <-release })
+			result := launcher.Start(fixedDirectory(directory), nil, func(ScanScope) {}, func(string, *Changes) { <-release })
 			if result.Status == StartStarted {
 				mu.Lock()
 				started++
@@ -64,7 +64,7 @@ func TestLauncherAdmitsOneScanAtATime(t *testing.T) {
 		t.Fatalf("expected exactly one scan to start, got %d", started)
 	}
 
-	result := launcher.Start(directory, nil, func(ScanScope) {}, func(string, *Changes) {})
+	result := launcher.Start(fixedDirectory(directory), nil, func(ScanScope) {}, func(string, *Changes) {})
 	scans.Wait()
 	if result.Status != StartStarted {
 		t.Fatalf("a finished scan must let the next one start, got status %d", result.Status)

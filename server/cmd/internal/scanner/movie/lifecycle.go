@@ -9,12 +9,12 @@ import (
 )
 
 func (s *Scanner) Start() scanner.StartResult {
-	return s.launcher.Start(s.currentMoviesDirectory(), nil, s.beginReport, s.runMovieScan)
+	return s.launcher.Start(s.currentMoviesDirectory, nil, s.beginReport, s.runMovieScan)
 }
 
 // StartChanges applies what the library watcher saw change.
 func (s *Scanner) StartChanges(changes scanner.Changes) scanner.StartResult {
-	return s.launcher.Start(s.currentMoviesDirectory(), &changes, s.beginReport, s.runMovieScan)
+	return s.launcher.Start(s.currentMoviesDirectory, &changes, s.beginReport, s.runMovieScan)
 }
 
 // loadMovieScanIndex reads the catalog rows the run covers: all of them, or

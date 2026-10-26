@@ -11,7 +11,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -288,7 +287,7 @@ func TestLauncherQueuesALibraryScanBehindChanges(t *testing.T) {
 	var scopes []ScanScope
 	begin := func(scope ScanScope) { scopes = append(scopes, scope) }
 
-	result := launcher.Start(directory, scoped, begin, func(directory string, changes *Changes) {
+	result := launcher.Start(fixedDirectory(directory), scoped, begin, func(directory string, changes *Changes) {
 		<-release
 		record("changes")(directory, changes)
 	})
@@ -296,25 +295,25 @@ func TestLauncherQueuesALibraryScanBehindChanges(t *testing.T) {
 		t.Fatalf("changes status = %d", result.Status)
 	}
 	// A second run of changes is refused; the watcher retries it.
-	result = launcher.Start(directory, scoped, begin, record("second changes"))
+	result = launcher.Start(fixedDirectory(directory), scoped, begin, record("second changes"))
 	if result.Status != StartAlreadyRunning {
 		t.Fatalf("second changes status = %d, want already running", result.Status)
 	}
-	// A library scan is queued behind it, and a repeat request or a catch-up
-	// joins the queue.
-	result = launcher.Start(directory, nil, begin, record("library"))
-	if result.Status != StartQueued {
-		t.Fatalf("library status = %d, want queued", result.Status)
-	}
-	for _, changes := range []*Changes{nil, catchUp} {
-		result = launcher.Start(directory, changes, begin, record("duplicate"))
+	// A library scan is queued behind it, a repeat request joins the queue,
+	// and a catch-up takes its place.
+	queued := []struct {
+		changes *Changes
+		name    string
+	}{{nil, "library"}, {nil, "repeat"}, {catchUp, "catch-up"}, {nil, "after catch-up"}}
+	for _, request := range queued {
+		result = launcher.Start(fixedDirectory(directory), request.changes, begin, record(request.name))
 		if result.Status != StartQueued {
-			t.Fatalf("repeat status = %d, want queued", result.Status)
+			t.Fatalf("%s status = %d, want queued", request.name, result.Status)
 		}
 	}
 	close(release)
 	scans.Wait()
-	if strings.Join(order, ",") != "changes,library" || !reflect.DeepEqual(scopes, []ScanScope{ScopeChanges, ScopeLibrary}) {
+	if strings.Join(order, ",") != "changes,catch-up" || !reflect.DeepEqual(scopes, []ScanScope{ScopeChanges, ScopeLibrary}) {
 		t.Fatalf("order = %q, scopes = %q", order, scopes)
 	}
 
@@ -322,9 +321,9 @@ func TestLauncherQueuesALibraryScanBehindChanges(t *testing.T) {
 	// than queued.
 	for _, running := range []*Changes{nil, catchUp} {
 		block := make(chan struct{})
-		launcher.Start(directory, running, func(ScanScope) {}, func(string, *Changes) { <-block })
+		launcher.Start(fixedDirectory(directory), running, func(ScanScope) {}, func(string, *Changes) { <-block })
 		for _, changes := range []*Changes{nil, catchUp, scoped} {
-			status := launcher.Start(directory, changes, func(ScanScope) {}, func(string, *Changes) {}).Status
+			status := launcher.Start(fixedDirectory(directory), changes, func(ScanScope) {}, func(string, *Changes) {}).Status
 			if status != StartAlreadyRunning {
 				t.Fatalf("during %+v: start %+v status %d, want already running", running, changes, status)
 			}
@@ -332,12 +331,12 @@ func TestLauncherQueuesALibraryScanBehindChanges(t *testing.T) {
 		close(block)
 		scans.Wait()
 	}
-	result = launcher.Start(directory, scoped, func(ScanScope) {}, func(string, *Changes) {})
+	result = launcher.Start(fixedDirectory(directory), scoped, func(ScanScope) {}, func(string, *Changes) {})
 	scans.Wait()
 	if result.Status != StartStarted {
 		t.Fatalf("after the queue drained: %d", result.Status)
 	}
-	if launcher.Start(sql.NullString{}, scoped, func(ScanScope) {}, func(string, *Changes) {}).Status != StartNotConfigured {
+	if launcher.Start(fixedDirectory(sql.NullString{}), scoped, func(ScanScope) {}, func(string, *Changes) {}).Status != StartNotConfigured {
 		t.Fatal("an unconfigured library must not start changes")
 	}
 }
@@ -376,67 +375,72 @@ func TestPathWithin(t *testing.T) {
 	}
 }
 
-func TestLauncherQueuesLatestDirectory(t *testing.T) {
+func fixedDirectory(directory sql.NullString) func() sql.NullString {
+	return func() sql.NullString { return directory }
+}
+
+// A queued library scan walks the root configured when it launches, and a
+// catch-up queued with it keeps its deferral hand-back and empty-root guard.
+func TestLauncherQueuedScanReadsTheRootAtLaunch(t *testing.T) {
+	manual := func() *Changes { return nil }
+	catchUp := func() *Changes { return &Changes{CatchUp: true} }
 	for _, tc := range []struct {
-		name  string
-		roots []string
-		want  string
+		name      string
+		requests  []func() *Changes
+		root      string
+		want      string
+		wantCatch bool
 	}{
-		{"same root", []string{"A", "A"}, "A:0"},
-		{"replacement", []string{"A", "B"}, "B:1"},
-		{"latest replacement", []string{"A", "B", "C", "C"}, "C:2"},
+		{"root changed while queued", []func() *Changes{manual}, "B", "B", false},
+		{"catch-up replaces a queued scan", []func() *Changes{manual, catchUp}, "A", "A", true},
+		{"a scan joins a queued catch-up", []func() *Changes{catchUp, manual}, "A", "A", true},
+		{"cleared while queued", []func() *Changes{manual}, "", "", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var scans sync.WaitGroup
 			launcher := Launcher{Wait: &scans}
+			var mu sync.Mutex
+			root := "A"
+			directory := func() sql.NullString {
+				mu.Lock()
+				defer mu.Unlock()
+				return sql.NullString{String: root, Valid: root != ""}
+			}
 			release := make(chan struct{})
-			defer scans.Wait()
-			defer close(release)
-			var active atomic.Bool
-			var overlapped atomic.Bool
 			started := make(chan struct{})
-			completed := make(chan string, len(tc.roots))
-			launcher.Start(sql.NullString{String: "original", Valid: true}, &Changes{Paths: []string{"file.mkv"}}, func(ScanScope) {}, func(string, *Changes) {
-				active.Store(true)
+			launcher.Start(directory, &Changes{Paths: []string{"file.mkv"}}, func(ScanScope) {}, func(string, *Changes) {
 				close(started)
 				<-release
-				active.Store(false)
 			})
 			<-started
-			for i, root := range tc.roots {
-				// The first request is manual; catch-ups for later settings supersede it.
-				var changes *Changes
-				if i > 0 {
-					changes = &Changes{CatchUp: true}
-				}
-				result := launcher.Start(sql.NullString{String: root, Valid: true}, changes, func(ScanScope) {}, func(directory string, _ *Changes) {
-					wasActive := active.Swap(true)
-					if wasActive {
-						overlapped.Store(true)
-					}
-					completed <- fmt.Sprintf("%s:%d", directory, i)
-					active.Store(false)
+			completed := make(chan string, len(tc.requests))
+			for _, request := range tc.requests {
+				result := launcher.Start(directory, request(), func(ScanScope) {}, func(directory string, changes *Changes) {
+					completed <- fmt.Sprintf("%s:%v", directory, changes != nil && changes.CatchUp)
 				})
-				if result.Status != StartQueued {
-					t.Fatalf("request %s: %+v", root, result)
+				if result.Status != StartQueued || result.Directory != "A" {
+					t.Fatalf("request: %+v", result)
 				}
 			}
-			select {
-			case got := <-completed:
-				t.Fatalf("queued run started before scoped run finished: %s", got)
-			default:
-			}
-			// The deferred close also releases the run on assertion failures.
-			release <- struct{}{}
+			mu.Lock()
+			root = tc.root
+			mu.Unlock()
+			close(release)
 			scans.Wait()
-			if overlapped.Load() || len(completed) != 1 {
-				t.Fatalf("overlap=%v completed=%d", overlapped.Load(), len(completed))
+			if tc.want == "" {
+				if len(completed) != 0 {
+					t.Fatalf("a scan queued for a cleared library ran: %s", <-completed)
+				}
+			} else {
+				if len(completed) != 1 {
+					t.Fatalf("%d queued scans ran, want one", len(completed))
+				}
+				got, want := <-completed, fmt.Sprintf("%s:%v", tc.want, tc.wantCatch)
+				if got != want {
+					t.Fatalf("ran %q, want %q", got, want)
+				}
 			}
-			got := <-completed
-			if got != tc.want {
-				t.Fatalf("ran %q, want %q", got, tc.want)
-			}
-			if launcher.queued != nil || launcher.queuedDirectory != "" || launcher.running {
+			if launcher.queued != nil || launcher.running {
 				t.Fatal("launcher retained queued or running state")
 			}
 		})

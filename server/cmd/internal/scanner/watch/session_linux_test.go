@@ -671,7 +671,7 @@ func TestWatcherAppliesNothingDuringALibraryScan(t *testing.T) {
 	fixture := newWatcherFixture(t, func(lib *Library) {
 		lib.StartChanges = func(changes scanner.Changes) scanner.StartResult {
 			requested <- struct{}{}
-			return launcher.Start(lib.Directory(), &changes, func(scanner.ScanScope) {}, func(_ string, changes *scanner.Changes) {
+			return launcher.Start(lib.Directory, &changes, func(scanner.ScanScope) {}, func(_ string, changes *scanner.Changes) {
 				if scanning.Load() {
 					overlapped.Store(true)
 				}
@@ -682,7 +682,7 @@ func TestWatcherAppliesNothingDuringALibraryScan(t *testing.T) {
 	t.Cleanup(scans.Wait)
 	release := make(chan struct{})
 	scanning.Store(true)
-	launcher.Start(sql.NullString{String: fixture.root, Valid: true}, nil, func(scanner.ScanScope) {}, func(string, *scanner.Changes) {
+	launcher.Start(func() sql.NullString { return sql.NullString{String: fixture.root, Valid: true} }, nil, func(scanner.ScanScope) {}, func(string, *scanner.Changes) {
 		<-release
 		scanning.Store(false)
 	})
