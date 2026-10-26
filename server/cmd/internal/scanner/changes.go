@@ -153,11 +153,13 @@ func LoadUnder[Under, Row any](
 // PathWithin reports whether path is parent or lies beneath it. Both are
 // clean; a parent of "/" holds every absolute path.
 func PathWithin(parent, path string) bool {
-	prefix := parent
-	if !strings.HasSuffix(prefix, string(filepath.Separator)) {
-		prefix += string(filepath.Separator)
+	if !strings.HasPrefix(path, parent) {
+		return false
 	}
-	return path == parent || strings.HasPrefix(path, prefix)
+	// Compared in place: the watcher calls this for every watched directory
+	// on each directory event.
+	rest := path[len(parent):]
+	return rest == "" || strings.HasSuffix(parent, string(filepath.Separator)) || rest[0] == filepath.Separator
 }
 
 // escapesRoot reports whether a cleaned relative path leaves its root.
