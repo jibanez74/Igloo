@@ -22,6 +22,11 @@ func newPollFixture(t *testing.T, files ...string) *pollFixture {
 	for _, rel := range files {
 		scannertest.WriteFile(t, filepath.Join(root, rel), "media")
 	}
+	return armPollFixture(t, root)
+}
+
+func armPollFixture(t *testing.T, root string) *pollFixture {
+	t.Helper()
 	f := &pollFixture{now: time.Now()}
 	f.p = &poller{root: root, extensions: map[string]bool{"mkv": true}, timing: defaultPollTiming,
 		now: func() time.Time { return f.now }, layout: layout{root: root}, offline: true}
@@ -344,4 +349,55 @@ func TestPollResettlesADeferredFile(t *testing.T) {
 	// Changed metadata starts the wait over, as for any settling file.
 	f.poll(t, 70*time.Second, nil)
 	f.poll(t, 70*time.Second, map[string]changeKind{"a.mkv": changeSettled})
+}
+
+// lockDirectory makes directory unreadable until the returned function, or the
+// end of the test, unlocks it.
+func lockDirectory(t *testing.T, directory string) func() {
+	t.Helper()
+	if os.Geteuid() == 0 {
+		t.Skip("root reads every directory")
+	}
+	err := os.MkdirAll(directory, 0o755)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unlock := func() {
+		err := os.Chmod(directory, 0o755)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	err = os.Chmod(directory, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(directory, 0o755) })
+	return unlock
+}
+
+func TestPollRetriesADirectoryThatCouldNotBeListed(t *testing.T) {
+	t.Run("found by a poll", func(t *testing.T) {
+		f := newPollFixture(t)
+		unlock := lockDirectory(t, filepath.Join(f.p.root, "Sub"))
+		f.poll(t, 0, nil)
+		unlock()
+		scannertest.WriteFile(t, filepath.Join(f.p.root, "Sub", "a.mkv"), "media")
+		scannertest.WriteFile(t, filepath.Join(f.p.root, "Sub", "Deeper", "b.mkv"), "media")
+		f.poll(t, 0, nil)
+		f.poll(t, 70*time.Second, map[string]changeKind{"Sub/a.mkv": changeSettled, "Sub/Deeper/b.mkv": changeSettled})
+		f.poll(t, time.Minute, nil)
+	})
+	t.Run("unreadable when armed", func(t *testing.T) {
+		root := t.TempDir()
+		scannertest.WriteFile(t, filepath.Join(root, "Sub", "a.mkv"), "media")
+		unlock := lockDirectory(t, filepath.Join(root, "Sub"))
+		f := armPollFixture(t, root)
+		f.poll(t, 0, nil)
+		unlock()
+		// The catch-up walk could not read it either, so its files are new.
+		f.poll(t, 0, nil)
+		f.poll(t, 70*time.Second, map[string]changeKind{"Sub/a.mkv": changeSettled})
+		f.poll(t, time.Minute, nil)
+	})
 }

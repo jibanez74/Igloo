@@ -33,6 +33,9 @@ type polledDir struct {
 	id      identity
 	mtime   int64
 	entries map[string]bool // name -> is a directory
+	// unread marks a directory whose listing failed; every poll lists it
+	// again until one succeeds.
+	unread bool
 }
 
 type polledChange struct {
@@ -261,17 +264,22 @@ func (p *poller) goOffline() pollReport {
 }
 
 // snapshot records directory and everything beneath it that the scanner
-// would walk; with files set it also collects the media files found.
+// would walk; with files set it also collects the media files found. A
+// directory that cannot be listed is recorded as unread, so later polls retry
+// it rather than taking its empty snapshot as complete.
 func (p *poller) snapshot(directory string, files *[]string) error {
 	return walkLibraryDirs(p.root, directory, p.allow, p.extensions, files, func(path string, info os.FileInfo, mount bool) error {
 		if mount {
 			p.layout.mounts[path] = true
 		}
+		known := &polledDir{id: identityOf(info), mtime: info.ModTime().UnixNano(), entries: map[string]bool{}}
 		listing, err := os.ReadDir(path)
 		if err != nil {
-			return nil
+			known.unread = true
+		} else {
+			known.entries = p.entries(path, listing)
 		}
-		p.dirs[path] = &polledDir{id: identityOf(info), mtime: info.ModTime().UnixNano(), entries: p.entries(path, listing)}
+		p.dirs[path] = known
 		return nil
 	})
 }
@@ -294,7 +302,8 @@ func (p *poller) entries(directory string, listing []fs.DirEntry) map[string]boo
 	return entries
 }
 
-// diff lists a directory again when its mtime or identity moved. Removals
+// diff lists a directory again when its mtime or identity moved, or while it
+// is unread. Removals
 // are only reported from a successful listing of the same directory: a
 // replaced directory, such as an empty mount point, proves nothing. It
 // reports whether the share itself became unavailable.
@@ -309,7 +318,7 @@ func (p *poller) diff(directory string) bool {
 	}
 	id := identityOf(info)
 	mtime := info.ModTime().UnixNano()
-	unchanged := id == known.id && mtime == known.mtime
+	unchanged := id == known.id && mtime == known.mtime && !known.unread
 	if unchanged {
 		return false
 	}
@@ -357,7 +366,7 @@ func (p *poller) diff(directory string) bool {
 		// fingerprint check skips any neighboring files that did not change.
 		p.observe(path)
 	}
-	known.id, known.mtime, known.entries = id, mtime, current
+	known.id, known.mtime, known.entries, known.unread = id, mtime, current, false
 	return false
 }
 
