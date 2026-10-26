@@ -47,7 +47,7 @@ function AuthLayout() {
   const librariesVisible = useLocation({ select: location => location.pathname.replace(/\/+$/, "") === "/settings/libraries" });
   const scanOptions = {
     enabled: data?.error === false && data.data.user.is_admin,
-    watchIdle: librariesVisible,
+    background: !librariesVisible,
   };
   useMovieScanStatus(scanOptions);
   useMusicScanStatus(scanOptions);

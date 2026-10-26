@@ -18,7 +18,7 @@ function ScanView() {
 }
 
 function BackgroundScanView() {
-  const query = useMovieScanStatus({ watchIdle: false });
+  const query = useMovieScanStatus({ background: true });
   return <ScanProgress library="movies" status={query.data} unavailable={query.isError} />;
 }
 
@@ -141,7 +141,7 @@ describe("movie scan progress", () => {
     client.clear();
   });
 
-  it("discovers a running scan without watching idle status, then stops once it finishes", async () => {
+  it("polls in the background at a minute's pace while idle and every two seconds while a scan runs", async () => {
     vi.useFakeTimers();
     let status = movieScanStatus();
     const fetchMock = vi.fn(() => jsonResponse({ error: false, data: status }));
@@ -159,6 +159,9 @@ describe("movie scan progress", () => {
     const completedCalls = fetchMock.mock.calls.length;
     await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
     expect(fetchMock).toHaveBeenCalledTimes(completedCalls);
+    // A watcher run that finished between two idle polls is still seen.
+    await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+    expect(fetchMock).toHaveBeenCalledTimes(completedCalls + 1);
     client.clear();
   });
 });

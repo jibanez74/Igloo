@@ -19,7 +19,7 @@ type ScanStatusLike = Pick<
 
 type ScanStatusOptions = {
   enabled?: boolean;
-  watchIdle?: boolean;
+  background?: boolean;
 };
 
 type ScanStatusConfig<T extends ScanStatusLike & Record<string, unknown>> = {
@@ -31,9 +31,10 @@ type ScanStatusConfig<T extends ScanStatusLike & Record<string, unknown>> = {
 };
 
 // Polls a scan report every two seconds while it runs and every ten seconds
-// otherwise (or while the report keeps failing), pausing in hidden tabs. Without watchIdle the first request still
-// goes out, so a scan started elsewhere is discovered on any route; polling
-// then continues only while it runs. A new catalog revision refreshes the
+// otherwise (or while the report keeps failing), pausing in hidden tabs. In the
+// background, off the libraries page, an idle report is polled once a minute,
+// so a scan started elsewhere or a run of watcher-detected changes is still
+// noticed on any route. A new catalog revision refreshes the
 // library statistics; a new run, phase or terminal state of a library scan
 // refreshes the library lists. A run of watcher-detected changes is often one
 // file and over within a poll, and several can finish between two polls, so
@@ -42,22 +43,22 @@ type ScanStatusConfig<T extends ScanStatusLike & Record<string, unknown>> = {
 // across runs, moved since the last refresh.
 function useScanStatus<T extends ScanStatusLike & Record<string, unknown>>(
   config: ScanStatusConfig<T>,
-  { enabled = true, watchIdle = true }: ScanStatusOptions,
+  { enabled = true, background = false }: ScanStatusOptions,
 ) {
   const visible = useSyncExternalStore(subscribeVisibility, isVisible);
   const queryClient = useQueryClient();
   const query = useQuery({
     ...config.queryOptions(),
-    enabled: query =>
-      enabled && visible && (watchIdle || query.state.status === "pending" || query.state.data?.state === "running"),
+    enabled: enabled && visible,
     refetchOnMount: "always",
     refetchInterval: query => {
       if (!visible) return false;
       // A failing report (the server restarting, the session gone) keeps its
       // last "running" data; retrying that every two seconds for as long as
       // the failure lasts helps nobody, so it backs off to the idle pace.
-      if (query.state.status === "error") return 10_000;
-      return query.state.data?.state === "running" ? 2_000 : 10_000;
+      const idle = background ? 60_000 : 10_000;
+      if (query.state.status === "error") return idle;
+      return query.state.data?.state === "running" ? 2_000 : idle;
     },
     refetchIntervalInBackground: false,
   });
