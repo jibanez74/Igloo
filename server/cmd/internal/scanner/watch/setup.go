@@ -3,10 +3,8 @@ package watch
 import (
 	"errors"
 	"io/fs"
-	"maps"
 	"os"
 	"syscall"
-	"time"
 
 	"igloo/cmd/internal/logger"
 )
@@ -21,18 +19,14 @@ type setupWatch struct {
 	wd   int32
 }
 
-// setupResult is what a setup hands back to the session: the watches it
-// added, and for an arming walk the root's recorded layout.
+// setupResult is what a setup hands back to the session: the root's recorded
+// layout and the watches it added.
 type setupResult struct {
 	library    *library
 	generation int
-	// rewatch marks a walk after lost events, which keeps an armed library
-	// armed; stale then holds the library's watches when it started.
-	rewatch bool
-	stale   map[int32]bool
-	layout  layout
-	watches []setupWatch
-	err     error
+	layout     layout
+	watches    []setupWatch
+	err        error
 }
 
 // collectWatches adds a watch to every directory at or beneath directory that
@@ -79,25 +73,15 @@ func collectWatches(n notifier, log logger.LoggerInterface, name, root, director
 // it only adds watches and reads the filesystem, and its result is dropped
 // once the session ends. The library dispatches nothing until the result is
 // applied.
-func (s *session) startSetup(lib *library, rewatch bool) {
+func (s *session) startSetup(lib *library) {
 	lib.generation++
+	lib.mode = modeArming
 	s.setupsInFlight++
-	result := setupResult{library: lib, generation: lib.generation, rewatch: rewatch}
-	if rewatch {
-		lib.rewatching = true
-		result.stale = make(map[int32]bool)
-		for wd, watched := range s.watches {
-			if watched.libraries[lib] {
-				result.stale[wd] = true
-			}
-		}
-	} else {
-		lib.mode = modeArming
-	}
+	result := setupResult{library: lib, generation: lib.generation}
 	n, log, name, root := s.notifier, s.deps.Logger, lib.Name, lib.resolved
 	allow, extensions := lib.AllowDirectory, lib.Extensions
 	go func() {
-		result.layout, result.watches, result.err = setUp(n, log, name, root, allow, extensions, rewatch)
+		result.layout, result.watches, result.err = setUp(n, log, name, root, allow, extensions)
 		select {
 		case s.setups <- result:
 		case <-s.ctx.Done():
@@ -105,16 +89,12 @@ func (s *session) startSetup(lib *library, rewatch bool) {
 	}()
 }
 
-// setUp is a setup's filesystem work: the root's layout for an arming walk,
-// then a watch on every directory the scanner walks.
-func setUp(n notifier, log logger.LoggerInterface, name, root string, allow func(root, path string) bool, extensions map[string]bool, rewatch bool) (layout, []setupWatch, error) {
-	recorded := layout{root: root, mounts: make(map[string]bool)}
-	if !rewatch {
-		var err error
-		recorded, err = recordRoot(root)
-		if err != nil {
-			return recorded, nil, err
-		}
+// setUp is a setup's filesystem work: the root's layout, then a watch on
+// every directory the scanner walks.
+func setUp(n notifier, log logger.LoggerInterface, name, root string, allow func(root, path string) bool, extensions map[string]bool) (layout, []setupWatch, error) {
+	recorded, err := recordRoot(root)
+	if err != nil {
+		return recorded, nil, err
 	}
 	watches, err := collectWatches(n, log, name, root, root, allow, extensions, nil, recorded.mounts)
 	return recorded, watches, err
@@ -126,19 +106,11 @@ func setUp(n notifier, log logger.LoggerInterface, name, root string, allow func
 func (s *session) handleSetup(result setupResult) {
 	s.setupsInFlight--
 	lib := result.library
-	current := result.generation == lib.generation
-	if result.rewatch {
-		current = current && lib.mode == modeInotify && !lib.offline
-	} else {
-		current = current && lib.mode == modeArming
-	}
-	switch {
-	case !current:
-		s.orphan(result.watches)
-	case result.rewatch:
-		s.finishRewatch(lib, result)
-	default:
+	current := result.generation == lib.generation && lib.mode == modeArming
+	if current {
 		s.finishArm(lib, result)
+	} else {
+		s.orphan(result.watches)
 	}
 	s.replayEarly()
 	s.releaseOrphans()
@@ -167,43 +139,16 @@ func (s *session) finishArm(lib *library, result setupResult) {
 	lib.catchUp = true
 	lib.checkAt = s.now().Add(s.polling.recheck)
 	s.deps.Logger.Info("library watcher armed", "library", lib.Name, "backend", lib.mode.String(), "directories", s.countWatches(lib), "mounts", len(lib.layout.mounts))
-	if lib.rewatchAgain {
-		lib.rewatchAgain = false
-		s.startSetup(lib, true)
+	if lib.armAgain {
+		// Events were lost while the walk ran, possibly in directories it
+		// had already passed.
+		s.disarm(lib)
+		s.arm(lib)
 	}
 }
 
-// finishRewatch applies a walk after lost events: it adds the watches for
-// directories the session missed, follows directories renamed meanwhile to
-// their new paths, and releases the watches of directories the walk no longer
-// reached, such as one moved out of the library. A directory watched by an
-// event during the walk was not among the walk's stale watches, so it stays.
-func (s *session) finishRewatch(lib *library, result setupResult) {
-	lib.rewatching = false
-	maps.Copy(lib.layout.mounts, result.layout.mounts)
-	if result.err != nil {
-		s.register(lib, result.watches)
-		s.fallBackToPolling(lib, result.err)
-		return
-	}
-	reached := s.register(lib, result.watches)
-	for wd := range result.stale {
-		watched := s.watches[wd]
-		if !reached[wd] && watched != nil {
-			s.releaseWatch(lib, wd, watched)
-		}
-	}
-	lib.catchUp, lib.retryAt = true, time.Time{}
-	if lib.rewatchAgain {
-		lib.rewatchAgain = false
-		s.startSetup(lib, true)
-	}
-}
-
-// register records the watches a walk added for lib and returns their
-// descriptors.
-func (s *session) register(lib *library, watches []setupWatch) map[int32]bool {
-	reached := make(map[int32]bool, len(watches))
+// register records the watches a walk added for lib.
+func (s *session) register(lib *library, watches []setupWatch) {
 	for _, added := range watches {
 		delete(s.orphans, added.wd)
 		watched, ok := s.watches[added.wd]
@@ -212,9 +157,9 @@ func (s *session) register(lib *library, watches []setupWatch) map[int32]bool {
 			s.watches[added.wd] = watched
 		}
 		if watched.path != added.path {
-			// The kernel answers a directory renamed while its events were
-			// lost with its existing watch; its events now belong to the new
-			// path.
+			// The kernel answers a directory renamed while another library
+			// still watched it with that watch; its events now belong to the
+			// new path.
 			if s.dirs[watched.path] == added.wd {
 				delete(s.dirs, watched.path)
 			}
@@ -222,9 +167,7 @@ func (s *session) register(lib *library, watches []setupWatch) map[int32]bool {
 		}
 		watched.libraries[lib] = true
 		s.dirs[added.path] = added.wd
-		reached[added.wd] = true
 	}
-	return reached
 }
 
 // orphan keeps the watches no library registered for release. The kernel
@@ -257,9 +200,12 @@ func (s *session) releaseOrphans() {
 
 // holdEarly keeps an event for a watch the session does not know while a
 // setup is in flight: the walk adds a watch before it lists the directory,
-// and an entry created then must not be missed.
+// and a directory created then must be watched too. A file's change needs no
+// replay, since every setup ends in a catch-up that walks the whole library;
+// dropping them keeps a copy running during the walk from filling the buffer.
 func (s *session) holdEarly(event rawEvent) {
-	if s.setupsInFlight == 0 {
+	fileChange := !event.isDir && event.op&(opDeleteSelf|opMoveSelf|opUnmount|opIgnored) == 0
+	if s.setupsInFlight == 0 || fileChange {
 		return
 	}
 	if len(s.early) >= earlyEventCap {

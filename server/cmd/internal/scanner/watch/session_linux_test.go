@@ -1187,7 +1187,8 @@ func TestWatcherWatchesADirectoryCreatedDuringTheSetupWalk(t *testing.T) {
 }
 
 // Events lost while a library is still being set up may hide a directory its
-// walk already passed, so it walks again once the setup lands.
+// walk already passed, so it is armed again once the setup lands; one
+// catch-up follows.
 func TestWatcherWalksAgainAfterEventsLostDuringTheSetup(t *testing.T) {
 	fixture := newWatcherFixture(t, nil)
 	root, err := filepath.EvalSymlinks(fixture.root)
@@ -1213,11 +1214,8 @@ func TestWatcherWalksAgainAfterEventsLostDuringTheSetup(t *testing.T) {
 	lossy.losing.Store(false)
 	lossy.out <- rawEvent{wd: -1, op: opOverflow}
 	close(gate)
-	// One catch-up follows the setup and one the walk after the lost events.
-	for range 2 {
-		if !fixture.scanner.next(t).CatchUp {
-			t.Fatal("expected a catch-up")
-		}
+	if !fixture.scanner.next(t).CatchUp {
+		t.Fatal("expected the catch-up")
 	}
 	scannertest.WriteFile(t, fixture.path("Lost (2021)", "later.mkv"), "later")
 	got := sortedPaths(fixture.scanner.nextChanges(t))
@@ -1228,8 +1226,8 @@ func TestWatcherWalksAgainAfterEventsLostDuringTheSetup(t *testing.T) {
 
 // A removal seen before an overflow may be half of a rename whose new name
 // was lost. Dispatched alone, it would delete an episode and its progress, so
-// the library's changes wait for the walk after the lost events and its
-// catch-up, which sees both names at once.
+// the library is armed again and its catch-up, which sees both names at once,
+// comes first.
 func TestWatcherHoldsChangesUntilTheCatchUpAfterLostEvents(t *testing.T) {
 	fixture := newWatcherFixture(t, nil)
 	root, err := filepath.EvalSymlinks(fixture.root)
@@ -1259,11 +1257,69 @@ func TestWatcherHoldsChangesUntilTheCatchUpAfterLostEvents(t *testing.T) {
 		t.Fatal(err)
 	}
 	lossy.out <- rawEvent{wd: -1, op: opOverflow}
-	scannertest.WaitForSignal(t, entered, 5*time.Second, "the walk after the lost events")
+	scannertest.WaitForSignal(t, entered, 5*time.Second, "the setup after the lost events")
 	fixture.scanner.quiet(t, 300*time.Millisecond)
 	close(gate)
 	if !fixture.scanner.next(t).CatchUp {
 		t.Fatal("the catch-up must come before the held removal")
+	}
+}
+
+// A copy running while a library is set up writes far more events than the
+// early buffer holds. A file's change needs no replay, since the catch-up
+// after the setup walks the whole library, so the copy must not count as lost
+// events and make the library walk again.
+func TestWatcherWalksOnceWhileACopyRunsDuringTheSetup(t *testing.T) {
+	fixture := newWatcherFixture(t, nil)
+	root, err := filepath.EvalSymlinks(fixture.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	slow := filepath.Join(root, "Slow (2019)")
+	scannertest.WriteFile(t, filepath.Join(slow, "slow.mkv"), "slow")
+	gate := make(chan struct{})
+	entered := make(chan struct{}, 1)
+	var rootWalks atomic.Int32
+	_, open := newHookedNotifier(func(path string) {
+		switch path {
+		case root:
+			rootWalks.Add(1)
+		case slow:
+			if rootWalks.Load() == 1 {
+				entered <- struct{}{}
+				<-gate
+			}
+		}
+	})
+	fixture.watcher.open = open
+	fixture.watcher.Sync(true)
+	scannertest.WaitForSignal(t, entered, 5*time.Second, "the setup walk")
+	// Two files written in turn, so the kernel cannot merge their events.
+	files := make([]*os.File, 2)
+	for i := range files {
+		files[i], err = os.Create(filepath.Join(root, fmt.Sprintf("copy%d.mkv", i)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer files[i].Close()
+	}
+	for range earlyEventCap {
+		for _, file := range files {
+			_, err = file.Write([]byte("x"))
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	// Let the events reach the session before the setup lands.
+	time.Sleep(200 * time.Millisecond)
+	close(gate)
+	if !fixture.scanner.next(t).CatchUp {
+		t.Fatal("expected the catch-up")
+	}
+	fixture.scanner.quiet(t, 300*time.Millisecond)
+	if walks := rootWalks.Load(); walks != 1 {
+		t.Fatalf("the library was walked %d times", walks)
 	}
 }
 

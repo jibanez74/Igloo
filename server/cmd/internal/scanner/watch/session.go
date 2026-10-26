@@ -71,19 +71,9 @@ type library struct {
 	stopPoll   context.CancelFunc
 	// probing is set while a bounded check of the root is still running.
 	probing atomic.Bool
-	// rewatching is set while a walk after lost events runs; rewatchAgain
-	// asks for another once it or the arming walk ends, for events lost
-	// during it.
-	rewatching   bool
-	rewatchAgain bool
-}
-
-// awaitingCatchUp reports a library owed a walk of the whole library, whose
-// changes wait until it has started: they may be half of a change whose other
-// half was lost, such as a rename's old name without its new one, which a run
-// of changes would apply as a deletion.
-func (lib *library) awaitingCatchUp() bool {
-	return lib.rewatching || lib.catchUp
+	// armAgain asks for the library to be armed again once its setup walk
+	// lands, after events were lost during it.
+	armAgain bool
 }
 
 // rootProbe is what arming learns about a library root: its path with
@@ -313,13 +303,11 @@ func (s *session) wakeTimes(lib *library) []time.Time {
 	if lib.offline {
 		return times
 	}
+	// Changes wait for an owed catch-up; see dispatch.
 	if lib.catchUp {
-		times = append(times, lib.retryAt)
+		return append(times, lib.retryAt)
 	}
-	if !lib.awaitingCatchUp() {
-		times = append(times, lib.pending.due())
-	}
-	return times
+	return append(times, lib.pending.due())
 }
 
 // configuredRoot is the library directory as the settings hold it now; empty
@@ -337,8 +325,7 @@ func configuredRoot(lib *library) string {
 func (s *session) arm(lib *library) {
 	lib.root = configuredRoot(lib)
 	lib.pending = newPending(s.timing)
-	lib.catchUp, lib.retryAt, lib.offline = false, time.Time{}, false
-	lib.rewatching, lib.rewatchAgain = false, false
+	lib.catchUp, lib.retryAt, lib.offline, lib.armAgain = false, time.Time{}, false, false
 	lib.layout = layout{root: lib.root}
 	lib.mode = modeIdle
 	if lib.root == "" {
@@ -365,7 +352,7 @@ func (s *session) arm(lib *library) {
 		s.deps.Logger.Info("library watcher armed", "library", lib.Name, "backend", lib.mode.String(), "filesystem", probe.fsName)
 		return
 	}
-	s.startSetup(lib, false)
+	s.startSetup(lib)
 }
 
 func (s *session) disarm(lib *library) {
@@ -378,8 +365,7 @@ func (s *session) disarm(lib *library) {
 		lib.stopPoll()
 		lib.stopPoll, lib.poller = nil, nil
 	}
-	lib.mode, lib.offline, lib.catchUp = modeIdle, false, false
-	lib.rewatching, lib.rewatchAgain = false, false
+	lib.mode, lib.offline, lib.catchUp, lib.armAgain = modeIdle, false, false, false
 	lib.pending = newPending(s.timing)
 }
 
@@ -673,27 +659,22 @@ func (s *session) fallBackToPolling(lib *library, err error) {
 }
 
 // overflow handles a full kernel queue: events were lost, so every inotify
-// library rebuilds its watches from a walk and catches up with a library
-// scan.
+// library is armed again, which rebuilds its watches from a walk, drops its
+// pending changes and catches up with a walk of the whole library. A pending
+// change may be half of one whose other half was lost, such as a rename's old
+// name without its new one, which a run of changes would apply as a deletion.
 func (s *session) overflow() {
 	s.deps.Logger.Warn("library watcher lost events; catching up with a library scan")
 	for _, lib := range s.libraries {
-		if lib.mode == modeArming {
+		switch {
+		case lib.mode == modeArming:
 			// Its walk may already have passed directories whose events
-			// were lost; it walks again once it lands.
-			lib.rewatchAgain = true
-			continue
+			// were lost.
+			lib.armAgain = true
+		case lib.mode == modeInotify && !lib.offline:
+			s.disarm(lib)
+			s.arm(lib)
 		}
-		if lib.mode != modeInotify || lib.offline {
-			continue
-		}
-		// The walk ends in a catch-up; one already running may have passed
-		// directories whose events were just lost, so it is walked again.
-		if lib.rewatching {
-			lib.rewatchAgain = true
-			continue
-		}
-		s.startSetup(lib, true)
 	}
 }
 
@@ -784,7 +765,10 @@ func (s *session) dispatch(now time.Time) {
 		if catchUpDue {
 			s.startCatchUp(lib, now)
 		}
-		if lib.awaitingCatchUp() {
+		// Changes wait until an owed catch-up has started: the walk applies
+		// them too, and sees both halves of a change whose events were partly
+		// lost.
+		if lib.catchUp {
 			continue
 		}
 		due := lib.pending.due()
