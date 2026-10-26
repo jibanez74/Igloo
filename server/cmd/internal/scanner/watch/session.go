@@ -24,12 +24,16 @@ type backendMode uint8
 
 const (
 	modeIdle backendMode = iota
+	// modeArming is an inotify library whose setup walk is still running.
+	modeArming
 	modeInotify
 	modePoll
 )
 
 func (m backendMode) String() string {
 	switch m {
+	case modeArming:
+		return "arming"
 	case modeInotify:
 		return "inotify"
 	case modePoll:
@@ -67,6 +71,11 @@ type library struct {
 	stopPoll   context.CancelFunc
 	// probing is set while a bounded check of the root is still running.
 	probing atomic.Bool
+	// rewatching is set while a walk after lost events runs; rewatchAgain
+	// asks for another once it or the arming walk ends, for events lost
+	// during it.
+	rewatching   bool
+	rewatchAgain bool
 }
 
 // rootProbe is what arming learns about a library root: its path with
@@ -160,6 +169,16 @@ type session struct {
 	dirs      map[string]int32
 	polls     chan pollReport
 
+	// setups carries the results of the walks that set inotify libraries
+	// up. While any is in flight, watches no library uses are kept in
+	// orphans rather than removed, and events for watches the session does
+	// not know yet are held in early.
+	setups         chan setupResult
+	setupsInFlight int
+	orphans        map[int32]bool
+	early          []rawEvent
+	earlyLost      bool
+
 	deferredMu     sync.Mutex
 	deferrals      []deferral
 	deferredSignal chan struct{}
@@ -172,6 +191,7 @@ func startSession(deps Dependencies, t timing, polling pollTiming, open func(*sy
 		done: make(chan struct{}), reloads: make(chan struct{}, 1),
 		watches: make(map[int32]*watchedDir), dirs: make(map[string]int32),
 		polls: make(chan pollReport), deferredSignal: make(chan struct{}, 1),
+		setups: make(chan setupResult), orphans: make(map[int32]bool),
 	}
 	for _, configured := range deps.Libraries {
 		s.libraries = append(s.libraries, &library{Library: configured})
@@ -230,6 +250,8 @@ func (s *session) run() {
 			s.handle(event)
 		case report := <-s.polls:
 			s.handlePoll(report)
+		case result := <-s.setups:
+			s.handleSetup(result)
 		case <-s.deferredSignal:
 			s.drainDeferrals()
 		case <-s.reloads:
@@ -272,7 +294,7 @@ func (s *session) resetTimer(timer *time.Timer) {
 }
 
 func (s *session) wakeTimes(lib *library) []time.Time {
-	if lib.mode == modeIdle {
+	if lib.mode == modeIdle || lib.mode == modeArming {
 		return nil
 	}
 	var times []time.Time
@@ -306,6 +328,7 @@ func (s *session) arm(lib *library) {
 	lib.root = configuredRoot(lib)
 	lib.pending = newPending(s.timing)
 	lib.catchUp, lib.retryAt, lib.offline = false, time.Time{}, false
+	lib.rewatching, lib.rewatchAgain = false, false
 	lib.layout = layout{root: lib.root}
 	lib.mode = modeIdle
 	if lib.root == "" {
@@ -327,29 +350,12 @@ func (s *session) arm(lib *library) {
 	absolute, err := filepath.Abs(lib.root)
 	lib.linked = err != nil || absolute != probe.resolved
 	poll := s.notifier == nil || probe.fsName != ""
-	if !poll {
-		err := s.watchLibrary(lib)
-		poll = errors.Is(err, errNetworkMount) || watchLimitReached(err)
-		if poll {
-			s.unwatchTree(lib, lib.resolved)
-		}
-		if watchLimitReached(err) {
-			s.deps.Logger.Warn("inotify watch limit reached; polling the library instead. Raise fs.inotify.max_user_watches to watch it with events",
-				"library", lib.Name, "error", err)
-		}
-		if err != nil && !poll {
-			s.goOffline(lib, "the library directory could not be watched", err)
-			return
-		}
-	}
 	if poll {
 		s.startPoll(lib)
 		s.deps.Logger.Info("library watcher armed", "library", lib.Name, "backend", lib.mode.String(), "filesystem", probe.fsName)
 		return
 	}
-	lib.catchUp = true
-	lib.checkAt = s.now().Add(s.polling.recheck)
-	s.deps.Logger.Info("library watcher armed", "library", lib.Name, "backend", lib.mode.String(), "directories", s.countWatches(lib), "mounts", len(lib.layout.mounts))
+	s.startSetup(lib, false)
 }
 
 func (s *session) disarm(lib *library) {
@@ -363,6 +369,7 @@ func (s *session) disarm(lib *library) {
 		lib.stopPoll, lib.poller = nil, nil
 	}
 	lib.mode, lib.offline, lib.catchUp = modeIdle, false, false
+	lib.rewatching, lib.rewatchAgain = false, false
 	lib.pending = newPending(s.timing)
 }
 
@@ -378,76 +385,14 @@ func (s *session) rearmChanged() {
 	}
 }
 
-func (s *session) watchLibrary(lib *library) error {
-	recorded, err := recordRoot(lib.resolved)
-	if err != nil {
-		return err
-	}
-	lib.layout = recorded
-	_, err = s.watchTree(lib, lib.resolved, false, nil)
-	return err
-}
-
-// watchTree adds a watch to every directory at or beneath directory that the
-// scanner walks, each before it is listed so no entry created meanwhile is
-// missed. With collect set it returns the media files it passed, for a
-// directory that appeared with files already in it; reached, when set,
-// receives every watch the walk added or found.
-func (s *session) watchTree(lib *library, directory string, collect bool, reached map[int32]bool) ([]string, error) {
+// watchTree watches a directory that appeared inside an inotify library and
+// everything beneath it, and returns the media files already in it. Its walk
+// is limited to the new directory, so it runs on the session goroutine.
+func (s *session) watchTree(lib *library, directory string) ([]string, error) {
 	var files []string
-	collected := &files
-	if !collect {
-		collected = nil
-	}
-	err := walkLibraryDirs(lib.resolved, directory, lib.AllowDirectory, lib.Extensions, collected, func(path string, _ os.FileInfo, mount bool) error {
-		if mount {
-			fsName, err := networkFilesystem(path)
-			if err == nil && fsName != "" {
-				return errNetworkMount
-			}
-			lib.layout.mounts[path] = true
-		}
-		return s.addWatch(lib, path, reached)
-	})
+	watches, err := collectWatches(s.notifier, s.deps.Logger, lib.Name, lib.resolved, directory, lib.AllowDirectory, lib.Extensions, &files, lib.layout.mounts)
+	s.register(lib, watches)
 	return files, err
-}
-
-func (s *session) addWatch(lib *library, path string, reached map[int32]bool) error {
-	wd, err := s.notifier.add(path)
-	raced := errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ENOTDIR)
-	if raced {
-		return nil
-	}
-	// The scanner walk skips a directory it cannot read, so the watcher does
-	// too rather than pausing the whole library.
-	unreadable := errors.Is(err, fs.ErrPermission)
-	if unreadable {
-		s.deps.Logger.Warn("library watcher cannot read a directory; changes inside it need a library scan",
-			"library", lib.Name, "path", path, "error", err)
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	watched, ok := s.watches[wd]
-	if !ok {
-		watched = &watchedDir{path: path, libraries: make(map[*library]bool)}
-		s.watches[wd] = watched
-	}
-	if watched.path != path {
-		// The kernel answers a directory renamed while its events were lost
-		// with its existing watch; its events now belong to the new path.
-		if s.dirs[watched.path] == wd {
-			delete(s.dirs, watched.path)
-		}
-		watched.path = path
-	}
-	watched.libraries[lib] = true
-	s.dirs[path] = wd
-	if reached != nil {
-		reached[wd] = true
-	}
-	return nil
 }
 
 // unwatchTree drops the library's watches at or beneath directory; a watch
@@ -476,38 +421,19 @@ func (s *session) releaseWatch(lib *library, wd int32, watched *watchedDir) {
 	if len(watched.libraries) > 0 {
 		return
 	}
-	// The kernel already dropped the watch of a deleted directory, so
-	// removing it again fails harmlessly.
-	_ = s.notifier.remove(wd)
 	delete(s.watches, wd)
+	if s.setupsInFlight > 0 {
+		// A setup in flight may have added the same directory, which the
+		// kernel answers with this watch.
+		s.orphans[wd] = true
+	} else {
+		// The kernel already dropped the watch of a deleted directory, so
+		// removing it again fails harmlessly.
+		_ = s.notifier.remove(wd)
+	}
 	if s.dirs[watched.path] == wd {
 		delete(s.dirs, watched.path)
 	}
-}
-
-// rewatchLibrary walks an inotify library again after lost events: it adds
-// the watches for directories it missed, follows directories renamed
-// meanwhile to their new paths, and releases the watches of directories the
-// walk no longer reaches, such as one moved out of the library.
-func (s *session) rewatchLibrary(lib *library) error {
-	stale := make(map[int32]bool)
-	for wd, watched := range s.watches {
-		if watched.libraries[lib] {
-			stale[wd] = true
-		}
-	}
-	reached := make(map[int32]bool)
-	_, err := s.watchTree(lib, lib.resolved, false, reached)
-	if err != nil {
-		return err
-	}
-	for wd := range stale {
-		watched := s.watches[wd]
-		if !reached[wd] && watched != nil {
-			s.releaseWatch(lib, wd, watched)
-		}
-	}
-	return nil
 }
 
 func (s *session) countWatches(lib *library) int {
@@ -521,6 +447,7 @@ func (s *session) countWatches(lib *library) int {
 }
 
 func (s *session) forget(wd int32) {
+	delete(s.orphans, wd)
 	watched, ok := s.watches[wd]
 	if !ok {
 		return
@@ -645,6 +572,7 @@ func (s *session) handle(event rawEvent) {
 	}
 	watched, ok := s.watches[event.wd]
 	if !ok {
+		s.holdEarly(event)
 		return
 	}
 	libraries := make([]*library, 0, len(watched.libraries))
@@ -692,7 +620,7 @@ func (s *session) apply(lib *library, event rawEvent, path string) {
 		}
 		switch {
 		case event.op&(opCreate|opMovedTo) != 0:
-			files, err := s.watchTree(lib, path, true, nil)
+			files, err := s.watchTree(lib, path)
 			if err != nil && !errors.Is(err, fs.ErrNotExist) {
 				s.fallBackToPolling(lib, err)
 				return
@@ -740,15 +668,22 @@ func (s *session) fallBackToPolling(lib *library, err error) {
 func (s *session) overflow() {
 	s.deps.Logger.Warn("library watcher lost events; catching up with a library scan")
 	for _, lib := range s.libraries {
+		if lib.mode == modeArming {
+			// Its walk may already have passed directories whose events
+			// were lost; it walks again once it lands.
+			lib.rewatchAgain = true
+			continue
+		}
 		if lib.mode != modeInotify || lib.offline {
 			continue
 		}
-		err := s.rewatchLibrary(lib)
-		if err != nil {
-			s.fallBackToPolling(lib, err)
+		// The walk ends in a catch-up; one already running may have passed
+		// directories whose events were just lost, so it is walked again.
+		if lib.rewatching {
+			lib.rewatchAgain = true
 			continue
 		}
-		lib.catchUp, lib.retryAt = true, time.Time{}
+		s.startSetup(lib, true)
 	}
 }
 
@@ -759,8 +694,11 @@ func (s *session) notifierFailed() {
 	_ = s.notifier.close()
 	s.notifier, s.raw = nil, nil
 	s.watches, s.dirs = make(map[int32]*watchedDir), make(map[string]int32)
+	// Closing the instance dropped every watch, held or not.
+	clear(s.orphans)
+	s.early, s.earlyLost = nil, false
 	for _, lib := range s.libraries {
-		if lib.mode == modeInotify {
+		if lib.mode == modeInotify || lib.mode == modeArming {
 			lib.mode = modeIdle
 			s.arm(lib)
 		}
@@ -788,7 +726,7 @@ func (s *session) drainDeferrals() {
 	for _, d := range deferrals {
 		lib := d.library
 		switch {
-		case lib.mode == modeIdle || lib.offline:
+		case lib.mode == modeIdle || lib.mode == modeArming || lib.offline:
 		case lib.mode == modePoll:
 			// The scanner saw the file change after the poller had settled
 			// it; a poll cannot see a writer close a file, so the poller must
@@ -822,7 +760,7 @@ func (s *session) inspector(lib *library) inspectFunc {
 
 func (s *session) dispatch(now time.Time) {
 	for _, lib := range s.libraries {
-		if lib.mode == modeIdle {
+		if lib.mode == modeIdle || lib.mode == modeArming {
 			continue
 		}
 		checkDue := lib.mode == modeInotify && !now.Before(lib.checkAt)

@@ -817,11 +817,16 @@ func TestSessionRearmsRetargetedPollBeforeApplyingChanges(t *testing.T) {
 		ctx: context.Background(), deps: Dependencies{Now: time.Now, Logger: &scannertest.Logger{}},
 		timing: defaultTiming, polling: defaultPollTiming, resolve: resolveRoot,
 		notifier: newScriptedNotifier(), watches: make(map[int32]*watchedDir), dirs: make(map[string]int32),
+		setups: make(chan setupResult), orphans: make(map[int32]bool),
 	}
 	s.handlePoll(pollReport{
 		library: lib, generation: 2, retargeted: true,
 		changes: []polledChange{{rel: "also-obsolete.mkv", kind: changeRemoved}},
 	})
+	if lib.mode != modeArming || !lib.pending.empty() {
+		t.Fatalf("retarget did not start setting up inotify: %+v", lib)
+	}
+	s.handleSetup(<-s.setups)
 	if !stopped || lib.mode != modeInotify || lib.resolved != root || !lib.catchUp || !lib.pending.empty() {
 		t.Fatalf("retarget did not replace the poller and discard old changes: %+v", lib)
 	}
@@ -960,3 +965,279 @@ func TestWatcherChecksASymlinkedRootBeforeDispatching(t *testing.T) {
 		t.Fatalf("after the retarget: %+v", got)
 	}
 }
+
+// hookedNotifier is the real inotify instance with a hook run before each
+// watch is added, and a record of the watches added and removed.
+type hookedNotifier struct {
+	notifier
+	hook    func(path string)
+	mu      sync.Mutex
+	added   map[string]int32
+	removed map[int32]bool
+}
+
+func newHookedNotifier(hook func(path string)) (*hookedNotifier, func(*sync.WaitGroup) (notifier, error)) {
+	h := &hookedNotifier{hook: hook, added: make(map[string]int32), removed: make(map[int32]bool)}
+	open := func(wait *sync.WaitGroup) (notifier, error) {
+		inner, err := newNotifier(wait)
+		if err != nil {
+			return nil, err
+		}
+		h.notifier = inner
+		return h, nil
+	}
+	return h, open
+}
+
+func (h *hookedNotifier) add(path string) (int32, error) {
+	h.hook(path)
+	wd, err := h.notifier.add(path)
+	if err == nil {
+		h.mu.Lock()
+		h.added[path] = wd
+		h.mu.Unlock()
+	}
+	return wd, err
+}
+
+func (h *hookedNotifier) remove(wd int32) error {
+	h.mu.Lock()
+	h.removed[wd] = true
+	h.mu.Unlock()
+	return h.notifier.remove(wd)
+}
+
+func (h *hookedNotifier) wd(t *testing.T, path string) int32 {
+	t.Helper()
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	wd, ok := h.added[path]
+	if !ok {
+		t.Fatalf("no watch was added for %s", path)
+	}
+	return wd
+}
+
+func (h *hookedNotifier) wasRemoved(wd int32) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.removed[wd]
+}
+
+func resolvedTempDir(t *testing.T) string {
+	t.Helper()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func TestWatcherKeepsOtherLibrariesRunningWhileASetupHangs(t *testing.T) {
+	hungRoot, root := resolvedTempDir(t), resolvedTempDir(t)
+	hungDir := filepath.Join(hungRoot, "Hung (2020)")
+	scannertest.WriteFile(t, filepath.Join(hungDir, "hung.mkv"), "hung")
+	hang := make(chan struct{})
+	t.Cleanup(func() { close(hang) })
+	entered := make(chan struct{}, 1)
+	_, open := newHookedNotifier(func(path string) {
+		if path == hungDir {
+			entered <- struct{}{}
+			<-hang
+		}
+	})
+	hung := newFakeScanner()
+	directoryOf := func(root string) func() sql.NullString {
+		return func() sql.NullString { return sql.NullString{String: root, Valid: true} }
+	}
+	fixture := newWatcherFixture(t, func(lib *Library) { lib.Directory = directoryOf(root) })
+	fixture.watcher.deps.Libraries = append(fixture.watcher.deps.Libraries, Library{
+		Name: "hung", Directory: directoryOf(hungRoot), Extensions: map[string]bool{"mkv": true}, StartChanges: hung.start,
+	})
+	fixture.watcher.open = open
+	fixture.watcher.Sync(true)
+	scannertest.WaitForSignal(t, entered, 5*time.Second, "the hanging setup walk")
+
+	if !fixture.scanner.next(t).CatchUp {
+		t.Fatal("the other library must be armed and walked")
+	}
+	scannertest.WriteFile(t, filepath.Join(root, "New (2020)", "new.mkv"), "new")
+	got := sortedPaths(fixture.scanner.nextChanges(t))
+	if !slices.Equal(got, []string{"New (2020)/new.mkv"}) {
+		t.Fatalf("create while another library's setup hangs: %q", got)
+	}
+	hung.quiet(t, 300*time.Millisecond)
+	started := time.Now()
+	fixture.watcher.Sync(false)
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("turning the watcher off waited %s on a setup that hangs", elapsed)
+	}
+}
+
+// A setup that finishes after its library was armed again hands back watches
+// nobody registered. The kernel answers a directory watched twice with the
+// same watch, so they are released only once no setup is in flight, and a
+// watch the newer setup registered stays.
+func TestWatcherReleasesTheWatchesOfAStaleSetup(t *testing.T) {
+	first, second := resolvedTempDir(t), resolvedTempDir(t)
+	scannertest.WriteFile(t, filepath.Join(first, "A (2020)", "a.mkv"), "a")
+	scannertest.WriteFile(t, filepath.Join(second, "B (2020)", "b.mkv"), "b")
+	var mu sync.Mutex
+	root := first
+	fixture := newWatcherFixture(t, func(lib *Library) {
+		lib.Directory = func() sql.NullString {
+			mu.Lock()
+			defer mu.Unlock()
+			return sql.NullString{String: root, Valid: true}
+		}
+	})
+	configure := func(next string) {
+		mu.Lock()
+		root = next
+		mu.Unlock()
+		fixture.watcher.Sync(true)
+	}
+	gate := make(chan struct{})
+	entered := make(chan struct{}, 1)
+	var gated atomic.Bool
+	gated.Store(true)
+	hooked, open := newHookedNotifier(func(path string) {
+		if path == first && gated.CompareAndSwap(true, false) {
+			entered <- struct{}{}
+			<-gate
+		}
+	})
+	fixture.watcher.open = open
+	fixture.watcher.Sync(true)
+	scannertest.WaitForSignal(t, entered, 5*time.Second, "the first setup")
+
+	// Re-armed twice while the first setup still walks: once onto another
+	// root, and back onto the first, whose new setup finishes first.
+	configure(second)
+	if !fixture.scanner.next(t).CatchUp {
+		t.Fatal("expected the second root's catch-up")
+	}
+	configure(first)
+	if !fixture.scanner.next(t).CatchUp {
+		t.Fatal("expected the first root's catch-up")
+	}
+	close(gate)
+
+	secondWatches := []int32{hooked.wd(t, second), hooked.wd(t, filepath.Join(second, "B (2020)"))}
+	deadline := time.Now().Add(5 * time.Second)
+	for !hooked.wasRemoved(secondWatches[0]) || !hooked.wasRemoved(secondWatches[1]) {
+		if time.Now().After(deadline) {
+			t.Fatal("the watches of the root no longer configured were never released")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	for _, path := range []string{first, filepath.Join(first, "A (2020)")} {
+		if hooked.wasRemoved(hooked.wd(t, path)) {
+			t.Fatalf("the stale setup released %s, which the newer setup registered", path)
+		}
+	}
+	scannertest.WriteFile(t, filepath.Join(first, "A (2020)", "new.mkv"), "new")
+	got := sortedPaths(fixture.scanner.nextChanges(t))
+	if !slices.Equal(got, []string{"A (2020)/new.mkv"}) {
+		t.Fatalf("create after the stale setup finished: %q", got)
+	}
+}
+
+// A directory created after the setup walk listed its parent is reported by
+// the parent's watch before the session registered it; the event is held and
+// applied once the setup lands, so the new directory is watched too.
+func TestWatcherWatchesADirectoryCreatedDuringTheSetupWalk(t *testing.T) {
+	fixture := newWatcherFixture(t, nil)
+	root, err := filepath.EvalSymlinks(fixture.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	slow := filepath.Join(root, "Slow (2019)")
+	scannertest.WriteFile(t, filepath.Join(slow, "slow.mkv"), "slow")
+	gate := make(chan struct{})
+	entered := make(chan struct{}, 1)
+	_, open := newHookedNotifier(func(path string) {
+		if path == slow {
+			entered <- struct{}{}
+			<-gate
+		}
+	})
+	fixture.watcher.open = open
+	fixture.watcher.Sync(true)
+	scannertest.WaitForSignal(t, entered, 5*time.Second, "the setup walk")
+	scannertest.WriteFile(t, fixture.path("Late (2021)", "late.mkv"), "late")
+	// Let the create event reach the session before the setup lands.
+	time.Sleep(100 * time.Millisecond)
+	close(gate)
+	if !fixture.scanner.next(t).CatchUp {
+		t.Fatal("expected the catch-up first")
+	}
+	scannertest.WriteFile(t, fixture.path("Late (2021)", "later.mkv"), "later")
+	deadline := time.After(5 * time.Second)
+	for {
+		select {
+		case changes := <-fixture.scanner.calls:
+			if slices.Contains(changes.Paths, "Late (2021)/later.mkv") {
+				return
+			}
+		case <-deadline:
+			t.Fatal("a directory created during the setup walk was never watched")
+		}
+	}
+}
+
+// Events lost while a library is still being set up may hide a directory its
+// walk already passed, so it walks again once the setup lands.
+func TestWatcherWalksAgainAfterEventsLostDuringTheSetup(t *testing.T) {
+	fixture := newWatcherFixture(t, nil)
+	root, err := filepath.EvalSymlinks(fixture.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	slow := filepath.Join(root, "Slow (2019)")
+	scannertest.WriteFile(t, filepath.Join(slow, "slow.mkv"), "slow")
+	gate := make(chan struct{})
+	entered := make(chan struct{}, 1)
+	lossy, open := newLossyNotifier(t)
+	hooked, _ := newHookedNotifier(func(path string) {
+		if path == slow {
+			entered <- struct{}{}
+			<-gate
+		}
+	})
+	fixture.watcher.open = func(wait *sync.WaitGroup) (notifier, error) {
+		inner, err := open(wait)
+		if err != nil {
+			return nil, err
+		}
+		hooked.notifier = inner
+		return &eventsOf{hookedNotifier: hooked, out: lossy.events()}, nil
+	}
+	fixture.watcher.Sync(true)
+	scannertest.WaitForSignal(t, entered, 5*time.Second, "the setup walk")
+	lossy.losing.Store(true)
+	scannertest.WriteFile(t, fixture.path("Lost (2021)", "lost.mkv"), "lost")
+	lossy.lose(t, opCreate)
+	lossy.losing.Store(false)
+	lossy.out <- rawEvent{wd: -1, op: opOverflow}
+	close(gate)
+	// One catch-up follows the setup and one the walk after the lost events.
+	for range 2 {
+		if !fixture.scanner.next(t).CatchUp {
+			t.Fatal("expected a catch-up")
+		}
+	}
+	scannertest.WriteFile(t, fixture.path("Lost (2021)", "later.mkv"), "later")
+	got := sortedPaths(fixture.scanner.nextChanges(t))
+	if !slices.Equal(got, []string{"Lost (2021)/later.mkv"}) {
+		t.Fatalf("create in a directory whose events were lost during the setup: %q", got)
+	}
+}
+
+// eventsOf serves a hooked notifier's watches with another channel's events.
+type eventsOf struct {
+	*hookedNotifier
+	out <-chan rawEvent
+}
+
+func (e *eventsOf) events() <-chan rawEvent { return e.out }
