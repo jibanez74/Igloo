@@ -417,6 +417,97 @@ func TestWatcherCatchesUpAfterLostEvents(t *testing.T) {
 	}
 }
 
+// lossyNotifier is the real inotify instance with a switch that drops its
+// events, as a full kernel queue does, so a test can stage what an overflow
+// hides.
+type lossyNotifier struct {
+	notifier
+	out    chan rawEvent
+	losing atomic.Bool
+	lost   chan rawEvent
+}
+
+func newLossyNotifier(t *testing.T) (*lossyNotifier, func(*sync.WaitGroup) (notifier, error)) {
+	t.Helper()
+	l := &lossyNotifier{out: make(chan rawEvent, 4096), lost: make(chan rawEvent, 4096)}
+	open := func(wait *sync.WaitGroup) (notifier, error) {
+		inner, err := newNotifier(wait)
+		if err != nil {
+			return nil, err
+		}
+		l.notifier = inner
+		wait.Go(func() {
+			defer close(l.out)
+			for event := range inner.events() {
+				if l.losing.Load() {
+					l.lost <- event
+					continue
+				}
+				l.out <- event
+			}
+		})
+		return l, nil
+	}
+	return l, open
+}
+
+func (l *lossyNotifier) events() <-chan rawEvent { return l.out }
+
+// lose drops events until one with want arrives.
+func (l *lossyNotifier) lose(t *testing.T, want op) {
+	t.Helper()
+	for {
+		select {
+		case event := <-l.lost:
+			if event.op&want != 0 {
+				return
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("the expected event never arrived")
+		}
+	}
+}
+
+func TestWatcherFollowsDirectoriesMovedWhileEventsWereLost(t *testing.T) {
+	fixture := newWatcherFixture(t, nil)
+	scannertest.WriteFile(t, fixture.path("Old (2001)", "old.mkv"), "old")
+	scannertest.WriteFile(t, fixture.path("Gone (2002)", "gone.mkv"), "gone")
+	lossy, open := newLossyNotifier(t)
+	fixture.watcher.open = open
+	fixture.watcher.Sync(true)
+	if !fixture.scanner.next(t).CatchUp {
+		t.Fatal("expected the first catch-up")
+	}
+
+	// A directory renamed inside the library keeps its inode, and with it its
+	// watch descriptor; another moves out of the library.
+	lossy.losing.Store(true)
+	err := os.Rename(fixture.path("Old (2001)"), fixture.path("Renamed (2001)"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lossy.lose(t, opMovedTo)
+	outside := t.TempDir()
+	err = os.Rename(fixture.path("Gone (2002)"), filepath.Join(outside, "Gone (2002)"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lossy.lose(t, opMovedFrom)
+	lossy.losing.Store(false)
+	lossy.out <- rawEvent{wd: -1, op: opOverflow}
+	if !fixture.scanner.next(t).CatchUp {
+		t.Fatal("a queue overflow must be followed by a catch-up")
+	}
+
+	scannertest.WriteFile(t, filepath.Join(outside, "Gone (2002)", "elsewhere.mkv"), "elsewhere")
+	scannertest.WriteFile(t, fixture.path("Renamed (2001)", "new.mkv"), "new")
+	got := sortedPaths(fixture.scanner.nextChanges(t))
+	if !slices.Equal(got, []string{"Renamed (2001)/new.mkv"}) {
+		t.Fatalf("after the overflow: %q", got)
+	}
+	fixture.scanner.quiet(t, 300*time.Millisecond)
+}
+
 func TestWatcherPollsWhenTheWatchLimitIsReached(t *testing.T) {
 	fixture := newWatcherFixture(t, nil)
 	scripted := newScriptedNotifier()

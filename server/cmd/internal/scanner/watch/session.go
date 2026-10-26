@@ -369,15 +369,16 @@ func (s *session) watchLibrary(lib *library) error {
 		return err
 	}
 	lib.layout = recorded
-	_, err = s.watchTree(lib, lib.resolved, false)
+	_, err = s.watchTree(lib, lib.resolved, false, nil)
 	return err
 }
 
 // watchTree adds a watch to every directory at or beneath directory that the
 // scanner walks, each before it is listed so no entry created meanwhile is
 // missed. With collect set it returns the media files it passed, for a
-// directory that appeared with files already in it.
-func (s *session) watchTree(lib *library, directory string, collect bool) ([]string, error) {
+// directory that appeared with files already in it; reached, when set,
+// receives every watch the walk added or found.
+func (s *session) watchTree(lib *library, directory string, collect bool, reached map[int32]bool) ([]string, error) {
 	var files []string
 	collected := &files
 	if !collect {
@@ -391,12 +392,12 @@ func (s *session) watchTree(lib *library, directory string, collect bool) ([]str
 			}
 			lib.layout.mounts[path] = true
 		}
-		return s.addWatch(lib, path)
+		return s.addWatch(lib, path, reached)
 	})
 	return files, err
 }
 
-func (s *session) addWatch(lib *library, path string) error {
+func (s *session) addWatch(lib *library, path string, reached map[int32]bool) error {
 	wd, err := s.notifier.add(path)
 	raced := errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ENOTDIR)
 	if raced {
@@ -410,8 +411,19 @@ func (s *session) addWatch(lib *library, path string) error {
 		watched = &watchedDir{path: path, libraries: make(map[*library]bool)}
 		s.watches[wd] = watched
 	}
+	if watched.path != path {
+		// The kernel answers a directory renamed while its events were lost
+		// with its existing watch; its events now belong to the new path.
+		if s.dirs[watched.path] == wd {
+			delete(s.dirs, watched.path)
+		}
+		watched.path = path
+	}
 	watched.libraries[lib] = true
 	s.dirs[path] = wd
+	if reached != nil {
+		reached[wd] = true
+	}
 	return nil
 }
 
@@ -427,16 +439,52 @@ func (s *session) unwatchTree(lib *library, directory string) {
 			delete(s.dirs, path)
 			continue
 		}
-		delete(watched.libraries, lib)
-		if len(watched.libraries) > 0 {
-			continue
+		s.releaseWatch(lib, wd, watched)
+		if s.watches[wd] == nil {
+			delete(s.dirs, path)
 		}
-		// The kernel already dropped the watch of a deleted directory, so
-		// removing it again fails harmlessly.
-		_ = s.notifier.remove(wd)
-		delete(s.watches, wd)
-		delete(s.dirs, path)
 	}
+}
+
+// releaseWatch drops the library's use of a watch, and the watch itself once
+// no library uses it.
+func (s *session) releaseWatch(lib *library, wd int32, watched *watchedDir) {
+	delete(watched.libraries, lib)
+	if len(watched.libraries) > 0 {
+		return
+	}
+	// The kernel already dropped the watch of a deleted directory, so
+	// removing it again fails harmlessly.
+	_ = s.notifier.remove(wd)
+	delete(s.watches, wd)
+	if s.dirs[watched.path] == wd {
+		delete(s.dirs, watched.path)
+	}
+}
+
+// rewatchLibrary walks an inotify library again after lost events: it adds
+// the watches for directories it missed, follows directories renamed
+// meanwhile to their new paths, and releases the watches of directories the
+// walk no longer reaches, such as one moved out of the library.
+func (s *session) rewatchLibrary(lib *library) error {
+	stale := make(map[int32]bool)
+	for wd, watched := range s.watches {
+		if watched.libraries[lib] {
+			stale[wd] = true
+		}
+	}
+	reached := make(map[int32]bool)
+	_, err := s.watchTree(lib, lib.resolved, false, reached)
+	if err != nil {
+		return err
+	}
+	for wd := range stale {
+		watched := s.watches[wd]
+		if !reached[wd] && watched != nil {
+			s.releaseWatch(lib, wd, watched)
+		}
+	}
+	return nil
 }
 
 func (s *session) countWatches(lib *library) int {
@@ -608,7 +656,7 @@ func (s *session) apply(lib *library, event rawEvent, path string) {
 		}
 		switch {
 		case event.op&(opCreate|opMovedTo) != 0:
-			files, err := s.watchTree(lib, path, true)
+			files, err := s.watchTree(lib, path, true, nil)
 			if err != nil && !errors.Is(err, fs.ErrNotExist) {
 				s.fallBackToPolling(lib, err)
 				return
@@ -649,15 +697,15 @@ func (s *session) fallBackToPolling(lib *library, err error) {
 }
 
 // overflow handles a full kernel queue: events were lost, so every inotify
-// library re-adds watches for directories it may have missed and walks
-// itself once.
+// library rebuilds its watches from a walk and catches up with a library
+// scan.
 func (s *session) overflow() {
 	s.deps.Logger.Warn("library watcher lost events; catching up with a library scan")
 	for _, lib := range s.libraries {
 		if lib.mode != modeInotify || lib.offline {
 			continue
 		}
-		_, err := s.watchTree(lib, lib.resolved, false)
+		err := s.rewatchLibrary(lib)
 		if err != nil {
 			s.fallBackToPolling(lib, err)
 			continue
