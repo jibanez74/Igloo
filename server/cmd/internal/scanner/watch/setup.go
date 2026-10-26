@@ -79,9 +79,9 @@ func (s *session) startSetup(lib *library) {
 	s.setupsInFlight++
 	result := setupResult{library: lib, generation: lib.generation}
 	n, log, name, root := s.notifier, s.deps.Logger, lib.Name, lib.resolved
-	allow, extensions := lib.AllowDirectory, lib.Extensions
+	allow, extensions, mountPoints := lib.AllowDirectory, lib.Extensions, s.mountPoints
 	go func() {
-		result.layout, result.watches, result.err = setUp(n, log, name, root, allow, extensions)
+		result.layout, result.watches, result.err = setUp(n, log, name, root, allow, extensions, mountPoints)
 		select {
 		case s.setups <- result:
 		case <-s.ctx.Done():
@@ -91,8 +91,8 @@ func (s *session) startSetup(lib *library) {
 
 // setUp is a setup's filesystem work: the root's layout, then a watch on
 // every directory the scanner walks.
-func setUp(n notifier, log logger.LoggerInterface, name, root string, allow func(root, path string) bool, extensions map[string]bool) (layout, []setupWatch, error) {
-	recorded, err := recordRoot(root)
+func setUp(n notifier, log logger.LoggerInterface, name, root string, allow func(root, path string) bool, extensions map[string]bool, mountPoints func() ([]string, error)) (layout, []setupWatch, error) {
+	recorded, err := recordRoot(root, mountPoints)
 	if err != nil {
 		return recorded, nil, err
 	}

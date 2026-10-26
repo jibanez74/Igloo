@@ -69,6 +69,7 @@ type poller struct {
 	root           string
 	configuredRoot string
 	resolve        func(root string) (string, error)
+	mountPoints    func() ([]string, error)
 	allow          func(root, path string) bool
 	extensions     map[string]bool
 	timing         pollTiming
@@ -255,7 +256,7 @@ func (p *poller) arm() pollReport {
 	if !present {
 		return pollReport{}
 	}
-	recorded, err := recordRoot(p.root)
+	recorded, err := recordRoot(p.root, p.mountPoints)
 	if err != nil {
 		return pollReport{}
 	}

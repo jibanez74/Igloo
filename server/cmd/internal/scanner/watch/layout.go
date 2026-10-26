@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"syscall"
 
 	"igloo/cmd/internal/scanner"
@@ -29,11 +30,16 @@ type layout struct {
 	rootID    identity
 	rootMount bool
 	mounts    map[string]bool
+	// table holds the mount points beneath the root, relative to it, that
+	// mountPoints listed when the layout was recorded.
+	table       []string
+	mountPoints func() ([]string, error)
 }
 
 // check reports whether the layout is present, and whether the root changed
-// identity since it was recorded, which calls for arming the library again: a
-// filesystem mounted over it, a remount, or a recreated directory. A mount
+// identity or a filesystem was mounted beneath it since it was recorded,
+// which calls for arming the library again: a filesystem mounted over it or
+// inside it, a remount, or a recreated directory. A mount
 // point counts as mounted while its device differs from its parent's; a
 // remount may bring a new device number, so the old one is not compared. A
 // layout that was never recorded only needs the root to exist.
@@ -55,7 +61,30 @@ func (l layout) check() (present, changed bool) {
 			return false, false
 		}
 	}
-	return true, identityOf(info) != l.rootID
+	appeared := l.mountAppeared()
+	return true, appeared || identityOf(info) != l.rootID
+}
+
+// mountAppeared reports a filesystem mounted beneath the root since the layout
+// was recorded, such as a disk that came up late after a power cut: mounting
+// over a watched directory sends no event, and its watch no longer sees the
+// directories the disk brings. It reads the mount table, so it never touches
+// a share whose server is down.
+func (l layout) mountAppeared() bool {
+	if l.mountPoints == nil {
+		return false
+	}
+	points, err := l.mountPoints()
+	if err != nil {
+		return false
+	}
+	for _, point := range scanner.MountPointsBeneath(points, l.root) {
+		known := slices.Contains(l.table, point)
+		if !known {
+			return true
+		}
+	}
+	return false
 }
 
 // mounted reports whether path, whose stat is info, sits on another device
@@ -68,13 +97,21 @@ func mounted(path string, info os.FileInfo) bool {
 	return identityOf(parent).device != identityOf(info).device
 }
 
-// recordRoot fills the root half of a layout from the directory as it is now.
-func recordRoot(root string) (layout, error) {
+// recordRoot fills the root half of a layout from the directory as it is now,
+// with the mount points beneath it that mountPoints lists.
+func recordRoot(root string, mountPoints func() ([]string, error)) (layout, error) {
 	info, err := os.Stat(root)
 	if err != nil {
 		return layout{}, err
 	}
-	return layout{root: root, rootID: identityOf(info), rootMount: mounted(root, info), mounts: make(map[string]bool)}, nil
+	recorded := layout{root: root, rootID: identityOf(info), rootMount: mounted(root, info), mounts: make(map[string]bool), mountPoints: mountPoints}
+	if mountPoints != nil {
+		points, err := mountPoints()
+		if err == nil {
+			recorded.table = scanner.MountPointsBeneath(points, root)
+		}
+	}
+	return recorded, nil
 }
 
 // unavailable reports errors that mean a share or disk went away rather than
