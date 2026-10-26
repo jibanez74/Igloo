@@ -848,3 +848,19 @@ func TestLayoutCheckPausesWhileAnEarlierProbeStillHangs(t *testing.T) {
 		t.Fatal("a check that could not resolve the root left work eligible for dispatch")
 	}
 }
+
+func TestBoundedIsFreeAgainOnceItReturns(t *testing.T) {
+	var busy atomic.Bool
+	// A caller that acts on the answer, such as checkLayout re-arming the
+	// library, runs the next bounded check at once; it must not find the
+	// answered check still marked busy.
+	for range 10000 {
+		_, answered := bounded(context.Background(), &busy, time.Second, func() int { return 1 })
+		if !answered {
+			t.Fatal("a check that answered reported no answer")
+		}
+		if busy.Load() {
+			t.Fatal("bounded returned while its finished check still held the library")
+		}
+	}
+}

@@ -106,8 +106,12 @@ func bounded[T any](ctx context.Context, busy *atomic.Bool, timeout time.Duratio
 	}
 	done := make(chan T, 1)
 	go func() {
-		defer busy.Store(false)
-		done <- check()
+		result := check()
+		// Free the library before answering: a caller that acts on the
+		// answer, such as a layout check re-arming the library, runs the
+		// next bounded check at once.
+		busy.Store(false)
+		done <- result
 	}()
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
