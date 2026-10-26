@@ -187,6 +187,7 @@ func (s *Scanner) runShowScan(directory string, changes *scanner.Changes) {
 	}
 
 	s.phase(report, scanner.PhaseLocal)
+	s.applyMoves(ctx, scan, reconciliation, root, files)
 	s.processLocal(ctx, scan, report, root, files)
 	if ctx.Err() != nil {
 		return
@@ -275,7 +276,7 @@ func showScanIndex(rows []database.GetShowScanIndexRow, links []database.GetShow
 			entry.FileFingerprint = scanner.StoredFingerprint(row.Size, row.MtimeNs, row.CtimeNs, row.Device, row.Inode)
 		}
 		index[filepath.Clean(row.FilePath)] = entry
-		catalog = append(catalog, scanner.CatalogFile{ID: row.ID, Path: row.FilePath})
+		catalog = append(catalog, scanner.CatalogFile{ID: row.ID, Path: row.FilePath, Fingerprint: entry.FileFingerprint})
 	}
 	return index, catalog
 }

@@ -619,3 +619,9 @@ SELECT
 FROM movies
 WHERE id = ?
 LIMIT 1;
+
+-- name: MoveMovieFile :execrows
+-- A file renamed or moved within the library keeps its row, and everything
+-- that refers to it.
+UPDATE movies SET file_path = sqlc.arg(new_path), file_name = sqlc.arg(file_name), updated_at = CURRENT_TIMESTAMP
+WHERE id = sqlc.arg(id) AND file_path = sqlc.arg(file_path);

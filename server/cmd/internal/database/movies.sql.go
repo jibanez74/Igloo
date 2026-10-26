@@ -1619,6 +1619,33 @@ func (q *Queries) MarkMovieTmdbRetry(ctx context.Context, movieID int64) error {
 	return err
 }
 
+const moveMovieFile = `-- name: MoveMovieFile :execrows
+UPDATE movies SET file_path = ?1, file_name = ?2, updated_at = CURRENT_TIMESTAMP
+WHERE id = ?3 AND file_path = ?4
+`
+
+type MoveMovieFileParams struct {
+	NewPath  string `json:"new_path"`
+	FileName string `json:"file_name"`
+	ID       int64  `json:"id"`
+	FilePath string `json:"file_path"`
+}
+
+// A file renamed or moved within the library keeps its row, and everything
+// that refers to it.
+func (q *Queries) MoveMovieFile(ctx context.Context, arg MoveMovieFileParams) (int64, error) {
+	result, err := q.exec(ctx, q.moveMovieFileStmt, moveMovieFile,
+		arg.NewPath,
+		arg.FileName,
+		arg.ID,
+		arg.FilePath,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const movieExists = `-- name: MovieExists :one
 SELECT
   EXISTS (

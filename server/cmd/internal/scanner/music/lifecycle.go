@@ -85,6 +85,7 @@ func (s *Scanner) runMusicScan(directory string, changes *scanner.Changes) {
 		if len(batch) == 0 {
 			return
 		}
+		s.applyMoves(ctx, scan, reconciliation, batch)
 		s.processMusicBatch(ctx, scan, report, directory, batch)
 		batch = batch[:0]
 	}
@@ -281,7 +282,6 @@ func musicScanIndex(rows []database.ListMusicTrackScanIndexRow) (map[string]scan
 	index := make(map[string]scanner.FileFingerprint, len(rows))
 	files := make([]scanner.CatalogFile, 0, len(rows))
 	for _, row := range rows {
-		files = append(files, scanner.CatalogFile{ID: row.ID, Path: row.FilePath})
 		// A catalog row without a baseline still exists, so its file counts as
 		// updated rather than imported; the zero fingerprint never matches, which
 		// forces the reprobe that records a real one.
@@ -289,6 +289,7 @@ func musicScanIndex(rows []database.ListMusicTrackScanIndexRow) (map[string]scan
 		if len(row.Sha256) == len(fingerprint.SHA256) {
 			fingerprint.SHA256 = [32]byte(row.Sha256)
 		}
+		files = append(files, scanner.CatalogFile{ID: row.ID, Path: row.FilePath, Fingerprint: fingerprint})
 		index[filepath.Clean(row.FilePath)] = fingerprint
 	}
 	return index, files

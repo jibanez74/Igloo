@@ -771,3 +771,23 @@ WHERE sev.show_id = ?
 ORDER BY
   ev.type,
   ev.title;
+
+-- name: MoveShowFile :execrows
+-- A file renamed or moved within its season keeps its row and episode links.
+UPDATE show_files SET file_path = sqlc.arg(new_path), file_name = sqlc.arg(file_name), updated_at = CURRENT_TIMESTAMP
+WHERE id = sqlc.arg(id) AND file_path = sqlc.arg(file_path);
+
+-- name: MoveShowDirectory :one
+-- A renamed show folder keeps its show, seasons and episodes, and with them
+-- watch progress. Its local name follows the folder; an unmatched show's
+-- display name does too, while a matched one keeps TMDB's. A folder that
+-- already has a show is left alone.
+UPDATE shows SET
+ directory_path = sqlc.arg(new_path),
+ local_name = sqlc.arg(local_name),
+ premiere_year = sqlc.arg(premiere_year),
+ name = CASE WHEN tmdb_id IS NULL THEN sqlc.arg(local_name) ELSE name END,
+ updated_at = CURRENT_TIMESTAMP
+WHERE shows.directory_path = sqlc.arg(directory_path)
+ AND NOT EXISTS (SELECT 1 FROM shows AS taken WHERE taken.directory_path = sqlc.arg(new_path))
+RETURNING id, tmdb_id;

@@ -557,6 +557,9 @@ type Querier interface {
 	MarkShowEpisodeWatchedFromProgress(ctx context.Context, arg MarkShowEpisodeWatchedFromProgressParams) error
 	MarkShowRetry(ctx context.Context, showID int64) error
 	MarkShowSeasonRetry(ctx context.Context, seasonID int64) error
+	// A file renamed or moved within the library keeps its row, and everything
+	// that refers to it.
+	MoveMovieFile(ctx context.Context, arg MoveMovieFileParams) (int64, error)
 	MoveMusicAlbumAliases(ctx context.Context, arg MoveMusicAlbumAliasesParams) error
 	MoveMusicAlbumFallback(ctx context.Context, arg MoveMusicAlbumFallbackParams) error
 	MoveMusicAlbumGenres(ctx context.Context, arg MoveMusicAlbumGenresParams) error
@@ -566,6 +569,16 @@ type Querier interface {
 	MoveMusicArtistCredits(ctx context.Context, arg MoveMusicArtistCreditsParams) error
 	MoveMusicArtistGenres(ctx context.Context, arg MoveMusicArtistGenresParams) error
 	MoveMusicArtistTracks(ctx context.Context, arg MoveMusicArtistTracksParams) error
+	// A renamed show folder keeps its show, seasons and episodes, and with them
+	// watch progress. Its local name follows the folder; an unmatched show's
+	// display name does too, while a matched one keeps TMDB's. A folder that
+	// already has a show is left alone.
+	MoveShowDirectory(ctx context.Context, arg MoveShowDirectoryParams) (MoveShowDirectoryRow, error)
+	// A file renamed or moved within its season keeps its row and episode links.
+	MoveShowFile(ctx context.Context, arg MoveShowFileParams) (int64, error)
+	// A file renamed or moved within the library keeps its row, and with it its
+	// likes and playlist entries.
+	MoveTrackFile(ctx context.Context, arg MoveTrackFileParams) (int64, error)
 	// Existence probe for handlers that only need to 404 on an unknown movie;
 	// avoids shipping the full 27-column row.
 	MovieExists(ctx context.Context, id int64) (bool, error)
