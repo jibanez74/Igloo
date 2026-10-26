@@ -33,9 +33,16 @@ func TestChangesResolve(t *testing.T) {
 		"Other/../../outside.mkv",
 		"/etc/passwd",
 		"Movies (2021)/m.mkv",
+		// A sibling that sorts between a directory and its descendant must
+		// not keep the descendant.
+		"A/c.mkv",
+		"A b",
+		"A",
 	}}
 	got := changes.Resolve(root)
 	want := []string{
+		"/library/A",
+		"/library/A b",
 		"/library/Movie (2020)",
 		"/library/Movies (2021)/m.mkv",
 		"/library/Other/a.mkv",

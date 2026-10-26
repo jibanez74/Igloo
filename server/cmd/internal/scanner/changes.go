@@ -99,10 +99,21 @@ func (c *Changes) Resolve(root string) []string {
 	}
 	slices.Sort(resolved)
 	resolved = slices.Compact(resolved)
+	// A sibling can sort between a directory and its descendants ("A b"
+	// sorts before "A/c.mkv"), so each path is checked against every kept
+	// parent rather than the last kept path.
+	kept := make(map[string]bool, len(resolved))
 	collapsed := resolved[:0]
 	for _, path := range resolved {
-		covered := len(collapsed) > 0 && PathWithin(collapsed[len(collapsed)-1], path)
+		covered := false
+		for parent := filepath.Dir(path); parent != root && PathWithin(root, parent); parent = filepath.Dir(parent) {
+			if kept[parent] {
+				covered = true
+				break
+			}
+		}
 		if !covered {
+			kept[path] = true
 			collapsed = append(collapsed, path)
 		}
 	}
