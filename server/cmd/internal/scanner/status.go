@@ -109,7 +109,10 @@ type Revision struct {
 
 // Stamp counts what progress's run changed since its last stamp and sets the
 // running total on progress. A new run starts counting from zero, so the total
-// only grows. additionalChanges is cumulative for this run, like counts.
+// only grows. additionalChanges is cumulative for this run, like counts, and
+// their sum must never shrink within a run: a change that lowers a counter,
+// such as a match taken back out of Enriched, must add as much back through
+// additionalChanges, or the changes after it are not counted.
 func (r *Revision) Stamp(progress *Progress, counts Counts, additionalChanges int) {
 	if progress.RunID != r.run {
 		r.run, r.counted = progress.RunID, 0

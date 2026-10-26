@@ -301,3 +301,52 @@ func TestMusicRevisionCountsCommittedPairingRetries(t *testing.T) {
 		}
 	}
 }
+
+// A contradicted album match is a committed catalog change, and moving its
+// tally from matched to unmatched must not swallow the changes after it.
+func TestMusicCatalogRevisionCountsADroppedAlbumMatch(t *testing.T) {
+	for _, matchedEarlier := range []bool{false, true} {
+		t.Run(fmt.Sprintf("matchedEarlier=%v", matchedEarlier), func(t *testing.T) {
+			s := setupMusicScanner(t)
+			album := testAlbum(
+				spotifyTrack("x1", "Malena", 1, 1, 240000, false),
+				spotifyTrack("x2", "Negracha", 1, 2, 250000, true),
+			)
+			album.TotalTracks = 2
+			s.spotify = &musicScannerSpotifyStub{artist: testArtist(), album: album}
+			scan := newMusicScanContext(nil)
+			dir := t.TempDir()
+			for i, title := range []string{"Forget You", "Nothin' On You", "California Gurls"} {
+				scanTaggedTrack(t, s, scan, fmt.Sprintf("%s/%02d.m4a", dir, i+1), 1, albumTags(title, strconv.Itoa(i+1)))
+			}
+			if matchedEarlier {
+				// The album was matched by an earlier scan, so this run holds no
+				// outcome for it.
+				scan = newMusicScanContext(nil)
+			}
+			s.beginReport(scanner.ScopeChanges)
+			report := newScanReport(s.Status())
+			report.scan = scan
+			s.publish(report)
+			before := s.Status().CatalogRevision
+			err := s.linkAlbumTracks(context.Background(), scan, report)
+			if err != nil {
+				t.Fatalf("link album tracks: %v", err)
+			}
+			if albumMatchFor(t, s, "Test Album").status.String != musicStatusUnmatched {
+				t.Fatal("the fixture's album match was not dropped")
+			}
+			s.publish(report)
+			dropped := s.Status().CatalogRevision
+			if dropped <= before {
+				t.Fatalf("revision after dropping the album match = %d, want more than %d", dropped, before)
+			}
+			scan.tracksLinked++
+			s.publish(report)
+			paired := s.Status().CatalogRevision
+			if paired != dropped+1 {
+				t.Fatalf("revision after a later pairing = %d, want %d", paired, dropped+1)
+			}
+		})
+	}
+}

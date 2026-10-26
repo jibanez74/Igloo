@@ -337,6 +337,7 @@ func dropAlbumMatch(ctx context.Context, qtx *database.Queries, txScan *musicSca
 	for _, row := range rows {
 		txScan.invalidatedTracks[row.ID] = true
 	}
+	txScan.matchesDropped++
 	return saveMusicMatch(ctx, qtx, musicProviderSpotify, musicEntityAlbum, albumID, &resolvedMatch{
 		status: musicStatusUnmatched,
 		reason: sql.NullString{String: musicSpotifyReasonTracksDisagree, Valid: true},

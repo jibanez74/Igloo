@@ -4950,7 +4950,7 @@ export interface components {
             issues: components["schemas"]["ScanIssue"][];
             /**
              * Format: int64
-             * @description Running count of the catalog changes this scanner has made since the server started: files imported, updated or deleted, artists and albums enriched, and committed Apple Music or Spotify track pairings, summed across runs. Track pairings count even for unchanged files or fingerprint-only updates; they do not increase enriched. Rolled-back pairings and repeated publication of the same committed changes add nothing. It changes even when the run that made the change finished between two reads of this report, so a client compares it to tell whether the catalog changed. Compare it for change only; it restarts from 0 with the server.
+             * @description Running count of the catalog changes this scanner has made since the server started: files imported, updated or deleted, artists and albums enriched, committed Apple Music or Spotify track pairings, and album matches dropped because their tracks contradicted them, summed across runs. Track pairings count even for unchanged files or fingerprint-only updates; they do not increase enriched. A dropped match counts even though it lowers enriched. Rolled-back pairings and repeated publication of the same committed changes add nothing. It changes even when the run that made the change finished between two reads of this report, so a client compares it to tell whether the catalog changed. Compare it for change only; it restarts from 0 with the server.
              */
             catalog_revision: number;
         };

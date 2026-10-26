@@ -44,6 +44,14 @@ type musicScanContext struct {
 	// tracksLinked counts the tracks paired with an Apple Music or Spotify
 	// track; a clone counts its own transaction and mergeFrom adds it.
 	tracksLinked int
+	// matchesDropped counts the album matches undone because their tracks
+	// contradicted them; a clone counts its own transaction and mergeFrom
+	// adds it.
+	matchesDropped int
+	// matchesRevoked counts the tallies moved away from matched. Enriched
+	// drops with each one, so the catalog revision adds it back: the changes
+	// it counts in a run must never shrink.
+	matchesRevoked int
 	// breaker stops Spotify lookups for the rest of the scan once the provider
 	// is failing; stopReported keeps the scan-wide issue to one.
 	breaker      *scanner.ProviderBreaker
@@ -120,6 +128,7 @@ func (scan *musicScanContext) clone() *musicScanContext {
 func (scan *musicScanContext) mergeFrom(other *musicScanContext) {
 	scan.genreIDs.MergeFrom(other.genreIDs)
 	scan.tracksLinked += other.tracksLinked
+	scan.matchesDropped += other.matchesDropped
 	if other.merged {
 		scan.merged = true
 		scan.musicianIDs = scanner.NewScanCache[string, int64]()
@@ -155,6 +164,9 @@ func (scan *musicScanContext) recountEnrichment(key, status string) {
 			return
 		}
 		scan.enrichmentCounts[previous]--
+		if previous == musicStatusMatched {
+			scan.matchesRevoked++
+		}
 	}
 	scan.enrichmentOutcome[key] = status
 	scan.enrichmentCounts[status]++

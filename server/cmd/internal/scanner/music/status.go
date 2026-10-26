@@ -44,6 +44,16 @@ func (r *scanReport) tracksLinked() int {
 	return r.scan.tracksLinked
 }
 
+// metadataChanges is what the catalog revision counts beyond the file and
+// enrichment counters: track pairings, dropped album matches, and the
+// matched tallies those drops took back out of Enriched.
+func (r *scanReport) metadataChanges() int {
+	if r.scan == nil {
+		return 0
+	}
+	return r.scan.tracksLinked + r.scan.matchesDropped + r.scan.matchesRevoked
+}
+
 func (s *Scanner) Status() Status {
 	s.statusMu.RLock()
 	defer s.statusMu.RUnlock()
@@ -64,7 +74,7 @@ func (s *Scanner) publish(report *scanReport) {
 	report.Publish(&report.status.Progress)
 	s.statusMu.Lock()
 	s.status = report.status
-	s.revision.Stamp(&s.status.Progress, s.status.Counts, report.tracksLinked())
+	s.revision.Stamp(&s.status.Progress, s.status.Counts, report.metadataChanges())
 	s.statusMu.Unlock()
 }
 
