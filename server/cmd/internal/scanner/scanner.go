@@ -175,31 +175,30 @@ func (l *Launcher) launch(request *launchRequest, directory string) {
 // finish launches the queued library scan, if any, with the directory
 // configured now. The directory is read outside the lock: reading the
 // settings must never wait on a launcher that a settings save may be calling.
+// Nothing queues meanwhile: with no run of changes in progress, Start refuses
+// rather than queues.
 func (l *Launcher) finish() {
-	for {
-		l.mu.Lock()
-		next := l.queued
-		l.queued = nil
-		// Only a library scan is ever queued.
-		l.changes = false
-		if next == nil {
-			l.running = false
-			l.mu.Unlock()
-			return
-		}
-		l.mu.Unlock()
-		configured := next.directory()
-		unset := !configured.Valid || configured.String == ""
-		if unset {
-			// The library was cleared while its scan waited; a request queued
-			// meanwhile still gets its turn.
-			continue
-		}
-		l.mu.Lock()
-		l.launch(next, configured.String)
+	l.mu.Lock()
+	next := l.queued
+	l.queued = nil
+	// Only a library scan is ever queued.
+	l.changes = false
+	if next == nil {
+		l.running = false
 		l.mu.Unlock()
 		return
 	}
+	l.mu.Unlock()
+	configured := next.directory()
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	unset := !configured.Valid || configured.String == ""
+	if unset {
+		// The library was cleared while its scan waited.
+		l.running = false
+		return
+	}
+	l.launch(next, configured.String)
 }
 
 // WalkMediaLibraryContext walks root until it completes or ctx is canceled,
