@@ -258,3 +258,64 @@ func TestPollerReportsNoRemovalsFromAReplacedDirectory(t *testing.T) {
 		})
 	}
 }
+
+func TestPollerPausesWhileTheRootIsGoneAndReportsNoRemovals(t *testing.T) {
+	f := newPollFixture(t, "a.mkv")
+	err := os.RemoveAll(f.p.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	report := f.p.poll()
+	if !report.offline || len(report.changes) != 0 {
+		t.Fatalf("root gone: %+v", report)
+	}
+	report = f.p.poll()
+	if report.offline || report.online || len(report.changes) != 0 {
+		t.Fatalf("still gone: %+v", report)
+	}
+	scannertest.WriteFile(t, filepath.Join(f.p.root, "b.mkv"), "media")
+	report = f.p.poll()
+	if !report.online || len(report.changes) != 0 {
+		t.Fatalf("root back: %+v", report)
+	}
+	// The catch-up walk the online report asks for covers what changed.
+	f.poll(t, 70*time.Second, nil)
+}
+
+func TestPollAnUnreadableFileDoesNotHoldRemovalsBack(t *testing.T) {
+	f := newPollFixture(t, "a.mkv")
+	err := os.Remove(filepath.Join(f.p.root, "a.mkv"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A symlink to itself never stats, so it can never settle: it goes to the
+	// scanner, which reports it, and the removal with it.
+	err = os.Symlink("loop.mkv", filepath.Join(f.p.root, "loop.mkv"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.poll(t, 0, map[string]changeKind{"a.mkv": changeRemoved, "loop.mkv": changeSettled})
+	f.poll(t, time.Minute, nil)
+}
+
+func TestPollHoldForSettlingFilesEndsAtTheCap(t *testing.T) {
+	f := newPollFixture(t, "a.mkv")
+	f.p.timing.holdCap = time.Minute
+	err := os.Remove(filepath.Join(f.p.root, "a.mkv"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	growing := scannertest.WriteFile(t, filepath.Join(f.p.root, "recording.mkv"), "r")
+	f.poll(t, 0, nil)
+	content := "r"
+	for _, advance := range []time.Duration{30 * time.Second, 29 * time.Second} {
+		content += "r"
+		scannertest.WriteFile(t, growing, content)
+		f.poll(t, advance, nil)
+	}
+	content += "r"
+	scannertest.WriteFile(t, growing, content)
+	// A file still being written holds the removal back for the cap, then
+	// the removal goes alone.
+	f.poll(t, 2*time.Second, map[string]changeKind{"a.mkv": changeRemoved})
+}

@@ -4,44 +4,25 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
-	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/movie"
+	"igloo/cmd/internal/scanner/scannertest"
 )
-
-// inotifyInstances counts this process's open inotify instances: the watcher
-// holds exactly one while it runs.
-func inotifyInstances(t *testing.T) int {
-	t.Helper()
-	entries, err := os.ReadDir("/proc/self/fd")
-	if err != nil {
-		t.Fatalf("list descriptors: %v", err)
-	}
-	count := 0
-	for _, entry := range entries {
-		target, err := os.Readlink(filepath.Join("/proc/self/fd", entry.Name()))
-		if err == nil && strings.Contains(target, "inotify") {
-			count++
-		}
-	}
-	return count
-}
 
 // waitForInotifyInstances waits for the session goroutine to open its
 // instance, which it does after Sync returns.
 func waitForInotifyInstances(t *testing.T, want int) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
-	for inotifyInstances(t) != want {
+	for scannertest.InotifyInstances(t) != want {
 		if time.Now().After(deadline) {
-			t.Fatalf("inotify instances = %d, want %d", inotifyInstances(t), want)
+			t.Fatalf("inotify instances = %d, want %d", scannertest.InotifyInstances(t), want)
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
@@ -51,7 +32,7 @@ func TestUpdateGeneralSettings_StartsAndStopsTheWatcher(t *testing.T) {
 	app := setupSessionTestApp(t)
 	admin := createTestUser(t, app, "Settings Admin", "settings-admin@example.com", true)
 	staticDir := filepath.Join(t.TempDir(), "static")
-	before := inotifyInstances(t)
+	before := scannertest.InotifyInstances(t)
 
 	w := serveAs(t, app, admin.ID, http.MethodPut, "/api/settings/general", generalSettingsBodyWithWatcher(staticDir, true))
 	if w.Code != http.StatusOK {
@@ -61,8 +42,8 @@ func TestUpdateGeneralSettings_StartsAndStopsTheWatcher(t *testing.T) {
 
 	// Off means off: the instance is closed before the response is written.
 	w = serveAs(t, app, admin.ID, http.MethodPut, "/api/settings/general", generalSettingsBodyWithWatcher(staticDir, false))
-	if w.Code != http.StatusOK || inotifyInstances(t) != before {
-		t.Fatalf("disabling: status %d, inotify instances %d, want %d", w.Code, inotifyInstances(t), before)
+	if w.Code != http.StatusOK || scannertest.InotifyInstances(t) != before {
+		t.Fatalf("disabling: status %d, inotify instances %d, want %d", w.Code, scannertest.InotifyInstances(t), before)
 	}
 }
 
@@ -101,7 +82,7 @@ func TestStartLibraryWorkFollowsTheStoredWatcherSetting(t *testing.T) {
 	for _, enabled := range []bool{false, true} {
 		t.Run(fmt.Sprintf("watcher %t", enabled), func(t *testing.T) {
 			app := setupTestApp(t)
-			before := inotifyInstances(t)
+			before := scannertest.InotifyInstances(t)
 			root := t.TempDir()
 			settings := *app.CurrentSettings()
 			settings.EnableWatcher = enabled
@@ -118,7 +99,7 @@ func TestStartLibraryWorkFollowsTheStoredWatcherSetting(t *testing.T) {
 
 			startLibraryWork(app)
 
-			if !enabled && inotifyInstances(t) != before {
+			if !enabled && scannertest.InotifyInstances(t) != before {
 				t.Fatal("with the watcher off nothing may watch the libraries")
 			}
 			if enabled {

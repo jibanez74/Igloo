@@ -32,8 +32,12 @@ type timing struct {
 	writeIdle time.Duration
 	// quiet is how long after its last change a file may dispatch.
 	quiet time.Duration
-	// retry is how long a batch waits when its scanner is busy.
+	// retry is how long a batch waits when its scanner is busy: running a
+	// library scan, a catch-up or another run of changes.
 	retry time.Duration
+	// probe is how long the session waits on a library root that does not
+	// answer before pausing the library.
+	probe time.Duration
 }
 
 var defaultTiming = timing{
@@ -42,6 +46,7 @@ var defaultTiming = timing{
 	writeIdle: scanner.FileQuietPeriod,
 	quiet:     scanner.ChangeQuietPeriod,
 	retry:     5 * time.Second,
+	probe:     10 * time.Second,
 }
 
 type pendingPath struct {

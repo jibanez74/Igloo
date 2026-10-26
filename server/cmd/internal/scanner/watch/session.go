@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -59,6 +61,52 @@ type library struct {
 	// generation tells a stopped poller's late reports apart.
 	generation int
 	stopPoll   context.CancelFunc
+	// probing is set while a bounded check of the root is still running.
+	probing atomic.Bool
+}
+
+// rootProbe is what arming learns about a library root: its path with
+// symlinks resolved, and the network or FUSE filesystem holding it or mounted
+// inside it, if any.
+type rootProbe struct {
+	resolved string
+	fsName   string
+	err      error
+}
+
+func probeRoot(root string) rootProbe {
+	resolved, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return rootProbe{err: err}
+	}
+	fsName, err := networkFilesystem(resolved)
+	return rootProbe{resolved: resolved, fsName: fsName, err: err}
+}
+
+// bounded runs check off the session goroutine and waits for it at most
+// timeout, or until the session ends: a stat on a hard-mounted share whose
+// server is down never returns, and the session must stay responsive. busy
+// keeps at most one such check per library; while it hangs, later calls give
+// up at once. Like the pollers, the check is not in the shutdown wait group.
+func bounded[T any](ctx context.Context, busy *atomic.Bool, timeout time.Duration, check func() T) (T, bool) {
+	var zero T
+	if !busy.CompareAndSwap(false, true) {
+		return zero, false
+	}
+	done := make(chan T, 1)
+	go func() {
+		defer busy.Store(false)
+		done <- check()
+	}()
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case result := <-done:
+		return result, true
+	case <-timer.C:
+	case <-ctx.Done():
+	}
+	return zero, false
 }
 
 type watchedDir struct {
@@ -79,6 +127,7 @@ type session struct {
 	timing   timing
 	polling  pollTiming
 	open     func(*sync.WaitGroup) (notifier, error)
+	probe    func(root string) rootProbe
 	ctx      context.Context
 	cancel   context.CancelFunc
 	done     chan struct{}
@@ -96,16 +145,16 @@ type session struct {
 	deferredSignal chan struct{}
 }
 
-func startSession(deps Dependencies, t timing, polling pollTiming, open func(*sync.WaitGroup) (notifier, error)) *session {
+func startSession(deps Dependencies, t timing, polling pollTiming, open func(*sync.WaitGroup) (notifier, error), probe func(string) rootProbe) *session {
 	ctx, cancel := context.WithCancel(deps.Context)
 	s := &session{
-		deps: deps, timing: t, polling: polling, open: open, ctx: ctx, cancel: cancel,
+		deps: deps, timing: t, polling: polling, open: open, probe: probe, ctx: ctx, cancel: cancel,
 		done: make(chan struct{}), reloads: make(chan struct{}, 1),
 		watches: make(map[int32]*watchedDir), dirs: make(map[string]int32),
 		polls: make(chan pollReport), deferredSignal: make(chan struct{}, 1),
 	}
 	for _, configured := range deps.Libraries {
-		s.libraries = append(s.libraries, &library{Library: configured, pending: newPending(t)})
+		s.libraries = append(s.libraries, &library{Library: configured})
 	}
 	deps.Wait.Go(func() {
 		defer close(s.done)
@@ -221,14 +270,20 @@ func (s *session) wakeTimes(lib *library) []time.Time {
 	return times
 }
 
+// configuredRoot is the library directory as the settings hold it now; empty
+// when unset.
+func configuredRoot(lib *library) string {
+	directory := lib.Directory()
+	if !directory.Valid {
+		return ""
+	}
+	return directory.String
+}
+
 // arm sets a library up from its configured root: inotify where events can
 // be trusted, the poller otherwise, and a catch-up walk once it is present.
 func (s *session) arm(lib *library) {
-	directory := lib.Directory()
-	lib.root = ""
-	if directory.Valid {
-		lib.root = directory.String
-	}
+	lib.root = configuredRoot(lib)
 	lib.pending = newPending(s.timing)
 	lib.catchUp, lib.retryAt, lib.offline = false, time.Time{}, false
 	lib.layout = layout{root: lib.root}
@@ -237,21 +292,21 @@ func (s *session) arm(lib *library) {
 		return
 	}
 	lib.mode = modeInotify
-	resolved, err := filepath.EvalSymlinks(lib.root)
-	if err != nil {
-		s.goOffline(lib, "the library directory is unavailable", err)
+	root := lib.root
+	probe, answered := bounded(s.ctx, &lib.probing, s.timing.probe, func() rootProbe { return s.probe(root) })
+	if !answered {
+		s.notAnswered(lib)
 		return
 	}
-	lib.resolved = resolved
-	lib.layout.root = resolved
-	fsName, err := networkFilesystem(resolved)
-	if err != nil {
-		s.goOffline(lib, "the library directory is unavailable", err)
+	if probe.err != nil {
+		s.goOffline(lib, "the library directory is unavailable", probe.err)
 		return
 	}
-	poll := s.notifier == nil || fsName != ""
+	lib.resolved = probe.resolved
+	lib.layout.root = probe.resolved
+	poll := s.notifier == nil || probe.fsName != ""
 	if !poll {
-		err = s.watchLibrary(lib)
+		err := s.watchLibrary(lib)
 		poll = errors.Is(err, errNetworkMount) || watchLimitReached(err)
 		if poll {
 			s.unwatchTree(lib, lib.resolved)
@@ -267,7 +322,7 @@ func (s *session) arm(lib *library) {
 	}
 	if poll {
 		s.startPoll(lib)
-		s.deps.Logger.Info("library watcher armed", "library", lib.Name, "backend", lib.mode.String(), "filesystem", fsName)
+		s.deps.Logger.Info("library watcher armed", "library", lib.Name, "backend", lib.mode.String(), "filesystem", probe.fsName)
 		return
 	}
 	lib.catchUp = true
@@ -291,8 +346,7 @@ func (s *session) disarm(lib *library) {
 
 func (s *session) rearmChanged() {
 	for _, lib := range s.libraries {
-		directory := lib.Directory()
-		changed := directory.String != lib.root || !directory.Valid && lib.root != ""
+		changed := configuredRoot(lib) != lib.root
 		// Saving the settings again also re-arms a library that stayed
 		// offline, so a layout that changed for good can be accepted.
 		if changed || lib.offline {
@@ -318,42 +372,14 @@ func (s *session) watchLibrary(lib *library) error {
 // directory that appeared with files already in it.
 func (s *session) watchTree(lib *library, directory string, collect bool) ([]string, error) {
 	var files []string
-	devices := make(map[string]string)
-	err := filepath.WalkDir(directory, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			if path == directory {
-				return err
-			}
-			return nil
-		}
-		if !entry.IsDir() {
-			isMedia := collect && lib.Extensions[helpers.FileExtension(path)]
-			if isMedia {
-				files = append(files, path)
-			}
-			return nil
-		}
-		allowed := path == lib.resolved || lib.AllowDirectory == nil || lib.AllowDirectory(lib.resolved, path)
-		if !allowed {
-			return fs.SkipDir
-		}
-		info, err := os.Stat(path)
-		if err != nil {
-			return nil
-		}
-		device := identityOf(info).device
-		devices[path] = device
-		parent, known := devices[filepath.Dir(path)]
-		if !known && path != lib.resolved {
-			parentInfo, statErr := os.Stat(filepath.Dir(path))
-			if statErr == nil {
-				parent, known = identityOf(parentInfo).device, true
-			}
-		}
-		isMount := path != lib.resolved && known && parent != device
-		if isMount {
-			fsName, statErr := networkFilesystem(path)
-			if statErr == nil && fsName != "" {
+	collected := &files
+	if !collect {
+		collected = nil
+	}
+	err := walkLibraryDirs(lib.resolved, directory, lib.AllowDirectory, lib.Extensions, collected, func(path string, _ os.FileInfo, mount bool) error {
+		if mount {
+			fsName, err := networkFilesystem(path)
+			if err == nil && fsName != "" {
 				return errNetworkMount
 			}
 			lib.layout.mounts[path] = true
@@ -386,7 +412,7 @@ func (s *session) addWatch(lib *library, path string) error {
 // another library still uses stays.
 func (s *session) unwatchTree(lib *library, directory string) {
 	for path, wd := range s.dirs {
-		if !within(directory, path) {
+		if !scanner.PathWithin(directory, path) {
 			continue
 		}
 		watched := s.watches[wd]
@@ -444,12 +470,34 @@ func (s *session) goOffline(lib *library, reason string, err error) {
 	s.deps.Logger.Warn("library watcher paused the library; nothing is removed until it is back", args...)
 }
 
+// notAnswered pauses a library whose bounded check gave up, unless it gave up
+// because the session is ending.
+func (s *session) notAnswered(lib *library) {
+	if s.ctx.Err() != nil {
+		return
+	}
+	s.goOffline(lib, "the library directory did not answer", nil)
+}
+
 // checkLayout looks at an inotify library's layout: a missing part pauses
 // it, and a root that changed identity, or that is back after an outage, is
 // armed again, which walks the whole library once.
 func (s *session) checkLayout(lib *library) {
 	lib.checkAt = s.now().Add(s.polling.recheck)
-	present, changed := lib.layout.check()
+	// The check reads its own copy: a check that hangs outlives this call,
+	// and the session may change the layout meanwhile.
+	recorded := lib.layout
+	recorded.mounts = maps.Clone(recorded.mounts)
+	type layoutState struct{ present, changed bool }
+	state, answered := bounded(s.ctx, &lib.probing, s.timing.probe, func() layoutState {
+		present, changed := recorded.check()
+		return layoutState{present, changed}
+	})
+	if !answered {
+		s.notAnswered(lib)
+		return
+	}
+	present, changed := state.present, state.changed
 	if !present {
 		if !lib.offline {
 			s.goOffline(lib, "the library directory or a mount inside it is missing", nil)
@@ -488,9 +536,7 @@ func (s *session) handlePoll(report pollReport) {
 	now := s.now()
 	switch {
 	case report.offline:
-		lib.offline, lib.catchUp = true, false
-		lib.pending = newPending(s.timing)
-		s.deps.Logger.Warn("library watcher paused the library; nothing is removed until it is back", "library", lib.Name, "reason", "the share is unavailable")
+		s.goOffline(lib, "the share is unavailable", nil)
 	case report.online:
 		lib.offline, lib.catchUp = false, true
 	}
@@ -707,6 +753,7 @@ func (s *session) startCatchUp(lib *library, now time.Time) {
 	case scanner.StartNotConfigured:
 		lib.catchUp = false
 	default:
+		// Started, or queued behind a run of changes: it walks either way.
 		lib.catchUp = false
 		s.deps.Logger.Info("library watcher walking the whole library", "library", lib.Name)
 	}
@@ -719,7 +766,7 @@ func (s *session) startChanges(lib *library, items []batchItem, now time.Time) {
 	}
 	result := lib.StartChanges(scanner.Changes{Paths: paths, OnDeferred: s.onDeferred(lib)})
 	switch result.Status {
-	case scanner.StartAlreadyRunning, scanner.StartQueued:
+	case scanner.StartAlreadyRunning:
 		for _, item := range items {
 			lib.pending.hold(item.rel, item.entry, now.Add(s.timing.retry))
 		}

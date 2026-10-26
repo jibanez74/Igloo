@@ -4,7 +4,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"syscall"
 
 	"igloo/cmd/internal/scanner"
@@ -85,15 +84,11 @@ func unavailable(err error) bool {
 		errors.Is(err, syscall.EHOSTDOWN) || errors.Is(err, syscall.ETIMEDOUT) || errors.Is(err, syscall.ENODEV)
 }
 
-// within reports whether path is parent or lies beneath it.
-func within(parent, path string) bool {
-	return path == parent || strings.HasPrefix(path, parent+string(filepath.Separator))
-}
-
 // relative returns path relative to root when it lies beneath it.
 func relative(root, path string) (string, bool) {
-	if path == root || !within(root, path) {
+	if path == root || !scanner.PathWithin(root, path) {
 		return "", false
 	}
-	return path[len(root)+1:], true
+	rel, err := filepath.Rel(root, path)
+	return rel, err == nil
 }

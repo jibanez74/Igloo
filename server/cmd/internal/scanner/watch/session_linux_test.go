@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -22,6 +23,7 @@ var sessionTestTiming = timing{
 	writeIdle: time.Second,
 	quiet:     100 * time.Millisecond,
 	retry:     100 * time.Millisecond,
+	probe:     time.Second,
 }
 
 var sessionTestPolling = pollTiming{
@@ -29,6 +31,7 @@ var sessionTestPolling = pollTiming{
 	settle:   50 * time.Millisecond,
 	recheck:  100 * time.Millisecond,
 	quiet:    200 * time.Millisecond,
+	holdCap:  5 * time.Second,
 }
 
 // fakeScanner records every run the watcher starts and answers with scripted
@@ -137,27 +140,11 @@ func running(w *Watcher) bool {
 	return w.active()
 }
 
-func inotifyDescriptors(t *testing.T) int {
-	t.Helper()
-	entries, err := os.ReadDir("/proc/self/fd")
-	if err != nil {
-		t.Skip("no /proc/self/fd")
-	}
-	count := 0
-	for _, entry := range entries {
-		target, err := os.Readlink(filepath.Join("/proc/self/fd", entry.Name()))
-		if err == nil && strings.Contains(target, "inotify") {
-			count++
-		}
-	}
-	return count
-}
-
 func TestWatcherOffMeansNothingRuns(t *testing.T) {
-	before := inotifyDescriptors(t)
+	before := scannertest.InotifyInstances(t)
 	fixture := newWatcherFixture(t, nil)
 	fixture.watcher.Sync(false)
-	if running(fixture.watcher) || inotifyDescriptors(t) != before {
+	if running(fixture.watcher) || scannertest.InotifyInstances(t) != before {
 		t.Fatal("a watcher that was never enabled must hold nothing")
 	}
 
@@ -166,12 +153,12 @@ func TestWatcherOffMeansNothingRuns(t *testing.T) {
 	if !catchUp.CatchUp {
 		t.Fatalf("turning the watcher on must catch up first, got %+v", catchUp)
 	}
-	if !running(fixture.watcher) || inotifyDescriptors(t) != before+1 {
-		t.Fatalf("running watcher: inotify descriptors %d, want %d", inotifyDescriptors(t), before+1)
+	if !running(fixture.watcher) || scannertest.InotifyInstances(t) != before+1 {
+		t.Fatalf("running watcher: inotify descriptors %d, want %d", scannertest.InotifyInstances(t), before+1)
 	}
 
 	fixture.watcher.Sync(false)
-	if running(fixture.watcher) || inotifyDescriptors(t) != before {
+	if running(fixture.watcher) || scannertest.InotifyInstances(t) != before {
 		t.Fatal("turning the watcher off must close its inotify instance before returning")
 	}
 	scannertest.WriteFile(t, fixture.path("Ignored (2020)", "ignored.mkv"), "x")
@@ -443,5 +430,164 @@ func TestWatcherPollsWhenTheWatchLimitIsReached(t *testing.T) {
 	got := sortedPaths(fixture.scanner.nextChanges(t))
 	if !slices.Equal(got, []string{"New (2020)/new.mkv"}) {
 		t.Fatalf("polled create after the watch limit: %q", got)
+	}
+}
+
+func TestWatcherPollsWhenTheNotifierStops(t *testing.T) {
+	fixture := newWatcherFixture(t, nil)
+	scripted := newScriptedNotifier()
+	fixture.watcher.open = func(*sync.WaitGroup) (notifier, error) { return scripted, nil }
+	fixture.watcher.Sync(true)
+	if !fixture.scanner.next(t).CatchUp {
+		t.Fatal("expected the first catch-up")
+	}
+	close(scripted.out)
+	// Moving to the poller arms the library again, which walks it once.
+	if !fixture.scanner.next(t).CatchUp {
+		t.Fatal("a library moved to the poller must be walked once")
+	}
+	scannertest.WriteFile(t, fixture.path("New (2020)", "new.mkv"), "new")
+	got := sortedPaths(fixture.scanner.nextChanges(t))
+	if !slices.Equal(got, []string{"New (2020)/new.mkv"}) {
+		t.Fatalf("polled create after the notifier stopped: %q", got)
+	}
+}
+
+func TestWatcherPausesOnUnmountUntilTheLibraryIsBack(t *testing.T) {
+	fixture := newWatcherFixture(t, nil)
+	scripted := newScriptedNotifier()
+	fixture.watcher.open = func(*sync.WaitGroup) (notifier, error) { return scripted, nil }
+	fixture.watcher.Sync(true)
+	if !fixture.scanner.next(t).CatchUp {
+		t.Fatal("expected the first catch-up")
+	}
+	// The root is the first directory watched.
+	scripted.out <- rawEvent{wd: 1, op: opUnmount}
+	// The root is still present, so the next layout check arms it again and
+	// walks it once rather than trusting what it missed.
+	if !fixture.scanner.next(t).CatchUp {
+		t.Fatal("a library back after an unmount must be walked once")
+	}
+}
+
+func TestWatcherIdlesALibraryWhoseDirectoryIsCleared(t *testing.T) {
+	var mu sync.Mutex
+	root := t.TempDir()
+	configured := true
+	fixture := newWatcherFixture(t, func(lib *Library) {
+		lib.Directory = func() sql.NullString {
+			mu.Lock()
+			defer mu.Unlock()
+			return sql.NullString{String: root, Valid: configured}
+		}
+	})
+	fixture.watcher.Sync(true)
+	fixture.scanner.next(t)
+
+	mu.Lock()
+	configured = false
+	mu.Unlock()
+	fixture.watcher.Sync(true)
+	scannertest.WriteFile(t, filepath.Join(root, "Ignored (2020)", "ignored.mkv"), "x")
+	fixture.scanner.quiet(t, 400*time.Millisecond)
+
+	mu.Lock()
+	configured = true
+	mu.Unlock()
+	fixture.watcher.Sync(true)
+	if !fixture.scanner.next(t).CatchUp {
+		t.Fatal("a library configured again must be walked once")
+	}
+}
+
+func TestWatcherPausesALibraryWhoseRootDoesNotAnswer(t *testing.T) {
+	fixture := newWatcherFixture(t, nil)
+	hang := make(chan struct{})
+	t.Cleanup(func() { close(hang) })
+	probes := make(chan struct{}, 10)
+	fixture.watcher.probe = func(root string) rootProbe {
+		probes <- struct{}{}
+		<-hang
+		return probeRoot(root)
+	}
+	fixture.watcher.Sync(true)
+	scannertest.WaitForSignal(t, probes, 5*time.Second, "the root probe")
+	// Nothing is dispatched for a library that does not answer, and the
+	// hanging stat is not retried while it still hangs.
+	fixture.scanner.quiet(t, 1500*time.Millisecond)
+	if len(probes) != 0 {
+		t.Fatalf("%d more probes started while the first still hung", len(probes))
+	}
+	started := time.Now()
+	fixture.watcher.Sync(false)
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("turning the watcher off waited %s on a root that does not answer", elapsed)
+	}
+}
+
+func TestWatcherStartsNothingOnceTheScanContextEnded(t *testing.T) {
+	before := scannertest.InotifyInstances(t)
+	fixture := newWatcherFixture(t, nil)
+	fixture.cancel()
+	fixture.watcher.Sync(true)
+	if running(fixture.watcher) || scannertest.InotifyInstances(t) != before {
+		t.Fatal("a watcher whose scan context ended must not start a session")
+	}
+	fixture.scanner.quiet(t, 300*time.Millisecond)
+}
+
+// TestWatcherAppliesNothingDuringALibraryScan drives the scanners' real
+// launcher: the watcher keeps collecting events while a library scan runs,
+// but every run it asks for is refused until the scan ends, and what it saw
+// meanwhile is applied afterwards.
+func TestWatcherAppliesNothingDuringALibraryScan(t *testing.T) {
+	var scans sync.WaitGroup
+	launcher := &scanner.Launcher{Wait: &scans}
+	var scanning, overlapped atomic.Bool
+	runs := make(chan scanner.Changes, 100)
+	requested := make(chan struct{}, 100)
+	fixture := newWatcherFixture(t, func(lib *Library) {
+		lib.StartChanges = func(changes scanner.Changes) scanner.StartResult {
+			requested <- struct{}{}
+			return launcher.Start(lib.Directory(), &changes, func(scanner.ScanScope) {}, func(_ string, changes *scanner.Changes) {
+				if scanning.Load() {
+					overlapped.Store(true)
+				}
+				runs <- *changes
+			})
+		}
+	})
+	t.Cleanup(scans.Wait)
+	release := make(chan struct{})
+	scanning.Store(true)
+	launcher.Start(sql.NullString{String: fixture.root, Valid: true}, nil, func(scanner.ScanScope) {}, func(string, *scanner.Changes) {
+		<-release
+		scanning.Store(false)
+	})
+
+	fixture.watcher.Sync(true)
+	// The catch-up is asked for once the library is armed; it is refused.
+	scannertest.WaitForSignal(t, requested, 5*time.Second, "the catch-up request")
+	scannertest.WriteFile(t, fixture.path("New (2020)", "new.mkv"), "new")
+	select {
+	case changes := <-runs:
+		t.Fatalf("a run started during the library scan: %+v", changes)
+	case <-time.After(time.Second):
+	}
+
+	close(release)
+	deadline := time.After(5 * time.Second)
+	for {
+		select {
+		case changes := <-runs:
+			if overlapped.Load() {
+				t.Fatal("a watcher run overlapped the library scan")
+			}
+			if slices.Equal(changes.Paths, []string{"New (2020)/new.mkv"}) {
+				return
+			}
+		case <-deadline:
+			t.Fatal("the change seen during the scan was never applied")
+		}
 	}
 }

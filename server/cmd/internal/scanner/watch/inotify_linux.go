@@ -147,30 +147,6 @@ func translate(mask uint32) op {
 	return result
 }
 
-// Filesystems whose changes inotify cannot see when they come from another
-// machine or bypass this kernel's view: network shares and FUSE (mergerfs
-// among them, whose branches change underneath it).
-var networkFilesystems = map[uint32]string{
-	0x6969:     "nfs",
-	0x517B:     "smb",
-	0xFF534D42: "cifs",
-	0xFE534D42: "smb2",
-	0x65735546: "fuse",
-	0x01021997: "9p",
-	0x00C36400: "ceph",
-}
-
-// networkFilesystem names the filesystem at path when inotify cannot be
-// trusted on it.
-func networkFilesystem(path string) (string, error) {
-	var stat syscall.Statfs_t
-	err := syscall.Statfs(path, &stat)
-	if err != nil {
-		return "", os.NewSyscallError("statfs", err)
-	}
-	return networkFilesystems[uint32(stat.Type)], nil
-}
-
 // watchLimitReached reports the inotify limits: max_user_watches answers
 // ENOSPC, max_user_instances EMFILE.
 func watchLimitReached(err error) bool {

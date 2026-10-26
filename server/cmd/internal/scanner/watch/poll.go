@@ -22,6 +22,10 @@ const (
 	pollSettleInterval = 30 * time.Second
 	// recheckInterval spaces the checks for a library that went offline.
 	recheckInterval = 30 * time.Second
+	// pollHoldCap bounds how long held removals wait for files still
+	// settling: far longer than a rename's new name takes, so a file that
+	// never settles cannot hold back the library's deletions for good.
+	pollHoldCap = 10 * time.Minute
 )
 
 type polledDir struct {
@@ -67,7 +71,9 @@ type poller struct {
 	dirs     map[string]*polledDir
 	settling map[string]scanner.FileFingerprint
 	held     map[string]changeKind // absolute paths ready for the next report
-	offline  bool
+	// heldSince is when a held removal first waited for settling files.
+	heldSince time.Time
+	offline   bool
 }
 
 type pollTiming struct {
@@ -75,9 +81,10 @@ type pollTiming struct {
 	settle   time.Duration
 	recheck  time.Duration
 	quiet    time.Duration
+	holdCap  time.Duration
 }
 
-var defaultPollTiming = pollTiming{interval: pollInterval, settle: pollSettleInterval, recheck: recheckInterval, quiet: scanner.FileQuietPeriod}
+var defaultPollTiming = pollTiming{interval: pollInterval, settle: pollSettleInterval, recheck: recheckInterval, quiet: scanner.FileQuietPeriod, holdCap: pollHoldCap}
 
 func (p *poller) run(ctx context.Context, out chan<- pollReport) {
 	p.offline = true
@@ -144,14 +151,12 @@ func (p *poller) poll() pollReport {
 	}
 	// The session cannot see files still settling here. Its batching cap is
 	// shorter than our quiet period, so keep both sides of a rename here until
-	// they can be dispatched together, even across several polls.
-	if len(p.settling) > 0 {
-		for _, kind := range p.held {
-			if kind == changeRemoved {
-				return report
-			}
-		}
+	// they can be dispatched together, even across several polls, within
+	// holdCap.
+	if p.holdsForSettling() {
+		return report
 	}
+	p.heldSince = time.Time{}
 	for path, kind := range p.held {
 		rel, ok := relative(p.root, path)
 		if ok {
@@ -160,6 +165,26 @@ func (p *poller) poll() pollReport {
 	}
 	clear(p.held)
 	return report
+}
+
+// holdsForSettling reports whether held changes wait for files still
+// settling: while a removal is held, until holdCap after it first waited.
+func (p *poller) holdsForSettling() bool {
+	if len(p.settling) == 0 {
+		return false
+	}
+	removal := false
+	for _, kind := range p.held {
+		removal = removal || kind == changeRemoved
+	}
+	if !removal {
+		return false
+	}
+	now := p.now()
+	if p.heldSince.IsZero() {
+		p.heldSince = now
+	}
+	return now.Before(p.heldSince.Add(p.timing.holdCap))
 }
 
 // arm takes the snapshot once the library is present; the session then
@@ -177,6 +202,7 @@ func (p *poller) arm() pollReport {
 	p.dirs = make(map[string]*polledDir)
 	p.settling = make(map[string]scanner.FileFingerprint)
 	p.held = make(map[string]changeKind)
+	p.heldSince = time.Time{}
 	err = p.snapshot(p.root, nil)
 	if err != nil {
 		return pollReport{}
@@ -187,49 +213,23 @@ func (p *poller) arm() pollReport {
 
 func (p *poller) goOffline() pollReport {
 	p.offline = true
-	p.dirs, p.settling = nil, nil
-	p.held = nil
+	p.dirs, p.settling, p.held = nil, nil, nil
+	p.heldSince = time.Time{}
 	return pollReport{offline: true}
 }
 
 // snapshot records directory and everything beneath it that the scanner
 // would walk; with files set it also collects the media files found.
 func (p *poller) snapshot(directory string, files *[]string) error {
-	devices := make(map[string]string)
-	return filepath.WalkDir(directory, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			if path == directory {
-				return err
-			}
-			return nil
-		}
-		if !entry.IsDir() {
-			isMedia := files != nil && p.extensions[helpers.FileExtension(path)]
-			if isMedia {
-				*files = append(*files, path)
-			}
-			return nil
-		}
-		allowed := path == p.root || p.allow == nil || p.allow(p.root, path)
-		if !allowed {
-			return fs.SkipDir
-		}
-		info, err := os.Stat(path)
-		if err != nil {
-			return nil
-		}
-		id := identityOf(info)
-		devices[path] = id.device
-		parent, known := devices[filepath.Dir(path)]
-		isMount := path != p.root && known && parent != id.device
-		if isMount {
+	return walkLibraryDirs(p.root, directory, p.allow, p.extensions, files, func(path string, info os.FileInfo, mount bool) error {
+		if mount {
 			p.layout.mounts[path] = true
 		}
 		listing, err := os.ReadDir(path)
 		if err != nil {
 			return nil
 		}
-		p.dirs[path] = &polledDir{id: id, mtime: info.ModTime().UnixNano(), entries: p.entries(path, listing)}
+		p.dirs[path] = &polledDir{id: identityOf(info), mtime: info.ModTime().UnixNano(), entries: p.entries(path, listing)}
 		return nil
 	})
 }
@@ -340,17 +340,17 @@ func (p *poller) observe(path string) {
 
 func (p *poller) forget(directory string) {
 	for path := range p.dirs {
-		if within(directory, path) {
+		if scanner.PathWithin(directory, path) {
 			delete(p.dirs, path)
 		}
 	}
 	for path := range p.settling {
-		if within(directory, path) {
+		if scanner.PathWithin(directory, path) {
 			delete(p.settling, path)
 		}
 	}
 	for path := range p.held {
-		if within(directory, path) {
+		if scanner.PathWithin(directory, path) {
 			delete(p.held, path)
 		}
 	}
@@ -371,6 +371,9 @@ func (p *poller) settle() bool {
 			if unavailable(err) {
 				return true
 			}
+			// A file that cannot be read never settles; the scanner reports it.
+			delete(p.settling, path)
+			p.held[path] = changeSettled
 			continue
 		}
 		observed := scanner.FingerprintOf(info)

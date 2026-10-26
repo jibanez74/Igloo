@@ -45,8 +45,10 @@ type Watcher struct {
 	deps    Dependencies
 	timing  timing
 	polling pollTiming
-	// open opens the kernel instance; tests substitute a scripted one.
-	open func(*sync.WaitGroup) (notifier, error)
+	// open opens the kernel instance and probe inspects a library root;
+	// tests substitute scripted ones.
+	open  func(*sync.WaitGroup) (notifier, error)
+	probe func(root string) rootProbe
 
 	mu      sync.Mutex
 	session *session
@@ -63,17 +65,18 @@ func New(deps Dependencies) *Watcher {
 	if deps.Now == nil {
 		deps.Now = time.Now
 	}
-	return &Watcher{deps: deps, timing: defaultTiming, polling: defaultPollTiming, open: newNotifier}
+	return &Watcher{deps: deps, timing: defaultTiming, polling: defaultPollTiming, open: newNotifier, probe: probeRoot}
 }
 
 // Sync brings the watcher in line with the setting. Turning it on arms every
 // library and walks each once to catch up; turning it off returns only after
 // the session released its watches. While on, Sync re-reads the library
-// roots, re-arming any that changed or stayed offline.
+// roots, re-arming any that changed or stayed offline. Once the scan context
+// has ended, as at shutdown, it only stops.
 func (w *Watcher) Sync(enabled bool) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if !enabled {
+	if !enabled || w.deps.Context.Err() != nil {
 		if w.session != nil {
 			w.session.stop()
 			w.session = nil
@@ -84,7 +87,7 @@ func (w *Watcher) Sync(enabled bool) {
 		w.session.reload()
 		return
 	}
-	w.session = startSession(w.deps, w.timing, w.polling, w.open)
+	w.session = startSession(w.deps, w.timing, w.polling, w.open, w.probe)
 }
 
 // active reports a session that has not ended; the caller holds w.mu.

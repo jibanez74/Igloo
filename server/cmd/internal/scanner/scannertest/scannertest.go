@@ -130,6 +130,25 @@ func WaitForSignal(t testing.TB, signal <-chan struct{}, timeout time.Duration, 
 	}
 }
 
+// InotifyInstances counts this process's open inotify instances; the library
+// watcher holds exactly one while it runs. It skips the test where the
+// process's descriptors cannot be listed.
+func InotifyInstances(t testing.TB) int {
+	t.Helper()
+	entries, err := os.ReadDir("/proc/self/fd")
+	if err != nil {
+		t.Skip("no /proc/self/fd")
+	}
+	count := 0
+	for _, entry := range entries {
+		target, err := os.Readlink(filepath.Join("/proc/self/fd", entry.Name()))
+		if err == nil && strings.Contains(target, "inotify") {
+			count++
+		}
+	}
+	return count
+}
+
 // CountRows runs a single-column count query and fails the test on error.
 func CountRows(t testing.TB, db *sql.DB, query string, args ...any) int {
 	t.Helper()
