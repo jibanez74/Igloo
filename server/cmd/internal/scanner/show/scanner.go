@@ -191,15 +191,15 @@ func (s *Scanner) runShowScan(directory string, changes *scanner.Changes) {
 	}
 
 	s.phase(report, scanner.PhaseCleanup)
-	if reconciliation.RefusesCleanup(changes) {
-		s.Logger.Warn("show cleanup skipped: the library looked empty", "directory", root)
-		report.Issue("", scanner.PhaseCleanup, scanner.ReasonCleanupSkippedEmpty)
-	} else {
-		err = s.cleanup(ctx, reconciliation, report)
-		if err != nil {
-			fail(err, "Missing TV files could not be reconciled.")
-			return
-		}
+	kept, reason := reconciliation.Guard(changes)
+	if reason != "" {
+		s.Logger.Warn("show cleanup kept files that looked unmounted", "directory", root, "files", kept)
+		report.Issue("", scanner.PhaseCleanup, reason)
+	}
+	err = s.cleanup(ctx, reconciliation, report)
+	if err != nil {
+		fail(err, "Missing TV files could not be reconciled.")
+		return
 	}
 	if ctx.Err() != nil {
 		return
@@ -269,7 +269,7 @@ func showScanIndex(rows []database.GetShowScanIndexRow, links []database.GetShow
 			entry.FileFingerprint = scanner.StoredFingerprint(row.Size, row.MtimeNs, row.CtimeNs, row.Device, row.Inode)
 		}
 		index[filepath.Clean(row.FilePath)] = entry
-		catalog = append(catalog, scanner.CatalogFile{ID: row.ID, Path: row.FilePath})
+		catalog = append(catalog, scanner.CatalogFile{ID: row.ID, Path: row.FilePath, Device: row.Device.String})
 	}
 	return index, catalog
 }

@@ -196,7 +196,7 @@ func (s *Scanner) runMovieScan(directory string, changes *scanner.Changes) {
 	}
 	// A watcher run hands its deferred files back instead of holding the
 	// launcher through the retry window; the watcher retries them.
-	if changes == nil {
+	if !changes.HandsBackDeferred() {
 		s.retryDeferred(ctx, scan, report, files)
 	} else {
 		for _, file := range files {
@@ -210,15 +210,15 @@ func (s *Scanner) runMovieScan(directory string, changes *scanner.Changes) {
 		return
 	}
 	s.phase(report, scanner.PhaseCleanup)
-	if reconciliation.RefusesCleanup(changes) {
-		s.logger.Warn("movie cleanup skipped: the library looked empty", "directory", directory)
-		report.Issue("", scanner.PhaseCleanup, scanner.ReasonCleanupSkippedEmpty)
-	} else {
-		report.status.Deleted, err = s.cleanupMissingMovie(ctx, scan, reconciliation)
-		if err != nil {
-			fail(err, scanner.ReasonCleanupUnsafe)
-			return
-		}
+	kept, reason := reconciliation.Guard(changes)
+	if reason != "" {
+		s.logger.Warn("movie cleanup kept files that looked unmounted", "directory", directory, "files", kept)
+		report.Issue("", scanner.PhaseCleanup, reason)
+	}
+	report.status.Deleted, err = s.cleanupMissingMovie(ctx, scan, reconciliation)
+	if err != nil {
+		fail(err, scanner.ReasonCleanupUnsafe)
+		return
 	}
 	s.phase(report, scanner.PhaseEnrichment)
 	s.enrichMovies(ctx, scan, report, files)

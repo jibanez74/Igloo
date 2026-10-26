@@ -25,9 +25,10 @@ type Changes struct {
 	// Paths are relative to the library root. A path that no longer exists
 	// removes the catalog rows at or beneath it.
 	Paths []string
-	// CatchUp walks the whole library instead, after the watcher could not
-	// see what changed. It keeps FileQuietPeriod and refuses cleanup when the
-	// walk finds nothing, since an empty root is more likely a dropped mount.
+	// CatchUp walks the whole library instead, after nothing could see what
+	// changed: at startup, or once the watcher armed or lost events. It keeps
+	// FileQuietPeriod, and its cleanup keeps files that look unmounted rather
+	// than deleted; see Reconciliation.Guard.
 	CatchUp bool
 	// OnDeferred hands back each file the run deferred, with the time it
 	// becomes eligible when known, so the watcher can retry it. It runs on the
@@ -35,7 +36,13 @@ type Changes struct {
 	OnDeferred func(path string, eligibleAt time.Time)
 }
 
-// A nil *Changes is a library scan: requested by an admin or run at startup.
+// A nil *Changes is a library scan an admin requested.
+
+// HandsBackDeferred reports a run whose deferred files the watcher retries;
+// any other run words and retries its own.
+func (c *Changes) HandsBackDeferred() bool {
+	return c != nil && c.OnDeferred != nil
+}
 
 // Scoped reports a run limited to Paths.
 func (c *Changes) Scoped() bool {
@@ -62,7 +69,7 @@ func (c *Changes) QuietPeriod() time.Duration {
 
 // Deferred reports a deferred file to the watcher, as a path relative to root.
 func (c *Changes) Deferred(root, path string, eligibleAt time.Time) {
-	if c == nil || c.OnDeferred == nil {
+	if !c.HandsBackDeferred() {
 		return
 	}
 	relative, err := filepath.Rel(root, path)
@@ -75,7 +82,7 @@ func (c *Changes) Deferred(root, path string, eligibleAt time.Time) {
 // DeferredReason is the issue text for a deferred file: the watcher retries
 // what its runs defer, while a library scan words its own retry.
 func (c *Changes) DeferredReason(libraryScan string) string {
-	if c == nil {
+	if !c.HandsBackDeferred() {
 		return libraryScan
 	}
 	return ReasonFileDeferredWatched

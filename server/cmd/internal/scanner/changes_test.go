@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -54,14 +55,19 @@ func TestChangesResolve(t *testing.T) {
 
 func TestChangesQuietPeriodAndDeferred(t *testing.T) {
 	var library *Changes
-	catchUp := &Changes{CatchUp: true}
-	scoped := &Changes{Paths: []string{"a.mkv"}}
+	onDeferred := func(string, time.Time) {}
+	catchUp := &Changes{CatchUp: true, OnDeferred: onDeferred}
+	scoped := &Changes{Paths: []string{"a.mkv"}, OnDeferred: onDeferred}
+	startup := &Changes{CatchUp: true}
 	const libraryReason = "retried on the next scan"
 	if scoped.QuietPeriod() != ChangeQuietPeriod || !scoped.Scoped() || scoped.Scope() != ScopeChanges || scoped.DeferredReason(libraryReason) != ReasonFileDeferredWatched {
 		t.Fatal("a run of changes must use ChangeQuietPeriod, be scoped, and leave deferred files to the watcher")
 	}
 	if catchUp.QuietPeriod() != FileQuietPeriod || catchUp.Scoped() || catchUp.Scope() != ScopeLibrary || catchUp.DeferredReason(libraryReason) != ReasonFileDeferredWatched {
 		t.Fatal("a catch-up run must keep FileQuietPeriod and walk everything, and the watcher retries what it defers")
+	}
+	if startup.HandsBackDeferred() || startup.DeferredReason(libraryReason) != libraryReason {
+		t.Fatal("a startup catch-up has no watcher to hand its deferred files to")
 	}
 	if library.QuietPeriod() != FileQuietPeriod || library.Scoped() || library.Scope() != ScopeLibrary || library.DeferredReason(libraryReason) != libraryReason || library.Resolve("/library") != nil {
 		t.Fatal("a library scan keeps today's behavior")
@@ -182,31 +188,69 @@ func TestWalkChangesStopsOnCancelAndVisitError(t *testing.T) {
 	}
 }
 
-func TestReconciliationRefusesCleanupOnlyForAnEmptyCatchUp(t *testing.T) {
+func TestReconciliationGuardKeepsOnlyACatchUpFromAnEmptyWalk(t *testing.T) {
 	root := t.TempDir()
-	files := []CatalogFile{{1, filepath.Join(root, "A", "a.mkv")}}
+	files := []CatalogFile{{ID: 1, Path: filepath.Join(root, "A", "a.mkv")}}
+	newReconciliation := func(files []CatalogFile) *Reconciliation {
+		r, err := NewReconciliation(context.Background(), root, files)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	catchUp := &Changes{CatchUp: true}
+	r := newReconciliation(files)
+	if kept, reason := r.Guard(catchUp); kept != 1 || reason != ReasonCleanupSkippedEmpty || len(r.Unseen()) != 0 {
+		t.Fatalf("a catch-up that saw nothing under a populated catalog kept %d (%q), unseen %v", kept, reason, r.Unseen())
+	}
+	for _, changes := range []*Changes{nil, {Paths: []string{"A"}}} {
+		r := newReconciliation(files)
+		if kept, reason := r.Guard(changes); kept != 0 || reason != "" || len(r.Unseen()) != 1 {
+			t.Fatalf("only a catch-up keeps files: %+v kept %d (%q)", changes, kept, reason)
+		}
+	}
+	if kept, reason := newReconciliation(nil).Guard(catchUp); kept != 0 || reason != "" {
+		t.Fatalf("an empty catalog has nothing to keep: %d (%q)", kept, reason)
+	}
+}
+
+// A disk mounted inside the library that has not come up leaves an empty
+// mount point on the root's filesystem: its files are missing, and the walk
+// found nothing else of the device they recorded.
+func TestReconciliationGuardKeepsFilesOfAFilesystemTheWalkFoundNothingOf(t *testing.T) {
+	root := t.TempDir()
+	info, err := os.Stat(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rootDevice := FingerprintOf(info).Device
+	path := func(name string) string { return filepath.Join(root, name) }
+	files := []CatalogFile{
+		{ID: 1, Path: path("disk1/seen.mkv"), Device: "remounted"},
+		{ID: 2, Path: path("disk1/gone.mkv"), Device: "remounted"},
+		{ID: 3, Path: path("disk2/a.mkv"), Device: "unmounted"},
+		{ID: 4, Path: path("disk2/b.mkv"), Device: "unmounted"},
+		{ID: 5, Path: path("local.mkv"), Device: rootDevice},
+		{ID: 6, Path: path("legacy.mkv")},
+	}
 	r, err := NewReconciliation(context.Background(), root, files)
 	if err != nil {
 		t.Fatal(err)
 	}
-	catchUp := &Changes{CatchUp: true}
-	if !r.RefusesCleanup(catchUp) {
-		t.Fatal("a catch-up that saw nothing under a populated catalog must not clean up")
-	}
-	if r.RefusesCleanup(nil) || r.RefusesCleanup(&Changes{Paths: []string{"A"}}) {
-		t.Fatal("only a catch-up refuses: a library scan and a run of changes clean up")
-	}
 	r.MarkSeen(files[0].Path)
-	if r.RefusesCleanup(catchUp) {
-		t.Fatal("a catch-up that saw a file cleans up")
+	kept, reason := r.Guard(&Changes{CatchUp: true})
+	if kept != 2 || reason != ReasonCleanupKeptUnmounted {
+		t.Fatalf("kept %d (%q), want the two files of the unmounted disk", kept, reason)
 	}
-
-	empty, err := NewReconciliation(context.Background(), root, nil)
-	if err != nil {
-		t.Fatal(err)
+	var ids []int64
+	for _, file := range r.Unseen() {
+		ids = append(ids, file.ID)
 	}
-	if empty.RefusesCleanup(catchUp) {
-		t.Fatal("an empty catalog has nothing to protect")
+	// A device the walk saw a cataloged file of is mounted, even under a
+	// number the root does not have; the root's own device is mounted; a file
+	// without a recorded device gives no evidence either way.
+	if want := []int64{2, 5, 6}; !slices.Equal(ids, want) {
+		t.Fatalf("cleanup candidates %v, want %v", ids, want)
 	}
 }
 

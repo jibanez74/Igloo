@@ -73,7 +73,10 @@ func main() {
 // ENABLE_WATCHER environment value seeds only for a new database. With the
 // watcher on, each library is walked once as soon as its watches are in place,
 // so no change made during that walk is missed; otherwise the startup scans
-// run as before and nothing watches the libraries.
+// run as before and nothing watches the libraries. A startup scan is a
+// catch-up, like the watcher's walks: nothing saw what changed while the
+// server was down, and a disk that has not mounted yet must not read as
+// deleted files.
 func startLibraryWork(app *Application) {
 	enabled := app.CurrentSettings().EnableWatcher
 	if enabled {
@@ -85,9 +88,10 @@ func startLibraryWork(app *Application) {
 }
 
 func startLibraryScansAtStartup(app *Application) {
-	app.startScanAtStartup(movieLibrary, app.MovieScanner.Start())
-	app.startScanAtStartup(showLibrary, app.ShowScanner.Start())
-	app.startScanAtStartup(musicLibrary, app.MusicScanner.Start())
+	catchUp := scanner.Changes{CatchUp: true}
+	app.startScanAtStartup(movieLibrary, app.MovieScanner.StartChanges(catchUp))
+	app.startScanAtStartup(showLibrary, app.ShowScanner.StartChanges(catchUp))
+	app.startScanAtStartup(musicLibrary, app.MusicScanner.StartChanges(catchUp))
 }
 
 func (app *Application) startScanAtStartup(library scanLibrary, result scanner.StartResult) {

@@ -12,10 +12,13 @@ import (
 	"igloo/cmd/internal/database"
 )
 
-// CatalogFile retains the original database identity even when paths need cleaning.
+// CatalogFile retains the original database identity even when paths need
+// cleaning. Device is the filesystem its stored fingerprint recorded; empty
+// without one.
 type CatalogFile struct {
-	ID   int64
-	Path string
+	ID     int64
+	Path   string
+	Device string
 }
 
 // Reconciliation owns filesystem decisions for one completed library walk.
@@ -59,12 +62,45 @@ func NewReconciliation(ctx context.Context, directory string, files []CatalogFil
 	return r, nil
 }
 
-// RefusesCleanup reports a catch-up whose walk found no file while the
-// catalog holds some under the root: what a dropped mount looks like, since
-// the empty mount point stays readable. Such a run must not remove anything.
-func (r *Reconciliation) RefusesCleanup(changes *Changes) bool {
+// Guard keeps a catch-up from deleting files that look unmounted rather than
+// deleted: a filesystem that is not mounted, such as a disk that came up late
+// after a power cut, leaves an empty, readable mount point. A walk that found
+// no file at all keeps every file. Otherwise a missing file is kept when the
+// walk found nothing of the filesystem its fingerprint recorded: it is not the
+// root's, and no cataloged file the walk saw recorded it either, which also
+// holds across a share mounted again under another device number. Guard
+// returns how many files it kept and the issue to report, empty when it kept
+// none. A library scan an admin requests deletes them, for a disk removed for
+// good.
+func (r *Reconciliation) Guard(changes *Changes) (int, string) {
 	catchUp := changes != nil && changes.CatchUp
-	return catchUp && len(r.seen) == 0 && len(r.candidates) > 0
+	if !catchUp || len(r.candidates) == 0 {
+		return 0, ""
+	}
+	if len(r.seen) == 0 {
+		kept := len(r.candidates)
+		r.candidates = nil
+		return kept, ReasonCleanupSkippedEmpty
+	}
+	present := map[string]bool{FingerprintOf(r.identity).Device: true}
+	for _, file := range r.candidates {
+		if r.saw(file) {
+			present[file.Device] = true
+		}
+	}
+	remaining := make([]CatalogFile, 0, len(r.candidates))
+	for _, file := range r.candidates {
+		unmounted := file.Device != "" && !present[file.Device]
+		if !unmounted {
+			remaining = append(remaining, file)
+		}
+	}
+	kept := len(r.candidates) - len(remaining)
+	r.candidates = remaining
+	if kept == 0 {
+		return 0, ""
+	}
+	return kept, ReasonCleanupKeptUnmounted
 }
 
 func (r *Reconciliation) MarkSeen(path string) {
@@ -74,11 +110,15 @@ func (r *Reconciliation) MarkSeen(path string) {
 	}
 }
 
+func (r *Reconciliation) saw(file CatalogFile) bool {
+	absolute, err := filepath.Abs(file.Path)
+	return err == nil && r.seen[absolute]
+}
+
 func (r *Reconciliation) Unseen() []CatalogFile {
 	files := make([]CatalogFile, 0)
 	for _, file := range r.candidates {
-		absolute, err := filepath.Abs(file.Path)
-		if err == nil && !r.seen[absolute] {
+		if !r.saw(file) {
 			files = append(files, file)
 		}
 	}

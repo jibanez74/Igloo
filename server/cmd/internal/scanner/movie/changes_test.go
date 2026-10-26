@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"sync"
 	"testing"
@@ -189,6 +190,57 @@ func TestMovieCatchUpRefusesToEmptyALibraryThatLooksUnmounted(t *testing.T) {
 	s.scan(root)
 	if len(catalogPaths(t, s)) != 0 {
 		t.Fatal("a requested library scan must still remove missing movies")
+	}
+}
+
+// A disk mounted inside the library that has not come up, after a power cut
+// on a server whose disks are mounted one per folder, leaves its empty mount
+// point. The catch-up keeps its movies, while a movie deleted from a disk that
+// is mounted still goes.
+func TestMovieCatchUpKeepsTheMoviesOfADiskThatIsNotMounted(t *testing.T) {
+	fixture := setupMovieScanner(t)
+	s := fixture.scanner
+	s.ffprobe = &scannertest.CountingProbe{Default: movieScannerMetadataFixture("120")}
+	root := t.TempDir()
+	kept := filepath.Join(root, "disk1", "A (2001)", "a.mkv")
+	deleted := filepath.Join(root, "disk1", "D (2004)", "d.mkv")
+	unmounted := []string{filepath.Join(root, "disk2", "B (2002)", "b.mkv"), filepath.Join(root, "disk2", "C (2003)", "c.mkv")}
+	for _, path := range append([]string{kept, deleted}, unmounted...) {
+		scannertest.WriteFile(t, path, filepath.Base(path))
+	}
+	s.scan(root)
+	// A test cannot mount a filesystem, so disk2's movies are recorded on a
+	// device of their own, as they would be.
+	_, err := fixture.db.Exec(`UPDATE movie_file_fingerprints SET device = 'disk2'
+		WHERE movie_id IN (SELECT id FROM movies WHERE file_path LIKE ?)`, filepath.Join(root, "disk2")+"/%")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, directory := range []string{filepath.Join(root, "disk2"), filepath.Dir(deleted)} {
+		err = os.RemoveAll(directory)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	err = os.Mkdir(filepath.Join(root, "disk2"), 0o755)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	s.scanChanges(root, scanner.Changes{CatchUp: true})
+	status := s.Status()
+	if got, want := catalogPaths(t, s), append([]string{kept}, unmounted...); !slices.Equal(got, want) {
+		t.Fatalf("after the catch-up: %q, want %q", got, want)
+	}
+	if status.Deleted != 1 || status.IssueCount != 1 || status.Issues[0].Reason != scanner.ReasonCleanupKeptUnmounted {
+		t.Fatalf("deleted=%d issues=%+v", status.Deleted, status.Issues)
+	}
+
+	// A library scan an admin asked for deletes them, for a disk removed for
+	// good.
+	s.scan(root)
+	if got := catalogPaths(t, s); !slices.Equal(got, []string{kept}) {
+		t.Fatalf("after the library scan: %q", got)
 	}
 }
 
