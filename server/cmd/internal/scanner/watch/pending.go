@@ -166,10 +166,10 @@ type batchItem struct {
 // ready once it is not being written and has been unchanged for the quiet
 // period; a removal waits while another path in the library is still
 // settling, within maxBatch, so both names of a rename land in one run. Ready
-// paths also wait for files that only need to finish their quiet period, so
-// files copied a moment apart, an album's tracks, dispatch as one run; the
-// hold lasts maxBatch at most, so a steady trickle of new files cannot starve
-// them.
+// paths wait for those removals, which may be the other name of one of them,
+// and for files that only need to finish their quiet period, so files copied
+// a moment apart, an album's tracks, dispatch as one run; the hold lasts
+// maxBatch at most, so a steady trickle of new files cannot starve them.
 func (p *pending) take(now time.Time, inspect inspectFunc) []batchItem {
 	if p.empty() {
 		return nil
@@ -181,7 +181,8 @@ func (p *pending) take(now time.Time, inspect inspectFunc) []batchItem {
 	var ready []batchItem
 	var removals []string
 	settling := false
-	quieting := time.Time{}
+	// holdUntil is when the last path the ready ones wait for is released.
+	holdUntil := time.Time{}
 	for rel, entry := range p.paths {
 		if entry.removal {
 			removals = append(removals, rel)
@@ -196,8 +197,8 @@ func (p *pending) take(now time.Time, inspect inspectFunc) []batchItem {
 		if at.After(now) {
 			settling = true
 			p.wake(at)
-			if !entry.writing && at.After(quieting) {
-				quieting = at
+			if !entry.writing && at.After(holdUntil) {
+				holdUntil = at
 			}
 			continue
 		}
@@ -208,23 +209,25 @@ func (p *pending) take(now time.Time, inspect inspectFunc) []batchItem {
 		released := entry.firstSeen.Add(p.timing.maxBatch)
 		held := settling && now.Before(released)
 		if entry.notBefore.After(now) {
-			p.wake(entry.notBefore)
-			continue
+			released, held = entry.notBefore, true
 		}
 		if held {
 			p.wake(released)
+			if released.After(holdUntil) {
+				holdUntil = released
+			}
 			continue
 		}
 		ready = append(ready, batchItem{rel: rel, entry: *entry})
 	}
-	if len(ready) > 0 && !quieting.IsZero() {
+	if len(ready) > 0 && !holdUntil.IsZero() {
 		if p.heldSince.IsZero() {
 			p.heldSince = now
 		}
 		released := p.heldSince.Add(p.timing.maxBatch)
 		if now.Before(released) {
 			// Wake once the last of them is quiet rather than at each one.
-			p.wakeAt = minTime(quieting, released)
+			p.wakeAt = minTime(holdUntil, released)
 			return nil
 		}
 	}

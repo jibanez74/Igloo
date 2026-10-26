@@ -272,3 +272,33 @@ func TestPendingHoldForSettlingFilesEndsAtTheCap(t *testing.T) {
 		t.Fatalf("a steady trickle starved the first file: dispatched %q", dispatched)
 	}
 }
+
+// A file still being written holds a removal back; the new name of a rename
+// must wait with it rather than dispatch alone, or the run that imports it
+// would not see the old name and the next would delete the episode.
+func TestPendingKeepsARenameTogetherWhileAnotherFileIsWritten(t *testing.T) {
+	start := time.Unix(1000, 0)
+	files := fakeFiles{}
+	p := newPending(testTiming)
+	for i := 0; i <= 8; i++ {
+		at := start.Add(time.Duration(i) * time.Second)
+		p.note("Copying (2024)/copying.mkv", changeWritten, at, false)
+		files["Copying (2024)/copying.mkv"] = at
+	}
+	renamedAt := start.Add(time.Second)
+	p.note("Movie (2001)/old.mkv", changeRemoved, renamedAt, false)
+	p.note("Movie (2001)/new.mkv", changeSettled, renamedAt, false)
+	files["Movie (2001)/new.mkv"] = renamedAt
+	if got := p.take(start.Add(10*time.Second), files.inspect); got != nil {
+		t.Fatalf("dispatched %q while the removal was held", rels(got))
+	}
+	released := renamedAt.Add(testTiming.maxBatch)
+	if due := p.due(); !due.Equal(released) {
+		t.Fatalf("due = %v, want the removal's cap %v", due, released)
+	}
+	got := rels(p.take(released, files.inspect))
+	want := []string{"Movie (2001)/new.mkv", "Movie (2001)/old.mkv"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("batch = %q, want both names together", got)
+	}
+}
