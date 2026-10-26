@@ -466,38 +466,6 @@ func (q *Queries) DeleteShowSeasonExtraVideo(ctx context.Context, seasonID int64
 	return err
 }
 
-const forgetShowEpisodeMatches = `-- name: ForgetShowEpisodeMatches :exec
-UPDATE show_episodes SET tmdb_id = NULL WHERE season_id IN (SELECT id FROM show_seasons WHERE show_id = ?)
-`
-
-func (q *Queries) ForgetShowEpisodeMatches(ctx context.Context, showID int64) error {
-	_, err := q.exec(ctx, q.forgetShowEpisodeMatchesStmt, forgetShowEpisodeMatches, showID)
-	return err
-}
-
-const forgetShowMatch = `-- name: ForgetShowMatch :exec
-UPDATE shows SET tmdb_id = NULL, imdb_id = NULL, name = local_name, updated_at = CURRENT_TIMESTAMP WHERE id = ?
-`
-
-// A matched show whose folder now names another title or year is searched
-// again: shows have no Identify, so renaming the folder is how a wrong match
-// is fixed. Its seasons and episodes forget theirs too, since a season or
-// episode whose stored identity disagrees with the new match is refused, and
-// all of them are queued, so the new match fills them.
-func (q *Queries) ForgetShowMatch(ctx context.Context, id int64) error {
-	_, err := q.exec(ctx, q.forgetShowMatchStmt, forgetShowMatch, id)
-	return err
-}
-
-const forgetShowSeasonMatches = `-- name: ForgetShowSeasonMatches :exec
-UPDATE show_seasons SET tmdb_id = NULL WHERE show_id = ?
-`
-
-func (q *Queries) ForgetShowSeasonMatches(ctx context.Context, showID int64) error {
-	_, err := q.exec(ctx, q.forgetShowSeasonMatchesStmt, forgetShowSeasonMatches, showID)
-	return err
-}
-
 const getCastByShowID = `-- name: GetCastByShowID :many
 SELECT
   sc.credit_id,
@@ -2741,17 +2709,6 @@ func (q *Queries) MarkShowEpisodeRetry(ctx context.Context, episodeID int64) err
 	return err
 }
 
-const markShowEpisodesRetry = `-- name: MarkShowEpisodesRetry :exec
-INSERT INTO show_episode_tmdb_retries (episode_id)
-SELECT e.id FROM show_episodes e JOIN show_seasons ss ON ss.id = e.season_id WHERE ss.show_id = ?
-ON CONFLICT DO NOTHING
-`
-
-func (q *Queries) MarkShowEpisodesRetry(ctx context.Context, showID int64) error {
-	_, err := q.exec(ctx, q.markShowEpisodesRetryStmt, markShowEpisodesRetry, showID)
-	return err
-}
-
 const markShowRetry = `-- name: MarkShowRetry :exec
 INSERT INTO show_tmdb_retries (show_id) VALUES (?) ON CONFLICT (show_id) DO UPDATE SET attempts = 0, last_attempt_at = NULL
 `
@@ -2770,15 +2727,6 @@ func (q *Queries) MarkShowSeasonRetry(ctx context.Context, seasonID int64) error
 	return err
 }
 
-const markShowSeasonsRetry = `-- name: MarkShowSeasonsRetry :exec
-INSERT INTO show_season_tmdb_retries (season_id) SELECT id FROM show_seasons WHERE show_id = ? ON CONFLICT DO NOTHING
-`
-
-func (q *Queries) MarkShowSeasonsRetry(ctx context.Context, showID int64) error {
-	_, err := q.exec(ctx, q.markShowSeasonsRetryStmt, markShowSeasonsRetry, showID)
-	return err
-}
-
 const moveShowDirectory = `-- name: MoveShowDirectory :one
 UPDATE shows SET
  directory_path = ?1,
@@ -2788,7 +2736,7 @@ UPDATE shows SET
  updated_at = CURRENT_TIMESTAMP
 WHERE shows.directory_path = ?4
  AND NOT EXISTS (SELECT 1 FROM shows AS taken WHERE taken.directory_path = ?1)
-RETURNING id, tmdb_id
+RETURNING id, tmdb_id, first_air_date
 `
 
 type MoveShowDirectoryParams struct {
@@ -2799,13 +2747,15 @@ type MoveShowDirectoryParams struct {
 }
 
 type MoveShowDirectoryRow struct {
-	ID     int64         `json:"id"`
-	TmdbID sql.NullInt64 `json:"tmdb_id"`
+	ID           int64          `json:"id"`
+	TmdbID       sql.NullInt64  `json:"tmdb_id"`
+	FirstAirDate sql.NullString `json:"first_air_date"`
 }
 
 // A renamed show folder keeps its show, seasons and episodes, and with them
 // watch progress. Its local name follows the folder, and so does an unmatched
-// show's display name. A folder that already has a show is left alone.
+// show's display name. A folder that already has a show is left alone. The
+// caller rolls the move back for a matched show the new name contradicts.
 func (q *Queries) MoveShowDirectory(ctx context.Context, arg MoveShowDirectoryParams) (MoveShowDirectoryRow, error) {
 	row := q.queryRow(ctx, q.moveShowDirectoryStmt, moveShowDirectory,
 		arg.NewPath,
@@ -2814,7 +2764,7 @@ func (q *Queries) MoveShowDirectory(ctx context.Context, arg MoveShowDirectoryPa
 		arg.DirectoryPath,
 	)
 	var i MoveShowDirectoryRow
-	err := row.Scan(&i.ID, &i.TmdbID)
+	err := row.Scan(&i.ID, &i.TmdbID, &i.FirstAirDate)
 	return i, err
 }
 
@@ -2830,9 +2780,9 @@ type MoveShowFileParams struct {
 	FilePath string `json:"file_path"`
 }
 
-// A file renamed or moved within its season keeps its row and episode links.
-// updated_at stays: the file's content is unchanged, and it keys the playback
-// caches.
+// A file renamed or moved within its season keeps its row. Processing then
+// checks it like any other file, and links it to the episodes its new name
+// gives.
 func (q *Queries) MoveShowFile(ctx context.Context, arg MoveShowFileParams) (int64, error) {
 	result, err := q.exec(ctx, q.moveShowFileStmt, moveShowFile,
 		arg.NewPath,

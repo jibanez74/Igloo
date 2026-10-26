@@ -345,15 +345,6 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.findMusicGenreIdentityStmt, err = db.PrepareContext(ctx, findMusicGenreIdentity); err != nil {
 		return nil, fmt.Errorf("error preparing query FindMusicGenreIdentity: %w", err)
 	}
-	if q.forgetShowEpisodeMatchesStmt, err = db.PrepareContext(ctx, forgetShowEpisodeMatches); err != nil {
-		return nil, fmt.Errorf("error preparing query ForgetShowEpisodeMatches: %w", err)
-	}
-	if q.forgetShowMatchStmt, err = db.PrepareContext(ctx, forgetShowMatch); err != nil {
-		return nil, fmt.Errorf("error preparing query ForgetShowMatch: %w", err)
-	}
-	if q.forgetShowSeasonMatchesStmt, err = db.PrepareContext(ctx, forgetShowSeasonMatches); err != nil {
-		return nil, fmt.Errorf("error preparing query ForgetShowSeasonMatches: %w", err)
-	}
 	if q.getAdminUserStmt, err = db.PrepareContext(ctx, getAdminUser); err != nil {
 		return nil, fmt.Errorf("error preparing query GetAdminUser: %w", err)
 	}
@@ -882,17 +873,11 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.markShowEpisodeWatchedFromProgressStmt, err = db.PrepareContext(ctx, markShowEpisodeWatchedFromProgress); err != nil {
 		return nil, fmt.Errorf("error preparing query MarkShowEpisodeWatchedFromProgress: %w", err)
 	}
-	if q.markShowEpisodesRetryStmt, err = db.PrepareContext(ctx, markShowEpisodesRetry); err != nil {
-		return nil, fmt.Errorf("error preparing query MarkShowEpisodesRetry: %w", err)
-	}
 	if q.markShowRetryStmt, err = db.PrepareContext(ctx, markShowRetry); err != nil {
 		return nil, fmt.Errorf("error preparing query MarkShowRetry: %w", err)
 	}
 	if q.markShowSeasonRetryStmt, err = db.PrepareContext(ctx, markShowSeasonRetry); err != nil {
 		return nil, fmt.Errorf("error preparing query MarkShowSeasonRetry: %w", err)
-	}
-	if q.markShowSeasonsRetryStmt, err = db.PrepareContext(ctx, markShowSeasonsRetry); err != nil {
-		return nil, fmt.Errorf("error preparing query MarkShowSeasonsRetry: %w", err)
 	}
 	if q.moveMovieFileStmt, err = db.PrepareContext(ctx, moveMovieFile); err != nil {
 		return nil, fmt.Errorf("error preparing query MoveMovieFile: %w", err)
@@ -1762,21 +1747,6 @@ func (q *Queries) Close() error {
 	if q.findMusicGenreIdentityStmt != nil {
 		if cerr := q.findMusicGenreIdentityStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing findMusicGenreIdentityStmt: %w", cerr)
-		}
-	}
-	if q.forgetShowEpisodeMatchesStmt != nil {
-		if cerr := q.forgetShowEpisodeMatchesStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing forgetShowEpisodeMatchesStmt: %w", cerr)
-		}
-	}
-	if q.forgetShowMatchStmt != nil {
-		if cerr := q.forgetShowMatchStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing forgetShowMatchStmt: %w", cerr)
-		}
-	}
-	if q.forgetShowSeasonMatchesStmt != nil {
-		if cerr := q.forgetShowSeasonMatchesStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing forgetShowSeasonMatchesStmt: %w", cerr)
 		}
 	}
 	if q.getAdminUserStmt != nil {
@@ -2659,11 +2629,6 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing markShowEpisodeWatchedFromProgressStmt: %w", cerr)
 		}
 	}
-	if q.markShowEpisodesRetryStmt != nil {
-		if cerr := q.markShowEpisodesRetryStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing markShowEpisodesRetryStmt: %w", cerr)
-		}
-	}
 	if q.markShowRetryStmt != nil {
 		if cerr := q.markShowRetryStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing markShowRetryStmt: %w", cerr)
@@ -2672,11 +2637,6 @@ func (q *Queries) Close() error {
 	if q.markShowSeasonRetryStmt != nil {
 		if cerr := q.markShowSeasonRetryStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing markShowSeasonRetryStmt: %w", cerr)
-		}
-	}
-	if q.markShowSeasonsRetryStmt != nil {
-		if cerr := q.markShowSeasonsRetryStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing markShowSeasonsRetryStmt: %w", cerr)
 		}
 	}
 	if q.moveMovieFileStmt != nil {
@@ -3375,9 +3335,6 @@ type Queries struct {
 	findMusicAlbumIdentityStmt                  *sql.Stmt
 	findMusicArtistIdentityStmt                 *sql.Stmt
 	findMusicGenreIdentityStmt                  *sql.Stmt
-	forgetShowEpisodeMatchesStmt                *sql.Stmt
-	forgetShowMatchStmt                         *sql.Stmt
-	forgetShowSeasonMatchesStmt                 *sql.Stmt
 	getAdminUserStmt                            *sql.Stmt
 	getAlbumByAppleIDStmt                       *sql.Stmt
 	getAlbumByIDStmt                            *sql.Stmt
@@ -3554,10 +3511,8 @@ type Queries struct {
 	markShowEpisodeUnwatchedStmt                *sql.Stmt
 	markShowEpisodeWatchedStmt                  *sql.Stmt
 	markShowEpisodeWatchedFromProgressStmt      *sql.Stmt
-	markShowEpisodesRetryStmt                   *sql.Stmt
 	markShowRetryStmt                           *sql.Stmt
 	markShowSeasonRetryStmt                     *sql.Stmt
-	markShowSeasonsRetryStmt                    *sql.Stmt
 	moveMovieFileStmt                           *sql.Stmt
 	moveMusicAlbumAliasesStmt                   *sql.Stmt
 	moveMusicAlbumFallbackStmt                  *sql.Stmt
@@ -3781,9 +3736,6 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		findMusicAlbumIdentityStmt:                  q.findMusicAlbumIdentityStmt,
 		findMusicArtistIdentityStmt:                 q.findMusicArtistIdentityStmt,
 		findMusicGenreIdentityStmt:                  q.findMusicGenreIdentityStmt,
-		forgetShowEpisodeMatchesStmt:                q.forgetShowEpisodeMatchesStmt,
-		forgetShowMatchStmt:                         q.forgetShowMatchStmt,
-		forgetShowSeasonMatchesStmt:                 q.forgetShowSeasonMatchesStmt,
 		getAdminUserStmt:                            q.getAdminUserStmt,
 		getAlbumByAppleIDStmt:                       q.getAlbumByAppleIDStmt,
 		getAlbumByIDStmt:                            q.getAlbumByIDStmt,
@@ -3960,10 +3912,8 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		markShowEpisodeUnwatchedStmt:                q.markShowEpisodeUnwatchedStmt,
 		markShowEpisodeWatchedStmt:                  q.markShowEpisodeWatchedStmt,
 		markShowEpisodeWatchedFromProgressStmt:      q.markShowEpisodeWatchedFromProgressStmt,
-		markShowEpisodesRetryStmt:                   q.markShowEpisodesRetryStmt,
 		markShowRetryStmt:                           q.markShowRetryStmt,
 		markShowSeasonRetryStmt:                     q.markShowSeasonRetryStmt,
-		markShowSeasonsRetryStmt:                    q.markShowSeasonsRetryStmt,
 		moveMovieFileStmt:                           q.moveMovieFileStmt,
 		moveMusicAlbumAliasesStmt:                   q.moveMusicAlbumAliasesStmt,
 		moveMusicAlbumFallbackStmt:                  q.moveMusicAlbumFallbackStmt,

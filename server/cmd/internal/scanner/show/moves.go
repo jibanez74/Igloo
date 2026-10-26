@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
@@ -88,38 +89,41 @@ func (s *Scanner) applyMoves(ctx context.Context, scan *showScanContext, report 
 	}
 }
 
+// errShowRenamedAway rolls back the move of a matched show whose new folder
+// name contradicts its match.
+var errShowRenamedAway = errors.New("matched show renamed to another title or year")
+
 // moveShow re-keys the show of a renamed folder to its new folder. Its local
 // name follows the folder, and an unmatched show is searched again at once,
-// since a rename is how a wrong or missing match is fixed. So is a matched
-// show whose folder now names another title or year: shows have no Identify,
-// so renaming the folder is how a wrong match is fixed, and its seasons and
-// episodes forget their matches with it, which a new match would contradict.
+// since a rename is how a wrong or missing match is fixed. A matched show
+// moves while the new name agrees with its match: the same title, and the
+// same year, no year, or a year added that its first air date bears out, as
+// Sonarr's {Series TitleYear} folders add. Any other rename of a matched show
+// is how a wrong match is fixed, since shows have no Identify, so its files
+// are imported as a new show and searched again, as before.
 func (s *Scanner) moveShow(ctx context.Context, folder string, before, target localEpisodeFile) bool {
 	_, err := os.Stat(folder)
 	gone := errors.Is(err, fs.ErrNotExist)
 	if !gone {
 		return false
 	}
-	renamed := before.title != target.title || before.year != target.year
 	err = s.tx.Run(ctx, func(q *database.Queries) error {
 		show, err := q.MoveShowDirectory(ctx, database.MoveShowDirectoryParams{NewPath: target.showPath, LocalName: target.title, PremiereYear: helpers.NullInt64(int64(target.year)), DirectoryPath: folder})
 		if err != nil {
 			return err
 		}
-		rematch := show.TmdbID.Valid && renamed
-		if rematch {
-			err = forgetShowMatch(ctx, q, show.ID)
-			if err != nil {
-				return err
-			}
-		}
-		if !show.TmdbID.Valid || rematch {
+		if !show.TmdbID.Valid {
 			return q.MarkShowRetry(ctx, show.ID)
+		}
+		agrees := keepsMatch(before, target, show.FirstAirDate.String)
+		if !agrees {
+			return errShowRenamedAway
 		}
 		return nil
 	}, nil)
-	// No show had the old folder, or the new folder already has one.
-	unmoved := errors.Is(err, sql.ErrNoRows)
+	// No show had the old folder, the new folder already has one, or the new
+	// name contradicts the show's match.
+	unmoved := errors.Is(err, sql.ErrNoRows) || errors.Is(err, errShowRenamedAway)
 	if unmoved {
 		return false
 	}
@@ -131,18 +135,19 @@ func (s *Scanner) moveShow(ctx context.Context, folder string, before, target lo
 	return true
 }
 
-// forgetShowMatch clears a show's TMDB identity, and its seasons' and
-// episodes', and queues all of them for enrichment.
-func forgetShowMatch(ctx context.Context, q *database.Queries, showID int64) error {
-	for _, forget := range []func(context.Context, int64) error{
-		q.ForgetShowMatch, q.ForgetShowSeasonMatches, q.ForgetShowEpisodeMatches, q.MarkShowSeasonsRetry, q.MarkShowEpisodesRetry,
-	} {
-		err := forget(ctx, showID)
-		if err != nil {
-			return err
-		}
+// keepsMatch reports whether a matched show's renamed folder still names it:
+// the same title, and the same year, no year, or a year added that its first
+// air date (YYYY-MM-DD) bears out.
+func keepsMatch(before, target localEpisodeFile, firstAirDate string) bool {
+	if before.title != target.title {
+		return false
 	}
-	return nil
+	airYear := ""
+	if len(firstAirDate) >= 4 {
+		airYear = firstAirDate[:4]
+	}
+	added := before.year == 0 && strconv.Itoa(target.year) == airYear
+	return target.year == before.year || target.year == 0 || added
 }
 
 // moveFile re-keys one episode file.
