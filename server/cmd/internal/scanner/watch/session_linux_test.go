@@ -1198,21 +1198,13 @@ func TestWatcherWalksAgainAfterEventsLostDuringTheSetup(t *testing.T) {
 	scannertest.WriteFile(t, filepath.Join(slow, "slow.mkv"), "slow")
 	gate := make(chan struct{})
 	entered := make(chan struct{}, 1)
-	lossy, open := newLossyNotifier(t)
-	hooked, _ := newHookedNotifier(func(path string) {
+	lossy, open := newHookedLossyNotifier(t, func(path string) {
 		if path == slow {
 			entered <- struct{}{}
 			<-gate
 		}
 	})
-	fixture.watcher.open = func(wait *sync.WaitGroup) (notifier, error) {
-		inner, err := open(wait)
-		if err != nil {
-			return nil, err
-		}
-		hooked.notifier = inner
-		return &eventsOf{hookedNotifier: hooked, out: lossy.events()}, nil
-	}
+	fixture.watcher.open = open
 	fixture.watcher.Sync(true)
 	scannertest.WaitForSignal(t, entered, 5*time.Second, "the setup walk")
 	lossy.losing.Store(true)
@@ -1232,6 +1224,64 @@ func TestWatcherWalksAgainAfterEventsLostDuringTheSetup(t *testing.T) {
 	if !slices.Equal(got, []string{"Lost (2021)/later.mkv"}) {
 		t.Fatalf("create in a directory whose events were lost during the setup: %q", got)
 	}
+}
+
+// A removal seen before an overflow may be half of a rename whose new name
+// was lost. Dispatched alone, it would delete an episode and its progress, so
+// the library's changes wait for the walk after the lost events and its
+// catch-up, which sees both names at once.
+func TestWatcherHoldsChangesUntilTheCatchUpAfterLostEvents(t *testing.T) {
+	fixture := newWatcherFixture(t, nil)
+	root, err := filepath.EvalSymlinks(fixture.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	episode := filepath.Join(root, "Show (2020)", "ep.mkv")
+	scannertest.WriteFile(t, episode, "ep")
+	gate := make(chan struct{})
+	entered := make(chan struct{}, 1)
+	var gated atomic.Bool
+	lossy, open := newHookedLossyNotifier(t, func(path string) {
+		if path == root && gated.CompareAndSwap(true, false) {
+			entered <- struct{}{}
+			<-gate
+		}
+	})
+	fixture.watcher.open = open
+	fixture.watcher.Sync(true)
+	if !fixture.scanner.next(t).CatchUp {
+		t.Fatal("expected the first catch-up")
+	}
+
+	gated.Store(true)
+	err = os.Remove(episode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lossy.out <- rawEvent{wd: -1, op: opOverflow}
+	scannertest.WaitForSignal(t, entered, 5*time.Second, "the walk after the lost events")
+	fixture.scanner.quiet(t, 300*time.Millisecond)
+	close(gate)
+	if !fixture.scanner.next(t).CatchUp {
+		t.Fatal("the catch-up must come before the held removal")
+	}
+}
+
+// newHookedLossyNotifier is a hooked notifier whose events pass through a
+// lossy one, so a test can both hold a walk and inject an overflow.
+func newHookedLossyNotifier(t *testing.T, hook func(path string)) (*lossyNotifier, func(*sync.WaitGroup) (notifier, error)) {
+	t.Helper()
+	lossy, openLossy := newLossyNotifier(t)
+	hooked, _ := newHookedNotifier(hook)
+	open := func(wait *sync.WaitGroup) (notifier, error) {
+		inner, err := openLossy(wait)
+		if err != nil {
+			return nil, err
+		}
+		hooked.notifier = inner
+		return &eventsOf{hookedNotifier: hooked, out: lossy.events()}, nil
+	}
+	return lossy, open
 }
 
 // eventsOf serves a hooked notifier's watches with another channel's events.

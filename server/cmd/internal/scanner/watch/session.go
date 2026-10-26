@@ -78,6 +78,14 @@ type library struct {
 	rewatchAgain bool
 }
 
+// awaitingCatchUp reports a library owed a walk of the whole library, whose
+// changes wait until it has started: they may be half of a change whose other
+// half was lost, such as a rename's old name without its new one, which a run
+// of changes would apply as a deletion.
+func (lib *library) awaitingCatchUp() bool {
+	return lib.rewatching || lib.catchUp
+}
+
 // rootProbe is what arming learns about a library root: its path with
 // symlinks resolved, and the network or FUSE filesystem holding it or mounted
 // inside it, if any.
@@ -305,9 +313,11 @@ func (s *session) wakeTimes(lib *library) []time.Time {
 	if lib.offline {
 		return times
 	}
-	times = append(times, lib.pending.due())
 	if lib.catchUp {
 		times = append(times, lib.retryAt)
+	}
+	if !lib.awaitingCatchUp() {
+		times = append(times, lib.pending.due())
 	}
 	return times
 }
@@ -773,6 +783,9 @@ func (s *session) dispatch(now time.Time) {
 		catchUpDue := lib.catchUp && !now.Before(lib.retryAt)
 		if catchUpDue {
 			s.startCatchUp(lib, now)
+		}
+		if lib.awaitingCatchUp() {
+			continue
 		}
 		due := lib.pending.due()
 		if due.IsZero() || now.Before(due) {
