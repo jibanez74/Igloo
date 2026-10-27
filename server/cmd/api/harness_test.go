@@ -221,13 +221,19 @@ func bootTestApp(t *testing.T, db *sql.DB, config RuntimeConfig) *Application {
 }
 
 // artworkRequests stands in for the artwork syncer and counts the passes
-// requested of it.
+// and the reverts requested of it.
 type artworkRequests struct {
-	count atomic.Int32
+	count   atomic.Int32
+	reverts atomic.Int32
 }
 
 func (a *artworkRequests) Request() {
 	a.count.Add(1)
+}
+
+func (a *artworkRequests) Revert(context.Context) error {
+	a.reverts.Add(1)
+	return nil
 }
 
 // stopBackgroundWork cancels scans at cleanup and waits for app.Wait, so no

@@ -20,7 +20,8 @@ import (
 // The whole way a downloaded image goes: turning the setting on starts a
 // pass, the pass stores the copy in the static directory and points the movie
 // at it, and the API serves the copy at the URL the movie returns. Turning it
-// off returns the TMDB path and deletes the copy.
+// off returns the TMDB path as soon as the save answers, and a pass then
+// deletes the copy.
 func TestDownloadImages_ServesTheMoviePosterFromTheStaticDirectory(t *testing.T) {
 	app := setupSessionTestApp(t)
 	admin := createTestUser(t, app, "Settings Admin", "settings-admin@example.com", true)
@@ -78,10 +79,14 @@ func TestDownloadImages_ServesTheMoviePosterFromTheStaticDirectory(t *testing.T)
 		if w.Code != http.StatusOK {
 			t.Fatalf("save settings: %d %s", w.Code, w.Body.String())
 		}
+	}
+	waitForPass := func() {
+		t.Helper()
 		scannertest.WaitForGroup(t, app.Wait, 10*time.Second, "the artwork pass")
 	}
 
 	saveDownloadImages(true)
+	waitForPass()
 
 	served := moviePoster()
 	if !strings.HasPrefix(served, "/api/static/movies/603/the_matrix_poster.png?v=") {
@@ -96,10 +101,10 @@ func TestDownloadImages_ServesTheMoviePosterFromTheStaticDirectory(t *testing.T)
 	}
 
 	saveDownloadImages(false)
-
 	if moviePoster() != "/poster.jpg" {
-		t.Fatalf("poster_path = %q after turning downloads off, want the TMDB path", moviePoster())
+		t.Fatalf("poster_path = %q right after turning downloads off, want the TMDB path", moviePoster())
 	}
+	waitForPass()
 	_, err = os.Stat(filepath.Join(staticDir, "movies"))
 	if !os.IsNotExist(err) {
 		t.Fatalf("the movies folder is still there: %v", err)

@@ -3,6 +3,16 @@
 -- at the end of schema.sql keep the two in step for every other writer. The
 -- syncer's writes leave updated_at alone, like the triggers.
 
+-- name: GetArtworkStaticDir :one
+SELECT static_dir FROM artwork_state WHERE id = 1;
+
+-- name: SetArtworkStaticDir :exec
+INSERT INTO artwork_state (id, static_dir) VALUES (1, ?)
+ON CONFLICT (id) DO UPDATE SET static_dir = excluded.static_dir;
+
+-- name: ClearArtworkStaticDir :exec
+DELETE FROM artwork_state;
+
 -- name: ListMovieArtwork :many
 SELECT id, tmdb_id, title, poster_path, poster_path_source, backdrop_path, backdrop_path_source
 FROM movies

@@ -10,6 +10,31 @@ import (
 	"database/sql"
 )
 
+const clearArtworkStaticDir = `-- name: ClearArtworkStaticDir :exec
+DELETE FROM artwork_state
+`
+
+func (q *Queries) ClearArtworkStaticDir(ctx context.Context) error {
+	_, err := q.exec(ctx, q.clearArtworkStaticDirStmt, clearArtworkStaticDir)
+	return err
+}
+
+const getArtworkStaticDir = `-- name: GetArtworkStaticDir :one
+
+SELECT static_dir FROM artwork_state WHERE id = 1
+`
+
+// Library artwork, kept by the artwork syncer. Each image column is the value
+// the API returns and its _source column the provider reference; the triggers
+// at the end of schema.sql keep the two in step for every other writer. The
+// syncer's writes leave updated_at alone, like the triggers.
+func (q *Queries) GetArtworkStaticDir(ctx context.Context) (string, error) {
+	row := q.queryRow(ctx, q.getArtworkStaticDirStmt, getArtworkStaticDir)
+	var static_dir string
+	err := row.Scan(&static_dir)
+	return static_dir, err
+}
+
 const listArtistArtwork = `-- name: ListArtistArtwork :many
 SELECT id, tmdb_id, name, profile, profile_source
 FROM artist
@@ -61,7 +86,6 @@ func (q *Queries) ListArtistArtwork(ctx context.Context, arg ListArtistArtworkPa
 }
 
 const listMovieArtwork = `-- name: ListMovieArtwork :many
-
 SELECT id, tmdb_id, title, poster_path, poster_path_source, backdrop_path, backdrop_path_source
 FROM movies
 WHERE id > ?1
@@ -85,10 +109,6 @@ type ListMovieArtworkRow struct {
 	BackdropPathSource sql.NullString `json:"-"`
 }
 
-// Library artwork, kept by the artwork syncer. Each image column is the value
-// the API returns and its _source column the provider reference; the triggers
-// at the end of schema.sql keep the two in step for every other writer. The
-// syncer's writes leave updated_at alone, like the triggers.
 func (q *Queries) ListMovieArtwork(ctx context.Context, arg ListMovieArtworkParams) ([]ListMovieArtworkRow, error) {
 	rows, err := q.query(ctx, q.listMovieArtworkStmt, listMovieArtwork, arg.AfterID, arg.PageSize)
 	if err != nil {
@@ -443,6 +463,16 @@ func (q *Queries) SetArtistProfileArtwork(ctx context.Context, arg SetArtistProf
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const setArtworkStaticDir = `-- name: SetArtworkStaticDir :exec
+INSERT INTO artwork_state (id, static_dir) VALUES (1, ?)
+ON CONFLICT (id) DO UPDATE SET static_dir = excluded.static_dir
+`
+
+func (q *Queries) SetArtworkStaticDir(ctx context.Context, staticDir string) error {
+	_, err := q.exec(ctx, q.setArtworkStaticDirStmt, setArtworkStaticDir, staticDir)
+	return err
 }
 
 const setMovieBackdropArtwork = `-- name: SetMovieBackdropArtwork :execrows

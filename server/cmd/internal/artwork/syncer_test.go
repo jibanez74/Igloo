@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -754,5 +755,134 @@ func TestPass_KeepsTwoImagesOfOneNameApart(t *testing.T) {
 	}
 	if h.upstream.requests("/w500/season-poster.jpg") != 0 {
 		t.Fatal("downloaded an image whose file name another image holds")
+	}
+}
+
+// A key folder is the syncer's own; one that is a symlink, here into the movie
+// library, is never written through, and a copy reached through one is not
+// taken for one the syncer wrote.
+func TestPass_NeverWritesThroughALinkedKeyFolder(t *testing.T) {
+	h := newHarness(t)
+	// Movie 1 is still remote, so a pass would download into its folder;
+	// movie 2 already points at a file its linked folder leads to.
+	h.addMovie(1, 603, "The Matrix", "/matrix-poster.jpg", "")
+	h.addMovie(2, 604, "The Matrix Reloaded", "/reloaded-poster.jpg", "")
+	h.exec(`UPDATE movies SET poster_path = ? WHERE id = 2`, local("movies/604/the_matrix_reloaded_poster.png", "w500", "/reloaded-poster.jpg"))
+	err := os.MkdirAll(filepath.Join(h.static, "movies"), 0o755)
+	if err != nil {
+		t.Fatal(err)
+	}
+	libraryFiles := map[string]string{}
+	for key, name := range map[string]string{"603": "the_matrix_poster.png", "604": "the_matrix_reloaded_poster.png"} {
+		library := t.TempDir()
+		h.libraries = append(h.libraries, library)
+		libraryFiles[key] = filepath.Join(library, name)
+		err = os.WriteFile(libraryFiles[key], []byte("the library's own"), 0o644)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = os.Symlink(library, filepath.Join(h.static, "movies", key))
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	h.pass()
+
+	for key, path := range libraryFiles {
+		saved, err := os.ReadFile(path)
+		if err != nil || string(saved) != "the library's own" {
+			t.Errorf("folder %s: the library's file holds %q (%v), want it untouched", key, saved, err)
+		}
+	}
+	if h.upstream.total() != 0 {
+		t.Errorf("made %d requests for linked key folders", h.upstream.total())
+	}
+	for id, source := range map[int64]string{1: "/matrix-poster.jpg", 2: "/reloaded-poster.jpg"} {
+		got := h.value("movies", "poster_path", id).String
+		if got != source {
+			t.Errorf("movie %d poster = %q, want its source", id, got)
+		}
+	}
+}
+
+// Copies are trusted only in the directory they were made in. Back in a
+// directory used before, a file left there from an older source is replaced,
+// even though its name and the column's version agree.
+func TestPass_DownloadsAgainInADirectoryTheCopiesWereNotMadeIn(t *testing.T) {
+	h := newHarness(t)
+	h.addMovie(1, 603, "The Matrix", "/old-poster.jpg", "")
+	first := h.static
+	h.pass()
+
+	h.static = t.TempDir()
+	h.pass()
+	h.exec(`UPDATE movies SET poster_path_source = '/new-poster.jpg' WHERE id = 1`)
+	h.pass()
+
+	h.static = first
+	h.pass()
+
+	saved, err := os.ReadFile(filepath.Join(first, "movies", "603", "the_matrix_poster.png"))
+	if err != nil || !strings.HasSuffix(string(saved), "/w500/new-poster.jpg") {
+		t.Fatalf("the first directory's copy holds %q (%v), want the new poster", saved, err)
+	}
+	if h.value("movies", "poster_path", 1).String != local("movies/603/the_matrix_poster.png", "w500", "/new-poster.jpg") {
+		t.Fatalf("poster = %q", h.value("movies", "poster_path", 1).String)
+	}
+}
+
+// A pass that is downloading when downloads are turned off writes nothing
+// after that: the save's Revert and the pass's writes share the scanner
+// mutex, and each write first checks the setting.
+func TestPass_WritesNothingOnceDownloadsAreTurnedOff(t *testing.T) {
+	h := newHarness(t)
+	h.addMovie(1, 603, "The Matrix", "/matrix-poster.jpg", "")
+	var on atomic.Bool
+	on.Store(true)
+	h.syncer.enabled = on.Load
+	h.upstream.handlers["/w500/matrix-poster.jpg"] = func(w http.ResponseWriter, r *http.Request) {
+		on.Store(false)
+		w.Write([]byte(pngSignature))
+	}
+
+	h.pass()
+
+	if h.value("movies", "poster_path", 1).String != "/matrix-poster.jpg" {
+		t.Fatalf("poster = %q, want no copy written after downloads were turned off", h.value("movies", "poster_path", 1).String)
+	}
+	for _, entry := range h.logger.ErrorEntries {
+		t.Errorf("logged the stop as an error: %s %v", entry.Msg, entry.Args)
+	}
+}
+
+func TestRevert_PointsEveryColumnBackAtOnce(t *testing.T) {
+	h := newHarness(t)
+	h.addMovie(1, 603, "The Matrix", "/matrix-poster.jpg", "/matrix-backdrop.jpg")
+	h.addPerson(1, 6384, "Keanu Reeves", "/keanu.jpg")
+	h.addShow(1, 1438, "The Wire", "/wire-poster.jpg", "")
+	h.pass()
+
+	err := h.syncer.Revert(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, check := range []struct{ table, column, want string }{
+		{"movies", "poster_path", "/matrix-poster.jpg"},
+		{"movies", "backdrop_path", "/matrix-backdrop.jpg"},
+		{"artist", "profile", "/keanu.jpg"},
+		{"shows", "poster_path", "/wire-poster.jpg"},
+	} {
+		got := h.value(check.table, check.column, 1).String
+		if got != check.want {
+			t.Errorf("%s.%s = %q, want %q", check.table, check.column, got, check.want)
+		}
+	}
+	// The copies stay for the pass that follows; with downloads still on, it
+	// makes them again in the directory, since Revert forgot it.
+	h.pass()
+	if h.value("movies", "poster_path", 1).String != local("movies/603/the_matrix_poster.png", "w500", "/matrix-poster.jpg") {
+		t.Fatal("the pass after a Revert did not point the column at its copy again")
 	}
 }

@@ -1651,6 +1651,14 @@ CREATE TABLE IF NOT EXISTS library_mount_points (
 -- returned value; writing the same source again keeps a downloaded copy that
 -- replaced it, an /api/static/... URL. The triggers leave updated_at alone,
 -- since movie playback fingerprints include it.
+-- The static directory the artwork copies the image columns point at were made
+-- in, one row at most. Files a pass finds in any other directory may have been
+-- made from sources that changed since, so it starts that directory afresh.
+CREATE TABLE IF NOT EXISTS artwork_state (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  static_dir TEXT NOT NULL
+);
+
 CREATE TRIGGER IF NOT EXISTS movies_artwork_ai
 AFTER INSERT ON movies
 WHEN new.poster_path_source IS NOT NULL OR new.backdrop_path_source IS NOT NULL

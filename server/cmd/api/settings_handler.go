@@ -240,6 +240,13 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 		return
 	}
 	app.syncWatcher()
+	// Copies stop being served when downloads go off, and the URLs of the
+	// old directory's copies stop resolving when it moves.
+	dropsCopies := previous.DownloadImages &&
+		(!updatedSettings.DownloadImages || previous.StaticDir != updatedSettings.StaticDir)
+	if dropsCopies {
+		app.revertArtwork(r.Context())
+	}
 	artworkChanged := previous.DownloadImages != updatedSettings.DownloadImages || previous.StaticDir != updatedSettings.StaticDir
 	if artworkChanged {
 		app.syncArtwork()

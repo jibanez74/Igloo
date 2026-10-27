@@ -40,17 +40,7 @@ func (s *Syncer) removeCopies(ctx context.Context, staticDir string) {
 	clear(s.failures)
 	s.lastStaticDir = ""
 
-	var reverted int64
-	err := s.tx.Run(ctx, func(q *database.Queries) error {
-		for _, c := range columns {
-			n, err := c.revert(q, ctx)
-			if err != nil {
-				return fmt.Errorf("revert %s artwork: %w", c.label, err)
-			}
-			reverted += n
-		}
-		return nil
-	}, nil)
+	reverted, err := s.revertAll(ctx, "")
 	if err != nil {
 		s.logFailure(ctx, "failed to point artwork back at its providers", err)
 		return
@@ -66,6 +56,42 @@ func (s *Syncer) removeCopies(ctx context.Context, staticDir string) {
 	if changed {
 		s.logger.Info("removed downloaded artwork", "reverted", reverted, "removed_files", removed, "static_dir", staticDir)
 	}
+}
+
+// Revert points every image column back at its source at once, and forgets
+// the directory the copies were made in. A settings save that turns downloads
+// off or moves the static directory calls it before it answers, so a client
+// that refetches gets no URL of a copy about to be removed or left behind; a
+// pass then deletes or downloads the files.
+func (s *Syncer) Revert(ctx context.Context) error {
+	_, err := s.revertAll(ctx, "")
+	return err
+}
+
+// revertAll points every column back at its source in one transaction and
+// records staticDir as the directory copies are made in from now on, while
+// downloads are still on there, or forgets the directory when staticDir is
+// empty.
+func (s *Syncer) revertAll(ctx context.Context, staticDir string) (int64, error) {
+	var reverted int64
+	err := s.tx.Run(ctx, func(q *database.Queries) error {
+		isStale := staticDir != "" && !(s.enabled() && s.staticDir() == staticDir)
+		if isStale {
+			return errSettingsChanged
+		}
+		for _, c := range columns {
+			n, err := c.revert(q, ctx)
+			if err != nil {
+				return fmt.Errorf("revert %s artwork: %w", c.label, err)
+			}
+			reverted += n
+		}
+		if staticDir == "" {
+			return q.ClearArtworkStaticDir(ctx)
+		}
+		return q.SetArtworkStaticDir(ctx, staticDir)
+	}, nil)
+	return reverted, err
 }
 
 // target is where an image's copy belongs and what it is made from.
@@ -141,6 +167,27 @@ func (s *Syncer) keepCopies(ctx context.Context, staticDir string) {
 		s.logger.Error("not managing artwork in a folder that overlaps a media library; choose another static directory", "folder", filepath.Join(staticDir, dir), "library", library)
 	}
 
+	// The files in a directory other than the one the copies were made in
+	// may be older than their sources, even when their names and the
+	// columns' versions agree, so the pass downloads every copy there again.
+	recorded, err := s.queries.GetArtworkStaticDir(ctx)
+	if errors.Is(err, sql.ErrNoRows) {
+		recorded, err = "", nil
+	}
+	if err != nil {
+		s.logFailure(ctx, "failed to read the artwork directory", err)
+		return
+	}
+	var restarted int64
+	isNewDir := recorded != staticDir
+	if isNewDir {
+		restarted, err = s.revertAll(ctx, staticDir)
+		if err != nil {
+			s.logFailure(ctx, "failed to start artwork in a new static directory", err)
+			return
+		}
+	}
+
 	images, err := s.listImages(ctx)
 	if err != nil {
 		s.logFailure(ctx, "failed to list library artwork", err)
@@ -159,12 +206,13 @@ func (s *Syncer) keepCopies(ctx context.Context, staticDir string) {
 	}
 
 	applyFailed := false
-	reverted, err := s.apply(ctx, p.reverts, p.kept)
+	reverted, err := s.apply(ctx, staticDir, p.reverts, p.kept)
 	if err != nil {
 		applyFailed = true
 		s.logFailure(ctx, "failed to point stale artwork back at its providers", err)
 	}
-	reused, err := s.apply(ctx, p.reuses, p.kept)
+	reverted += int(restarted)
+	reused, err := s.apply(ctx, staticDir, p.reuses, p.kept)
 	if err != nil {
 		applyFailed = true
 		s.logFailure(ctx, "failed to point artwork at existing copies", err)
@@ -302,16 +350,27 @@ func (s *Syncer) plan(staticDir string, images []image, skipped map[string]strin
 	return p
 }
 
+// errSettingsChanged stops a pass whose setting or static directory changed
+// under it; the pass the change requested takes over.
+var errSettingsChanged = errors.New("download_images or static_dir changed during the pass")
+
 // apply writes the updates in transactions of applyBatchSize, records in kept
 // the copies a column now points at, and reports how many columns changed.
 // An update whose row has a new source by now is skipped: the source wins.
-func (s *Syncer) apply(ctx context.Context, updates []update, kept map[string]bool) (int, error) {
+// Each transaction first checks, under the scanner mutex that Revert takes
+// too, that downloads are still on in staticDir, so no column is pointed at a
+// copy after a settings save reverted them.
+func (s *Syncer) apply(ctx context.Context, staticDir string, updates []update, kept map[string]bool) (int, error) {
 	applied := 0
 	for start := 0; start < len(updates); start += applyBatchSize {
 		batch := updates[start:min(start+applyBatchSize, len(updates))]
 		batchApplied := 0
 		var landed []string
 		err := s.tx.Run(ctx, func(q *database.Queries) error {
+			isCurrent := s.enabled() && s.staticDir() == staticDir
+			if !isCurrent {
+				return errSettingsChanged
+			}
 			for _, u := range batch {
 				n, err := u.img.column.set(ctx, q, u.img.rowID, u.value, u.img.source)
 				if err != nil {
@@ -365,7 +424,7 @@ func (s *Syncer) downloadAll(ctx context.Context, staticDir string, p plan) (int
 		if !isDue || applyErr != nil {
 			return
 		}
-		_, applyErr = s.apply(ctx, pending, p.kept)
+		_, applyErr = s.apply(ctx, staticDir, pending, p.kept)
 		pending = pending[:0]
 	}
 
@@ -373,6 +432,10 @@ func (s *Syncer) downloadAll(ctx context.Context, staticDir string, p plan) (int
 		func() bool { return !breaker.Stopped && applyErr == nil && s.enabled() },
 		func(ctx context.Context, job *download) downloadResult {
 			dir := filepath.Join(staticDir, filepath.FromSlash(job.folder))
+			err := checkKeyFolder(dir)
+			if err != nil {
+				return downloadResult{job: job, err: err}
+			}
 			saved, err := helpers.DownloadImage(ctx, s.client, job.url, dir, job.stem)
 			return downloadResult{job: job, path: saved, err: err}
 		},
@@ -434,7 +497,7 @@ func classifyDownloadError(err error) (fatal, transient bool) {
 		return false, isServerSide
 	}
 
-	isContent := errors.Is(err, helpers.ErrUnsupportedImageType) || errors.Is(err, helpers.ErrImageTooLarge)
+	isContent := errors.Is(err, helpers.ErrUnsupportedImageType) || errors.Is(err, helpers.ErrImageTooLarge) || errors.Is(err, errLinkedKeyFolder)
 	return false, !isContent
 }
 
@@ -449,7 +512,7 @@ func isPermanentDownloadFailure(err error) bool {
 		return isClientSide && statusErr.StatusCode != http.StatusTooManyRequests
 	}
 
-	return errors.Is(err, helpers.ErrUnsupportedImageType) || errors.Is(err, helpers.ErrImageTooLarge)
+	return errors.Is(err, helpers.ErrUnsupportedImageType) || errors.Is(err, helpers.ErrImageTooLarge) || errors.Is(err, errLinkedKeyFolder)
 }
 
 // prune removes the managed files that are not in kept (every one when kept
@@ -594,13 +657,45 @@ func pathsOverlap(a, b string) bool {
 	return a == b || strings.HasPrefix(a, b+separator) || strings.HasPrefix(b, a+separator)
 }
 
-func fileExists(staticDir, rel string) bool {
-	info, err := os.Stat(filepath.Join(staticDir, filepath.FromSlash(rel)))
-	return err == nil && info.Mode().IsRegular()
+// errLinkedKeyFolder refuses a download into a key folder that is a symlink or
+// another non-directory: the syncer creates these folders itself, so one that
+// is not a real directory leads somewhere else, perhaps into a library.
+var errLinkedKeyFolder = errors.New("artwork folder is not a directory")
+
+// checkKeyFolder reports whether a copy can be written into the key folder
+// dir: it may not exist yet, but must not be a symlink.
+func checkKeyFolder(dir string) error {
+	info, err := os.Lstat(dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("%w: %s", errLinkedKeyFolder, dir)
+	}
+	return nil
 }
 
-// logFailure logs err unless shutdown caused it.
+// fileExists reports whether rel is a regular file in a real key folder; a
+// copy reached through a symlink is not one the syncer wrote.
+func fileExists(staticDir, rel string) bool {
+	path := filepath.Join(staticDir, filepath.FromSlash(rel))
+	folder, err := os.Lstat(filepath.Dir(path))
+	if err != nil || !folder.IsDir() {
+		return false
+	}
+	file, err := os.Lstat(path)
+	return err == nil && file.Mode().IsRegular()
+}
+
+// logFailure logs err unless shutdown or a settings change caused it.
 func (s *Syncer) logFailure(ctx context.Context, message string, err error) {
+	if errors.Is(err, errSettingsChanged) {
+		s.logger.Debug(message, "error", err)
+		return
+	}
 	if ctx.Err() != nil {
 		return
 	}

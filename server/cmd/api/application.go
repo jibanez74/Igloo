@@ -121,8 +121,12 @@ type Application struct {
 	// starts and stops it.
 	Watcher *watch.Watcher
 	// Artwork keeps the library artwork downloaded while download_images is
-	// on; Request starts a pass.
-	Artwork interface{ Request() }
+	// on; Request starts a pass, and Revert points the image columns back at
+	// their sources at once.
+	Artwork interface {
+		Request()
+		Revert(ctx context.Context) error
+	}
 }
 
 //go:embed all:webdist
@@ -383,6 +387,20 @@ func (app *Application) syncArtwork() {
 		return
 	}
 	app.Artwork.Request()
+}
+
+// revertArtwork points the image columns back at their sources before a
+// settings save answers, so the client's refetch finds none of the copies
+// the pass it requests will delete or leave behind. A failure is only
+// logged: that pass reverts them too.
+func (app *Application) revertArtwork(ctx context.Context) {
+	if app.Artwork == nil {
+		return
+	}
+	err := app.Artwork.Revert(ctx)
+	if err != nil {
+		app.Logger.Error("failed to point artwork back at its providers", "error", err)
+	}
 }
 
 // invalidateDeletedWatchRooms runs after scanner deletion commits, before movie

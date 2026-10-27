@@ -1,6 +1,12 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
+import {
+  ALBUM_DETAILS_KEY,
+  MOVIES_LIBRARY_KEY,
+  SHOW_DETAILS_KEY,
+} from "@/lib/constants";
 import { jsonResponse, requestURL } from "../helpers/api";
 import { authUserData } from "../helpers/fixtures";
 import { renderRoute } from "../helpers/render-route";
@@ -47,11 +53,33 @@ function mockGeneralSettings() {
   return saves;
 }
 
+// Cached pages that show library artwork, which a save that stops serving
+// the downloaded copies must send back to the server.
+const artworkQueryKeys = [
+  [MOVIES_LIBRARY_KEY, "seeded"],
+  [SHOW_DETAILS_KEY, 1],
+  [ALBUM_DETAILS_KEY, 1],
+  ["person", 6384],
+];
+
+function seedArtworkQueries(queryClient: QueryClient) {
+  for (const queryKey of artworkQueryKeys) {
+    queryClient.setQueryData(queryKey, { error: false, data: {} });
+  }
+}
+
+function invalidatedArtworkQueries(queryClient: QueryClient) {
+  return artworkQueryKeys.filter(
+    queryKey => queryClient.getQueryState(queryKey)?.isInvalidated,
+  );
+}
+
 describe("general settings: download images", () => {
   it("asks before a save that turns downloads off, since it deletes them", async () => {
     const saves = mockGeneralSettings();
     const user = userEvent.setup();
-    await renderRoute("/settings");
+    const { queryClient } = await renderRoute("/settings");
+    seedArtworkQueries(queryClient);
 
     const downloads = await screen.findByRole("switch", {
       name: "Download images",
@@ -69,6 +97,7 @@ describe("general settings: download images", () => {
     });
     expect(saves).toHaveLength(0);
     expect(downloads).toHaveAttribute("aria-checked", "false");
+    expect(invalidatedArtworkQueries(queryClient)).toEqual([]);
     // Focus goes back to what opened the dialog.
     await waitFor(() => {
       expect(
@@ -92,6 +121,8 @@ describe("general settings: download images", () => {
     await waitFor(() => {
       expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     });
+    // The cached pages still hold URLs of copies the server stopped serving.
+    expect(invalidatedArtworkQueries(queryClient)).toEqual(artworkQueryKeys);
     // The saved form disables Save, so focus lands on the switch instead.
     expect(screen.getByRole("button", { name: "Save Settings" })).toBeDisabled();
     await waitFor(() => {
@@ -102,7 +133,8 @@ describe("general settings: download images", () => {
   it("saves other changes without asking", async () => {
     const saves = mockGeneralSettings();
     const user = userEvent.setup();
-    await renderRoute("/settings");
+    const { queryClient } = await renderRoute("/settings");
+    seedArtworkQueries(queryClient);
 
     await user.click(
       await screen.findByRole("switch", { name: "Library watcher" }),
@@ -114,5 +146,26 @@ describe("general settings: download images", () => {
     });
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(saves[0]).toMatchObject({ download_images: true });
+    expect(invalidatedArtworkQueries(queryClient)).toEqual([]);
+  });
+
+  it("refreshes artwork pages after moving the static directory", async () => {
+    const saves = mockGeneralSettings();
+    const user = userEvent.setup();
+    const { queryClient } = await renderRoute("/settings");
+    seedArtworkQueries(queryClient);
+
+    const staticDir = await screen.findByLabelText("Static directory");
+    await user.clear(staticDir);
+    await user.type(staticDir, "/srv/igloo/static");
+    await user.click(screen.getByRole("button", { name: "Save Settings" }));
+
+    await waitFor(() => {
+      expect(saves).toHaveLength(1);
+    });
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(invalidatedArtworkQueries(queryClient)).toEqual(artworkQueryKeys);
+    });
   });
 });

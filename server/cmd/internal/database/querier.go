@@ -19,6 +19,7 @@ type Querier interface {
 	AddTrackToPlaylist(ctx context.Context, arg AddTrackToPlaylistParams) (int64, error)
 	AddWatchRoomMember(ctx context.Context, arg AddWatchRoomMemberParams) error
 	AdminUpdateUser(ctx context.Context, arg AdminUpdateUserParams) (AdminUpdateUserRow, error)
+	ClearArtworkStaticDir(ctx context.Context) error
 	ClearMovieTmdbRetry(ctx context.Context, movieID int64) error
 	// Drops what a match its tracks contradicted stored on the album; the next
 	// three statements drop its date and its tracks' pairings and outcomes.
@@ -172,6 +173,11 @@ type Querier interface {
 	// is set, so the values never leave the database.
 	GetAllUsers(ctx context.Context) ([]GetAllUsersRow, error)
 	GetArtistByTmdbID(ctx context.Context, tmdbID int64) (Artist, error)
+	// Library artwork, kept by the artwork syncer. Each image column is the value
+	// the API returns and its _source column the provider reference; the triggers
+	// at the end of schema.sql keep the two in step for every other writer. The
+	// syncer's writes leave updated_at alone, like the triggers.
+	GetArtworkStaticDir(ctx context.Context) (string, error)
 	// Audio streams for a movie (for technical details and playback settings).
 	GetAudioStreamsByMovieID(ctx context.Context, movieID int64) ([]AudioStream, error)
 	// Cast for a movie with artist name and profile (for details view).
@@ -529,10 +535,6 @@ type Querier interface {
 	LinkShowEpisodeFile(ctx context.Context, arg LinkShowEpisodeFileParams) error
 	ListArtistArtwork(ctx context.Context, arg ListArtistArtworkParams) ([]ListArtistArtworkRow, error)
 	ListLibraryMountPoints(ctx context.Context, root string) ([]string, error)
-	// Library artwork, kept by the artwork syncer. Each image column is the value
-	// the API returns and its _source column the provider reference; the triggers
-	// at the end of schema.sql keep the two in step for every other writer. The
-	// syncer's writes leave updated_at alone, like the triggers.
 	ListMovieArtwork(ctx context.Context, arg ListMovieArtworkParams) ([]ListMovieArtworkRow, error)
 	ListMusicTrackScanIndex(ctx context.Context) ([]ListMusicTrackScanIndexRow, error)
 	// ListMusicTrackScanIndex for one path a run of watcher-detected changes
@@ -686,6 +688,7 @@ type Querier interface {
 	SaveMusicSpotifyAdoption(ctx context.Context, arg SaveMusicSpotifyAdoptionParams) error
 	SaveMusicTrackMetadata(ctx context.Context, arg SaveMusicTrackMetadataParams) error
 	SetArtistProfileArtwork(ctx context.Context, arg SetArtistProfileArtworkParams) (int64, error)
+	SetArtworkStaticDir(ctx context.Context, staticDir string) error
 	SetMovieBackdropArtwork(ctx context.Context, arg SetMovieBackdropArtworkParams) (int64, error)
 	// Applies only while the source the value was made from is still the row's,
 	// so a source a scanner wrote meanwhile wins.

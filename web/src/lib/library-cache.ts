@@ -116,6 +116,19 @@ export function invalidateLibraryQueries(
 }
 
 /**
+ * Marks stale every query that shows library artwork: each library's, and the
+ * person pages, whose photos and credits come from the libraries too. A
+ * settings save that stops serving the downloaded copies calls it, since the
+ * cached image URLs point at files the server deletes or no longer serves.
+ */
+export function invalidateArtworkQueries(queryClient: QueryClient) {
+  for (const library of Object.keys(LIBRARY_QUERY_KEYS) as Library[]) {
+    invalidateLibraryQueries(queryClient, library);
+  }
+  void queryClient.invalidateQueries({ queryKey: ["person"] });
+}
+
+/**
  * Drops the library's inactive queries and refetches the active ones,
  * rejecting if any refetch fails or lands on an API error envelope, so the
  * caller's toast reflects what the user will actually see.

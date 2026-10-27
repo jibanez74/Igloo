@@ -39,6 +39,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.adminUpdateUserStmt, err = db.PrepareContext(ctx, adminUpdateUser); err != nil {
 		return nil, fmt.Errorf("error preparing query AdminUpdateUser: %w", err)
 	}
+	if q.clearArtworkStaticDirStmt, err = db.PrepareContext(ctx, clearArtworkStaticDir); err != nil {
+		return nil, fmt.Errorf("error preparing query ClearArtworkStaticDir: %w", err)
+	}
 	if q.clearMovieTmdbRetryStmt, err = db.PrepareContext(ctx, clearMovieTmdbRetry); err != nil {
 		return nil, fmt.Errorf("error preparing query ClearMovieTmdbRetry: %w", err)
 	}
@@ -380,6 +383,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.getArtistByTmdbIDStmt, err = db.PrepareContext(ctx, getArtistByTmdbID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetArtistByTmdbID: %w", err)
+	}
+	if q.getArtworkStaticDirStmt, err = db.PrepareContext(ctx, getArtworkStaticDir); err != nil {
+		return nil, fmt.Errorf("error preparing query GetArtworkStaticDir: %w", err)
 	}
 	if q.getAudioStreamsByMovieIDStmt, err = db.PrepareContext(ctx, getAudioStreamsByMovieID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetAudioStreamsByMovieID: %w", err)
@@ -1086,6 +1092,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.setArtistProfileArtworkStmt, err = db.PrepareContext(ctx, setArtistProfileArtwork); err != nil {
 		return nil, fmt.Errorf("error preparing query SetArtistProfileArtwork: %w", err)
 	}
+	if q.setArtworkStaticDirStmt, err = db.PrepareContext(ctx, setArtworkStaticDir); err != nil {
+		return nil, fmt.Errorf("error preparing query SetArtworkStaticDir: %w", err)
+	}
 	if q.setMovieBackdropArtworkStmt, err = db.PrepareContext(ctx, setMovieBackdropArtwork); err != nil {
 		return nil, fmt.Errorf("error preparing query SetMovieBackdropArtwork: %w", err)
 	}
@@ -1303,6 +1312,11 @@ func (q *Queries) Close() error {
 	if q.adminUpdateUserStmt != nil {
 		if cerr := q.adminUpdateUserStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing adminUpdateUserStmt: %w", cerr)
+		}
+	}
+	if q.clearArtworkStaticDirStmt != nil {
+		if cerr := q.clearArtworkStaticDirStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing clearArtworkStaticDirStmt: %w", cerr)
 		}
 	}
 	if q.clearMovieTmdbRetryStmt != nil {
@@ -1873,6 +1887,11 @@ func (q *Queries) Close() error {
 	if q.getArtistByTmdbIDStmt != nil {
 		if cerr := q.getArtistByTmdbIDStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getArtistByTmdbIDStmt: %w", cerr)
+		}
+	}
+	if q.getArtworkStaticDirStmt != nil {
+		if cerr := q.getArtworkStaticDirStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getArtworkStaticDirStmt: %w", cerr)
 		}
 	}
 	if q.getAudioStreamsByMovieIDStmt != nil {
@@ -3050,6 +3069,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing setArtistProfileArtworkStmt: %w", cerr)
 		}
 	}
+	if q.setArtworkStaticDirStmt != nil {
+		if cerr := q.setArtworkStaticDirStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing setArtworkStaticDirStmt: %w", cerr)
+		}
+	}
 	if q.setMovieBackdropArtworkStmt != nil {
 		if cerr := q.setMovieBackdropArtworkStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing setMovieBackdropArtworkStmt: %w", cerr)
@@ -3409,6 +3433,7 @@ type Queries struct {
 	addTrackToPlaylistStmt                      *sql.Stmt
 	addWatchRoomMemberStmt                      *sql.Stmt
 	adminUpdateUserStmt                         *sql.Stmt
+	clearArtworkStaticDirStmt                   *sql.Stmt
 	clearMovieTmdbRetryStmt                     *sql.Stmt
 	clearMusicAlbumSpotifyStmt                  *sql.Stmt
 	clearMusicAlbumSpotifyDateStmt              *sql.Stmt
@@ -3523,6 +3548,7 @@ type Queries struct {
 	getAlbumsWithoutSpotifyIDByIdentityKeysStmt *sql.Stmt
 	getAllUsersStmt                             *sql.Stmt
 	getArtistByTmdbIDStmt                       *sql.Stmt
+	getArtworkStaticDirStmt                     *sql.Stmt
 	getAudioStreamsByMovieIDStmt                *sql.Stmt
 	getCastByMovieIDStmt                        *sql.Stmt
 	getCastByShowIDStmt                         *sql.Stmt
@@ -3758,6 +3784,7 @@ type Queries struct {
 	saveMusicSpotifyAdoptionStmt                *sql.Stmt
 	saveMusicTrackMetadataStmt                  *sql.Stmt
 	setArtistProfileArtworkStmt                 *sql.Stmt
+	setArtworkStaticDirStmt                     *sql.Stmt
 	setMovieBackdropArtworkStmt                 *sql.Stmt
 	setMoviePosterArtworkStmt                   *sql.Stmt
 	setMusicAlbumAppleIDStmt                    *sql.Stmt
@@ -3832,6 +3859,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		addTrackToPlaylistStmt:                      q.addTrackToPlaylistStmt,
 		addWatchRoomMemberStmt:                      q.addWatchRoomMemberStmt,
 		adminUpdateUserStmt:                         q.adminUpdateUserStmt,
+		clearArtworkStaticDirStmt:                   q.clearArtworkStaticDirStmt,
 		clearMovieTmdbRetryStmt:                     q.clearMovieTmdbRetryStmt,
 		clearMusicAlbumSpotifyStmt:                  q.clearMusicAlbumSpotifyStmt,
 		clearMusicAlbumSpotifyDateStmt:              q.clearMusicAlbumSpotifyDateStmt,
@@ -3946,6 +3974,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getAlbumsWithoutSpotifyIDByIdentityKeysStmt: q.getAlbumsWithoutSpotifyIDByIdentityKeysStmt,
 		getAllUsersStmt:                             q.getAllUsersStmt,
 		getArtistByTmdbIDStmt:                       q.getArtistByTmdbIDStmt,
+		getArtworkStaticDirStmt:                     q.getArtworkStaticDirStmt,
 		getAudioStreamsByMovieIDStmt:                q.getAudioStreamsByMovieIDStmt,
 		getCastByMovieIDStmt:                        q.getCastByMovieIDStmt,
 		getCastByShowIDStmt:                         q.getCastByShowIDStmt,
@@ -4181,6 +4210,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		saveMusicSpotifyAdoptionStmt:                q.saveMusicSpotifyAdoptionStmt,
 		saveMusicTrackMetadataStmt:                  q.saveMusicTrackMetadataStmt,
 		setArtistProfileArtworkStmt:                 q.setArtistProfileArtworkStmt,
+		setArtworkStaticDirStmt:                     q.setArtworkStaticDirStmt,
 		setMovieBackdropArtworkStmt:                 q.setMovieBackdropArtworkStmt,
 		setMoviePosterArtworkStmt:                   q.setMoviePosterArtworkStmt,
 		setMusicAlbumAppleIDStmt:                    q.setMusicAlbumAppleIDStmt,

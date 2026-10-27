@@ -31,6 +31,7 @@ import {
   SETTINGS_INPUT_CLASS,
 } from "@/lib/constants";
 import { updateGeneralSettings } from "@/lib/api";
+import { invalidateArtworkQueries } from "@/lib/library-cache";
 import { trimmedOrNull } from "@/lib/nullable";
 import { generalSettingsQueryOpts } from "@/lib/query-opts";
 import {
@@ -212,6 +213,21 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
           settings: res.data.settings,
         },
       });
+
+      // The server points the images back at their providers before it
+      // answers a save that stops serving its downloaded copies, so the
+      // cached library pages refetch them.
+      const previous =
+        context?.previousData?.error === false
+          ? context.previousData.data.settings
+          : null;
+      const saved = res.data.settings;
+      const dropsCopies =
+        previous?.download_images === true &&
+        (!saved.download_images || saved.static_dir !== previous.static_dir);
+      if (dropsCopies) {
+        invalidateArtworkQueries(queryClient);
+      }
 
       if (res.data.restart_required) {
         showSuccess(
