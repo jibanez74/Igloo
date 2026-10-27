@@ -16845,7 +16845,7 @@
           "issue_count": {
             "type": "integer",
             "minimum": 0,
-            "description": "Outstanding issues. A run of changes (scope \"changes\") also lists, after its own, those the previous run left at paths outside its own, or beneath a changed path it could not read, that stay true until a run looks at them again: files that failed or were deferred, and disks kept because they were not mounted. Carried issues do not make its state completed-with-issues; discovery and enrichment issues stay with the run that raised them."
+            "description": "Outstanding issues. A run of changes (scope \"changes\") also lists, after its own, those the previous run left at paths outside its own, or at or beneath a path it could not read (for files it did not see and that still exist), that stay true until a run looks at them again: files that failed or were deferred, and disks kept because they were not mounted. Carried issues do not make its state completed-with-issues; discovery and enrichment issues stay with the run that raised them."
           },
           "issues": {
             "type": "array",
@@ -17044,7 +17044,7 @@
           "issue_count": {
             "type": "integer",
             "minimum": 0,
-            "description": "Outstanding issues. A run of changes (scope \"changes\") also lists, after its own, those the previous run left at paths outside its own, or beneath a changed path it could not read, that stay true until a run looks at them again: files that failed or were deferred, and disks kept because they were not mounted. Carried issues do not make its state completed-with-issues; discovery and enrichment issues stay with the run that raised them."
+            "description": "Outstanding issues. A run of changes (scope \"changes\") also lists, after its own, those the previous run left at paths outside its own, or at or beneath a path it could not read (for files it did not see and that still exist), that stay true until a run looks at them again: files that failed or were deferred, and disks kept because they were not mounted. Carried issues do not make its state completed-with-issues; discovery and enrichment issues stay with the run that raised them."
           },
           "issues": {
             "type": "array",
@@ -17237,7 +17237,7 @@
           "issue_count": {
             "type": "integer",
             "minimum": 0,
-            "description": "Outstanding issues. A run of changes (scope \"changes\") also lists, after its own, those the previous run left at paths outside its own, or beneath a changed path it could not read, that stay true until a run looks at them again: files that failed or were deferred, and disks kept because they were not mounted. Carried issues do not make its state completed-with-issues; discovery and enrichment issues stay with the run that raised them."
+            "description": "Outstanding issues. A run of changes (scope \"changes\") also lists, after its own, those the previous run left at paths outside its own, or at or beneath a path it could not read (for files it did not see and that still exist), that stay true until a run looks at them again: files that failed or were deferred, and disks kept because they were not mounted. Carried issues do not make its state completed-with-issues; discovery and enrichment issues stay with the run that raised them."
           },
           "issues": {
             "type": "array",

@@ -1,9 +1,13 @@
 package scanner
 
 import (
+	"errors"
+	"io/fs"
 	"maps"
+	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 // Outstanding keeps the file issues a scanner's last run left. Each run
@@ -25,7 +29,8 @@ var carriedPhases = map[ScanPhase]bool{PhaseLocal: true, PhaseCleanup: true}
 
 // Carry lists in a run of changes' report the issues the last run left at
 // paths outside the run's, which it does not look at again; those at or
-// beneath its paths are its to raise or settle. A walk of the whole library
+// beneath its paths are its to raise or settle, unless it cannot read them
+// (see Unread). A walk of the whole library
 // looks at every file, so it carries nothing. Carried issues do not make the
 // run's state completed-with-issues, and its own are published first.
 func (o *Outstanding) Carry(report *Report, changes *Changes, paths []string) {
@@ -51,10 +56,12 @@ func (o *Outstanding) Carry(report *Report, changes *Changes, paths []string) {
 }
 
 // Unread carries back into a run of changes, once its walk is over, the
-// issues the last run left beneath the paths this run could not read, which
-// it reported as its own discovery issues: it covered them without looking at
-// them, so they still stand.
-func (o *Outstanding) Unread(report *Report, changes *Changes) {
+// issues the last run left at or beneath the paths this run could not read,
+// which it reported as its own discovery issues, for files it did not see and
+// that still exist: it covered them without looking at them, so they still
+// stand. A file the run saw was looked at, and one gone since, as a broken
+// symlink's, is the cleanup's to remove.
+func (o *Outstanding) Unread(report *Report, changes *Changes, seen func(path string) bool) {
 	scoped := changes.Scoped()
 	if !scoped {
 		return
@@ -78,7 +85,12 @@ func (o *Outstanding) Unread(report *Report, changes *Changes) {
 			continue
 		}
 		beneath := covered(unread, path)
-		if beneath {
+		if !beneath || seen(path) {
+			continue
+		}
+		_, err := os.Stat(path)
+		gone := errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ENOTDIR)
+		if !gone {
 			report.carry(key, issue)
 		}
 	}

@@ -399,6 +399,9 @@ func TestMovieChangesRunKeepsTheIssuesOfFilesItDidNotLookAt(t *testing.T) {
 // failures an earlier scan found inside it, beside its own issue for the
 // directory.
 func TestMovieChangesRunKeepsTheIssuesInsideADirectoryItCannotRead(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads a directory whatever its mode")
+	}
 	fixture := setupMovieScanner(t)
 	s := fixture.scanner
 	s.ffprobe = &scannertest.CountingProbe{Hook: func(context.Context, string) (*ffprobe.FfprobeResult, error) {

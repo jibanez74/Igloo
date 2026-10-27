@@ -229,6 +229,12 @@ func (r *Reconciliation) MarkSeen(path string) {
 	}
 }
 
+// Seen reports a path the walk saw.
+func (r *Reconciliation) Seen(path string) bool {
+	absolute, err := filepath.Abs(path)
+	return err == nil && r.seen[absolute]
+}
+
 func (r *Reconciliation) saw(file CatalogFile) bool {
 	absolute, err := filepath.Abs(file.Path)
 	return err == nil && r.seen[absolute]

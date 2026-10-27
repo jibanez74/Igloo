@@ -1,9 +1,12 @@
 package scanner
 
 import (
+	"path/filepath"
 	"reflect"
 	"slices"
 	"testing"
+
+	"igloo/cmd/internal/scanner/scannertest"
 )
 
 func TestOutstandingCarriesFileIssuesOutsideARunOfChanges(t *testing.T) {
@@ -114,24 +117,39 @@ func TestOutstandingCarriesIssuesOfARelativeLibraryRoot(t *testing.T) {
 }
 
 // A run of changes that could not read one of its paths covered the issues
-// beneath it without looking at them, so they still stand.
+// beneath it without looking at them, so those of files it did not see and
+// that still exist still stand.
 func TestOutstandingKeepsTheIssuesBeneathAPathTheRunCouldNotRead(t *testing.T) {
+	root := t.TempDir()
+	unread := scannertest.WriteFile(t, filepath.Join(root, "A", "a.mkv"), "a")
+	seen := scannertest.WriteFile(t, filepath.Join(root, "A", "seen.mkv"), "seen")
+	gone := filepath.Join(root, "A", "gone.mkv")
+	elsewhere := scannertest.WriteFile(t, filepath.Join(root, "B", "b.mkv"), "b")
 	previous := NewReport()
-	previous.Issue("/library/A/a.mkv", PhaseLocal, "failed")
-	previous.Issue("/library/B/b.mkv", PhaseLocal, "failed")
+	for _, path := range []string{unread, seen, gone, elsewhere} {
+		previous.Issue(path, PhaseLocal, "failed")
+	}
 	var outstanding Outstanding
 	outstanding.Keep(&previous)
 	changes := &Changes{Paths: []string{"A", "B"}}
 
 	report := NewReport()
-	outstanding.Carry(&report, changes, changes.Resolve("/library"))
-	report.Issue("/library/A", PhaseDiscovery, ReasonDiscoveryEntry)
-	outstanding.Unread(&report, changes)
+	outstanding.Carry(&report, changes, changes.Resolve(root))
+	report.Issue(filepath.Join(root, "A"), PhaseDiscovery, ReasonDiscoveryEntry)
+	outstanding.Unread(&report, changes, func(path string) bool { return path == seen })
 	var got []string
 	for key := range report.carried {
 		got = append(got, key)
 	}
-	if !slices.Equal(got, []string{"local:/library/A/a.mkv"}) {
-		t.Fatalf("carried %q, want only the issue beneath the unreadable path", got)
+	if !slices.Equal(got, []string{"local:" + unread}) {
+		t.Fatalf("carried %q, want only the unseen file beneath the unreadable path", got)
+	}
+
+	// A walk of the whole library keeps nothing back.
+	report = NewReport()
+	report.Issue(filepath.Join(root, "A"), PhaseDiscovery, ReasonDiscoveryEntry)
+	outstanding.Unread(&report, &Changes{CatchUp: true}, func(string) bool { return false })
+	if len(report.carried) != 0 {
+		t.Fatalf("a catch-up carried %v", report.carried)
 	}
 }
