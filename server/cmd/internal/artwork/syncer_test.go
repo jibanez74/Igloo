@@ -678,3 +678,81 @@ func TestPass_TurningOffRetriesAFolderItCouldNotEmpty(t *testing.T) {
 		t.Fatal("a later pass did not remove the copy once it could")
 	}
 }
+
+func (h *harness) addShow(id int64, tmdbID any, name, poster, backdrop string) {
+	h.t.Helper()
+	h.exec(`INSERT INTO shows (id, directory_path, local_name, name, tmdb_id, poster_path_source, backdrop_path_source)
+		VALUES (?, ?, ?, ?, ?, NULLIF(?, ''), NULLIF(?, ''))`, id, fmt.Sprintf("/shows/%s-%d", name, id), name, name, tmdbID, poster, backdrop)
+}
+
+func TestPass_DownloadsShowSeasonEpisodeAndNetworkArtwork(t *testing.T) {
+	h := newHarness(t)
+	h.addShow(1, 1438, "The Wire", "/wire-poster.jpg", "/wire-backdrop.jpg")
+	h.exec(`INSERT INTO show_seasons (id, show_id, season_number, name, poster_path_source) VALUES (1, 1, 0, 'Specials', '/specials.jpg'), (2, 1, 1, 'Season 1', '/season-1.jpg')`)
+	h.exec(`INSERT INTO show_episodes (id, season_id, episode_number, name, still_path_source) VALUES (1, 2, 1, 'The Target', '/pilot.jpg')`)
+	h.exec(`INSERT INTO networks (id, tmdb_id, name, logo_source) VALUES (1, 49, 'HBO', '/hbo.png')`)
+	// A show with no TMDB match has no folder, so neither do its seasons.
+	h.addShow(2, nil, "Home Movies", "/home-poster.jpg", "")
+	h.exec(`INSERT INTO show_seasons (id, show_id, season_number, name, poster_path_source) VALUES (3, 2, 1, 'Season 1', '/home-season.jpg')`)
+
+	h.pass()
+
+	want := []struct {
+		table, column string
+		id            int64
+		rel, size     string
+		source        string
+	}{
+		{"shows", "poster_path", 1, "shows/1438/the_wire_poster.png", "w500", "/wire-poster.jpg"},
+		{"shows", "backdrop_path", 1, "shows/1438/the_wire_backdrop.png", "w1280", "/wire-backdrop.jpg"},
+		{"show_seasons", "poster_path", 1, "shows/1438/season_00_poster.png", "w500", "/specials.jpg"},
+		{"show_seasons", "poster_path", 2, "shows/1438/season_01_poster.png", "w500", "/season-1.jpg"},
+		{"show_episodes", "still_path", 1, "shows/1438/s01e01_still.png", "w500", "/pilot.jpg"},
+		{"networks", "logo", 1, "networks/49/hbo_logo.png", "w92", "/hbo.png"},
+	}
+	for _, w := range want {
+		got := h.value(w.table, w.column, w.id).String
+		if got != local(w.rel, w.size, w.source) {
+			t.Errorf("%s.%s %d = %q, want the copy at %s", w.table, w.column, w.id, got, w.rel)
+		}
+		if h.upstream.requests("/"+w.size+w.source) != 1 {
+			t.Errorf("%s was not requested once at %s", w.source, w.size)
+		}
+	}
+	if h.value("shows", "poster_path", 2).String != "/home-poster.jpg" || h.value("show_seasons", "poster_path", 3).String != "/home-season.jpg" {
+		t.Error("an unmatched show's images did not stay remote")
+	}
+
+	h.enabled = false
+	h.pass()
+	for _, w := range want {
+		if h.value(w.table, w.column, w.id).String != w.source {
+			t.Errorf("%s.%s %d was not pointed back at its source", w.table, w.column, w.id)
+		}
+	}
+	if h.exists("shows") || h.exists("networks") {
+		t.Error("turning downloads off left the show or network folders")
+	}
+}
+
+// A show named like one of its seasons would give two images one file. The
+// first listed, the show's own poster, keeps the name; the season's stays
+// remote rather than overwrite it.
+func TestPass_KeepsTwoImagesOfOneNameApart(t *testing.T) {
+	h := newHarness(t)
+	h.addShow(1, 1438, "Season 01", "/show-poster.jpg", "")
+	h.exec(`INSERT INTO show_seasons (id, show_id, season_number, name, poster_path_source) VALUES (1, 1, 1, 'Season 1', '/season-poster.jpg')`)
+
+	h.pass()
+	h.pass()
+
+	if h.value("shows", "poster_path", 1).String != local("shows/1438/season_01_poster.png", "w500", "/show-poster.jpg") {
+		t.Fatalf("show poster = %q", h.value("shows", "poster_path", 1).String)
+	}
+	if h.value("show_seasons", "poster_path", 1).String != "/season-poster.jpg" {
+		t.Fatalf("season poster = %q, want it left remote", h.value("show_seasons", "poster_path", 1).String)
+	}
+	if h.upstream.requests("/w500/season-poster.jpg") != 0 {
+		t.Fatal("downloaded an image whose file name another image holds")
+	}
+}

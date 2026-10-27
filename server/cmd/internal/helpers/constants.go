@@ -41,6 +41,8 @@ const (
 	TMDB_POSTER_SIZE         = "w500"
 	TMDB_PROFILE_SIZE        = "w185"
 	TMDB_LOGO_SIZE           = "w92"
+	// TMDB_STILL_SIZE is the poster size, which the clients show stills at.
+	TMDB_STILL_SIZE = TMDB_POSTER_SIZE
 )
 
 // STATIC_URL_PREFIX is the URL path the static directory is served under.

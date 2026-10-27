@@ -120,6 +120,217 @@ func (q *Queries) ListMovieArtwork(ctx context.Context, arg ListMovieArtworkPara
 	return items, nil
 }
 
+const listNetworkArtwork = `-- name: ListNetworkArtwork :many
+SELECT id, tmdb_id, name, logo, logo_source
+FROM networks
+WHERE id > ?1 AND (logo IS NOT NULL OR logo_source IS NOT NULL)
+ORDER BY id
+LIMIT ?2
+`
+
+type ListNetworkArtworkParams struct {
+	AfterID  int64 `json:"after_id"`
+	PageSize int64 `json:"page_size"`
+}
+
+type ListNetworkArtworkRow struct {
+	ID         int64          `json:"id"`
+	TmdbID     int64          `json:"tmdb_id"`
+	Name       string         `json:"name"`
+	Logo       sql.NullString `json:"logo"`
+	LogoSource sql.NullString `json:"-"`
+}
+
+func (q *Queries) ListNetworkArtwork(ctx context.Context, arg ListNetworkArtworkParams) ([]ListNetworkArtworkRow, error) {
+	rows, err := q.query(ctx, q.listNetworkArtworkStmt, listNetworkArtwork, arg.AfterID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListNetworkArtworkRow{}
+	for rows.Next() {
+		var i ListNetworkArtworkRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TmdbID,
+			&i.Name,
+			&i.Logo,
+			&i.LogoSource,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listShowArtwork = `-- name: ListShowArtwork :many
+SELECT id, tmdb_id, name, poster_path, poster_path_source, backdrop_path, backdrop_path_source
+FROM shows
+WHERE id > ?1
+  AND (poster_path IS NOT NULL OR poster_path_source IS NOT NULL OR backdrop_path IS NOT NULL OR backdrop_path_source IS NOT NULL)
+ORDER BY id
+LIMIT ?2
+`
+
+type ListShowArtworkParams struct {
+	AfterID  int64 `json:"after_id"`
+	PageSize int64 `json:"page_size"`
+}
+
+type ListShowArtworkRow struct {
+	ID                 int64          `json:"id"`
+	TmdbID             sql.NullInt64  `json:"tmdb_id"`
+	Name               string         `json:"name"`
+	PosterPath         sql.NullString `json:"poster_path"`
+	PosterPathSource   sql.NullString `json:"-"`
+	BackdropPath       sql.NullString `json:"backdrop_path"`
+	BackdropPathSource sql.NullString `json:"-"`
+}
+
+func (q *Queries) ListShowArtwork(ctx context.Context, arg ListShowArtworkParams) ([]ListShowArtworkRow, error) {
+	rows, err := q.query(ctx, q.listShowArtworkStmt, listShowArtwork, arg.AfterID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListShowArtworkRow{}
+	for rows.Next() {
+		var i ListShowArtworkRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TmdbID,
+			&i.Name,
+			&i.PosterPath,
+			&i.PosterPathSource,
+			&i.BackdropPath,
+			&i.BackdropPathSource,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listShowEpisodeArtwork = `-- name: ListShowEpisodeArtwork :many
+SELECT e.id, sh.tmdb_id AS show_tmdb_id, se.season_number, e.episode_number, e.still_path, e.still_path_source
+FROM show_episodes e
+JOIN show_seasons se ON se.id = e.season_id
+JOIN shows sh ON sh.id = se.show_id
+WHERE e.id > ?1 AND (e.still_path IS NOT NULL OR e.still_path_source IS NOT NULL)
+ORDER BY e.id
+LIMIT ?2
+`
+
+type ListShowEpisodeArtworkParams struct {
+	AfterID  int64 `json:"after_id"`
+	PageSize int64 `json:"page_size"`
+}
+
+type ListShowEpisodeArtworkRow struct {
+	ID              int64          `json:"id"`
+	ShowTmdbID      sql.NullInt64  `json:"show_tmdb_id"`
+	SeasonNumber    int64          `json:"season_number"`
+	EpisodeNumber   int64          `json:"episode_number"`
+	StillPath       sql.NullString `json:"still_path"`
+	StillPathSource sql.NullString `json:"-"`
+}
+
+func (q *Queries) ListShowEpisodeArtwork(ctx context.Context, arg ListShowEpisodeArtworkParams) ([]ListShowEpisodeArtworkRow, error) {
+	rows, err := q.query(ctx, q.listShowEpisodeArtworkStmt, listShowEpisodeArtwork, arg.AfterID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListShowEpisodeArtworkRow{}
+	for rows.Next() {
+		var i ListShowEpisodeArtworkRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ShowTmdbID,
+			&i.SeasonNumber,
+			&i.EpisodeNumber,
+			&i.StillPath,
+			&i.StillPathSource,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listShowSeasonArtwork = `-- name: ListShowSeasonArtwork :many
+SELECT se.id, sh.tmdb_id AS show_tmdb_id, se.season_number, se.poster_path, se.poster_path_source
+FROM show_seasons se
+JOIN shows sh ON sh.id = se.show_id
+WHERE se.id > ?1 AND (se.poster_path IS NOT NULL OR se.poster_path_source IS NOT NULL)
+ORDER BY se.id
+LIMIT ?2
+`
+
+type ListShowSeasonArtworkParams struct {
+	AfterID  int64 `json:"after_id"`
+	PageSize int64 `json:"page_size"`
+}
+
+type ListShowSeasonArtworkRow struct {
+	ID               int64          `json:"id"`
+	ShowTmdbID       sql.NullInt64  `json:"show_tmdb_id"`
+	SeasonNumber     int64          `json:"season_number"`
+	PosterPath       sql.NullString `json:"poster_path"`
+	PosterPathSource sql.NullString `json:"-"`
+}
+
+// Season and episode copies live in their show's folder, named by its TMDB id.
+func (q *Queries) ListShowSeasonArtwork(ctx context.Context, arg ListShowSeasonArtworkParams) ([]ListShowSeasonArtworkRow, error) {
+	rows, err := q.query(ctx, q.listShowSeasonArtworkStmt, listShowSeasonArtwork, arg.AfterID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListShowSeasonArtworkRow{}
+	for rows.Next() {
+		var i ListShowSeasonArtworkRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ShowTmdbID,
+			&i.SeasonNumber,
+			&i.PosterPath,
+			&i.PosterPathSource,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const revertArtistProfileArtwork = `-- name: RevertArtistProfileArtwork :execrows
 UPDATE artist SET profile = profile_source WHERE profile LIKE '/api/static/%'
 `
@@ -150,6 +361,66 @@ UPDATE movies SET poster_path = poster_path_source WHERE poster_path LIKE '/api/
 
 func (q *Queries) RevertMoviePosterArtwork(ctx context.Context) (int64, error) {
 	result, err := q.exec(ctx, q.revertMoviePosterArtworkStmt, revertMoviePosterArtwork)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const revertNetworkLogoArtwork = `-- name: RevertNetworkLogoArtwork :execrows
+UPDATE networks SET logo = logo_source WHERE logo LIKE '/api/static/%'
+`
+
+func (q *Queries) RevertNetworkLogoArtwork(ctx context.Context) (int64, error) {
+	result, err := q.exec(ctx, q.revertNetworkLogoArtworkStmt, revertNetworkLogoArtwork)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const revertShowBackdropArtwork = `-- name: RevertShowBackdropArtwork :execrows
+UPDATE shows SET backdrop_path = backdrop_path_source WHERE backdrop_path LIKE '/api/static/%'
+`
+
+func (q *Queries) RevertShowBackdropArtwork(ctx context.Context) (int64, error) {
+	result, err := q.exec(ctx, q.revertShowBackdropArtworkStmt, revertShowBackdropArtwork)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const revertShowEpisodeStillArtwork = `-- name: RevertShowEpisodeStillArtwork :execrows
+UPDATE show_episodes SET still_path = still_path_source WHERE still_path LIKE '/api/static/%'
+`
+
+func (q *Queries) RevertShowEpisodeStillArtwork(ctx context.Context) (int64, error) {
+	result, err := q.exec(ctx, q.revertShowEpisodeStillArtworkStmt, revertShowEpisodeStillArtwork)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const revertShowPosterArtwork = `-- name: RevertShowPosterArtwork :execrows
+UPDATE shows SET poster_path = poster_path_source WHERE poster_path LIKE '/api/static/%'
+`
+
+func (q *Queries) RevertShowPosterArtwork(ctx context.Context) (int64, error) {
+	result, err := q.exec(ctx, q.revertShowPosterArtworkStmt, revertShowPosterArtwork)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const revertShowSeasonPosterArtwork = `-- name: RevertShowSeasonPosterArtwork :execrows
+UPDATE show_seasons SET poster_path = poster_path_source WHERE poster_path LIKE '/api/static/%'
+`
+
+func (q *Queries) RevertShowSeasonPosterArtwork(ctx context.Context) (int64, error) {
+	result, err := q.exec(ctx, q.revertShowSeasonPosterArtworkStmt, revertShowSeasonPosterArtwork)
 	if err != nil {
 		return 0, err
 	}
@@ -206,6 +477,96 @@ type SetMoviePosterArtworkParams struct {
 // so a source a scanner wrote meanwhile wins.
 func (q *Queries) SetMoviePosterArtwork(ctx context.Context, arg SetMoviePosterArtworkParams) (int64, error) {
 	result, err := q.exec(ctx, q.setMoviePosterArtworkStmt, setMoviePosterArtwork, arg.Value, arg.ID, arg.Source)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const setNetworkLogoArtwork = `-- name: SetNetworkLogoArtwork :execrows
+UPDATE networks SET logo = ?1 WHERE id = ?2 AND logo_source IS ?3
+`
+
+type SetNetworkLogoArtworkParams struct {
+	Value  sql.NullString `json:"value"`
+	ID     int64          `json:"id"`
+	Source sql.NullString `json:"-"`
+}
+
+func (q *Queries) SetNetworkLogoArtwork(ctx context.Context, arg SetNetworkLogoArtworkParams) (int64, error) {
+	result, err := q.exec(ctx, q.setNetworkLogoArtworkStmt, setNetworkLogoArtwork, arg.Value, arg.ID, arg.Source)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const setShowBackdropArtwork = `-- name: SetShowBackdropArtwork :execrows
+UPDATE shows SET backdrop_path = ?1 WHERE id = ?2 AND backdrop_path_source IS ?3
+`
+
+type SetShowBackdropArtworkParams struct {
+	Value  sql.NullString `json:"value"`
+	ID     int64          `json:"id"`
+	Source sql.NullString `json:"-"`
+}
+
+func (q *Queries) SetShowBackdropArtwork(ctx context.Context, arg SetShowBackdropArtworkParams) (int64, error) {
+	result, err := q.exec(ctx, q.setShowBackdropArtworkStmt, setShowBackdropArtwork, arg.Value, arg.ID, arg.Source)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const setShowEpisodeStillArtwork = `-- name: SetShowEpisodeStillArtwork :execrows
+UPDATE show_episodes SET still_path = ?1 WHERE id = ?2 AND still_path_source IS ?3
+`
+
+type SetShowEpisodeStillArtworkParams struct {
+	Value  sql.NullString `json:"value"`
+	ID     int64          `json:"id"`
+	Source sql.NullString `json:"-"`
+}
+
+func (q *Queries) SetShowEpisodeStillArtwork(ctx context.Context, arg SetShowEpisodeStillArtworkParams) (int64, error) {
+	result, err := q.exec(ctx, q.setShowEpisodeStillArtworkStmt, setShowEpisodeStillArtwork, arg.Value, arg.ID, arg.Source)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const setShowPosterArtwork = `-- name: SetShowPosterArtwork :execrows
+UPDATE shows SET poster_path = ?1 WHERE id = ?2 AND poster_path_source IS ?3
+`
+
+type SetShowPosterArtworkParams struct {
+	Value  sql.NullString `json:"value"`
+	ID     int64          `json:"id"`
+	Source sql.NullString `json:"-"`
+}
+
+func (q *Queries) SetShowPosterArtwork(ctx context.Context, arg SetShowPosterArtworkParams) (int64, error) {
+	result, err := q.exec(ctx, q.setShowPosterArtworkStmt, setShowPosterArtwork, arg.Value, arg.ID, arg.Source)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const setShowSeasonPosterArtwork = `-- name: SetShowSeasonPosterArtwork :execrows
+UPDATE show_seasons SET poster_path = ?1 WHERE id = ?2 AND poster_path_source IS ?3
+`
+
+type SetShowSeasonPosterArtworkParams struct {
+	Value  sql.NullString `json:"value"`
+	ID     int64          `json:"id"`
+	Source sql.NullString `json:"-"`
+}
+
+func (q *Queries) SetShowSeasonPosterArtwork(ctx context.Context, arg SetShowSeasonPosterArtworkParams) (int64, error) {
+	result, err := q.exec(ctx, q.setShowSeasonPosterArtworkStmt, setShowSeasonPosterArtwork, arg.Value, arg.ID, arg.Source)
 	if err != nil {
 		return 0, err
 	}

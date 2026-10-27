@@ -436,7 +436,7 @@ export interface paths {
         };
         /**
          * Serve a static asset
-         * @description Serves files from the configured static directory: uploaded avatars, and the library artwork downloaded while download_images is on (movies/ and people/). A downloaded image's URL carries a ?v= version that changes when the image is replaced, since responses are cached for a year. Content-Type comes from the file extension using the host MIME registry, falling back to application/octet-stream. Successful responses set Cache-Control: public, max-age=31536000 and X-Content-Type-Options: nosniff. Last-Modified supports date revalidation; this endpoint does not emit ETag.
+         * @description Serves files from the configured static directory: uploaded avatars, and the library artwork downloaded while download_images is on (movies/, people/, shows/ and networks/). A downloaded image's URL carries a ?v= version that changes when the image is replaced, since responses are cached for a year. Content-Type comes from the file extension using the host MIME registry, falling back to application/octet-stream. Successful responses set Cache-Control: public, max-age=31536000 and X-Content-Type-Options: nosniff. Last-Modified supports date revalidation; this endpoint does not emit ETag.
          */
         get: operations["serveStaticFiles"];
         put?: never;
@@ -2883,7 +2883,7 @@ export interface components {
             enable_apple_lookups: boolean;
             /** @description When true, the server watches the configured movie, show and music directories and applies each media file that is created, rewritten, moved or deleted through the scanner within seconds, without a library scan: inotify on local Linux filesystems, a directory poll every few minutes on network shares, FUSE mounts and macOS. Turning it on walks each library once; turning it off stops all watching before the response is sent. A library whose directory, or a mount inside it, disappears is paused rather than emptied. The ENABLE_WATCHER environment value seeds this only for a new database. */
             enable_watcher: boolean;
-            /** @description While true, the server downloads movie posters and backdrops and cast and crew photos into static_dir and returns the downloaded copies in place of the TMDB paths, as the API description explains; images not downloaded yet keep their TMDB paths. Turning it off returns the TMDB paths and deletes the downloaded copies. Either change starts the work in the background, and so does a change to static_dir. */
+            /** @description While true, the server downloads movie, show, season and episode images, cast and crew photos, and network logos into static_dir and returns the downloaded copies in place of the TMDB paths, as the API description explains; images not downloaded yet keep their TMDB paths. Turning it off returns the TMDB paths and deletes the downloaded copies. Either change starts the work in the background, and so does a change to static_dir. */
             download_images: boolean;
             /** @description Directory /api/static serves files from, where avatar uploads and, while download_images is on, downloaded library artwork are written. Read on each request. */
             static_dir: string;
@@ -2899,7 +2899,7 @@ export interface components {
             enable_apple_lookups: boolean;
             /** @description When true, the server watches the configured movie, show and music directories and applies each media file that is created, rewritten, moved or deleted through the scanner within seconds, without a library scan: inotify on local Linux filesystems, a directory poll every few minutes on network shares, FUSE mounts and macOS. Turning it on walks each library once; turning it off stops all watching before the response is sent. A library whose directory, or a mount inside it, disappears is paused rather than emptied. The ENABLE_WATCHER environment value seeds this only for a new database. */
             enable_watcher: boolean;
-            /** @description While true, the server downloads movie posters and backdrops and cast and crew photos into static_dir and returns the downloaded copies in place of the TMDB paths, as the API description explains; images not downloaded yet keep their TMDB paths. Turning it off returns the TMDB paths and deletes the downloaded copies. Either change starts the work in the background, and so does a change to static_dir. */
+            /** @description While true, the server downloads movie, show, season and episode images, cast and crew photos, and network logos into static_dir and returns the downloaded copies in place of the TMDB paths, as the API description explains; images not downloaded yet keep their TMDB paths. Turning it off returns the TMDB paths and deletes the downloaded copies. Either change starts the work in the background, and so does a change to static_dir. */
             download_images: boolean;
             /** @description Required. Created when missing; 400 when it cannot be created or accessed. */
             static_dir: string;
@@ -2986,6 +2986,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             title: string;
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             poster_path: components["schemas"]["SqlNullString"];
             year: components["schemas"]["SqlNullInt64"];
             /** Format: double */
@@ -3035,6 +3036,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             name: string;
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             poster_path: components["schemas"]["SqlNullString"];
             premiere_year: components["schemas"]["SqlNullInt64"];
         };
@@ -3048,6 +3050,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             name: string;
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             poster_path: components["schemas"]["SqlNullString"];
             premiere_year: components["schemas"]["SqlNullInt64"];
             certification: components["schemas"]["SqlNullString"];
@@ -3108,7 +3111,9 @@ export interface components {
             last_air_date: components["schemas"]["SqlNullString"];
             status: components["schemas"]["SqlNullString"];
             type: components["schemas"]["SqlNullString"];
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             poster_path: components["schemas"]["SqlNullString"];
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             backdrop_path: components["schemas"]["SqlNullString"];
             vote_average: components["schemas"]["SqlNullFloat64"];
             vote_count: components["schemas"]["SqlNullInt64"];
@@ -3124,6 +3129,7 @@ export interface components {
             name: string;
             overview: components["schemas"]["SqlNullString"];
             air_date: components["schemas"]["SqlNullString"];
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             poster_path: components["schemas"]["SqlNullString"];
             tmdb_episode_count: components["schemas"]["SqlNullInt64"];
             /** Format: int64 */
@@ -3138,6 +3144,7 @@ export interface components {
             name: string;
             overview: components["schemas"]["SqlNullString"];
             air_date: components["schemas"]["SqlNullString"];
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             still_path: components["schemas"]["SqlNullString"];
             tmdb_runtime: components["schemas"]["SqlNullInt64"];
             vote_average: components["schemas"]["SqlNullFloat64"];
@@ -3202,6 +3209,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             name: string;
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             logo: components["schemas"]["SqlNullString"];
             country: components["schemas"]["SqlNullString"];
         };
@@ -4982,6 +4990,7 @@ export interface components {
             name: string;
             overview: components["schemas"]["SqlNullString"];
             air_date: components["schemas"]["SqlNullString"];
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             still_path: components["schemas"]["SqlNullString"];
             tmdb_runtime: components["schemas"]["SqlNullInt64"];
             vote_average: components["schemas"]["SqlNullFloat64"];
@@ -4991,7 +5000,9 @@ export interface components {
             /** Format: int64 */
             id: number;
             name: string;
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             poster_path: components["schemas"]["SqlNullString"];
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             backdrop_path: components["schemas"]["SqlNullString"];
         };
         ShowEpisodePlaybackSeason: {
@@ -5008,6 +5019,7 @@ export interface components {
             /** Format: int64 */
             episode_number: number;
             name: string;
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             still_path: components["schemas"]["SqlNullString"];
             progress_sec: components["schemas"]["SqlNullFloat64"];
             duration_sec: components["schemas"]["SqlNullFloat64"];

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"fmt"
 	"path"
 	"strconv"
 	"strings"
@@ -58,9 +59,47 @@ var (
 		},
 		revert: (*database.Queries).RevertArtistProfileArtwork,
 	}
+
+	showPoster = &column{
+		label: "show poster", dir: "shows", role: "poster", size: helpers.TMDB_POSTER_SIZE,
+		set: func(ctx context.Context, q *database.Queries, id int64, value, source sql.NullString) (int64, error) {
+			return q.SetShowPosterArtwork(ctx, database.SetShowPosterArtworkParams{ID: id, Value: value, Source: source})
+		},
+		revert: (*database.Queries).RevertShowPosterArtwork,
+	}
+	showBackdrop = &column{
+		label: "show backdrop", dir: "shows", role: "backdrop", size: helpers.TMDB_BACKDROP_SIZE,
+		set: func(ctx context.Context, q *database.Queries, id int64, value, source sql.NullString) (int64, error) {
+			return q.SetShowBackdropArtwork(ctx, database.SetShowBackdropArtworkParams{ID: id, Value: value, Source: source})
+		},
+		revert: (*database.Queries).RevertShowBackdropArtwork,
+	}
+	// Seasons and episodes share their show's folder, so their stems name
+	// them by number.
+	seasonPoster = &column{
+		label: "season poster", dir: "shows", role: "poster", size: helpers.TMDB_POSTER_SIZE,
+		set: func(ctx context.Context, q *database.Queries, id int64, value, source sql.NullString) (int64, error) {
+			return q.SetShowSeasonPosterArtwork(ctx, database.SetShowSeasonPosterArtworkParams{ID: id, Value: value, Source: source})
+		},
+		revert: (*database.Queries).RevertShowSeasonPosterArtwork,
+	}
+	episodeStill = &column{
+		label: "episode still", dir: "shows", role: "still", size: helpers.TMDB_STILL_SIZE,
+		set: func(ctx context.Context, q *database.Queries, id int64, value, source sql.NullString) (int64, error) {
+			return q.SetShowEpisodeStillArtwork(ctx, database.SetShowEpisodeStillArtworkParams{ID: id, Value: value, Source: source})
+		},
+		revert: (*database.Queries).RevertShowEpisodeStillArtwork,
+	}
+	networkLogo = &column{
+		label: "network logo", dir: "networks", role: "logo", size: helpers.TMDB_LOGO_SIZE,
+		set: func(ctx context.Context, q *database.Queries, id int64, value, source sql.NullString) (int64, error) {
+			return q.SetNetworkLogoArtwork(ctx, database.SetNetworkLogoArtworkParams{ID: id, Value: value, Source: source})
+		},
+		revert: (*database.Queries).RevertNetworkLogoArtwork,
+	}
 )
 
-var columns = []*column{moviePoster, movieBackdrop, artistProfile}
+var columns = []*column{moviePoster, movieBackdrop, artistProfile, showPoster, showBackdrop, seasonPoster, episodeStill, networkLogo}
 
 // image is one managed image column of one catalog row.
 type image struct {
@@ -83,6 +122,10 @@ type table struct {
 var tables = []table{
 	{name: "movies", list: listMovieImages},
 	{name: "artist", list: listArtistImages},
+	{name: "shows", list: listShowImages},
+	{name: "show_seasons", list: listSeasonImages},
+	{name: "show_episodes", list: listEpisodeImages},
+	{name: "networks", list: listNetworkImages},
 }
 
 func listMovieImages(ctx context.Context, q *database.Queries, afterID int64) ([]image, int64, int, error) {
@@ -94,10 +137,7 @@ func listMovieImages(ctx context.Context, q *database.Queries, afterID int64) ([
 	images := make([]image, 0, 2*len(rows))
 	var lastID int64
 	for _, row := range rows {
-		key := ""
-		if row.TmdbID.Valid {
-			key = strconv.FormatInt(row.TmdbID.Int64, 10)
-		}
+		key := tmdbKey(row.TmdbID)
 		title := slug(row.Title)
 		images = append(images,
 			image{column: moviePoster, rowID: row.ID, key: key, stem: title + "_" + moviePoster.role, source: row.PosterPathSource, value: row.PosterPath},
@@ -126,6 +166,95 @@ func listArtistImages(ctx context.Context, q *database.Queries, afterID int64) (
 	}
 
 	return images, lastID, len(rows), nil
+}
+
+func listShowImages(ctx context.Context, q *database.Queries, afterID int64) ([]image, int64, int, error) {
+	rows, err := q.ListShowArtwork(ctx, database.ListShowArtworkParams{AfterID: afterID, PageSize: pageSize})
+	if err != nil {
+		return nil, 0, 0, err
+	}
+
+	images := make([]image, 0, 2*len(rows))
+	var lastID int64
+	for _, row := range rows {
+		key := tmdbKey(row.TmdbID)
+		name := slug(row.Name)
+		images = append(images,
+			image{column: showPoster, rowID: row.ID, key: key, stem: name + "_" + showPoster.role, source: row.PosterPathSource, value: row.PosterPath},
+			image{column: showBackdrop, rowID: row.ID, key: key, stem: name + "_" + showBackdrop.role, source: row.BackdropPathSource, value: row.BackdropPath},
+		)
+		lastID = row.ID
+	}
+
+	return images, lastID, len(rows), nil
+}
+
+func listSeasonImages(ctx context.Context, q *database.Queries, afterID int64) ([]image, int64, int, error) {
+	rows, err := q.ListShowSeasonArtwork(ctx, database.ListShowSeasonArtworkParams{AfterID: afterID, PageSize: pageSize})
+	if err != nil {
+		return nil, 0, 0, err
+	}
+
+	images := make([]image, 0, len(rows))
+	var lastID int64
+	for _, row := range rows {
+		images = append(images, image{
+			column: seasonPoster, rowID: row.ID, key: tmdbKey(row.ShowTmdbID),
+			stem:   fmt.Sprintf("season_%02d_%s", row.SeasonNumber, seasonPoster.role),
+			source: row.PosterPathSource, value: row.PosterPath,
+		})
+		lastID = row.ID
+	}
+
+	return images, lastID, len(rows), nil
+}
+
+func listEpisodeImages(ctx context.Context, q *database.Queries, afterID int64) ([]image, int64, int, error) {
+	rows, err := q.ListShowEpisodeArtwork(ctx, database.ListShowEpisodeArtworkParams{AfterID: afterID, PageSize: pageSize})
+	if err != nil {
+		return nil, 0, 0, err
+	}
+
+	images := make([]image, 0, len(rows))
+	var lastID int64
+	for _, row := range rows {
+		images = append(images, image{
+			column: episodeStill, rowID: row.ID, key: tmdbKey(row.ShowTmdbID),
+			stem:   fmt.Sprintf("s%02de%02d_%s", row.SeasonNumber, row.EpisodeNumber, episodeStill.role),
+			source: row.StillPathSource, value: row.StillPath,
+		})
+		lastID = row.ID
+	}
+
+	return images, lastID, len(rows), nil
+}
+
+func listNetworkImages(ctx context.Context, q *database.Queries, afterID int64) ([]image, int64, int, error) {
+	rows, err := q.ListNetworkArtwork(ctx, database.ListNetworkArtworkParams{AfterID: afterID, PageSize: pageSize})
+	if err != nil {
+		return nil, 0, 0, err
+	}
+
+	images := make([]image, 0, len(rows))
+	var lastID int64
+	for _, row := range rows {
+		images = append(images, image{
+			column: networkLogo, rowID: row.ID, key: strconv.FormatInt(row.TmdbID, 10),
+			stem: slug(row.Name) + "_" + networkLogo.role, source: row.LogoSource, value: row.Logo,
+		})
+		lastID = row.ID
+	}
+
+	return images, lastID, len(rows), nil
+}
+
+// tmdbKey names the folder of an entity matched on TMDB; an unmatched one has
+// none, so its images stay remote.
+func tmdbKey(id sql.NullInt64) string {
+	if !id.Valid {
+		return ""
+	}
+	return strconv.FormatInt(id.Int64, 10)
 }
 
 // managedDirs lists the folders under the static directory the syncer owns.
