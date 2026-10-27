@@ -31,7 +31,7 @@ func TestOutstandingCarriesFileIssuesOutsideARunOfChanges(t *testing.T) {
 		report := NewReport()
 		outstanding.Carry(&report, tc.changes, tc.changes.Resolve("/library"))
 		var got []string
-		for key := range report.issues {
+		for key := range report.carried {
 			got = append(got, key)
 		}
 		slices.Sort(got)
@@ -63,10 +63,11 @@ func TestCarriedIssuesNeitherSetTheStateNorCrowdOutTheRunsOwn(t *testing.T) {
 
 	report = NewReport()
 	outstanding.Carry(&report, changes, changes.Resolve("/library"))
-	report.Issue("/library/z.mkv", PhaseLocal, "failed")
-	// A carried issue the run raises again is its own.
-	report.Issue("/library/a.mkv", PhaseLocal, "failed")
 	progress = Progress{State: StateRunning}
+	report.Publish(&progress)
+	report.Issue("/library/z.mkv", PhaseLocal, "failed")
+	// A carried issue the run raises again, with the same text, is its own.
+	report.Issue("/library/a.mkv", PhaseLocal, "failed")
 	report.Publish(&progress)
 	report.Finish(&progress, false)
 	if progress.State != StateCompletedWithIssues {
@@ -78,5 +79,36 @@ func TestCarriedIssuesNeitherSetTheStateNorCrowdOutTheRunsOwn(t *testing.T) {
 	}
 	if !slices.Equal(order, []string{"a.mkv", "z.mkv", "b.mkv", "c.mkv"}) {
 		t.Fatalf("published order %q, want the run's own first", order)
+	}
+	// Dropping a carried issue republishes without it.
+	report.DropIssue("/library/b.mkv", PhaseLocal)
+	report.Publish(&progress)
+	order = nil
+	for _, issue := range progress.Issues {
+		order = append(order, issue.Filename)
+	}
+	if !slices.Equal(order, []string{"a.mkv", "z.mkv", "c.mkv"}) || progress.IssueCount != 3 {
+		t.Fatalf("after dropping a carried issue: %q (%d)", order, progress.IssueCount)
+	}
+}
+
+// A library configured with a relative path keys its issues by it, and they
+// carry the same.
+func TestOutstandingCarriesIssuesOfARelativeLibraryRoot(t *testing.T) {
+	previous := NewReport()
+	previous.Issue("media/movies/A/a.mkv", PhaseLocal, "failed")
+	var outstanding Outstanding
+	outstanding.Keep(&previous)
+	changes := &Changes{Paths: []string{"B"}}
+	report := NewReport()
+	outstanding.Carry(&report, changes, changes.Resolve("media/movies"))
+	if len(report.carried) != 1 {
+		t.Fatalf("carried %v", report.carried)
+	}
+	report = NewReport()
+	changes = &Changes{Paths: []string{"A"}}
+	outstanding.Carry(&report, changes, changes.Resolve("media/movies"))
+	if len(report.carried) != 0 {
+		t.Fatalf("an issue the run looks at again was carried: %v", report.carried)
 	}
 }

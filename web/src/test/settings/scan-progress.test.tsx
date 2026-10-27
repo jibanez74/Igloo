@@ -273,6 +273,18 @@ describe("runs of watcher-detected changes", () => {
     expect(screen.queryByText(/Files must be quiet for 60 seconds/)).not.toBeInTheDocument();
   });
 
+  it("announces a clean watcher run as applied while still listing the files an earlier scan left failing", async () => {
+    const user = userEvent.setup();
+    const done = movieScanStatus({
+      scope: "changes", state: "completed", total: 1, processed: 1, imported: 1,
+      issue_count: 1, issues: [{ filename: "bad.mkv", phase: "local", reason: "The file could not be imported." }],
+    });
+    render(<ScanProgress library="movies" status={done} unavailable={false} />);
+    expect(screen.getByRole("status")).toHaveTextContent("Detected movie changes applied");
+    await user.click(screen.getByText("1 outstanding issue", { exact: true }));
+    expect(screen.getByText(/bad\.mkv/)).toBeInTheDocument();
+  });
+
   it("refreshes the library lists once a watcher run commits something, and not for one that changed nothing", async () => {
     vi.useFakeTimers();
     let status = movieScanStatus({ scope: "changes", total: 1 });

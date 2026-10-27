@@ -181,9 +181,12 @@ type Report struct {
 	publishedLast string
 	// moves counts the files the run re-keyed to a new path.
 	moves int
-	// carried holds the keys of issues an earlier run left that this run
-	// lists without having raised them; see Outstanding.
-	carried map[string]bool
+	// carried holds the issues an earlier run left that this run lists, after
+	// its own, without having raised them; see Outstanding. carriedOrder is
+	// their sorted keys, rebuilt when carriedDirty is set.
+	carried      map[string]Issue
+	carriedOrder []string
+	carriedDirty bool
 }
 
 // Moves counts the files this run re-keyed to a new path. A move leaves the
@@ -194,7 +197,7 @@ func (r *Report) Moves() int {
 }
 
 func NewReport() Report {
-	return Report{issues: make(map[string]Issue), active: make(map[string]bool), carried: make(map[string]bool)}
+	return Report{issues: make(map[string]Issue), active: make(map[string]bool), carried: make(map[string]Issue)}
 }
 
 // Kept records the issues of a cleanup that kept files: one for each mount
@@ -222,8 +225,8 @@ func (r *Report) Issue(path string, phase ScanPhase, reason string) {
 		filename = filepath.Base(path)
 	}
 	entry := Issue{Filename: filename, Phase: phase, Reason: reason}
-	// The run raised it, so it is no longer only carried.
-	delete(r.carried, key)
+	// The run raised it, so it is its own rather than carried.
+	r.dropCarried(key)
 	existing, ok := r.issues[key]
 	if ok && existing == entry {
 		return
@@ -234,21 +237,32 @@ func (r *Report) Issue(path string, phase ScanPhase, reason string) {
 
 func (r *Report) DropIssue(path string, phase ScanPhase) {
 	key := string(phase) + ":" + path
+	r.dropCarried(key)
 	_, ok := r.issues[key]
 	if !ok {
 		return
 	}
 	delete(r.issues, key)
-	delete(r.carried, key)
 	r.markIssueChanged(key)
 }
 
-// markIssueChanged records a change to key unless the published slice is full
-// and key sorts after its last entry: every published key is then still
-// present and still sorts first, so the slice Publish would build is the same.
-// With carried issues the run's own come first, so any change counts.
+// dropCarried removes a carried issue, which changes the published slice.
+func (r *Report) dropCarried(key string) {
+	_, carried := r.carried[key]
+	if !carried {
+		return
+	}
+	delete(r.carried, key)
+	r.carriedDirty = true
+	r.issueVersion++
+}
+
+// markIssueChanged records a change to the run's own key unless the published
+// slice is full of its own issues and key sorts after its last entry: every
+// published key is then still present and still sorts first, so the slice
+// Publish would build is the same.
 func (r *Report) markIssueChanged(key string) {
-	beyondPublished := r.publishedLast != "" && key > r.publishedLast && len(r.carried) == 0
+	beyondPublished := r.publishedLast != "" && key > r.publishedLast
 	if beyondPublished {
 		return
 	}
@@ -273,23 +287,15 @@ func (r *Report) Publish(progress *Progress) {
 		progress.ActiveFiles = append(progress.ActiveFiles, filepath.Base(path))
 	}
 	sort.Strings(progress.ActiveFiles)
-	progress.IssueCount = len(r.issues)
+	progress.IssueCount = len(r.issues) + len(r.carried)
 	if r.issueVersion == r.publishedIssues {
 		return
 	}
-	// The run's own issues come first, so carried ones never crowd them out
-	// of the published slice.
 	keys := make([]string, 0, len(r.issues))
 	for key := range r.issues {
 		keys = append(keys, key)
 	}
-	sort.Slice(keys, func(i, j int) bool {
-		carriedI, carriedJ := r.carried[keys[i]], r.carried[keys[j]]
-		if carriedI != carriedJ {
-			return carriedJ
-		}
-		return keys[i] < keys[j]
-	})
+	sort.Strings(keys)
 	limit := min(MaxPublishedIssues, len(keys))
 	progress.Issues = make([]Issue, 0, limit)
 	for _, key := range keys[:limit] {
@@ -299,6 +305,20 @@ func (r *Report) Publish(progress *Progress) {
 	r.publishedLast = ""
 	if limit == MaxPublishedIssues {
 		r.publishedLast = keys[limit-1]
+		return
+	}
+	// Carried issues fill what the run's own leave, so they never crowd them
+	// out of the published slice.
+	if r.carriedDirty {
+		r.carriedOrder = make([]string, 0, len(r.carried))
+		for key := range r.carried {
+			r.carriedOrder = append(r.carriedOrder, key)
+		}
+		sort.Strings(r.carriedOrder)
+		r.carriedDirty = false
+	}
+	for _, key := range r.carriedOrder[:min(MaxPublishedIssues-limit, len(r.carriedOrder))] {
+		progress.Issues = append(progress.Issues, r.carried[key])
 	}
 }
 
@@ -311,8 +331,8 @@ func (r *Report) Finish(progress *Progress, canceled bool) {
 	}
 	if progress.State == StateRunning {
 		progress.State = StateCompleted
-		own := len(r.issues) - len(r.carried)
-		if own > 0 {
+		own := len(r.issues) > 0
+		if own {
 			progress.State = StateCompletedWithIssues
 		}
 	}

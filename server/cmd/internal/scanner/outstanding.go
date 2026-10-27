@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"maps"
 	"path/filepath"
 	"strings"
 )
@@ -38,13 +39,17 @@ func (o *Outstanding) Carry(report *Report, changes *Changes, paths []string) {
 	}
 	for key, issue := range o.issues {
 		phase, path, _ := strings.Cut(key, ":")
-		absolute := filepath.IsAbs(path)
-		if !absolute || !carriedPhases[ScanPhase(phase)] || covered(changed, path) {
+		stays := path != "" && carriedPhases[ScanPhase(phase)]
+		if !stays {
 			continue
 		}
-		report.issues[key] = issue
-		report.carried[key] = true
-		report.markIssueChanged(key)
+		lookedAt := covered(changed, path)
+		if lookedAt {
+			continue
+		}
+		report.carried[key] = issue
+		report.carriedDirty = true
+		report.issueVersion++
 	}
 }
 
@@ -62,10 +67,10 @@ func covered(changed map[string]bool, path string) bool {
 	}
 }
 
-// Keep remembers a finished run's issues for the next run.
+// Keep remembers a finished run's issues, its own and those it carried, for
+// the next run.
 func (o *Outstanding) Keep(report *Report) {
-	o.issues = make(map[string]Issue, len(report.issues))
-	for key, issue := range report.issues {
-		o.issues[key] = issue
-	}
+	o.issues = make(map[string]Issue, len(report.issues)+len(report.carried))
+	maps.Copy(o.issues, report.carried)
+	maps.Copy(o.issues, report.issues)
 }

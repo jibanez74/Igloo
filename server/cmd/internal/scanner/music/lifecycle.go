@@ -94,7 +94,8 @@ func (s *Scanner) runMusicScan(directory string, changes *scanner.Changes) {
 
 	onError := func(path string, err error) {
 		s.logger.Warn("music discovery failed", "path", path, "error", err)
-		report.Issue(path, scanner.PhaseLocal, scanner.ReasonDiscoveryEntry)
+		// Music has no discovery phase of its own, but a walk error is one.
+		report.Issue(path, scanner.PhaseDiscovery, scanner.ReasonDiscoveryEntry)
 	}
 	onFile := func(file scanner.ScanFile) error {
 		reconciliation.MarkSeen(file.Path)
