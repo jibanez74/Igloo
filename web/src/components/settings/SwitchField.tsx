@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 
 import {
   FOCUS_VISIBLE_RING_CLASS,
@@ -15,6 +15,7 @@ type SwitchFieldProps = {
   onCheckedChange: (checked: boolean) => void;
   icon: ReactNode;
   disabled?: boolean;
+  ref?: Ref<HTMLButtonElement>;
 };
 
 /**
@@ -30,6 +31,7 @@ export default function SwitchField({
   onCheckedChange,
   icon,
   disabled,
+  ref,
 }: SwitchFieldProps) {
   const labelId = `${id}-label`;
   const descriptionId = `${id}-description`;
@@ -55,6 +57,7 @@ export default function SwitchField({
           {label}
         </p>
         <button
+          ref={ref}
           type="button"
           role="switch"
           aria-checked={checked}

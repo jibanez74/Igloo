@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useId, useState, useTransition } from "react";
+import { useId, useRef, useState, useTransition } from "react";
 import type { FormEvent, ReactNode } from "react";
 import {
   Activity,
@@ -140,6 +140,10 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   const [validationMessage, setValidationMessage] = useState("");
   const [validationField, setValidationField] = useState<string | null>(null);
   const [confirmingImageRemoval, setConfirmingImageRemoval] = useState(false);
+  // Closing the confirmation returns focus to what submitted the form, or,
+  // once a successful save has disabled Save, to the switch it was about.
+  const imageRemovalReturnRef = useRef<HTMLElement | null>(null);
+  const downloadImagesSwitchRef = useRef<HTMLButtonElement>(null);
   const [, startTransition] = useTransition();
 
   const isDirty = !formsMatchSettings(form, syncedSettings);
@@ -308,6 +312,9 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
     const turnsDownloadsOff =
       syncedSettings.download_images && !form.download_images;
     if (turnsDownloadsOff) {
+      const submitter = (event.nativeEvent as SubmitEvent).submitter;
+      imageRemovalReturnRef.current =
+        submitter ?? (document.activeElement as HTMLElement | null);
       setConfirmingImageRemoval(true);
       return;
     }
@@ -354,6 +361,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
             disabled={updateMutation.isPending}
           />
           <SwitchField
+            ref={downloadImagesSwitchRef}
             id={downloadImagesId}
             label="Download images"
             description="Save library artwork in the static directory and serve it from there. Turning this off deletes the saved images."
@@ -481,6 +489,8 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
         description="Turning off image downloads deletes the artwork saved in the static directory. Images load from their online sources again."
         confirmLabel="Delete images"
         pending={updateMutation.isPending}
+        restoreFocusRef={imageRemovalReturnRef}
+        fallbackFocusRef={downloadImagesSwitchRef}
         onConfirm={saveForm}
       />
     </form>

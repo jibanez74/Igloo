@@ -69,6 +69,12 @@ describe("general settings: download images", () => {
     });
     expect(saves).toHaveLength(0);
     expect(downloads).toHaveAttribute("aria-checked", "false");
+    // Focus goes back to what opened the dialog.
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Save Settings" }),
+      ).toHaveFocus();
+    });
 
     await user.click(screen.getByRole("button", { name: "Save Settings" }));
     await user.click(
@@ -85,6 +91,11 @@ describe("general settings: download images", () => {
     expect(saves[0]).toMatchObject({ download_images: false });
     await waitFor(() => {
       expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    });
+    // The saved form disables Save, so focus lands on the switch instead.
+    expect(screen.getByRole("button", { name: "Save Settings" })).toBeDisabled();
+    await waitFor(() => {
+      expect(downloads).toHaveFocus();
     });
   });
 

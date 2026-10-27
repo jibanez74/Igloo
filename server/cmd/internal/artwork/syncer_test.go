@@ -3,6 +3,7 @@ package artwork
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -574,5 +575,106 @@ func TestRequest_RunsOnePassForTheRequestsMadeDuringAPass(t *testing.T) {
 	}
 	if passes != 2 {
 		t.Fatalf("ran %d passes, want the first and one for the requests made during it", passes)
+	}
+}
+
+// A managed folder that leads into a library through a symlink is that
+// library: the syncer neither downloads into it nor prunes it, with the
+// setting on or off, whether the folder or the static directory is the link.
+func TestPass_NeverManagesAFolderThatLinksIntoALibrary(t *testing.T) {
+	for _, link := range []string{"managed folder", "static directory"} {
+		t.Run(link, func(t *testing.T) {
+			h := newHarness(t)
+			h.addMovie(1, 603, "The Matrix", "/matrix-poster.jpg", "")
+			parent := t.TempDir()
+			library := filepath.Join(parent, "movies")
+			libraryPoster := filepath.Join(library, "603", "my_movie_poster.jpg")
+			err := os.MkdirAll(filepath.Dir(libraryPoster), 0o755)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = os.WriteFile(libraryPoster, []byte("the library's own"), 0o644)
+			if err != nil {
+				t.Fatal(err)
+			}
+			h.libraries = []string{library}
+			if link == "managed folder" {
+				err = os.Symlink(library, filepath.Join(h.static, "movies"))
+			} else {
+				h.static = filepath.Join(t.TempDir(), "static")
+				err = os.Symlink(parent, h.static)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			h.enabled = false
+			h.pass()
+			h.enabled = true
+			h.pass()
+
+			_, err = os.Stat(libraryPoster)
+			if err != nil {
+				t.Fatalf("the library's file is gone: %v", err)
+			}
+			if h.upstream.requests("/w500/matrix-poster.jpg") != 0 || h.value("movies", "poster_path", 1).String != "/matrix-poster.jpg" {
+				t.Fatal("downloaded into a folder that links into a library")
+			}
+		})
+	}
+}
+
+// The pass stops after three failures in a row, not three in all: a success
+// in between starts the count again.
+func TestPass_ASuccessResetsTheProviderFailureCount(t *testing.T) {
+	h := newHarness(t)
+	for id := int64(1); id <= 40; id++ {
+		poster := fmt.Sprintf("/poster-%d.jpg", id)
+		h.addMovie(id, 600+id, "Movie", poster, "")
+		if id%10 == 0 {
+			h.upstream.set("/w500"+poster, http.StatusBadGateway)
+		}
+	}
+
+	h.pass()
+
+	if h.upstream.total() != 40 {
+		t.Fatalf("requested %d of 40 images, want every one", h.upstream.total())
+	}
+	downloaded := scannertest.CountRows(t, h.db, `SELECT count(*) FROM movies WHERE poster_path LIKE '/api/static/%'`)
+	if downloaded != 36 {
+		t.Fatalf("downloaded %d posters, want the 36 the provider served", downloaded)
+	}
+}
+
+// Turning downloads off records the static directory as clean only once every
+// copy is gone, so a folder it could not empty is tried again on later passes.
+func TestPass_TurningOffRetriesAFolderItCouldNotEmpty(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	h := newHarness(t)
+	h.addMovie(1, 603, "The Matrix", "/matrix-poster.jpg", "")
+	h.pass()
+	folder := filepath.Join(h.static, "movies", "603")
+	err := os.Chmod(folder, 0o555)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(folder, 0o755) })
+
+	h.enabled = false
+	h.pass()
+	if !h.exists("movies/603/the_matrix_poster.png") {
+		t.Fatal("removed a copy from a folder it cannot write to")
+	}
+
+	err = os.Chmod(folder, 0o755)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.pass()
+	if h.exists("movies/603/the_matrix_poster.png") {
+		t.Fatal("a later pass did not remove the copy once it could")
 	}
 }

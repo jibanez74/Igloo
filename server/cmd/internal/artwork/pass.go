@@ -56,8 +56,10 @@ func (s *Syncer) removeCopies(ctx context.Context, staticDir string) {
 		return
 	}
 
-	removed := s.prune(ctx, staticDir, nil, s.overlappingDirs(staticDir))
-	if ctx.Err() == nil {
+	// A folder that overlaps a library was never written, so there is
+	// nothing to remove from it.
+	removed, complete := s.prune(ctx, staticDir, nil, s.overlappingDirs(staticDir))
+	if complete && ctx.Err() == nil {
 		s.cleanedDir = staticDir
 	}
 	changed := reverted > 0 || removed > 0
@@ -135,6 +137,9 @@ func (s *Syncer) keepCopies(ctx context.Context, staticDir string) {
 	s.cleanedDir = ""
 	started := s.now()
 	skipped := s.overlappingDirs(staticDir)
+	for dir, library := range skipped {
+		s.logger.Error("not managing artwork in a folder that overlaps a media library; choose another static directory", "folder", filepath.Join(staticDir, dir), "library", library)
+	}
 
 	images, err := s.listImages(ctx)
 	if err != nil {
@@ -177,7 +182,7 @@ func (s *Syncer) keepCopies(ctx context.Context, staticDir string) {
 	removed := 0
 	canPrune := !applyFailed && ctx.Err() == nil && s.enabled()
 	if canPrune {
-		removed = s.prune(ctx, staticDir, p.kept, skipped)
+		removed, _ = s.prune(ctx, staticDir, p.kept, skipped)
 		s.lastStaticDir = staticDir
 	}
 
@@ -217,7 +222,7 @@ func (s *Syncer) listImages(ctx context.Context) ([]image, error) {
 
 // plan sorts the images into copies to keep, columns to point back at their
 // source, copies to reuse and copies to download.
-func (s *Syncer) plan(staticDir string, images []image, skipped map[string]bool) plan {
+func (s *Syncer) plan(staticDir string, images []image, skipped map[string]string) plan {
 	p := plan{kept: make(map[string]bool)}
 	keptStems := make(map[string]keptCopy)
 	type candidate struct {
@@ -227,7 +232,8 @@ func (s *Syncer) plan(staticDir string, images []image, skipped map[string]bool)
 	var candidates []candidate
 
 	for _, img := range images {
-		if skipped[img.column.dir] {
+		_, isSkipped := skipped[img.column.dir]
+		if isSkipped {
 			continue
 		}
 
@@ -388,6 +394,7 @@ func (s *Syncer) downloadAll(ctx context.Context, staticDir string, p plan) (int
 				return
 			}
 
+			breaker.Observe(nil)
 			downloaded++
 			rel := job.folder + "/" + filepath.Base(result.path)
 			value := sql.NullString{String: localURL(rel, job.version), Valid: true}
@@ -413,8 +420,13 @@ func (s *Syncer) downloadAll(ctx context.Context, staticDir string, p plan) (int
 }
 
 // classifyDownloadError marks transport failures, rate limits and server
-// errors as transient, so a run of them stops the pass. Nothing is fatal.
+// errors as transient, so a run of them stops the pass; a success or any
+// other failure ends the run. Nothing is fatal.
 func classifyDownloadError(err error) (fatal, transient bool) {
+	if err == nil {
+		return false, false
+	}
+
 	var statusErr *helpers.ImageStatusError
 	isStatus := errors.As(err, &statusErr)
 	if isStatus {
@@ -442,11 +454,14 @@ func isPermanentDownloadFailure(err error) bool {
 
 // prune removes the managed files that are not in kept (every one when kept
 // is nil) from the managed folders not in skipped, then the folders left
-// empty, and reports how many files it removed.
-func (s *Syncer) prune(ctx context.Context, staticDir string, kept map[string]bool, skipped map[string]bool) int {
+// empty. It reports how many files it removed, and whether it got through
+// every folder without a filesystem error.
+func (s *Syncer) prune(ctx context.Context, staticDir string, kept map[string]bool, skipped map[string]string) (int, bool) {
 	removed := 0
+	complete := true
 	for _, dir := range managedDirs() {
-		if skipped[dir] {
+		_, isSkipped := skipped[dir]
+		if isSkipped {
 			continue
 		}
 
@@ -457,18 +472,21 @@ func (s *Syncer) prune(ctx context.Context, staticDir string, kept map[string]bo
 		}
 		if err != nil {
 			s.logger.Error("failed to read artwork folder", "path", root, "error", err)
+			complete = false
 			continue
 		}
 
 		for _, key := range keys {
 			if ctx.Err() != nil {
-				return removed
+				return removed, false
 			}
 			isKeyFolder := key.IsDir() && helpers.IsPlainPathSegment(key.Name(), "")
 			if !isKeyFolder {
 				continue
 			}
-			removed += s.pruneFolder(dir, filepath.Join(root, key.Name()), key.Name(), kept)
+			n, folderComplete := s.pruneFolder(dir, filepath.Join(root, key.Name()), key.Name(), kept)
+			removed += n
+			complete = complete && folderComplete
 		}
 
 		if kept == nil {
@@ -477,17 +495,18 @@ func (s *Syncer) prune(ctx context.Context, staticDir string, kept map[string]bo
 		}
 	}
 
-	return removed
+	return removed, complete
 }
 
-func (s *Syncer) pruneFolder(dir, folder, key string, kept map[string]bool) int {
+func (s *Syncer) pruneFolder(dir, folder, key string, kept map[string]bool) (int, bool) {
 	files, err := os.ReadDir(folder)
 	if err != nil {
 		s.logger.Error("failed to read artwork folder", "path", folder, "error", err)
-		return 0
+		return 0, false
 	}
 
 	removed := 0
+	complete := true
 	for _, file := range files {
 		isOurs := file.Type().IsRegular() && isManagedFile(dir, file.Name())
 		if !isOurs {
@@ -500,6 +519,7 @@ func (s *Syncer) pruneFolder(dir, folder, key string, kept map[string]bool) int 
 		err = os.Remove(filepath.Join(folder, file.Name()))
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			s.logger.Error("failed to remove artwork", "path", filepath.Join(folder, file.Name()), "error", err)
+			complete = false
 			continue
 		}
 		removed++
@@ -508,34 +528,65 @@ func (s *Syncer) pruneFolder(dir, folder, key string, kept map[string]bool) int 
 	// Fails, as it should, while anything is left in the folder.
 	_ = os.Remove(folder)
 
-	return removed
+	return removed, complete
 }
 
 // overlappingDirs reports the managed folders that are, contain or lie inside
-// a media library. The syncer never writes or deletes there: a library's own
-// files could be taken for copies.
-func (s *Syncer) overlappingDirs(staticDir string) map[string]bool {
-	overlapping := make(map[string]bool)
+// a media library, mapped to that library. The syncer never writes or deletes
+// there: a library's own files could be taken for copies. Symlinks are
+// resolved on both sides, since a managed folder that links into a library is
+// that library; a path that cannot be resolved counts as overlapping.
+func (s *Syncer) overlappingDirs(staticDir string) map[string]string {
+	overlapping := make(map[string]string)
 	for _, dir := range managedDirs() {
-		managed, err := filepath.Abs(filepath.Join(staticDir, dir))
+		managed, err := resolvedPath(filepath.Join(staticDir, dir))
 		if err != nil {
-			overlapping[dir] = true
+			overlapping[dir] = err.Error()
 			continue
 		}
 
 		for _, library := range s.libraryDirs() {
-			libraryPath, err := filepath.Abs(library)
+			libraryPath, err := resolvedPath(library)
 			if err != nil {
+				overlapping[dir] = library
 				continue
 			}
 			if pathsOverlap(managed, libraryPath) {
-				overlapping[dir] = true
-				s.logger.Error("not managing artwork in a folder that overlaps a media library; choose another static directory", "path", managed, "library", libraryPath)
+				overlapping[dir] = library
 			}
 		}
 	}
 
 	return overlapping
+}
+
+// resolvedPath is the absolute path p leads to with every symlink in it
+// resolved. A path that does not exist yet resolves through its nearest
+// existing ancestor, since a folder created there lands wherever that
+// ancestor leads.
+func resolvedPath(p string) (string, error) {
+	current, err := filepath.Abs(p)
+	if err != nil {
+		return "", err
+	}
+
+	var missing []string
+	for {
+		resolved, err := filepath.EvalSymlinks(current)
+		if err == nil {
+			return filepath.Join(append([]string{resolved}, missing...)...), nil
+		}
+		if !errors.Is(err, fs.ErrNotExist) {
+			return "", err
+		}
+
+		parent := filepath.Dir(current)
+		if parent == current {
+			return "", err
+		}
+		missing = append([]string{filepath.Base(current)}, missing...)
+		current = parent
+	}
 }
 
 func pathsOverlap(a, b string) bool {
