@@ -384,6 +384,10 @@ func TestMovieChangesRunKeepsTheIssuesOfFilesItDidNotLookAt(t *testing.T) {
 	if status.IssueCount != 1 || status.Issues[0].Filename != "bad.mkv" {
 		t.Fatalf("after a run of changes elsewhere: %+v", status.Issues)
 	}
+	// The run itself went fine.
+	if status.State != scanner.StateCompleted {
+		t.Fatalf("a run of changes with only carried issues ended %s", status.State)
+	}
 	broken = false
 	s.scanChanges(root, scanner.Changes{Paths: []string{"Bad (2001)/bad.mkv"}})
 	if s.Status().IssueCount != 0 {

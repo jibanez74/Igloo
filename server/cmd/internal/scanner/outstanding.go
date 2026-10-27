@@ -14,31 +14,51 @@ type Outstanding struct {
 	issues map[string]Issue
 }
 
-// Carry copies into a run of changes' report the issues the last run left at
-// files outside paths, which this run does not look at again; those at or
-// beneath paths are its to raise or settle. A walk of the whole library
-// looks at every file, so it carries nothing. Issues that name no file, a
-// run's own failures and provider lookups, stay with the run that raised
-// them.
+// carriedPhases are the phases whose issues stay true until a run looks at
+// their path again: a file that failed or was deferred, and a disk kept
+// because it was not mounted. Discovery issues are left out, since a directory
+// fixed since is not among the paths of the run that imports its files, and
+// so are enrichment issues, which a run of changes may settle without naming
+// their key, as it enriches a show it touched.
+var carriedPhases = map[ScanPhase]bool{PhaseLocal: true, PhaseCleanup: true}
+
+// Carry lists in a run of changes' report the issues the last run left at
+// paths outside the run's, which it does not look at again; those at or
+// beneath its paths are its to raise or settle. A walk of the whole library
+// looks at every file, so it carries nothing. Carried issues do not make the
+// run's state completed-with-issues, and its own are published first.
 func (o *Outstanding) Carry(report *Report, changes *Changes, paths []string) {
 	scoped := changes.Scoped()
 	if !scoped {
 		return
 	}
+	changed := make(map[string]bool, len(paths))
+	for _, path := range paths {
+		changed[path] = true
+	}
 	for key, issue := range o.issues {
-		_, path, _ := strings.Cut(key, ":")
+		phase, path, _ := strings.Cut(key, ":")
 		absolute := filepath.IsAbs(path)
-		if !absolute {
+		if !absolute || !carriedPhases[ScanPhase(phase)] || covered(changed, path) {
 			continue
 		}
-		covered := false
-		for _, changed := range paths {
-			covered = covered || PathWithin(changed, path)
+		report.issues[key] = issue
+		report.carried[key] = true
+		report.markIssueChanged(key)
+	}
+}
+
+// covered reports whether path is one of changed or lies beneath one.
+func covered(changed map[string]bool, path string) bool {
+	for {
+		if changed[path] {
+			return true
 		}
-		if !covered {
-			report.issues[key] = issue
-			report.markIssueChanged(key)
+		parent := filepath.Dir(path)
+		if parent == path {
+			return false
 		}
+		path = parent
 	}
 }
 

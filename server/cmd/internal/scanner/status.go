@@ -181,6 +181,9 @@ type Report struct {
 	publishedLast string
 	// moves counts the files the run re-keyed to a new path.
 	moves int
+	// carried holds the keys of issues an earlier run left that this run
+	// lists without having raised them; see Outstanding.
+	carried map[string]bool
 }
 
 // Moves counts the files this run re-keyed to a new path. A move leaves the
@@ -191,7 +194,7 @@ func (r *Report) Moves() int {
 }
 
 func NewReport() Report {
-	return Report{issues: make(map[string]Issue), active: make(map[string]bool)}
+	return Report{issues: make(map[string]Issue), active: make(map[string]bool), carried: make(map[string]bool)}
 }
 
 // Kept records the issues of a cleanup that kept files: one for each mount
@@ -219,6 +222,8 @@ func (r *Report) Issue(path string, phase ScanPhase, reason string) {
 		filename = filepath.Base(path)
 	}
 	entry := Issue{Filename: filename, Phase: phase, Reason: reason}
+	// The run raised it, so it is no longer only carried.
+	delete(r.carried, key)
 	existing, ok := r.issues[key]
 	if ok && existing == entry {
 		return
@@ -234,14 +239,16 @@ func (r *Report) DropIssue(path string, phase ScanPhase) {
 		return
 	}
 	delete(r.issues, key)
+	delete(r.carried, key)
 	r.markIssueChanged(key)
 }
 
 // markIssueChanged records a change to key unless the published slice is full
 // and key sorts after its last entry: every published key is then still
 // present and still sorts first, so the slice Publish would build is the same.
+// With carried issues the run's own come first, so any change counts.
 func (r *Report) markIssueChanged(key string) {
-	beyondPublished := r.publishedLast != "" && key > r.publishedLast
+	beyondPublished := r.publishedLast != "" && key > r.publishedLast && len(r.carried) == 0
 	if beyondPublished {
 		return
 	}
@@ -270,11 +277,19 @@ func (r *Report) Publish(progress *Progress) {
 	if r.issueVersion == r.publishedIssues {
 		return
 	}
+	// The run's own issues come first, so carried ones never crowd them out
+	// of the published slice.
 	keys := make([]string, 0, len(r.issues))
 	for key := range r.issues {
 		keys = append(keys, key)
 	}
-	sort.Strings(keys)
+	sort.Slice(keys, func(i, j int) bool {
+		carriedI, carriedJ := r.carried[keys[i]], r.carried[keys[j]]
+		if carriedI != carriedJ {
+			return carriedJ
+		}
+		return keys[i] < keys[j]
+	})
 	limit := min(MaxPublishedIssues, len(keys))
 	progress.Issues = make([]Issue, 0, limit)
 	for _, key := range keys[:limit] {
@@ -288,14 +303,16 @@ func (r *Report) Publish(progress *Progress) {
 }
 
 // Finish resolves the terminal state: cancellation wins, a failure set earlier
-// stays, and a run still marked running completed, with issues when any remain.
+// stays, and a run still marked running completed, with issues when any of its
+// own remain; issues it only carried describe an earlier run.
 func (r *Report) Finish(progress *Progress, canceled bool) {
 	if canceled {
 		progress.State = StateCanceled
 	}
 	if progress.State == StateRunning {
 		progress.State = StateCompleted
-		if len(r.issues) > 0 {
+		own := len(r.issues) - len(r.carried)
+		if own > 0 {
 			progress.State = StateCompletedWithIssues
 		}
 	}

@@ -16845,7 +16845,7 @@
           "issue_count": {
             "type": "integer",
             "minimum": 0,
-            "description": "Outstanding issues. A run of changes (scope \"changes\") also carries those the previous run left at files outside its paths, which it does not look at again, so a library scan's failed and deferred files stay listed until a run looks at them; issues naming no file stay with the run that raised them."
+            "description": "Outstanding issues. A run of changes (scope \"changes\") also lists, after its own, those the previous run left at paths outside its own that stay true until a run looks at them again: files that failed or were deferred, and disks kept because they were not mounted. Carried issues do not make its state completed-with-issues; discovery and enrichment issues stay with the run that raised them."
           },
           "issues": {
             "type": "array",
@@ -17044,7 +17044,7 @@
           "issue_count": {
             "type": "integer",
             "minimum": 0,
-            "description": "Outstanding issues. A run of changes (scope \"changes\") also carries those the previous run left at files outside its paths, which it does not look at again, so a library scan's failed and deferred files stay listed until a run looks at them; issues naming no file stay with the run that raised them."
+            "description": "Outstanding issues. A run of changes (scope \"changes\") also lists, after its own, those the previous run left at paths outside its own that stay true until a run looks at them again: files that failed or were deferred, and disks kept because they were not mounted. Carried issues do not make its state completed-with-issues; discovery and enrichment issues stay with the run that raised them."
           },
           "issues": {
             "type": "array",
@@ -17237,7 +17237,7 @@
           "issue_count": {
             "type": "integer",
             "minimum": 0,
-            "description": "Outstanding issues. A run of changes (scope \"changes\") also carries those the previous run left at files outside its paths, which it does not look at again, so a library scan's failed and deferred files stay listed until a run looks at them; issues naming no file stay with the run that raised them."
+            "description": "Outstanding issues. A run of changes (scope \"changes\") also lists, after its own, those the previous run left at paths outside its own that stay true until a run looks at them again: files that failed or were deferred, and disks kept because they were not mounted. Carried issues do not make its state completed-with-issues; discovery and enrichment issues stay with the run that raised them."
           },
           "issues": {
             "type": "array",
