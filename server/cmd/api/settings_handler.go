@@ -329,6 +329,9 @@ func (app *Application) UpdateLibrarySettings(w http.ResponseWriter, r *http.Req
 		return
 	}
 	app.syncWatcher()
+	// The artwork syncer keeps clear of the library roots, which may now
+	// cover a folder it manages, or no longer cover one it skipped.
+	app.syncArtwork()
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Message: "Library settings updated",

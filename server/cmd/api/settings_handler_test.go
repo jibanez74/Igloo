@@ -249,6 +249,8 @@ func TestUpdateGeneralSettings_RejectsEmptyRequiredDirectories(t *testing.T) {
 func TestUpdateLibrarySettings_UpdatesMediaDirectories(t *testing.T) {
 	app := setupSessionTestApp(t)
 	admin := createTestUser(t, app, "Settings Admin", "settings-admin@example.com", true)
+	artwork := &artworkRequests{}
+	app.Artwork = artwork
 
 	root := t.TempDir()
 	moviesDir := filepath.Join(root, "movies")
@@ -269,6 +271,11 @@ func TestUpdateLibrarySettings_UpdatesMediaDirectories(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	// The artwork syncer keeps clear of the library roots, so new roots
+	// start a pass.
+	if artwork.count.Load() != 1 {
+		t.Fatalf("artwork passes requested = %d, want 1", artwork.count.Load())
 	}
 
 	settings, err := app.Queries.GetSettings(context.Background())

@@ -115,17 +115,35 @@ export function invalidateLibraryQueries(
   }
 }
 
+const artworkResetListeners = new Set<() => void>();
+
+/**
+ * Calls `listener` whenever invalidateArtworkQueries runs, for state that
+ * holds image URLs outside the query cache, such as the audio queue. Returns
+ * the unsubscribe function.
+ */
+export function onArtworkReset(listener: () => void) {
+  artworkResetListeners.add(listener);
+  return () => {
+    artworkResetListeners.delete(listener);
+  };
+}
+
 /**
  * Marks stale every query that shows library artwork: each library's, and the
  * person pages, whose photos and credits come from the libraries too. A
  * settings save that stops serving the downloaded copies calls it, since the
- * cached image URLs point at files the server deletes or no longer serves.
+ * cached image URLs point at files the server deletes or no longer serves;
+ * the onArtworkReset listeners then refresh the URLs they hold.
  */
 export function invalidateArtworkQueries(queryClient: QueryClient) {
   for (const library of Object.keys(LIBRARY_QUERY_KEYS) as Library[]) {
     invalidateLibraryQueries(queryClient, library);
   }
   void queryClient.invalidateQueries({ queryKey: ["person"] });
+  for (const listener of artworkResetListeners) {
+    listener();
+  }
 }
 
 /**

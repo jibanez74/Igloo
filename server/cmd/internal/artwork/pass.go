@@ -11,6 +11,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -49,7 +50,7 @@ func (s *Syncer) removeCopies(ctx context.Context, staticDir string) {
 
 	// A folder that overlaps a library was never written, so there is
 	// nothing to remove from it.
-	removed, complete := s.prune(ctx, staticDir, nil, s.overlappingDirs(staticDir))
+	removed, complete := s.prune(ctx, staticDir, nil, s.overlappingDirs(staticDir, s.libraryDirs()))
 	if complete && ctx.Err() == nil {
 		s.cleanedDir = staticDir
 	}
@@ -163,7 +164,12 @@ type update struct {
 func (s *Syncer) keepCopies(ctx context.Context, staticDir string) {
 	s.cleanedDir = ""
 	started := s.now()
-	skipped := s.overlappingDirs(staticDir)
+	// The overlap check holds for the library roots it was made with, so a
+	// pass whose roots change while it runs stops writing and deleting; the
+	// save that changed them starts another.
+	roots := s.libraryDirs()
+	librariesChanged := func() bool { return !slices.Equal(roots, s.libraryDirs()) }
+	skipped := s.overlappingDirs(staticDir, roots)
 	for dir, library := range skipped {
 		s.logger.Error("not managing artwork in a folder that overlaps a media library; choose another static directory", "folder", filepath.Join(staticDir, dir), "library", library)
 	}
@@ -219,7 +225,7 @@ func (s *Syncer) keepCopies(ctx context.Context, staticDir string) {
 		s.logFailure(ctx, "failed to point artwork at existing copies", err)
 	}
 
-	downloaded, failed, err := s.downloadAll(ctx, staticDir, p)
+	downloaded, failed, err := s.downloadAll(ctx, staticDir, p, librariesChanged)
 	if err != nil {
 		applyFailed = true
 		s.logFailure(ctx, "failed to point artwork at downloaded copies", err)
@@ -229,7 +235,7 @@ func (s *Syncer) keepCopies(ctx context.Context, staticDir string) {
 	// landed, and the setting is still on; otherwise a copy a column points
 	// at could be taken for an orphan.
 	removed := 0
-	canPrune := !applyFailed && ctx.Err() == nil && s.enabled()
+	canPrune := !applyFailed && ctx.Err() == nil && s.enabled() && !librariesChanged()
 	if canPrune {
 		removed, _ = s.prune(ctx, staticDir, p.kept, skipped)
 		s.lastStaticDir = staticDir
@@ -281,8 +287,15 @@ func (s *Syncer) plan(staticDir string, images []image, skipped map[string]strin
 	var candidates []candidate
 
 	for _, img := range images {
+		// A folder that overlaps a library is never written or pruned, but a
+		// column pointing into it goes back to its source: the folder is the
+		// library's now.
 		_, isSkipped := skipped[img.column.dir]
 		if isSkipped {
+			_, _, isLocal := parseLocalURL(img.value.String)
+			if isLocal {
+				p.reverts = append(p.reverts, update{img: img, value: img.source})
+			}
 			continue
 		}
 
@@ -409,7 +422,7 @@ type downloadResult struct {
 // provider at a time, each with its own breaker, so a provider that keeps
 // failing stops only its own downloads. It reports the copies saved and the
 // downloads that failed; the error is a failed column write.
-func (s *Syncer) downloadAll(ctx context.Context, staticDir string, p plan) (int, int, error) {
+func (s *Syncer) downloadAll(ctx context.Context, staticDir string, p plan, librariesChanged func() bool) (int, int, error) {
 	if len(p.downloads) == 0 {
 		return 0, 0, nil
 	}
@@ -432,8 +445,11 @@ func (s *Syncer) downloadAll(ctx context.Context, staticDir string, p plan) (int
 	for _, group := range groupByHost(p.downloads) {
 		breaker := scanner.ProviderBreaker{Classify: classifyDownloadError}
 		scanner.RunWorkers(ctx, downloadWorkers, group.jobs,
-			func() bool { return !breaker.Stopped && applyErr == nil && s.enabled() },
+			func() bool { return !breaker.Stopped && applyErr == nil && s.enabled() && !librariesChanged() },
 			func(ctx context.Context, job *download) downloadResult {
+				if librariesChanged() {
+					return downloadResult{job: job, err: errLibrariesChanged}
+				}
 				dir := filepath.Join(staticDir, filepath.FromSlash(job.folder))
 				err := checkKeyFolder(dir)
 				if err != nil {
@@ -446,8 +462,8 @@ func (s *Syncer) downloadAll(ctx context.Context, staticDir string, p plan) (int
 			func(result downloadResult) {
 				job := result.job
 				if result.err != nil {
-					canceled := ctx.Err() != nil
-					if canceled {
+					stopped := ctx.Err() != nil || errors.Is(result.err, errLibrariesChanged)
+					if stopped {
 						return
 					}
 					failed++
@@ -480,7 +496,7 @@ func (s *Syncer) downloadAll(ctx context.Context, staticDir string, p plan) (int
 			s.logger.Warn("stopped downloading artwork after repeated failures; the rest is retried on the next pass", "provider", group.host, "downloaded", downloaded, "failed", failed)
 		}
 
-		isStopped := applyErr != nil || ctx.Err() != nil || !s.enabled()
+		isStopped := applyErr != nil || ctx.Err() != nil || !s.enabled() || librariesChanged()
 		if isStopped {
 			break
 		}
@@ -637,7 +653,7 @@ func (s *Syncer) pruneFolder(dir, folder, key string, kept map[string]bool) (int
 // there: a library's own files could be taken for copies. Symlinks are
 // resolved on both sides, since a managed folder that links into a library is
 // that library; a path that cannot be resolved counts as overlapping.
-func (s *Syncer) overlappingDirs(staticDir string) map[string]string {
+func (s *Syncer) overlappingDirs(staticDir string, roots []string) map[string]string {
 	overlapping := make(map[string]string)
 	for _, dir := range managedDirs() {
 		managed, err := resolvedPath(filepath.Join(staticDir, dir))
@@ -646,7 +662,7 @@ func (s *Syncer) overlappingDirs(staticDir string) map[string]string {
 			continue
 		}
 
-		for _, library := range s.libraryDirs() {
+		for _, library := range roots {
 			libraryPath, err := resolvedPath(library)
 			if err != nil {
 				overlapping[dir] = library
@@ -690,9 +706,23 @@ func resolvedPath(p string) (string, error) {
 	}
 }
 
+// errLibrariesChanged stops a download that would write under library roots
+// other than the ones the pass checked.
+var errLibrariesChanged = errors.New("library directories changed during the pass")
+
+// pathsOverlap reports whether one of two clean absolute paths is or lies
+// beneath the other, the filesystem root included.
 func pathsOverlap(a, b string) bool {
-	separator := string(filepath.Separator)
-	return a == b || strings.HasPrefix(a, b+separator) || strings.HasPrefix(b, a+separator)
+	return isWithin(a, b) || isWithin(b, a)
+}
+
+func isWithin(path, dir string) bool {
+	rel, err := filepath.Rel(dir, path)
+	if err != nil {
+		return false
+	}
+	isOutside := rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator))
+	return !isOutside
 }
 
 // errLinkedKeyFolder refuses a download into a key folder that is a symlink or

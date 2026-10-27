@@ -1,10 +1,12 @@
 import { useRef } from "react";
-import { cleanup, fireEvent, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AudioPlayerProvider } from "@/context/AudioPlayerContext";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { renderWithQueryClient } from "@/test/helpers/render";
+import { getAlbumDetails } from "@/lib/api";
 import { convertToAudioTrack } from "@/lib/audio-utils";
+import { invalidateArtworkQueries } from "@/lib/library-cache";
 import type { PlayableTrackData } from "@/types";
 import { stubMediaElement } from "../helpers/dom";
 
@@ -14,6 +16,7 @@ vi.mock("@/lib/api", async importOriginal => ({
     error: false,
     data: { liked_track_ids: [] },
   }),
+  getAlbumDetails: vi.fn(),
 }));
 
 function rawTrack({
@@ -682,5 +685,70 @@ describe("extendQueue", () => {
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
       "Song 2",
     );
+  });
+});
+
+describe("artwork reset", () => {
+  beforeEach(() => {
+    stubMediaElement();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  // Turning image downloads off removes the server's copies, which the queue
+  // holds the URLs of outside the query cache.
+  it("replaces the queue's downloaded covers without stopping playback", async () => {
+    vi.mocked(getAlbumDetails).mockImplementation(async id => ({
+      error: false,
+      data: {
+        album: { cover: { String: `https://i.scdn.co/image/album-${id}`, Valid: true } },
+      } as unknown as Awaited<ReturnType<typeof getAlbumDetails>>["data"],
+    }) as Awaited<ReturnType<typeof getAlbumDetails>>);
+    const stone = rawTrack({
+      id: 1,
+      title: "Alabaster",
+      albumTitle: "Stone Record",
+      musician: "The Band",
+      cover: "/api/static/albums/a1/stone_record_cover.jpg?v=1",
+    });
+    const white = rawTrack({
+      id: 2,
+      title: "Chalk",
+      albumTitle: "White Record",
+      musician: "Third Band",
+      cover: "/api/static/albums/a2/white_record_cover.jpg?v=2",
+    });
+    const { queryClient } = renderWithQueryClient(
+      <AudioPlayerProvider>
+        <QueueHarness rawTracks={[stone, white]} startTrackId={1} />
+      </AudioPlayerProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "start queue" }));
+
+    act(() => {
+      invalidateArtworkQueries(queryClient);
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("img", { name: "Album cover for Stone Record" }),
+      ).toHaveAttribute("src", "https://i.scdn.co/image/album-1");
+    });
+    expect(
+      screen.getByRole("dialog", { name: "Now playing: Alabaster by The Band" }),
+    ).toBeInTheDocument();
+
+    // The next album's cover was refreshed too, before its track came up.
+    await waitFor(() => {
+      expect(getAlbumDetails).toHaveBeenCalledWith(2, expect.anything());
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next track" }));
+    await waitFor(() => {
+      expect(
+        screen.getByRole("img", { name: "Album cover for White Record" }),
+      ).toHaveAttribute("src", "https://i.scdn.co/image/album-2");
+    });
   });
 });

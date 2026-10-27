@@ -967,3 +967,62 @@ func TestPass_AFailingProviderStopsOnlyItsOwnDownloads(t *testing.T) {
 		t.Fatalf("downloaded %d of 5 album covers from a working provider", downloaded)
 	}
 }
+
+// A library at the filesystem root contains every managed folder.
+func TestPass_NeverManagesFoldersUnderALibraryAtTheRoot(t *testing.T) {
+	h := newHarness(t)
+	h.addMovie(1, 603, "The Matrix", "/matrix-poster.jpg", "")
+	h.write("movies/1999/a_poster.jpg", "the library's own")
+	h.libraries = []string{string(filepath.Separator)}
+
+	h.pass()
+	h.enabled = false
+	h.pass()
+
+	if h.upstream.total() != 0 {
+		t.Fatalf("made %d requests with every folder inside a library", h.upstream.total())
+	}
+	if !h.exists("movies/1999/a_poster.jpg") {
+		t.Fatal("deleted a file inside a library at the root")
+	}
+}
+
+// The overlap check holds for the roots a pass started with. When a library
+// is moved onto a managed folder mid-pass, the pass dispatches no more
+// downloads and deletes nothing there; the pass the save starts points the
+// folder's columns back at their sources and leaves its files alone.
+func TestPass_StopsWritingAndDeletingWhenTheLibrariesChange(t *testing.T) {
+	h := newHarness(t)
+	for id := int64(1); id <= 12; id++ {
+		h.addMovie(id, 600+id, fmt.Sprintf("Movie %d", id), fmt.Sprintf("/poster-%d.jpg", id), "")
+	}
+	h.write("movies/1999/valuable_poster.jpg", "the library's own")
+	var libraries atomic.Pointer[[]string]
+	libraries.Store(&[]string{})
+	h.syncer.libraryDirs = func() []string { return *libraries.Load() }
+	for id := 1; id <= 12; id++ {
+		h.upstream.handlers[fmt.Sprintf("/w500/poster-%d.jpg", id)] = func(w http.ResponseWriter, r *http.Request) {
+			libraries.Store(&[]string{filepath.Join(h.static, "movies")})
+			w.Write([]byte(pngSignature + r.URL.Path))
+		}
+	}
+
+	h.pass()
+
+	if !h.exists("movies/1999/valuable_poster.jpg") {
+		t.Fatal("deleted a file from a folder that became a library during the pass")
+	}
+	if h.upstream.total() > downloadWorkers {
+		t.Fatalf("made %d requests, want none dispatched after the libraries changed", h.upstream.total())
+	}
+
+	h.pass()
+
+	local := scannertest.CountRows(t, h.db, `SELECT count(*) FROM movies WHERE poster_path LIKE '/api/static/%'`)
+	if local != 0 {
+		t.Fatalf("%d posters still point into the library's folder", local)
+	}
+	if !h.exists("movies/1999/valuable_poster.jpg") {
+		t.Fatal("the next pass deleted a file from the library's folder")
+	}
+}
