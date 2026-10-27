@@ -124,6 +124,7 @@ func (s *Scanner) runMovieScan(directory string, changes *scanner.Changes) {
 			s.logger.Warn("movie scan interrupted", "phase", report.status.Phase, "processed", report.status.Processed, "total", report.status.Total, "error", contextErr)
 		}
 		report.Finish(&report.status.Progress, contextErr != nil)
+		s.outstanding.Keep(&report.Report)
 		s.publish(report)
 		now := *report.status.FinishedAt
 		s.logger.Info("movie scan finished", "run", report.status.RunID, "state", report.status.State, "elapsed", now.Sub(*report.status.StartedAt), "processed", report.status.Processed, "total", report.status.Total, "imported", report.status.Imported, "updated", report.status.Updated, "unchanged", report.status.Unchanged, "failed", report.status.Failed, "deferred", report.status.Deferred, "deleted", report.status.Deleted, "enriched", report.status.Enriched, "pending", report.status.PendingEnrichment)
@@ -143,6 +144,7 @@ func (s *Scanner) runMovieScan(directory string, changes *scanner.Changes) {
 	// A run of changes reads only the catalog rows beneath its paths, and the
 	// pending count it publishes from the database instead of the index.
 	paths := changes.Resolve(directory)
+	s.outstanding.Carry(&report.Report, changes, paths)
 	index, catalog, err := s.loadMovieScanIndex(ctx, changes, paths)
 	if err != nil {
 		fail(err, "Unable to read the movie catalog.")

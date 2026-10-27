@@ -64,6 +64,7 @@ type Scanner struct {
 	launcher                 scanner.Launcher
 	tx                       scanner.TxRunner
 	mountPoints              func() ([]string, error)
+	outstanding              scanner.Outstanding
 	currentMusicDirectory    func() sql.NullString
 	invalidateCommittedTrack func(int64)
 	statusMu                 sync.RWMutex

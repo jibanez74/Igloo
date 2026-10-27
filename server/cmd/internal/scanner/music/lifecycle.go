@@ -49,6 +49,7 @@ func (s *Scanner) runMusicScan(directory string, changes *scanner.Changes) {
 			s.logger.Warn("music library scan interrupted", "phase", report.status.Phase, "processed", report.status.Processed, "total", report.status.Total, "error", contextErr)
 		}
 		report.Finish(&report.status.Progress, contextErr != nil)
+		s.outstanding.Keep(&report.Report)
 		s.publish(report)
 		now := *report.status.FinishedAt
 		s.logger.Info("music scan finished", "run", report.status.RunID, "state", report.status.State, "elapsed", now.Sub(*report.status.StartedAt), "processed", report.status.Processed, "total", report.status.Total, "imported", report.status.Imported, "updated", report.status.Updated, "unchanged", report.status.Unchanged, "failed", report.status.Failed, "deferred", report.status.Deferred, "deleted", report.status.Deleted, "matched", report.status.Enriched, "enrichment_failed", report.status.EnrichmentFailed, "unmatched", report.status.EnrichmentUnmatched, "tracks_linked", report.tracksLinked())
@@ -66,6 +67,7 @@ func (s *Scanner) runMusicScan(directory string, changes *scanner.Changes) {
 	}
 	s.logger.Info("music scan phase", "run", report.status.RunID, "phase", scanner.PhaseLocal, "directory", directory)
 	paths := changes.Resolve(directory)
+	s.outstanding.Carry(&report.Report, changes, paths)
 	scanIndex, files, err := s.loadMusicScanIndex(ctx, changes, paths)
 	if err != nil {
 		fail(err, "Unable to read the music catalog.")
@@ -92,7 +94,8 @@ func (s *Scanner) runMusicScan(directory string, changes *scanner.Changes) {
 
 	onError := func(path string, err error) {
 		s.logger.Warn("music discovery failed", "path", path, "error", err)
-		report.Issue(path, scanner.PhaseLocal, scanner.ReasonDiscoveryEntry)
+		// Music has no discovery phase of its own, but a walk error is one.
+		report.Issue(path, scanner.PhaseDiscovery, scanner.ReasonDiscoveryEntry)
 	}
 	onFile := func(file scanner.ScanFile) error {
 		reconciliation.MarkSeen(file.Path)

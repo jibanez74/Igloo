@@ -2,6 +2,7 @@ package movie
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -11,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/scannertest"
 	"igloo/cmd/internal/tmdb"
@@ -354,5 +356,41 @@ func TestMovieAtomicReplacementRefreshesOnlyChangedTechnicalState(t *testing.T) 
 		if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM "+table) != 0 {
 			t.Fatalf("replacement retained %s", table)
 		}
+	}
+}
+
+// A run of changes publishes its own report, but a library scan's failed file
+// it did not look at is still failing, so its issue stays until a run looks at
+// the file again.
+func TestMovieChangesRunKeepsTheIssuesOfFilesItDidNotLookAt(t *testing.T) {
+	fixture := setupMovieScanner(t)
+	s := fixture.scanner
+	broken := true
+	s.ffprobe = &scannertest.CountingProbe{Default: movieScannerMetadataFixture("120"), Hook: func(_ context.Context, path string) (*ffprobe.FfprobeResult, error) {
+		if broken && filepath.Base(path) == "bad.mkv" {
+			return nil, errors.New("unreadable")
+		}
+		return movieScannerMetadataFixture("120"), nil
+	}}
+	root := t.TempDir()
+	scannertest.WriteFile(t, filepath.Join(root, "Bad (2001)", "bad.mkv"), "bad")
+	s.scan(root)
+	if s.Status().IssueCount != 1 {
+		t.Fatalf("library scan issues = %+v", s.Status().Issues)
+	}
+	scannertest.WriteFile(t, filepath.Join(root, "New (2002)", "new.mkv"), "new")
+	s.scanChanges(root, scanner.Changes{Paths: []string{"New (2002)/new.mkv"}})
+	status := s.Status()
+	if status.IssueCount != 1 || status.Issues[0].Filename != "bad.mkv" {
+		t.Fatalf("after a run of changes elsewhere: %+v", status.Issues)
+	}
+	// The run itself went fine.
+	if status.State != scanner.StateCompleted {
+		t.Fatalf("a run of changes with only carried issues ended %s", status.State)
+	}
+	broken = false
+	s.scanChanges(root, scanner.Changes{Paths: []string{"Bad (2001)/bad.mkv"}})
+	if s.Status().IssueCount != 0 {
+		t.Fatalf("after the file was looked at again: %+v", s.Status().Issues)
 	}
 }

@@ -59,6 +59,7 @@ type Scanner struct {
 	launcher    scanner.Launcher
 	tx          scanner.TxRunner
 	mountPoints func() ([]string, error)
+	outstanding scanner.Outstanding
 	statusMu    sync.RWMutex
 	status      Status
 	revision    scanner.Revision
@@ -122,6 +123,7 @@ func (s *Scanner) runShowScan(directory string, changes *scanner.Changes) {
 			s.Logger.Warn("show library scan interrupted", "phase", report.status.Phase, "processed", report.status.Processed, "total", report.status.Total, "error", contextErr)
 		}
 		report.Finish(&report.status.Progress, contextErr != nil)
+		s.outstanding.Keep(&report.Report)
 		s.publish(report)
 		now := *report.status.FinishedAt
 		s.Logger.Info("show scan finished", "run", report.status.RunID, "state", report.status.State, "elapsed", now.Sub(*report.status.StartedAt), "processed", report.status.Processed, "total", report.status.Total, "imported", report.status.Imported, "updated", report.status.Updated, "unchanged", report.status.Unchanged, "failed", report.status.Failed, "deferred", report.status.Deferred, "deleted", report.status.Deleted, "episodes", report.status.Episodes, "enriched", report.status.Enriched, "enrichment_failed", report.status.EnrichmentFailed, "enrichment_unmatched", report.status.EnrichmentUnmatched, "pending_enrichment", report.status.PendingEnrichment)
@@ -146,6 +148,7 @@ func (s *Scanner) runShowScan(directory string, changes *scanner.Changes) {
 	s.Logger.Info("show scan phase", "run", report.status.RunID, "phase", scanner.PhaseDiscovery, "directory", root)
 
 	paths := changes.Resolve(root)
+	s.outstanding.Carry(&report.Report, changes, paths)
 	index, catalog, err := s.loadScanIndex(ctx, changes, paths)
 	if err != nil {
 		fail(err, "Unable to read the TV catalog.")

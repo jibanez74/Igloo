@@ -1,12 +1,15 @@
 package show
 
 import (
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
 
+	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/scannertest"
 )
@@ -185,5 +188,25 @@ func TestShowChangesRunHandsBackDeferredFiles(t *testing.T) {
 	}
 	if status.Issues[0].Reason != scanner.ReasonFileDeferredWatched {
 		t.Fatalf("issue = %+v", status.Issues)
+	}
+}
+
+// A library scan's rejected file stays in the status through a run of changes
+// that does not look at it.
+func TestShowChangesRunKeepsTheIssuesOfFilesItDidNotLookAt(t *testing.T) {
+	s, probe, root := setupScanner(t)
+	probe.Hook = func(_ context.Context, path string) (*ffprobe.FfprobeResult, error) {
+		if filepath.Base(path) == "S01E02.mkv" {
+			return nil, errors.New("unreadable")
+		}
+		return defaultProbeResult(), nil
+	}
+	scannertest.WriteFile(t, filepath.Join(root, "Show (2020)/Season 1/S01E02.mkv"), "bad")
+	scanOK(t, s, root)
+	scannertest.WriteFile(t, filepath.Join(root, "Show (2020)/Season 1/S01E03.mkv"), "new")
+	s.scanChanges(root, scanner.Changes{Paths: []string{"Show (2020)/Season 1/S01E03.mkv"}})
+	status := s.Status()
+	if status.IssueCount != 1 || status.Issues[0].Filename != "S01E02.mkv" {
+		t.Fatalf("after a run of changes elsewhere: %+v", status.Issues)
 	}
 }
