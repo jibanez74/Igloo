@@ -494,7 +494,7 @@ explaining what it owns. The styling families:
   overlay + scaled action reveal), `CARD_FOCUS_WITHIN_RING_CLASS` (§1.7) and
   `OVER_MEDIA_BADGE_CLASS` (the corner chip over a poster).
 - **Motion** — `MOTION_*`: page/section, media-overlay and -dialog,
-  player-chrome, track-row, settings-surface and decorative classes, plus the
+  player-chrome, track-row and settings-surface classes, plus the
   loading/spinner states and the three `MOTION_DURATION_*_MS` numbers (§1.5).
 - **Focus** — the three ring recipes (§1.7). `DETAIL_SECTION_HEADING_CLASS`,
   `DETAIL_RAIL_HEADING_CLASS`, `SKIP_LINK_CLASS`, `PLAYER_ICON_BUTTON_CLASS`
@@ -593,7 +593,7 @@ collapse, while the mobile trigger controls the sheet.
 
 - Sidebar: `BrandMark` on a `bg-primary` tile + "Igloo" wordmark linking
   home; Home / Movies / TV Shows
-  / Music / Photos / Settings with lucide icons (active =
+  / Music / Settings with lucide icons (active =
   `bg-sidebar-accent` + `text-primary` icon); footer Logout. `SidebarRail`
   gives a click-to-collapse handle.
 - Header: sticky `h-14 bg-background/95 backdrop-blur-sm`, border-b.
@@ -1145,8 +1145,7 @@ is unknown or empty.
 
   Because the erroring subtree often unmounts its own live region, error
   surfaces carry `role="alert"` and announce themselves — never repeat one
-  through `LiveAnnouncer` as well. Placeholder sections (`ComingSoon`) reuse
-  the EmptyState language.
+  through `LiveAnnouncer` as well.
 
 ### 3.5 Playback surfaces
 

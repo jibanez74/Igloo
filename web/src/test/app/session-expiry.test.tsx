@@ -4,8 +4,8 @@ import { describe, expect, it, vi } from "vitest";
 import { AudioPlayerActionsContext } from "@/context/AudioPlayerContext";
 import { getNotifications } from "@/lib/api";
 import type { AudioPlayerActions } from "@/types/audio-player";
-import { jsonResponse, requestURL } from "../helpers/api";
-import { authUser } from "../helpers/fixtures";
+import { jsonResponse } from "../helpers/api";
+import { homeShellResponse } from "../helpers/home";
 import { renderRoute } from "../helpers/render-route";
 
 const toastMocks = vi.hoisted(() => ({ showInfo: vi.fn() }));
@@ -36,16 +36,14 @@ function mockServer(initial: AuthAnswer) {
       if (server.auth === "unauthorized") {
         return jsonResponse({ error: true, message: "not authorized" }, 401);
       }
-      return requestURL(input) === "/api/auth/user"
-        ? jsonResponse(authUser())
-        : jsonResponse({ error: false, data: {} });
+      return homeShellResponse(input);
     }),
   );
 
   return server;
 }
 
-function renderShell(path = "/photos") {
+function renderShell(path = "/") {
   const stop = vi.fn();
   const view = renderRoute(path, {
     wrapper: children => (
@@ -76,7 +74,7 @@ describe("a session that ends while the shell is open", () => {
     await waitFor(() => {
       expect(router.state.location.pathname).toBe("/login");
     });
-    expect(router.state.location.search).toEqual({ redirect: "/photos" });
+    expect(router.state.location.search).toEqual({ redirect: "/" });
     expect(router.state.location.state).toMatchObject({ loggedOut: true });
     expect(stop).toHaveBeenCalledOnce();
     expect(toastMocks.showInfo).toHaveBeenCalledExactlyOnceWith("You've been signed out.");
@@ -121,7 +119,7 @@ describe("the shell's auth check", () => {
         "Couldn’t load Igloo.",
       );
       expect(screen.getByRole("heading", { level: 1, name: "Igloo" })).toBeInTheDocument();
-      expect(router.state.location.pathname).toBe("/photos");
+      expect(router.state.location.pathname).toBe("/");
 
       server.auth = "user";
       await user.click(screen.getByRole("button", { name: "Try again" }));
@@ -139,7 +137,7 @@ describe("the shell's auth check", () => {
     await waitFor(() => {
       expect(router.state.location.pathname).toBe("/login");
     });
-    expect(router.state.location.search).toEqual({ redirect: "/photos" });
+    expect(router.state.location.search).toEqual({ redirect: "/" });
     // Nobody was signed in, so there is no sign-out to announce.
     expect(toastMocks.showInfo).not.toHaveBeenCalled();
   });

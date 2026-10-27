@@ -18,7 +18,6 @@ import { Route as AuthTrailerRouteImport } from './routes/_auth/trailer'
 import { Route as AuthMoviesIndexRouteImport } from './routes/_auth/movies/index'
 import { Route as AuthMusicIndexRouteImport } from './routes/_auth/music/index'
 import { Route as AuthPeopleIdRouteImport } from './routes/_auth/people/$id'
-import { Route as AuthPhotosIndexRouteImport } from './routes/_auth/photos/index'
 import { Route as AuthSearchIndexRouteImport } from './routes/_auth/search/index'
 import { Route as AuthSettingsIndexRouteImport } from './routes/_auth/settings/index'
 import { Route as AuthSettingsAccountRouteImport } from './routes/_auth/settings/account'
@@ -79,11 +78,6 @@ const AuthMusicIndexRoute = AuthMusicIndexRouteImport.update({
 const AuthPeopleIdRoute = AuthPeopleIdRouteImport.update({
   id: '/people/$id',
   path: '/people/$id',
-  getParentRoute: () => AuthRouteRoute,
-} as any)
-const AuthPhotosIndexRoute = AuthPhotosIndexRouteImport.update({
-  id: '/photos/',
-  path: '/photos/',
   getParentRoute: () => AuthRouteRoute,
 } as any)
 const AuthSearchIndexRoute = AuthSearchIndexRouteImport.update({
@@ -187,7 +181,6 @@ export interface FileRoutesByFullPath {
   '/watch-rooms/$id': typeof AuthWatchRoomsIdRoute
   '/movies/': typeof AuthMoviesIndexRoute
   '/music/': typeof AuthMusicIndexRoute
-  '/photos/': typeof AuthPhotosIndexRoute
   '/search/': typeof AuthSearchIndexRoute
   '/settings/': typeof AuthSettingsIndexRoute
   '/tv-shows/': typeof AuthTvShowsIndexRoute
@@ -214,7 +207,6 @@ export interface FileRoutesByTo {
   '/watch-rooms/$id': typeof AuthWatchRoomsIdRoute
   '/movies': typeof AuthMoviesIndexRoute
   '/music': typeof AuthMusicIndexRoute
-  '/photos': typeof AuthPhotosIndexRoute
   '/search': typeof AuthSearchIndexRoute
   '/settings': typeof AuthSettingsIndexRoute
   '/tv-shows': typeof AuthTvShowsIndexRoute
@@ -244,7 +236,6 @@ export interface FileRoutesById {
   '/_auth/watch-rooms/$id': typeof AuthWatchRoomsIdRoute
   '/_auth/movies/': typeof AuthMoviesIndexRoute
   '/_auth/music/': typeof AuthMusicIndexRoute
-  '/_auth/photos/': typeof AuthPhotosIndexRoute
   '/_auth/search/': typeof AuthSearchIndexRoute
   '/_auth/settings/': typeof AuthSettingsIndexRoute
   '/_auth/tv-shows/': typeof AuthTvShowsIndexRoute
@@ -274,7 +265,6 @@ export interface FileRouteTypes {
     | '/watch-rooms/$id'
     | '/movies/'
     | '/music/'
-    | '/photos/'
     | '/search/'
     | '/settings/'
     | '/tv-shows/'
@@ -301,7 +291,6 @@ export interface FileRouteTypes {
     | '/watch-rooms/$id'
     | '/movies'
     | '/music'
-    | '/photos'
     | '/search'
     | '/settings'
     | '/tv-shows'
@@ -330,7 +319,6 @@ export interface FileRouteTypes {
     | '/_auth/watch-rooms/$id'
     | '/_auth/movies/'
     | '/_auth/music/'
-    | '/_auth/photos/'
     | '/_auth/search/'
     | '/_auth/settings/'
     | '/_auth/tv-shows/'
@@ -413,13 +401,6 @@ declare module '@tanstack/react-router' {
       path: '/people/$id'
       fullPath: '/people/$id'
       preLoaderRoute: typeof AuthPeopleIdRouteImport
-      parentRoute: typeof AuthRouteRoute
-    }
-    '/_auth/photos/': {
-      id: '/_auth/photos/'
-      path: '/photos'
-      fullPath: '/photos/'
-      preLoaderRoute: typeof AuthPhotosIndexRouteImport
       parentRoute: typeof AuthRouteRoute
     }
     '/_auth/search/': {
@@ -572,7 +553,6 @@ interface AuthRouteRouteChildren {
   AuthWatchRoomsIdRoute: typeof AuthWatchRoomsIdRoute
   AuthMoviesIndexRoute: typeof AuthMoviesIndexRoute
   AuthMusicIndexRoute: typeof AuthMusicIndexRoute
-  AuthPhotosIndexRoute: typeof AuthPhotosIndexRoute
   AuthSearchIndexRoute: typeof AuthSearchIndexRoute
   AuthTvShowsIndexRoute: typeof AuthTvShowsIndexRoute
   AuthMoviesIdPlayRoute: typeof AuthMoviesIdPlayRoute
@@ -595,7 +575,6 @@ const AuthRouteRouteChildren: AuthRouteRouteChildren = {
   AuthWatchRoomsIdRoute: AuthWatchRoomsIdRoute,
   AuthMoviesIndexRoute: AuthMoviesIndexRoute,
   AuthMusicIndexRoute: AuthMusicIndexRoute,
-  AuthPhotosIndexRoute: AuthPhotosIndexRoute,
   AuthSearchIndexRoute: AuthSearchIndexRoute,
   AuthTvShowsIndexRoute: AuthTvShowsIndexRoute,
   AuthMoviesIdPlayRoute: AuthMoviesIdPlayRoute,

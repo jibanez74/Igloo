@@ -20,25 +20,29 @@ function mockShellFetch() {
 // The router's default not-found view was one unstyled line with no shell
 // and no way back; unknown URLs now land on a page inside the shell.
 describe("unknown URLs", () => {
-  it("render a not-found page inside the authenticated shell", async () => {
-    mockShellFetch();
+  it.each(["/does-not-exist", "/photos", "/photos/"])(
+    "renders %s as not found inside the authenticated shell",
+    async path => {
+      mockShellFetch();
 
-    await renderRoute("/does-not-exist");
+      await renderRoute(path);
 
-    expect(
-      await screen.findByRole("heading", { level: 1, name: "Page not found" }),
-    ).toBeInTheDocument();
-    // The heading names the failure; the alert adds one sentence, untitled.
-    const alert = screen.getByRole("alert");
-    expect(alert).toHaveTextContent("There is no page at this address.");
-    expect(alert).not.toHaveTextContent("Not found");
-    expect(screen.getByRole("link", { name: "Back to Home" })).toHaveAttribute(
-      "href",
-      "/",
-    );
-    expect(screen.getByRole("link", { name: "Movies" })).toBeInTheDocument();
-    expect(readDocumentHead().title).toBe("Page not found - Igloo");
-  });
+      expect(
+        await screen.findByRole("heading", { level: 1, name: "Page not found" }),
+      ).toBeInTheDocument();
+      // The heading names the failure; the alert adds one sentence, untitled.
+      const alert = screen.getByRole("alert");
+      expect(alert).toHaveTextContent("There is no page at this address.");
+      expect(alert).not.toHaveTextContent("Not found");
+      expect(screen.getByRole("link", { name: "Back to Home" })).toHaveAttribute(
+        "href",
+        "/",
+      );
+      expect(screen.getByRole("link", { name: "Movies" })).toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "Photos" })).not.toBeInTheDocument();
+      expect(readDocumentHead().title).toBe("Page not found - Igloo");
+    },
+  );
 
   it("catch nested paths under a known section too", async () => {
     mockShellFetch();

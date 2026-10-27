@@ -1,7 +1,7 @@
 {
   "name": "Igloo",
   "short_name": "Igloo",
-  "description": "Igloo is your personal media center for movies, TV Shows, music, personal videos, photos and so much more. Stream and organize your entire media library.",
+  "description": "Igloo is your personal media center for movies, TV Shows, music, personal videos and so much more. Stream and organize your entire media library.",
   "id": "/",
   "start_url": "/",
   "scope": "/",

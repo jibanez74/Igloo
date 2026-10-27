@@ -13,7 +13,6 @@ import {
   CONTENT_FADE_TRANSITION_MS,
   DETAIL_PAGE_CONTENT_ENTER_CLASS,
   MOTION_CONTROL_THUMB_TRANSFORM_CLASS,
-  MOTION_DECORATIVE_PING_CLASS,
   MOTION_DURATION_MICRO_MS,
   MOTION_DURATION_PAGE_MS,
   MOTION_DURATION_STANDARD_MS,
@@ -241,9 +240,6 @@ describe("motion contracts", () => {
     );
     expect(MOTION_LOADING_STATE_CLASS).toContain("motion-reduce:animate-none");
     expect(MOTION_SPINNER_STATE_CLASS).toContain("motion-reduce:animate-none");
-    expect(MOTION_DECORATIVE_PING_CLASS).toContain(
-      "motion-reduce:animate-none",
-    );
   });
 
   it("treats template expressions as one class-bearing literal", () => {

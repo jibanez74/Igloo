@@ -5,7 +5,6 @@ import {
   Music,
   Film,
   Tv,
-  Image,
   Settings,
   LogOut,
   type LucideIcon,
@@ -57,7 +56,6 @@ const navItems: NavItem[] = [
   { title: "Movies", url: "/movies", icon: Film },
   { title: "TV Shows", url: "/tv-shows", icon: Tv },
   { title: "Music", url: "/music", icon: Music },
-  { title: "Photos", url: "/photos", icon: Image },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 

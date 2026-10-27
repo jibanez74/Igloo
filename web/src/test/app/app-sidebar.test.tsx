@@ -1,7 +1,6 @@
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { jsonResponse, requestURL } from "../helpers/api";
-import { authUser } from "../helpers/fixtures";
+import { homeShellResponse } from "../helpers/home";
 import { renderRoute } from "../helpers/render-route";
 
 const miniPlayer = vi.hoisted(() => ({ visible: false }));
@@ -11,19 +10,19 @@ vi.mock("@/hooks/useIsMiniPlayerVisible", () => ({
 }));
 
 function mockShellFetch() {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn((input: RequestInfo | URL) =>
-      requestURL(input) === "/api/auth/user"
-        ? jsonResponse(authUser())
-        : jsonResponse({ error: false, data: {} }),
-    ),
-  );
+  vi.stubGlobal("fetch", vi.fn(homeShellResponse));
 }
 
 async function renderSidebar() {
-  await renderRoute("/photos");
-  await screen.findByRole("button", { name: "Logout" });
+  await renderRoute("/");
+  await screen.findByRole("heading", { name: "Welcome to Igloo" });
+  const navigation = screen.getByRole("navigation", { name: "Main navigation" });
+  expect(within(navigation).getAllByRole("link").map(link => link.textContent)).toEqual([
+    "Home", "Movies", "TV Shows", "Music", "Settings",
+  ]);
+  expect(within(navigation).getByRole("link", { name: "Home" })).toHaveAttribute(
+    "aria-current", "page",
+  );
   return document.querySelector('[data-slot="sidebar-container"]');
 }
 

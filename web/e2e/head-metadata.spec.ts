@@ -5,7 +5,7 @@ import { trackBrowserIssues } from "./e2e-browser-issues";
 import { requireMockApi } from "./e2e-env";
 
 const ROOT_DESCRIPTION =
-  "Igloo is your personal media center for movies, TV Shows, music, personal videos, photos and so much more. Stream and organize your entire media library.";
+  "Igloo is your personal media center for movies, TV Shows, music, personal videos and so much more. Stream and organize your entire media library.";
 const MOVIES_DESCRIPTION =
   "Browse and organize your personal movie collection in your Igloo media library.";
 const SETTINGS_DESCRIPTION =

@@ -3,7 +3,7 @@ export const APP_NAME = "Igloo";
 
 /** Default page description (root route head) and the web manifest's. */
 export const APP_DESCRIPTION =
-  "Igloo is your personal media center for movies, TV Shows, music, personal videos, photos and so much more. Stream and organize your entire media library.";
+  "Igloo is your personal media center for movies, TV Shows, music, personal videos and so much more. Stream and organize your entire media library.";
 
 // TanStack Query keys. Keep these values stable and use the exported constants
 // for query options, cache reads/writes, invalidation, and tests.
@@ -603,8 +603,6 @@ export const MOTION_LOADING_STATE_CLASS =
   "animate-pulse motion-reduce:animate-none";
 export const MOTION_SPINNER_STATE_CLASS =
   "animate-spin motion-reduce:animate-none";
-export const MOTION_DECORATIVE_PING_CLASS =
-  "animate-ping motion-reduce:animate-none";
 export const DETAIL_PAGE_CONTENT_ENTER_CLASS = MOTION_PAGE_ENTER_CLASS;
 /**
  * Detail-page hero scrims (design-system §1.2 over-media exception: literal
