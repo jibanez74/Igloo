@@ -6,7 +6,7 @@ WHERE id = ?
 LIMIT 1;
 
 -- name: GetAlbumBySpotifyID :one
-SELECT id, spotify_id, cover
+SELECT id, spotify_id, cover_source
 FROM albums
 WHERE spotify_id = ?
 LIMIT 1;
@@ -69,10 +69,10 @@ OFFSET ?;
 -- name: UpdateAlbumCover :one
 UPDATE albums
 SET
-  cover = ?,
+  cover_source = ?,
   updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING id, spotify_id, cover;
+RETURNING id, spotify_id, cover_source;
 
 -- name: UpsertAlbum :one
 INSERT INTO albums (
@@ -83,7 +83,7 @@ INSERT INTO albums (
   release_date,
   year,
   total_tracks,
-  cover
+  cover_source
 )
 VALUES
   (?, ?, ?, ?, ?, ?, ?, ?)
@@ -96,9 +96,9 @@ SET
   release_date = COALESCE(excluded.release_date, albums.release_date),
   year = COALESCE(excluded.year, albums.year),
   total_tracks = COALESCE(excluded.total_tracks, albums.total_tracks),
-  cover = COALESCE(excluded.cover, albums.cover),
+  cover_source = COALESCE(excluded.cover_source, albums.cover_source),
   updated_at = CURRENT_TIMESTAMP
-RETURNING id, spotify_id, cover;
+RETURNING id, spotify_id, cover_source;
 
 -- name: DeleteAlbum :one
 -- RETURNING doubles as the existence check: no row means no such album.

@@ -720,3 +720,167 @@ func TestSchema_ParentDeletesCascade(t *testing.T) {
 		})
 	}
 }
+
+// Each image column is the value the API returns and its _source column the
+// provider reference writers set. A new source replaces a downloaded copy,
+// writing the same source keeps it, and neither touches updated_at, which
+// movie playback fingerprints include.
+func TestSchema_ArtworkSourceDecidesTheReturnedImage(t *testing.T) {
+	const showSeason = `
+		INSERT INTO shows (id, directory_path, local_name, name) VALUES (1, '/shows/Nightfall', 'Nightfall', 'Nightfall');
+		INSERT INTO show_seasons (id, show_id, season_number, name) VALUES (1, 1, 1, 'Season 1');`
+
+	tests := []struct {
+		table        string
+		column       string
+		insert       string // the row with id 1, its source bound to ?
+		hasUpdatedAt bool
+	}{
+		{"movies", "poster_path", `INSERT INTO movies (id, title, file_path, file_name, size, container, mime_type, adult, poster_path_source)
+			VALUES (1, 'Moonrise', '/movies/moonrise.mkv', 'moonrise.mkv', 1, 'mkv', 'video/x-matroska', false, ?)`, true},
+		{"movies", "backdrop_path", `INSERT INTO movies (id, title, file_path, file_name, size, container, mime_type, adult, backdrop_path_source)
+			VALUES (1, 'Moonrise', '/movies/moonrise.mkv', 'moonrise.mkv', 1, 'mkv', 'video/x-matroska', false, ?)`, true},
+		{"artist", "profile", `INSERT INTO artist (id, name, tmdb_id, profile_source) VALUES (1, 'Ada', 1, ?)`, false},
+		{"shows", "poster_path", `INSERT INTO shows (id, directory_path, local_name, name, poster_path_source) VALUES (1, '/shows/Nightfall', 'Nightfall', 'Nightfall', ?)`, true},
+		{"shows", "backdrop_path", `INSERT INTO shows (id, directory_path, local_name, name, backdrop_path_source) VALUES (1, '/shows/Nightfall', 'Nightfall', 'Nightfall', ?)`, true},
+		{"show_seasons", "poster_path", `
+			INSERT INTO shows (id, directory_path, local_name, name) VALUES (1, '/shows/Nightfall', 'Nightfall', 'Nightfall');
+			INSERT INTO show_seasons (id, show_id, season_number, name, poster_path_source) VALUES (1, 1, 1, 'Season 1', ?)`, true},
+		{"show_episodes", "still_path", showSeason + `
+			INSERT INTO show_episodes (id, season_id, episode_number, name, still_path_source) VALUES (1, 1, 1, 'Pilot', ?)`, true},
+		{"networks", "logo", `INSERT INTO networks (id, tmdb_id, name, logo_source) VALUES (1, 49, 'HBO', ?)`, false},
+		{"albums", "cover", `INSERT INTO albums (id, title, sort_title, cover_source) VALUES (1, 'Daylight', 'daylight', ?)`, true},
+		{"musicians", "thumb", `INSERT INTO musicians (id, name, sort_name, thumb_source) VALUES (1, 'Aurora', 'aurora', ?)`, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.table+"."+tt.column, func(t *testing.T) {
+			db := newTestDBApp(t).DB
+			source := tt.column + "_source"
+			const downloaded = "/api/static/artwork/1/first.jpg?v=1a2b3c4d"
+			const stamp = "2000-01-01 00:00:00"
+
+			returned := func() sql.NullString {
+				t.Helper()
+				var value sql.NullString
+				err := db.QueryRow(fmt.Sprintf(`SELECT %s FROM %s WHERE id = 1`, tt.column, tt.table)).Scan(&value)
+				if err != nil {
+					t.Fatalf("read %s: %v", tt.column, err)
+				}
+				return value
+			}
+
+			_, err := db.Exec(tt.insert, "/first.jpg")
+			if err != nil {
+				t.Fatalf("insert: %v", err)
+			}
+			got := returned()
+			if got != (sql.NullString{String: "/first.jpg", Valid: true}) {
+				t.Fatalf("after insert %s = %+v, want the source", tt.column, got)
+			}
+
+			_, err = db.Exec(fmt.Sprintf(`UPDATE %s SET %s = ? WHERE id = 1`, tt.table, tt.column), downloaded)
+			if err != nil {
+				t.Fatalf("store downloaded copy: %v", err)
+			}
+			if tt.hasUpdatedAt {
+				_, err = db.Exec(fmt.Sprintf(`UPDATE %s SET updated_at = ? WHERE id = 1`, tt.table), stamp)
+				if err != nil {
+					t.Fatalf("pin updated_at: %v", err)
+				}
+			}
+
+			steps := []struct {
+				name   string
+				source any
+				want   sql.NullString
+			}{
+				{"same source keeps the downloaded copy", "/first.jpg", sql.NullString{String: downloaded, Valid: true}},
+				{"new source replaces it", "/second.jpg", sql.NullString{String: "/second.jpg", Valid: true}},
+				{"cleared source clears it", nil, sql.NullString{}},
+			}
+			for _, step := range steps {
+				_, err = db.Exec(fmt.Sprintf(`UPDATE %s SET %s = ? WHERE id = 1`, tt.table, source), step.source)
+				if err != nil {
+					t.Fatalf("%s: write source: %v", step.name, err)
+				}
+				got := returned()
+				if got != step.want {
+					t.Errorf("%s: %s = %+v, want %+v", step.name, tt.column, got, step.want)
+				}
+				if !tt.hasUpdatedAt {
+					continue
+				}
+				var updatedAt string
+				err = db.QueryRow(fmt.Sprintf(`SELECT updated_at FROM %s WHERE id = 1`, tt.table)).Scan(&updatedAt)
+				if err != nil {
+					t.Fatalf("read updated_at: %v", err)
+				}
+				if updatedAt != stamp {
+					t.Errorf("%s: updated_at = %q, want it left at %q", step.name, updatedAt, stamp)
+				}
+			}
+		})
+	}
+}
+
+// Rows written without a source, as fixtures and hand edits are, keep the
+// image they were given.
+func TestSchema_ArtworkWithoutSourceIsKept(t *testing.T) {
+	db := newTestDBApp(t).DB
+
+	_, err := db.Exec(`INSERT INTO movies (id, title, file_path, file_name, size, container, mime_type, adult, poster_path)
+		VALUES (1, 'Moonrise', '/movies/moonrise.mkv', 'moonrise.mkv', 1, 'mkv', 'video/x-matroska', false, '/given.jpg')`)
+	if err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	var poster string
+	err = db.QueryRow(`SELECT poster_path FROM movies WHERE id = 1`).Scan(&poster)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if poster != "/given.jpg" {
+		t.Fatalf("poster_path = %q, want the value it was inserted with", poster)
+	}
+}
+
+// People are upserted from every movie and show that credits them, often
+// without a photo; that keeps the stored source, and with it a downloaded copy.
+func TestUpsertArtist_KeepsADownloadedProfileWhileItsSourceHolds(t *testing.T) {
+	app := setupTestApp(t)
+	ctx := context.Background()
+	const downloaded = "/api/static/people/1/ada_profile.jpg?v=1a2b3c4d"
+
+	id, err := app.Queries.UpsertArtist(ctx, database.UpsertArtistParams{Name: "Ada", TmdbID: 1, ProfileSource: sql.NullString{String: "/ada.jpg", Valid: true}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = app.DB.Exec(`UPDATE artist SET profile = ? WHERE id = ?`, downloaded, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	upserts := []struct {
+		name    string
+		profile sql.NullString
+		want    string
+	}{
+		{"credit without a photo", sql.NullString{}, downloaded},
+		{"credit with the same photo", sql.NullString{String: "/ada.jpg", Valid: true}, downloaded},
+		{"credit with a new photo", sql.NullString{String: "/ada-2.jpg", Valid: true}, "/ada-2.jpg"},
+	}
+	for _, upsert := range upserts {
+		_, err = app.Queries.UpsertArtist(ctx, database.UpsertArtistParams{Name: "Ada", TmdbID: 1, ProfileSource: upsert.profile})
+		if err != nil {
+			t.Fatalf("%s: %v", upsert.name, err)
+		}
+		var profile string
+		err = app.DB.QueryRow(`SELECT profile FROM artist WHERE id = ?`, id).Scan(&profile)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if profile != upsert.want {
+			t.Errorf("%s: profile = %q, want %q", upsert.name, profile, upsert.want)
+		}
+	}
+}

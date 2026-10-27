@@ -66,7 +66,7 @@ LIMIT ? OFFSET ?;
 INSERT INTO shows (directory_path, local_name, premiere_year, name) VALUES (?, ?, ?, ?) ON CONFLICT (directory_path) DO UPDATE SET id = shows.id RETURNING *;
 
 -- name: UpdateShowMetadata :exec
-UPDATE shows SET name = ?, tmdb_id = ?, imdb_id = ?, original_name = ?, overview = ?, tagline = ?, language = ?, origin_countries = ?, first_air_date = ?, last_air_date = ?, status = ?, type = ?, adult = ?, poster_path = ?, backdrop_path = ?, homepage = ?, vote_average = ?, vote_count = ?, popularity = ?, certification = ?, tmdb_season_count = ?, tmdb_episode_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?;
+UPDATE shows SET name = ?, tmdb_id = ?, imdb_id = ?, original_name = ?, overview = ?, tagline = ?, language = ?, origin_countries = ?, first_air_date = ?, last_air_date = ?, status = ?, type = ?, adult = ?, poster_path_source = ?, backdrop_path_source = ?, homepage = ?, vote_average = ?, vote_count = ?, popularity = ?, certification = ?, tmdb_season_count = ?, tmdb_episode_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?;
 
 -- name: MarkShowRetry :exec
 INSERT INTO show_tmdb_retries (show_id) VALUES (?) ON CONFLICT (show_id) DO UPDATE SET attempts = 0, last_attempt_at = NULL;
@@ -85,7 +85,7 @@ SELECT * FROM show_seasons WHERE id = ?;
 INSERT INTO show_seasons (show_id, season_number, name) VALUES (?, ?, ?) ON CONFLICT (show_id, season_number) DO UPDATE SET id = show_seasons.id RETURNING *;
 
 -- name: UpdateShowSeasonMetadata :exec
-UPDATE show_seasons SET name = ?, tmdb_id = ?, overview = ?, air_date = ?, poster_path = ?, vote_average = ?, tmdb_episode_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?;
+UPDATE show_seasons SET name = ?, tmdb_id = ?, overview = ?, air_date = ?, poster_path_source = ?, vote_average = ?, tmdb_episode_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?;
 
 -- name: MarkShowSeasonRetry :exec
 INSERT INTO show_season_tmdb_retries (season_id) VALUES (?) ON CONFLICT DO NOTHING;
@@ -100,7 +100,7 @@ SELECT * FROM show_episodes WHERE id = ?;
 INSERT INTO show_episodes (season_id, episode_number, name) VALUES (?, ?, ?) ON CONFLICT (season_id, episode_number) DO UPDATE SET id = show_episodes.id RETURNING *;
 
 -- name: UpdateShowEpisodeMetadata :exec
-UPDATE show_episodes SET name = ?, tmdb_id = ?, overview = ?, air_date = ?, still_path = ?, production_code = ?, tmdb_runtime = ?, vote_average = ?, vote_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?;
+UPDATE show_episodes SET name = ?, tmdb_id = ?, overview = ?, air_date = ?, still_path_source = ?, production_code = ?, tmdb_runtime = ?, vote_average = ?, vote_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?;
 
 -- name: MarkShowEpisodeRetry :exec
 INSERT INTO show_episode_tmdb_retries (episode_id) VALUES (?) ON CONFLICT DO NOTHING;
@@ -271,7 +271,7 @@ VALUES
   (?, ?, ?);
 
 -- name: UpsertNetwork :one
-INSERT INTO networks (tmdb_id, name, logo, country) VALUES (?, ?, ?, ?) ON CONFLICT (tmdb_id) DO UPDATE SET name = excluded.name, logo = excluded.logo, country = excluded.country RETURNING *;
+INSERT INTO networks (tmdb_id, name, logo_source, country) VALUES (?, ?, ?, ?) ON CONFLICT (tmdb_id) DO UPDATE SET name = excluded.name, logo_source = excluded.logo_source, country = excluded.country RETURNING id;
 
 -- name: DeleteShowCast :exec
 DELETE FROM show_cast WHERE show_id = ?;

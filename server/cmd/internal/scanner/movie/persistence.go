@@ -223,8 +223,8 @@ func applyTmdbMetadata(
 ) error {
 	err := qtx.UpdateMovieTmdbMetadata(ctx, database.UpdateMovieTmdbMetadataParams{
 		ID: movieID, Title: tmdbMovie.Title, TmdbID: helpers.NullInt64(int64(tmdbMovie.TmdbID)),
-		ImdbID: helpers.NullString(tmdbMovie.ImdbID), PosterPath: helpers.NullString(tmdbMovie.PosterPath),
-		BackdropPath: helpers.NullString(tmdbMovie.BackdropPath), Adult: tmdbMovie.Adult,
+		ImdbID: helpers.NullString(tmdbMovie.ImdbID), PosterPathSource: helpers.NullString(tmdbMovie.PosterPath),
+		BackdropPathSource: helpers.NullString(tmdbMovie.BackdropPath), Adult: tmdbMovie.Adult,
 		Language: helpers.NullString(tmdbMovie.OriginalLang), Year: helpers.NullInt64(int64(tmdbmatch.ReleaseYear(tmdbMovie.ReleaseDate))),
 		ReleaseDate: helpers.NullString(tmdbMovie.ReleaseDate), Overview: helpers.NullString(tmdbMovie.Overview),
 		TagLine: helpers.NullString(tmdbMovie.Tagline), Certification: helpers.NullString(tmdbMovie.Certification()),
@@ -381,9 +381,9 @@ func getOrCreateArtistID(
 	}
 
 	artist, err := qtx.UpsertArtist(ctx, database.UpsertArtistParams{
-		Name:    name,
-		TmdbID:  int64(tmdbID),
-		Profile: helpers.NullString(profilePath),
+		Name:          name,
+		TmdbID:        int64(tmdbID),
+		ProfileSource: helpers.NullString(profilePath),
 	})
 	if err != nil {
 		return 0, fmt.Errorf("upsert artist failed: %w", err)

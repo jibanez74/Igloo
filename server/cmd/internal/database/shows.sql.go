@@ -784,7 +784,7 @@ func (q *Queries) GetNetworksByShowID(ctx context.Context, showID int64) ([]GetN
 }
 
 const getPendingShows = `-- name: GetPendingShows :many
-SELECT s.id, s.directory_path, s.local_name, s.premiere_year, s.name, s.tmdb_id, s.imdb_id, s.original_name, s.overview, s.tagline, s.language, s.origin_countries, s.first_air_date, s.last_air_date, s.status, s.type, s.adult, s.poster_path, s.backdrop_path, s.homepage, s.vote_average, s.vote_count, s.popularity, s.certification, s.tmdb_season_count, s.tmdb_episode_count, s.created_at, s.updated_at, r.show_id IS NOT NULL AS pending_retry, r.attempts AS retry_attempts, r.last_attempt_at
+SELECT s.id, s.directory_path, s.local_name, s.premiere_year, s.name, s.tmdb_id, s.imdb_id, s.original_name, s.overview, s.tagline, s.language, s.origin_countries, s.first_air_date, s.last_air_date, s.status, s.type, s.adult, s.poster_path, s.poster_path_source, s.backdrop_path, s.backdrop_path_source, s.homepage, s.vote_average, s.vote_count, s.popularity, s.certification, s.tmdb_season_count, s.tmdb_episode_count, s.created_at, s.updated_at, r.show_id IS NOT NULL AS pending_retry, r.attempts AS retry_attempts, r.last_attempt_at
 FROM shows s LEFT JOIN show_tmdb_retries r ON r.show_id = s.id
 WHERE s.id > ?1 AND (
  r.show_id IS NOT NULL OR
@@ -833,7 +833,9 @@ func (q *Queries) GetPendingShows(ctx context.Context, afterID int64) ([]GetPend
 			&i.Show.Type,
 			&i.Show.Adult,
 			&i.Show.PosterPath,
+			&i.Show.PosterPathSource,
 			&i.Show.BackdropPath,
+			&i.Show.BackdropPathSource,
 			&i.Show.Homepage,
 			&i.Show.VoteAverage,
 			&i.Show.VoteCount,
@@ -901,7 +903,7 @@ func (q *Queries) GetProductionCompaniesByShowID(ctx context.Context, showID int
 }
 
 const getShow = `-- name: GetShow :one
-SELECT id, directory_path, local_name, premiere_year, name, tmdb_id, imdb_id, original_name, overview, tagline, language, origin_countries, first_air_date, last_air_date, status, type, adult, poster_path, backdrop_path, homepage, vote_average, vote_count, popularity, certification, tmdb_season_count, tmdb_episode_count, created_at, updated_at FROM shows WHERE id = ?
+SELECT id, directory_path, local_name, premiere_year, name, tmdb_id, imdb_id, original_name, overview, tagline, language, origin_countries, first_air_date, last_air_date, status, type, adult, poster_path, poster_path_source, backdrop_path, backdrop_path_source, homepage, vote_average, vote_count, popularity, certification, tmdb_season_count, tmdb_episode_count, created_at, updated_at FROM shows WHERE id = ?
 `
 
 func (q *Queries) GetShow(ctx context.Context, id int64) (Show, error) {
@@ -926,7 +928,9 @@ func (q *Queries) GetShow(ctx context.Context, id int64) (Show, error) {
 		&i.Type,
 		&i.Adult,
 		&i.PosterPath,
+		&i.PosterPathSource,
 		&i.BackdropPath,
+		&i.BackdropPathSource,
 		&i.Homepage,
 		&i.VoteAverage,
 		&i.VoteCount,
@@ -1140,7 +1144,7 @@ func (q *Queries) GetShowDetails(ctx context.Context, id int64) (GetShowDetailsR
 }
 
 const getShowEpisode = `-- name: GetShowEpisode :one
-SELECT id, season_id, episode_number, name, tmdb_id, overview, air_date, still_path, production_code, tmdb_runtime, vote_average, vote_count, created_at, updated_at FROM show_episodes WHERE id = ?
+SELECT id, season_id, episode_number, name, tmdb_id, overview, air_date, still_path, still_path_source, production_code, tmdb_runtime, vote_average, vote_count, created_at, updated_at FROM show_episodes WHERE id = ?
 `
 
 func (q *Queries) GetShowEpisode(ctx context.Context, id int64) (ShowEpisode, error) {
@@ -1155,6 +1159,7 @@ func (q *Queries) GetShowEpisode(ctx context.Context, id int64) (ShowEpisode, er
 		&i.Overview,
 		&i.AirDate,
 		&i.StillPath,
+		&i.StillPathSource,
 		&i.ProductionCode,
 		&i.TmdbRuntime,
 		&i.VoteAverage,
@@ -1235,7 +1240,7 @@ func (q *Queries) GetShowEpisodePlaybackDetails(ctx context.Context, id int64) (
 }
 
 const getShowEpisodes = `-- name: GetShowEpisodes :many
-SELECT id, season_id, episode_number, name, tmdb_id, overview, air_date, still_path, production_code, tmdb_runtime, vote_average, vote_count, created_at, updated_at FROM show_episodes WHERE season_id = ? ORDER BY episode_number
+SELECT id, season_id, episode_number, name, tmdb_id, overview, air_date, still_path, still_path_source, production_code, tmdb_runtime, vote_average, vote_count, created_at, updated_at FROM show_episodes WHERE season_id = ? ORDER BY episode_number
 `
 
 func (q *Queries) GetShowEpisodes(ctx context.Context, seasonID int64) ([]ShowEpisode, error) {
@@ -1256,6 +1261,7 @@ func (q *Queries) GetShowEpisodes(ctx context.Context, seasonID int64) ([]ShowEp
 			&i.Overview,
 			&i.AirDate,
 			&i.StillPath,
+			&i.StillPathSource,
 			&i.ProductionCode,
 			&i.TmdbRuntime,
 			&i.VoteAverage,
@@ -1900,7 +1906,7 @@ func (q *Queries) GetShowScanIndexUnder(ctx context.Context, arg GetShowScanInde
 }
 
 const getShowSeason = `-- name: GetShowSeason :one
-SELECT id, show_id, season_number, name, tmdb_id, overview, air_date, poster_path, vote_average, tmdb_episode_count, created_at, updated_at FROM show_seasons WHERE id = ?
+SELECT id, show_id, season_number, name, tmdb_id, overview, air_date, poster_path, poster_path_source, vote_average, tmdb_episode_count, created_at, updated_at FROM show_seasons WHERE id = ?
 `
 
 func (q *Queries) GetShowSeason(ctx context.Context, id int64) (ShowSeason, error) {
@@ -1915,6 +1921,7 @@ func (q *Queries) GetShowSeason(ctx context.Context, id int64) (ShowSeason, erro
 		&i.Overview,
 		&i.AirDate,
 		&i.PosterPath,
+		&i.PosterPathSource,
 		&i.VoteAverage,
 		&i.TmdbEpisodeCount,
 		&i.CreatedAt,
@@ -2043,7 +2050,7 @@ func (q *Queries) GetShowSeasonSummaryByNumber(ctx context.Context, arg GetShowS
 }
 
 const getShowSeasons = `-- name: GetShowSeasons :many
-SELECT id, show_id, season_number, name, tmdb_id, overview, air_date, poster_path, vote_average, tmdb_episode_count, created_at, updated_at FROM show_seasons WHERE show_id = ? ORDER BY season_number
+SELECT id, show_id, season_number, name, tmdb_id, overview, air_date, poster_path, poster_path_source, vote_average, tmdb_episode_count, created_at, updated_at FROM show_seasons WHERE show_id = ? ORDER BY season_number
 `
 
 func (q *Queries) GetShowSeasons(ctx context.Context, showID int64) ([]ShowSeason, error) {
@@ -2064,6 +2071,7 @@ func (q *Queries) GetShowSeasons(ctx context.Context, showID int64) ([]ShowSeaso
 			&i.Overview,
 			&i.AirDate,
 			&i.PosterPath,
+			&i.PosterPathSource,
 			&i.VoteAverage,
 			&i.TmdbEpisodeCount,
 			&i.CreatedAt,
@@ -2843,20 +2851,20 @@ func (q *Queries) RecordShowTmdbMiss(ctx context.Context, arg RecordShowTmdbMiss
 }
 
 const updateShowEpisodeMetadata = `-- name: UpdateShowEpisodeMetadata :exec
-UPDATE show_episodes SET name = ?, tmdb_id = ?, overview = ?, air_date = ?, still_path = ?, production_code = ?, tmdb_runtime = ?, vote_average = ?, vote_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+UPDATE show_episodes SET name = ?, tmdb_id = ?, overview = ?, air_date = ?, still_path_source = ?, production_code = ?, tmdb_runtime = ?, vote_average = ?, vote_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
 `
 
 type UpdateShowEpisodeMetadataParams struct {
-	Name           string          `json:"name"`
-	TmdbID         sql.NullInt64   `json:"tmdb_id"`
-	Overview       sql.NullString  `json:"overview"`
-	AirDate        sql.NullString  `json:"air_date"`
-	StillPath      sql.NullString  `json:"still_path"`
-	ProductionCode sql.NullString  `json:"production_code"`
-	TmdbRuntime    sql.NullInt64   `json:"tmdb_runtime"`
-	VoteAverage    sql.NullFloat64 `json:"vote_average"`
-	VoteCount      sql.NullInt64   `json:"vote_count"`
-	ID             int64           `json:"id"`
+	Name            string          `json:"name"`
+	TmdbID          sql.NullInt64   `json:"tmdb_id"`
+	Overview        sql.NullString  `json:"overview"`
+	AirDate         sql.NullString  `json:"air_date"`
+	StillPathSource sql.NullString  `json:"-"`
+	ProductionCode  sql.NullString  `json:"production_code"`
+	TmdbRuntime     sql.NullInt64   `json:"tmdb_runtime"`
+	VoteAverage     sql.NullFloat64 `json:"vote_average"`
+	VoteCount       sql.NullInt64   `json:"vote_count"`
+	ID              int64           `json:"id"`
 }
 
 func (q *Queries) UpdateShowEpisodeMetadata(ctx context.Context, arg UpdateShowEpisodeMetadataParams) error {
@@ -2865,7 +2873,7 @@ func (q *Queries) UpdateShowEpisodeMetadata(ctx context.Context, arg UpdateShowE
 		arg.TmdbID,
 		arg.Overview,
 		arg.AirDate,
-		arg.StillPath,
+		arg.StillPathSource,
 		arg.ProductionCode,
 		arg.TmdbRuntime,
 		arg.VoteAverage,
@@ -2876,33 +2884,33 @@ func (q *Queries) UpdateShowEpisodeMetadata(ctx context.Context, arg UpdateShowE
 }
 
 const updateShowMetadata = `-- name: UpdateShowMetadata :exec
-UPDATE shows SET name = ?, tmdb_id = ?, imdb_id = ?, original_name = ?, overview = ?, tagline = ?, language = ?, origin_countries = ?, first_air_date = ?, last_air_date = ?, status = ?, type = ?, adult = ?, poster_path = ?, backdrop_path = ?, homepage = ?, vote_average = ?, vote_count = ?, popularity = ?, certification = ?, tmdb_season_count = ?, tmdb_episode_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+UPDATE shows SET name = ?, tmdb_id = ?, imdb_id = ?, original_name = ?, overview = ?, tagline = ?, language = ?, origin_countries = ?, first_air_date = ?, last_air_date = ?, status = ?, type = ?, adult = ?, poster_path_source = ?, backdrop_path_source = ?, homepage = ?, vote_average = ?, vote_count = ?, popularity = ?, certification = ?, tmdb_season_count = ?, tmdb_episode_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
 `
 
 type UpdateShowMetadataParams struct {
-	Name             string          `json:"name"`
-	TmdbID           sql.NullInt64   `json:"tmdb_id"`
-	ImdbID           sql.NullString  `json:"imdb_id"`
-	OriginalName     sql.NullString  `json:"original_name"`
-	Overview         sql.NullString  `json:"overview"`
-	Tagline          sql.NullString  `json:"tagline"`
-	Language         sql.NullString  `json:"language"`
-	OriginCountries  sql.NullString  `json:"origin_countries"`
-	FirstAirDate     sql.NullString  `json:"first_air_date"`
-	LastAirDate      sql.NullString  `json:"last_air_date"`
-	Status           sql.NullString  `json:"status"`
-	Type             sql.NullString  `json:"type"`
-	Adult            bool            `json:"adult"`
-	PosterPath       sql.NullString  `json:"poster_path"`
-	BackdropPath     sql.NullString  `json:"backdrop_path"`
-	Homepage         sql.NullString  `json:"homepage"`
-	VoteAverage      sql.NullFloat64 `json:"vote_average"`
-	VoteCount        sql.NullInt64   `json:"vote_count"`
-	Popularity       sql.NullFloat64 `json:"popularity"`
-	Certification    sql.NullString  `json:"certification"`
-	TmdbSeasonCount  sql.NullInt64   `json:"tmdb_season_count"`
-	TmdbEpisodeCount sql.NullInt64   `json:"tmdb_episode_count"`
-	ID               int64           `json:"id"`
+	Name               string          `json:"name"`
+	TmdbID             sql.NullInt64   `json:"tmdb_id"`
+	ImdbID             sql.NullString  `json:"imdb_id"`
+	OriginalName       sql.NullString  `json:"original_name"`
+	Overview           sql.NullString  `json:"overview"`
+	Tagline            sql.NullString  `json:"tagline"`
+	Language           sql.NullString  `json:"language"`
+	OriginCountries    sql.NullString  `json:"origin_countries"`
+	FirstAirDate       sql.NullString  `json:"first_air_date"`
+	LastAirDate        sql.NullString  `json:"last_air_date"`
+	Status             sql.NullString  `json:"status"`
+	Type               sql.NullString  `json:"type"`
+	Adult              bool            `json:"adult"`
+	PosterPathSource   sql.NullString  `json:"-"`
+	BackdropPathSource sql.NullString  `json:"-"`
+	Homepage           sql.NullString  `json:"homepage"`
+	VoteAverage        sql.NullFloat64 `json:"vote_average"`
+	VoteCount          sql.NullInt64   `json:"vote_count"`
+	Popularity         sql.NullFloat64 `json:"popularity"`
+	Certification      sql.NullString  `json:"certification"`
+	TmdbSeasonCount    sql.NullInt64   `json:"tmdb_season_count"`
+	TmdbEpisodeCount   sql.NullInt64   `json:"tmdb_episode_count"`
+	ID                 int64           `json:"id"`
 }
 
 func (q *Queries) UpdateShowMetadata(ctx context.Context, arg UpdateShowMetadataParams) error {
@@ -2920,8 +2928,8 @@ func (q *Queries) UpdateShowMetadata(ctx context.Context, arg UpdateShowMetadata
 		arg.Status,
 		arg.Type,
 		arg.Adult,
-		arg.PosterPath,
-		arg.BackdropPath,
+		arg.PosterPathSource,
+		arg.BackdropPathSource,
 		arg.Homepage,
 		arg.VoteAverage,
 		arg.VoteCount,
@@ -2935,7 +2943,7 @@ func (q *Queries) UpdateShowMetadata(ctx context.Context, arg UpdateShowMetadata
 }
 
 const updateShowSeasonMetadata = `-- name: UpdateShowSeasonMetadata :exec
-UPDATE show_seasons SET name = ?, tmdb_id = ?, overview = ?, air_date = ?, poster_path = ?, vote_average = ?, tmdb_episode_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+UPDATE show_seasons SET name = ?, tmdb_id = ?, overview = ?, air_date = ?, poster_path_source = ?, vote_average = ?, tmdb_episode_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
 `
 
 type UpdateShowSeasonMetadataParams struct {
@@ -2943,7 +2951,7 @@ type UpdateShowSeasonMetadataParams struct {
 	TmdbID           sql.NullInt64   `json:"tmdb_id"`
 	Overview         sql.NullString  `json:"overview"`
 	AirDate          sql.NullString  `json:"air_date"`
-	PosterPath       sql.NullString  `json:"poster_path"`
+	PosterPathSource sql.NullString  `json:"-"`
 	VoteAverage      sql.NullFloat64 `json:"vote_average"`
 	TmdbEpisodeCount sql.NullInt64   `json:"tmdb_episode_count"`
 	ID               int64           `json:"id"`
@@ -2955,7 +2963,7 @@ func (q *Queries) UpdateShowSeasonMetadata(ctx context.Context, arg UpdateShowSe
 		arg.TmdbID,
 		arg.Overview,
 		arg.AirDate,
-		arg.PosterPath,
+		arg.PosterPathSource,
 		arg.VoteAverage,
 		arg.TmdbEpisodeCount,
 		arg.ID,
@@ -2964,7 +2972,7 @@ func (q *Queries) UpdateShowSeasonMetadata(ctx context.Context, arg UpdateShowSe
 }
 
 const upsertLocalShow = `-- name: UpsertLocalShow :one
-INSERT INTO shows (directory_path, local_name, premiere_year, name) VALUES (?, ?, ?, ?) ON CONFLICT (directory_path) DO UPDATE SET id = shows.id RETURNING id, directory_path, local_name, premiere_year, name, tmdb_id, imdb_id, original_name, overview, tagline, language, origin_countries, first_air_date, last_air_date, status, type, adult, poster_path, backdrop_path, homepage, vote_average, vote_count, popularity, certification, tmdb_season_count, tmdb_episode_count, created_at, updated_at
+INSERT INTO shows (directory_path, local_name, premiere_year, name) VALUES (?, ?, ?, ?) ON CONFLICT (directory_path) DO UPDATE SET id = shows.id RETURNING id, directory_path, local_name, premiere_year, name, tmdb_id, imdb_id, original_name, overview, tagline, language, origin_countries, first_air_date, last_air_date, status, type, adult, poster_path, poster_path_source, backdrop_path, backdrop_path_source, homepage, vote_average, vote_count, popularity, certification, tmdb_season_count, tmdb_episode_count, created_at, updated_at
 `
 
 type UpsertLocalShowParams struct {
@@ -3001,7 +3009,9 @@ func (q *Queries) UpsertLocalShow(ctx context.Context, arg UpsertLocalShowParams
 		&i.Type,
 		&i.Adult,
 		&i.PosterPath,
+		&i.PosterPathSource,
 		&i.BackdropPath,
+		&i.BackdropPathSource,
 		&i.Homepage,
 		&i.VoteAverage,
 		&i.VoteCount,
@@ -3016,7 +3026,7 @@ func (q *Queries) UpsertLocalShow(ctx context.Context, arg UpsertLocalShowParams
 }
 
 const upsertLocalShowEpisode = `-- name: UpsertLocalShowEpisode :one
-INSERT INTO show_episodes (season_id, episode_number, name) VALUES (?, ?, ?) ON CONFLICT (season_id, episode_number) DO UPDATE SET id = show_episodes.id RETURNING id, season_id, episode_number, name, tmdb_id, overview, air_date, still_path, production_code, tmdb_runtime, vote_average, vote_count, created_at, updated_at
+INSERT INTO show_episodes (season_id, episode_number, name) VALUES (?, ?, ?) ON CONFLICT (season_id, episode_number) DO UPDATE SET id = show_episodes.id RETURNING id, season_id, episode_number, name, tmdb_id, overview, air_date, still_path, still_path_source, production_code, tmdb_runtime, vote_average, vote_count, created_at, updated_at
 `
 
 type UpsertLocalShowEpisodeParams struct {
@@ -3037,6 +3047,7 @@ func (q *Queries) UpsertLocalShowEpisode(ctx context.Context, arg UpsertLocalSho
 		&i.Overview,
 		&i.AirDate,
 		&i.StillPath,
+		&i.StillPathSource,
 		&i.ProductionCode,
 		&i.TmdbRuntime,
 		&i.VoteAverage,
@@ -3048,7 +3059,7 @@ func (q *Queries) UpsertLocalShowEpisode(ctx context.Context, arg UpsertLocalSho
 }
 
 const upsertLocalShowSeason = `-- name: UpsertLocalShowSeason :one
-INSERT INTO show_seasons (show_id, season_number, name) VALUES (?, ?, ?) ON CONFLICT (show_id, season_number) DO UPDATE SET id = show_seasons.id RETURNING id, show_id, season_number, name, tmdb_id, overview, air_date, poster_path, vote_average, tmdb_episode_count, created_at, updated_at
+INSERT INTO show_seasons (show_id, season_number, name) VALUES (?, ?, ?) ON CONFLICT (show_id, season_number) DO UPDATE SET id = show_seasons.id RETURNING id, show_id, season_number, name, tmdb_id, overview, air_date, poster_path, poster_path_source, vote_average, tmdb_episode_count, created_at, updated_at
 `
 
 type UpsertLocalShowSeasonParams struct {
@@ -3069,6 +3080,7 @@ func (q *Queries) UpsertLocalShowSeason(ctx context.Context, arg UpsertLocalShow
 		&i.Overview,
 		&i.AirDate,
 		&i.PosterPath,
+		&i.PosterPathSource,
 		&i.VoteAverage,
 		&i.TmdbEpisodeCount,
 		&i.CreatedAt,
@@ -3078,32 +3090,26 @@ func (q *Queries) UpsertLocalShowSeason(ctx context.Context, arg UpsertLocalShow
 }
 
 const upsertNetwork = `-- name: UpsertNetwork :one
-INSERT INTO networks (tmdb_id, name, logo, country) VALUES (?, ?, ?, ?) ON CONFLICT (tmdb_id) DO UPDATE SET name = excluded.name, logo = excluded.logo, country = excluded.country RETURNING id, tmdb_id, name, logo, country
+INSERT INTO networks (tmdb_id, name, logo_source, country) VALUES (?, ?, ?, ?) ON CONFLICT (tmdb_id) DO UPDATE SET name = excluded.name, logo_source = excluded.logo_source, country = excluded.country RETURNING id
 `
 
 type UpsertNetworkParams struct {
-	TmdbID  int64          `json:"tmdb_id"`
-	Name    string         `json:"name"`
-	Logo    sql.NullString `json:"logo"`
-	Country sql.NullString `json:"country"`
+	TmdbID     int64          `json:"tmdb_id"`
+	Name       string         `json:"name"`
+	LogoSource sql.NullString `json:"-"`
+	Country    sql.NullString `json:"country"`
 }
 
-func (q *Queries) UpsertNetwork(ctx context.Context, arg UpsertNetworkParams) (Network, error) {
+func (q *Queries) UpsertNetwork(ctx context.Context, arg UpsertNetworkParams) (int64, error) {
 	row := q.queryRow(ctx, q.upsertNetworkStmt, upsertNetwork,
 		arg.TmdbID,
 		arg.Name,
-		arg.Logo,
+		arg.LogoSource,
 		arg.Country,
 	)
-	var i Network
-	err := row.Scan(
-		&i.ID,
-		&i.TmdbID,
-		&i.Name,
-		&i.Logo,
-		&i.Country,
-	)
-	return i, err
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const upsertShowFile = `-- name: UpsertShowFile :one

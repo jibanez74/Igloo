@@ -83,8 +83,8 @@ INSERT INTO movies (
   adult,
   tmdb_id,
   imdb_id,
-  poster_path,
-  backdrop_path,
+  poster_path_source,
+  backdrop_path_source,
   language,
   year,
   release_date,
@@ -127,14 +127,14 @@ RETURNING id;
 INSERT INTO artist (
   name,
   tmdb_id,
-  profile
+  profile_source
 )
 VALUES
   (?, ?, ?)
 ON CONFLICT (tmdb_id) DO UPDATE
 SET
   name = excluded.name,
-  profile = COALESCE(excluded.profile, artist.profile)
+  profile_source = COALESCE(excluded.profile_source, artist.profile_source)
 RETURNING id;
 
 -- name: UpsertCast :exec
@@ -412,8 +412,8 @@ SET
   title = ?,
   tmdb_id = ?,
   imdb_id = ?,
-  poster_path = ?,
-  backdrop_path = ?,
+  poster_path_source = ?,
+  backdrop_path_source = ?,
   adult = ?,
   language = ?,
   year = ?,
@@ -587,7 +587,7 @@ DELETE FROM movie_tmdb_retries WHERE movie_id = ?;
 
 -- name: UpdateMovieTmdbMetadata :exec
 UPDATE movies SET
- title = ?, tmdb_id = ?, imdb_id = ?, poster_path = ?, backdrop_path = ?,
+ title = ?, tmdb_id = ?, imdb_id = ?, poster_path_source = ?, backdrop_path_source = ?,
  adult = ?, language = ?, year = ?, release_date = ?, overview = ?, tag_line = ?,
  certification = ?, critic_rating = ?, revenue = ?, budget = ?, updated_at = CURRENT_TIMESTAMP
 WHERE id = ?;

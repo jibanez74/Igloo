@@ -521,7 +521,7 @@ func (q *Queries) GetLatestMovies(ctx context.Context) ([]GetLatestMoviesRow, er
 
 const getMovieByID = `-- name: GetMovieByID :one
 SELECT
-  id, title, file_path, file_name, size, container, mime_type, adult, tmdb_id, imdb_id, poster_path, backdrop_path, language, year, release_date, overview, tag_line, certification, critic_rating, audience_rating, revenue, budget, run_time, duration, created_at, updated_at
+  id, title, file_path, file_name, size, container, mime_type, adult, tmdb_id, imdb_id, poster_path, poster_path_source, backdrop_path, backdrop_path_source, language, year, release_date, overview, tag_line, certification, critic_rating, audience_rating, revenue, budget, run_time, duration, created_at, updated_at
 FROM movies
 WHERE id = ?
 LIMIT 1
@@ -542,7 +542,9 @@ func (q *Queries) GetMovieByID(ctx context.Context, id int64) (Movie, error) {
 		&i.TmdbID,
 		&i.ImdbID,
 		&i.PosterPath,
+		&i.PosterPathSource,
 		&i.BackdropPath,
+		&i.BackdropPathSource,
 		&i.Language,
 		&i.Year,
 		&i.ReleaseDate,
@@ -1695,8 +1697,8 @@ SET
   title = ?,
   tmdb_id = ?,
   imdb_id = ?,
-  poster_path = ?,
-  backdrop_path = ?,
+  poster_path_source = ?,
+  backdrop_path_source = ?,
   adult = ?,
   language = ?,
   year = ?,
@@ -1714,24 +1716,24 @@ WHERE id = ?
 `
 
 type UpdateMovieParams struct {
-	Title          string          `json:"title"`
-	TmdbID         sql.NullInt64   `json:"tmdb_id"`
-	ImdbID         sql.NullString  `json:"imdb_id"`
-	PosterPath     sql.NullString  `json:"poster_path"`
-	BackdropPath   sql.NullString  `json:"backdrop_path"`
-	Adult          bool            `json:"adult"`
-	Language       sql.NullString  `json:"language"`
-	Year           sql.NullInt64   `json:"year"`
-	ReleaseDate    sql.NullString  `json:"release_date"`
-	Overview       sql.NullString  `json:"overview"`
-	TagLine        sql.NullString  `json:"tag_line"`
-	Certification  sql.NullString  `json:"certification"`
-	CriticRating   sql.NullFloat64 `json:"critic_rating"`
-	AudienceRating sql.NullFloat64 `json:"audience_rating"`
-	Revenue        sql.NullFloat64 `json:"revenue"`
-	Budget         sql.NullFloat64 `json:"budget"`
-	RunTime        sql.NullInt64   `json:"run_time"`
-	ID             int64           `json:"id"`
+	Title              string          `json:"title"`
+	TmdbID             sql.NullInt64   `json:"tmdb_id"`
+	ImdbID             sql.NullString  `json:"imdb_id"`
+	PosterPathSource   sql.NullString  `json:"-"`
+	BackdropPathSource sql.NullString  `json:"-"`
+	Adult              bool            `json:"adult"`
+	Language           sql.NullString  `json:"language"`
+	Year               sql.NullInt64   `json:"year"`
+	ReleaseDate        sql.NullString  `json:"release_date"`
+	Overview           sql.NullString  `json:"overview"`
+	TagLine            sql.NullString  `json:"tag_line"`
+	Certification      sql.NullString  `json:"certification"`
+	CriticRating       sql.NullFloat64 `json:"critic_rating"`
+	AudienceRating     sql.NullFloat64 `json:"audience_rating"`
+	Revenue            sql.NullFloat64 `json:"revenue"`
+	Budget             sql.NullFloat64 `json:"budget"`
+	RunTime            sql.NullInt64   `json:"run_time"`
+	ID                 int64           `json:"id"`
 }
 
 // Dedicated UPDATE for movie metadata (used by Edit feature).
@@ -1741,8 +1743,8 @@ func (q *Queries) UpdateMovie(ctx context.Context, arg UpdateMovieParams) (int64
 		arg.Title,
 		arg.TmdbID,
 		arg.ImdbID,
-		arg.PosterPath,
-		arg.BackdropPath,
+		arg.PosterPathSource,
+		arg.BackdropPathSource,
 		arg.Adult,
 		arg.Language,
 		arg.Year,
@@ -1765,29 +1767,29 @@ func (q *Queries) UpdateMovie(ctx context.Context, arg UpdateMovieParams) (int64
 
 const updateMovieTmdbMetadata = `-- name: UpdateMovieTmdbMetadata :exec
 UPDATE movies SET
- title = ?, tmdb_id = ?, imdb_id = ?, poster_path = ?, backdrop_path = ?,
+ title = ?, tmdb_id = ?, imdb_id = ?, poster_path_source = ?, backdrop_path_source = ?,
  adult = ?, language = ?, year = ?, release_date = ?, overview = ?, tag_line = ?,
  certification = ?, critic_rating = ?, revenue = ?, budget = ?, updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
 `
 
 type UpdateMovieTmdbMetadataParams struct {
-	Title         string          `json:"title"`
-	TmdbID        sql.NullInt64   `json:"tmdb_id"`
-	ImdbID        sql.NullString  `json:"imdb_id"`
-	PosterPath    sql.NullString  `json:"poster_path"`
-	BackdropPath  sql.NullString  `json:"backdrop_path"`
-	Adult         bool            `json:"adult"`
-	Language      sql.NullString  `json:"language"`
-	Year          sql.NullInt64   `json:"year"`
-	ReleaseDate   sql.NullString  `json:"release_date"`
-	Overview      sql.NullString  `json:"overview"`
-	TagLine       sql.NullString  `json:"tag_line"`
-	Certification sql.NullString  `json:"certification"`
-	CriticRating  sql.NullFloat64 `json:"critic_rating"`
-	Revenue       sql.NullFloat64 `json:"revenue"`
-	Budget        sql.NullFloat64 `json:"budget"`
-	ID            int64           `json:"id"`
+	Title              string          `json:"title"`
+	TmdbID             sql.NullInt64   `json:"tmdb_id"`
+	ImdbID             sql.NullString  `json:"imdb_id"`
+	PosterPathSource   sql.NullString  `json:"-"`
+	BackdropPathSource sql.NullString  `json:"-"`
+	Adult              bool            `json:"adult"`
+	Language           sql.NullString  `json:"language"`
+	Year               sql.NullInt64   `json:"year"`
+	ReleaseDate        sql.NullString  `json:"release_date"`
+	Overview           sql.NullString  `json:"overview"`
+	TagLine            sql.NullString  `json:"tag_line"`
+	Certification      sql.NullString  `json:"certification"`
+	CriticRating       sql.NullFloat64 `json:"critic_rating"`
+	Revenue            sql.NullFloat64 `json:"revenue"`
+	Budget             sql.NullFloat64 `json:"budget"`
+	ID                 int64           `json:"id"`
 }
 
 func (q *Queries) UpdateMovieTmdbMetadata(ctx context.Context, arg UpdateMovieTmdbMetadataParams) error {
@@ -1795,8 +1797,8 @@ func (q *Queries) UpdateMovieTmdbMetadata(ctx context.Context, arg UpdateMovieTm
 		arg.Title,
 		arg.TmdbID,
 		arg.ImdbID,
-		arg.PosterPath,
-		arg.BackdropPath,
+		arg.PosterPathSource,
+		arg.BackdropPathSource,
 		arg.Adult,
 		arg.Language,
 		arg.Year,
@@ -1816,25 +1818,25 @@ const upsertArtist = `-- name: UpsertArtist :one
 INSERT INTO artist (
   name,
   tmdb_id,
-  profile
+  profile_source
 )
 VALUES
   (?, ?, ?)
 ON CONFLICT (tmdb_id) DO UPDATE
 SET
   name = excluded.name,
-  profile = COALESCE(excluded.profile, artist.profile)
+  profile_source = COALESCE(excluded.profile_source, artist.profile_source)
 RETURNING id
 `
 
 type UpsertArtistParams struct {
-	Name    string         `json:"name"`
-	TmdbID  int64          `json:"tmdb_id"`
-	Profile sql.NullString `json:"profile"`
+	Name          string         `json:"name"`
+	TmdbID        int64          `json:"tmdb_id"`
+	ProfileSource sql.NullString `json:"-"`
 }
 
 func (q *Queries) UpsertArtist(ctx context.Context, arg UpsertArtistParams) (int64, error) {
-	row := q.queryRow(ctx, q.upsertArtistStmt, upsertArtist, arg.Name, arg.TmdbID, arg.Profile)
+	row := q.queryRow(ctx, q.upsertArtistStmt, upsertArtist, arg.Name, arg.TmdbID, arg.ProfileSource)
 	var id int64
 	err := row.Scan(&id)
 	return id, err
@@ -1953,8 +1955,8 @@ INSERT INTO movies (
   adult,
   tmdb_id,
   imdb_id,
-  poster_path,
-  backdrop_path,
+  poster_path_source,
+  backdrop_path_source,
   language,
   year,
   release_date,
@@ -1983,29 +1985,29 @@ RETURNING id
 `
 
 type UpsertMovieParams struct {
-	Title          string          `json:"title"`
-	FilePath       string          `json:"file_path"`
-	FileName       string          `json:"file_name"`
-	Size           int64           `json:"size"`
-	Container      string          `json:"container"`
-	MimeType       string          `json:"mime_type"`
-	Adult          bool            `json:"adult"`
-	TmdbID         sql.NullInt64   `json:"tmdb_id"`
-	ImdbID         sql.NullString  `json:"imdb_id"`
-	PosterPath     sql.NullString  `json:"poster_path"`
-	BackdropPath   sql.NullString  `json:"backdrop_path"`
-	Language       sql.NullString  `json:"language"`
-	Year           sql.NullInt64   `json:"year"`
-	ReleaseDate    sql.NullString  `json:"release_date"`
-	Overview       sql.NullString  `json:"overview"`
-	TagLine        sql.NullString  `json:"tag_line"`
-	Certification  sql.NullString  `json:"certification"`
-	CriticRating   sql.NullFloat64 `json:"critic_rating"`
-	AudienceRating sql.NullFloat64 `json:"audience_rating"`
-	Revenue        sql.NullFloat64 `json:"revenue"`
-	Budget         sql.NullFloat64 `json:"budget"`
-	RunTime        sql.NullInt64   `json:"run_time"`
-	Duration       sql.NullFloat64 `json:"duration"`
+	Title              string          `json:"title"`
+	FilePath           string          `json:"file_path"`
+	FileName           string          `json:"file_name"`
+	Size               int64           `json:"size"`
+	Container          string          `json:"container"`
+	MimeType           string          `json:"mime_type"`
+	Adult              bool            `json:"adult"`
+	TmdbID             sql.NullInt64   `json:"tmdb_id"`
+	ImdbID             sql.NullString  `json:"imdb_id"`
+	PosterPathSource   sql.NullString  `json:"-"`
+	BackdropPathSource sql.NullString  `json:"-"`
+	Language           sql.NullString  `json:"language"`
+	Year               sql.NullInt64   `json:"year"`
+	ReleaseDate        sql.NullString  `json:"release_date"`
+	Overview           sql.NullString  `json:"overview"`
+	TagLine            sql.NullString  `json:"tag_line"`
+	Certification      sql.NullString  `json:"certification"`
+	CriticRating       sql.NullFloat64 `json:"critic_rating"`
+	AudienceRating     sql.NullFloat64 `json:"audience_rating"`
+	Revenue            sql.NullFloat64 `json:"revenue"`
+	Budget             sql.NullFloat64 `json:"budget"`
+	RunTime            sql.NullInt64   `json:"run_time"`
+	Duration           sql.NullFloat64 `json:"duration"`
 }
 
 // Existing movies retain descriptions; confirmed TMDB details are applied separately.
@@ -2020,8 +2022,8 @@ func (q *Queries) UpsertMovie(ctx context.Context, arg UpsertMovieParams) (int64
 		arg.Adult,
 		arg.TmdbID,
 		arg.ImdbID,
-		arg.PosterPath,
-		arg.BackdropPath,
+		arg.PosterPathSource,
+		arg.BackdropPathSource,
 		arg.Language,
 		arg.Year,
 		arg.ReleaseDate,

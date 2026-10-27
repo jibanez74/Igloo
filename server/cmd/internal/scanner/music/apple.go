@@ -211,7 +211,7 @@ func (s *Scanner) claimAppleAlbum(ctx context.Context, qtx *database.Queries, tx
 	}
 	cover := collection.CoverURL()
 	if cover != "" {
-		_, err = qtx.UpdateAlbumCover(ctx, database.UpdateAlbumCoverParams{ID: owner, Cover: helpers.NullString(cover)})
+		_, err = qtx.UpdateAlbumCover(ctx, database.UpdateAlbumCoverParams{ID: owner, CoverSource: helpers.NullString(cover)})
 		if err != nil {
 			return 0, err
 		}

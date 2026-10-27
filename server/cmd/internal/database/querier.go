@@ -725,7 +725,7 @@ type Querier interface {
 	UpsertMovieWatchProgress(ctx context.Context, arg UpsertMovieWatchProgressParams) error
 	UpsertMusicProviderMatch(ctx context.Context, arg UpsertMusicProviderMatchParams) error
 	UpsertMusician(ctx context.Context, arg UpsertMusicianParams) (UpsertMusicianRow, error)
-	UpsertNetwork(ctx context.Context, arg UpsertNetworkParams) (Network, error)
+	UpsertNetwork(ctx context.Context, arg UpsertNetworkParams) (int64, error)
 	UpsertProductionCompany(ctx context.Context, arg UpsertProductionCompanyParams) (int64, error)
 	UpsertRemuxSafetyVerdict(ctx context.Context, arg UpsertRemuxSafetyVerdictParams) error
 	UpsertShowEpisodeWatchProgress(ctx context.Context, arg UpsertShowEpisodeWatchProgressParams) error

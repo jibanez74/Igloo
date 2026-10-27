@@ -801,6 +801,66 @@ func TestUpdateMovieMetadata_PreservesOmittedNullableFields(t *testing.T) {
 	}
 }
 
+// The edit starts from the stored provider references, not the returned
+// values, so editing other fields of a movie whose artwork was downloaded
+// neither stores the local URL as its source nor drops the downloaded copy.
+func TestUpdateMovieMetadata_KeepsDownloadedArtwork(t *testing.T) {
+	app := setupTestApp(t)
+
+	ctx := context.Background()
+	movieID, err := app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{
+		Title:              "Original",
+		FilePath:           "/movies/original-artwork.mkv",
+		FileName:           "original-artwork.mkv",
+		Size:               1,
+		Container:          "mkv",
+		MimeType:           "video/x-matroska",
+		PosterPathSource:   helpers.NullString("/poster.jpg"),
+		BackdropPathSource: helpers.NullString("/backdrop.jpg"),
+	})
+	if err != nil {
+		t.Fatalf("insert movie: %v", err)
+	}
+	const posterCopy = "/api/static/movies/1/original_poster.jpg?v=1a2b3c4d"
+	_, err = app.DB.Exec(`UPDATE movies SET poster_path = ? WHERE id = ?`, posterCopy, movieID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	actor := createTestUser(t, app, "Editor", "editor@example.com", true)
+	router := authenticatedRouter(t, app, actor.ID)
+	path := "/api/movies/" + strconv.FormatInt(movieID, 10)
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, newOpenAPIJSONRequest(http.MethodPatch, path, `{"title":"Updated"}`))
+	if w.Code != http.StatusOK {
+		t.Fatalf("title edit status = %d, body = %s", w.Code, w.Body.String())
+	}
+	updated, err := app.Queries.GetMovieByID(ctx, movieID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.PosterPath.String != posterCopy || updated.PosterPathSource.String != "/poster.jpg" {
+		t.Fatalf("after a title edit poster = %q from %q, want the copy of /poster.jpg kept", updated.PosterPath.String, updated.PosterPathSource.String)
+	}
+
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, newOpenAPIJSONRequest(http.MethodPatch, path, `{"poster_path":"/new-poster.jpg"}`))
+	if w.Code != http.StatusOK {
+		t.Fatalf("poster edit status = %d, body = %s", w.Code, w.Body.String())
+	}
+	updated, err = app.Queries.GetMovieByID(ctx, movieID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.PosterPath.String != "/new-poster.jpg" || updated.PosterPathSource.String != "/new-poster.jpg" {
+		t.Fatalf("after a poster edit poster = %q from %q, want the new path", updated.PosterPath.String, updated.PosterPathSource.String)
+	}
+	if updated.BackdropPath.String != "/backdrop.jpg" {
+		t.Fatalf("backdrop = %q, want it untouched", updated.BackdropPath.String)
+	}
+}
+
 type identifyDuringScanTmdb struct {
 	tmdb.TmdbInterface
 	entered chan struct{}

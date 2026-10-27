@@ -1,11 +1,11 @@
 -- name: FindMusicArtistIdentity :one
-SELECT e.id, e.spotify_id, e.thumb FROM musicians e JOIN music_artist_identity i ON i.musician_id=e.id WHERE i.identity_key = ?;
+SELECT e.id, e.spotify_id, e.thumb_source FROM musicians e JOIN music_artist_identity i ON i.musician_id=e.id WHERE i.identity_key = ?;
 
 -- name: SaveMusicArtistIdentity :exec
 INSERT INTO music_artist_identity(identity_key, musician_id) VALUES (?, ?) ON CONFLICT DO NOTHING;
 
 -- name: FindMusicAlbumIdentity :one
-SELECT e.id, e.spotify_id, e.cover FROM albums e JOIN music_album_identity i ON i.album_id=e.id WHERE i.title_key = ? AND i.artist_key = ?;
+SELECT e.id, e.spotify_id, e.cover_source FROM albums e JOIN music_album_identity i ON i.album_id=e.id WHERE i.title_key = ? AND i.artist_key = ?;
 
 -- name: SaveMusicAlbumIdentity :exec
 INSERT INTO music_album_identity(title_key, artist_key, album_id) VALUES (?, ?, ?) ON CONFLICT DO NOTHING;
@@ -224,7 +224,7 @@ ORDER BY t.disc, t.track_index, t.id;
 -- name: ClearMusicAlbumSpotify :exec
 -- Drops what a match its tracks contradicted stored on the album; the next
 -- three statements drop its date and its tracks' pairings and outcomes.
-UPDATE albums SET spotify_id=NULL, cover=NULL, album_type=NULL, total_tracks=NULL, updated_at=CURRENT_TIMESTAMP WHERE id=?;
+UPDATE albums SET spotify_id=NULL, cover_source=NULL, album_type=NULL, total_tracks=NULL, updated_at=CURRENT_TIMESTAMP WHERE id=?;
 
 -- name: ClearMusicAlbumSpotifyDate :exec
 UPDATE music_album_metadata SET spotify_date=NULL WHERE album_id=?;

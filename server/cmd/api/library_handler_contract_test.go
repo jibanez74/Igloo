@@ -285,9 +285,9 @@ func seedMovieDetailFixtures(t *testing.T, app *Application, movieID int64) {
 	ctx := t.Context()
 
 	artistID, err := app.Queries.UpsertArtist(ctx, database.UpsertArtistParams{
-		Name:    "Contract Artist Credit",
-		TmdbID:  9001,
-		Profile: sql.NullString{String: "/artist.jpg", Valid: true},
+		Name:          "Contract Artist Credit",
+		TmdbID:        9001,
+		ProfileSource: sql.NullString{String: "/artist.jpg", Valid: true},
 	})
 	if err != nil {
 		t.Fatalf("create artist: %v", err)

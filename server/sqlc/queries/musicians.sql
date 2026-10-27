@@ -1,5 +1,5 @@
 -- name: GetMusicianBySpotifyID :one
-SELECT id, spotify_id, thumb
+SELECT id, spotify_id, thumb_source
 FROM musicians
 WHERE spotify_id = ?
 LIMIT 1;
@@ -7,17 +7,17 @@ LIMIT 1;
 -- name: UpdateMusicianSpotifyThumb :one
 UPDATE musicians
 SET
-  thumb = ?,
+  thumb_source = ?,
   updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING id, spotify_id, thumb;
+RETURNING id, spotify_id, thumb_source;
 
 -- name: UpsertMusician :one
 INSERT INTO musicians (
   name,
   sort_name,
   spotify_id,
-  thumb
+  thumb_source
 )
 VALUES
   (?, ?, ?, ?)
@@ -25,9 +25,9 @@ ON CONFLICT (name) DO UPDATE
 SET
   sort_name = excluded.sort_name,
   spotify_id = COALESCE(excluded.spotify_id, musicians.spotify_id),
-  thumb = COALESCE(excluded.thumb, musicians.thumb),
+  thumb_source = COALESCE(excluded.thumb_source, musicians.thumb_source),
   updated_at = CURRENT_TIMESTAMP
-RETURNING id, spotify_id, thumb;
+RETURNING id, spotify_id, thumb_source;
 
 -- name: GetMusiciansByAlbumID :many
 SELECT

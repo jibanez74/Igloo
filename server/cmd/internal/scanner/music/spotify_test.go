@@ -123,19 +123,19 @@ func TestProcessMusicBatchPreservesExistingImagesWithoutSpotifyMatch(t *testing.
 	app := setupMusicScanner(t)
 
 	_, err := app.queries.UpsertMusician(context.Background(), database.UpsertMusicianParams{
-		Name:     "Test Artist",
-		SortName: "Test Artist",
-		Thumb:    sql.NullString{String: "file:///music/artist.jpg", Valid: true},
+		Name:        "Test Artist",
+		SortName:    "Test Artist",
+		ThumbSource: sql.NullString{String: "file:///music/artist.jpg", Valid: true},
 	})
 	if err != nil {
 		t.Fatalf("seed musician: %v", err)
 	}
 
 	_, err = app.queries.UpsertAlbum(context.Background(), database.UpsertAlbumParams{
-		Title:     "Test Album",
-		SortTitle: "Test Album",
-		Musician:  sql.NullString{String: "Test Artist", Valid: true},
-		Cover:     sql.NullString{String: "file:///music/cover.jpg", Valid: true},
+		Title:       "Test Album",
+		SortTitle:   "Test Album",
+		Musician:    sql.NullString{String: "Test Artist", Valid: true},
+		CoverSource: sql.NullString{String: "file:///music/cover.jpg", Valid: true},
 	})
 	if err != nil {
 		t.Fatalf("seed album: %v", err)
@@ -368,31 +368,38 @@ func TestProcessMusicBatchDoesNotUpdateUnchangedSpotifyImages(t *testing.T) {
 	app := setupMusicScanner(t)
 
 	_, err := app.queries.UpsertMusician(context.Background(), database.UpsertMusicianParams{
-		Name:      "Existing Artist",
-		SortName:  "Existing Artist",
-		SpotifyID: sql.NullString{String: "artist123", Valid: true},
-		Thumb:     sql.NullString{String: "https://i.scdn.co/artist.jpg", Valid: true},
+		Name:        "Existing Artist",
+		SortName:    "Existing Artist",
+		SpotifyID:   sql.NullString{String: "artist123", Valid: true},
+		ThumbSource: sql.NullString{String: "https://i.scdn.co/artist.jpg", Valid: true},
 	})
 	if err != nil {
 		t.Fatalf("seed musician: %v", err)
 	}
 
 	_, err = app.queries.UpsertAlbum(context.Background(), database.UpsertAlbumParams{
-		Title:     "Existing Album",
-		SortTitle: "Existing Album",
-		Musician:  sql.NullString{String: "Existing Artist", Valid: true},
-		SpotifyID: sql.NullString{String: "album123", Valid: true},
-		Cover:     sql.NullString{String: "https://i.scdn.co/album.jpg", Valid: true},
+		Title:       "Existing Album",
+		SortTitle:   "Existing Album",
+		Musician:    sql.NullString{String: "Existing Artist", Valid: true},
+		SpotifyID:   sql.NullString{String: "album123", Valid: true},
+		CoverSource: sql.NullString{String: "https://i.scdn.co/album.jpg", Valid: true},
 	})
 	if err != nil {
 		t.Fatalf("seed album: %v", err)
 	}
 
+	// Downloaded copies stand in for the provider URLs. The scanner compares
+	// the provider URL with the stored source, so an unchanged image is not
+	// written again and the copy stays.
+	const artistCopy = "/api/static/musicians/artist123/existing_artist_thumb.jpg?v=1"
+	const albumCopy = "/api/static/albums/album123/existing_album_cover.jpg?v=1"
 	_, err = app.tx.DB.Exec(`
+ UPDATE musicians SET thumb = ? WHERE spotify_id = 'artist123';
+ UPDATE albums SET cover = ? WHERE spotify_id = 'album123';
  CREATE TABLE image_writes(entity TEXT);
- CREATE TRIGGER count_artist_image AFTER UPDATE OF thumb ON musicians BEGIN INSERT INTO image_writes VALUES('artist'); END;
- CREATE TRIGGER count_album_image AFTER UPDATE OF cover ON albums BEGIN INSERT INTO image_writes VALUES('album'); END;
- `)
+ CREATE TRIGGER count_artist_image AFTER UPDATE OF thumb_source ON musicians BEGIN INSERT INTO image_writes VALUES('artist'); END;
+ CREATE TRIGGER count_album_image AFTER UPDATE OF cover_source ON albums BEGIN INSERT INTO image_writes VALUES('album'); END;
+ `, artistCopy, albumCopy)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -425,6 +432,15 @@ func TestProcessMusicBatchDoesNotUpdateUnchangedSpotifyImages(t *testing.T) {
 	count := scannertest.CountRows(t, app.tx.DB, "SELECT count(*) FROM image_writes")
 	if count != 0 {
 		t.Fatalf("unchanged images caused %d writes", count)
+	}
+
+	var thumb, cover string
+	err = app.tx.DB.QueryRow(`SELECT m.thumb, a.cover FROM musicians m, albums a WHERE m.spotify_id = 'artist123' AND a.spotify_id = 'album123'`).Scan(&thumb, &cover)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if thumb != artistCopy || cover != albumCopy {
+		t.Fatalf("thumb = %q, cover = %q; want the downloaded copies kept", thumb, cover)
 	}
 }
 
@@ -881,10 +897,10 @@ func TestMergedArtistSortVotesOncePerTrack(t *testing.T) {
 func seedMatchedSpotifyEntities(t *testing.T, app *Scanner) (database.Musician, database.Album) {
 	t.Helper()
 	musicianIdentity, err := app.queries.UpsertMusician(context.Background(), database.UpsertMusicianParams{
-		Name:      "Existing Artist",
-		SortName:  "Existing Artist",
-		SpotifyID: sql.NullString{String: "artist123", Valid: true},
-		Thumb:     sql.NullString{String: "file:///music/artist.jpg", Valid: true},
+		Name:        "Existing Artist",
+		SortName:    "Existing Artist",
+		SpotifyID:   sql.NullString{String: "artist123", Valid: true},
+		ThumbSource: sql.NullString{String: "file:///music/artist.jpg", Valid: true},
 	})
 	if err != nil {
 		t.Fatalf("seed musician: %v", err)
@@ -894,11 +910,11 @@ func seedMatchedSpotifyEntities(t *testing.T, app *Scanner) (database.Musician, 
 		t.Fatal(err)
 	}
 	albumIdentity, err := app.queries.UpsertAlbum(context.Background(), database.UpsertAlbumParams{
-		Title:     "Existing Album",
-		SortTitle: "Existing Album",
-		Musician:  sql.NullString{String: "Existing Artist", Valid: true},
-		SpotifyID: sql.NullString{String: "album123", Valid: true},
-		Cover:     sql.NullString{String: "file:///music/cover.jpg", Valid: true},
+		Title:       "Existing Album",
+		SortTitle:   "Existing Album",
+		Musician:    sql.NullString{String: "Existing Artist", Valid: true},
+		SpotifyID:   sql.NullString{String: "album123", Valid: true},
+		CoverSource: sql.NullString{String: "file:///music/cover.jpg", Valid: true},
 	})
 	if err != nil {
 		t.Fatalf("seed album: %v", err)

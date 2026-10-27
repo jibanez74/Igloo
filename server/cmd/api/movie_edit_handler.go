@@ -142,24 +142,24 @@ func (app *Application) UpdateMovieMetadata(w http.ResponseWriter, r *http.Reque
 
 	// Start from current values; only override fields present in the request.
 	params := database.UpdateMovieParams{
-		ID:             movie.ID,
-		Title:          movie.Title,
-		TmdbID:         movie.TmdbID,
-		ImdbID:         movie.ImdbID,
-		PosterPath:     movie.PosterPath,
-		BackdropPath:   movie.BackdropPath,
-		Adult:          movie.Adult,
-		Language:       movie.Language,
-		Year:           movie.Year,
-		ReleaseDate:    movie.ReleaseDate,
-		Overview:       movie.Overview,
-		TagLine:        movie.TagLine,
-		Certification:  movie.Certification,
-		CriticRating:   movie.CriticRating,
-		AudienceRating: movie.AudienceRating,
-		Revenue:        movie.Revenue,
-		Budget:         movie.Budget,
-		RunTime:        movie.RunTime,
+		ID:                 movie.ID,
+		Title:              movie.Title,
+		TmdbID:             movie.TmdbID,
+		ImdbID:             movie.ImdbID,
+		PosterPathSource:   movie.PosterPathSource,
+		BackdropPathSource: movie.BackdropPathSource,
+		Adult:              movie.Adult,
+		Language:           movie.Language,
+		Year:               movie.Year,
+		ReleaseDate:        movie.ReleaseDate,
+		Overview:           movie.Overview,
+		TagLine:            movie.TagLine,
+		Certification:      movie.Certification,
+		CriticRating:       movie.CriticRating,
+		AudienceRating:     movie.AudienceRating,
+		Revenue:            movie.Revenue,
+		Budget:             movie.Budget,
+		RunTime:            movie.RunTime,
 	}
 
 	if payload.Title != nil {
@@ -181,10 +181,10 @@ func (app *Application) UpdateMovieMetadata(w http.ResponseWriter, r *http.Reque
 		params.Certification = helpers.NullString(*payload.Certification)
 	}
 	if payload.PosterPath != nil {
-		params.PosterPath = helpers.NullString(*payload.PosterPath)
+		params.PosterPathSource = helpers.NullString(*payload.PosterPath)
 	}
 	if payload.BackdropPath != nil {
-		params.BackdropPath = helpers.NullString(*payload.BackdropPath)
+		params.BackdropPathSource = helpers.NullString(*payload.BackdropPath)
 	}
 	if payload.Language != nil {
 		params.Language = helpers.NullString(*payload.Language)

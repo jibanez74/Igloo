@@ -12,7 +12,7 @@ import (
 )
 
 const clearMusicAlbumSpotify = `-- name: ClearMusicAlbumSpotify :exec
-UPDATE albums SET spotify_id=NULL, cover=NULL, album_type=NULL, total_tracks=NULL, updated_at=CURRENT_TIMESTAMP WHERE id=?
+UPDATE albums SET spotify_id=NULL, cover_source=NULL, album_type=NULL, total_tracks=NULL, updated_at=CURRENT_TIMESTAMP WHERE id=?
 `
 
 // Drops what a match its tracks contradicted stored on the album; the next
@@ -149,7 +149,7 @@ func (q *Queries) DeleteMusicSpotifyAdoption(ctx context.Context, musicianID int
 }
 
 const findMusicAlbumIdentity = `-- name: FindMusicAlbumIdentity :one
-SELECT e.id, e.spotify_id, e.cover FROM albums e JOIN music_album_identity i ON i.album_id=e.id WHERE i.title_key = ? AND i.artist_key = ?
+SELECT e.id, e.spotify_id, e.cover_source FROM albums e JOIN music_album_identity i ON i.album_id=e.id WHERE i.title_key = ? AND i.artist_key = ?
 `
 
 type FindMusicAlbumIdentityParams struct {
@@ -158,32 +158,32 @@ type FindMusicAlbumIdentityParams struct {
 }
 
 type FindMusicAlbumIdentityRow struct {
-	ID        int64          `json:"id"`
-	SpotifyID sql.NullString `json:"spotify_id"`
-	Cover     sql.NullString `json:"cover"`
+	ID          int64          `json:"id"`
+	SpotifyID   sql.NullString `json:"spotify_id"`
+	CoverSource sql.NullString `json:"-"`
 }
 
 func (q *Queries) FindMusicAlbumIdentity(ctx context.Context, arg FindMusicAlbumIdentityParams) (FindMusicAlbumIdentityRow, error) {
 	row := q.queryRow(ctx, q.findMusicAlbumIdentityStmt, findMusicAlbumIdentity, arg.TitleKey, arg.ArtistKey)
 	var i FindMusicAlbumIdentityRow
-	err := row.Scan(&i.ID, &i.SpotifyID, &i.Cover)
+	err := row.Scan(&i.ID, &i.SpotifyID, &i.CoverSource)
 	return i, err
 }
 
 const findMusicArtistIdentity = `-- name: FindMusicArtistIdentity :one
-SELECT e.id, e.spotify_id, e.thumb FROM musicians e JOIN music_artist_identity i ON i.musician_id=e.id WHERE i.identity_key = ?
+SELECT e.id, e.spotify_id, e.thumb_source FROM musicians e JOIN music_artist_identity i ON i.musician_id=e.id WHERE i.identity_key = ?
 `
 
 type FindMusicArtistIdentityRow struct {
-	ID        int64          `json:"id"`
-	SpotifyID sql.NullString `json:"spotify_id"`
-	Thumb     sql.NullString `json:"thumb"`
+	ID          int64          `json:"id"`
+	SpotifyID   sql.NullString `json:"spotify_id"`
+	ThumbSource sql.NullString `json:"-"`
 }
 
 func (q *Queries) FindMusicArtistIdentity(ctx context.Context, identityKey string) (FindMusicArtistIdentityRow, error) {
 	row := q.queryRow(ctx, q.findMusicArtistIdentityStmt, findMusicArtistIdentity, identityKey)
 	var i FindMusicArtistIdentityRow
-	err := row.Scan(&i.ID, &i.SpotifyID, &i.Thumb)
+	err := row.Scan(&i.ID, &i.SpotifyID, &i.ThumbSource)
 	return i, err
 }
 
