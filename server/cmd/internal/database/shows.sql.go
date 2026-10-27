@@ -2727,6 +2727,75 @@ func (q *Queries) MarkShowSeasonRetry(ctx context.Context, seasonID int64) error
 	return err
 }
 
+const moveShowDirectory = `-- name: MoveShowDirectory :one
+UPDATE shows SET
+ directory_path = ?1,
+ local_name = ?2,
+ premiere_year = ?3,
+ name = CASE WHEN tmdb_id IS NULL THEN ?2 ELSE name END,
+ updated_at = CURRENT_TIMESTAMP
+WHERE shows.directory_path = ?4
+ AND NOT EXISTS (SELECT 1 FROM shows AS taken WHERE taken.directory_path = ?1)
+RETURNING id, tmdb_id, first_air_date
+`
+
+type MoveShowDirectoryParams struct {
+	NewPath       string        `json:"new_path"`
+	LocalName     string        `json:"local_name"`
+	PremiereYear  sql.NullInt64 `json:"premiere_year"`
+	DirectoryPath string        `json:"directory_path"`
+}
+
+type MoveShowDirectoryRow struct {
+	ID           int64          `json:"id"`
+	TmdbID       sql.NullInt64  `json:"tmdb_id"`
+	FirstAirDate sql.NullString `json:"first_air_date"`
+}
+
+// A renamed show folder keeps its show, seasons and episodes, and with them
+// watch progress. Its local name follows the folder, and so does an unmatched
+// show's display name. A folder that already has a show is left alone. The
+// caller rolls the move back for a matched show the new name contradicts.
+func (q *Queries) MoveShowDirectory(ctx context.Context, arg MoveShowDirectoryParams) (MoveShowDirectoryRow, error) {
+	row := q.queryRow(ctx, q.moveShowDirectoryStmt, moveShowDirectory,
+		arg.NewPath,
+		arg.LocalName,
+		arg.PremiereYear,
+		arg.DirectoryPath,
+	)
+	var i MoveShowDirectoryRow
+	err := row.Scan(&i.ID, &i.TmdbID, &i.FirstAirDate)
+	return i, err
+}
+
+const moveShowFile = `-- name: MoveShowFile :execrows
+UPDATE show_files SET file_path = ?1, file_name = ?2
+WHERE id = ?3 AND file_path = ?4
+`
+
+type MoveShowFileParams struct {
+	NewPath  string `json:"new_path"`
+	FileName string `json:"file_name"`
+	ID       int64  `json:"id"`
+	FilePath string `json:"file_path"`
+}
+
+// A file renamed or moved within its season keeps its row. Processing then
+// checks it like any other file, and links it to the episodes its new name
+// gives.
+func (q *Queries) MoveShowFile(ctx context.Context, arg MoveShowFileParams) (int64, error) {
+	result, err := q.exec(ctx, q.moveShowFileStmt, moveShowFile,
+		arg.NewPath,
+		arg.FileName,
+		arg.ID,
+		arg.FilePath,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const pruneShow = `-- name: PruneShow :exec
 DELETE FROM shows WHERE shows.id = ? AND NOT EXISTS (SELECT 1 FROM show_seasons s WHERE s.show_id = shows.id)
 `

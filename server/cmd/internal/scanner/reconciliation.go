@@ -13,10 +13,12 @@ import (
 	"igloo/cmd/internal/database"
 )
 
-// CatalogFile retains the original database identity even when paths need cleaning.
+// CatalogFile retains the original database identity even when paths need
+// cleaning, with the stored fingerprint of its file; zero without one.
 type CatalogFile struct {
-	ID   int64
-	Path string
+	ID          int64
+	Path        string
+	Fingerprint FileFingerprint
 }
 
 // Reconciliation owns filesystem decisions for one completed library walk.
@@ -27,6 +29,10 @@ type Reconciliation struct {
 	candidates []CatalogFile
 	seen       map[string]bool
 	stat       func(string) (os.FileInfo, error)
+	// moves indexes the candidates by what a move keeps, built on first use;
+	// moved holds the ids of those re-keyed to a new path, out of the cleanup.
+	moves map[moveKey][]int
+	moved map[int64]bool
 }
 
 func NewReconciliation(ctx context.Context, directory string, files []CatalogFile) (*Reconciliation, error) {
@@ -38,7 +44,7 @@ func NewReconciliation(ctx context.Context, directory string, files []CatalogFil
 	if err != nil {
 		return nil, err
 	}
-	r := &Reconciliation{root: root, identity: identity, seen: make(map[string]bool), stat: os.Stat}
+	r := &Reconciliation{root: root, identity: identity, seen: make(map[string]bool), stat: os.Stat, moved: make(map[int64]bool)}
 	err = r.ValidateRoot(ctx)
 	if err != nil {
 		return nil, err
@@ -182,7 +188,7 @@ func (r *Reconciliation) keep(recorded, mounted []string) Kept {
 	for _, file := range r.candidates {
 		point := r.mountPointOf(file, unmounted)
 		seen := r.saw(file)
-		if point == "" || seen {
+		if point == "" || seen || r.moved[file.ID] {
 			remaining = append(remaining, file)
 			continue
 		}
@@ -232,7 +238,7 @@ func (r *Reconciliation) Unseen() []CatalogFile {
 	files := make([]CatalogFile, 0)
 	for _, file := range r.candidates {
 		seen := r.saw(file)
-		if !seen {
+		if !seen && !r.moved[file.ID] {
 			files = append(files, file)
 		}
 	}
@@ -295,8 +301,8 @@ func (r *Reconciliation) ConfirmMissing(ctx context.Context, file CatalogFile) (
 	return missing && err == nil, err
 }
 
-// errDeletionSkipped aborts a DeleteConfirmed transaction without reporting an
-// error: the row was already gone, or the file reappeared before commit.
+// errDeletionSkipped aborts a deletion or move transaction without reporting
+// an error: the row no longer matched, or the file reappeared before commit.
 var errDeletionSkipped = errors.New("deletion skipped")
 
 // DeleteUnseen deletes every catalog file the walk did not see, through del,
@@ -330,16 +336,30 @@ func (r *Reconciliation) DeleteConfirmed(
 	del func(*database.Queries) (bool, error),
 	committed func(),
 ) (bool, error) {
+	return r.whileMissing(ctx, tx, file, del, committed)
+}
+
+// whileMissing runs change inside a transaction while file is confirmed
+// missing, before it and again immediately before commit, and reports whether
+// the change committed. change returns false when the catalog row no longer
+// matches; committed runs under the scanner mutex once the change is durable.
+func (r *Reconciliation) whileMissing(
+	ctx context.Context,
+	tx TxRunner,
+	file CatalogFile,
+	change func(*database.Queries) (bool, error),
+	committed func(),
+) (bool, error) {
 	missing, err := r.ConfirmMissing(ctx, file)
 	if err != nil || !missing {
 		return false, err
 	}
 	err = tx.Run(ctx, func(qtx *database.Queries) error {
-		deleted, err := del(qtx)
+		changed, err := change(qtx)
 		if err != nil {
 			return err
 		}
-		if !deleted {
+		if !changed {
 			return errDeletionSkipped
 		}
 		missing, err := r.ConfirmMissing(ctx, file)

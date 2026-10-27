@@ -14,11 +14,11 @@ import (
 func TestReconciliationBoundariesAndSeenPaths(t *testing.T) {
 	root := t.TempDir()
 	files := []CatalogFile{
-		{1, filepath.Join(root, "gone.mkv")},
-		{2, root + "/nested/../seen.mkv"},
-		{3, root + "-other/gone.mkv"},
-		{4, filepath.Join(root, "..", "outside.mkv")},
-		{5, root},
+		{ID: 1, Path: filepath.Join(root, "gone.mkv")},
+		{ID: 2, Path: root + "/nested/../seen.mkv"},
+		{ID: 3, Path: root + "-other/gone.mkv"},
+		{ID: 4, Path: filepath.Join(root, "..", "outside.mkv")},
+		{ID: 5, Path: root},
 	}
 	r, err := NewReconciliation(context.Background(), root+"/.", files)
 	if err != nil {

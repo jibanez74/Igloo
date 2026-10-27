@@ -41,8 +41,8 @@ func TestShowChangesRunAppliesOnlyTheChangedPaths(t *testing.T) {
 		t.Fatalf("library scan probes = %d", probe.Calls())
 	}
 
-	// Renaming an episode file lands both names in one run: the new name is
-	// processed before cleanup, so the episode and its progress survive.
+	// Renaming an episode file lands both names in one run: the file keeps its
+	// row under the new name, so the episode and its progress survive.
 	renamed := filepath.Join(root, "Show (2020)/Season 1/S01E01 - Pilot.mkv")
 	err = os.Rename(e1, renamed)
 	if err != nil {
@@ -67,7 +67,8 @@ func TestShowChangesRunAppliesOnlyTheChangedPaths(t *testing.T) {
 	if status.Scope != scanner.ScopeChanges || status.State != scanner.StateCompleted {
 		t.Fatalf("scope=%s state=%s issues=%+v", status.Scope, status.State, status.Issues)
 	}
-	if status.Total != 2 || status.Imported != 2 || status.Deleted != 1 || status.Failed != 0 {
+	// The renamed file keeps its row; its new ctime probes it again.
+	if status.Total != 2 || status.Imported != 1 || status.Updated != 1 || status.Deleted != 0 || status.Failed != 0 {
 		t.Fatalf("counts = %+v", status.Counts)
 	}
 	if probe.Calls() != 5 {

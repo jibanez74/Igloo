@@ -879,6 +879,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.markShowSeasonRetryStmt, err = db.PrepareContext(ctx, markShowSeasonRetry); err != nil {
 		return nil, fmt.Errorf("error preparing query MarkShowSeasonRetry: %w", err)
 	}
+	if q.moveMovieFileStmt, err = db.PrepareContext(ctx, moveMovieFile); err != nil {
+		return nil, fmt.Errorf("error preparing query MoveMovieFile: %w", err)
+	}
 	if q.moveMusicAlbumAliasesStmt, err = db.PrepareContext(ctx, moveMusicAlbumAliases); err != nil {
 		return nil, fmt.Errorf("error preparing query MoveMusicAlbumAliases: %w", err)
 	}
@@ -905,6 +908,15 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.moveMusicArtistTracksStmt, err = db.PrepareContext(ctx, moveMusicArtistTracks); err != nil {
 		return nil, fmt.Errorf("error preparing query MoveMusicArtistTracks: %w", err)
+	}
+	if q.moveShowDirectoryStmt, err = db.PrepareContext(ctx, moveShowDirectory); err != nil {
+		return nil, fmt.Errorf("error preparing query MoveShowDirectory: %w", err)
+	}
+	if q.moveShowFileStmt, err = db.PrepareContext(ctx, moveShowFile); err != nil {
+		return nil, fmt.Errorf("error preparing query MoveShowFile: %w", err)
+	}
+	if q.moveTrackFileStmt, err = db.PrepareContext(ctx, moveTrackFile); err != nil {
+		return nil, fmt.Errorf("error preparing query MoveTrackFile: %w", err)
 	}
 	if q.movieExistsStmt, err = db.PrepareContext(ctx, movieExists); err != nil {
 		return nil, fmt.Errorf("error preparing query MovieExists: %w", err)
@@ -2627,6 +2639,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing markShowSeasonRetryStmt: %w", cerr)
 		}
 	}
+	if q.moveMovieFileStmt != nil {
+		if cerr := q.moveMovieFileStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing moveMovieFileStmt: %w", cerr)
+		}
+	}
 	if q.moveMusicAlbumAliasesStmt != nil {
 		if cerr := q.moveMusicAlbumAliasesStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing moveMusicAlbumAliasesStmt: %w", cerr)
@@ -2670,6 +2687,21 @@ func (q *Queries) Close() error {
 	if q.moveMusicArtistTracksStmt != nil {
 		if cerr := q.moveMusicArtistTracksStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing moveMusicArtistTracksStmt: %w", cerr)
+		}
+	}
+	if q.moveShowDirectoryStmt != nil {
+		if cerr := q.moveShowDirectoryStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing moveShowDirectoryStmt: %w", cerr)
+		}
+	}
+	if q.moveShowFileStmt != nil {
+		if cerr := q.moveShowFileStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing moveShowFileStmt: %w", cerr)
+		}
+	}
+	if q.moveTrackFileStmt != nil {
+		if cerr := q.moveTrackFileStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing moveTrackFileStmt: %w", cerr)
 		}
 	}
 	if q.movieExistsStmt != nil {
@@ -3481,6 +3513,7 @@ type Queries struct {
 	markShowEpisodeWatchedFromProgressStmt      *sql.Stmt
 	markShowRetryStmt                           *sql.Stmt
 	markShowSeasonRetryStmt                     *sql.Stmt
+	moveMovieFileStmt                           *sql.Stmt
 	moveMusicAlbumAliasesStmt                   *sql.Stmt
 	moveMusicAlbumFallbackStmt                  *sql.Stmt
 	moveMusicAlbumGenresStmt                    *sql.Stmt
@@ -3490,6 +3523,9 @@ type Queries struct {
 	moveMusicArtistCreditsStmt                  *sql.Stmt
 	moveMusicArtistGenresStmt                   *sql.Stmt
 	moveMusicArtistTracksStmt                   *sql.Stmt
+	moveShowDirectoryStmt                       *sql.Stmt
+	moveShowFileStmt                            *sql.Stmt
+	moveTrackFileStmt                           *sql.Stmt
 	movieExistsStmt                             *sql.Stmt
 	musicAlbumAppleCollectionsStmt              *sql.Stmt
 	musicAlbumHasAppleHintStmt                  *sql.Stmt
@@ -3878,6 +3914,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		markShowEpisodeWatchedFromProgressStmt:      q.markShowEpisodeWatchedFromProgressStmt,
 		markShowRetryStmt:                           q.markShowRetryStmt,
 		markShowSeasonRetryStmt:                     q.markShowSeasonRetryStmt,
+		moveMovieFileStmt:                           q.moveMovieFileStmt,
 		moveMusicAlbumAliasesStmt:                   q.moveMusicAlbumAliasesStmt,
 		moveMusicAlbumFallbackStmt:                  q.moveMusicAlbumFallbackStmt,
 		moveMusicAlbumGenresStmt:                    q.moveMusicAlbumGenresStmt,
@@ -3887,6 +3924,9 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		moveMusicArtistCreditsStmt:                  q.moveMusicArtistCreditsStmt,
 		moveMusicArtistGenresStmt:                   q.moveMusicArtistGenresStmt,
 		moveMusicArtistTracksStmt:                   q.moveMusicArtistTracksStmt,
+		moveShowDirectoryStmt:                       q.moveShowDirectoryStmt,
+		moveShowFileStmt:                            q.moveShowFileStmt,
+		moveTrackFileStmt:                           q.moveTrackFileStmt,
 		movieExistsStmt:                             q.movieExistsStmt,
 		musicAlbumAppleCollectionsStmt:              q.musicAlbumAppleCollectionsStmt,
 		musicAlbumHasAppleHintStmt:                  q.musicAlbumHasAppleHintStmt,

@@ -41,9 +41,10 @@ func movieScanIndex(rows []database.GetMovieScanIndexRow) (map[string]movieScanE
 	index := make(map[string]movieScanEntry, len(rows))
 	files := make([]scanner.CatalogFile, 0, len(rows))
 	for _, row := range rows {
-		files = append(files, scanner.CatalogFile{ID: row.ID, Path: row.FilePath})
+		fingerprint := scanner.StoredFingerprint(row.Size, row.MtimeNs, row.CtimeNs, row.Device, row.Inode)
+		files = append(files, scanner.CatalogFile{ID: row.ID, Path: row.FilePath, Fingerprint: fingerprint})
 		index[filepath.Clean(row.FilePath)] = movieScanEntry{
-			FileFingerprint: scanner.StoredFingerprint(row.Size, row.MtimeNs, row.CtimeNs, row.Device, row.Inode),
+			FileFingerprint: fingerprint,
 			ID:              row.ID, FilePath: row.FilePath, TmdbID: row.TmdbID, PendingRetry: row.PendingRetry,
 			RetryAttempts: row.RetryAttempts.Int64, LastAttemptAt: row.LastAttemptAt, HasFingerprint: row.MtimeNs.Valid,
 		}

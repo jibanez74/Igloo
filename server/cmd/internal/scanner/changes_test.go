@@ -206,7 +206,7 @@ func mountTable(points ...string) func() ([]string, error) {
 
 func TestReconciliationGuardKeepsEverythingAfterACatchUpThatFoundNothing(t *testing.T) {
 	root, tx := guardFixture(t)
-	files := []CatalogFile{{1, filepath.Join(root, "A", "a.mkv")}}
+	files := []CatalogFile{{ID: 1, Path: filepath.Join(root, "A", "a.mkv")}}
 	for _, tc := range []struct {
 		changes *Changes
 		kept    int
@@ -242,11 +242,11 @@ func TestReconciliationGuardKeepsFilesBeneathAMountPointThatIsNotMounted(t *test
 	root, tx := guardFixture(t)
 	disk1, disk2 := filepath.Join(root, "disk1"), filepath.Join(root, "disk2")
 	files := []CatalogFile{
-		{1, filepath.Join(disk1, "seen.mkv")},
-		{2, filepath.Join(disk1, "gone.mkv")},
-		{3, filepath.Join(disk2, "a.mkv")},
-		{4, filepath.Join(disk2, "b.mkv")},
-		{5, filepath.Join(root, "gone.mkv")},
+		{ID: 1, Path: filepath.Join(disk1, "seen.mkv")},
+		{ID: 2, Path: filepath.Join(disk1, "gone.mkv")},
+		{ID: 3, Path: filepath.Join(disk2, "a.mkv")},
+		{ID: 4, Path: filepath.Join(disk2, "b.mkv")},
+		{ID: 5, Path: filepath.Join(root, "gone.mkv")},
 	}
 	// guard runs the guard over a walk that saw files[0] and the files with
 	// the extra ids.
@@ -312,7 +312,7 @@ func TestReconciliationGuardKeepsFilesBeneathAMountPointThatIsNotMounted(t *test
 	// A run of changes keeps nothing, but records a disk that mounted since,
 	// whose first files it may import.
 	disk3 := filepath.Join(root, "disk3")
-	files = append(files, CatalogFile{6, filepath.Join(disk3, "c.mkv")})
+	files = append(files, CatalogFile{ID: 6, Path: filepath.Join(disk3, "c.mkv")})
 	kept, _ = guard(&Changes{Paths: []string{"disk3"}}, mountTable(disk1, disk3), 6)
 	if kept.Files != 0 || !slices.Equal(recorded(), []string{"disk1", "disk3"}) {
 		t.Fatalf("a run of changes: kept %+v, recorded %q", kept, recorded())
@@ -328,7 +328,7 @@ func TestReconciliationGuardKeepsFilesBeneathAMountPointThatIsNotMounted(t *test
 // is found.
 func TestReconciliationGuardKeepsTheFilesOfARootThatIsNotMounted(t *testing.T) {
 	root, tx := guardFixture(t)
-	files := []CatalogFile{{1, filepath.Join(root, "stray.mkv")}, {2, filepath.Join(root, "A", "a.mkv")}}
+	files := []CatalogFile{{ID: 1, Path: filepath.Join(root, "stray.mkv")}, {ID: 2, Path: filepath.Join(root, "A", "a.mkv")}}
 	for _, tc := range []struct {
 		mounts func() ([]string, error)
 		kept   int
@@ -358,7 +358,7 @@ func TestReconciliationGuardResolvesASymlinkedRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	disk := filepath.Join(resolved, "disk")
-	files := []CatalogFile{{1, filepath.Join(link, "seen.mkv")}, {2, filepath.Join(link, "disk", "a.mkv")}}
+	files := []CatalogFile{{ID: 1, Path: filepath.Join(link, "seen.mkv")}, {ID: 2, Path: filepath.Join(link, "disk", "a.mkv")}}
 	for _, tc := range []struct {
 		mounts func() ([]string, error)
 		seen   []CatalogFile
@@ -385,7 +385,7 @@ func TestReconciliationGuardResolvesASymlinkedRoot(t *testing.T) {
 // recorded or deleted.
 func TestReconciliationGuardFailsWithoutAMountTable(t *testing.T) {
 	root, tx := guardFixture(t)
-	files := []CatalogFile{{1, filepath.Join(root, "seen.mkv")}, {2, filepath.Join(root, "gone.mkv")}}
+	files := []CatalogFile{{ID: 1, Path: filepath.Join(root, "seen.mkv")}, {ID: 2, Path: filepath.Join(root, "gone.mkv")}}
 	r, err := NewReconciliation(context.Background(), root, files)
 	if err != nil {
 		t.Fatal(err)

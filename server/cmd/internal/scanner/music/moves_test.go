@@ -1,0 +1,116 @@
+package music
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"igloo/cmd/internal/scanner"
+	"igloo/cmd/internal/scanner/scannertest"
+)
+
+// An album folder renamed within the library, as Picard's or Lidarr's
+// renaming does when it leaves the tags alone, keeps
+// its tracks' rows and with them their likes, whether a run of changes or a
+// library scan sees the rename.
+func TestMusicRenameKeepsTheTrackAndItsLike(t *testing.T) {
+	for _, watched := range []bool{false, true} {
+		t.Run(map[bool]string{false: "library scan", true: "run of changes"}[watched], func(t *testing.T) {
+			s := setupMusicScanner(t)
+			s.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadata()}
+			root := t.TempDir()
+			old := scannertest.WriteFile(t, filepath.Join(root, "Album", "01 Track.flac"), "track")
+			s.scan(root)
+			db := s.tx.DB
+			var id int64
+			revision := s.Status().CatalogRevision
+			err := db.QueryRow("SELECT id FROM tracks WHERE file_path = ?", old).Scan(&id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = db.Exec("INSERT INTO users (name, email, password) VALUES ('u', 'u@example.com', 'p')")
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = db.Exec("INSERT INTO user_liked_tracks (user_id, track_id) VALUES (1, ?)", id)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			err = os.Rename(filepath.Join(root, "Album"), filepath.Join(root, "Album (2001)"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			renamed := filepath.Join(root, "Album (2001)", "01 Track.flac")
+			if watched {
+				s.scanChanges(root, scanner.Changes{Paths: []string{"Album", "Album (2001)/01 Track.flac"}})
+			} else {
+				s.scan(root)
+			}
+
+			var movedID int64
+			err = db.QueryRow("SELECT id FROM tracks WHERE file_path = ?", renamed).Scan(&movedID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if movedID != id || scannertest.CountRows(t, db, "SELECT count(*) FROM tracks") != 1 {
+				t.Fatalf("moved row id %d, want %d, with no second track", movedID, id)
+			}
+			if scannertest.CountRows(t, db, "SELECT count(*) FROM user_liked_tracks") != 1 {
+				t.Fatal("the rename lost the like")
+			}
+			status := s.Status()
+			if status.Deleted != 0 || status.Imported != 0 {
+				t.Fatalf("a rename counted as a removal and an import: %+v", status.Counts)
+			}
+			// The web client refreshes its lists when the revision moves.
+			if status.CatalogRevision <= revision {
+				t.Fatalf("catalog revision %d after the rename, was %d", status.CatalogRevision, revision)
+			}
+		})
+	}
+}
+
+// A rename that keeps the bytes only records the new fingerprint, while a
+// tagger that rewrote the file in place, keeping its size and modification
+// time, and moved it has it processed again.
+func TestMusicMoveReprocessesATrackRewrittenWithItsTimestampKept(t *testing.T) {
+	for _, rewritten := range []bool{false, true} {
+		t.Run(map[bool]string{false: "rename", true: "retag and rename"}[rewritten], func(t *testing.T) {
+			s := setupMusicScanner(t)
+			probe := &scannertest.CountingProbe{Default: testMusicMetadata()}
+			s.ffprobe = probe
+			root := t.TempDir()
+			old := scannertest.WriteFile(t, filepath.Join(root, "Album", "01.flac"), "tags-v1")
+			s.scan(root)
+			calls := probe.Calls()
+			info, err := os.Stat(old)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if rewritten {
+				err = os.WriteFile(old, []byte("tags-v2"), 0o644)
+				if err != nil {
+					t.Fatal(err)
+				}
+				err = os.Chtimes(old, info.ModTime(), info.ModTime())
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			renamed := filepath.Join(root, "Album", "01 Intro.flac")
+			err = os.Rename(old, renamed)
+			if err != nil {
+				t.Fatal(err)
+			}
+			s.scan(root)
+			if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM tracks") != 1 {
+				t.Fatal("the rename left a second track")
+			}
+			reprocessed := probe.Calls() > calls
+			if reprocessed != rewritten {
+				t.Fatalf("probed again: %v, want %v", reprocessed, rewritten)
+			}
+		})
+	}
+}

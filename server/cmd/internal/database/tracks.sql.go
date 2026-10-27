@@ -634,6 +634,33 @@ func (q *Queries) ListMusicTrackScanIndexUnder(ctx context.Context, arg ListMusi
 	return items, nil
 }
 
+const moveTrackFile = `-- name: MoveTrackFile :execrows
+UPDATE tracks SET file_path = ?1, file_name = ?2
+WHERE id = ?3 AND file_path = ?4
+`
+
+type MoveTrackFileParams struct {
+	NewPath  string `json:"new_path"`
+	FileName string `json:"file_name"`
+	ID       int64  `json:"id"`
+	FilePath string `json:"file_path"`
+}
+
+// A file renamed or moved within the library keeps its row, and with it its
+// likes and playlist entries.
+func (q *Queries) MoveTrackFile(ctx context.Context, arg MoveTrackFileParams) (int64, error) {
+	result, err := q.exec(ctx, q.moveTrackFileStmt, moveTrackFile,
+		arg.NewPath,
+		arg.FileName,
+		arg.ID,
+		arg.FilePath,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const trackExists = `-- name: TrackExists :one
 SELECT
   EXISTS (
