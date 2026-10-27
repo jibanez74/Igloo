@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -327,13 +326,6 @@ func isOptionalHTTPURL(value string) bool {
 // under; the file behind it is static/avatars/<userID>-<unix nanos><ext>.
 const uploadedAvatarURLPrefix = "/api/static/avatars/"
 
-var allowedAvatarMimeTypes = map[string]string{
-	"image/jpeg": ".jpg",
-	"image/png":  ".png",
-	"image/gif":  ".gif",
-	"image/webp": ".webp",
-}
-
 const maxAvatarSize = 20 << 20
 
 func (app *Application) UploadUserAvatar(w http.ResponseWriter, r *http.Request) {
@@ -357,48 +349,30 @@ func (app *Application) UploadUserAvatar(w http.ResponseWriter, r *http.Request)
 	}
 	defer file.Close()
 
-	var buffer [512]byte
-	n, err := file.Read(buffer[:])
-	if err != nil && err != io.EOF {
-		helpers.ErrorJSON(w, errors.New("failed to read file"), http.StatusBadRequest)
-		return
-	}
-
-	contentType := http.DetectContentType(buffer[:n])
-
-	ext, ok := allowedAvatarMimeTypes[contentType]
-	if !ok {
-		helpers.ErrorJSON(w, errors.New("invalid file type. Allowed: JPEG, PNG, GIF, WebP"), http.StatusBadRequest)
-		return
-	}
-
-	if _, err := file.Seek(0, 0); err != nil {
-		helpers.ErrorJSON(w, errors.New("failed to process file"), http.StatusInternalServerError)
-		return
-	}
-
-	avatarsDir := filepath.Join(app.CurrentSettings().StaticDir, "avatars")
-	_, err = helpers.GetOrCreateDir(avatarsDir)
-	if err != nil {
-		app.serverError(w, err, "failed to create avatars directory", internalServerErrorMessage, "path", avatarsDir)
-		return
-	}
-
 	// Every upload gets a file name of its own. Static files are served with
 	// a year-long max-age, so a reused name would keep showing the previous
 	// image, and writing over the file the account points at would change the
 	// avatar even when the account update below fails.
-	filename := fmt.Sprintf("%d-%d%s", userID, time.Now().UnixNano(), ext)
-	filePath := filepath.Join(avatarsDir, filename)
+	avatarsDir := filepath.Join(app.CurrentSettings().StaticDir, "avatars")
+	name := fmt.Sprintf("%d-%d", userID, time.Now().UnixNano())
 
-	// A temp file renamed into place, so a failed write leaves nothing under
-	// the new name.
-	err = writeAvatarFile(avatarsDir, filePath, file)
+	filePath, err := helpers.SaveImage(avatarsDir, name, file, maxAvatarSize)
+	isUnsupportedType := errors.Is(err, helpers.ErrUnsupportedImageType)
+	if isUnsupportedType {
+		helpers.ErrorJSON(w, errors.New("invalid file type. Allowed: JPEG, PNG, GIF, WebP"), http.StatusBadRequest)
+		return
+	}
+	isTooLarge := errors.Is(err, helpers.ErrImageTooLarge)
+	if isTooLarge {
+		helpers.ErrorJSON(w, errors.New("file too large, maximum size is 20MB"), http.StatusRequestEntityTooLarge)
+		return
+	}
 	if err != nil {
-		app.serverError(w, err, "failed to write avatar file", internalServerErrorMessage, "path", filePath)
+		app.serverError(w, err, "failed to save avatar file", internalServerErrorMessage, "dir", avatarsDir)
 		return
 	}
 
+	filename := filepath.Base(filePath)
 	avatarURL := uploadedAvatarURLPrefix + filename
 
 	user, replaced, err := app.replaceUserAvatar(r.Context(), userID, sql.NullString{String: avatarURL, Valid: true})
@@ -417,7 +391,6 @@ func (app *Application) UploadUserAvatar(w http.ResponseWriter, r *http.Request)
 		"user_id", userID,
 		"filename", filename,
 		"size", header.Size,
-		"content_type", contentType,
 	)
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
@@ -483,31 +456,7 @@ func isOwnUploadedAvatarName(userID int64, name string) bool {
 	if stamp == "" || strings.Trim(stamp, "0123456789") != "" {
 		return false
 	}
-	for _, allowed := range allowedAvatarMimeTypes {
-		if ext == allowed {
-			return true
-		}
-	}
-	return false
-}
-
-func writeAvatarFile(dir, path string, src io.Reader) error {
-	tmp, err := os.CreateTemp(dir, ".avatar-*")
-	if err != nil {
-		return err
-	}
-	_, err = io.Copy(tmp, src)
-	closeErr := tmp.Close()
-	if err == nil {
-		err = closeErr
-	}
-	if err == nil {
-		err = os.Rename(tmp.Name(), path)
-	}
-	if err != nil {
-		_ = os.Remove(tmp.Name())
-	}
-	return err
+	return helpers.IsImageExtension(ext)
 }
 
 // deleteUploadedAvatar removes the file UploadUserAvatar wrote for userID.
