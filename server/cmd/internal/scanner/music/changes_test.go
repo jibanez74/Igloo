@@ -2,6 +2,7 @@ package music
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -263,5 +264,26 @@ func TestMusicChangesRunThatOnlyRemovesTracksCompletes(t *testing.T) {
 	status := s.Status()
 	if status.State != scanner.StateCompleted || status.Deleted != 1 {
 		t.Fatalf("deletion-only run with Spotify configured: state=%s %+v issues=%+v", status.State, status.Counts, status.Issues)
+	}
+}
+
+// A library scan's failed track stays in the status through a run of changes
+// that does not look at it.
+func TestMusicChangesRunKeepsTheIssuesOfFilesItDidNotLookAt(t *testing.T) {
+	s := setupMusicScanner(t)
+	s.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadata(), Hook: func(_ context.Context, path string) (*ffprobe.FfprobeResult, error) {
+		if filepath.Base(path) == "bad.flac" {
+			return nil, errors.New("unreadable")
+		}
+		return testMusicMetadata(), nil
+	}}
+	root := t.TempDir()
+	scannertest.WriteFile(t, filepath.Join(root, "Album", "bad.flac"), "bad")
+	s.scan(root)
+	scannertest.WriteFile(t, filepath.Join(root, "Album", "new.flac"), "new")
+	s.scanChanges(root, scanner.Changes{Paths: []string{"Album/new.flac"}})
+	status := s.Status()
+	if status.IssueCount != 1 || status.Issues[0].Filename != "bad.flac" {
+		t.Fatalf("after a run of changes elsewhere: %+v", status.Issues)
 	}
 }

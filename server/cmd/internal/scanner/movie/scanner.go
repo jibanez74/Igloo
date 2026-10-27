@@ -49,6 +49,7 @@ type Scanner struct {
 	launcher                    scanner.Launcher
 	tx                          scanner.TxRunner
 	mountPoints                 func() ([]string, error)
+	outstanding                 scanner.Outstanding
 	currentMoviesDirectory      func() sql.NullString
 	invalidateCommittedMovie    func(int64)
 	invalidateDeletedWatchRooms func([]int64)

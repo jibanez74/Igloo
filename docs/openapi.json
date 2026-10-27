@@ -16844,7 +16844,8 @@
           },
           "issue_count": {
             "type": "integer",
-            "minimum": 0
+            "minimum": 0,
+            "description": "Outstanding issues. A run of changes (scope \"changes\") also carries those the previous run left at files outside its paths, which it does not look at again, so a library scan's failed and deferred files stay listed until a run looks at them; issues naming no file stay with the run that raised them."
           },
           "issues": {
             "type": "array",
@@ -17042,7 +17043,8 @@
           },
           "issue_count": {
             "type": "integer",
-            "minimum": 0
+            "minimum": 0,
+            "description": "Outstanding issues. A run of changes (scope \"changes\") also carries those the previous run left at files outside its paths, which it does not look at again, so a library scan's failed and deferred files stay listed until a run looks at them; issues naming no file stay with the run that raised them."
           },
           "issues": {
             "type": "array",
@@ -17234,7 +17236,8 @@
           },
           "issue_count": {
             "type": "integer",
-            "minimum": 0
+            "minimum": 0,
+            "description": "Outstanding issues. A run of changes (scope \"changes\") also carries those the previous run left at files outside its paths, which it does not look at again, so a library scan's failed and deferred files stay listed until a run looks at them; issues naming no file stay with the run that raised them."
           },
           "issues": {
             "type": "array",

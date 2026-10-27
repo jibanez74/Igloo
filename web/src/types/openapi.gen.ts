@@ -4833,6 +4833,7 @@ export interface components {
             enrichment_unmatched: number;
             /** @description Movies still lacking a confirmed TMDB identity or re-queued by a technical change, including those backing off after repeated misses; updated as results commit. It does not by itself make the final state completed-with-issues. */
             pending_enrichment: number;
+            /** @description Outstanding issues. A run of changes (scope "changes") also carries those the previous run left at files outside its paths, which it does not look at again, so a library scan's failed and deferred files stay listed until a run looks at them; issues naming no file stay with the run that raised them. */
             issue_count: number;
             issues: components["schemas"]["ScanIssue"][];
             /**
@@ -4887,6 +4888,7 @@ export interface components {
             enrichment_unmatched: number;
             /** @description Shows, seasons, and episodes still carrying a retry marker when the run finished, including shows whose miss backoff has not elapsed. It does not by itself make the final state completed-with-issues. */
             pending_enrichment: number;
+            /** @description Outstanding issues. A run of changes (scope "changes") also carries those the previous run left at files outside its paths, which it does not look at again, so a library scan's failed and deferred files stay listed until a run looks at them; issues naming no file stay with the run that raised them. */
             issue_count: number;
             issues: components["schemas"]["ScanIssue"][];
             /**
@@ -4946,6 +4948,7 @@ export interface components {
             enrichment_failed: number;
             /** @description Unique artists and albums with a definitive no-match during this run. An album Apple Music no longer lists is counted by its Spotify outcome, or as unmatched when Spotify cannot search that run (not configured or temporarily refused). */
             enrichment_unmatched: number;
+            /** @description Outstanding issues. A run of changes (scope "changes") also carries those the previous run left at files outside its paths, which it does not look at again, so a library scan's failed and deferred files stay listed until a run looks at them; issues naming no file stay with the run that raised them. */
             issue_count: number;
             issues: components["schemas"]["ScanIssue"][];
             /**
