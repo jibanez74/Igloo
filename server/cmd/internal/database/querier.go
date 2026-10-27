@@ -533,6 +533,9 @@ type Querier interface {
 	// only ever filled in, never replaced: the file's own tag wins when it has one.
 	LinkMusicTrackSpotify(ctx context.Context, arg LinkMusicTrackSpotifyParams) error
 	LinkShowEpisodeFile(ctx context.Context, arg LinkShowEpisodeFileParams) error
+	// An album is matched by Spotify or by Apple, never both; the ID of the one
+	// that matched it names its folder.
+	ListAlbumArtwork(ctx context.Context, arg ListAlbumArtworkParams) ([]ListAlbumArtworkRow, error)
 	ListArtistArtwork(ctx context.Context, arg ListArtistArtworkParams) ([]ListArtistArtworkRow, error)
 	ListLibraryMountPoints(ctx context.Context, root string) ([]string, error)
 	ListMovieArtwork(ctx context.Context, arg ListMovieArtworkParams) ([]ListMovieArtworkRow, error)
@@ -540,6 +543,7 @@ type Querier interface {
 	// ListMusicTrackScanIndex for one path a run of watcher-detected changes
 	// covers; lower and upper bound its children as in GetMovieScanIndexUnder.
 	ListMusicTrackScanIndexUnder(ctx context.Context, arg ListMusicTrackScanIndexUnderParams) ([]ListMusicTrackScanIndexUnderRow, error)
+	ListMusicianArtwork(ctx context.Context, arg ListMusicianArtworkParams) ([]ListMusicianArtworkRow, error)
 	ListNetworkArtwork(ctx context.Context, arg ListNetworkArtworkParams) ([]ListNetworkArtworkRow, error)
 	// The shared admin request queue, newest first. Visibility is admin-only and
 	// enforced by the handlers; user_id here only selects the viewer's read state
@@ -672,9 +676,11 @@ type Querier interface {
 	RemoveMovieFromPlaylist(ctx context.Context, arg RemoveMovieFromPlaylistParams) error
 	RemoveTrackFromPlaylist(ctx context.Context, arg RemoveTrackFromPlaylistParams) error
 	RenameDevice(ctx context.Context, arg RenameDeviceParams) (int64, error)
+	RevertAlbumCoverArtwork(ctx context.Context) (int64, error)
 	RevertArtistProfileArtwork(ctx context.Context) (int64, error)
 	RevertMovieBackdropArtwork(ctx context.Context) (int64, error)
 	RevertMoviePosterArtwork(ctx context.Context) (int64, error)
+	RevertMusicianThumbArtwork(ctx context.Context) (int64, error)
 	RevertNetworkLogoArtwork(ctx context.Context) (int64, error)
 	RevertShowBackdropArtwork(ctx context.Context) (int64, error)
 	RevertShowEpisodeStillArtwork(ctx context.Context) (int64, error)
@@ -687,6 +693,7 @@ type Querier interface {
 	SaveMusicGenreIdentity(ctx context.Context, arg SaveMusicGenreIdentityParams) error
 	SaveMusicSpotifyAdoption(ctx context.Context, arg SaveMusicSpotifyAdoptionParams) error
 	SaveMusicTrackMetadata(ctx context.Context, arg SaveMusicTrackMetadataParams) error
+	SetAlbumCoverArtwork(ctx context.Context, arg SetAlbumCoverArtworkParams) (int64, error)
 	SetArtistProfileArtwork(ctx context.Context, arg SetArtistProfileArtworkParams) (int64, error)
 	SetArtworkStaticDir(ctx context.Context, staticDir string) error
 	SetMovieBackdropArtwork(ctx context.Context, arg SetMovieBackdropArtworkParams) (int64, error)
@@ -696,6 +703,7 @@ type Querier interface {
 	SetMusicAlbumAppleID(ctx context.Context, arg SetMusicAlbumAppleIDParams) error
 	SetMusicAlbumSpotifyID(ctx context.Context, arg SetMusicAlbumSpotifyIDParams) error
 	SetMusicArtistSpotifyID(ctx context.Context, arg SetMusicArtistSpotifyIDParams) error
+	SetMusicianThumbArtwork(ctx context.Context, arg SetMusicianThumbArtworkParams) (int64, error)
 	SetNetworkLogoArtwork(ctx context.Context, arg SetNetworkLogoArtworkParams) (int64, error)
 	SetShowBackdropArtwork(ctx context.Context, arg SetShowBackdropArtworkParams) (int64, error)
 	SetShowEpisodeStillArtwork(ctx context.Context, arg SetShowEpisodeStillArtworkParams) (int64, error)

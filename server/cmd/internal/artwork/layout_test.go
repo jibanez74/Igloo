@@ -104,6 +104,9 @@ func TestIsManagedFile(t *testing.T) {
 		{"shows", "season_00_poster.jpg", true},
 		{"shows", "s01e02_still.jpg", true},
 		{"networks", "hbo_logo.png", true},
+		{"albums", "daylight_cover.jpg", true},
+		{"musicians", "aurora_thumb.jpg", true},
+		{"albums", "daylight_thumb.jpg", false},
 		{"networks", "hbo_poster.png", false},
 		{"shows", "s01e02_profile.jpg", false},
 		{"movies", "keanu_reeves_profile.jpg", false},
@@ -118,6 +121,28 @@ func TestIsManagedFile(t *testing.T) {
 		got := isManagedFile(tt.dir, tt.name)
 		if got != tt.want {
 			t.Errorf("isManagedFile(%q, %q) = %v, want %v", tt.dir, tt.name, got, tt.want)
+		}
+	}
+}
+
+func TestSourceURL_FetchesMusicURLsAsStored(t *testing.T) {
+	tests := []struct {
+		source string
+		want   string
+	}{
+		{"https://i.scdn.co/image/ab67616d0000b273", "https://i.scdn.co/image/ab67616d0000b273"},
+		{"https://is1-ssl.mzstatic.com/image/thumb/Music/x/640x640bb.jpg", "https://is1-ssl.mzstatic.com/image/thumb/Music/x/640x640bb.jpg"},
+		{"http://127.0.0.1:8080/image/cover", "http://127.0.0.1:8080/image/cover"},
+		{"https://example.com/cover.svg", ""},
+		{"file:///music/cover.jpg", ""},
+		{"/relative/cover.jpg", ""},
+		{"https:///no-host.jpg", ""},
+		{"not a url", ""},
+	}
+	for _, tt := range tests {
+		got := albumCover.sourceURL("https://image.tmdb.org/t/p", tt.source)
+		if got != tt.want {
+			t.Errorf("sourceURL(%q) = %q, want %q", tt.source, got, tt.want)
 		}
 	}
 }

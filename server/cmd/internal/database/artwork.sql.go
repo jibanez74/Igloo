@@ -35,6 +35,60 @@ func (q *Queries) GetArtworkStaticDir(ctx context.Context) (string, error) {
 	return static_dir, err
 }
 
+const listAlbumArtwork = `-- name: ListAlbumArtwork :many
+SELECT id, spotify_id, apple_id, title, cover, cover_source
+FROM albums
+WHERE id > ?1 AND (cover IS NOT NULL OR cover_source IS NOT NULL)
+ORDER BY id
+LIMIT ?2
+`
+
+type ListAlbumArtworkParams struct {
+	AfterID  int64 `json:"after_id"`
+	PageSize int64 `json:"page_size"`
+}
+
+type ListAlbumArtworkRow struct {
+	ID          int64          `json:"id"`
+	SpotifyID   sql.NullString `json:"spotify_id"`
+	AppleID     sql.NullInt64  `json:"apple_id"`
+	Title       string         `json:"title"`
+	Cover       sql.NullString `json:"cover"`
+	CoverSource sql.NullString `json:"-"`
+}
+
+// An album is matched by Spotify or by Apple, never both; the ID of the one
+// that matched it names its folder.
+func (q *Queries) ListAlbumArtwork(ctx context.Context, arg ListAlbumArtworkParams) ([]ListAlbumArtworkRow, error) {
+	rows, err := q.query(ctx, q.listAlbumArtworkStmt, listAlbumArtwork, arg.AfterID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAlbumArtworkRow{}
+	for rows.Next() {
+		var i ListAlbumArtworkRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SpotifyID,
+			&i.AppleID,
+			&i.Title,
+			&i.Cover,
+			&i.CoverSource,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listArtistArtwork = `-- name: ListArtistArtwork :many
 SELECT id, tmdb_id, name, profile, profile_source
 FROM artist
@@ -126,6 +180,56 @@ func (q *Queries) ListMovieArtwork(ctx context.Context, arg ListMovieArtworkPara
 			&i.PosterPathSource,
 			&i.BackdropPath,
 			&i.BackdropPathSource,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMusicianArtwork = `-- name: ListMusicianArtwork :many
+SELECT id, spotify_id, name, thumb, thumb_source
+FROM musicians
+WHERE id > ?1 AND (thumb IS NOT NULL OR thumb_source IS NOT NULL)
+ORDER BY id
+LIMIT ?2
+`
+
+type ListMusicianArtworkParams struct {
+	AfterID  int64 `json:"after_id"`
+	PageSize int64 `json:"page_size"`
+}
+
+type ListMusicianArtworkRow struct {
+	ID          int64          `json:"id"`
+	SpotifyID   sql.NullString `json:"spotify_id"`
+	Name        string         `json:"name"`
+	Thumb       sql.NullString `json:"thumb"`
+	ThumbSource sql.NullString `json:"-"`
+}
+
+func (q *Queries) ListMusicianArtwork(ctx context.Context, arg ListMusicianArtworkParams) ([]ListMusicianArtworkRow, error) {
+	rows, err := q.query(ctx, q.listMusicianArtworkStmt, listMusicianArtwork, arg.AfterID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListMusicianArtworkRow{}
+	for rows.Next() {
+		var i ListMusicianArtworkRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SpotifyID,
+			&i.Name,
+			&i.Thumb,
+			&i.ThumbSource,
 		); err != nil {
 			return nil, err
 		}
@@ -351,6 +455,18 @@ func (q *Queries) ListShowSeasonArtwork(ctx context.Context, arg ListShowSeasonA
 	return items, nil
 }
 
+const revertAlbumCoverArtwork = `-- name: RevertAlbumCoverArtwork :execrows
+UPDATE albums SET cover = cover_source WHERE cover LIKE '/api/static/%'
+`
+
+func (q *Queries) RevertAlbumCoverArtwork(ctx context.Context) (int64, error) {
+	result, err := q.exec(ctx, q.revertAlbumCoverArtworkStmt, revertAlbumCoverArtwork)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const revertArtistProfileArtwork = `-- name: RevertArtistProfileArtwork :execrows
 UPDATE artist SET profile = profile_source WHERE profile LIKE '/api/static/%'
 `
@@ -381,6 +497,18 @@ UPDATE movies SET poster_path = poster_path_source WHERE poster_path LIKE '/api/
 
 func (q *Queries) RevertMoviePosterArtwork(ctx context.Context) (int64, error) {
 	result, err := q.exec(ctx, q.revertMoviePosterArtworkStmt, revertMoviePosterArtwork)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const revertMusicianThumbArtwork = `-- name: RevertMusicianThumbArtwork :execrows
+UPDATE musicians SET thumb = thumb_source WHERE thumb LIKE '/api/static/%'
+`
+
+func (q *Queries) RevertMusicianThumbArtwork(ctx context.Context) (int64, error) {
+	result, err := q.exec(ctx, q.revertMusicianThumbArtworkStmt, revertMusicianThumbArtwork)
 	if err != nil {
 		return 0, err
 	}
@@ -447,6 +575,24 @@ func (q *Queries) RevertShowSeasonPosterArtwork(ctx context.Context) (int64, err
 	return result.RowsAffected()
 }
 
+const setAlbumCoverArtwork = `-- name: SetAlbumCoverArtwork :execrows
+UPDATE albums SET cover = ?1 WHERE id = ?2 AND cover_source IS ?3
+`
+
+type SetAlbumCoverArtworkParams struct {
+	Value  sql.NullString `json:"value"`
+	ID     int64          `json:"id"`
+	Source sql.NullString `json:"-"`
+}
+
+func (q *Queries) SetAlbumCoverArtwork(ctx context.Context, arg SetAlbumCoverArtworkParams) (int64, error) {
+	result, err := q.exec(ctx, q.setAlbumCoverArtworkStmt, setAlbumCoverArtwork, arg.Value, arg.ID, arg.Source)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const setArtistProfileArtwork = `-- name: SetArtistProfileArtwork :execrows
 UPDATE artist SET profile = ?1 WHERE id = ?2 AND profile_source IS ?3
 `
@@ -507,6 +653,24 @@ type SetMoviePosterArtworkParams struct {
 // so a source a scanner wrote meanwhile wins.
 func (q *Queries) SetMoviePosterArtwork(ctx context.Context, arg SetMoviePosterArtworkParams) (int64, error) {
 	result, err := q.exec(ctx, q.setMoviePosterArtworkStmt, setMoviePosterArtwork, arg.Value, arg.ID, arg.Source)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const setMusicianThumbArtwork = `-- name: SetMusicianThumbArtwork :execrows
+UPDATE musicians SET thumb = ?1 WHERE id = ?2 AND thumb_source IS ?3
+`
+
+type SetMusicianThumbArtworkParams struct {
+	Value  sql.NullString `json:"value"`
+	ID     int64          `json:"id"`
+	Source sql.NullString `json:"-"`
+}
+
+func (q *Queries) SetMusicianThumbArtwork(ctx context.Context, arg SetMusicianThumbArtworkParams) (int64, error) {
+	result, err := q.exec(ctx, q.setMusicianThumbArtworkStmt, setMusicianThumbArtwork, arg.Value, arg.ID, arg.Source)
 	if err != nil {
 		return 0, err
 	}

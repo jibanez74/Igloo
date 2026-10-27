@@ -831,6 +831,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.linkShowEpisodeFileStmt, err = db.PrepareContext(ctx, linkShowEpisodeFile); err != nil {
 		return nil, fmt.Errorf("error preparing query LinkShowEpisodeFile: %w", err)
 	}
+	if q.listAlbumArtworkStmt, err = db.PrepareContext(ctx, listAlbumArtwork); err != nil {
+		return nil, fmt.Errorf("error preparing query ListAlbumArtwork: %w", err)
+	}
 	if q.listArtistArtworkStmt, err = db.PrepareContext(ctx, listArtistArtwork); err != nil {
 		return nil, fmt.Errorf("error preparing query ListArtistArtwork: %w", err)
 	}
@@ -845,6 +848,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.listMusicTrackScanIndexUnderStmt, err = db.PrepareContext(ctx, listMusicTrackScanIndexUnder); err != nil {
 		return nil, fmt.Errorf("error preparing query ListMusicTrackScanIndexUnder: %w", err)
+	}
+	if q.listMusicianArtworkStmt, err = db.PrepareContext(ctx, listMusicianArtwork); err != nil {
+		return nil, fmt.Errorf("error preparing query ListMusicianArtwork: %w", err)
 	}
 	if q.listNetworkArtworkStmt, err = db.PrepareContext(ctx, listNetworkArtwork); err != nil {
 		return nil, fmt.Errorf("error preparing query ListNetworkArtwork: %w", err)
@@ -1044,6 +1050,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.renameDeviceStmt, err = db.PrepareContext(ctx, renameDevice); err != nil {
 		return nil, fmt.Errorf("error preparing query RenameDevice: %w", err)
 	}
+	if q.revertAlbumCoverArtworkStmt, err = db.PrepareContext(ctx, revertAlbumCoverArtwork); err != nil {
+		return nil, fmt.Errorf("error preparing query RevertAlbumCoverArtwork: %w", err)
+	}
 	if q.revertArtistProfileArtworkStmt, err = db.PrepareContext(ctx, revertArtistProfileArtwork); err != nil {
 		return nil, fmt.Errorf("error preparing query RevertArtistProfileArtwork: %w", err)
 	}
@@ -1052,6 +1061,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.revertMoviePosterArtworkStmt, err = db.PrepareContext(ctx, revertMoviePosterArtwork); err != nil {
 		return nil, fmt.Errorf("error preparing query RevertMoviePosterArtwork: %w", err)
+	}
+	if q.revertMusicianThumbArtworkStmt, err = db.PrepareContext(ctx, revertMusicianThumbArtwork); err != nil {
+		return nil, fmt.Errorf("error preparing query RevertMusicianThumbArtwork: %w", err)
 	}
 	if q.revertNetworkLogoArtworkStmt, err = db.PrepareContext(ctx, revertNetworkLogoArtwork); err != nil {
 		return nil, fmt.Errorf("error preparing query RevertNetworkLogoArtwork: %w", err)
@@ -1089,6 +1101,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.saveMusicTrackMetadataStmt, err = db.PrepareContext(ctx, saveMusicTrackMetadata); err != nil {
 		return nil, fmt.Errorf("error preparing query SaveMusicTrackMetadata: %w", err)
 	}
+	if q.setAlbumCoverArtworkStmt, err = db.PrepareContext(ctx, setAlbumCoverArtwork); err != nil {
+		return nil, fmt.Errorf("error preparing query SetAlbumCoverArtwork: %w", err)
+	}
 	if q.setArtistProfileArtworkStmt, err = db.PrepareContext(ctx, setArtistProfileArtwork); err != nil {
 		return nil, fmt.Errorf("error preparing query SetArtistProfileArtwork: %w", err)
 	}
@@ -1109,6 +1124,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.setMusicArtistSpotifyIDStmt, err = db.PrepareContext(ctx, setMusicArtistSpotifyID); err != nil {
 		return nil, fmt.Errorf("error preparing query SetMusicArtistSpotifyID: %w", err)
+	}
+	if q.setMusicianThumbArtworkStmt, err = db.PrepareContext(ctx, setMusicianThumbArtwork); err != nil {
+		return nil, fmt.Errorf("error preparing query SetMusicianThumbArtwork: %w", err)
 	}
 	if q.setNetworkLogoArtworkStmt, err = db.PrepareContext(ctx, setNetworkLogoArtwork); err != nil {
 		return nil, fmt.Errorf("error preparing query SetNetworkLogoArtwork: %w", err)
@@ -2634,6 +2652,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing linkShowEpisodeFileStmt: %w", cerr)
 		}
 	}
+	if q.listAlbumArtworkStmt != nil {
+		if cerr := q.listAlbumArtworkStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listAlbumArtworkStmt: %w", cerr)
+		}
+	}
 	if q.listArtistArtworkStmt != nil {
 		if cerr := q.listArtistArtworkStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing listArtistArtworkStmt: %w", cerr)
@@ -2657,6 +2680,11 @@ func (q *Queries) Close() error {
 	if q.listMusicTrackScanIndexUnderStmt != nil {
 		if cerr := q.listMusicTrackScanIndexUnderStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing listMusicTrackScanIndexUnderStmt: %w", cerr)
+		}
+	}
+	if q.listMusicianArtworkStmt != nil {
+		if cerr := q.listMusicianArtworkStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listMusicianArtworkStmt: %w", cerr)
 		}
 	}
 	if q.listNetworkArtworkStmt != nil {
@@ -2989,6 +3017,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing renameDeviceStmt: %w", cerr)
 		}
 	}
+	if q.revertAlbumCoverArtworkStmt != nil {
+		if cerr := q.revertAlbumCoverArtworkStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing revertAlbumCoverArtworkStmt: %w", cerr)
+		}
+	}
 	if q.revertArtistProfileArtworkStmt != nil {
 		if cerr := q.revertArtistProfileArtworkStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing revertArtistProfileArtworkStmt: %w", cerr)
@@ -3002,6 +3035,11 @@ func (q *Queries) Close() error {
 	if q.revertMoviePosterArtworkStmt != nil {
 		if cerr := q.revertMoviePosterArtworkStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing revertMoviePosterArtworkStmt: %w", cerr)
+		}
+	}
+	if q.revertMusicianThumbArtworkStmt != nil {
+		if cerr := q.revertMusicianThumbArtworkStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing revertMusicianThumbArtworkStmt: %w", cerr)
 		}
 	}
 	if q.revertNetworkLogoArtworkStmt != nil {
@@ -3064,6 +3102,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing saveMusicTrackMetadataStmt: %w", cerr)
 		}
 	}
+	if q.setAlbumCoverArtworkStmt != nil {
+		if cerr := q.setAlbumCoverArtworkStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing setAlbumCoverArtworkStmt: %w", cerr)
+		}
+	}
 	if q.setArtistProfileArtworkStmt != nil {
 		if cerr := q.setArtistProfileArtworkStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing setArtistProfileArtworkStmt: %w", cerr)
@@ -3097,6 +3140,11 @@ func (q *Queries) Close() error {
 	if q.setMusicArtistSpotifyIDStmt != nil {
 		if cerr := q.setMusicArtistSpotifyIDStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing setMusicArtistSpotifyIDStmt: %w", cerr)
+		}
+	}
+	if q.setMusicianThumbArtworkStmt != nil {
+		if cerr := q.setMusicianThumbArtworkStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing setMusicianThumbArtworkStmt: %w", cerr)
 		}
 	}
 	if q.setNetworkLogoArtworkStmt != nil {
@@ -3697,11 +3745,13 @@ type Queries struct {
 	linkMusicTrackAppleStmt                     *sql.Stmt
 	linkMusicTrackSpotifyStmt                   *sql.Stmt
 	linkShowEpisodeFileStmt                     *sql.Stmt
+	listAlbumArtworkStmt                        *sql.Stmt
 	listArtistArtworkStmt                       *sql.Stmt
 	listLibraryMountPointsStmt                  *sql.Stmt
 	listMovieArtworkStmt                        *sql.Stmt
 	listMusicTrackScanIndexStmt                 *sql.Stmt
 	listMusicTrackScanIndexUnderStmt            *sql.Stmt
+	listMusicianArtworkStmt                     *sql.Stmt
 	listNetworkArtworkStmt                      *sql.Stmt
 	listNotificationsForUserStmt                *sql.Stmt
 	listShowArtworkStmt                         *sql.Stmt
@@ -3768,9 +3818,11 @@ type Queries struct {
 	removeMovieFromPlaylistStmt                 *sql.Stmt
 	removeTrackFromPlaylistStmt                 *sql.Stmt
 	renameDeviceStmt                            *sql.Stmt
+	revertAlbumCoverArtworkStmt                 *sql.Stmt
 	revertArtistProfileArtworkStmt              *sql.Stmt
 	revertMovieBackdropArtworkStmt              *sql.Stmt
 	revertMoviePosterArtworkStmt                *sql.Stmt
+	revertMusicianThumbArtworkStmt              *sql.Stmt
 	revertNetworkLogoArtworkStmt                *sql.Stmt
 	revertShowBackdropArtworkStmt               *sql.Stmt
 	revertShowEpisodeStillArtworkStmt           *sql.Stmt
@@ -3783,6 +3835,7 @@ type Queries struct {
 	saveMusicGenreIdentityStmt                  *sql.Stmt
 	saveMusicSpotifyAdoptionStmt                *sql.Stmt
 	saveMusicTrackMetadataStmt                  *sql.Stmt
+	setAlbumCoverArtworkStmt                    *sql.Stmt
 	setArtistProfileArtworkStmt                 *sql.Stmt
 	setArtworkStaticDirStmt                     *sql.Stmt
 	setMovieBackdropArtworkStmt                 *sql.Stmt
@@ -3790,6 +3843,7 @@ type Queries struct {
 	setMusicAlbumAppleIDStmt                    *sql.Stmt
 	setMusicAlbumSpotifyIDStmt                  *sql.Stmt
 	setMusicArtistSpotifyIDStmt                 *sql.Stmt
+	setMusicianThumbArtworkStmt                 *sql.Stmt
 	setNetworkLogoArtworkStmt                   *sql.Stmt
 	setShowBackdropArtworkStmt                  *sql.Stmt
 	setShowEpisodeStillArtworkStmt              *sql.Stmt
@@ -4123,11 +4177,13 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		linkMusicTrackAppleStmt:                     q.linkMusicTrackAppleStmt,
 		linkMusicTrackSpotifyStmt:                   q.linkMusicTrackSpotifyStmt,
 		linkShowEpisodeFileStmt:                     q.linkShowEpisodeFileStmt,
+		listAlbumArtworkStmt:                        q.listAlbumArtworkStmt,
 		listArtistArtworkStmt:                       q.listArtistArtworkStmt,
 		listLibraryMountPointsStmt:                  q.listLibraryMountPointsStmt,
 		listMovieArtworkStmt:                        q.listMovieArtworkStmt,
 		listMusicTrackScanIndexStmt:                 q.listMusicTrackScanIndexStmt,
 		listMusicTrackScanIndexUnderStmt:            q.listMusicTrackScanIndexUnderStmt,
+		listMusicianArtworkStmt:                     q.listMusicianArtworkStmt,
 		listNetworkArtworkStmt:                      q.listNetworkArtworkStmt,
 		listNotificationsForUserStmt:                q.listNotificationsForUserStmt,
 		listShowArtworkStmt:                         q.listShowArtworkStmt,
@@ -4194,9 +4250,11 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		removeMovieFromPlaylistStmt:                 q.removeMovieFromPlaylistStmt,
 		removeTrackFromPlaylistStmt:                 q.removeTrackFromPlaylistStmt,
 		renameDeviceStmt:                            q.renameDeviceStmt,
+		revertAlbumCoverArtworkStmt:                 q.revertAlbumCoverArtworkStmt,
 		revertArtistProfileArtworkStmt:              q.revertArtistProfileArtworkStmt,
 		revertMovieBackdropArtworkStmt:              q.revertMovieBackdropArtworkStmt,
 		revertMoviePosterArtworkStmt:                q.revertMoviePosterArtworkStmt,
+		revertMusicianThumbArtworkStmt:              q.revertMusicianThumbArtworkStmt,
 		revertNetworkLogoArtworkStmt:                q.revertNetworkLogoArtworkStmt,
 		revertShowBackdropArtworkStmt:               q.revertShowBackdropArtworkStmt,
 		revertShowEpisodeStillArtworkStmt:           q.revertShowEpisodeStillArtworkStmt,
@@ -4209,6 +4267,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		saveMusicGenreIdentityStmt:                  q.saveMusicGenreIdentityStmt,
 		saveMusicSpotifyAdoptionStmt:                q.saveMusicSpotifyAdoptionStmt,
 		saveMusicTrackMetadataStmt:                  q.saveMusicTrackMetadataStmt,
+		setAlbumCoverArtworkStmt:                    q.setAlbumCoverArtworkStmt,
 		setArtistProfileArtworkStmt:                 q.setArtistProfileArtworkStmt,
 		setArtworkStaticDirStmt:                     q.setArtworkStaticDirStmt,
 		setMovieBackdropArtworkStmt:                 q.setMovieBackdropArtworkStmt,
@@ -4216,6 +4275,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		setMusicAlbumAppleIDStmt:                    q.setMusicAlbumAppleIDStmt,
 		setMusicAlbumSpotifyIDStmt:                  q.setMusicAlbumSpotifyIDStmt,
 		setMusicArtistSpotifyIDStmt:                 q.setMusicArtistSpotifyIDStmt,
+		setMusicianThumbArtworkStmt:                 q.setMusicianThumbArtworkStmt,
 		setNetworkLogoArtworkStmt:                   q.setNetworkLogoArtworkStmt,
 		setShowBackdropArtworkStmt:                  q.setShowBackdropArtworkStmt,
 		setShowEpisodeStillArtworkStmt:              q.setShowEpisodeStillArtworkStmt,

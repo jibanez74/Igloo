@@ -76,15 +76,17 @@ func (u *upstream) set(path string, status int) {
 }
 
 type harness struct {
-	t         *testing.T
-	db        *sql.DB
-	logger    *scannertest.Logger
-	upstream  *upstream
-	syncer    *Syncer
-	static    string
-	enabled   bool
-	libraries []string
-	now       time.Time
+	t        *testing.T
+	db       *sql.DB
+	logger   *scannertest.Logger
+	upstream *upstream
+	// upstreamURL serves the music sources too: they are full URLs.
+	upstreamURL string
+	syncer      *Syncer
+	static      string
+	enabled     bool
+	libraries   []string
+	now         time.Time
 }
 
 func newHarness(t *testing.T) *harness {
@@ -105,6 +107,7 @@ func newHarness(t *testing.T) *harness {
 	}
 	server := httptest.NewServer(h.upstream)
 	t.Cleanup(server.Close)
+	h.upstreamURL = server.URL
 
 	ctx, cancel := context.WithCancel(context.Background())
 	wait := &sync.WaitGroup{}
@@ -439,7 +442,7 @@ func TestPass_PrunesOnlyItsOwnFiles(t *testing.T) {
 		"movies/not a key/old_title_poster.jpg",
 		"movies/readme.jpg",
 		"avatars/1-1700000000.jpg",
-		"albums/123/daylight_cover.jpg",
+		"playlists/12/summer_cover.jpg",
 	}
 	for _, rel := range foreign {
 		h.write(rel, "keep")
@@ -884,5 +887,83 @@ func TestRevert_PointsEveryColumnBackAtOnce(t *testing.T) {
 	h.pass()
 	if h.value("movies", "poster_path", 1).String != local("movies/603/the_matrix_poster.png", "w500", "/matrix-poster.jpg") {
 		t.Fatal("the pass after a Revert did not point the column at its copy again")
+	}
+}
+
+func TestPass_DownloadsAlbumCoversAndMusicianPhotos(t *testing.T) {
+	h := newHarness(t)
+	spotifyCover := h.upstreamURL + "/image/ab67616d0000b273"
+	appleCover := h.upstreamURL + "/image/thumb/Music/daylight/640x640bb.jpg"
+	h.exec(`INSERT INTO albums (id, title, sort_title, spotify_id, cover_source) VALUES (1, 'Daylight', 'daylight', '4aawyAB9vmqN3uQ7FjRGTy', ?)`, spotifyCover)
+	h.exec(`INSERT INTO albums (id, title, sort_title, apple_id, cover_source) VALUES (2, 'Night Songs', 'night songs', 1440833098, ?)`, appleCover)
+	// A cover without a provider match has no folder.
+	h.exec(`INSERT INTO albums (id, title, sort_title, cover_source) VALUES (3, 'Untagged', 'untagged', ?)`, h.upstreamURL+"/image/untagged")
+	h.exec(`INSERT INTO musicians (id, name, sort_name, spotify_id, thumb_source) VALUES (1, 'Aurora', 'aurora', '1WgXqy2Dd70QQOU7Ay074N', ?)`, h.upstreamURL+"/image/aurora")
+
+	h.pass()
+
+	want := []struct {
+		table, column string
+		id            int64
+		rel, source   string
+	}{
+		{"albums", "cover", 1, "albums/4aawyAB9vmqN3uQ7FjRGTy/daylight_cover.png", spotifyCover},
+		{"albums", "cover", 2, "albums/1440833098/night_songs_cover.png", appleCover},
+		{"musicians", "thumb", 1, "musicians/1WgXqy2Dd70QQOU7Ay074N/aurora_thumb.png", h.upstreamURL + "/image/aurora"},
+	}
+	for _, w := range want {
+		got := h.value(w.table, w.column, w.id).String
+		if got != local(w.rel, "", w.source) {
+			t.Errorf("%s.%s %d = %q, want the copy at %s", w.table, w.column, w.id, got, w.rel)
+		}
+		if !h.exists(w.rel) {
+			t.Errorf("%s was not saved", w.rel)
+		}
+	}
+	if h.upstream.requests("/image/ab67616d0000b273") != 1 || h.upstream.requests("/image/thumb/Music/daylight/640x640bb.jpg") != 1 {
+		t.Errorf("music URLs were not fetched as stored, got %v", h.upstream.hits)
+	}
+	if h.value("albums", "cover", 3).String != h.upstreamURL+"/image/untagged" || h.upstream.requests("/image/untagged") != 0 {
+		t.Error("a cover without a provider match did not stay remote")
+	}
+
+	h.enabled = false
+	h.pass()
+	for _, w := range want {
+		if h.value(w.table, w.column, w.id).String != w.source {
+			t.Errorf("%s.%s %d was not pointed back at its source", w.table, w.column, w.id)
+		}
+	}
+	if h.exists("albums") || h.exists("musicians") {
+		t.Error("turning downloads off left the music folders")
+	}
+}
+
+// Each provider has its own breaker: TMDB failing over and over stops only
+// the TMDB downloads, and the music covers from another host still come.
+func TestPass_AFailingProviderStopsOnlyItsOwnDownloads(t *testing.T) {
+	h := newHarness(t)
+	for id := int64(1); id <= 10; id++ {
+		poster := fmt.Sprintf("/poster-%d.jpg", id)
+		h.addMovie(id, 600+id, "Movie", poster, "")
+		h.upstream.set("/w500"+poster, http.StatusBadGateway)
+	}
+	music := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(pngSignature + r.URL.Path))
+	}))
+	t.Cleanup(music.Close)
+	for id := int64(1); id <= 5; id++ {
+		h.exec(`INSERT INTO albums (id, title, sort_title, spotify_id, cover_source) VALUES (?, ?, ?, ?, ?)`,
+			id, fmt.Sprintf("Album %d", id), fmt.Sprintf("album %d", id), fmt.Sprintf("spotifyAlbum%d", id), fmt.Sprintf("%s/image/%d", music.URL, id))
+	}
+
+	h.pass()
+
+	if h.upstream.total() >= 10 {
+		t.Fatalf("made %d of 10 requests to a failing provider, want it stopped", h.upstream.total())
+	}
+	downloaded := scannertest.CountRows(t, h.db, `SELECT count(*) FROM albums WHERE cover LIKE '/api/static/%'`)
+	if downloaded != 5 {
+		t.Fatalf("downloaded %d of 5 album covers from a working provider", downloaded)
 	}
 }

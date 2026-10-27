@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -404,16 +405,16 @@ type downloadResult struct {
 }
 
 // downloadAll fetches the planned copies and points their images at them,
-// stopping when the setting is turned off or the provider keeps failing. It
-// reports the copies saved and the downloads that failed; the error is a
-// failed column write.
+// stopping when the setting is turned off. The copies are fetched one
+// provider at a time, each with its own breaker, so a provider that keeps
+// failing stops only its own downloads. It reports the copies saved and the
+// downloads that failed; the error is a failed column write.
 func (s *Syncer) downloadAll(ctx context.Context, staticDir string, p plan) (int, int, error) {
 	if len(p.downloads) == 0 {
 		return 0, 0, nil
 	}
 	s.logger.Info("downloading artwork", "images", len(p.downloads), "static_dir", staticDir)
 
-	breaker := scanner.ProviderBreaker{Classify: classifyDownloadError}
 	var pending []update
 	var applyErr error
 	downloaded, failed := 0, 0
@@ -428,58 +429,95 @@ func (s *Syncer) downloadAll(ctx context.Context, staticDir string, p plan) (int
 		pending = pending[:0]
 	}
 
-	scanner.RunWorkers(ctx, downloadWorkers, p.downloads,
-		func() bool { return !breaker.Stopped && applyErr == nil && s.enabled() },
-		func(ctx context.Context, job *download) downloadResult {
-			dir := filepath.Join(staticDir, filepath.FromSlash(job.folder))
-			err := checkKeyFolder(dir)
-			if err != nil {
-				return downloadResult{job: job, err: err}
-			}
-			saved, err := helpers.DownloadImage(ctx, s.client, job.url, dir, job.stem)
-			return downloadResult{job: job, path: saved, err: err}
-		},
-		func(*download) {},
-		func(result downloadResult) {
-			job := result.job
-			if result.err != nil {
-				canceled := ctx.Err() != nil
-				if canceled {
+	for _, group := range groupByHost(p.downloads) {
+		breaker := scanner.ProviderBreaker{Classify: classifyDownloadError}
+		scanner.RunWorkers(ctx, downloadWorkers, group.jobs,
+			func() bool { return !breaker.Stopped && applyErr == nil && s.enabled() },
+			func(ctx context.Context, job *download) downloadResult {
+				dir := filepath.Join(staticDir, filepath.FromSlash(job.folder))
+				err := checkKeyFolder(dir)
+				if err != nil {
+					return downloadResult{job: job, err: err}
+				}
+				saved, err := helpers.DownloadImage(ctx, s.client, job.url, dir, job.stem)
+				return downloadResult{job: job, path: saved, err: err}
+			},
+			func(*download) {},
+			func(result downloadResult) {
+				job := result.job
+				if result.err != nil {
+					canceled := ctx.Err() != nil
+					if canceled {
+						return
+					}
+					failed++
+					breaker.Observe(result.err)
+					isPermanent := isPermanentDownloadFailure(result.err)
+					if isPermanent {
+						s.failures[job.folder+"/"+job.stem+"|"+job.version] = s.now()
+					}
+					s.logger.Warn("failed to download artwork", "image", job.label, "url", job.url, "error", result.err)
 					return
 				}
-				failed++
-				breaker.Observe(result.err)
-				isPermanent := isPermanentDownloadFailure(result.err)
-				if isPermanent {
-					s.failures[job.folder+"/"+job.stem+"|"+job.version] = s.now()
+
+				breaker.Observe(nil)
+				downloaded++
+				rel := job.folder + "/" + filepath.Base(result.path)
+				value := sql.NullString{String: localURL(rel, job.version), Valid: true}
+				for _, img := range job.images {
+					pending = append(pending, update{img: img, value: value, rel: rel})
 				}
-				s.logger.Warn("failed to download artwork", "image", job.label, "url", job.url, "error", result.err)
-				return
-			}
+				flush(false)
 
-			breaker.Observe(nil)
-			downloaded++
-			rel := job.folder + "/" + filepath.Base(result.path)
-			value := sql.NullString{String: localURL(rel, job.version), Valid: true}
-			for _, img := range job.images {
-				pending = append(pending, update{img: img, value: value, rel: rel})
-			}
-			flush(false)
+				isProgressDue := s.now().Sub(lastProgress) >= progressLogInterval
+				if isProgressDue {
+					lastProgress = s.now()
+					s.logger.Info("artwork download progress", "downloaded", downloaded, "failed", failed, "total", len(p.downloads))
+				}
+			},
+		)
+		if breaker.Stopped {
+			s.logger.Warn("stopped downloading artwork after repeated failures; the rest is retried on the next pass", "provider", group.host, "downloaded", downloaded, "failed", failed)
+		}
 
-			isProgressDue := s.now().Sub(lastProgress) >= progressLogInterval
-			if isProgressDue {
-				lastProgress = s.now()
-				s.logger.Info("artwork download progress", "downloaded", downloaded, "failed", failed, "total", len(p.downloads))
-			}
-		},
-	)
+		isStopped := applyErr != nil || ctx.Err() != nil || !s.enabled()
+		if isStopped {
+			break
+		}
+	}
 	flush(true)
 
-	if breaker.Stopped {
-		s.logger.Warn("stopped downloading artwork after repeated failures; the rest is retried on the next pass", "downloaded", downloaded, "failed", failed)
+	return downloaded, failed, applyErr
+}
+
+// hostGroup is the downloads of one provider, by URL host.
+type hostGroup struct {
+	host string
+	jobs []*download
+}
+
+// groupByHost splits the downloads by URL host, keeping their order within a
+// host and the hosts in the order they first appear.
+func groupByHost(downloads []*download) []hostGroup {
+	var groups []hostGroup
+	index := make(map[string]int)
+	for _, job := range downloads {
+		host := ""
+		parsed, err := url.Parse(job.url)
+		if err == nil {
+			host = parsed.Host
+		}
+
+		i, known := index[host]
+		if !known {
+			i = len(groups)
+			index[host] = i
+			groups = append(groups, hostGroup{host: host})
+		}
+		groups[i].jobs = append(groups[i].jobs, job)
 	}
 
-	return downloaded, failed, applyErr
+	return groups
 }
 
 // classifyDownloadError marks transport failures, rate limits and server

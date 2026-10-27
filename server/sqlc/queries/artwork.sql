@@ -110,3 +110,31 @@ UPDATE networks SET logo = sqlc.narg(value) WHERE id = sqlc.arg(id) AND logo_sou
 
 -- name: RevertNetworkLogoArtwork :execrows
 UPDATE networks SET logo = logo_source WHERE logo LIKE '/api/static/%';
+
+-- name: ListAlbumArtwork :many
+-- An album is matched by Spotify or by Apple, never both; the ID of the one
+-- that matched it names its folder.
+SELECT id, spotify_id, apple_id, title, cover, cover_source
+FROM albums
+WHERE id > sqlc.arg(after_id) AND (cover IS NOT NULL OR cover_source IS NOT NULL)
+ORDER BY id
+LIMIT sqlc.arg(page_size);
+
+-- name: SetAlbumCoverArtwork :execrows
+UPDATE albums SET cover = sqlc.narg(value) WHERE id = sqlc.arg(id) AND cover_source IS sqlc.narg(source);
+
+-- name: RevertAlbumCoverArtwork :execrows
+UPDATE albums SET cover = cover_source WHERE cover LIKE '/api/static/%';
+
+-- name: ListMusicianArtwork :many
+SELECT id, spotify_id, name, thumb, thumb_source
+FROM musicians
+WHERE id > sqlc.arg(after_id) AND (thumb IS NOT NULL OR thumb_source IS NOT NULL)
+ORDER BY id
+LIMIT sqlc.arg(page_size);
+
+-- name: SetMusicianThumbArtwork :execrows
+UPDATE musicians SET thumb = sqlc.narg(value) WHERE id = sqlc.arg(id) AND thumb_source IS sqlc.narg(source);
+
+-- name: RevertMusicianThumbArtwork :execrows
+UPDATE musicians SET thumb = thumb_source WHERE thumb LIKE '/api/static/%';

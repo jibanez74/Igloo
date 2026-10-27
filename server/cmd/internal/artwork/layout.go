@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"net/url"
 	"path"
 	"strconv"
 	"strings"
@@ -29,8 +30,10 @@ type column struct {
 	label string // names the column in logs
 	dir   string
 	role  string
-	size  string // the TMDB size the source is fetched at
-	set   func(ctx context.Context, q *database.Queries, id int64, value, source sql.NullString) (int64, error)
+	// size is the TMDB size a TMDB path source is fetched at; empty for a
+	// column whose sources are full Spotify or Apple URLs, fetched as stored.
+	size string
+	set  func(ctx context.Context, q *database.Queries, id int64, value, source sql.NullString) (int64, error)
 	// revert points every copy in the column back at its source.
 	revert func(q *database.Queries, ctx context.Context) (int64, error)
 }
@@ -97,9 +100,23 @@ var (
 		},
 		revert: (*database.Queries).RevertNetworkLogoArtwork,
 	}
+	albumCover = &column{
+		label: "album cover", dir: "albums", role: "cover",
+		set: func(ctx context.Context, q *database.Queries, id int64, value, source sql.NullString) (int64, error) {
+			return q.SetAlbumCoverArtwork(ctx, database.SetAlbumCoverArtworkParams{ID: id, Value: value, Source: source})
+		},
+		revert: (*database.Queries).RevertAlbumCoverArtwork,
+	}
+	musicianThumb = &column{
+		label: "musician photo", dir: "musicians", role: "thumb",
+		set: func(ctx context.Context, q *database.Queries, id int64, value, source sql.NullString) (int64, error) {
+			return q.SetMusicianThumbArtwork(ctx, database.SetMusicianThumbArtworkParams{ID: id, Value: value, Source: source})
+		},
+		revert: (*database.Queries).RevertMusicianThumbArtwork,
+	}
 )
 
-var columns = []*column{moviePoster, movieBackdrop, artistProfile, showPoster, showBackdrop, seasonPoster, episodeStill, networkLogo}
+var columns = []*column{moviePoster, movieBackdrop, artistProfile, showPoster, showBackdrop, seasonPoster, episodeStill, networkLogo, albumCover, musicianThumb}
 
 // image is one managed image column of one catalog row.
 type image struct {
@@ -126,6 +143,8 @@ var tables = []table{
 	{name: "show_seasons", list: listSeasonImages},
 	{name: "show_episodes", list: listEpisodeImages},
 	{name: "networks", list: listNetworkImages},
+	{name: "albums", list: listAlbumImages},
+	{name: "musicians", list: listMusicianImages},
 }
 
 func listMovieImages(ctx context.Context, q *database.Queries, afterID int64) ([]image, int64, int, error) {
@@ -248,6 +267,58 @@ func listNetworkImages(ctx context.Context, q *database.Queries, afterID int64) 
 	return images, lastID, len(rows), nil
 }
 
+func listAlbumImages(ctx context.Context, q *database.Queries, afterID int64) ([]image, int64, int, error) {
+	rows, err := q.ListAlbumArtwork(ctx, database.ListAlbumArtworkParams{AfterID: afterID, PageSize: pageSize})
+	if err != nil {
+		return nil, 0, 0, err
+	}
+
+	images := make([]image, 0, len(rows))
+	var lastID int64
+	for _, row := range rows {
+		key := providerKey(row.SpotifyID)
+		if key == "" && row.AppleID.Valid {
+			key = strconv.FormatInt(row.AppleID.Int64, 10)
+		}
+		images = append(images, image{
+			column: albumCover, rowID: row.ID, key: key,
+			stem: slug(row.Title) + "_" + albumCover.role, source: row.CoverSource, value: row.Cover,
+		})
+		lastID = row.ID
+	}
+
+	return images, lastID, len(rows), nil
+}
+
+func listMusicianImages(ctx context.Context, q *database.Queries, afterID int64) ([]image, int64, int, error) {
+	rows, err := q.ListMusicianArtwork(ctx, database.ListMusicianArtworkParams{AfterID: afterID, PageSize: pageSize})
+	if err != nil {
+		return nil, 0, 0, err
+	}
+
+	images := make([]image, 0, len(rows))
+	var lastID int64
+	for _, row := range rows {
+		images = append(images, image{
+			column: musicianThumb, rowID: row.ID, key: providerKey(row.SpotifyID),
+			stem: slug(row.Name) + "_" + musicianThumb.role, source: row.ThumbSource, value: row.Thumb,
+		})
+		lastID = row.ID
+	}
+
+	return images, lastID, len(rows), nil
+}
+
+// providerKey names the folder of an entity matched on Spotify, whose IDs are
+// base62; anything else leaves its images remote.
+func providerKey(id sql.NullString) string {
+	isPlain := id.Valid && helpers.IsPlainPathSegment(id.String, "")
+	if !isPlain {
+		return ""
+	}
+	return id.String
+}
+
 // tmdbKey names the folder of an entity matched on TMDB; an unmatched one has
 // none, so its images stay remote.
 func tmdbKey(id sql.NullInt64) string {
@@ -323,10 +394,16 @@ func version(size, source string) string {
 	return hex.EncodeToString(sum[:4])
 }
 
-// sourceURL is where a TMDB path source is fetched from, or "" when the
-// image stays remote: for a malformed path, and for an SVG, which is never
-// served from the API's origin.
+// sourceURL is where source is fetched from: a TMDB path at the column's size,
+// or a Spotify or Apple URL as it is. It is "" when the image stays remote:
+// for a malformed path or URL, and for an SVG, which is never served from the
+// API's origin.
 func (c *column) sourceURL(tmdbBaseURL, source string) string {
+	isURLColumn := c.size == ""
+	if isURLColumn {
+		return remoteImageURL(source)
+	}
+
 	file, hasSlash := strings.CutPrefix(source, "/")
 	isPlainFile := hasSlash && helpers.IsPlainPathSegment(file, ".") && !strings.Contains(file, "..")
 	if !isPlainFile {
@@ -339,6 +416,23 @@ func (c *column) sourceURL(tmdbBaseURL, source string) string {
 	}
 
 	return tmdbBaseURL + "/" + c.size + "/" + file
+}
+
+// remoteImageURL is source when it is an http or https URL with a host and no
+// SVG path, and "" otherwise.
+func remoteImageURL(source string) string {
+	parsed, err := url.Parse(source)
+	if err != nil {
+		return ""
+	}
+
+	isWeb := parsed.Scheme == "http" || parsed.Scheme == "https"
+	isSVG := strings.EqualFold(path.Ext(parsed.Path), ".svg")
+	if !isWeb || parsed.Host == "" || isSVG {
+		return ""
+	}
+
+	return source
 }
 
 // localURL is the API URL of the copy at rel, a slash-separated path under

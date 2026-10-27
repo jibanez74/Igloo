@@ -87,7 +87,7 @@ Other values seed **Settings only when the database has no Settings row**. After
 - `MOVIES_DIR`, `SHOWS_DIR`, and `MUSIC_DIR` choose library paths. `STATIC_DIR` and `TRANSCODE_DIR` choose artwork/upload storage and temporary HLS storage.
 - `TMDB_API_KEY` enables movie and TV metadata enrichment. `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` enable music enrichment and Spotify search. `ENABLE_APPLE_LOOKUPS` (default `true`) controls matching iTunes Store purchases on Apple Music, which needs no credentials.
 - `HARDWARE_ACCELERATION_DEVICE` defaults to `cpu`; `apple`, `intel`, and `nvidia` select supported host acceleration when FFmpeg and drivers allow it.
-- `ENABLE_WATCHER` turns on the library watcher for a new database; afterwards the Settings switch decides. `DOWNLOAD_IMAGES` does the same for downloading movie and TV artwork, cast and crew photos, and network logos into `STATIC_DIR`, which Igloo then serves instead of the TMDB images; turning it off deletes them.
+- `ENABLE_WATCHER` turns on the library watcher for a new database; afterwards the Settings switch decides. `DOWNLOAD_IMAGES` does the same for downloading movie, TV and music artwork, cast and crew photos, and network logos into `STATIC_DIR`, which Igloo then serves instead of the TMDB, Spotify and Apple images; turning it off deletes them.
 
 The `DEFAULT_ADMIN_*` values are used when there is no administrator; changing them later does not reset an existing account. Igloo creates application storage directories as needed, but it does not create media library directories. Make sure the process can write its database, static files, logs, and transcode directory.
 

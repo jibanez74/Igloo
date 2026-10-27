@@ -436,7 +436,7 @@ export interface paths {
         };
         /**
          * Serve a static asset
-         * @description Serves files from the configured static directory: uploaded avatars, and the library artwork downloaded while download_images is on (movies/, people/, shows/ and networks/). A downloaded image's URL carries a ?v= version that changes when the image is replaced, since responses are cached for a year. Content-Type comes from the file extension using the host MIME registry, falling back to application/octet-stream. Successful responses set Cache-Control: public, max-age=31536000 and X-Content-Type-Options: nosniff. Last-Modified supports date revalidation; this endpoint does not emit ETag.
+         * @description Serves files from the configured static directory: uploaded avatars, and the library artwork downloaded while download_images is on (movies/, people/, shows/, networks/, albums/ and musicians/). A downloaded image's URL carries a ?v= version that changes when the image is replaced, since responses are cached for a year. Content-Type comes from the file extension using the host MIME registry, falling back to application/octet-stream. Successful responses set Cache-Control: public, max-age=31536000 and X-Content-Type-Options: nosniff. Last-Modified supports date revalidation; this endpoint does not emit ETag.
          */
         get: operations["serveStaticFiles"];
         put?: never;
@@ -2883,7 +2883,7 @@ export interface components {
             enable_apple_lookups: boolean;
             /** @description When true, the server watches the configured movie, show and music directories and applies each media file that is created, rewritten, moved or deleted through the scanner within seconds, without a library scan: inotify on local Linux filesystems, a directory poll every few minutes on network shares, FUSE mounts and macOS. Turning it on walks each library once; turning it off stops all watching before the response is sent. A library whose directory, or a mount inside it, disappears is paused rather than emptied. The ENABLE_WATCHER environment value seeds this only for a new database. */
             enable_watcher: boolean;
-            /** @description While true, the server downloads movie, show, season and episode images, cast and crew photos, and network logos into static_dir and returns the downloaded copies in place of the TMDB paths, as the API description explains; images not downloaded yet keep their TMDB paths. Turning it off returns the TMDB paths before the response is sent and deletes the downloaded copies in the background; turning it on downloads them in the background. Changing static_dir while it is on also returns the TMDB paths before the response, then downloads the copies again into the new directory. */
+            /** @description While true, the server downloads movie, show, season and episode images, cast and crew photos, network logos, album covers, and musician photos into static_dir and returns the downloaded copies in place of the TMDB paths and Spotify or Apple URLs, as the API description explains; images not downloaded yet keep those. Turning it off returns them before the response is sent and deletes the downloaded copies in the background; turning it on downloads them in the background. Changing static_dir while it is on also returns them before the response, then downloads the copies again into the new directory. */
             download_images: boolean;
             /** @description Directory /api/static serves files from, where avatar uploads and, while download_images is on, downloaded library artwork are written. Read on each request. */
             static_dir: string;
@@ -2899,7 +2899,7 @@ export interface components {
             enable_apple_lookups: boolean;
             /** @description When true, the server watches the configured movie, show and music directories and applies each media file that is created, rewritten, moved or deleted through the scanner within seconds, without a library scan: inotify on local Linux filesystems, a directory poll every few minutes on network shares, FUSE mounts and macOS. Turning it on walks each library once; turning it off stops all watching before the response is sent. A library whose directory, or a mount inside it, disappears is paused rather than emptied. The ENABLE_WATCHER environment value seeds this only for a new database. */
             enable_watcher: boolean;
-            /** @description While true, the server downloads movie, show, season and episode images, cast and crew photos, and network logos into static_dir and returns the downloaded copies in place of the TMDB paths, as the API description explains; images not downloaded yet keep their TMDB paths. Turning it off returns the TMDB paths before the response is sent and deletes the downloaded copies in the background; turning it on downloads them in the background. Changing static_dir while it is on also returns the TMDB paths before the response, then downloads the copies again into the new directory. */
+            /** @description While true, the server downloads movie, show, season and episode images, cast and crew photos, network logos, album covers, and musician photos into static_dir and returns the downloaded copies in place of the TMDB paths and Spotify or Apple URLs, as the API description explains; images not downloaded yet keep those. Turning it off returns them before the response is sent and deletes the downloaded copies in the background; turning it on downloads them in the background. Changing static_dir while it is on also returns them before the response, then downloads the copies again into the new directory. */
             download_images: boolean;
             /** @description Required. Created when missing; 400 when it cannot be created or accessed. */
             static_dir: string;
@@ -3982,6 +3982,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             title: string;
+            /** @description Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             cover: components["schemas"]["SqlNullString"];
             musician: components["schemas"]["SqlNullString"];
             year: components["schemas"]["SqlNullInt64"];
@@ -4009,7 +4010,7 @@ export interface components {
             year: components["schemas"]["SqlNullInt64"];
             /** @description The track count the matched provider reports for the album, not the number of local tracks. Valid is false until a match reports one. */
             total_tracks: components["schemas"]["SqlNullInt64"];
-            /** @description The matched provider's cover art URL. Valid is false until a match supplies one. */
+            /** @description The matched provider's cover art URL, or the /api/static/ URL of the server's downloaded copy; see the API description. Valid is false until a match supplies one. */
             cover: components["schemas"]["SqlNullString"];
             created_at: string;
             updated_at: string;
@@ -4072,6 +4073,7 @@ export interface components {
             bit_rate: number;
             album_id: components["schemas"]["SqlNullInt64"];
             album_title: components["schemas"]["SqlNullString"];
+            /** @description Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             album_cover: components["schemas"]["SqlNullString"];
             musician_id: components["schemas"]["SqlNullInt64"];
             musician_name: components["schemas"]["SqlNullString"];
@@ -4080,6 +4082,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             name: string;
+            /** @description Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             thumb: components["schemas"]["SqlNullString"];
             /** Format: int64 */
             album_count: number;
@@ -4118,6 +4121,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             name: string;
+            /** @description Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             thumb: components["schemas"]["SqlNullString"];
         };
         /** @description One genre tag carried by one track of the album; a track with several genres contributes several rows. */
@@ -4169,6 +4173,7 @@ export interface components {
             spotify_popularity: components["schemas"]["SqlNullFloat64"];
             /** @description No longer written: Spotify stopped reporting follower counts to this app in 2026, so Valid is false. */
             spotify_followers: components["schemas"]["SqlNullInt64"];
+            /** @description Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             thumb: components["schemas"]["SqlNullString"];
             created_at: string;
             updated_at: string;
@@ -4177,6 +4182,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             title: string;
+            /** @description Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             cover: components["schemas"]["SqlNullString"];
             year: components["schemas"]["SqlNullInt64"];
             release_date: components["schemas"]["SqlNullString"];
@@ -4198,6 +4204,7 @@ export interface components {
             bit_rate: number;
             album_id: components["schemas"]["SqlNullInt64"];
             album_title: components["schemas"]["SqlNullString"];
+            /** @description Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             album_cover: components["schemas"]["SqlNullString"];
         };
         MusicianDetailsData: {
@@ -4331,6 +4338,7 @@ export interface components {
             album_id: components["schemas"]["SqlNullInt64"];
             musician_id: components["schemas"]["SqlNullInt64"];
             album_title: components["schemas"]["SqlNullString"];
+            /** @description Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             album_cover: components["schemas"]["SqlNullString"];
             musician_name: components["schemas"]["SqlNullString"];
         };
@@ -4482,6 +4490,7 @@ export interface components {
             duration: number;
             album_id: components["schemas"]["SqlNullInt64"];
             album_title: components["schemas"]["SqlNullString"];
+            /** @description Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             album_cover: components["schemas"]["SqlNullString"];
             musician_id: components["schemas"]["SqlNullInt64"];
             musician_name: components["schemas"]["SqlNullString"];
@@ -4503,6 +4512,7 @@ export interface components {
             duration: number;
             album_id: components["schemas"]["SqlNullInt64"];
             album_title: components["schemas"]["SqlNullString"];
+            /** @description Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             album_cover: components["schemas"]["SqlNullString"];
             musician_id: components["schemas"]["SqlNullInt64"];
             musician_name: components["schemas"]["SqlNullString"];
@@ -4520,6 +4530,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             name: string;
+            /** @description Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             thumb: components["schemas"]["SqlNullString"];
             total_play_count: components["schemas"]["SqlNullFloat64"];
             /** @description Sum of duration_played, in seconds. */
@@ -4557,6 +4568,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             title: string;
+            /** @description Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             cover: components["schemas"]["SqlNullString"];
             musician: components["schemas"]["SqlNullString"];
             year: components["schemas"]["SqlNullInt64"];
