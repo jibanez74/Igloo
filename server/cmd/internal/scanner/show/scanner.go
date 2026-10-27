@@ -188,6 +188,7 @@ func (s *Scanner) runShowScan(directory string, changes *scanner.Changes) {
 		fail(err, "The library directory could not be read.")
 		return
 	}
+	s.outstanding.Unread(&report.Report, changes, reconciliation.Seen)
 
 	s.phase(report, scanner.PhaseLocal)
 	s.applyMoves(ctx, scan, report, reconciliation, root, files)

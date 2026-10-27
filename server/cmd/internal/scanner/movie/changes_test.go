@@ -394,3 +394,35 @@ func TestMovieChangesRunKeepsTheIssuesOfFilesItDidNotLookAt(t *testing.T) {
 		t.Fatalf("after the file was looked at again: %+v", s.Status().Issues)
 	}
 }
+
+// A run of changes that cannot read a changed directory keeps listing the
+// failures an earlier scan found inside it, beside its own issue for the
+// directory.
+func TestMovieChangesRunKeepsTheIssuesInsideADirectoryItCannotRead(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads a directory whatever its mode")
+	}
+	fixture := setupMovieScanner(t)
+	s := fixture.scanner
+	s.ffprobe = &scannertest.CountingProbe{Hook: func(context.Context, string) (*ffprobe.FfprobeResult, error) {
+		return nil, errors.New("unreadable")
+	}}
+	root := t.TempDir()
+	directory := filepath.Join(root, "Bad (2001)")
+	scannertest.WriteFile(t, filepath.Join(directory, "bad.mkv"), "bad")
+	s.scan(root)
+	err := os.Chmod(directory, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(directory, 0o755) })
+	s.scanChanges(root, scanner.Changes{Paths: []string{"Bad (2001)"}})
+	var names []string
+	for _, issue := range s.Status().Issues {
+		names = append(names, issue.Filename)
+	}
+	slices.Sort(names)
+	if !slices.Equal(names, []string{"Bad (2001)", "bad.mkv"}) {
+		t.Fatalf("issues after the unreadable run: %q", names)
+	}
+}

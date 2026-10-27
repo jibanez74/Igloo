@@ -4833,7 +4833,7 @@ export interface components {
             enrichment_unmatched: number;
             /** @description Movies still lacking a confirmed TMDB identity or re-queued by a technical change, including those backing off after repeated misses; updated as results commit. It does not by itself make the final state completed-with-issues. */
             pending_enrichment: number;
-            /** @description Outstanding issues. A run of changes (scope "changes") also lists, after its own, those the previous run left at paths outside its own that stay true until a run looks at them again: files that failed or were deferred, and disks kept because they were not mounted. Carried issues do not make its state completed-with-issues; discovery and enrichment issues stay with the run that raised them. */
+            /** @description Outstanding issues. A run of changes (scope "changes") also lists, after its own, those the previous run left at paths outside its own, or at or beneath a path it could not read (for files it did not see and that still exist), that stay true until a run looks at them again: files that failed or were deferred, and disks kept because they were not mounted. Carried issues do not make its state completed-with-issues; discovery and enrichment issues stay with the run that raised them. */
             issue_count: number;
             issues: components["schemas"]["ScanIssue"][];
             /**
@@ -4888,7 +4888,7 @@ export interface components {
             enrichment_unmatched: number;
             /** @description Shows, seasons, and episodes still carrying a retry marker when the run finished, including shows whose miss backoff has not elapsed. It does not by itself make the final state completed-with-issues. */
             pending_enrichment: number;
-            /** @description Outstanding issues. A run of changes (scope "changes") also lists, after its own, those the previous run left at paths outside its own that stay true until a run looks at them again: files that failed or were deferred, and disks kept because they were not mounted. Carried issues do not make its state completed-with-issues; discovery and enrichment issues stay with the run that raised them. */
+            /** @description Outstanding issues. A run of changes (scope "changes") also lists, after its own, those the previous run left at paths outside its own, or at or beneath a path it could not read (for files it did not see and that still exist), that stay true until a run looks at them again: files that failed or were deferred, and disks kept because they were not mounted. Carried issues do not make its state completed-with-issues; discovery and enrichment issues stay with the run that raised them. */
             issue_count: number;
             issues: components["schemas"]["ScanIssue"][];
             /**
@@ -4948,7 +4948,7 @@ export interface components {
             enrichment_failed: number;
             /** @description Unique artists and albums with a definitive no-match during this run. An album Apple Music no longer lists is counted by its Spotify outcome, or as unmatched when Spotify cannot search that run (not configured or temporarily refused). */
             enrichment_unmatched: number;
-            /** @description Outstanding issues. A run of changes (scope "changes") also lists, after its own, those the previous run left at paths outside its own that stay true until a run looks at them again: files that failed or were deferred, and disks kept because they were not mounted. Carried issues do not make its state completed-with-issues; discovery and enrichment issues stay with the run that raised them. */
+            /** @description Outstanding issues. A run of changes (scope "changes") also lists, after its own, those the previous run left at paths outside its own, or at or beneath a path it could not read (for files it did not see and that still exist), that stay true until a run looks at them again: files that failed or were deferred, and disks kept because they were not mounted. Carried issues do not make its state completed-with-issues; discovery and enrichment issues stay with the run that raised them. */
             issue_count: number;
             issues: components["schemas"]["ScanIssue"][];
             /**

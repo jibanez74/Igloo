@@ -113,6 +113,7 @@ func (s *Scanner) runMusicScan(directory string, changes *scanner.Changes) {
 		fail(err, scanner.ReasonDiscoveryInterrupted)
 		return
 	}
+	s.outstanding.Unread(&report.Report, changes, reconciliation.Seen)
 
 	flushBatch()
 	contextErr := ctx.Err()
