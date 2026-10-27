@@ -112,3 +112,26 @@ func TestOutstandingCarriesIssuesOfARelativeLibraryRoot(t *testing.T) {
 		t.Fatalf("an issue the run looks at again was carried: %v", report.carried)
 	}
 }
+
+// A run of changes that could not read one of its paths covered the issues
+// beneath it without looking at them, so they still stand.
+func TestOutstandingKeepsTheIssuesBeneathAPathTheRunCouldNotRead(t *testing.T) {
+	previous := NewReport()
+	previous.Issue("/library/A/a.mkv", PhaseLocal, "failed")
+	previous.Issue("/library/B/b.mkv", PhaseLocal, "failed")
+	var outstanding Outstanding
+	outstanding.Keep(&previous)
+	changes := &Changes{Paths: []string{"A", "B"}}
+
+	report := NewReport()
+	outstanding.Carry(&report, changes, changes.Resolve("/library"))
+	report.Issue("/library/A", PhaseDiscovery, ReasonDiscoveryEntry)
+	outstanding.Unread(&report, changes)
+	var got []string
+	for key := range report.carried {
+		got = append(got, key)
+	}
+	if !slices.Equal(got, []string{"local:/library/A/a.mkv"}) {
+		t.Fatalf("carried %q, want only the issue beneath the unreadable path", got)
+	}
+}

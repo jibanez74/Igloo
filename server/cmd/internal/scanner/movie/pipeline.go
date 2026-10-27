@@ -186,6 +186,7 @@ func (s *Scanner) runMovieScan(directory string, changes *scanner.Changes) {
 		fail(err, scanner.ReasonDiscoveryInterrupted)
 		return
 	}
+	s.outstanding.Unread(&report.Report, changes)
 	s.phase(report, scanner.PhaseLocal)
 	s.applyMoves(ctx, scan, report, reconciliation, files)
 	indexes := make([]int, len(files))

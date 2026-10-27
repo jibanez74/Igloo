@@ -246,6 +246,13 @@ func (r *Report) DropIssue(path string, phase ScanPhase) {
 	r.markIssueChanged(key)
 }
 
+// carry lists an issue an earlier run left; see Outstanding.
+func (r *Report) carry(key string, issue Issue) {
+	r.carried[key] = issue
+	r.carriedDirty = true
+	r.issueVersion++
+}
+
 // dropCarried removes a carried issue, which changes the published slice.
 func (r *Report) dropCarried(key string) {
 	_, carried := r.carried[key]

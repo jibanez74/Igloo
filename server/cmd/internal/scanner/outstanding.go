@@ -38,8 +38,7 @@ func (o *Outstanding) Carry(report *Report, changes *Changes, paths []string) {
 		changed[path] = true
 	}
 	for key, issue := range o.issues {
-		phase, path, _ := strings.Cut(key, ":")
-		stays := path != "" && carriedPhases[ScanPhase(phase)]
+		path, stays := lasting(key)
 		if !stays {
 			continue
 		}
@@ -47,10 +46,49 @@ func (o *Outstanding) Carry(report *Report, changes *Changes, paths []string) {
 		if lookedAt {
 			continue
 		}
-		report.carried[key] = issue
-		report.carriedDirty = true
-		report.issueVersion++
+		report.carry(key, issue)
 	}
+}
+
+// Unread carries back into a run of changes, once its walk is over, the
+// issues the last run left beneath the paths this run could not read, which
+// it reported as its own discovery issues: it covered them without looking at
+// them, so they still stand.
+func (o *Outstanding) Unread(report *Report, changes *Changes) {
+	scoped := changes.Scoped()
+	if !scoped {
+		return
+	}
+	unread := make(map[string]bool)
+	for key := range report.issues {
+		phase, path, _ := strings.Cut(key, ":")
+		discovery := ScanPhase(phase) == PhaseDiscovery && path != ""
+		if discovery {
+			unread[path] = true
+		}
+	}
+	if len(unread) == 0 {
+		return
+	}
+	for key, issue := range o.issues {
+		path, stays := lasting(key)
+		_, own := report.issues[key]
+		_, carried := report.carried[key]
+		if !stays || own || carried {
+			continue
+		}
+		beneath := covered(unread, path)
+		if beneath {
+			report.carry(key, issue)
+		}
+	}
+}
+
+// lasting returns the path of an issue key when the issue stays true until a
+// run looks at that path again.
+func lasting(key string) (string, bool) {
+	phase, path, _ := strings.Cut(key, ":")
+	return path, path != "" && carriedPhases[ScanPhase(phase)]
 }
 
 // covered reports whether path is one of changed or lies beneath one.
