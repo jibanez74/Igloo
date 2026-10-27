@@ -28,5 +28,5 @@ func (app *Application) ProxyYouTubeThumbnail(w http.ResponseWriter, r *http.Req
 }
 
 func isSafeYouTubeVideoKey(key string) bool {
-	return len(key) <= youtubeVideoKeyMaxLength && isPlainPathSegment(key, "")
+	return len(key) <= youtubeVideoKeyMaxLength && helpers.IsPlainPathSegment(key, "")
 }

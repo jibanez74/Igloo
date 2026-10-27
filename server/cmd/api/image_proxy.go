@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 
 	"igloo/cmd/internal/helpers"
 )
@@ -66,21 +65,4 @@ func (app *Application) proxyImage(w http.ResponseWriter, r *http.Request, clien
 	if err != nil {
 		app.Logger.Error("failed to stream "+label+" response", "error", err, "url", imageURL)
 	}
-}
-
-// isPlainPathSegment reports whether s is nonempty and made only of ASCII
-// letters, digits, '_', '-' and the characters in extra.
-func isPlainPathSegment(s, extra string) bool {
-	if s == "" {
-		return false
-	}
-
-	for _, char := range s {
-		isAlphanumeric := (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9')
-		if !isAlphanumeric && char != '_' && char != '-' && !strings.ContainsRune(extra, char) {
-			return false
-		}
-	}
-
-	return true
 }

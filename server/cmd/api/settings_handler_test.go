@@ -82,6 +82,38 @@ func TestUpdateGeneralSettings_UpdatesDatabaseAndApplicationSettings(t *testing.
 	}
 }
 
+// A save requests an artwork pass when it changes one of the two settings a
+// pass reads: the download flag, or the static directory the copies live in.
+func TestUpdateGeneralSettings_RequestsAnArtworkPassForItsSettings(t *testing.T) {
+	app := setupSessionTestApp(t)
+	admin := createTestUser(t, app, "Settings Admin", "settings-admin@example.com", true)
+	artwork := &artworkRequests{}
+	app.Artwork = artwork
+	staticDir := filepath.Join(t.TempDir(), "static")
+	otherStaticDir := filepath.Join(t.TempDir(), "static")
+
+	steps := []struct {
+		name string
+		body string
+		want int32
+	}{
+		{"turning downloads on", generalSettingsBody(staticDir), 1},
+		{"saving the same values", generalSettingsBody(staticDir), 1},
+		{"changing another setting", generalSettingsBodyWithWatcher(staticDir, false), 1},
+		{"moving the static directory", generalSettingsBody(otherStaticDir), 2},
+		{"turning downloads off", strings.Replace(generalSettingsBody(otherStaticDir), `"download_images": true`, `"download_images": false`, 1), 3},
+	}
+	for _, step := range steps {
+		w := serveAs(t, app, admin.ID, http.MethodPut, "/api/settings/general", step.body)
+		if w.Code != http.StatusOK {
+			t.Fatalf("%s: status %d: %s", step.name, w.Code, w.Body.String())
+		}
+		if artwork.count.Load() != step.want {
+			t.Fatalf("%s: artwork passes requested = %d, want %d", step.name, artwork.count.Load(), step.want)
+		}
+	}
+}
+
 func TestGeneralSettingsRestartRequired_OnlyForStartupClients(t *testing.T) {
 	previous := database.Setting{
 		TmdbKey:      sql.NullString{String: "tmdb-key", Valid: true},

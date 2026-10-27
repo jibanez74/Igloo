@@ -436,7 +436,7 @@ export interface paths {
         };
         /**
          * Serve a static asset
-         * @description Serves files from the configured static directory, such as uploaded avatars. Content-Type comes from the file extension using the host MIME registry, falling back to application/octet-stream. Successful responses set Cache-Control: public, max-age=31536000 and X-Content-Type-Options: nosniff. Last-Modified supports date revalidation; this endpoint does not emit ETag.
+         * @description Serves files from the configured static directory: uploaded avatars, and the library artwork downloaded while download_images is on (movies/ and people/). A downloaded image's URL carries a ?v= version that changes when the image is replaced, since responses are cached for a year. Content-Type comes from the file extension using the host MIME registry, falling back to application/octet-stream. Successful responses set Cache-Control: public, max-age=31536000 and X-Content-Type-Options: nosniff. Last-Modified supports date revalidation; this endpoint does not emit ETag.
          */
         get: operations["serveStaticFiles"];
         put?: never;
@@ -2883,9 +2883,9 @@ export interface components {
             enable_apple_lookups: boolean;
             /** @description When true, the server watches the configured movie, show and music directories and applies each media file that is created, rewritten, moved or deleted through the scanner within seconds, without a library scan: inotify on local Linux filesystems, a directory poll every few minutes on network shares, FUSE mounts and macOS. Turning it on walks each library once; turning it off stops all watching before the response is sent. A library whose directory, or a mount inside it, disappears is paused rather than emptied. The ENABLE_WATCHER environment value seeds this only for a new database. */
             enable_watcher: boolean;
-            /** @description Stored only; no server feature reads this value. */
+            /** @description While true, the server downloads movie posters and backdrops and cast and crew photos into static_dir and returns the downloaded copies in place of the TMDB paths, as the API description explains; images not downloaded yet keep their TMDB paths. Turning it off returns the TMDB paths and deletes the downloaded copies. Either change starts the work in the background, and so does a change to static_dir. */
             download_images: boolean;
-            /** @description Directory /api/static serves files from and avatar uploads are written to. Read on each request. */
+            /** @description Directory /api/static serves files from, where avatar uploads and, while download_images is on, downloaded library artwork are written. Read on each request. */
             static_dir: string;
             /** @description Directory new HLS sessions write their output to. */
             transcode_dir: string;
@@ -2899,7 +2899,7 @@ export interface components {
             enable_apple_lookups: boolean;
             /** @description When true, the server watches the configured movie, show and music directories and applies each media file that is created, rewritten, moved or deleted through the scanner within seconds, without a library scan: inotify on local Linux filesystems, a directory poll every few minutes on network shares, FUSE mounts and macOS. Turning it on walks each library once; turning it off stops all watching before the response is sent. A library whose directory, or a mount inside it, disappears is paused rather than emptied. The ENABLE_WATCHER environment value seeds this only for a new database. */
             enable_watcher: boolean;
-            /** @description Stored only; no server feature reads this value. */
+            /** @description While true, the server downloads movie posters and backdrops and cast and crew photos into static_dir and returns the downloaded copies in place of the TMDB paths, as the API description explains; images not downloaded yet keep their TMDB paths. Turning it off returns the TMDB paths and deletes the downloaded copies. Either change starts the work in the background, and so does a change to static_dir. */
             download_images: boolean;
             /** @description Required. Created when missing; 400 when it cannot be created or accessed. */
             static_dir: string;
@@ -2955,6 +2955,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             title: string;
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             poster_path: components["schemas"]["SqlNullString"];
             year: components["schemas"]["SqlNullInt64"];
         };
@@ -2967,6 +2968,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             title: string;
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             poster_path: components["schemas"]["SqlNullString"];
             year: components["schemas"]["SqlNullInt64"];
             /** Format: double */
@@ -3006,6 +3008,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             title: string;
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             poster_path: components["schemas"]["SqlNullString"];
             year: components["schemas"]["SqlNullInt64"];
             certification: components["schemas"]["SqlNullString"];
@@ -3153,6 +3156,7 @@ export interface components {
             /** Format: int64 */
             episode_count: number;
             artist_name: string;
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             artist_profile: components["schemas"]["SqlNullString"];
             /**
              * Format: int64
@@ -3169,6 +3173,7 @@ export interface components {
             /** Format: int64 */
             episode_count: number;
             artist_name: string;
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             artist_profile: components["schemas"]["SqlNullString"];
             /**
              * Format: int64
@@ -3180,6 +3185,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             name: string;
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             profile: components["schemas"]["SqlNullString"];
             /**
              * Format: int64
@@ -3280,7 +3286,9 @@ export interface components {
             adult: boolean;
             tmdb_id: components["schemas"]["SqlNullInt64"];
             imdb_id: components["schemas"]["SqlNullString"];
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             poster_path: components["schemas"]["SqlNullString"];
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             backdrop_path: components["schemas"]["SqlNullString"];
             language: components["schemas"]["SqlNullString"];
             year: components["schemas"]["SqlNullInt64"];
@@ -3302,6 +3310,7 @@ export interface components {
             /** Format: int64 */
             cast_order: number;
             artist_name: string;
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             artist_profile: components["schemas"]["SqlNullString"];
             /**
              * Format: int64
@@ -3802,7 +3811,9 @@ export interface components {
             overview?: string | null;
             tag_line?: string | null;
             certification?: string | null;
+            /** @description A TMDB image path for the poster. A value equal to the one the movie returns, which may be the URL of a downloaded copy, leaves the poster unchanged. */
             poster_path?: string | null;
+            /** @description A TMDB image path for the backdrop. A value equal to the one the movie returns, which may be the URL of a downloaded copy, leaves the backdrop unchanged. */
             backdrop_path?: string | null;
             language?: string | null;
         };
@@ -3862,6 +3873,7 @@ export interface components {
             /** Format: int64 */
             movie_id: number;
             movie_title: string;
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             movie_poster: string | null;
             owner: components["schemas"]["UserSummary"];
             members: components["schemas"]["UserSummary"][];
@@ -3875,6 +3887,7 @@ export interface components {
             /** Format: int64 */
             movie_id: number;
             movie_title: string;
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             movie_poster: string | null;
             owner: components["schemas"]["UserSummary"];
             members: components["schemas"]["UserSummary"][];
@@ -5133,6 +5146,7 @@ export interface components {
             birthday: string;
             deathday: string;
             place_of_birth: string;
+            /** @description TMDB image path of the person's photo, which clients show large. When TMDB is unavailable or has no photo, the stored one instead: a TMDB path, or the /api/static/ URL of its downloaded copy, which is stored at cast-card size. */
             profile_path: string;
             homepage: string;
             gender: number;
@@ -5156,6 +5170,7 @@ export interface components {
             title: string;
             /** @description Release/first-air date or stored year; empty when undated. */
             date: string;
+            /** @description TMDB image path, or the /api/static/ URL of the downloaded copy of the poster of a title in the library. */
             poster_path: string;
             popularity: number;
             /** Format: int64 */
@@ -7047,7 +7062,10 @@ export interface operations {
     };
     serveStaticFiles: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Version of a downloaded library image; the server ignores it. */
+                v?: string;
+            };
             header?: {
                 /** @description Byte ranges, including suffix and multiple ranges. A single satisfiable range returns 206 with Content-Range; multiple ranges return multipart/byteranges with per-part Content-Type and Content-Range. Malformed or non-overlapping ranges return plain-text 416. Ranges whose summed length exceeds the file size are ignored. HEAD also honors Range, but sends no body. */
                 Range?: components["parameters"]["RangeHeader"];

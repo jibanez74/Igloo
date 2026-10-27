@@ -214,7 +214,9 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 	// The directory validation above touches the filesystem, so it stays
 	// outside the lock; only the read-compare-write runs under it.
 	var restartRequired bool
+	var previous database.Setting
 	updatedSettings, err := app.withSettingsWrite(func(current database.Setting) (database.Setting, error) {
+		previous = current
 		updated, err := app.Queries.UpdateGeneralSettings(r.Context(), database.UpdateGeneralSettingsParams{
 			TmdbKey:             helpers.NullString(values.tmdbKey),
 			SpotifyClientID:     helpers.NullString(values.spotifyClientID),
@@ -238,6 +240,10 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 		return
 	}
 	app.syncWatcher()
+	artworkChanged := previous.DownloadImages != updatedSettings.DownloadImages || previous.StaticDir != updatedSettings.StaticDir
+	if artworkChanged {
+		app.syncArtwork()
+	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Message: "Settings updated",
@@ -263,7 +269,8 @@ func (app *Application) syncWatcher() {
 // after a restart: the TMDB and Spotify clients are built once at startup.
 // The static and transcode directories are read live, Apple lookups are read
 // at each music scan start, the watcher starts and stops with its flag, and
-// the image-download flag is stored without a server feature that reads it.
+// a change to the image-download flag or the static directory starts an
+// artwork pass.
 func generalSettingsRestartRequired(previous *database.Setting, next database.Setting) bool {
 	return previous.TmdbKey != next.TmdbKey ||
 		previous.SpotifyClientID != next.SpotifyClientID ||

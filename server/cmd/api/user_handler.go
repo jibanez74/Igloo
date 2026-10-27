@@ -324,7 +324,7 @@ func isOptionalHTTPURL(value string) bool {
 
 // uploadedAvatarURLPrefix is the URL UploadUserAvatar publishes an avatar
 // under; the file behind it is static/avatars/<userID>-<unix nanos><ext>.
-const uploadedAvatarURLPrefix = "/api/static/avatars/"
+const uploadedAvatarURLPrefix = helpers.STATIC_URL_PREFIX + "avatars/"
 
 const maxAvatarSize = 20 << 20
 

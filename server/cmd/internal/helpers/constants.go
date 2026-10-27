@@ -31,3 +31,21 @@ const (
 	HLS_SEGMENT_FILENAME_PREFIX = "segment_"
 	HLS_SEGMENT_FILENAME_SUFFIX = ".m4s"
 )
+
+// TMDB image sizes. The image proxy accepts exactly these, and the artwork
+// syncer downloads each kind of image at the size the clients request it.
+const (
+	TMDB_IMAGE_BASE_URL      = "https://image.tmdb.org/t/p"
+	TMDB_ORIGINAL_IMAGE_SIZE = "original"
+	TMDB_BACKDROP_SIZE       = "w1280"
+	TMDB_POSTER_SIZE         = "w500"
+	TMDB_PROFILE_SIZE        = "w185"
+	TMDB_LOGO_SIZE           = "w92"
+)
+
+// STATIC_URL_PREFIX is the URL path the static directory is served under.
+const STATIC_URL_PREFIX = "/api/static/"
+
+// TEMP_FILE_PREFIX starts the name of every temporary file WriteFileAtomic
+// creates beside its target, so one a crash left behind is recognizable.
+const TEMP_FILE_PREFIX = ".tmp-"

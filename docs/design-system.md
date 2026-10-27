@@ -981,7 +981,9 @@ is unknown or empty.
   `/api/tmdb/images/{size}{path}`. Sizes are the `TMDB_*_SIZE` constants in
   `lib/constants.ts` — `w500` posters and episode stills, `w1280` backdrops,
   `w185` profiles, `w92` network logos; the proxy accepts only those plus
-  `original`. Music images go through `getMediaImageUrl()`
+  `original`. A value that is already a server URL (`/api/static/...`, a copy
+  the server downloaded while "Download images" is on) comes back unchanged:
+  the copy exists at one size. Music images go through `getMediaImageUrl()`
   (`lib/media-image-url.ts`). Never hit `image.tmdb.org` directly from the
   client.
 - **Standard `<img>` recipe**: `loading="lazy" decoding="async"
@@ -1378,7 +1380,10 @@ require the full playback test pass.
 - File inputs, checkboxes, selects: use the vendored primitives; selects in
   dialogs rely on the `data-slot` contract (§1.6). Destructive confirmations
   go through the shared `ConfirmDialog`, and paged lists through
-  `LibraryPagination` — neither is re-implemented per page.
+  `LibraryPagination` — neither is re-implemented per page. A Save-bar form
+  whose save deletes data asks when Save is pressed, not when the control
+  changes, since the control only edits the form: turning off "Download
+  images" in General settings confirms "Delete downloaded images?" first.
 - Form-level failures toast (login's wrong-credentials toast included);
   field-level validation renders inline with
   `aria-invalid` (styled by the Button/Input base classes) and moves focus to

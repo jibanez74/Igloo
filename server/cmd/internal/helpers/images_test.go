@@ -2,7 +2,10 @@ package helpers
 
 import (
 	"bytes"
+	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -231,5 +234,80 @@ func TestSaveImage_ReadFailureLeavesNothingBehind(t *testing.T) {
 				t.Fatalf("failed read left %v behind", names)
 			}
 		})
+	}
+}
+
+func TestDownloadImage_StoresTheBodyUnderItsSniffedType(t *testing.T) {
+	poster := testImage(jpegSignature, 3000)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Like Spotify's image URLs: no extension and a generic content type.
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Write(poster)
+	}))
+	t.Cleanup(server.Close)
+	dir := filepath.Join(t.TempDir(), "albums", "4aawyAB9vmqN3uQ7FjRGTy")
+
+	path, err := DownloadImage(context.Background(), server.Client(), server.URL+"/image/ab67616d0000b273", dir, "daylight_cover")
+	if err != nil {
+		t.Fatalf("DownloadImage: %v", err)
+	}
+
+	if path != filepath.Join(dir, "daylight_cover.jpg") {
+		t.Fatalf("path = %q, want daylight_cover.jpg in %s", path, dir)
+	}
+	saved, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(saved, poster) {
+		t.Fatal("saved bytes differ from the response body")
+	}
+}
+
+func TestDownloadImage_ReportsTheStatusOfARefusedRequest(t *testing.T) {
+	for _, status := range []int{http.StatusNotFound, http.StatusInternalServerError} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(status)
+			w.Write(testImage(pngSignature, 100))
+		}))
+		dir := t.TempDir()
+
+		_, err := DownloadImage(context.Background(), server.Client(), server.URL+"/w500/poster.jpg", dir, "poster")
+		server.Close()
+
+		var statusErr *ImageStatusError
+		if !errors.As(err, &statusErr) || statusErr.StatusCode != status {
+			t.Fatalf("status %d: err = %v, want an ImageStatusError with that status", status, err)
+		}
+		names := dirEntries(t, dir)
+		if len(names) != 0 {
+			t.Fatalf("status %d left %v behind", status, names)
+		}
+	}
+}
+
+func TestDownloadImage_CanceledRequestLeavesNothingBehind(t *testing.T) {
+	started := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write(testImage(pngSignature, 1024))
+		w.(http.Flusher).Flush()
+		close(started)
+		<-r.Context().Done()
+	}))
+	t.Cleanup(server.Close)
+	dir := filepath.Join(t.TempDir(), "movies", "603")
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-started
+		cancel()
+	}()
+
+	_, err := DownloadImage(ctx, server.Client(), server.URL+"/w500/poster.jpg", dir, "poster")
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled", err)
+	}
+	names := dirEntries(t, dir)
+	if len(names) != 0 {
+		t.Fatalf("canceled download left %v behind", names)
 	}
 }

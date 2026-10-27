@@ -15,15 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-const (
-	tmdbImageBaseURL = "https://image.tmdb.org/t/p"
-	tmdbImageSize    = "original"
-	tmdbBackdropSize = "w1280"
-	tmdbPosterSize   = "w500"
-	tmdbProfileSize  = "w185"
-	tmdbLogoSize     = "w92"
-	tmdbMaxItems     = 12
-)
+const tmdbMaxItems = 12
 
 type tmdbSearchRequest struct {
 	Title  string `json:"title"`
@@ -59,11 +51,11 @@ type theaterMovieResponse struct {
 }
 
 var supportedTmdbImageSizes = map[string]bool{
-	tmdbImageSize:    true,
-	tmdbBackdropSize: true,
-	tmdbPosterSize:   true,
-	tmdbProfileSize:  true,
-	tmdbLogoSize:     true,
+	helpers.TMDB_ORIGINAL_IMAGE_SIZE: true,
+	helpers.TMDB_BACKDROP_SIZE:       true,
+	helpers.TMDB_POSTER_SIZE:         true,
+	helpers.TMDB_PROFILE_SIZE:        true,
+	helpers.TMDB_LOGO_SIZE:           true,
 }
 
 func (app *Application) SearchTmdbMovies(w http.ResponseWriter, r *http.Request) {
@@ -104,13 +96,18 @@ func (app *Application) GetTmdbStatus(w http.ResponseWriter, r *http.Request) {
 func (app *Application) ProxyTmdbImage(w http.ResponseWriter, r *http.Request) {
 	size := chi.URLParam(r, "size")
 	file := chi.URLParam(r, "file")
-	if !supportedTmdbImageSizes[size] || !isPlainPathSegment(file, ".") || strings.Contains(file, "..") {
+	if !supportedTmdbImageSizes[size] || !helpers.IsPlainPathSegment(file, ".") || strings.Contains(file, "..") {
 		helpers.ErrorJSON(w, errors.New("invalid TMDB image path"), http.StatusBadRequest)
 		return
 	}
 
-	baseURL := cmp.Or(strings.TrimRight(app.TmdbImageBaseURL, "/"), tmdbImageBaseURL)
-	app.proxyImage(w, r, app.TmdbImageHTTPClient, "TMDB image", baseURL, size, file)
+	app.proxyImage(w, r, app.TmdbImageHTTPClient, "TMDB image", app.tmdbImageBaseURL(), size, file)
+}
+
+// tmdbImageBaseURL is where TMDB images are fetched from: the CDN, or the
+// stand-in a test sets.
+func (app *Application) tmdbImageBaseURL() string {
+	return cmp.Or(strings.TrimRight(app.TmdbImageBaseURL, "/"), helpers.TMDB_IMAGE_BASE_URL)
 }
 
 func (app *Application) searchTmdbMovies(ctx context.Context, payload tmdbSearchRequest) ([]tmdbSearchResult, error) {

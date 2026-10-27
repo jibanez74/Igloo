@@ -653,6 +653,8 @@ func TestIdentifyMovie_HTTPPersistsTmdbMetadataAndRelationships(t *testing.T) {
 
 	actor := createTestUser(t, app, "Actor", "actor@example.com", true)
 	router := authenticatedRouter(t, app, actor.ID)
+	artwork := &artworkRequests{}
+	app.Artwork = artwork
 
 	w := httptest.NewRecorder()
 	req := newOpenAPIJSONRequest(http.MethodPut, "/api/movies/"+strconv.FormatInt(movie.ID, 10)+"/identify", `{"tmdb_id":603}`)
@@ -662,6 +664,9 @@ func TestIdentifyMovie_HTTPPersistsTmdbMetadataAndRelationships(t *testing.T) {
 		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
 	}
 	assertOpenAPIExchange(t, "identifyMovie", req, w)
+	if artwork.count.Load() != 1 {
+		t.Fatalf("artwork passes requested = %d, want one for the new match's artwork", artwork.count.Load())
+	}
 
 	updated, err := app.Queries.GetMovieByID(ctx, movie.ID)
 	if err != nil {
@@ -830,26 +835,35 @@ func TestUpdateMovieMetadata_KeepsDownloadedArtwork(t *testing.T) {
 	actor := createTestUser(t, app, "Editor", "editor@example.com", true)
 	router := authenticatedRouter(t, app, actor.ID)
 	path := "/api/movies/" + strconv.FormatInt(movieID, 10)
+	artwork := &artworkRequests{}
+	app.Artwork = artwork
+
+	// A client may send back every field it was shown, the copy's URL
+	// included, with only the title changed.
+	for _, body := range []string{`{"title":"Updated"}`, fmt.Sprintf(`{"title":"Updated","poster_path":%q}`, posterCopy)} {
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, newOpenAPIJSONRequest(http.MethodPatch, path, body))
+		if w.Code != http.StatusOK {
+			t.Fatalf("title edit status = %d, body = %s", w.Code, w.Body.String())
+		}
+		updated, err := app.Queries.GetMovieByID(ctx, movieID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if updated.PosterPath.String != posterCopy || updated.PosterPathSource.String != "/poster.jpg" {
+			t.Fatalf("after editing %s poster = %q from %q, want the copy of /poster.jpg kept", body, updated.PosterPath.String, updated.PosterPathSource.String)
+		}
+	}
+	if artwork.count.Load() != 2 {
+		t.Fatalf("artwork passes requested = %d, want one per edit", artwork.count.Load())
+	}
 
 	w := httptest.NewRecorder()
-	router.ServeHTTP(w, newOpenAPIJSONRequest(http.MethodPatch, path, `{"title":"Updated"}`))
-	if w.Code != http.StatusOK {
-		t.Fatalf("title edit status = %d, body = %s", w.Code, w.Body.String())
-	}
-	updated, err := app.Queries.GetMovieByID(ctx, movieID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if updated.PosterPath.String != posterCopy || updated.PosterPathSource.String != "/poster.jpg" {
-		t.Fatalf("after a title edit poster = %q from %q, want the copy of /poster.jpg kept", updated.PosterPath.String, updated.PosterPathSource.String)
-	}
-
-	w = httptest.NewRecorder()
 	router.ServeHTTP(w, newOpenAPIJSONRequest(http.MethodPatch, path, `{"poster_path":"/new-poster.jpg"}`))
 	if w.Code != http.StatusOK {
 		t.Fatalf("poster edit status = %d, body = %s", w.Code, w.Body.String())
 	}
-	updated, err = app.Queries.GetMovieByID(ctx, movieID)
+	updated, err := app.Queries.GetMovieByID(ctx, movieID)
 	if err != nil {
 		t.Fatal(err)
 	}

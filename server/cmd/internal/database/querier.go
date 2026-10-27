@@ -527,7 +527,13 @@ type Querier interface {
 	// only ever filled in, never replaced: the file's own tag wins when it has one.
 	LinkMusicTrackSpotify(ctx context.Context, arg LinkMusicTrackSpotifyParams) error
 	LinkShowEpisodeFile(ctx context.Context, arg LinkShowEpisodeFileParams) error
+	ListArtistArtwork(ctx context.Context, arg ListArtistArtworkParams) ([]ListArtistArtworkRow, error)
 	ListLibraryMountPoints(ctx context.Context, root string) ([]string, error)
+	// Library artwork, kept by the artwork syncer. Each image column is the value
+	// the API returns and its _source column the provider reference; the triggers
+	// at the end of schema.sql keep the two in step for every other writer. The
+	// syncer's writes leave updated_at alone, like the triggers.
+	ListMovieArtwork(ctx context.Context, arg ListMovieArtworkParams) ([]ListMovieArtworkRow, error)
 	ListMusicTrackScanIndex(ctx context.Context) ([]ListMusicTrackScanIndexRow, error)
 	// ListMusicTrackScanIndex for one path a run of watcher-detected changes
 	// covers; lower and upper bound its children as in GetMovieScanIndexUnder.
@@ -659,6 +665,9 @@ type Querier interface {
 	RemoveMovieFromPlaylist(ctx context.Context, arg RemoveMovieFromPlaylistParams) error
 	RemoveTrackFromPlaylist(ctx context.Context, arg RemoveTrackFromPlaylistParams) error
 	RenameDevice(ctx context.Context, arg RenameDeviceParams) (int64, error)
+	RevertArtistProfileArtwork(ctx context.Context) (int64, error)
+	RevertMovieBackdropArtwork(ctx context.Context) (int64, error)
+	RevertMoviePosterArtwork(ctx context.Context) (int64, error)
 	SaveMusicAlbumDate(ctx context.Context, arg SaveMusicAlbumDateParams) error
 	SaveMusicAlbumIdentity(ctx context.Context, arg SaveMusicAlbumIdentityParams) error
 	SaveMusicArtistIdentity(ctx context.Context, arg SaveMusicArtistIdentityParams) error
@@ -666,6 +675,11 @@ type Querier interface {
 	SaveMusicGenreIdentity(ctx context.Context, arg SaveMusicGenreIdentityParams) error
 	SaveMusicSpotifyAdoption(ctx context.Context, arg SaveMusicSpotifyAdoptionParams) error
 	SaveMusicTrackMetadata(ctx context.Context, arg SaveMusicTrackMetadataParams) error
+	SetArtistProfileArtwork(ctx context.Context, arg SetArtistProfileArtworkParams) (int64, error)
+	SetMovieBackdropArtwork(ctx context.Context, arg SetMovieBackdropArtworkParams) (int64, error)
+	// Applies only while the source the value was made from is still the row's,
+	// so a source a scanner wrote meanwhile wins.
+	SetMoviePosterArtwork(ctx context.Context, arg SetMoviePosterArtworkParams) (int64, error)
 	SetMusicAlbumAppleID(ctx context.Context, arg SetMusicAlbumAppleIDParams) error
 	SetMusicAlbumSpotifyID(ctx context.Context, arg SetMusicAlbumSpotifyIDParams) error
 	SetMusicArtistSpotifyID(ctx context.Context, arg SetMusicArtistSpotifyIDParams) error

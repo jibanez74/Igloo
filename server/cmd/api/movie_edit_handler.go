@@ -92,6 +92,7 @@ func (app *Application) IdentifyMovie(w http.ResponseWriter, r *http.Request) {
 		app.serverError(w, err, "failed to commit identify transaction", "failed to save changes", "movie_id", movie.ID)
 		return
 	}
+	app.syncArtwork()
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "movie identified successfully"})
 }
@@ -180,10 +181,14 @@ func (app *Application) UpdateMovieMetadata(w http.ResponseWriter, r *http.Reque
 	if payload.Certification != nil {
 		params.Certification = helpers.NullString(*payload.Certification)
 	}
-	if payload.PosterPath != nil {
+	// A value equal to the one the movie returns, which may be a downloaded
+	// copy, leaves that image as it is.
+	isNewPoster := payload.PosterPath != nil && *payload.PosterPath != movie.PosterPath.String
+	if isNewPoster {
 		params.PosterPathSource = helpers.NullString(*payload.PosterPath)
 	}
-	if payload.BackdropPath != nil {
+	isNewBackdrop := payload.BackdropPath != nil && *payload.BackdropPath != movie.BackdropPath.String
+	if isNewBackdrop {
 		params.BackdropPathSource = helpers.NullString(*payload.BackdropPath)
 	}
 	if payload.Language != nil {
@@ -204,6 +209,7 @@ func (app *Application) UpdateMovieMetadata(w http.ResponseWriter, r *http.Reque
 		app.serverError(w, err, "failed to commit movie metadata update", "failed to update movie", "id", id)
 		return
 	}
+	app.syncArtwork()
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "movie updated successfully"})
 }

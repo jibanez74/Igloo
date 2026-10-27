@@ -71,6 +71,41 @@ func TestLauncherAdmitsOneScanAtATime(t *testing.T) {
 	}
 }
 
+// Finished runs once after every run, between a run of changes and the
+// library scan queued behind it, so each can request work that follows a run.
+func TestLauncherFinishedRunsAfterEachRun(t *testing.T) {
+	var scans sync.WaitGroup
+	var mu sync.Mutex
+	var events []string
+	record := func(event string) {
+		mu.Lock()
+		events = append(events, event)
+		mu.Unlock()
+	}
+	launcher := Launcher{Wait: &scans, Finished: func() { record("finished") }}
+	directory := sql.NullString{String: "/library", Valid: true}
+	release := make(chan struct{})
+
+	result := launcher.Start(fixedDirectory(directory), &Changes{Paths: []string{"a.mkv"}}, func(ScanScope) {}, func(string, *Changes) {
+		<-release
+		record("changes")
+	})
+	if result.Status != StartStarted {
+		t.Fatalf("changes status = %d", result.Status)
+	}
+	result = launcher.Start(fixedDirectory(directory), nil, func(ScanScope) {}, func(string, *Changes) { record("library") })
+	if result.Status != StartQueued {
+		t.Fatalf("library scan status = %d, want queued", result.Status)
+	}
+	close(release)
+	scans.Wait()
+
+	got := strings.Join(events, ",")
+	if got != "changes,finished,library,finished" {
+		t.Fatalf("events = %q, want each run followed by finished", got)
+	}
+}
+
 func TestWalkMediaLibrary(t *testing.T) {
 	root := t.TempDir()
 

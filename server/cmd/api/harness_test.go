@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"igloo/cmd/internal/database"
@@ -213,9 +214,20 @@ func bootTestApp(t *testing.T, db *sql.DB, config RuntimeConfig) *Application {
 	initTestRuntime(app)
 	app.ScanContext, app.ScanCancel = context.WithCancel(context.Background())
 	stopBackgroundWork(t, app)
+	app.initArtwork()
 	app.initScanners(nil, nil)
 
 	return app
+}
+
+// artworkRequests stands in for the artwork syncer and counts the passes
+// requested of it.
+type artworkRequests struct {
+	count atomic.Int32
+}
+
+func (a *artworkRequests) Request() {
+	a.count.Add(1)
 }
 
 // stopBackgroundWork cancels scans at cleanup and waits for app.Wait, so no

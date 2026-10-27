@@ -2,6 +2,7 @@ package helpers
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +13,10 @@ import (
 
 // imageSniffLength is the most http.DetectContentType looks at.
 const imageSniffLength = 512
+
+// maxDownloadedImageSize is far above any artwork size Igloo requests; it only
+// bounds what a misbehaving server can write to disk.
+const maxDownloadedImageSize = 10 << 20
 
 var (
 	ErrUnsupportedImageType = errors.New("unsupported image type")
@@ -78,6 +83,40 @@ func SaveImage(dir, name string, src io.Reader, maxBytes int64) (string, error) 
 	}
 
 	return path, nil
+}
+
+// ImageStatusError reports a download the server answered with a status other
+// than 200.
+type ImageStatusError struct {
+	StatusCode int
+}
+
+func (e *ImageStatusError) Error() string {
+	return fmt.Sprintf("image request returned status %d", e.StatusCode)
+}
+
+// DownloadImage fetches the image at imageURL and stores it through SaveImage
+// as name in dir, returning the full path of the saved file. A response other
+// than 200 returns an *ImageStatusError, and a body that is not a supported
+// image returns ErrUnsupportedImageType.
+func DownloadImage(ctx context.Context, client *http.Client, imageURL, dir, name string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, imageURL, nil)
+	if err != nil {
+		return "", err
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	isOK := resp.StatusCode == http.StatusOK
+	if !isOK {
+		return "", &ImageStatusError{StatusCode: resp.StatusCode}
+	}
+
+	return SaveImage(dir, name, resp.Body, maxDownloadedImageSize)
 }
 
 // cappedReader passes through at most remaining bytes of src and fails with

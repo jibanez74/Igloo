@@ -35,6 +35,9 @@ type Dependencies struct {
 	CurrentMoviesDirectory      func() sql.NullString
 	InvalidateCommittedMovie    func(movieID int64)
 	InvalidateDeletedWatchRooms func(roomIDs []int64)
+	// ScanFinished runs when each run ends, to download the artwork it
+	// brought.
+	ScanFinished func()
 }
 
 // Scanner scans and persists the configured movie library.
@@ -87,7 +90,7 @@ func New(deps Dependencies) *Scanner {
 	return &Scanner{
 		now: deps.Now, waitForRetry: waitForMovieRetry,
 		queries: deps.Queries, logger: deps.Logger, ffprobe: deps.Ffprobe,
-		tmdb: deps.Tmdb, scanContext: deps.ScanContext, launcher: scanner.Launcher{Wait: deps.Wait},
+		tmdb: deps.Tmdb, scanContext: deps.ScanContext, launcher: scanner.Launcher{Wait: deps.Wait, Finished: deps.ScanFinished},
 		tx:                          scanner.TxRunner{DB: deps.DB, Mu: deps.ScannerDBMu, Queries: deps.Queries},
 		mountPoints:                 scanner.MountPoints,
 		currentMoviesDirectory:      deps.CurrentMoviesDirectory,

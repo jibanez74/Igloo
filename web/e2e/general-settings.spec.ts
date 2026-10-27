@@ -8,6 +8,7 @@ import type {
 import { trackBrowserIssues } from "./e2e-browser-issues";
 import { getApiData, readJSON } from "./e2e-api";
 import { loginPageViaApi } from "./e2e-auth";
+import { requireMockApi } from "./e2e-env";
 
 function requestFromSettings(
   settings: GeneralSettingsType,
@@ -264,6 +265,52 @@ test.describe("General settings", () => {
         await routeToContinue.continue().catch(() => undefined);
       }
       await page.unroute("**/api/settings/general").catch(() => undefined);
+      await restoreGeneralSettings(page, baselineRequest);
+    }
+
+    tracker.assertClean();
+  });
+  test("asks before turning image downloads off", async ({ page }) => {
+    // On a real instance the save would delete its downloaded artwork.
+    requireMockApi();
+    const tracker = trackBrowserIssues(page);
+    const puts: UpdateGeneralSettingsRequest[] = [];
+    page.on("request", request => {
+      if (
+        request.method() === "PUT" &&
+        new URL(request.url()).pathname === "/api/settings/general"
+      ) {
+        puts.push(request.postDataJSON() as UpdateGeneralSettingsRequest);
+      }
+    });
+
+    await loginPageViaApi(page);
+    const baselineRequest = requestFromSettings(await fetchGeneralSettings(page));
+    expect(baselineRequest.download_images).toBe(true);
+
+    try {
+      await page.goto("/settings");
+      const downloads = page.getByRole("switch", { name: "Download images" });
+      await downloads.click();
+      await expect(downloads).toHaveAttribute("aria-checked", "false");
+
+      await page.getByRole("button", { name: "Save Settings" }).click();
+      const dialog = page.getByRole("alertdialog", {
+        name: "Delete downloaded images?",
+      });
+      await expect(dialog).toBeVisible();
+      await dialog.getByRole("button", { name: "Cancel" }).click();
+      await expect(dialog).toBeHidden();
+      expect(puts).toHaveLength(0);
+
+      await page.getByRole("button", { name: "Save Settings" }).click();
+      await dialog.getByRole("button", { name: "Delete images" }).click();
+      await expect(dialog).toBeHidden();
+      await expect(page.getByText("Settings saved")).toBeVisible();
+      expect(puts).toHaveLength(1);
+      expect(puts[0].download_images).toBe(false);
+      expect((await fetchGeneralSettings(page)).download_images).toBe(false);
+    } finally {
       await restoreGeneralSettings(page, baselineRequest);
     }
 

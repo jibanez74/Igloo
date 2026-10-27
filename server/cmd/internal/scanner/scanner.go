@@ -109,6 +109,9 @@ type StartResult struct {
 // scan state keeps a single owner.
 type Launcher struct {
 	Wait *sync.WaitGroup
+	// Finished, when set, runs after every run, before a queued library scan
+	// starts.
+	Finished func()
 
 	mu      sync.Mutex
 	running bool
@@ -184,6 +187,9 @@ func (l *Launcher) launch(request *launchRequest, directory string) {
 	request.begin(request.changes.Scope())
 	l.Wait.Go(func() {
 		request.run(directory, request.changes)
+		if l.Finished != nil {
+			l.Finished()
+		}
 		l.finish()
 	})
 }
