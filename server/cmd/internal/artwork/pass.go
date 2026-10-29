@@ -243,8 +243,10 @@ func (s *Syncer) keepCopies(ctx context.Context, staticDir string, full bool) {
 	// folders they were in, is most likely an unmounted disk, also on the
 	// first pass after a restart; healing would download everything again
 	// beneath the mount point. Files deleted from a folder that is still
-	// there are downloaded again.
-	allMissing := p.localSeen > 0 && p.localMissing == p.localSeen
+	// there are downloaded again. A pass of changes lists only the copies of
+	// its folders, which may all be gone while others are not; the folders
+	// that held copies, checked above, stand in for this.
+	allMissing := full && p.localSeen > 0 && p.localMissing == p.localSeen
 	if allMissing && !anyDirExists(staticDir, p.localDirs, os.Lstat) {
 		s.logger.Warn(unmountedWarning, "static_dir", staticDir, "copies", p.localSeen)
 		return

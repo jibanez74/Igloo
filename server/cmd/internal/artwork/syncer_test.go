@@ -1596,3 +1596,34 @@ func TestPass_ANewProviderIDDuringTheDownloadWins(t *testing.T) {
 		t.Fatal("the next pass did not download into the new folder")
 	}
 }
+
+// A pass of changes sees only the copies of its folders, so every one of them
+// missing says nothing about a mount; a managed folder that links to another
+// disk is written through.
+func TestPassChanges_HealsACopyInAManagedFolderThatLinksElsewhere(t *testing.T) {
+	h := newHarness(t)
+	err := os.Symlink(t.TempDir(), filepath.Join(h.static, "movies"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.addMovie(1, 603, "The Matrix", "/matrix-poster.jpg", "")
+	h.addMovie(2, 604, "Inception", "/inception-poster.jpg", "")
+	h.pass()
+
+	err = os.Remove(filepath.Join(h.static, "movies", "603", "the_matrix_poster.png"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.exec(`UPDATE movies SET backdrop_path_source = '/matrix-backdrop.jpg' WHERE id = 1`)
+	h.passChanges()
+
+	if !h.exists("movies/603/the_matrix_poster.png") || h.value("movies", "poster_path", 1).String != local("movies/603/the_matrix_poster.png", "w500", "/matrix-poster.jpg") {
+		t.Fatal("did not download the deleted poster again")
+	}
+	if h.value("movies", "backdrop_path", 1).String != local("movies/603/the_matrix_backdrop.png", "w1280", "/matrix-backdrop.jpg") {
+		t.Fatalf("backdrop = %q, want its copy", h.value("movies", "backdrop_path", 1).String)
+	}
+	if len(h.logger.WarnEntries) != 0 {
+		t.Fatalf("warned %v", h.logger.WarnEntries)
+	}
+}
