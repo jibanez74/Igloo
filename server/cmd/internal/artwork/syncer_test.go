@@ -316,6 +316,29 @@ func TestPass_HealsAMissingCopy(t *testing.T) {
 	}
 }
 
+// Files deleted from a folder that is still there are not what an unmounted
+// disk looks like, even when they were every copy there was.
+func TestPass_HealsEveryCopyDeletedFromAFolderThatStillExists(t *testing.T) {
+	h := newHarness(t)
+	h.addMovie(1, 603, "The Matrix", "/matrix-poster.jpg", "/matrix-backdrop.jpg")
+	h.pass()
+
+	for _, name := range []string{"the_matrix_poster.png", "the_matrix_backdrop.png"} {
+		err := os.Remove(filepath.Join(h.static, "movies", "603", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	h.pass()
+
+	if !h.exists("movies/603/the_matrix_poster.png") || !h.exists("movies/603/the_matrix_backdrop.png") {
+		t.Fatal("copies deleted from a folder that still exists were not downloaded again")
+	}
+	if len(h.logger.WarnEntries) != 0 {
+		t.Fatalf("warned %q about a static directory that is mounted", h.logger.WarnEntries[0].Msg)
+	}
+}
+
 func TestPass_LeavesAStaticDirectoryThatLostEveryCopyAlone(t *testing.T) {
 	h := newHarness(t)
 	h.addMovie(1, 603, "The Matrix", "/matrix-poster.jpg", "/matrix-backdrop.jpg")
@@ -335,7 +358,7 @@ func TestPass_LeavesAStaticDirectoryThatLostEveryCopyAlone(t *testing.T) {
 	if h.value("movies", "poster_path", 1).String != copyURL {
 		t.Fatal("pointed a column away from its copy while the directory looked unmounted")
 	}
-	if !h.logger.WarnMentions("skipping artwork pass: no downloaded artwork is left in the static directory; is it mounted?", h.static) {
+	if !h.logger.WarnMentions("skipping artwork pass: no downloaded artwork is left in the static directory; is it mounted? Turn Download images off and on to download it again", h.static) {
 		t.Fatal("did not warn about the empty static directory")
 	}
 
@@ -368,7 +391,7 @@ func TestPass_LeavesAnEmptyStaticDirectoryAloneAfterARestart(t *testing.T) {
 	if h.value("movies", "poster_path", 1).String != copyURL {
 		t.Fatal("pointed a column away from its copy while the directory looked unmounted")
 	}
-	if !h.logger.WarnMentions("skipping artwork pass: no downloaded artwork is left in the static directory; is it mounted?", h.static) {
+	if !h.logger.WarnMentions("skipping artwork pass: no downloaded artwork is left in the static directory; is it mounted? Turn Download images off and on to download it again", h.static) {
 		t.Fatal("did not warn about the empty static directory")
 	}
 

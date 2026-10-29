@@ -146,9 +146,10 @@ type plan struct {
 	// kept holds the paths of the copies the columns point at, for prune.
 	kept map[string]bool
 	// localSeen counts the images pointing at a copy, localMissing those
-	// whose file is gone.
+	// whose file is gone; localDirs holds the managed folders they are in.
 	localSeen    int
 	localMissing int
+	localDirs    map[string]bool
 	remembered   int
 }
 
@@ -203,12 +204,14 @@ func (s *Syncer) keepCopies(ctx context.Context, staticDir string) {
 
 	p := s.plan(staticDir, images, skipped)
 	// Every copy listed is in the directory the database records, since a
-	// new one was just pointed back, so one that holds none of them now is
-	// most likely an unmounted disk, also on the first pass after a restart;
-	// healing would download everything again beneath the mount point.
+	// new one was just pointed back, so one that holds none of them, nor the
+	// folders they were in, is most likely an unmounted disk, also on the
+	// first pass after a restart; healing would download everything again
+	// beneath the mount point. Files deleted from a folder that is still
+	// there are downloaded again.
 	allMissing := p.localSeen > 0 && p.localMissing == p.localSeen
-	if allMissing {
-		s.logger.Warn("skipping artwork pass: no downloaded artwork is left in the static directory; is it mounted?", "static_dir", staticDir, "copies", p.localSeen)
+	if allMissing && !anyDirExists(staticDir, p.localDirs) {
+		s.logger.Warn("skipping artwork pass: no downloaded artwork is left in the static directory; is it mounted? Turn Download images off and on to download it again", "static_dir", staticDir, "copies", p.localSeen)
 		return
 	}
 
@@ -277,7 +280,7 @@ func (s *Syncer) listImages(ctx context.Context) ([]image, error) {
 // plan sorts the images into copies to keep, columns to point back at their
 // source, copies to reuse and copies to download.
 func (s *Syncer) plan(staticDir string, images []image, skipped map[string]string) plan {
-	p := plan{kept: make(map[string]bool)}
+	p := plan{kept: make(map[string]bool), localDirs: make(map[string]bool)}
 	keptStems := make(map[string]keptCopy)
 	type candidate struct {
 		img  image
@@ -302,6 +305,7 @@ func (s *Syncer) plan(staticDir string, images []image, skipped map[string]strin
 		rel, ver, isLocal := parseLocalURL(img.value.String)
 		if isLocal {
 			p.localSeen++
+			p.localDirs[img.column.dir] = true
 			exists := fileExists(staticDir, rel)
 			if !exists {
 				p.localMissing++
@@ -782,6 +786,18 @@ func fileExists(staticDir, rel string) bool {
 	}
 	file, err := os.Lstat(path)
 	return err == nil && file.Mode().IsRegular()
+}
+
+// anyDirExists reports whether one of the managed folders dirs is a real
+// directory in staticDir.
+func anyDirExists(staticDir string, dirs map[string]bool) bool {
+	for dir := range dirs {
+		info, err := os.Lstat(filepath.Join(staticDir, dir))
+		if err == nil && info.IsDir() {
+			return true
+		}
+	}
+	return false
 }
 
 // logFailure logs err unless shutdown or a settings change caused it.
