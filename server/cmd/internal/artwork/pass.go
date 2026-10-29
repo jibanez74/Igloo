@@ -489,7 +489,7 @@ func (s *Syncer) apply(ctx context.Context, staticDir string, updates []update, 
 				return errSettingsChanged
 			}
 			for _, u := range batch {
-				n, err := u.img.column.set(ctx, q, u.img.rowID, u.value, u.img.source)
+				n, err := u.img.column.set(ctx, q, u.img.rowID, u.value, u.img.source, u.img.key)
 				if err != nil {
 					return fmt.Errorf("update %s artwork: %w", u.img.column.label, err)
 				}

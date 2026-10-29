@@ -1517,3 +1517,82 @@ func TestRequest_AFullRequestDuringAPassWinsOverChanges(t *testing.T) {
 		})
 	}
 }
+
+// A new provider ID returns the source again, so a pass of changes downloads
+// the image into the new folder, and a pass that works in the old folder
+// finds no row pointing there to keep a copy for.
+func TestPassChanges_FollowsARowToTheFolderOfItsNewProviderID(t *testing.T) {
+	h := newHarness(t)
+	h.addMovie(1, 603, "The Matrix", "/matrix-poster.jpg", "")
+	h.pass()
+
+	h.exec(`UPDATE movies SET tmdb_id = 604 WHERE id = 1`)
+	if h.value("movies", "poster_path", 1).String != "/matrix-poster.jpg" {
+		t.Fatalf("poster = %q, want its source once the ID changed", h.value("movies", "poster_path", 1).String)
+	}
+
+	// Another movie selects the old folder in the same pass.
+	h.addMovie(2, 603, "The Matrix Reloaded", "/reloaded-poster.jpg", "")
+	h.passChanges()
+
+	if h.value("movies", "poster_path", 1).String != local("movies/604/the_matrix_poster.png", "w500", "/matrix-poster.jpg") || !h.exists("movies/604/the_matrix_poster.png") {
+		t.Fatalf("poster = %q, want its copy in the new folder", h.value("movies", "poster_path", 1).String)
+	}
+	if !h.exists("movies/603/the_matrix_reloaded_poster.png") {
+		t.Fatal("did not download the other movie's poster")
+	}
+	if h.exists("movies/603/the_matrix_poster.png") {
+		t.Fatal("left the copy in the old folder, which nothing points at")
+	}
+}
+
+// Seasons and episodes are in their show's folder, so a new show ID returns
+// their sources too.
+func TestPass_ANewShowIDReturnsTheSourcesOfItsSeasonsAndEpisodes(t *testing.T) {
+	h := newHarness(t)
+	h.addShow(1, 1438, "The Wire", "/wire-poster.jpg", "")
+	h.exec(`INSERT INTO show_seasons (id, show_id, season_number, name, poster_path_source) VALUES (1, 1, 1, 'Season 1', '/season-1.jpg')`)
+	h.exec(`INSERT INTO show_episodes (id, season_id, episode_number, name, still_path_source) VALUES (1, 1, 1, 'The Target', '/pilot.jpg')`)
+	h.pass()
+
+	h.exec(`UPDATE shows SET tmdb_id = 1439 WHERE id = 1`)
+	if h.value("shows", "poster_path", 1).String != "/wire-poster.jpg" ||
+		h.value("show_seasons", "poster_path", 1).String != "/season-1.jpg" ||
+		h.value("show_episodes", "still_path", 1).String != "/pilot.jpg" {
+		t.Fatal("a new show ID left images pointing into the old folder")
+	}
+
+	h.passChanges()
+	if h.value("show_episodes", "still_path", 1).String != local("shows/1439/s01e01_still.png", "w500", "/pilot.jpg") {
+		t.Fatalf("episode still = %q, want its copy in the new folder", h.value("show_episodes", "still_path", 1).String)
+	}
+}
+
+// A copy is only pointed at while the row's ID still names its folder: an ID
+// written during the download returned the source, and wins.
+func TestPass_ANewProviderIDDuringTheDownloadWins(t *testing.T) {
+	h := newHarness(t)
+	h.addMovie(1, 603, "The Matrix", "/matrix-poster.jpg", "")
+	h.upstream.handlers["/w500/matrix-poster.jpg"] = func(w http.ResponseWriter, r *http.Request) {
+		_, err := h.db.Exec(`UPDATE movies SET tmdb_id = 604 WHERE id = 1`)
+		if err != nil {
+			t.Error(err)
+		}
+		w.Write([]byte(pngSignature))
+	}
+
+	h.pass()
+
+	if h.value("movies", "poster_path", 1).String != "/matrix-poster.jpg" {
+		t.Fatalf("poster = %q, want its source", h.value("movies", "poster_path", 1).String)
+	}
+	if h.exists("movies/603/the_matrix_poster.png") {
+		t.Fatal("kept a copy in a folder the row no longer belongs in")
+	}
+
+	delete(h.upstream.handlers, "/w500/matrix-poster.jpg")
+	h.passChanges()
+	if h.value("movies", "poster_path", 1).String != local("movies/604/the_matrix_poster.png", "w500", "/matrix-poster.jpg") {
+		t.Fatal("the next pass did not download into the new folder")
+	}
+}

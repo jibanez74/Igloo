@@ -1785,6 +1785,59 @@ BEGIN
   UPDATE musicians SET thumb = new.thumb_source WHERE id = new.id;
 END;
 
+-- A copy lives in the folder of its row's provider ID, so a new ID returns
+-- the source again, as a new source does: the artwork pass after a run of
+-- changes lists only the rows whose ID names a folder it touches, and would
+-- take a copy the row still pointed at in its old folder for an orphan.
+CREATE TRIGGER IF NOT EXISTS movies_artwork_key_au
+AFTER UPDATE OF tmdb_id ON movies
+WHEN new.tmdb_id IS NOT old.tmdb_id
+BEGIN
+  UPDATE movies SET poster_path = poster_path_source WHERE id = new.id AND poster_path LIKE '/api/static/%';
+  UPDATE movies SET backdrop_path = backdrop_path_source WHERE id = new.id AND backdrop_path LIKE '/api/static/%';
+END;
+
+CREATE TRIGGER IF NOT EXISTS artist_artwork_key_au
+AFTER UPDATE OF tmdb_id ON artist
+WHEN new.tmdb_id IS NOT old.tmdb_id
+BEGIN
+  UPDATE artist SET profile = profile_source WHERE id = new.id AND profile LIKE '/api/static/%';
+END;
+
+-- Seasons and episodes share their show's folder.
+CREATE TRIGGER IF NOT EXISTS shows_artwork_key_au
+AFTER UPDATE OF tmdb_id ON shows
+WHEN new.tmdb_id IS NOT old.tmdb_id
+BEGIN
+  UPDATE shows SET poster_path = poster_path_source WHERE id = new.id AND poster_path LIKE '/api/static/%';
+  UPDATE shows SET backdrop_path = backdrop_path_source WHERE id = new.id AND backdrop_path LIKE '/api/static/%';
+  UPDATE show_seasons SET poster_path = poster_path_source WHERE show_id = new.id AND poster_path LIKE '/api/static/%';
+  UPDATE show_episodes SET still_path = still_path_source
+  WHERE season_id IN (SELECT id FROM show_seasons WHERE show_id = new.id) AND still_path LIKE '/api/static/%';
+END;
+
+CREATE TRIGGER IF NOT EXISTS networks_artwork_key_au
+AFTER UPDATE OF tmdb_id ON networks
+WHEN new.tmdb_id IS NOT old.tmdb_id
+BEGIN
+  UPDATE networks SET logo = logo_source WHERE id = new.id AND logo LIKE '/api/static/%';
+END;
+
+-- An album's folder is its Spotify ID, or its Apple ID without one.
+CREATE TRIGGER IF NOT EXISTS albums_artwork_key_au
+AFTER UPDATE OF spotify_id, apple_id ON albums
+WHEN new.spotify_id IS NOT old.spotify_id OR new.apple_id IS NOT old.apple_id
+BEGIN
+  UPDATE albums SET cover = cover_source WHERE id = new.id AND cover LIKE '/api/static/%';
+END;
+
+CREATE TRIGGER IF NOT EXISTS musicians_artwork_key_au
+AFTER UPDATE OF spotify_id ON musicians
+WHEN new.spotify_id IS NOT old.spotify_id
+BEGIN
+  UPDATE musicians SET thumb = thumb_source WHERE id = new.id AND thumb LIKE '/api/static/%';
+END;
+
 -- The image columns that still return their source: new rows and sources, and
 -- images that failed or stay remote. With downloads on they are few, so the
 -- artwork pass after a run of watcher-detected changes finds them without

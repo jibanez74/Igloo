@@ -1381,16 +1381,23 @@ func (q *Queries) RevertShowSeasonPosterArtwork(ctx context.Context) (int64, err
 
 const setAlbumCoverArtwork = `-- name: SetAlbumCoverArtwork :execrows
 UPDATE albums SET cover = ?1 WHERE id = ?2 AND cover_source IS ?3
+  AND (?1 IS ?3 OR spotify_id IS CAST(?4 AS TEXT) OR CAST(apple_id AS TEXT) IS CAST(?4 AS TEXT))
 `
 
 type SetAlbumCoverArtworkParams struct {
 	Value  sql.NullString `json:"value"`
 	ID     int64          `json:"id"`
 	Source sql.NullString `json:"-"`
+	Key    string         `json:"key"`
 }
 
 func (q *Queries) SetAlbumCoverArtwork(ctx context.Context, arg SetAlbumCoverArtworkParams) (int64, error) {
-	result, err := q.exec(ctx, q.setAlbumCoverArtworkStmt, setAlbumCoverArtwork, arg.Value, arg.ID, arg.Source)
+	result, err := q.exec(ctx, q.setAlbumCoverArtworkStmt, setAlbumCoverArtwork,
+		arg.Value,
+		arg.ID,
+		arg.Source,
+		arg.Key,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -1399,16 +1406,23 @@ func (q *Queries) SetAlbumCoverArtwork(ctx context.Context, arg SetAlbumCoverArt
 
 const setArtistProfileArtwork = `-- name: SetArtistProfileArtwork :execrows
 UPDATE artist SET profile = ?1 WHERE id = ?2 AND profile_source IS ?3
+  AND (?1 IS ?3 OR CAST(tmdb_id AS TEXT) IS CAST(?4 AS TEXT))
 `
 
 type SetArtistProfileArtworkParams struct {
 	Value  sql.NullString `json:"value"`
 	ID     int64          `json:"id"`
 	Source sql.NullString `json:"-"`
+	Key    string         `json:"key"`
 }
 
 func (q *Queries) SetArtistProfileArtwork(ctx context.Context, arg SetArtistProfileArtworkParams) (int64, error) {
-	result, err := q.exec(ctx, q.setArtistProfileArtworkStmt, setArtistProfileArtwork, arg.Value, arg.ID, arg.Source)
+	result, err := q.exec(ctx, q.setArtistProfileArtworkStmt, setArtistProfileArtwork,
+		arg.Value,
+		arg.ID,
+		arg.Source,
+		arg.Key,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -1427,16 +1441,23 @@ func (q *Queries) SetArtworkStaticDir(ctx context.Context, staticDir string) err
 
 const setMovieBackdropArtwork = `-- name: SetMovieBackdropArtwork :execrows
 UPDATE movies SET backdrop_path = ?1 WHERE id = ?2 AND backdrop_path_source IS ?3
+  AND (?1 IS ?3 OR CAST(tmdb_id AS TEXT) IS CAST(?4 AS TEXT))
 `
 
 type SetMovieBackdropArtworkParams struct {
 	Value  sql.NullString `json:"value"`
 	ID     int64          `json:"id"`
 	Source sql.NullString `json:"-"`
+	Key    string         `json:"key"`
 }
 
 func (q *Queries) SetMovieBackdropArtwork(ctx context.Context, arg SetMovieBackdropArtworkParams) (int64, error) {
-	result, err := q.exec(ctx, q.setMovieBackdropArtworkStmt, setMovieBackdropArtwork, arg.Value, arg.ID, arg.Source)
+	result, err := q.exec(ctx, q.setMovieBackdropArtworkStmt, setMovieBackdropArtwork,
+		arg.Value,
+		arg.ID,
+		arg.Source,
+		arg.Key,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -1445,18 +1466,27 @@ func (q *Queries) SetMovieBackdropArtwork(ctx context.Context, arg SetMovieBackd
 
 const setMoviePosterArtwork = `-- name: SetMoviePosterArtwork :execrows
 UPDATE movies SET poster_path = ?1 WHERE id = ?2 AND poster_path_source IS ?3
+  AND (?1 IS ?3 OR CAST(tmdb_id AS TEXT) IS CAST(?4 AS TEXT))
 `
 
 type SetMoviePosterArtworkParams struct {
 	Value  sql.NullString `json:"value"`
 	ID     int64          `json:"id"`
 	Source sql.NullString `json:"-"`
+	Key    string         `json:"key"`
 }
 
 // Applies only while the source the value was made from is still the row's,
-// so a source a scanner wrote meanwhile wins.
+// so a source a scanner wrote meanwhile wins, and a copy only while the row's
+// provider ID still names the folder key it is in: a new ID returned the
+// source, and a copy in the old folder would be taken for an orphan.
 func (q *Queries) SetMoviePosterArtwork(ctx context.Context, arg SetMoviePosterArtworkParams) (int64, error) {
-	result, err := q.exec(ctx, q.setMoviePosterArtworkStmt, setMoviePosterArtwork, arg.Value, arg.ID, arg.Source)
+	result, err := q.exec(ctx, q.setMoviePosterArtworkStmt, setMoviePosterArtwork,
+		arg.Value,
+		arg.ID,
+		arg.Source,
+		arg.Key,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -1465,16 +1495,23 @@ func (q *Queries) SetMoviePosterArtwork(ctx context.Context, arg SetMoviePosterA
 
 const setMusicianThumbArtwork = `-- name: SetMusicianThumbArtwork :execrows
 UPDATE musicians SET thumb = ?1 WHERE id = ?2 AND thumb_source IS ?3
+  AND (?1 IS ?3 OR spotify_id IS CAST(?4 AS TEXT))
 `
 
 type SetMusicianThumbArtworkParams struct {
 	Value  sql.NullString `json:"value"`
 	ID     int64          `json:"id"`
 	Source sql.NullString `json:"-"`
+	Key    string         `json:"key"`
 }
 
 func (q *Queries) SetMusicianThumbArtwork(ctx context.Context, arg SetMusicianThumbArtworkParams) (int64, error) {
-	result, err := q.exec(ctx, q.setMusicianThumbArtworkStmt, setMusicianThumbArtwork, arg.Value, arg.ID, arg.Source)
+	result, err := q.exec(ctx, q.setMusicianThumbArtworkStmt, setMusicianThumbArtwork,
+		arg.Value,
+		arg.ID,
+		arg.Source,
+		arg.Key,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -1483,16 +1520,23 @@ func (q *Queries) SetMusicianThumbArtwork(ctx context.Context, arg SetMusicianTh
 
 const setNetworkLogoArtwork = `-- name: SetNetworkLogoArtwork :execrows
 UPDATE networks SET logo = ?1 WHERE id = ?2 AND logo_source IS ?3
+  AND (?1 IS ?3 OR CAST(tmdb_id AS TEXT) IS CAST(?4 AS TEXT))
 `
 
 type SetNetworkLogoArtworkParams struct {
 	Value  sql.NullString `json:"value"`
 	ID     int64          `json:"id"`
 	Source sql.NullString `json:"-"`
+	Key    string         `json:"key"`
 }
 
 func (q *Queries) SetNetworkLogoArtwork(ctx context.Context, arg SetNetworkLogoArtworkParams) (int64, error) {
-	result, err := q.exec(ctx, q.setNetworkLogoArtworkStmt, setNetworkLogoArtwork, arg.Value, arg.ID, arg.Source)
+	result, err := q.exec(ctx, q.setNetworkLogoArtworkStmt, setNetworkLogoArtwork,
+		arg.Value,
+		arg.ID,
+		arg.Source,
+		arg.Key,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -1501,16 +1545,23 @@ func (q *Queries) SetNetworkLogoArtwork(ctx context.Context, arg SetNetworkLogoA
 
 const setShowBackdropArtwork = `-- name: SetShowBackdropArtwork :execrows
 UPDATE shows SET backdrop_path = ?1 WHERE id = ?2 AND backdrop_path_source IS ?3
+  AND (?1 IS ?3 OR CAST(tmdb_id AS TEXT) IS CAST(?4 AS TEXT))
 `
 
 type SetShowBackdropArtworkParams struct {
 	Value  sql.NullString `json:"value"`
 	ID     int64          `json:"id"`
 	Source sql.NullString `json:"-"`
+	Key    string         `json:"key"`
 }
 
 func (q *Queries) SetShowBackdropArtwork(ctx context.Context, arg SetShowBackdropArtworkParams) (int64, error) {
-	result, err := q.exec(ctx, q.setShowBackdropArtworkStmt, setShowBackdropArtwork, arg.Value, arg.ID, arg.Source)
+	result, err := q.exec(ctx, q.setShowBackdropArtworkStmt, setShowBackdropArtwork,
+		arg.Value,
+		arg.ID,
+		arg.Source,
+		arg.Key,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -1518,17 +1569,26 @@ func (q *Queries) SetShowBackdropArtwork(ctx context.Context, arg SetShowBackdro
 }
 
 const setShowEpisodeStillArtwork = `-- name: SetShowEpisodeStillArtwork :execrows
-UPDATE show_episodes SET still_path = ?1 WHERE id = ?2 AND still_path_source IS ?3
+UPDATE show_episodes SET still_path = ?1
+WHERE show_episodes.id = ?2 AND show_episodes.still_path_source IS ?3
+  AND (?1 IS ?3
+    OR (SELECT CAST(sh.tmdb_id AS TEXT) FROM show_seasons se JOIN shows sh ON sh.id = se.show_id WHERE se.id = show_episodes.season_id) IS CAST(?4 AS TEXT))
 `
 
 type SetShowEpisodeStillArtworkParams struct {
 	Value  sql.NullString `json:"value"`
 	ID     int64          `json:"id"`
 	Source sql.NullString `json:"-"`
+	Key    string         `json:"key"`
 }
 
 func (q *Queries) SetShowEpisodeStillArtwork(ctx context.Context, arg SetShowEpisodeStillArtworkParams) (int64, error) {
-	result, err := q.exec(ctx, q.setShowEpisodeStillArtworkStmt, setShowEpisodeStillArtwork, arg.Value, arg.ID, arg.Source)
+	result, err := q.exec(ctx, q.setShowEpisodeStillArtworkStmt, setShowEpisodeStillArtwork,
+		arg.Value,
+		arg.ID,
+		arg.Source,
+		arg.Key,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -1537,16 +1597,23 @@ func (q *Queries) SetShowEpisodeStillArtwork(ctx context.Context, arg SetShowEpi
 
 const setShowPosterArtwork = `-- name: SetShowPosterArtwork :execrows
 UPDATE shows SET poster_path = ?1 WHERE id = ?2 AND poster_path_source IS ?3
+  AND (?1 IS ?3 OR CAST(tmdb_id AS TEXT) IS CAST(?4 AS TEXT))
 `
 
 type SetShowPosterArtworkParams struct {
 	Value  sql.NullString `json:"value"`
 	ID     int64          `json:"id"`
 	Source sql.NullString `json:"-"`
+	Key    string         `json:"key"`
 }
 
 func (q *Queries) SetShowPosterArtwork(ctx context.Context, arg SetShowPosterArtworkParams) (int64, error) {
-	result, err := q.exec(ctx, q.setShowPosterArtworkStmt, setShowPosterArtwork, arg.Value, arg.ID, arg.Source)
+	result, err := q.exec(ctx, q.setShowPosterArtworkStmt, setShowPosterArtwork,
+		arg.Value,
+		arg.ID,
+		arg.Source,
+		arg.Key,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -1554,17 +1621,26 @@ func (q *Queries) SetShowPosterArtwork(ctx context.Context, arg SetShowPosterArt
 }
 
 const setShowSeasonPosterArtwork = `-- name: SetShowSeasonPosterArtwork :execrows
-UPDATE show_seasons SET poster_path = ?1 WHERE id = ?2 AND poster_path_source IS ?3
+UPDATE show_seasons SET poster_path = ?1
+WHERE show_seasons.id = ?2 AND show_seasons.poster_path_source IS ?3
+  AND (?1 IS ?3
+    OR (SELECT CAST(sh.tmdb_id AS TEXT) FROM shows sh WHERE sh.id = show_seasons.show_id) IS CAST(?4 AS TEXT))
 `
 
 type SetShowSeasonPosterArtworkParams struct {
 	Value  sql.NullString `json:"value"`
 	ID     int64          `json:"id"`
 	Source sql.NullString `json:"-"`
+	Key    string         `json:"key"`
 }
 
 func (q *Queries) SetShowSeasonPosterArtwork(ctx context.Context, arg SetShowSeasonPosterArtworkParams) (int64, error) {
-	result, err := q.exec(ctx, q.setShowSeasonPosterArtworkStmt, setShowSeasonPosterArtwork, arg.Value, arg.ID, arg.Source)
+	result, err := q.exec(ctx, q.setShowSeasonPosterArtworkStmt, setShowSeasonPosterArtwork,
+		arg.Value,
+		arg.ID,
+		arg.Source,
+		arg.Key,
+	)
 	if err != nil {
 		return 0, err
 	}

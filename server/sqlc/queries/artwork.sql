@@ -46,11 +46,15 @@ ORDER BY id;
 
 -- name: SetMoviePosterArtwork :execrows
 -- Applies only while the source the value was made from is still the row's,
--- so a source a scanner wrote meanwhile wins.
-UPDATE movies SET poster_path = sqlc.narg(value) WHERE id = sqlc.arg(id) AND poster_path_source IS sqlc.narg(source);
+-- so a source a scanner wrote meanwhile wins, and a copy only while the row's
+-- provider ID still names the folder key it is in: a new ID returned the
+-- source, and a copy in the old folder would be taken for an orphan.
+UPDATE movies SET poster_path = sqlc.narg(value) WHERE id = sqlc.arg(id) AND poster_path_source IS sqlc.narg(source)
+  AND (sqlc.narg(value) IS sqlc.narg(source) OR CAST(tmdb_id AS TEXT) IS CAST(sqlc.arg(key) AS TEXT));
 
 -- name: SetMovieBackdropArtwork :execrows
-UPDATE movies SET backdrop_path = sqlc.narg(value) WHERE id = sqlc.arg(id) AND backdrop_path_source IS sqlc.narg(source);
+UPDATE movies SET backdrop_path = sqlc.narg(value) WHERE id = sqlc.arg(id) AND backdrop_path_source IS sqlc.narg(source)
+  AND (sqlc.narg(value) IS sqlc.narg(source) OR CAST(tmdb_id AS TEXT) IS CAST(sqlc.arg(key) AS TEXT));
 
 -- name: RevertMoviePosterArtwork :execrows
 UPDATE movies SET poster_path = poster_path_source WHERE poster_path LIKE '/api/static/%';
@@ -80,7 +84,8 @@ WHERE tmdb_id IN (SELECT value FROM json_each(CAST(sqlc.arg(keys) AS TEXT)))
 ORDER BY id;
 
 -- name: SetArtistProfileArtwork :execrows
-UPDATE artist SET profile = sqlc.narg(value) WHERE id = sqlc.arg(id) AND profile_source IS sqlc.narg(source);
+UPDATE artist SET profile = sqlc.narg(value) WHERE id = sqlc.arg(id) AND profile_source IS sqlc.narg(source)
+  AND (sqlc.narg(value) IS sqlc.narg(source) OR CAST(tmdb_id AS TEXT) IS CAST(sqlc.arg(key) AS TEXT));
 
 -- name: RevertArtistProfileArtwork :execrows
 UPDATE artist SET profile = profile_source WHERE profile LIKE '/api/static/%';
@@ -110,10 +115,12 @@ WHERE tmdb_id IN (SELECT value FROM json_each(CAST(sqlc.arg(keys) AS TEXT)))
 ORDER BY id;
 
 -- name: SetShowPosterArtwork :execrows
-UPDATE shows SET poster_path = sqlc.narg(value) WHERE id = sqlc.arg(id) AND poster_path_source IS sqlc.narg(source);
+UPDATE shows SET poster_path = sqlc.narg(value) WHERE id = sqlc.arg(id) AND poster_path_source IS sqlc.narg(source)
+  AND (sqlc.narg(value) IS sqlc.narg(source) OR CAST(tmdb_id AS TEXT) IS CAST(sqlc.arg(key) AS TEXT));
 
 -- name: SetShowBackdropArtwork :execrows
-UPDATE shows SET backdrop_path = sqlc.narg(value) WHERE id = sqlc.arg(id) AND backdrop_path_source IS sqlc.narg(source);
+UPDATE shows SET backdrop_path = sqlc.narg(value) WHERE id = sqlc.arg(id) AND backdrop_path_source IS sqlc.narg(source)
+  AND (sqlc.narg(value) IS sqlc.narg(source) OR CAST(tmdb_id AS TEXT) IS CAST(sqlc.arg(key) AS TEXT));
 
 -- name: RevertShowPosterArtwork :execrows
 UPDATE shows SET poster_path = poster_path_source WHERE poster_path LIKE '/api/static/%';
@@ -147,7 +154,10 @@ WHERE sh.tmdb_id IN (SELECT value FROM json_each(CAST(sqlc.arg(keys) AS TEXT)))
 ORDER BY se.id;
 
 -- name: SetShowSeasonPosterArtwork :execrows
-UPDATE show_seasons SET poster_path = sqlc.narg(value) WHERE id = sqlc.arg(id) AND poster_path_source IS sqlc.narg(source);
+UPDATE show_seasons SET poster_path = sqlc.narg(value)
+WHERE show_seasons.id = sqlc.arg(id) AND show_seasons.poster_path_source IS sqlc.narg(source)
+  AND (sqlc.narg(value) IS sqlc.narg(source)
+    OR (SELECT CAST(sh.tmdb_id AS TEXT) FROM shows sh WHERE sh.id = show_seasons.show_id) IS CAST(sqlc.arg(key) AS TEXT));
 
 -- name: RevertShowSeasonPosterArtwork :execrows
 UPDATE show_seasons SET poster_path = poster_path_source WHERE poster_path LIKE '/api/static/%';
@@ -180,7 +190,10 @@ WHERE sh.tmdb_id IN (SELECT value FROM json_each(CAST(sqlc.arg(keys) AS TEXT)))
 ORDER BY e.id;
 
 -- name: SetShowEpisodeStillArtwork :execrows
-UPDATE show_episodes SET still_path = sqlc.narg(value) WHERE id = sqlc.arg(id) AND still_path_source IS sqlc.narg(source);
+UPDATE show_episodes SET still_path = sqlc.narg(value)
+WHERE show_episodes.id = sqlc.arg(id) AND show_episodes.still_path_source IS sqlc.narg(source)
+  AND (sqlc.narg(value) IS sqlc.narg(source)
+    OR (SELECT CAST(sh.tmdb_id AS TEXT) FROM show_seasons se JOIN shows sh ON sh.id = se.show_id WHERE se.id = show_episodes.season_id) IS CAST(sqlc.arg(key) AS TEXT));
 
 -- name: RevertShowEpisodeStillArtwork :execrows
 UPDATE show_episodes SET still_path = still_path_source WHERE still_path LIKE '/api/static/%';
@@ -207,7 +220,8 @@ WHERE tmdb_id IN (SELECT value FROM json_each(CAST(sqlc.arg(keys) AS TEXT)))
 ORDER BY id;
 
 -- name: SetNetworkLogoArtwork :execrows
-UPDATE networks SET logo = sqlc.narg(value) WHERE id = sqlc.arg(id) AND logo_source IS sqlc.narg(source);
+UPDATE networks SET logo = sqlc.narg(value) WHERE id = sqlc.arg(id) AND logo_source IS sqlc.narg(source)
+  AND (sqlc.narg(value) IS sqlc.narg(source) OR CAST(tmdb_id AS TEXT) IS CAST(sqlc.arg(key) AS TEXT));
 
 -- name: RevertNetworkLogoArtwork :execrows
 UPDATE networks SET logo = logo_source WHERE logo LIKE '/api/static/%';
@@ -239,7 +253,8 @@ WHERE (spotify_id IN (SELECT value FROM json_each(CAST(sqlc.arg(keys) AS TEXT)))
 ORDER BY id;
 
 -- name: SetAlbumCoverArtwork :execrows
-UPDATE albums SET cover = sqlc.narg(value) WHERE id = sqlc.arg(id) AND cover_source IS sqlc.narg(source);
+UPDATE albums SET cover = sqlc.narg(value) WHERE id = sqlc.arg(id) AND cover_source IS sqlc.narg(source)
+  AND (sqlc.narg(value) IS sqlc.narg(source) OR spotify_id IS CAST(sqlc.arg(key) AS TEXT) OR CAST(apple_id AS TEXT) IS CAST(sqlc.arg(key) AS TEXT));
 
 -- name: RevertAlbumCoverArtwork :execrows
 UPDATE albums SET cover = cover_source WHERE cover LIKE '/api/static/%';
@@ -266,7 +281,8 @@ WHERE spotify_id IN (SELECT value FROM json_each(CAST(sqlc.arg(keys) AS TEXT)))
 ORDER BY id;
 
 -- name: SetMusicianThumbArtwork :execrows
-UPDATE musicians SET thumb = sqlc.narg(value) WHERE id = sqlc.arg(id) AND thumb_source IS sqlc.narg(source);
+UPDATE musicians SET thumb = sqlc.narg(value) WHERE id = sqlc.arg(id) AND thumb_source IS sqlc.narg(source)
+  AND (sqlc.narg(value) IS sqlc.narg(source) OR spotify_id IS CAST(sqlc.arg(key) AS TEXT));
 
 -- name: RevertMusicianThumbArtwork :execrows
 UPDATE musicians SET thumb = thumb_source WHERE thumb LIKE '/api/static/%';

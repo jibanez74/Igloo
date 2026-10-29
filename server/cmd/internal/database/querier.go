@@ -723,7 +723,9 @@ type Querier interface {
 	SetArtworkStaticDir(ctx context.Context, staticDir string) error
 	SetMovieBackdropArtwork(ctx context.Context, arg SetMovieBackdropArtworkParams) (int64, error)
 	// Applies only while the source the value was made from is still the row's,
-	// so a source a scanner wrote meanwhile wins.
+	// so a source a scanner wrote meanwhile wins, and a copy only while the row's
+	// provider ID still names the folder key it is in: a new ID returned the
+	// source, and a copy in the old folder would be taken for an orphan.
 	SetMoviePosterArtwork(ctx context.Context, arg SetMoviePosterArtworkParams) (int64, error)
 	SetMusicAlbumAppleID(ctx context.Context, arg SetMusicAlbumAppleIDParams) error
 	SetMusicAlbumSpotifyID(ctx context.Context, arg SetMusicAlbumSpotifyIDParams) error

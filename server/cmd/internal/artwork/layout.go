@@ -33,7 +33,9 @@ type column struct {
 	// size is the TMDB size a TMDB path source is fetched at; empty for a
 	// column whose sources are full Spotify or Apple URLs, fetched as stored.
 	size string
-	set  func(ctx context.Context, q *database.Queries, id int64, value, source sql.NullString) (int64, error)
+	// set writes value while the row's source is still source and, unless
+	// value is that source, its key is still key.
+	set func(ctx context.Context, q *database.Queries, id int64, value, source sql.NullString, key string) (int64, error)
 	// revert points every copy in the column back at its source.
 	revert func(q *database.Queries, ctx context.Context) (int64, error)
 }
@@ -41,15 +43,15 @@ type column struct {
 var (
 	moviePoster = &column{
 		label: "movie poster", dir: "movies", role: "poster", size: helpers.TMDB_POSTER_SIZE,
-		set: func(ctx context.Context, q *database.Queries, id int64, value, source sql.NullString) (int64, error) {
-			return q.SetMoviePosterArtwork(ctx, database.SetMoviePosterArtworkParams{ID: id, Value: value, Source: source})
+		set: func(ctx context.Context, q *database.Queries, id int64, value, source sql.NullString, key string) (int64, error) {
+			return q.SetMoviePosterArtwork(ctx, database.SetMoviePosterArtworkParams{ID: id, Value: value, Source: source, Key: key})
 		},
 		revert: (*database.Queries).RevertMoviePosterArtwork,
 	}
 	movieBackdrop = &column{
 		label: "movie backdrop", dir: "movies", role: "backdrop", size: helpers.TMDB_BACKDROP_SIZE,
-		set: func(ctx context.Context, q *database.Queries, id int64, value, source sql.NullString) (int64, error) {
-			return q.SetMovieBackdropArtwork(ctx, database.SetMovieBackdropArtworkParams{ID: id, Value: value, Source: source})
+		set: func(ctx context.Context, q *database.Queries, id int64, value, source sql.NullString, key string) (int64, error) {
+			return q.SetMovieBackdropArtwork(ctx, database.SetMovieBackdropArtworkParams{ID: id, Value: value, Source: source, Key: key})
 		},
 		revert: (*database.Queries).RevertMovieBackdropArtwork,
 	}
@@ -57,23 +59,23 @@ var (
 	// has one folder whatever credits them.
 	artistProfile = &column{
 		label: "person profile", dir: "people", role: "profile", size: helpers.TMDB_PROFILE_SIZE,
-		set: func(ctx context.Context, q *database.Queries, id int64, value, source sql.NullString) (int64, error) {
-			return q.SetArtistProfileArtwork(ctx, database.SetArtistProfileArtworkParams{ID: id, Value: value, Source: source})
+		set: func(ctx context.Context, q *database.Queries, id int64, value, source sql.NullString, key string) (int64, error) {
+			return q.SetArtistProfileArtwork(ctx, database.SetArtistProfileArtworkParams{ID: id, Value: value, Source: source, Key: key})
 		},
 		revert: (*database.Queries).RevertArtistProfileArtwork,
 	}
 
 	showPoster = &column{
 		label: "show poster", dir: "shows", role: "poster", size: helpers.TMDB_POSTER_SIZE,
-		set: func(ctx context.Context, q *database.Queries, id int64, value, source sql.NullString) (int64, error) {
-			return q.SetShowPosterArtwork(ctx, database.SetShowPosterArtworkParams{ID: id, Value: value, Source: source})
+		set: func(ctx context.Context, q *database.Queries, id int64, value, source sql.NullString, key string) (int64, error) {
+			return q.SetShowPosterArtwork(ctx, database.SetShowPosterArtworkParams{ID: id, Value: value, Source: source, Key: key})
 		},
 		revert: (*database.Queries).RevertShowPosterArtwork,
 	}
 	showBackdrop = &column{
 		label: "show backdrop", dir: "shows", role: "backdrop", size: helpers.TMDB_BACKDROP_SIZE,
-		set: func(ctx context.Context, q *database.Queries, id int64, value, source sql.NullString) (int64, error) {
-			return q.SetShowBackdropArtwork(ctx, database.SetShowBackdropArtworkParams{ID: id, Value: value, Source: source})
+		set: func(ctx context.Context, q *database.Queries, id int64, value, source sql.NullString, key string) (int64, error) {
+			return q.SetShowBackdropArtwork(ctx, database.SetShowBackdropArtworkParams{ID: id, Value: value, Source: source, Key: key})
 		},
 		revert: (*database.Queries).RevertShowBackdropArtwork,
 	}
@@ -81,36 +83,36 @@ var (
 	// them by number.
 	seasonPoster = &column{
 		label: "season poster", dir: "shows", role: "poster", size: helpers.TMDB_POSTER_SIZE,
-		set: func(ctx context.Context, q *database.Queries, id int64, value, source sql.NullString) (int64, error) {
-			return q.SetShowSeasonPosterArtwork(ctx, database.SetShowSeasonPosterArtworkParams{ID: id, Value: value, Source: source})
+		set: func(ctx context.Context, q *database.Queries, id int64, value, source sql.NullString, key string) (int64, error) {
+			return q.SetShowSeasonPosterArtwork(ctx, database.SetShowSeasonPosterArtworkParams{ID: id, Value: value, Source: source, Key: key})
 		},
 		revert: (*database.Queries).RevertShowSeasonPosterArtwork,
 	}
 	episodeStill = &column{
 		label: "episode still", dir: "shows", role: "still", size: helpers.TMDB_STILL_SIZE,
-		set: func(ctx context.Context, q *database.Queries, id int64, value, source sql.NullString) (int64, error) {
-			return q.SetShowEpisodeStillArtwork(ctx, database.SetShowEpisodeStillArtworkParams{ID: id, Value: value, Source: source})
+		set: func(ctx context.Context, q *database.Queries, id int64, value, source sql.NullString, key string) (int64, error) {
+			return q.SetShowEpisodeStillArtwork(ctx, database.SetShowEpisodeStillArtworkParams{ID: id, Value: value, Source: source, Key: key})
 		},
 		revert: (*database.Queries).RevertShowEpisodeStillArtwork,
 	}
 	networkLogo = &column{
 		label: "network logo", dir: "networks", role: "logo", size: helpers.TMDB_LOGO_SIZE,
-		set: func(ctx context.Context, q *database.Queries, id int64, value, source sql.NullString) (int64, error) {
-			return q.SetNetworkLogoArtwork(ctx, database.SetNetworkLogoArtworkParams{ID: id, Value: value, Source: source})
+		set: func(ctx context.Context, q *database.Queries, id int64, value, source sql.NullString, key string) (int64, error) {
+			return q.SetNetworkLogoArtwork(ctx, database.SetNetworkLogoArtworkParams{ID: id, Value: value, Source: source, Key: key})
 		},
 		revert: (*database.Queries).RevertNetworkLogoArtwork,
 	}
 	albumCover = &column{
 		label: "album cover", dir: "albums", role: "cover",
-		set: func(ctx context.Context, q *database.Queries, id int64, value, source sql.NullString) (int64, error) {
-			return q.SetAlbumCoverArtwork(ctx, database.SetAlbumCoverArtworkParams{ID: id, Value: value, Source: source})
+		set: func(ctx context.Context, q *database.Queries, id int64, value, source sql.NullString, key string) (int64, error) {
+			return q.SetAlbumCoverArtwork(ctx, database.SetAlbumCoverArtworkParams{ID: id, Value: value, Source: source, Key: key})
 		},
 		revert: (*database.Queries).RevertAlbumCoverArtwork,
 	}
 	musicianThumb = &column{
 		label: "musician photo", dir: "musicians", role: "thumb",
-		set: func(ctx context.Context, q *database.Queries, id int64, value, source sql.NullString) (int64, error) {
-			return q.SetMusicianThumbArtwork(ctx, database.SetMusicianThumbArtworkParams{ID: id, Value: value, Source: source})
+		set: func(ctx context.Context, q *database.Queries, id int64, value, source sql.NullString, key string) (int64, error) {
+			return q.SetMusicianThumbArtwork(ctx, database.SetMusicianThumbArtworkParams{ID: id, Value: value, Source: source, Key: key})
 		},
 		revert: (*database.Queries).RevertMusicianThumbArtwork,
 	}
