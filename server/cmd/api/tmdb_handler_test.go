@@ -839,8 +839,11 @@ func TestUpdateMovieMetadata_KeepsDownloadedArtwork(t *testing.T) {
 	app.Artwork = artwork
 
 	// A client may send back every field it was shown, the copy's URL
-	// included, with only the title changed.
-	for _, body := range []string{`{"title":"Updated"}`, fmt.Sprintf(`{"title":"Updated","poster_path":%q}`, posterCopy)} {
+	// included, with only the title changed. A form opened before a settings
+	// save reverted the columns sends a copy's URL that differs from the one
+	// the movie returns now; no copy's URL is a source.
+	staleCopies := `{"title":"Updated","poster_path":"/api/static/movies/2/other_poster.jpg?v=9","backdrop_path":"/api/static/movies/1/original_backdrop.jpg?v=5"}`
+	for _, body := range []string{`{"title":"Updated"}`, fmt.Sprintf(`{"title":"Updated","poster_path":%q}`, posterCopy), staleCopies} {
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, newOpenAPIJSONRequest(http.MethodPatch, path, body))
 		if w.Code != http.StatusOK {
@@ -853,8 +856,11 @@ func TestUpdateMovieMetadata_KeepsDownloadedArtwork(t *testing.T) {
 		if updated.PosterPath.String != posterCopy || updated.PosterPathSource.String != "/poster.jpg" {
 			t.Fatalf("after editing %s poster = %q from %q, want the copy of /poster.jpg kept", body, updated.PosterPath.String, updated.PosterPathSource.String)
 		}
+		if updated.BackdropPath.String != "/backdrop.jpg" || updated.BackdropPathSource.String != "/backdrop.jpg" {
+			t.Fatalf("after editing %s backdrop = %q from %q, want /backdrop.jpg kept", body, updated.BackdropPath.String, updated.BackdropPathSource.String)
+		}
 	}
-	if artwork.count.Load() != 2 {
+	if artwork.count.Load() != 3 {
 		t.Fatalf("artwork passes requested = %d, want one per edit", artwork.count.Load())
 	}
 

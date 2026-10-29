@@ -3819,9 +3819,9 @@ export interface components {
             overview?: string | null;
             tag_line?: string | null;
             certification?: string | null;
-            /** @description A TMDB image path for the poster. A value equal to the one the movie returns, which may be the URL of a downloaded copy, leaves the poster unchanged. */
+            /** @description A TMDB image path for the poster. A value equal to the one the movie returns, or the URL of any downloaded copy (/api/static/...), leaves the poster unchanged. */
             poster_path?: string | null;
-            /** @description A TMDB image path for the backdrop. A value equal to the one the movie returns, which may be the URL of a downloaded copy, leaves the backdrop unchanged. */
+            /** @description A TMDB image path for the backdrop. A value equal to the one the movie returns, or the URL of any downloaded copy (/api/static/...), leaves the backdrop unchanged. */
             backdrop_path?: string | null;
             language?: string | null;
         };
