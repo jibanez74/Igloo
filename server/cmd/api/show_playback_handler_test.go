@@ -53,11 +53,11 @@ func seedPlaybackEpisodeAt(t *testing.T, app *Application, path string, containe
 		t.Fatalf("upsert show: %v", err)
 	}
 	err = q.UpdateShowMetadata(ctx, database.UpdateShowMetadataParams{
-		Name:         "Playback Show",
-		TmdbID:       sql.NullInt64{Int64: 4242, Valid: true},
-		PosterPath:   sql.NullString{String: "/playback-poster.jpg", Valid: true},
-		BackdropPath: sql.NullString{String: "/playback-backdrop.jpg", Valid: true},
-		ID:           show.ID,
+		Name:               "Playback Show",
+		TmdbID:             sql.NullInt64{Int64: 4242, Valid: true},
+		PosterPathSource:   sql.NullString{String: "/playback-poster.jpg", Valid: true},
+		BackdropPathSource: sql.NullString{String: "/playback-backdrop.jpg", Valid: true},
+		ID:                 show.ID,
 	})
 	if err != nil {
 		t.Fatalf("update show metadata: %v", err)
@@ -109,15 +109,15 @@ func seedPlaybackEpisodeAt(t *testing.T, app *Application, path string, containe
 	// The first episode is enriched so the nullable columns are exercised
 	// both ways across the two rows.
 	err = q.UpdateShowEpisodeMetadata(ctx, database.UpdateShowEpisodeMetadataParams{
-		Name:        "Pilot",
-		TmdbID:      sql.NullInt64{Int64: 70101, Valid: true},
-		Overview:    sql.NullString{String: "It begins.", Valid: true},
-		AirDate:     sql.NullString{String: "2024-03-08", Valid: true},
-		StillPath:   sql.NullString{String: "/still.jpg", Valid: true},
-		TmdbRuntime: sql.NullInt64{Int64: 47, Valid: true},
-		VoteAverage: sql.NullFloat64{Float64: 8.1, Valid: true},
-		VoteCount:   sql.NullInt64{Int64: 220, Valid: true},
-		ID:          episodeIDs[0],
+		Name:            "Pilot",
+		TmdbID:          sql.NullInt64{Int64: 70101, Valid: true},
+		Overview:        sql.NullString{String: "It begins.", Valid: true},
+		AirDate:         sql.NullString{String: "2024-03-08", Valid: true},
+		StillPathSource: sql.NullString{String: "/still.jpg", Valid: true},
+		TmdbRuntime:     sql.NullInt64{Int64: 47, Valid: true},
+		VoteAverage:     sql.NullFloat64{Float64: 8.1, Valid: true},
+		VoteCount:       sql.NullInt64{Int64: 220, Valid: true},
+		ID:              episodeIDs[0],
 	})
 	if err != nil {
 		t.Fatalf("update episode metadata: %v", err)

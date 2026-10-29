@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"igloo/cmd/internal/database"
@@ -213,9 +214,26 @@ func bootTestApp(t *testing.T, db *sql.DB, config RuntimeConfig) *Application {
 	initTestRuntime(app)
 	app.ScanContext, app.ScanCancel = context.WithCancel(context.Background())
 	stopBackgroundWork(t, app)
+	app.initArtwork()
 	app.initScanners(nil, nil)
 
 	return app
+}
+
+// artworkRequests stands in for the artwork syncer and counts the passes
+// and the reverts requested of it.
+type artworkRequests struct {
+	count   atomic.Int32
+	reverts atomic.Int32
+}
+
+func (a *artworkRequests) Request() {
+	a.count.Add(1)
+}
+
+func (a *artworkRequests) Revert(context.Context) error {
+	a.reverts.Add(1)
+	return nil
 }
 
 // stopBackgroundWork cancels scans at cleanup and waits for app.Wait, so no
@@ -667,25 +685,25 @@ func seedContractShow(t *testing.T, app *Application) int64 {
 	}
 
 	err = q.UpdateShowMetadata(ctx, database.UpdateShowMetadataParams{
-		Name:             "Contract Detail Show",
-		TmdbID:           sql.NullInt64{Int64: 90210, Valid: true},
-		OriginalName:     sql.NullString{String: "Contract Detail Show", Valid: true},
-		Overview:         sql.NullString{String: "A show that exists to validate the details contract.", Valid: true},
-		Tagline:          sql.NullString{String: "Every field, once.", Valid: true},
-		Language:         sql.NullString{String: "en", Valid: true},
-		OriginCountries:  sql.NullString{String: "US", Valid: true},
-		FirstAirDate:     sql.NullString{String: "2024-03-01", Valid: true},
-		LastAirDate:      sql.NullString{String: "2026-05-20", Valid: true},
-		Status:           sql.NullString{String: "Returning Series", Valid: true},
-		Type:             sql.NullString{String: "Scripted", Valid: true},
-		PosterPath:       sql.NullString{String: "/contract-detail-poster.jpg", Valid: true},
-		BackdropPath:     sql.NullString{String: "/contract-detail-backdrop.jpg", Valid: true},
-		VoteAverage:      sql.NullFloat64{Float64: 8.4, Valid: true},
-		VoteCount:        sql.NullInt64{Int64: 1200, Valid: true},
-		Certification:    sql.NullString{String: "TV-14", Valid: true},
-		TmdbSeasonCount:  sql.NullInt64{Int64: 2, Valid: true},
-		TmdbEpisodeCount: sql.NullInt64{Int64: 10, Valid: true},
-		ID:               show.ID,
+		Name:               "Contract Detail Show",
+		TmdbID:             sql.NullInt64{Int64: 90210, Valid: true},
+		OriginalName:       sql.NullString{String: "Contract Detail Show", Valid: true},
+		Overview:           sql.NullString{String: "A show that exists to validate the details contract.", Valid: true},
+		Tagline:            sql.NullString{String: "Every field, once.", Valid: true},
+		Language:           sql.NullString{String: "en", Valid: true},
+		OriginCountries:    sql.NullString{String: "US", Valid: true},
+		FirstAirDate:       sql.NullString{String: "2024-03-01", Valid: true},
+		LastAirDate:        sql.NullString{String: "2026-05-20", Valid: true},
+		Status:             sql.NullString{String: "Returning Series", Valid: true},
+		Type:               sql.NullString{String: "Scripted", Valid: true},
+		PosterPathSource:   sql.NullString{String: "/contract-detail-poster.jpg", Valid: true},
+		BackdropPathSource: sql.NullString{String: "/contract-detail-backdrop.jpg", Valid: true},
+		VoteAverage:        sql.NullFloat64{Float64: 8.4, Valid: true},
+		VoteCount:          sql.NullInt64{Int64: 1200, Valid: true},
+		Certification:      sql.NullString{String: "TV-14", Valid: true},
+		TmdbSeasonCount:    sql.NullInt64{Int64: 2, Valid: true},
+		TmdbEpisodeCount:   sql.NullInt64{Int64: 10, Valid: true},
+		ID:                 show.ID,
 	})
 	if err != nil {
 		t.Fatalf("update show metadata: %v", err)
@@ -718,7 +736,7 @@ func seedContractShow(t *testing.T, app *Application) int64 {
 			TmdbID:           sql.NullInt64{Int64: 5000 + s.number, Valid: true},
 			Overview:         sql.NullString{String: s.name + " overview.", Valid: true},
 			AirDate:          sql.NullString{String: "2024-03-01", Valid: true},
-			PosterPath:       sql.NullString{String: "/season.jpg", Valid: true},
+			PosterPathSource: sql.NullString{String: "/season.jpg", Valid: true},
 			VoteAverage:      sql.NullFloat64{Float64: 7.9, Valid: true},
 			TmdbEpisodeCount: sql.NullInt64{Int64: s.tmdbEpisodes, Valid: true},
 			ID:               season.ID,
@@ -744,15 +762,15 @@ func seedContractShow(t *testing.T, app *Application) int64 {
 			}
 
 			err = q.UpdateShowEpisodeMetadata(ctx, database.UpdateShowEpisodeMetadataParams{
-				Name:        fmt.Sprintf("%s Episode %d", s.name, n),
-				TmdbID:      sql.NullInt64{Int64: 70000 + s.number*100 + n, Valid: true},
-				Overview:    sql.NullString{String: "Episode overview.", Valid: true},
-				AirDate:     sql.NullString{String: "2024-03-08", Valid: true},
-				StillPath:   sql.NullString{String: "/still.jpg", Valid: true},
-				TmdbRuntime: sql.NullInt64{Int64: 47, Valid: true},
-				VoteAverage: sql.NullFloat64{Float64: 8.1, Valid: true},
-				VoteCount:   sql.NullInt64{Int64: 220, Valid: true},
-				ID:          episode.ID,
+				Name:            fmt.Sprintf("%s Episode %d", s.name, n),
+				TmdbID:          sql.NullInt64{Int64: 70000 + s.number*100 + n, Valid: true},
+				Overview:        sql.NullString{String: "Episode overview.", Valid: true},
+				AirDate:         sql.NullString{String: "2024-03-08", Valid: true},
+				StillPathSource: sql.NullString{String: "/still.jpg", Valid: true},
+				TmdbRuntime:     sql.NullInt64{Int64: 47, Valid: true},
+				VoteAverage:     sql.NullFloat64{Float64: 8.1, Valid: true},
+				VoteCount:       sql.NullInt64{Int64: 220, Valid: true},
+				ID:              episode.ID,
 			})
 			if err != nil {
 				t.Fatalf("update episode s%de%d metadata: %v", s.number, n, err)
@@ -761,9 +779,9 @@ func seedContractShow(t *testing.T, app *Application) int64 {
 	}
 
 	leadArtist, err := q.UpsertArtist(ctx, database.UpsertArtistParams{
-		Name:    "Ada Contract",
-		TmdbID:  4242,
-		Profile: sql.NullString{String: "/ada.jpg", Valid: true},
+		Name:          "Ada Contract",
+		TmdbID:        4242,
+		ProfileSource: sql.NullString{String: "/ada.jpg", Valid: true},
 	})
 	if err != nil {
 		t.Fatalf("upsert lead artist: %v", err)
@@ -817,16 +835,16 @@ func seedContractShow(t *testing.T, app *Application) int64 {
 		t.Fatalf("link genre: %v", err)
 	}
 
-	network, err := q.UpsertNetwork(ctx, database.UpsertNetworkParams{
-		TmdbID:  77,
-		Name:    "Contract Network",
-		Logo:    sql.NullString{String: "/network.png", Valid: true},
-		Country: sql.NullString{String: "US", Valid: true},
+	networkID, err := q.UpsertNetwork(ctx, database.UpsertNetworkParams{
+		TmdbID:     77,
+		Name:       "Contract Network",
+		LogoSource: sql.NullString{String: "/network.png", Valid: true},
+		Country:    sql.NullString{String: "US", Valid: true},
 	})
 	if err != nil {
 		t.Fatalf("upsert network: %v", err)
 	}
-	err = q.CreateShowNetwork(ctx, database.CreateShowNetworkParams{ShowID: show.ID, NetworkID: network.ID})
+	err = q.CreateShowNetwork(ctx, database.CreateShowNetworkParams{ShowID: show.ID, NetworkID: networkID})
 	if err != nil {
 		t.Fatalf("link network: %v", err)
 	}

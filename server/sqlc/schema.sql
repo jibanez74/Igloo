@@ -92,7 +92,8 @@ CREATE TABLE IF NOT EXISTS artist (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
   tmdb_id INTEGER NOT NULL UNIQUE,
-  profile TEXT
+  profile TEXT,
+  profile_source TEXT
 );
 
 CREATE TABLE IF NOT EXISTS genres (
@@ -122,6 +123,7 @@ CREATE TABLE IF NOT EXISTS musicians (
   spotify_popularity REAL,
   spotify_followers INTEGER,
   thumb TEXT,
+  thumb_source TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -149,6 +151,7 @@ CREATE TABLE IF NOT EXISTS albums (
   year INTEGER,
   total_tracks INTEGER,
   cover TEXT,
+  cover_source TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -375,7 +378,9 @@ CREATE TABLE IF NOT EXISTS movies (
   tmdb_id INTEGER,
   imdb_id TEXT,
   poster_path TEXT,
+  poster_path_source TEXT,
   backdrop_path TEXT,
+  backdrop_path_source TEXT,
   language TEXT,
   year INTEGER,
   release_date TEXT,
@@ -1242,7 +1247,9 @@ CREATE TABLE IF NOT EXISTS shows (
  type TEXT,
  adult BOOLEAN NOT NULL DEFAULT false,
  poster_path TEXT,
+ poster_path_source TEXT,
  backdrop_path TEXT,
+ backdrop_path_source TEXT,
  homepage TEXT,
  vote_average REAL,
  vote_count INTEGER,
@@ -1339,6 +1346,7 @@ CREATE TABLE IF NOT EXISTS show_seasons (
  overview TEXT,
  air_date TEXT,
  poster_path TEXT,
+ poster_path_source TEXT,
  vote_average REAL,
  tmdb_episode_count INTEGER,
  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1355,6 +1363,7 @@ CREATE TABLE IF NOT EXISTS show_episodes (
  overview TEXT,
  air_date TEXT,
  still_path TEXT,
+ still_path_source TEXT,
  production_code TEXT,
  tmdb_runtime INTEGER,
  vote_average REAL,
@@ -1520,6 +1529,7 @@ CREATE TABLE IF NOT EXISTS networks (
  tmdb_id INTEGER NOT NULL UNIQUE,
  name TEXT NOT NULL,
  logo TEXT,
+ logo_source TEXT,
  country TEXT
 );
 CREATE TABLE IF NOT EXISTS show_cast (
@@ -1634,3 +1644,143 @@ CREATE TABLE IF NOT EXISTS library_mount_points (
  mount_point TEXT NOT NULL,
  PRIMARY KEY (root, mount_point)
 ) WITHOUT ROWID;
+
+-- Library artwork. Each image column holds the value the API returns, and its
+-- _source column the provider reference (a TMDB path, or a Spotify or Apple
+-- URL) that the scanners and the movie editor write. A new source becomes the
+-- returned value; writing the same source again keeps a downloaded copy that
+-- replaced it, an /api/static/... URL. The triggers leave updated_at alone,
+-- since movie playback fingerprints include it.
+-- The static directory the artwork copies the image columns point at were made
+-- in, one row at most. Files a pass finds in any other directory may have been
+-- made from sources that changed since, so it starts that directory afresh.
+CREATE TABLE IF NOT EXISTS artwork_state (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  static_dir TEXT NOT NULL
+);
+
+CREATE TRIGGER IF NOT EXISTS movies_artwork_ai
+AFTER INSERT ON movies
+WHEN new.poster_path_source IS NOT NULL OR new.backdrop_path_source IS NOT NULL
+BEGIN
+  UPDATE movies SET poster_path = new.poster_path_source, backdrop_path = new.backdrop_path_source WHERE id = new.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS movies_poster_artwork_au
+AFTER UPDATE OF poster_path_source ON movies
+WHEN new.poster_path_source IS NOT old.poster_path_source
+BEGIN
+  UPDATE movies SET poster_path = new.poster_path_source WHERE id = new.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS movies_backdrop_artwork_au
+AFTER UPDATE OF backdrop_path_source ON movies
+WHEN new.backdrop_path_source IS NOT old.backdrop_path_source
+BEGIN
+  UPDATE movies SET backdrop_path = new.backdrop_path_source WHERE id = new.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS artist_artwork_ai
+AFTER INSERT ON artist
+WHEN new.profile_source IS NOT NULL
+BEGIN
+  UPDATE artist SET profile = new.profile_source WHERE id = new.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS artist_artwork_au
+AFTER UPDATE OF profile_source ON artist
+WHEN new.profile_source IS NOT old.profile_source
+BEGIN
+  UPDATE artist SET profile = new.profile_source WHERE id = new.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS shows_artwork_ai
+AFTER INSERT ON shows
+WHEN new.poster_path_source IS NOT NULL OR new.backdrop_path_source IS NOT NULL
+BEGIN
+  UPDATE shows SET poster_path = new.poster_path_source, backdrop_path = new.backdrop_path_source WHERE id = new.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS shows_poster_artwork_au
+AFTER UPDATE OF poster_path_source ON shows
+WHEN new.poster_path_source IS NOT old.poster_path_source
+BEGIN
+  UPDATE shows SET poster_path = new.poster_path_source WHERE id = new.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS shows_backdrop_artwork_au
+AFTER UPDATE OF backdrop_path_source ON shows
+WHEN new.backdrop_path_source IS NOT old.backdrop_path_source
+BEGIN
+  UPDATE shows SET backdrop_path = new.backdrop_path_source WHERE id = new.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS show_seasons_artwork_ai
+AFTER INSERT ON show_seasons
+WHEN new.poster_path_source IS NOT NULL
+BEGIN
+  UPDATE show_seasons SET poster_path = new.poster_path_source WHERE id = new.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS show_seasons_artwork_au
+AFTER UPDATE OF poster_path_source ON show_seasons
+WHEN new.poster_path_source IS NOT old.poster_path_source
+BEGIN
+  UPDATE show_seasons SET poster_path = new.poster_path_source WHERE id = new.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS show_episodes_artwork_ai
+AFTER INSERT ON show_episodes
+WHEN new.still_path_source IS NOT NULL
+BEGIN
+  UPDATE show_episodes SET still_path = new.still_path_source WHERE id = new.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS show_episodes_artwork_au
+AFTER UPDATE OF still_path_source ON show_episodes
+WHEN new.still_path_source IS NOT old.still_path_source
+BEGIN
+  UPDATE show_episodes SET still_path = new.still_path_source WHERE id = new.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS networks_artwork_ai
+AFTER INSERT ON networks
+WHEN new.logo_source IS NOT NULL
+BEGIN
+  UPDATE networks SET logo = new.logo_source WHERE id = new.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS networks_artwork_au
+AFTER UPDATE OF logo_source ON networks
+WHEN new.logo_source IS NOT old.logo_source
+BEGIN
+  UPDATE networks SET logo = new.logo_source WHERE id = new.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS albums_artwork_ai
+AFTER INSERT ON albums
+WHEN new.cover_source IS NOT NULL
+BEGIN
+  UPDATE albums SET cover = new.cover_source WHERE id = new.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS albums_artwork_au
+AFTER UPDATE OF cover_source ON albums
+WHEN new.cover_source IS NOT old.cover_source
+BEGIN
+  UPDATE albums SET cover = new.cover_source WHERE id = new.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS musicians_artwork_ai
+AFTER INSERT ON musicians
+WHEN new.thumb_source IS NOT NULL
+BEGIN
+  UPDATE musicians SET thumb = new.thumb_source WHERE id = new.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS musicians_artwork_au
+AFTER UPDATE OF thumb_source ON musicians
+WHEN new.thumb_source IS NOT old.thumb_source
+BEGIN
+  UPDATE musicians SET thumb = new.thumb_source WHERE id = new.id;
+END;

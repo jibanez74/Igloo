@@ -10,6 +10,7 @@ import (
 	"igloo/cmd/internal/tmdb"
 	"net/http"
 	"os"
+	"strings"
 )
 
 func (app *Application) IdentifyMovie(w http.ResponseWriter, r *http.Request) {
@@ -92,6 +93,7 @@ func (app *Application) IdentifyMovie(w http.ResponseWriter, r *http.Request) {
 		app.serverError(w, err, "failed to commit identify transaction", "failed to save changes", "movie_id", movie.ID)
 		return
 	}
+	app.syncArtwork()
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "movie identified successfully"})
 }
@@ -142,24 +144,24 @@ func (app *Application) UpdateMovieMetadata(w http.ResponseWriter, r *http.Reque
 
 	// Start from current values; only override fields present in the request.
 	params := database.UpdateMovieParams{
-		ID:             movie.ID,
-		Title:          movie.Title,
-		TmdbID:         movie.TmdbID,
-		ImdbID:         movie.ImdbID,
-		PosterPath:     movie.PosterPath,
-		BackdropPath:   movie.BackdropPath,
-		Adult:          movie.Adult,
-		Language:       movie.Language,
-		Year:           movie.Year,
-		ReleaseDate:    movie.ReleaseDate,
-		Overview:       movie.Overview,
-		TagLine:        movie.TagLine,
-		Certification:  movie.Certification,
-		CriticRating:   movie.CriticRating,
-		AudienceRating: movie.AudienceRating,
-		Revenue:        movie.Revenue,
-		Budget:         movie.Budget,
-		RunTime:        movie.RunTime,
+		ID:                 movie.ID,
+		Title:              movie.Title,
+		TmdbID:             movie.TmdbID,
+		ImdbID:             movie.ImdbID,
+		PosterPathSource:   movie.PosterPathSource,
+		BackdropPathSource: movie.BackdropPathSource,
+		Adult:              movie.Adult,
+		Language:           movie.Language,
+		Year:               movie.Year,
+		ReleaseDate:        movie.ReleaseDate,
+		Overview:           movie.Overview,
+		TagLine:            movie.TagLine,
+		Certification:      movie.Certification,
+		CriticRating:       movie.CriticRating,
+		AudienceRating:     movie.AudienceRating,
+		Revenue:            movie.Revenue,
+		Budget:             movie.Budget,
+		RunTime:            movie.RunTime,
 	}
 
 	if payload.Title != nil {
@@ -180,11 +182,16 @@ func (app *Application) UpdateMovieMetadata(w http.ResponseWriter, r *http.Reque
 	if payload.Certification != nil {
 		params.Certification = helpers.NullString(*payload.Certification)
 	}
-	if payload.PosterPath != nil {
-		params.PosterPath = helpers.NullString(*payload.PosterPath)
+	// A value equal to the one the movie returns, or the URL of any
+	// downloaded copy, which a form opened before the copies were reverted
+	// may still send, leaves that image as it is: a copy is never a source.
+	isNewPoster := isNewArtworkSource(payload.PosterPath, movie.PosterPath)
+	if isNewPoster {
+		params.PosterPathSource = helpers.NullString(*payload.PosterPath)
 	}
-	if payload.BackdropPath != nil {
-		params.BackdropPath = helpers.NullString(*payload.BackdropPath)
+	isNewBackdrop := isNewArtworkSource(payload.BackdropPath, movie.BackdropPath)
+	if isNewBackdrop {
+		params.BackdropPathSource = helpers.NullString(*payload.BackdropPath)
 	}
 	if payload.Language != nil {
 		params.Language = helpers.NullString(*payload.Language)
@@ -204,6 +211,7 @@ func (app *Application) UpdateMovieMetadata(w http.ResponseWriter, r *http.Reque
 		app.serverError(w, err, "failed to commit movie metadata update", "failed to update movie", "id", id)
 		return
 	}
+	app.syncArtwork()
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "movie updated successfully"})
 }
@@ -261,4 +269,14 @@ func (app *Application) DeleteMovie(w http.ResponseWriter, r *http.Request) {
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "movie deleted successfully"})
+}
+
+// isNewArtworkSource reports whether an edited image path is a source to
+// store: one sent, other than the value the movie returns and not the URL of
+// a downloaded copy.
+func isNewArtworkSource(sent *string, current sql.NullString) bool {
+	if sent == nil || *sent == current.String {
+		return false
+	}
+	return !strings.HasPrefix(*sent, helpers.STATIC_URL_PREFIX)
 }

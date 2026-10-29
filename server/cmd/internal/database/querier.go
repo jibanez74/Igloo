@@ -19,6 +19,7 @@ type Querier interface {
 	AddTrackToPlaylist(ctx context.Context, arg AddTrackToPlaylistParams) (int64, error)
 	AddWatchRoomMember(ctx context.Context, arg AddWatchRoomMemberParams) error
 	AdminUpdateUser(ctx context.Context, arg AdminUpdateUserParams) (AdminUpdateUserRow, error)
+	ClearArtworkStaticDir(ctx context.Context) error
 	ClearMovieTmdbRetry(ctx context.Context, movieID int64) error
 	// Drops what a match its tracks contradicted stored on the album; the next
 	// three statements drop its date and its tracks' pairings and outcomes.
@@ -172,6 +173,11 @@ type Querier interface {
 	// is set, so the values never leave the database.
 	GetAllUsers(ctx context.Context) ([]GetAllUsersRow, error)
 	GetArtistByTmdbID(ctx context.Context, tmdbID int64) (Artist, error)
+	// Library artwork, kept by the artwork syncer. Each image column is the value
+	// the API returns and its _source column the provider reference; the triggers
+	// at the end of schema.sql keep the two in step for every other writer. The
+	// syncer's writes leave updated_at alone, like the triggers.
+	GetArtworkStaticDir(ctx context.Context) (string, error)
 	// Audio streams for a movie (for technical details and playback settings).
 	GetAudioStreamsByMovieID(ctx context.Context, movieID int64) ([]AudioStream, error)
 	// Cast for a movie with artist name and profile (for details view).
@@ -527,15 +533,26 @@ type Querier interface {
 	// only ever filled in, never replaced: the file's own tag wins when it has one.
 	LinkMusicTrackSpotify(ctx context.Context, arg LinkMusicTrackSpotifyParams) error
 	LinkShowEpisodeFile(ctx context.Context, arg LinkShowEpisodeFileParams) error
+	// An album is matched by Spotify or by Apple, never both; the ID of the one
+	// that matched it names its folder.
+	ListAlbumArtwork(ctx context.Context, arg ListAlbumArtworkParams) ([]ListAlbumArtworkRow, error)
+	ListArtistArtwork(ctx context.Context, arg ListArtistArtworkParams) ([]ListArtistArtworkRow, error)
 	ListLibraryMountPoints(ctx context.Context, root string) ([]string, error)
+	ListMovieArtwork(ctx context.Context, arg ListMovieArtworkParams) ([]ListMovieArtworkRow, error)
 	ListMusicTrackScanIndex(ctx context.Context) ([]ListMusicTrackScanIndexRow, error)
 	// ListMusicTrackScanIndex for one path a run of watcher-detected changes
 	// covers; lower and upper bound its children as in GetMovieScanIndexUnder.
 	ListMusicTrackScanIndexUnder(ctx context.Context, arg ListMusicTrackScanIndexUnderParams) ([]ListMusicTrackScanIndexUnderRow, error)
+	ListMusicianArtwork(ctx context.Context, arg ListMusicianArtworkParams) ([]ListMusicianArtworkRow, error)
+	ListNetworkArtwork(ctx context.Context, arg ListNetworkArtworkParams) ([]ListNetworkArtworkRow, error)
 	// The shared admin request queue, newest first. Visibility is admin-only and
 	// enforced by the handlers; user_id here only selects the viewer's read state
 	// from notification_reads.
 	ListNotificationsForUser(ctx context.Context, arg ListNotificationsForUserParams) ([]ListNotificationsForUserRow, error)
+	ListShowArtwork(ctx context.Context, arg ListShowArtworkParams) ([]ListShowArtworkRow, error)
+	ListShowEpisodeArtwork(ctx context.Context, arg ListShowEpisodeArtworkParams) ([]ListShowEpisodeArtworkRow, error)
+	// Season and episode copies live in their show's folder, named by its TMDB id.
+	ListShowSeasonArtwork(ctx context.Context, arg ListShowSeasonArtworkParams) ([]ListShowSeasonArtworkRow, error)
 	ListWatchRoomIDsByMovieID(ctx context.Context, movieID int64) ([]int64, error)
 	// Deleting a user cascades away the rooms they own; the ids are read in the
 	// same transaction so the rooms' live state can be torn down after the commit.
@@ -659,6 +676,16 @@ type Querier interface {
 	RemoveMovieFromPlaylist(ctx context.Context, arg RemoveMovieFromPlaylistParams) error
 	RemoveTrackFromPlaylist(ctx context.Context, arg RemoveTrackFromPlaylistParams) error
 	RenameDevice(ctx context.Context, arg RenameDeviceParams) (int64, error)
+	RevertAlbumCoverArtwork(ctx context.Context) (int64, error)
+	RevertArtistProfileArtwork(ctx context.Context) (int64, error)
+	RevertMovieBackdropArtwork(ctx context.Context) (int64, error)
+	RevertMoviePosterArtwork(ctx context.Context) (int64, error)
+	RevertMusicianThumbArtwork(ctx context.Context) (int64, error)
+	RevertNetworkLogoArtwork(ctx context.Context) (int64, error)
+	RevertShowBackdropArtwork(ctx context.Context) (int64, error)
+	RevertShowEpisodeStillArtwork(ctx context.Context) (int64, error)
+	RevertShowPosterArtwork(ctx context.Context) (int64, error)
+	RevertShowSeasonPosterArtwork(ctx context.Context) (int64, error)
 	SaveMusicAlbumDate(ctx context.Context, arg SaveMusicAlbumDateParams) error
 	SaveMusicAlbumIdentity(ctx context.Context, arg SaveMusicAlbumIdentityParams) error
 	SaveMusicArtistIdentity(ctx context.Context, arg SaveMusicArtistIdentityParams) error
@@ -666,9 +693,22 @@ type Querier interface {
 	SaveMusicGenreIdentity(ctx context.Context, arg SaveMusicGenreIdentityParams) error
 	SaveMusicSpotifyAdoption(ctx context.Context, arg SaveMusicSpotifyAdoptionParams) error
 	SaveMusicTrackMetadata(ctx context.Context, arg SaveMusicTrackMetadataParams) error
+	SetAlbumCoverArtwork(ctx context.Context, arg SetAlbumCoverArtworkParams) (int64, error)
+	SetArtistProfileArtwork(ctx context.Context, arg SetArtistProfileArtworkParams) (int64, error)
+	SetArtworkStaticDir(ctx context.Context, staticDir string) error
+	SetMovieBackdropArtwork(ctx context.Context, arg SetMovieBackdropArtworkParams) (int64, error)
+	// Applies only while the source the value was made from is still the row's,
+	// so a source a scanner wrote meanwhile wins.
+	SetMoviePosterArtwork(ctx context.Context, arg SetMoviePosterArtworkParams) (int64, error)
 	SetMusicAlbumAppleID(ctx context.Context, arg SetMusicAlbumAppleIDParams) error
 	SetMusicAlbumSpotifyID(ctx context.Context, arg SetMusicAlbumSpotifyIDParams) error
 	SetMusicArtistSpotifyID(ctx context.Context, arg SetMusicArtistSpotifyIDParams) error
+	SetMusicianThumbArtwork(ctx context.Context, arg SetMusicianThumbArtworkParams) (int64, error)
+	SetNetworkLogoArtwork(ctx context.Context, arg SetNetworkLogoArtworkParams) (int64, error)
+	SetShowBackdropArtwork(ctx context.Context, arg SetShowBackdropArtworkParams) (int64, error)
+	SetShowEpisodeStillArtwork(ctx context.Context, arg SetShowEpisodeStillArtworkParams) (int64, error)
+	SetShowPosterArtwork(ctx context.Context, arg SetShowPosterArtworkParams) (int64, error)
+	SetShowSeasonPosterArtwork(ctx context.Context, arg SetShowSeasonPosterArtworkParams) (int64, error)
 	// Existence probe for the watch-progress handlers, which only need to 404 on
 	// an unknown episode.
 	ShowEpisodeExists(ctx context.Context, id int64) (bool, error)
@@ -725,7 +765,7 @@ type Querier interface {
 	UpsertMovieWatchProgress(ctx context.Context, arg UpsertMovieWatchProgressParams) error
 	UpsertMusicProviderMatch(ctx context.Context, arg UpsertMusicProviderMatchParams) error
 	UpsertMusician(ctx context.Context, arg UpsertMusicianParams) (UpsertMusicianRow, error)
-	UpsertNetwork(ctx context.Context, arg UpsertNetworkParams) (Network, error)
+	UpsertNetwork(ctx context.Context, arg UpsertNetworkParams) (int64, error)
 	UpsertProductionCompany(ctx context.Context, arg UpsertProductionCompanyParams) (int64, error)
 	UpsertRemuxSafetyVerdict(ctx context.Context, arg UpsertRemuxSafetyVerdictParams) error
 	UpsertShowEpisodeWatchProgress(ctx context.Context, arg UpsertShowEpisodeWatchProgressParams) error

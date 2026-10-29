@@ -3,7 +3,7 @@
   "info": {
     "title": "Igloo API",
     "version": "0.1.0",
-    "description": "HTTP API for the Igloo self-hosted media center. Most JSON endpoints return a shared envelope with error, optional message, and optional data fields. Device bearer tokens issued via Quick Connect or device login (Authorization: Bearer igd_...) are accepted on most routes that accept cookieAuth, except device-management, Quick Connect lookup/approval, PIN retrieval, account deletion, and email and password changes, which require a cookie session. See each operation's security block for route-specific requirements. Authentication and session middleware failures return sanitized JSON error envelopes even on media, static-file, subtitle, image-proxy, HLS, and WebSocket routes. HEAD responses never include a body, including errors; their Content-Type describes the corresponding GET representation."
+    "description": "HTTP API for the Igloo self-hosted media center. Most JSON endpoints return a shared envelope with error, optional message, and optional data fields. Device bearer tokens issued via Quick Connect or device login (Authorization: Bearer igd_...) are accepted on most routes that accept cookieAuth, except device-management, Quick Connect lookup/approval, PIN retrieval, account deletion, and email and password changes, which require a cookie session. See each operation's security block for route-specific requirements. Authentication and session middleware failures return sanitized JSON error envelopes even on media, static-file, subtitle, image-proxy, HLS, and WebSocket routes. HEAD responses never include a body, including errors; their Content-Type describes the corresponding GET representation. Movie, show, season and episode images, cast and crew photos, and network logos hold TMDB image paths such as /abc.jpg, which clients request through /api/tmdb/images/{size}/{file}; album covers and musician photos hold the Spotify or Apple image URL. While the download_images setting is on, the server downloads these images into the static directory, and a field whose image it has downloaded holds that copy's URL under /api/static/ instead, with a ?v= version; clients request it as it is, with the same authentication as the API."
   },
   "servers": [
     {
@@ -814,11 +814,20 @@
           "Static"
         ],
         "summary": "Serve a static asset",
-        "description": "Serves files from the configured static directory, such as uploaded avatars. Content-Type comes from the file extension using the host MIME registry, falling back to application/octet-stream. Successful responses set Cache-Control: public, max-age=31536000 and X-Content-Type-Options: nosniff. Last-Modified supports date revalidation; this endpoint does not emit ETag.",
+        "description": "Serves files from the configured static directory: uploaded avatars, and the library artwork downloaded while download_images is on (movies/, people/, shows/, networks/, albums/ and musicians/). A downloaded image's URL carries a ?v= version that changes when the image is replaced, since responses are cached for a year. Content-Type comes from the file extension using the host MIME registry, falling back to application/octet-stream. Successful responses set Cache-Control: public, max-age=31536000 and X-Content-Type-Options: nosniff. Last-Modified supports date revalidation; this endpoint does not emit ETag.",
         "operationId": "serveStaticFiles",
         "parameters": [
           {
             "$ref": "#/components/parameters/StaticPath"
+          },
+          {
+            "name": "v",
+            "in": "query",
+            "required": false,
+            "description": "Version of a downloaded library image; the server ignores it.",
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "$ref": "#/components/parameters/RangeHeader"
@@ -9535,11 +9544,11 @@
           },
           "download_images": {
             "type": "boolean",
-            "description": "Stored only; no server feature reads this value."
+            "description": "While true, the server downloads movie, show, season and episode images, cast and crew photos, network logos, album covers, and musician photos into static_dir and returns the downloaded copies in place of the TMDB paths and Spotify or Apple URLs, as the API description explains; images not downloaded yet keep those. Turning it off returns them before the response is sent and deletes the downloaded copies in the background; turning it on downloads them in the background. Changing static_dir while it is on also returns them before the response, then downloads the copies again into the new directory."
           },
           "static_dir": {
             "type": "string",
-            "description": "Directory /api/static serves files from and avatar uploads are written to. Read on each request."
+            "description": "Directory /api/static serves files from, where avatar uploads and, while download_images is on, downloaded library artwork are written. Read on each request."
           },
           "transcode_dir": {
             "type": "string",
@@ -9580,7 +9589,7 @@
           },
           "download_images": {
             "type": "boolean",
-            "description": "Stored only; no server feature reads this value."
+            "description": "While true, the server downloads movie, show, season and episode images, cast and crew photos, network logos, album covers, and musician photos into static_dir and returns the downloaded copies in place of the TMDB paths and Spotify or Apple URLs, as the API description explains; images not downloaded yet keep those. Turning it off returns them before the response is sent and deletes the downloaded copies in the background; turning it on downloads them in the background. Changing static_dir while it is on also returns them before the response, then downloads the copies again into the new directory."
           },
           "static_dir": {
             "type": "string",
@@ -9792,7 +9801,8 @@
             "type": "string"
           },
           "poster_path": {
-            "$ref": "#/components/schemas/SqlNullString"
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description."
           },
           "year": {
             "$ref": "#/components/schemas/SqlNullInt64"
@@ -9826,7 +9836,8 @@
             "type": "string"
           },
           "poster_path": {
-            "$ref": "#/components/schemas/SqlNullString"
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description."
           },
           "year": {
             "$ref": "#/components/schemas/SqlNullInt64"
@@ -9873,7 +9884,8 @@
             "type": "string"
           },
           "poster_path": {
-            "$ref": "#/components/schemas/SqlNullString"
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description."
           },
           "year": {
             "$ref": "#/components/schemas/SqlNullInt64"
@@ -9954,7 +9966,8 @@
             "type": "string"
           },
           "poster_path": {
-            "$ref": "#/components/schemas/SqlNullString"
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description."
           },
           "year": {
             "$ref": "#/components/schemas/SqlNullInt64"
@@ -10055,7 +10068,8 @@
             "type": "string"
           },
           "poster_path": {
-            "$ref": "#/components/schemas/SqlNullString"
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description."
           },
           "premiere_year": {
             "$ref": "#/components/schemas/SqlNullInt64"
@@ -10114,7 +10128,8 @@
             "type": "string"
           },
           "poster_path": {
-            "$ref": "#/components/schemas/SqlNullString"
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description."
           },
           "premiere_year": {
             "$ref": "#/components/schemas/SqlNullInt64"
@@ -10349,10 +10364,12 @@
             "$ref": "#/components/schemas/SqlNullString"
           },
           "poster_path": {
-            "$ref": "#/components/schemas/SqlNullString"
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description."
           },
           "backdrop_path": {
-            "$ref": "#/components/schemas/SqlNullString"
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description."
           },
           "vote_average": {
             "$ref": "#/components/schemas/SqlNullFloat64"
@@ -10403,7 +10420,8 @@
             "$ref": "#/components/schemas/SqlNullString"
           },
           "poster_path": {
-            "$ref": "#/components/schemas/SqlNullString"
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description."
           },
           "tmdb_episode_count": {
             "$ref": "#/components/schemas/SqlNullInt64"
@@ -10450,7 +10468,8 @@
             "$ref": "#/components/schemas/SqlNullString"
           },
           "still_path": {
-            "$ref": "#/components/schemas/SqlNullString"
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description."
           },
           "tmdb_runtime": {
             "$ref": "#/components/schemas/SqlNullInt64"
@@ -10509,7 +10528,8 @@
             "type": "string"
           },
           "artist_profile": {
-            "$ref": "#/components/schemas/SqlNullString"
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description."
           },
           "tmdb_id": {
             "type": "integer",
@@ -10554,7 +10574,8 @@
             "type": "string"
           },
           "artist_profile": {
-            "$ref": "#/components/schemas/SqlNullString"
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description."
           },
           "tmdb_id": {
             "type": "integer",
@@ -10582,7 +10603,8 @@
             "type": "string"
           },
           "profile": {
-            "$ref": "#/components/schemas/SqlNullString"
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description."
           },
           "tmdb_id": {
             "type": "integer",
@@ -10627,7 +10649,8 @@
             "type": "string"
           },
           "logo": {
-            "$ref": "#/components/schemas/SqlNullString"
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description."
           },
           "country": {
             "$ref": "#/components/schemas/SqlNullString"
@@ -11034,10 +11057,12 @@
             "$ref": "#/components/schemas/SqlNullString"
           },
           "poster_path": {
-            "$ref": "#/components/schemas/SqlNullString"
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description."
           },
           "backdrop_path": {
-            "$ref": "#/components/schemas/SqlNullString"
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description."
           },
           "language": {
             "$ref": "#/components/schemas/SqlNullString"
@@ -11104,7 +11129,8 @@
             "type": "string"
           },
           "artist_profile": {
-            "$ref": "#/components/schemas/SqlNullString"
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description."
           },
           "tmdb_id": {
             "type": "integer",
@@ -13034,13 +13060,15 @@
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "description": "A TMDB image path for the poster. A value equal to the one the movie returns, or the URL of any downloaded copy (/api/static/...), leaves the poster unchanged."
           },
           "backdrop_path": {
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "description": "A TMDB image path for the backdrop. A value equal to the one the movie returns, or the URL of any downloaded copy (/api/static/...), leaves the backdrop unchanged."
           },
           "language": {
             "type": [
@@ -13327,7 +13355,8 @@
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "description": "TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description."
           },
           "owner": {
             "$ref": "#/components/schemas/UserSummary"
@@ -13381,7 +13410,8 @@
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "description": "TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description."
           },
           "owner": {
             "$ref": "#/components/schemas/UserSummary"
@@ -13692,7 +13722,8 @@
             "type": "string"
           },
           "cover": {
-            "$ref": "#/components/schemas/SqlNullString"
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description."
           },
           "musician": {
             "$ref": "#/components/schemas/SqlNullString"
@@ -13780,7 +13811,7 @@
           },
           "cover": {
             "$ref": "#/components/schemas/SqlNullString",
-            "description": "The matched provider's cover art URL. Valid is false until a match supplies one."
+            "description": "The matched provider's cover art URL, or the /api/static/ URL of the server's downloaded copy; see the API description. Valid is false until a match supplies one."
           },
           "created_at": {
             "type": "string"
@@ -13959,7 +13990,8 @@
             "$ref": "#/components/schemas/SqlNullString"
           },
           "album_cover": {
-            "$ref": "#/components/schemas/SqlNullString"
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description."
           },
           "musician_id": {
             "$ref": "#/components/schemas/SqlNullInt64"
@@ -13988,7 +14020,8 @@
             "type": "string"
           },
           "thumb": {
-            "$ref": "#/components/schemas/SqlNullString"
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description."
           },
           "album_count": {
             "type": "integer",
@@ -14126,7 +14159,8 @@
             "type": "string"
           },
           "thumb": {
-            "$ref": "#/components/schemas/SqlNullString"
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description."
           }
         },
         "additionalProperties": false
@@ -14315,7 +14349,8 @@
             "description": "No longer written: Spotify stopped reporting follower counts to this app in 2026, so Valid is false."
           },
           "thumb": {
-            "$ref": "#/components/schemas/SqlNullString"
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description."
           },
           "created_at": {
             "type": "string"
@@ -14345,7 +14380,8 @@
             "type": "string"
           },
           "cover": {
-            "$ref": "#/components/schemas/SqlNullString"
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description."
           },
           "year": {
             "$ref": "#/components/schemas/SqlNullInt64"
@@ -14400,7 +14436,8 @@
             "$ref": "#/components/schemas/SqlNullString"
           },
           "album_cover": {
-            "$ref": "#/components/schemas/SqlNullString"
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description."
           }
         },
         "additionalProperties": false
@@ -14902,7 +14939,8 @@
             "$ref": "#/components/schemas/SqlNullString"
           },
           "album_cover": {
-            "$ref": "#/components/schemas/SqlNullString"
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description."
           },
           "musician_name": {
             "$ref": "#/components/schemas/SqlNullString"
@@ -15448,7 +15486,8 @@
             "$ref": "#/components/schemas/SqlNullString"
           },
           "album_cover": {
-            "$ref": "#/components/schemas/SqlNullString"
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description."
           },
           "musician_id": {
             "$ref": "#/components/schemas/SqlNullInt64"
@@ -15501,7 +15540,8 @@
             "$ref": "#/components/schemas/SqlNullString"
           },
           "album_cover": {
-            "$ref": "#/components/schemas/SqlNullString"
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description."
           },
           "musician_id": {
             "$ref": "#/components/schemas/SqlNullInt64"
@@ -15571,7 +15611,8 @@
             "type": "string"
           },
           "thumb": {
-            "$ref": "#/components/schemas/SqlNullString"
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description."
           },
           "total_play_count": {
             "$ref": "#/components/schemas/SqlNullFloat64"
@@ -15714,7 +15755,8 @@
             "type": "string"
           },
           "cover": {
-            "$ref": "#/components/schemas/SqlNullString"
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description."
           },
           "musician": {
             "$ref": "#/components/schemas/SqlNullString"
@@ -17305,7 +17347,8 @@
             "$ref": "#/components/schemas/SqlNullString"
           },
           "still_path": {
-            "$ref": "#/components/schemas/SqlNullString"
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description."
           },
           "tmdb_runtime": {
             "$ref": "#/components/schemas/SqlNullInt64"
@@ -17337,10 +17380,12 @@
             "type": "string"
           },
           "poster_path": {
-            "$ref": "#/components/schemas/SqlNullString"
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description."
           },
           "backdrop_path": {
-            "$ref": "#/components/schemas/SqlNullString"
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description."
           }
         },
         "additionalProperties": false
@@ -17392,7 +17437,8 @@
             "type": "string"
           },
           "still_path": {
-            "$ref": "#/components/schemas/SqlNullString"
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description."
           },
           "progress_sec": {
             "$ref": "#/components/schemas/SqlNullFloat64"
@@ -17902,7 +17948,8 @@
             "type": "string"
           },
           "profile_path": {
-            "type": "string"
+            "type": "string",
+            "description": "TMDB image path of the person's photo, which clients show large. When TMDB is unavailable or has no photo, the stored one instead: a TMDB path, or the /api/static/ URL of its downloaded copy, which is stored at cast-card size."
           },
           "homepage": {
             "type": "string"
@@ -17980,7 +18027,8 @@
             "description": "Release/first-air date or stored year; empty when undated."
           },
           "poster_path": {
-            "type": "string"
+            "type": "string",
+            "description": "TMDB image path, or the /api/static/ URL of the downloaded copy of the poster of a title in the library."
           },
           "popularity": {
             "type": "number"

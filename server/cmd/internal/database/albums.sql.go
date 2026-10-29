@@ -27,7 +27,7 @@ func (q *Queries) DeleteAlbum(ctx context.Context, id int64) (string, error) {
 
 const getAlbumByID = `-- name: GetAlbumByID :one
 SELECT
-  id, title, sort_title, spotify_id, apple_id, spotify_popularity, album_type, musician, release_date, year, total_tracks, cover, created_at, updated_at
+  id, title, sort_title, spotify_id, apple_id, spotify_popularity, album_type, musician, release_date, year, total_tracks, cover, cover_source, created_at, updated_at
 FROM albums
 WHERE id = ?
 LIMIT 1
@@ -49,6 +49,7 @@ func (q *Queries) GetAlbumByID(ctx context.Context, id int64) (Album, error) {
 		&i.Year,
 		&i.TotalTracks,
 		&i.Cover,
+		&i.CoverSource,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -56,22 +57,22 @@ func (q *Queries) GetAlbumByID(ctx context.Context, id int64) (Album, error) {
 }
 
 const getAlbumBySpotifyID = `-- name: GetAlbumBySpotifyID :one
-SELECT id, spotify_id, cover
+SELECT id, spotify_id, cover_source
 FROM albums
 WHERE spotify_id = ?
 LIMIT 1
 `
 
 type GetAlbumBySpotifyIDRow struct {
-	ID        int64          `json:"id"`
-	SpotifyID sql.NullString `json:"spotify_id"`
-	Cover     sql.NullString `json:"cover"`
+	ID          int64          `json:"id"`
+	SpotifyID   sql.NullString `json:"spotify_id"`
+	CoverSource sql.NullString `json:"-"`
 }
 
 func (q *Queries) GetAlbumBySpotifyID(ctx context.Context, spotifyID sql.NullString) (GetAlbumBySpotifyIDRow, error) {
 	row := q.queryRow(ctx, q.getAlbumBySpotifyIDStmt, getAlbumBySpotifyID, spotifyID)
 	var i GetAlbumBySpotifyIDRow
-	err := row.Scan(&i.ID, &i.SpotifyID, &i.Cover)
+	err := row.Scan(&i.ID, &i.SpotifyID, &i.CoverSource)
 	return i, err
 }
 
@@ -277,27 +278,27 @@ func (q *Queries) GetLatestAlbums(ctx context.Context) ([]GetLatestAlbumsRow, er
 const updateAlbumCover = `-- name: UpdateAlbumCover :one
 UPDATE albums
 SET
-  cover = ?,
+  cover_source = ?,
   updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING id, spotify_id, cover
+RETURNING id, spotify_id, cover_source
 `
 
 type UpdateAlbumCoverParams struct {
-	Cover sql.NullString `json:"cover"`
-	ID    int64          `json:"id"`
+	CoverSource sql.NullString `json:"-"`
+	ID          int64          `json:"id"`
 }
 
 type UpdateAlbumCoverRow struct {
-	ID        int64          `json:"id"`
-	SpotifyID sql.NullString `json:"spotify_id"`
-	Cover     sql.NullString `json:"cover"`
+	ID          int64          `json:"id"`
+	SpotifyID   sql.NullString `json:"spotify_id"`
+	CoverSource sql.NullString `json:"-"`
 }
 
 func (q *Queries) UpdateAlbumCover(ctx context.Context, arg UpdateAlbumCoverParams) (UpdateAlbumCoverRow, error) {
-	row := q.queryRow(ctx, q.updateAlbumCoverStmt, updateAlbumCover, arg.Cover, arg.ID)
+	row := q.queryRow(ctx, q.updateAlbumCoverStmt, updateAlbumCover, arg.CoverSource, arg.ID)
 	var i UpdateAlbumCoverRow
-	err := row.Scan(&i.ID, &i.SpotifyID, &i.Cover)
+	err := row.Scan(&i.ID, &i.SpotifyID, &i.CoverSource)
 	return i, err
 }
 
@@ -310,7 +311,7 @@ INSERT INTO albums (
   release_date,
   year,
   total_tracks,
-  cover
+  cover_source
 )
 VALUES
   (?, ?, ?, ?, ?, ?, ?, ?)
@@ -321,9 +322,9 @@ SET
   release_date = COALESCE(excluded.release_date, albums.release_date),
   year = COALESCE(excluded.year, albums.year),
   total_tracks = COALESCE(excluded.total_tracks, albums.total_tracks),
-  cover = COALESCE(excluded.cover, albums.cover),
+  cover_source = COALESCE(excluded.cover_source, albums.cover_source),
   updated_at = CURRENT_TIMESTAMP
-RETURNING id, spotify_id, cover
+RETURNING id, spotify_id, cover_source
 `
 
 type UpsertAlbumParams struct {
@@ -334,13 +335,13 @@ type UpsertAlbumParams struct {
 	ReleaseDate sql.NullString `json:"release_date"`
 	Year        sql.NullInt64  `json:"year"`
 	TotalTracks sql.NullInt64  `json:"total_tracks"`
-	Cover       sql.NullString `json:"cover"`
+	CoverSource sql.NullString `json:"-"`
 }
 
 type UpsertAlbumRow struct {
-	ID        int64          `json:"id"`
-	SpotifyID sql.NullString `json:"spotify_id"`
-	Cover     sql.NullString `json:"cover"`
+	ID          int64          `json:"id"`
+	SpotifyID   sql.NullString `json:"spotify_id"`
+	CoverSource sql.NullString `json:"-"`
 }
 
 // Matches idx_albums_title_musician, which treats a missing musician as ” so an
@@ -354,9 +355,9 @@ func (q *Queries) UpsertAlbum(ctx context.Context, arg UpsertAlbumParams) (Upser
 		arg.ReleaseDate,
 		arg.Year,
 		arg.TotalTracks,
-		arg.Cover,
+		arg.CoverSource,
 	)
 	var i UpsertAlbumRow
-	err := row.Scan(&i.ID, &i.SpotifyID, &i.Cover)
+	err := row.Scan(&i.ID, &i.SpotifyID, &i.CoverSource)
 	return i, err
 }

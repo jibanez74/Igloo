@@ -367,12 +367,12 @@ func createSearchShow(t *testing.T, app *Application, name, directory, overview,
 	}
 
 	err = app.Queries.UpdateShowMetadata(ctx, database.UpdateShowMetadataParams{
-		Name:          name,
-		Overview:      sql.NullString{String: overview, Valid: overview != ""},
-		Tagline:       sql.NullString{String: tagline, Valid: tagline != ""},
-		PosterPath:    sql.NullString{String: "/" + directory + ".jpg", Valid: true},
-		Certification: sql.NullString{String: "TV-14", Valid: true},
-		ID:            show.ID,
+		Name:             name,
+		Overview:         sql.NullString{String: overview, Valid: overview != ""},
+		Tagline:          sql.NullString{String: tagline, Valid: tagline != ""},
+		PosterPathSource: sql.NullString{String: "/" + directory + ".jpg", Valid: true},
+		Certification:    sql.NullString{String: "TV-14", Valid: true},
+		ID:               show.ID,
 	})
 	if err != nil {
 		t.Fatalf("update show metadata %q: %v", name, err)

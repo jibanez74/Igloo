@@ -105,10 +105,18 @@ func (app *Application) GetPerson(w http.ResponseWriter, r *http.Request) {
 		if data.Person.AlsoKnownAs == nil {
 			data.Person.AlsoKnownAs = []string{}
 		}
-		if data.Person.ProfilePath == "" && local {
+		// The page shows the profile large, so the provider's photo, which the
+		// client requests at full size, wins over a downloaded copy, which is
+		// stored at cast-card size. The stored photo stands in when the
+		// provider has none, and the gallery leaves out its source too.
+		usesStoredProfile := data.Person.ProfilePath == "" && local
+		if usesStoredProfile {
 			data.Person.ProfilePath = artist.Profile.String
 		}
-		seenPhotos := map[string]bool{data.Person.ProfilePath: true, "": true}
+		seenPhotos := map[string]bool{provider.ProfilePath: true, "": true}
+		if usesStoredProfile {
+			seenPhotos[artist.ProfileSource.String] = true
+		}
 		for _, photo := range provider.Images.Profiles {
 			if !seenPhotos[photo.FilePath] {
 				data.Photos = append(data.Photos, photo.FilePath)
@@ -142,7 +150,9 @@ func (app *Application) GetPerson(w http.ResponseWriter, r *http.Request) {
 			if title.Date == "" {
 				title.Date = c.Date
 			}
-			if title.PosterPath == "" {
+			// A downloaded copy of the library's poster replaces the provider's.
+			isCopy := strings.HasPrefix(c.PosterPath, helpers.STATIC_URL_PREFIX)
+			if title.PosterPath == "" || isCopy {
 				title.PosterPath = c.PosterPath
 			}
 			if title.LibraryID == nil || c.LibraryID < *title.LibraryID {

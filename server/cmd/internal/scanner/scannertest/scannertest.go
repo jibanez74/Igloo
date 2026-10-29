@@ -61,6 +61,19 @@ func (l *Logger) DebugMentions(msg, needle string) bool {
 	return mentions(l.DebugEntries, msg, needle)
 }
 
+// ErrorCount reports how many errors were logged with the given message.
+func (l *Logger) ErrorCount(msg string) int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	count := 0
+	for _, entry := range l.ErrorEntries {
+		if entry.Msg == msg {
+			count++
+		}
+	}
+	return count
+}
+
 func mentions(entries []LogEntry, msg, needle string) bool {
 	for _, entry := range entries {
 		if entry.Msg != msg {

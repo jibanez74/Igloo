@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useId, useState, useTransition } from "react";
+import { useId, useRef, useState, useTransition } from "react";
 import type { FormEvent, ReactNode } from "react";
 import {
   Activity,
@@ -14,6 +14,7 @@ import {
   KeyRound,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import ConfirmDialog from "@/components/shared/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,6 +31,7 @@ import {
   SETTINGS_INPUT_CLASS,
 } from "@/lib/constants";
 import { updateGeneralSettings } from "@/lib/api";
+import { invalidateArtworkQueries } from "@/lib/library-cache";
 import { trimmedOrNull } from "@/lib/nullable";
 import { generalSettingsQueryOpts } from "@/lib/query-opts";
 import {
@@ -138,6 +140,11 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   const [syncedSettings, setSyncedSettings] = useState(settings);
   const [validationMessage, setValidationMessage] = useState("");
   const [validationField, setValidationField] = useState<string | null>(null);
+  const [confirmingImageRemoval, setConfirmingImageRemoval] = useState(false);
+  // Closing the confirmation returns focus to what submitted the form, or,
+  // once a successful save has disabled Save, to the switch it was about.
+  const imageRemovalReturnRef = useRef<HTMLElement | null>(null);
+  const downloadImagesSwitchRef = useRef<HTMLButtonElement>(null);
   const [, startTransition] = useTransition();
 
   const isDirty = !formsMatchSettings(form, syncedSettings);
@@ -207,6 +214,21 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
         },
       });
 
+      // The server points the images back at their providers before it
+      // answers a save that stops serving its downloaded copies, so the
+      // cached library pages refetch them.
+      const previous =
+        context?.previousData?.error === false
+          ? context.previousData.data.settings
+          : null;
+      const saved = res.data.settings;
+      const dropsCopies =
+        previous?.download_images === true &&
+        (!saved.download_images || saved.static_dir !== previous.static_dir);
+      if (dropsCopies) {
+        invalidateArtworkQueries(queryClient);
+      }
+
       if (res.data.restart_required) {
         showSuccess(
           "Settings saved",
@@ -273,6 +295,20 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
     return { field: null, message: "" };
   };
 
+  const saveForm = () => {
+    updateMutation.mutate(
+      {
+        ...form,
+        tmdb_key: form.tmdb_key.trim(),
+        spotify_client_id: form.spotify_client_id.trim(),
+        spotify_client_secret: form.spotify_client_secret.trim(),
+        static_dir: form.static_dir.trim(),
+        transcode_dir: form.transcode_dir.trim(),
+      },
+      { onSettled: () => setConfirmingImageRemoval(false) },
+    );
+  };
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const { field, message } = validateForm();
@@ -287,14 +323,18 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
 
     setValidationMessage("");
     setValidationField(null);
-    updateMutation.mutate({
-      ...form,
-      tmdb_key: form.tmdb_key.trim(),
-      spotify_client_id: form.spotify_client_id.trim(),
-      spotify_client_secret: form.spotify_client_secret.trim(),
-      static_dir: form.static_dir.trim(),
-      transcode_dir: form.transcode_dir.trim(),
-    });
+    // The server deletes the downloaded artwork when downloads are turned
+    // off, so that save waits for a confirmation.
+    const turnsDownloadsOff =
+      syncedSettings.download_images && !form.download_images;
+    if (turnsDownloadsOff) {
+      const submitter = (event.nativeEvent as SubmitEvent).submitter;
+      imageRemovalReturnRef.current =
+        submitter ?? (document.activeElement as HTMLElement | null);
+      setConfirmingImageRemoval(true);
+      return;
+    }
+    saveForm();
   };
 
   return (
@@ -337,9 +377,10 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
             disabled={updateMutation.isPending}
           />
           <SwitchField
+            ref={downloadImagesSwitchRef}
             id={downloadImagesId}
             label="Download images"
-            description="Store downloaded artwork for local serving."
+            description="Save library artwork in the static directory and serve it from there. Turning this off deletes the saved images."
             checked={form.download_images}
             onCheckedChange={checked =>
               handleToggleChange("download_images", checked)
@@ -455,6 +496,18 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
           isMiniPlayerVisible ? MINI_PLAYER_CLEARANCE_BOTTOM_CLASS : "bottom-4"
         }
         className={MOTION_SETTINGS_SURFACE_CLASS}
+      />
+
+      <ConfirmDialog
+        open={confirmingImageRemoval}
+        onOpenChange={setConfirmingImageRemoval}
+        title="Delete downloaded images?"
+        description="Turning off image downloads deletes the artwork saved in the static directory. Images load from their online sources again."
+        confirmLabel="Delete images"
+        pending={updateMutation.isPending}
+        restoreFocusRef={imageRemovalReturnRef}
+        fallbackFocusRef={downloadImagesSwitchRef}
+        onConfirm={saveForm}
       />
     </form>
   );

@@ -49,6 +49,9 @@ type Dependencies struct {
 	ScannerDBMu              *sync.Mutex
 	CurrentMusicDirectory    func() sql.NullString
 	InvalidateCommittedTrack func(trackID int64)
+	// ScanFinished runs when each run ends, to download the artwork it
+	// brought.
+	ScanFinished func()
 }
 
 // Scanner scans and persists the configured music library.
@@ -99,7 +102,7 @@ func New(deps Dependencies) *Scanner {
 		now:     deps.Now,
 		queries: deps.Queries, logger: deps.Logger, ffprobe: deps.Ffprobe,
 		spotify: deps.Spotify, apple: deps.Apple, appleLookupsEnabled: deps.AppleLookupsEnabled,
-		scanContext: deps.ScanContext, launcher: scanner.Launcher{Wait: deps.Wait},
+		scanContext: deps.ScanContext, launcher: scanner.Launcher{Wait: deps.Wait, Finished: deps.ScanFinished},
 		tx:                       scanner.TxRunner{DB: deps.DB, Mu: deps.ScannerDBMu, Queries: deps.Queries},
 		mountPoints:              scanner.MountPoints,
 		currentMusicDirectory:    deps.CurrentMusicDirectory,

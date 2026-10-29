@@ -3,7 +3,9 @@ import {
   useState,
   useRef,
   useEffect,
+  useEffectEvent,
 } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type {
   AudioPlayerActions,
   AudioPlayerNowPlaying,
@@ -32,6 +34,9 @@ import {
   SHUFFLE_TRACKS_LIMIT,
   TRACKS_INFINITE_PAGE_SIZE,
 } from "@/lib/constants";
+import { onArtworkReset } from "@/lib/library-cache";
+import { unwrapString } from "@/lib/nullable";
+import { albumDetailsQueryOpts } from "@/lib/query-opts";
 import { showInfo } from "@/lib/toast-helpers";
 
 const MINIMUM_PLAY_SECONDS = 30;
@@ -71,6 +76,7 @@ export function AudioPlayerProvider({
 }: {
   children: React.ReactNode;
 }) {
+  const queryClient = useQueryClient();
   const [queueState, setQueueState] = useState<AudioPlayerQueueState>(() =>
     createInitialQueueState(),
   );
@@ -202,6 +208,57 @@ export function AudioPlayerProvider({
         : fallback.title,
     };
   };
+
+  // A settings save that stops serving the downloaded artwork copies leaves the
+  // queue holding their URLs, outside the query cache. Each such cover is
+  // replaced by its album's current one, the playing track's first and one
+  // album at a time, so playback goes on and later tracks show a cover that
+  // exists. A queue started meanwhile was built from fresh data.
+  const refreshQueueArtwork = useEffectEvent(async () => {
+    const covers = trackCoversRef.current;
+    const queued = queueState.currentTrack
+      ? [queueState.currentTrack, ...queueState.tracks]
+      : queueState.tracks;
+    const albumByStaleCover = new Map<string, number>();
+    for (const track of queued) {
+      const cover = covers?.has(track.id)
+        ? (covers.get(track.id) ?? null)
+        : queueState.albumCover;
+      const isCopy = cover?.startsWith("/api/static/") ?? false;
+      if (cover && isCopy && track.album_id.Valid && !albumByStaleCover.has(cover)) {
+        albumByStaleCover.set(cover, track.album_id.Int64);
+      }
+    }
+
+    const queueId = liveQueueIdRef.current;
+    for (const [staleCover, albumId] of albumByStaleCover) {
+      const response = await queryClient.fetchQuery(
+        albumDetailsQueryOpts(albumId),
+      );
+      if (liveQueueIdRef.current !== queueId) return;
+      if (response.error) continue;
+
+      const freshCover = unwrapString(response.data.album.cover);
+      for (const [trackId, cover] of trackCoversRef.current ?? []) {
+        if (cover === staleCover) {
+          trackCoversRef.current?.set(trackId, freshCover);
+        }
+      }
+      setQueueState(prev =>
+        prev.albumCover === staleCover
+          ? { ...prev, albumCover: freshCover }
+          : prev,
+      );
+    }
+  });
+
+  useEffect(
+    () =>
+      onArtworkReset(() => {
+        void refreshQueueArtwork();
+      }),
+    [],
+  );
 
   const clearMetadataRefs = () => {
     trackCoversRef.current?.clear();

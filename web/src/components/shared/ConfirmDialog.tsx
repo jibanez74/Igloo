@@ -21,6 +21,8 @@ type ConfirmDialogProps = {
   confirmLabel: string;
   pending?: boolean;
   restoreFocusRef?: RefObject<HTMLElement | null>;
+  /** Takes focus when the restore target is gone or disabled by then. */
+  fallbackFocusRef?: RefObject<HTMLElement | null>;
   onConfirm: () => void;
 };
 
@@ -33,6 +35,7 @@ export default function ConfirmDialog({
   confirmLabel,
   pending = false,
   restoreFocusRef,
+  fallbackFocusRef,
   onConfirm,
 }: ConfirmDialogProps) {
   const handleOpenChange = (next: boolean) => {
@@ -48,7 +51,10 @@ export default function ConfirmDialog({
           restoreFocusRef
             ? event => {
                 event.preventDefault();
-                focusDialogRestoreTarget(restoreFocusRef.current);
+                focusDialogRestoreTarget(
+                  restoreFocusRef.current,
+                  fallbackFocusRef?.current,
+                );
               }
             : undefined
         }

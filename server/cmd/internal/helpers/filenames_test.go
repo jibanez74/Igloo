@@ -142,3 +142,27 @@ func TestIsReasonableYear(t *testing.T) {
 		}
 	}
 }
+
+func TestIsPlainPathSegment(t *testing.T) {
+	tests := []struct {
+		s     string
+		extra string
+		want  bool
+	}{
+		{"f89U3ADr1oiB1s9GkdPOEpXUk5H.jpg", ".", true},
+		{"dQw4w9WgXcQ", "", true},
+		{"key_with-dash", "", true},
+		{"", "", false},
+		{"poster.jpg", "", false},
+		{"a/b", ".", false},
+		{"..", "", false},
+		{"café", "", false},
+		{"with space", "", false},
+	}
+	for _, tt := range tests {
+		got := IsPlainPathSegment(tt.s, tt.extra)
+		if got != tt.want {
+			t.Errorf("IsPlainPathSegment(%q, %q) = %v, want %v", tt.s, tt.extra, got, tt.want)
+		}
+	}
+}

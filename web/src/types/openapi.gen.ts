@@ -436,7 +436,7 @@ export interface paths {
         };
         /**
          * Serve a static asset
-         * @description Serves files from the configured static directory, such as uploaded avatars. Content-Type comes from the file extension using the host MIME registry, falling back to application/octet-stream. Successful responses set Cache-Control: public, max-age=31536000 and X-Content-Type-Options: nosniff. Last-Modified supports date revalidation; this endpoint does not emit ETag.
+         * @description Serves files from the configured static directory: uploaded avatars, and the library artwork downloaded while download_images is on (movies/, people/, shows/, networks/, albums/ and musicians/). A downloaded image's URL carries a ?v= version that changes when the image is replaced, since responses are cached for a year. Content-Type comes from the file extension using the host MIME registry, falling back to application/octet-stream. Successful responses set Cache-Control: public, max-age=31536000 and X-Content-Type-Options: nosniff. Last-Modified supports date revalidation; this endpoint does not emit ETag.
          */
         get: operations["serveStaticFiles"];
         put?: never;
@@ -2883,9 +2883,9 @@ export interface components {
             enable_apple_lookups: boolean;
             /** @description When true, the server watches the configured movie, show and music directories and applies each media file that is created, rewritten, moved or deleted through the scanner within seconds, without a library scan: inotify on local Linux filesystems, a directory poll every few minutes on network shares, FUSE mounts and macOS. Turning it on walks each library once; turning it off stops all watching before the response is sent. A library whose directory, or a mount inside it, disappears is paused rather than emptied. The ENABLE_WATCHER environment value seeds this only for a new database. */
             enable_watcher: boolean;
-            /** @description Stored only; no server feature reads this value. */
+            /** @description While true, the server downloads movie, show, season and episode images, cast and crew photos, network logos, album covers, and musician photos into static_dir and returns the downloaded copies in place of the TMDB paths and Spotify or Apple URLs, as the API description explains; images not downloaded yet keep those. Turning it off returns them before the response is sent and deletes the downloaded copies in the background; turning it on downloads them in the background. Changing static_dir while it is on also returns them before the response, then downloads the copies again into the new directory. */
             download_images: boolean;
-            /** @description Directory /api/static serves files from and avatar uploads are written to. Read on each request. */
+            /** @description Directory /api/static serves files from, where avatar uploads and, while download_images is on, downloaded library artwork are written. Read on each request. */
             static_dir: string;
             /** @description Directory new HLS sessions write their output to. */
             transcode_dir: string;
@@ -2899,7 +2899,7 @@ export interface components {
             enable_apple_lookups: boolean;
             /** @description When true, the server watches the configured movie, show and music directories and applies each media file that is created, rewritten, moved or deleted through the scanner within seconds, without a library scan: inotify on local Linux filesystems, a directory poll every few minutes on network shares, FUSE mounts and macOS. Turning it on walks each library once; turning it off stops all watching before the response is sent. A library whose directory, or a mount inside it, disappears is paused rather than emptied. The ENABLE_WATCHER environment value seeds this only for a new database. */
             enable_watcher: boolean;
-            /** @description Stored only; no server feature reads this value. */
+            /** @description While true, the server downloads movie, show, season and episode images, cast and crew photos, network logos, album covers, and musician photos into static_dir and returns the downloaded copies in place of the TMDB paths and Spotify or Apple URLs, as the API description explains; images not downloaded yet keep those. Turning it off returns them before the response is sent and deletes the downloaded copies in the background; turning it on downloads them in the background. Changing static_dir while it is on also returns them before the response, then downloads the copies again into the new directory. */
             download_images: boolean;
             /** @description Required. Created when missing; 400 when it cannot be created or accessed. */
             static_dir: string;
@@ -2955,6 +2955,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             title: string;
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             poster_path: components["schemas"]["SqlNullString"];
             year: components["schemas"]["SqlNullInt64"];
         };
@@ -2967,6 +2968,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             title: string;
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             poster_path: components["schemas"]["SqlNullString"];
             year: components["schemas"]["SqlNullInt64"];
             /** Format: double */
@@ -2984,6 +2986,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             title: string;
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             poster_path: components["schemas"]["SqlNullString"];
             year: components["schemas"]["SqlNullInt64"];
             /** Format: double */
@@ -3006,6 +3009,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             title: string;
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             poster_path: components["schemas"]["SqlNullString"];
             year: components["schemas"]["SqlNullInt64"];
             certification: components["schemas"]["SqlNullString"];
@@ -3032,6 +3036,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             name: string;
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             poster_path: components["schemas"]["SqlNullString"];
             premiere_year: components["schemas"]["SqlNullInt64"];
         };
@@ -3045,6 +3050,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             name: string;
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             poster_path: components["schemas"]["SqlNullString"];
             premiere_year: components["schemas"]["SqlNullInt64"];
             certification: components["schemas"]["SqlNullString"];
@@ -3105,7 +3111,9 @@ export interface components {
             last_air_date: components["schemas"]["SqlNullString"];
             status: components["schemas"]["SqlNullString"];
             type: components["schemas"]["SqlNullString"];
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             poster_path: components["schemas"]["SqlNullString"];
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             backdrop_path: components["schemas"]["SqlNullString"];
             vote_average: components["schemas"]["SqlNullFloat64"];
             vote_count: components["schemas"]["SqlNullInt64"];
@@ -3121,6 +3129,7 @@ export interface components {
             name: string;
             overview: components["schemas"]["SqlNullString"];
             air_date: components["schemas"]["SqlNullString"];
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             poster_path: components["schemas"]["SqlNullString"];
             tmdb_episode_count: components["schemas"]["SqlNullInt64"];
             /** Format: int64 */
@@ -3135,6 +3144,7 @@ export interface components {
             name: string;
             overview: components["schemas"]["SqlNullString"];
             air_date: components["schemas"]["SqlNullString"];
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             still_path: components["schemas"]["SqlNullString"];
             tmdb_runtime: components["schemas"]["SqlNullInt64"];
             vote_average: components["schemas"]["SqlNullFloat64"];
@@ -3153,6 +3163,7 @@ export interface components {
             /** Format: int64 */
             episode_count: number;
             artist_name: string;
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             artist_profile: components["schemas"]["SqlNullString"];
             /**
              * Format: int64
@@ -3169,6 +3180,7 @@ export interface components {
             /** Format: int64 */
             episode_count: number;
             artist_name: string;
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             artist_profile: components["schemas"]["SqlNullString"];
             /**
              * Format: int64
@@ -3180,6 +3192,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             name: string;
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             profile: components["schemas"]["SqlNullString"];
             /**
              * Format: int64
@@ -3196,6 +3209,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             name: string;
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             logo: components["schemas"]["SqlNullString"];
             country: components["schemas"]["SqlNullString"];
         };
@@ -3280,7 +3294,9 @@ export interface components {
             adult: boolean;
             tmdb_id: components["schemas"]["SqlNullInt64"];
             imdb_id: components["schemas"]["SqlNullString"];
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             poster_path: components["schemas"]["SqlNullString"];
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             backdrop_path: components["schemas"]["SqlNullString"];
             language: components["schemas"]["SqlNullString"];
             year: components["schemas"]["SqlNullInt64"];
@@ -3302,6 +3318,7 @@ export interface components {
             /** Format: int64 */
             cast_order: number;
             artist_name: string;
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             artist_profile: components["schemas"]["SqlNullString"];
             /**
              * Format: int64
@@ -3802,7 +3819,9 @@ export interface components {
             overview?: string | null;
             tag_line?: string | null;
             certification?: string | null;
+            /** @description A TMDB image path for the poster. A value equal to the one the movie returns, or the URL of any downloaded copy (/api/static/...), leaves the poster unchanged. */
             poster_path?: string | null;
+            /** @description A TMDB image path for the backdrop. A value equal to the one the movie returns, or the URL of any downloaded copy (/api/static/...), leaves the backdrop unchanged. */
             backdrop_path?: string | null;
             language?: string | null;
         };
@@ -3862,6 +3881,7 @@ export interface components {
             /** Format: int64 */
             movie_id: number;
             movie_title: string;
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             movie_poster: string | null;
             owner: components["schemas"]["UserSummary"];
             members: components["schemas"]["UserSummary"][];
@@ -3875,6 +3895,7 @@ export interface components {
             /** Format: int64 */
             movie_id: number;
             movie_title: string;
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             movie_poster: string | null;
             owner: components["schemas"]["UserSummary"];
             members: components["schemas"]["UserSummary"][];
@@ -3961,6 +3982,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             title: string;
+            /** @description Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             cover: components["schemas"]["SqlNullString"];
             musician: components["schemas"]["SqlNullString"];
             year: components["schemas"]["SqlNullInt64"];
@@ -3988,7 +4010,7 @@ export interface components {
             year: components["schemas"]["SqlNullInt64"];
             /** @description The track count the matched provider reports for the album, not the number of local tracks. Valid is false until a match reports one. */
             total_tracks: components["schemas"]["SqlNullInt64"];
-            /** @description The matched provider's cover art URL. Valid is false until a match supplies one. */
+            /** @description The matched provider's cover art URL, or the /api/static/ URL of the server's downloaded copy; see the API description. Valid is false until a match supplies one. */
             cover: components["schemas"]["SqlNullString"];
             created_at: string;
             updated_at: string;
@@ -4051,6 +4073,7 @@ export interface components {
             bit_rate: number;
             album_id: components["schemas"]["SqlNullInt64"];
             album_title: components["schemas"]["SqlNullString"];
+            /** @description Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             album_cover: components["schemas"]["SqlNullString"];
             musician_id: components["schemas"]["SqlNullInt64"];
             musician_name: components["schemas"]["SqlNullString"];
@@ -4059,6 +4082,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             name: string;
+            /** @description Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             thumb: components["schemas"]["SqlNullString"];
             /** Format: int64 */
             album_count: number;
@@ -4097,6 +4121,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             name: string;
+            /** @description Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             thumb: components["schemas"]["SqlNullString"];
         };
         /** @description One genre tag carried by one track of the album; a track with several genres contributes several rows. */
@@ -4148,6 +4173,7 @@ export interface components {
             spotify_popularity: components["schemas"]["SqlNullFloat64"];
             /** @description No longer written: Spotify stopped reporting follower counts to this app in 2026, so Valid is false. */
             spotify_followers: components["schemas"]["SqlNullInt64"];
+            /** @description Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             thumb: components["schemas"]["SqlNullString"];
             created_at: string;
             updated_at: string;
@@ -4156,6 +4182,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             title: string;
+            /** @description Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             cover: components["schemas"]["SqlNullString"];
             year: components["schemas"]["SqlNullInt64"];
             release_date: components["schemas"]["SqlNullString"];
@@ -4177,6 +4204,7 @@ export interface components {
             bit_rate: number;
             album_id: components["schemas"]["SqlNullInt64"];
             album_title: components["schemas"]["SqlNullString"];
+            /** @description Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             album_cover: components["schemas"]["SqlNullString"];
         };
         MusicianDetailsData: {
@@ -4310,6 +4338,7 @@ export interface components {
             album_id: components["schemas"]["SqlNullInt64"];
             musician_id: components["schemas"]["SqlNullInt64"];
             album_title: components["schemas"]["SqlNullString"];
+            /** @description Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             album_cover: components["schemas"]["SqlNullString"];
             musician_name: components["schemas"]["SqlNullString"];
         };
@@ -4461,6 +4490,7 @@ export interface components {
             duration: number;
             album_id: components["schemas"]["SqlNullInt64"];
             album_title: components["schemas"]["SqlNullString"];
+            /** @description Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             album_cover: components["schemas"]["SqlNullString"];
             musician_id: components["schemas"]["SqlNullInt64"];
             musician_name: components["schemas"]["SqlNullString"];
@@ -4482,6 +4512,7 @@ export interface components {
             duration: number;
             album_id: components["schemas"]["SqlNullInt64"];
             album_title: components["schemas"]["SqlNullString"];
+            /** @description Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             album_cover: components["schemas"]["SqlNullString"];
             musician_id: components["schemas"]["SqlNullInt64"];
             musician_name: components["schemas"]["SqlNullString"];
@@ -4499,6 +4530,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             name: string;
+            /** @description Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             thumb: components["schemas"]["SqlNullString"];
             total_play_count: components["schemas"]["SqlNullFloat64"];
             /** @description Sum of duration_played, in seconds. */
@@ -4536,6 +4568,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             title: string;
+            /** @description Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             cover: components["schemas"]["SqlNullString"];
             musician: components["schemas"]["SqlNullString"];
             year: components["schemas"]["SqlNullInt64"];
@@ -4969,6 +5002,7 @@ export interface components {
             name: string;
             overview: components["schemas"]["SqlNullString"];
             air_date: components["schemas"]["SqlNullString"];
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             still_path: components["schemas"]["SqlNullString"];
             tmdb_runtime: components["schemas"]["SqlNullInt64"];
             vote_average: components["schemas"]["SqlNullFloat64"];
@@ -4978,7 +5012,9 @@ export interface components {
             /** Format: int64 */
             id: number;
             name: string;
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             poster_path: components["schemas"]["SqlNullString"];
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             backdrop_path: components["schemas"]["SqlNullString"];
         };
         ShowEpisodePlaybackSeason: {
@@ -4995,6 +5031,7 @@ export interface components {
             /** Format: int64 */
             episode_number: number;
             name: string;
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             still_path: components["schemas"]["SqlNullString"];
             progress_sec: components["schemas"]["SqlNullFloat64"];
             duration_sec: components["schemas"]["SqlNullFloat64"];
@@ -5133,6 +5170,7 @@ export interface components {
             birthday: string;
             deathday: string;
             place_of_birth: string;
+            /** @description TMDB image path of the person's photo, which clients show large. When TMDB is unavailable or has no photo, the stored one instead: a TMDB path, or the /api/static/ URL of its downloaded copy, which is stored at cast-card size. */
             profile_path: string;
             homepage: string;
             gender: number;
@@ -5156,6 +5194,7 @@ export interface components {
             title: string;
             /** @description Release/first-air date or stored year; empty when undated. */
             date: string;
+            /** @description TMDB image path, or the /api/static/ URL of the downloaded copy of the poster of a title in the library. */
             poster_path: string;
             popularity: number;
             /** Format: int64 */
@@ -7047,7 +7086,10 @@ export interface operations {
     };
     serveStaticFiles: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Version of a downloaded library image; the server ignores it. */
+                v?: string;
+            };
             header?: {
                 /** @description Byte ranges, including suffix and multiple ranges. A single satisfiable range returns 206 with Content-Range; multiple ranges return multipart/byteranges with per-part Content-Type and Content-Range. Malformed or non-overlapping ranges return plain-text 416. Ranges whose summed length exceeds the file size are ignored. HEAD also honors Range, but sends no body. */
                 Range?: components["parameters"]["RangeHeader"];

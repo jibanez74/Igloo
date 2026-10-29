@@ -13,7 +13,7 @@ import (
 
 const getArtistByTmdbID = `-- name: GetArtistByTmdbID :one
 SELECT
-  id, name, tmdb_id, profile
+  id, name, tmdb_id, profile, profile_source
 FROM artist
 WHERE tmdb_id = ?
 `
@@ -26,6 +26,7 @@ func (q *Queries) GetArtistByTmdbID(ctx context.Context, tmdbID int64) (Artist, 
 		&i.Name,
 		&i.TmdbID,
 		&i.Profile,
+		&i.ProfileSource,
 	)
 	return i, err
 }

@@ -653,6 +653,8 @@ func TestIdentifyMovie_HTTPPersistsTmdbMetadataAndRelationships(t *testing.T) {
 
 	actor := createTestUser(t, app, "Actor", "actor@example.com", true)
 	router := authenticatedRouter(t, app, actor.ID)
+	artwork := &artworkRequests{}
+	app.Artwork = artwork
 
 	w := httptest.NewRecorder()
 	req := newOpenAPIJSONRequest(http.MethodPut, "/api/movies/"+strconv.FormatInt(movie.ID, 10)+"/identify", `{"tmdb_id":603}`)
@@ -662,6 +664,9 @@ func TestIdentifyMovie_HTTPPersistsTmdbMetadataAndRelationships(t *testing.T) {
 		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
 	}
 	assertOpenAPIExchange(t, "identifyMovie", req, w)
+	if artwork.count.Load() != 1 {
+		t.Fatalf("artwork passes requested = %d, want one for the new match's artwork", artwork.count.Load())
+	}
 
 	updated, err := app.Queries.GetMovieByID(ctx, movie.ID)
 	if err != nil {
@@ -798,6 +803,81 @@ func TestUpdateMovieMetadata_PreservesOmittedNullableFields(t *testing.T) {
 		!updated.Year.Valid || updated.Year.Int64 != 2001 ||
 		!updated.Certification.Valid || updated.Certification.String != "PG" {
 		t.Fatalf("updated movie = %+v, want omitted nullable fields preserved", updated)
+	}
+}
+
+// The edit starts from the stored provider references, not the returned
+// values, so editing other fields of a movie whose artwork was downloaded
+// neither stores the local URL as its source nor drops the downloaded copy.
+func TestUpdateMovieMetadata_KeepsDownloadedArtwork(t *testing.T) {
+	app := setupTestApp(t)
+
+	ctx := context.Background()
+	movieID, err := app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{
+		Title:              "Original",
+		FilePath:           "/movies/original-artwork.mkv",
+		FileName:           "original-artwork.mkv",
+		Size:               1,
+		Container:          "mkv",
+		MimeType:           "video/x-matroska",
+		PosterPathSource:   helpers.NullString("/poster.jpg"),
+		BackdropPathSource: helpers.NullString("/backdrop.jpg"),
+	})
+	if err != nil {
+		t.Fatalf("insert movie: %v", err)
+	}
+	const posterCopy = "/api/static/movies/1/original_poster.jpg?v=1a2b3c4d"
+	_, err = app.DB.Exec(`UPDATE movies SET poster_path = ? WHERE id = ?`, posterCopy, movieID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	actor := createTestUser(t, app, "Editor", "editor@example.com", true)
+	router := authenticatedRouter(t, app, actor.ID)
+	path := "/api/movies/" + strconv.FormatInt(movieID, 10)
+	artwork := &artworkRequests{}
+	app.Artwork = artwork
+
+	// A client may send back every field it was shown, the copy's URL
+	// included, with only the title changed. A form opened before a settings
+	// save reverted the columns sends a copy's URL that differs from the one
+	// the movie returns now; no copy's URL is a source.
+	staleCopies := `{"title":"Updated","poster_path":"/api/static/movies/2/other_poster.jpg?v=9","backdrop_path":"/api/static/movies/1/original_backdrop.jpg?v=5"}`
+	for _, body := range []string{`{"title":"Updated"}`, fmt.Sprintf(`{"title":"Updated","poster_path":%q}`, posterCopy), staleCopies} {
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, newOpenAPIJSONRequest(http.MethodPatch, path, body))
+		if w.Code != http.StatusOK {
+			t.Fatalf("title edit status = %d, body = %s", w.Code, w.Body.String())
+		}
+		updated, err := app.Queries.GetMovieByID(ctx, movieID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if updated.PosterPath.String != posterCopy || updated.PosterPathSource.String != "/poster.jpg" {
+			t.Fatalf("after editing %s poster = %q from %q, want the copy of /poster.jpg kept", body, updated.PosterPath.String, updated.PosterPathSource.String)
+		}
+		if updated.BackdropPath.String != "/backdrop.jpg" || updated.BackdropPathSource.String != "/backdrop.jpg" {
+			t.Fatalf("after editing %s backdrop = %q from %q, want /backdrop.jpg kept", body, updated.BackdropPath.String, updated.BackdropPathSource.String)
+		}
+	}
+	if artwork.count.Load() != 3 {
+		t.Fatalf("artwork passes requested = %d, want one per edit", artwork.count.Load())
+	}
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, newOpenAPIJSONRequest(http.MethodPatch, path, `{"poster_path":"/new-poster.jpg"}`))
+	if w.Code != http.StatusOK {
+		t.Fatalf("poster edit status = %d, body = %s", w.Code, w.Body.String())
+	}
+	updated, err := app.Queries.GetMovieByID(ctx, movieID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.PosterPath.String != "/new-poster.jpg" || updated.PosterPathSource.String != "/new-poster.jpg" {
+		t.Fatalf("after a poster edit poster = %q from %q, want the new path", updated.PosterPath.String, updated.PosterPathSource.String)
+	}
+	if updated.BackdropPath.String != "/backdrop.jpg" {
+		t.Fatalf("backdrop = %q, want it untouched", updated.BackdropPath.String)
 	}
 }
 

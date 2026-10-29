@@ -25,29 +25,29 @@ func applyShow(ctx context.Context, q *database.Queries, id int64, m *tmdb.TVSho
 	// Valid: true, because for them a genuine 0 is a fact — a show nobody has
 	// rated has 0 votes, and that is not the same as a vote count never fetched.
 	err = q.UpdateShowMetadata(ctx, database.UpdateShowMetadataParams{
-		ID:               id,
-		Name:             m.Name,
-		TmdbID:           helpers.NullInt64(int64(m.ID)),
-		ImdbID:           helpers.NullString(m.ExternalIDs.IMDbID),
-		OriginalName:     helpers.NullString(m.OriginalName),
-		Overview:         helpers.NullString(m.Overview),
-		Tagline:          helpers.NullString(m.Tagline),
-		Language:         helpers.NullString(m.OriginalLanguage),
-		OriginCountries:  helpers.NullString(string(countries)),
-		FirstAirDate:     helpers.NullString(m.FirstAirDate),
-		LastAirDate:      helpers.NullString(m.LastAirDate),
-		Status:           helpers.NullString(m.Status),
-		Type:             helpers.NullString(m.Type),
-		Adult:            m.Adult,
-		PosterPath:       helpers.NullString(m.PosterPath),
-		BackdropPath:     helpers.NullString(m.BackdropPath),
-		Homepage:         helpers.NullString(m.Homepage),
-		VoteAverage:      sql.NullFloat64{Float64: m.VoteAverage, Valid: true},
-		VoteCount:        sql.NullInt64{Int64: int64(m.VoteCount), Valid: true},
-		Popularity:       sql.NullFloat64{Float64: m.Popularity, Valid: true},
-		Certification:    helpers.NullString(m.Certification()),
-		TmdbSeasonCount:  sql.NullInt64{Int64: int64(m.NumberOfSeasons), Valid: true},
-		TmdbEpisodeCount: sql.NullInt64{Int64: int64(m.NumberOfEpisodes), Valid: true},
+		ID:                 id,
+		Name:               m.Name,
+		TmdbID:             helpers.NullInt64(int64(m.ID)),
+		ImdbID:             helpers.NullString(m.ExternalIDs.IMDbID),
+		OriginalName:       helpers.NullString(m.OriginalName),
+		Overview:           helpers.NullString(m.Overview),
+		Tagline:            helpers.NullString(m.Tagline),
+		Language:           helpers.NullString(m.OriginalLanguage),
+		OriginCountries:    helpers.NullString(string(countries)),
+		FirstAirDate:       helpers.NullString(m.FirstAirDate),
+		LastAirDate:        helpers.NullString(m.LastAirDate),
+		Status:             helpers.NullString(m.Status),
+		Type:               helpers.NullString(m.Type),
+		Adult:              m.Adult,
+		PosterPathSource:   helpers.NullString(m.PosterPath),
+		BackdropPathSource: helpers.NullString(m.BackdropPath),
+		Homepage:           helpers.NullString(m.Homepage),
+		VoteAverage:        sql.NullFloat64{Float64: m.VoteAverage, Valid: true},
+		VoteCount:          sql.NullInt64{Int64: int64(m.VoteCount), Valid: true},
+		Popularity:         sql.NullFloat64{Float64: m.Popularity, Valid: true},
+		Certification:      helpers.NullString(m.Certification()),
+		TmdbSeasonCount:    sql.NullInt64{Int64: int64(m.NumberOfSeasons), Valid: true},
+		TmdbEpisodeCount:   sql.NullInt64{Int64: int64(m.NumberOfEpisodes), Valid: true},
 	})
 	if err != nil {
 		return err
@@ -79,11 +79,11 @@ func applyShow(ctx context.Context, q *database.Queries, id int64, m *tmdb.TVSho
 		}
 	}
 	for _, n := range m.Networks {
-		network, err := q.UpsertNetwork(ctx, database.UpsertNetworkParams{Name: n.Name, TmdbID: int64(n.ID), Logo: helpers.NullString(n.LogoPath), Country: helpers.NullString(n.OriginCountry)})
+		networkID, err := q.UpsertNetwork(ctx, database.UpsertNetworkParams{Name: n.Name, TmdbID: int64(n.ID), LogoSource: helpers.NullString(n.LogoPath), Country: helpers.NullString(n.OriginCountry)})
 		if err != nil {
 			return err
 		}
-		err = q.CreateShowNetwork(ctx, database.CreateShowNetworkParams{ShowID: id, NetworkID: network.ID})
+		err = q.CreateShowNetwork(ctx, database.CreateShowNetworkParams{ShowID: id, NetworkID: networkID})
 		if err != nil {
 			return err
 		}
@@ -122,7 +122,7 @@ func applySeason(ctx context.Context, q *database.Queries, id int64, m *tmdb.TVS
 		TmdbID:           helpers.NullInt64(int64(m.ID)),
 		Overview:         helpers.NullString(m.Overview),
 		AirDate:          helpers.NullString(m.AirDate),
-		PosterPath:       helpers.NullString(m.PosterPath),
+		PosterPathSource: helpers.NullString(m.PosterPath),
 		VoteAverage:      sql.NullFloat64{Float64: m.VoteAverage, Valid: true},
 		TmdbEpisodeCount: sql.NullInt64{Int64: int64(len(m.Episodes)), Valid: true},
 	})
@@ -148,16 +148,16 @@ func applyEpisode(ctx context.Context, q *database.Queries, id int64, m tmdb.TVE
 	// See applyShow for why the rating and count fields keep an explicit
 	// Valid: true while the rest go through the helpers.
 	err := q.UpdateShowEpisodeMetadata(ctx, database.UpdateShowEpisodeMetadataParams{
-		ID:             id,
-		Name:           name,
-		TmdbID:         helpers.NullInt64(int64(m.ID)),
-		Overview:       helpers.NullString(m.Overview),
-		AirDate:        helpers.NullString(m.AirDate),
-		StillPath:      helpers.NullString(m.StillPath),
-		ProductionCode: helpers.NullString(m.ProductionCode),
-		TmdbRuntime:    helpers.NullInt64(int64(m.Runtime)),
-		VoteAverage:    sql.NullFloat64{Float64: m.VoteAverage, Valid: true},
-		VoteCount:      sql.NullInt64{Int64: int64(m.VoteCount), Valid: true},
+		ID:              id,
+		Name:            name,
+		TmdbID:          helpers.NullInt64(int64(m.ID)),
+		Overview:        helpers.NullString(m.Overview),
+		AirDate:         helpers.NullString(m.AirDate),
+		StillPathSource: helpers.NullString(m.StillPath),
+		ProductionCode:  helpers.NullString(m.ProductionCode),
+		TmdbRuntime:     helpers.NullInt64(int64(m.Runtime)),
+		VoteAverage:     sql.NullFloat64{Float64: m.VoteAverage, Valid: true},
+		VoteCount:       sql.NullInt64{Int64: int64(m.VoteCount), Valid: true},
 	})
 	if err != nil {
 		return err
@@ -202,7 +202,7 @@ func upsertPerson(ctx context.Context, q *database.Queries, p tmdb.TVPerson) (in
 	if p.ID <= 0 {
 		return 0, errors.New("invalid TMDB person identity")
 	}
-	return q.UpsertArtist(ctx, database.UpsertArtistParams{Name: p.Name, TmdbID: int64(p.ID), Profile: helpers.NullString(p.ProfilePath)})
+	return q.UpsertArtist(ctx, database.UpsertArtistParams{Name: p.Name, TmdbID: int64(p.ID), ProfileSource: helpers.NullString(p.ProfilePath)})
 }
 func replaceCredits(ctx context.Context, q *database.Queries, owner metadataOwner, rows []credit) error {
 	var remove []func(context.Context, int64) error

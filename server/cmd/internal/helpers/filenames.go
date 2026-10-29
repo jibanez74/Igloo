@@ -114,3 +114,20 @@ func FileExtension(path string) string {
 
 	return strings.ToLower(ext[1:])
 }
+
+// IsPlainPathSegment reports whether s is nonempty and made only of ASCII
+// letters, digits, '_', '-' and the characters in extra.
+func IsPlainPathSegment(s, extra string) bool {
+	if s == "" {
+		return false
+	}
+
+	for _, char := range s {
+		isAlphanumeric := (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9')
+		if !isAlphanumeric && char != '_' && char != '-' && !strings.ContainsRune(extra, char) {
+			return false
+		}
+	}
+
+	return true
+}

@@ -15,3 +15,26 @@ sql:
         emit_exact_table_names: false
         emit_prepared_queries: true
         omit_unused_structs: true
+        # The provider reference behind each image column stays internal; the
+        # API returns the image column itself.
+        overrides:
+          - column: "movies.poster_path_source"
+            go_struct_tag: 'json:"-"'
+          - column: "movies.backdrop_path_source"
+            go_struct_tag: 'json:"-"'
+          - column: "artist.profile_source"
+            go_struct_tag: 'json:"-"'
+          - column: "shows.poster_path_source"
+            go_struct_tag: 'json:"-"'
+          - column: "shows.backdrop_path_source"
+            go_struct_tag: 'json:"-"'
+          - column: "show_seasons.poster_path_source"
+            go_struct_tag: 'json:"-"'
+          - column: "show_episodes.still_path_source"
+            go_struct_tag: 'json:"-"'
+          - column: "networks.logo_source"
+            go_struct_tag: 'json:"-"'
+          - column: "albums.cover_source"
+            go_struct_tag: 'json:"-"'
+          - column: "musicians.thumb_source"
+            go_struct_tag: 'json:"-"'

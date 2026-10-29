@@ -380,13 +380,13 @@ func (s *Scanner) updateMusicianThumbIfChanged(ctx context.Context, qtx *databas
 	if thumbURL == "" {
 		return musician, nil
 	}
-	if musician.Thumb.Valid && musician.Thumb.String == thumbURL {
+	if musician.ThumbSource.Valid && musician.ThumbSource.String == thumbURL {
 		return musician, nil
 	}
 
 	row, err := qtx.UpdateMusicianSpotifyThumb(ctx, database.UpdateMusicianSpotifyThumbParams{
-		ID:    musician.ID,
-		Thumb: helpers.NullString(thumbURL),
+		ID:          musician.ID,
+		ThumbSource: helpers.NullString(thumbURL),
 	})
 	return database.GetMusicianBySpotifyIDRow(row), err
 }
@@ -395,13 +395,13 @@ func (s *Scanner) updateAlbumCoverIfChanged(ctx context.Context, qtx *database.Q
 	if coverURL == "" {
 		return album, nil
 	}
-	if album.Cover.Valid && album.Cover.String == coverURL {
+	if album.CoverSource.Valid && album.CoverSource.String == coverURL {
 		return album, nil
 	}
 
 	row, err := qtx.UpdateAlbumCover(ctx, database.UpdateAlbumCoverParams{
-		ID:    album.ID,
-		Cover: helpers.NullString(coverURL),
+		ID:          album.ID,
+		CoverSource: helpers.NullString(coverURL),
 	})
 	return database.GetAlbumBySpotifyIDRow(row), err
 }

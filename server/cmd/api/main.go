@@ -78,6 +78,9 @@ func main() {
 // server was down, and a disk that has not mounted yet must not read as
 // deleted files.
 func startLibraryWork(app *Application) {
+	// A first artwork pass catches up with a setting changed, or copies
+	// deleted, while the server was down.
+	app.syncArtwork()
 	enabled := app.CurrentSettings().EnableWatcher
 	if enabled {
 		app.Watcher.Sync(true)

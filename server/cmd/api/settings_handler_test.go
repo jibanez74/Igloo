@@ -82,6 +82,45 @@ func TestUpdateGeneralSettings_UpdatesDatabaseAndApplicationSettings(t *testing.
 	}
 }
 
+// A save requests an artwork pass when it changes one of the two settings a
+// pass reads: the download flag, or the static directory the copies live in.
+func TestUpdateGeneralSettings_RequestsAnArtworkPassForItsSettings(t *testing.T) {
+	app := setupSessionTestApp(t)
+	admin := createTestUser(t, app, "Settings Admin", "settings-admin@example.com", true)
+	artwork := &artworkRequests{}
+	app.Artwork = artwork
+	staticDir := filepath.Join(t.TempDir(), "static")
+	otherStaticDir := filepath.Join(t.TempDir(), "static")
+
+	// Moving the directory while downloads are on, or turning them off, also
+	// points the columns back at their sources before the response.
+	downloadsOff := func(dir string) string {
+		return strings.Replace(generalSettingsBody(dir), `"download_images": true`, `"download_images": false`, 1)
+	}
+	steps := []struct {
+		name        string
+		body        string
+		wantPasses  int32
+		wantReverts int32
+	}{
+		{"turning downloads on", generalSettingsBody(staticDir), 1, 0},
+		{"saving the same values", generalSettingsBody(staticDir), 1, 0},
+		{"changing another setting", generalSettingsBodyWithWatcher(staticDir, false), 1, 0},
+		{"moving the static directory", generalSettingsBody(otherStaticDir), 2, 1},
+		{"turning downloads off", downloadsOff(otherStaticDir), 3, 2},
+		{"moving the directory while off", downloadsOff(staticDir), 4, 2},
+	}
+	for _, step := range steps {
+		w := serveAs(t, app, admin.ID, http.MethodPut, "/api/settings/general", step.body)
+		if w.Code != http.StatusOK {
+			t.Fatalf("%s: status %d: %s", step.name, w.Code, w.Body.String())
+		}
+		if artwork.count.Load() != step.wantPasses || artwork.reverts.Load() != step.wantReverts {
+			t.Fatalf("%s: passes = %d, reverts = %d; want %d and %d", step.name, artwork.count.Load(), artwork.reverts.Load(), step.wantPasses, step.wantReverts)
+		}
+	}
+}
+
 func TestGeneralSettingsRestartRequired_OnlyForStartupClients(t *testing.T) {
 	previous := database.Setting{
 		TmdbKey:      sql.NullString{String: "tmdb-key", Valid: true},
@@ -210,6 +249,8 @@ func TestUpdateGeneralSettings_RejectsEmptyRequiredDirectories(t *testing.T) {
 func TestUpdateLibrarySettings_UpdatesMediaDirectories(t *testing.T) {
 	app := setupSessionTestApp(t)
 	admin := createTestUser(t, app, "Settings Admin", "settings-admin@example.com", true)
+	artwork := &artworkRequests{}
+	app.Artwork = artwork
 
 	root := t.TempDir()
 	moviesDir := filepath.Join(root, "movies")
@@ -230,6 +271,11 @@ func TestUpdateLibrarySettings_UpdatesMediaDirectories(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	// The artwork syncer keeps clear of the library roots, so new roots
+	// start a pass.
+	if artwork.count.Load() != 1 {
+		t.Fatalf("artwork passes requested = %d, want 1", artwork.count.Load())
 	}
 
 	settings, err := app.Queries.GetSettings(context.Background())

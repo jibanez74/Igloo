@@ -33,6 +33,9 @@ type Dependencies struct {
 	// deletion), under the scanner mutex, with the episode ids the file backs,
 	// so the API drops the runtime caches derived from the replaced rows.
 	InvalidateCommittedShowFile func(fileID int64, episodeIDs []int64)
+	// ScanFinished runs when each run ends, to download the artwork it
+	// brought.
+	ScanFinished func()
 }
 
 const (
@@ -86,7 +89,7 @@ func New(deps Dependencies) *Scanner {
 	}
 	return &Scanner{
 		Dependencies: deps,
-		launcher:     scanner.Launcher{Wait: deps.Wait},
+		launcher:     scanner.Launcher{Wait: deps.Wait, Finished: deps.ScanFinished},
 		tx:           scanner.TxRunner{DB: deps.DB, Mu: deps.ScannerDBMu, Queries: deps.Queries},
 		mountPoints:  scanner.MountPoints,
 	}

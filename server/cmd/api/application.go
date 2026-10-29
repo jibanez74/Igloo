@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"sync"
 
+	"igloo/cmd/internal/artwork"
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffmpeg"
 	"igloo/cmd/internal/ffprobe"
@@ -119,6 +120,13 @@ type Application struct {
 	// Watcher follows the library roots while enable_watcher is on; Sync
 	// starts and stops it.
 	Watcher *watch.Watcher
+	// Artwork keeps the library artwork downloaded while download_images is
+	// on; Request starts a pass, and Revert points the image columns back at
+	// their sources at once.
+	Artwork interface {
+		Request()
+		Revert(ctx context.Context) error
+	}
 }
 
 //go:embed all:webdist
@@ -239,6 +247,8 @@ func InitApp() (initializedApp *Application, err error) {
 
 	app.initRuntimeCaches()
 	app.ScanContext, app.ScanCancel = context.WithCancel(context.Background())
+	// The scanners request an artwork pass when each run ends.
+	app.initArtwork()
 	// Apple lookups take no credentials, so the client always exists; the
 	// enable_apple_lookups setting gates its use at each music scan.
 	app.initScanners(musicSpotify, itunes.New())
@@ -273,6 +283,7 @@ func (app *Application) initScanners(musicSpotify music.SpotifyProvider, musicAp
 		InvalidateCommittedTrack: func(trackID int64) {
 			app.StreamFileCache.invalidate(trackStreamFileKey(trackID))
 		},
+		ScanFinished: app.syncArtwork,
 	})
 
 	app.ShowScanner = show.New(show.Dependencies{
@@ -288,6 +299,7 @@ func (app *Application) initScanners(musicSpotify music.SpotifyProvider, musicAp
 			return app.CurrentSettings().ShowsDir
 		},
 		InvalidateCommittedShowFile: app.invalidateCommittedShowFile,
+		ScanFinished:                app.syncArtwork,
 	})
 
 	app.MovieScanner = movie.New(movie.Dependencies{
@@ -304,6 +316,7 @@ func (app *Application) initScanners(musicSpotify music.SpotifyProvider, musicAp
 		},
 		InvalidateCommittedMovie:    app.invalidateCommittedMovie,
 		InvalidateDeletedWatchRooms: app.invalidateDeletedWatchRooms,
+		ScanFinished:                app.syncArtwork,
 	})
 
 	// The watcher reads the scanner fields at each run, so a test that swaps
@@ -334,6 +347,60 @@ func (app *Application) initScanners(musicSpotify music.SpotifyProvider, musicAp
 			},
 		},
 	})
+}
+
+// initArtwork wires the artwork syncer, which reads the settings live and
+// fetches TMDB images from the same place the image proxy does.
+func (app *Application) initArtwork() {
+	app.Artwork = artwork.New(artwork.Dependencies{
+		DB:          app.DB,
+		Queries:     app.Queries,
+		Logger:      app.Logger,
+		ScannerDBMu: &app.ScannerDBMu,
+		Context:     app.ScanContext,
+		Wait:        app.Wait,
+		Enabled: func() bool {
+			return app.CurrentSettings().DownloadImages
+		},
+		StaticDir: func() string {
+			return app.CurrentSettings().StaticDir
+		},
+		LibraryDirs: func() []string {
+			settings := app.CurrentSettings()
+			var dirs []string
+			for _, dir := range []sql.NullString{settings.MoviesDir, settings.ShowsDir, settings.MusicDir} {
+				if dir.Valid && dir.String != "" {
+					dirs = append(dirs, dir.String)
+				}
+			}
+			return dirs
+		},
+		TmdbImageBaseURL: app.tmdbImageBaseURL,
+		HTTPClient:       app.TmdbImageHTTPClient,
+	})
+}
+
+// syncArtwork requests an artwork pass, which downloads what is missing while
+// download_images is on and removes the downloads while it is off.
+func (app *Application) syncArtwork() {
+	if app.Artwork == nil {
+		return
+	}
+	app.Artwork.Request()
+}
+
+// revertArtwork points the image columns back at their sources before a
+// settings save answers, so the client's refetch finds none of the copies
+// the pass it requests will delete or leave behind. A failure is only
+// logged: that pass reverts them too.
+func (app *Application) revertArtwork(ctx context.Context) {
+	if app.Artwork == nil {
+		return
+	}
+	err := app.Artwork.Revert(ctx)
+	if err != nil {
+		app.Logger.Error("failed to point artwork back at its providers", "error", err)
+	}
 }
 
 // invalidateDeletedWatchRooms runs after scanner deletion commits, before movie

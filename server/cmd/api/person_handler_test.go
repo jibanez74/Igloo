@@ -173,3 +173,69 @@ func TestPersonDatabaseFailure(t *testing.T) {
 	}
 	serveOpenAPIExchange(t, authenticatedRouter(t, app, user.ID), "getPerson", httptest.NewRequest(http.MethodGet, "/api/people/7", nil), http.StatusInternalServerError)
 }
+
+// The person page shows the profile large, so the provider's photo wins over
+// a downloaded copy stored at cast-card size; the copy stands in only when the
+// provider has no photo. A downloaded poster always replaces the provider's for
+// a title in the library.
+func TestPersonDownloadedArtwork(t *testing.T) {
+	const profileCopy = "/api/static/people/7/stored_person_profile.jpg?v=1a2b3c4d"
+	const posterCopy = "/api/static/movies/10/movie_poster.jpg?v=1a2b3c4d"
+	provider := func(profile string, gallery ...string) *tmdb.Person {
+		person := &tmdb.Person{ID: 7, Name: "Provider Person", ProfilePath: profile}
+		for _, path := range gallery {
+			person.Images.Profiles = append(person.Images.Profiles, struct {
+				FilePath string `json:"file_path"`
+			}{FilePath: path})
+		}
+		person.CombinedCredits.Cast = []tmdb.PersonCredit{{ID: 10, MediaType: "movie", Title: "Movie", Character: "Hero", PosterPath: "/provider-poster.jpg"}}
+		return person
+	}
+	tests := []struct {
+		name        string
+		provider    *tmdb.Person
+		wantProfile string
+		wantPhotos  []string
+	}{
+		{"same photo", provider("/face.jpg", "/face.jpg", "/other.jpg"), "/face.jpg", []string{"/other.jpg"}},
+		{"provider has a newer photo", provider("/newer.jpg", "/newer.jpg", "/face.jpg"), "/newer.jpg", []string{"/face.jpg"}},
+		{"provider has no photo", provider("", "/face.jpg", "/other.jpg"), profileCopy, []string{"/other.jpg"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := setupTestApp(t)
+			user := createTestUser(t, app, "Person User", "person@example.com", false)
+			_, err := app.DB.Exec(`
+ INSERT INTO artist(id,tmdb_id,name,profile_source) VALUES (1,7,'Stored Person','/face.jpg');
+ UPDATE artist SET profile = ? WHERE id = 1;
+ INSERT INTO movies(id,title,file_path,file_name,size,container,mime_type,adult,tmdb_id,poster_path_source) VALUES (1,'Movie','/one.mkv','one.mkv',1,'mkv','video/x-matroska',0,10,'/movie-poster.jpg');
+ UPDATE movies SET poster_path = ? WHERE id = 1;
+ INSERT INTO cast(movie_id,artist_id,character,cast_order) VALUES (1,1,'Hero',0);
+ `, profileCopy, posterCopy)
+			if err != nil {
+				t.Fatal(err)
+			}
+			app.Tmdb = &stubTmdbClient{person: tt.provider}
+
+			response := serveOpenAPIExchange(t, authenticatedRouter(t, app, user.ID), "getPerson", httptest.NewRequest(http.MethodGet, "/api/people/7", nil), http.StatusOK)
+			var body struct {
+				Data personData `json:"data"`
+			}
+			err = json.Unmarshal(response.Body.Bytes(), &body)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			data := body.Data
+			if data.Person.ProfilePath != tt.wantProfile {
+				t.Errorf("profile = %q, want %q", data.Person.ProfilePath, tt.wantProfile)
+			}
+			if fmt.Sprint(data.Photos) != fmt.Sprint(tt.wantPhotos) {
+				t.Errorf("photos = %v, want %v", data.Photos, tt.wantPhotos)
+			}
+			if len(data.Filmography) != 1 || data.Filmography[0].PosterPath != posterCopy {
+				t.Errorf("filmography = %+v, want the movie with its downloaded poster", data.Filmography)
+			}
+		})
+	}
+}
