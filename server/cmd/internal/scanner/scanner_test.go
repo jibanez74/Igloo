@@ -82,7 +82,13 @@ func TestLauncherFinishedRunsAfterEachRun(t *testing.T) {
 		events = append(events, event)
 		mu.Unlock()
 	}
-	launcher := Launcher{Wait: &scans, Finished: func() { record("finished") }}
+	launcher := Launcher{Wait: &scans, Finished: func(scoped bool) {
+		if scoped {
+			record("finished changes")
+			return
+		}
+		record("finished")
+	}}
 	directory := sql.NullString{String: "/library", Valid: true}
 	release := make(chan struct{})
 
@@ -100,9 +106,16 @@ func TestLauncherFinishedRunsAfterEachRun(t *testing.T) {
 	close(release)
 	scans.Wait()
 
+	// A catch-up walks the whole library, so it is not a run of changes.
+	result = launcher.Start(fixedDirectory(directory), &Changes{CatchUp: true}, func(ScanScope) {}, func(string, *Changes) { record("catch-up") })
+	if result.Status != StartStarted {
+		t.Fatalf("catch-up status = %d", result.Status)
+	}
+	scans.Wait()
+
 	got := strings.Join(events, ",")
-	if got != "changes,finished,library,finished" {
-		t.Fatalf("events = %q, want each run followed by finished", got)
+	if got != "changes,finished changes,library,finished,catch-up,finished" {
+		t.Fatalf("events = %q, want each run followed by finished, scoped for the run of changes", got)
 	}
 }
 

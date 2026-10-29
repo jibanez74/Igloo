@@ -220,15 +220,20 @@ func bootTestApp(t *testing.T, db *sql.DB, config RuntimeConfig) *Application {
 	return app
 }
 
-// artworkRequests stands in for the artwork syncer and counts the passes
-// and the reverts requested of it.
+// artworkRequests stands in for the artwork syncer and counts the full
+// passes, the passes of changes and the reverts requested of it.
 type artworkRequests struct {
 	count   atomic.Int32
+	changes atomic.Int32
 	reverts atomic.Int32
 }
 
 func (a *artworkRequests) Request() {
 	a.count.Add(1)
+}
+
+func (a *artworkRequests) RequestChanges() {
+	a.changes.Add(1)
 }
 
 func (a *artworkRequests) Revert(context.Context) error {

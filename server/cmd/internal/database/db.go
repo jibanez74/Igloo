@@ -834,14 +834,23 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.listAlbumArtworkStmt, err = db.PrepareContext(ctx, listAlbumArtwork); err != nil {
 		return nil, fmt.Errorf("error preparing query ListAlbumArtwork: %w", err)
 	}
+	if q.listAlbumArtworkInFoldersStmt, err = db.PrepareContext(ctx, listAlbumArtworkInFolders); err != nil {
+		return nil, fmt.Errorf("error preparing query ListAlbumArtworkInFolders: %w", err)
+	}
 	if q.listArtistArtworkStmt, err = db.PrepareContext(ctx, listArtistArtwork); err != nil {
 		return nil, fmt.Errorf("error preparing query ListArtistArtwork: %w", err)
+	}
+	if q.listArtistArtworkInFoldersStmt, err = db.PrepareContext(ctx, listArtistArtworkInFolders); err != nil {
+		return nil, fmt.Errorf("error preparing query ListArtistArtworkInFolders: %w", err)
 	}
 	if q.listLibraryMountPointsStmt, err = db.PrepareContext(ctx, listLibraryMountPoints); err != nil {
 		return nil, fmt.Errorf("error preparing query ListLibraryMountPoints: %w", err)
 	}
 	if q.listMovieArtworkStmt, err = db.PrepareContext(ctx, listMovieArtwork); err != nil {
 		return nil, fmt.Errorf("error preparing query ListMovieArtwork: %w", err)
+	}
+	if q.listMovieArtworkInFoldersStmt, err = db.PrepareContext(ctx, listMovieArtworkInFolders); err != nil {
+		return nil, fmt.Errorf("error preparing query ListMovieArtworkInFolders: %w", err)
 	}
 	if q.listMusicTrackScanIndexStmt, err = db.PrepareContext(ctx, listMusicTrackScanIndex); err != nil {
 		return nil, fmt.Errorf("error preparing query ListMusicTrackScanIndex: %w", err)
@@ -852,20 +861,59 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.listMusicianArtworkStmt, err = db.PrepareContext(ctx, listMusicianArtwork); err != nil {
 		return nil, fmt.Errorf("error preparing query ListMusicianArtwork: %w", err)
 	}
+	if q.listMusicianArtworkInFoldersStmt, err = db.PrepareContext(ctx, listMusicianArtworkInFolders); err != nil {
+		return nil, fmt.Errorf("error preparing query ListMusicianArtworkInFolders: %w", err)
+	}
 	if q.listNetworkArtworkStmt, err = db.PrepareContext(ctx, listNetworkArtwork); err != nil {
 		return nil, fmt.Errorf("error preparing query ListNetworkArtwork: %w", err)
+	}
+	if q.listNetworkArtworkInFoldersStmt, err = db.PrepareContext(ctx, listNetworkArtworkInFolders); err != nil {
+		return nil, fmt.Errorf("error preparing query ListNetworkArtworkInFolders: %w", err)
 	}
 	if q.listNotificationsForUserStmt, err = db.PrepareContext(ctx, listNotificationsForUser); err != nil {
 		return nil, fmt.Errorf("error preparing query ListNotificationsForUser: %w", err)
 	}
+	if q.listPendingAlbumArtworkStmt, err = db.PrepareContext(ctx, listPendingAlbumArtwork); err != nil {
+		return nil, fmt.Errorf("error preparing query ListPendingAlbumArtwork: %w", err)
+	}
+	if q.listPendingArtistArtworkStmt, err = db.PrepareContext(ctx, listPendingArtistArtwork); err != nil {
+		return nil, fmt.Errorf("error preparing query ListPendingArtistArtwork: %w", err)
+	}
+	if q.listPendingMovieArtworkStmt, err = db.PrepareContext(ctx, listPendingMovieArtwork); err != nil {
+		return nil, fmt.Errorf("error preparing query ListPendingMovieArtwork: %w", err)
+	}
+	if q.listPendingMusicianArtworkStmt, err = db.PrepareContext(ctx, listPendingMusicianArtwork); err != nil {
+		return nil, fmt.Errorf("error preparing query ListPendingMusicianArtwork: %w", err)
+	}
+	if q.listPendingNetworkArtworkStmt, err = db.PrepareContext(ctx, listPendingNetworkArtwork); err != nil {
+		return nil, fmt.Errorf("error preparing query ListPendingNetworkArtwork: %w", err)
+	}
+	if q.listPendingShowArtworkStmt, err = db.PrepareContext(ctx, listPendingShowArtwork); err != nil {
+		return nil, fmt.Errorf("error preparing query ListPendingShowArtwork: %w", err)
+	}
+	if q.listPendingShowEpisodeArtworkStmt, err = db.PrepareContext(ctx, listPendingShowEpisodeArtwork); err != nil {
+		return nil, fmt.Errorf("error preparing query ListPendingShowEpisodeArtwork: %w", err)
+	}
+	if q.listPendingShowSeasonArtworkStmt, err = db.PrepareContext(ctx, listPendingShowSeasonArtwork); err != nil {
+		return nil, fmt.Errorf("error preparing query ListPendingShowSeasonArtwork: %w", err)
+	}
 	if q.listShowArtworkStmt, err = db.PrepareContext(ctx, listShowArtwork); err != nil {
 		return nil, fmt.Errorf("error preparing query ListShowArtwork: %w", err)
+	}
+	if q.listShowArtworkInFoldersStmt, err = db.PrepareContext(ctx, listShowArtworkInFolders); err != nil {
+		return nil, fmt.Errorf("error preparing query ListShowArtworkInFolders: %w", err)
 	}
 	if q.listShowEpisodeArtworkStmt, err = db.PrepareContext(ctx, listShowEpisodeArtwork); err != nil {
 		return nil, fmt.Errorf("error preparing query ListShowEpisodeArtwork: %w", err)
 	}
+	if q.listShowEpisodeArtworkInFoldersStmt, err = db.PrepareContext(ctx, listShowEpisodeArtworkInFolders); err != nil {
+		return nil, fmt.Errorf("error preparing query ListShowEpisodeArtworkInFolders: %w", err)
+	}
 	if q.listShowSeasonArtworkStmt, err = db.PrepareContext(ctx, listShowSeasonArtwork); err != nil {
 		return nil, fmt.Errorf("error preparing query ListShowSeasonArtwork: %w", err)
+	}
+	if q.listShowSeasonArtworkInFoldersStmt, err = db.PrepareContext(ctx, listShowSeasonArtworkInFolders); err != nil {
+		return nil, fmt.Errorf("error preparing query ListShowSeasonArtworkInFolders: %w", err)
 	}
 	if q.listWatchRoomIDsByMovieIDStmt, err = db.PrepareContext(ctx, listWatchRoomIDsByMovieID); err != nil {
 		return nil, fmt.Errorf("error preparing query ListWatchRoomIDsByMovieID: %w", err)
@@ -2657,9 +2705,19 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing listAlbumArtworkStmt: %w", cerr)
 		}
 	}
+	if q.listAlbumArtworkInFoldersStmt != nil {
+		if cerr := q.listAlbumArtworkInFoldersStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listAlbumArtworkInFoldersStmt: %w", cerr)
+		}
+	}
 	if q.listArtistArtworkStmt != nil {
 		if cerr := q.listArtistArtworkStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing listArtistArtworkStmt: %w", cerr)
+		}
+	}
+	if q.listArtistArtworkInFoldersStmt != nil {
+		if cerr := q.listArtistArtworkInFoldersStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listArtistArtworkInFoldersStmt: %w", cerr)
 		}
 	}
 	if q.listLibraryMountPointsStmt != nil {
@@ -2670,6 +2728,11 @@ func (q *Queries) Close() error {
 	if q.listMovieArtworkStmt != nil {
 		if cerr := q.listMovieArtworkStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing listMovieArtworkStmt: %w", cerr)
+		}
+	}
+	if q.listMovieArtworkInFoldersStmt != nil {
+		if cerr := q.listMovieArtworkInFoldersStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listMovieArtworkInFoldersStmt: %w", cerr)
 		}
 	}
 	if q.listMusicTrackScanIndexStmt != nil {
@@ -2687,9 +2750,19 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing listMusicianArtworkStmt: %w", cerr)
 		}
 	}
+	if q.listMusicianArtworkInFoldersStmt != nil {
+		if cerr := q.listMusicianArtworkInFoldersStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listMusicianArtworkInFoldersStmt: %w", cerr)
+		}
+	}
 	if q.listNetworkArtworkStmt != nil {
 		if cerr := q.listNetworkArtworkStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing listNetworkArtworkStmt: %w", cerr)
+		}
+	}
+	if q.listNetworkArtworkInFoldersStmt != nil {
+		if cerr := q.listNetworkArtworkInFoldersStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listNetworkArtworkInFoldersStmt: %w", cerr)
 		}
 	}
 	if q.listNotificationsForUserStmt != nil {
@@ -2697,9 +2770,54 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing listNotificationsForUserStmt: %w", cerr)
 		}
 	}
+	if q.listPendingAlbumArtworkStmt != nil {
+		if cerr := q.listPendingAlbumArtworkStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listPendingAlbumArtworkStmt: %w", cerr)
+		}
+	}
+	if q.listPendingArtistArtworkStmt != nil {
+		if cerr := q.listPendingArtistArtworkStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listPendingArtistArtworkStmt: %w", cerr)
+		}
+	}
+	if q.listPendingMovieArtworkStmt != nil {
+		if cerr := q.listPendingMovieArtworkStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listPendingMovieArtworkStmt: %w", cerr)
+		}
+	}
+	if q.listPendingMusicianArtworkStmt != nil {
+		if cerr := q.listPendingMusicianArtworkStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listPendingMusicianArtworkStmt: %w", cerr)
+		}
+	}
+	if q.listPendingNetworkArtworkStmt != nil {
+		if cerr := q.listPendingNetworkArtworkStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listPendingNetworkArtworkStmt: %w", cerr)
+		}
+	}
+	if q.listPendingShowArtworkStmt != nil {
+		if cerr := q.listPendingShowArtworkStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listPendingShowArtworkStmt: %w", cerr)
+		}
+	}
+	if q.listPendingShowEpisodeArtworkStmt != nil {
+		if cerr := q.listPendingShowEpisodeArtworkStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listPendingShowEpisodeArtworkStmt: %w", cerr)
+		}
+	}
+	if q.listPendingShowSeasonArtworkStmt != nil {
+		if cerr := q.listPendingShowSeasonArtworkStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listPendingShowSeasonArtworkStmt: %w", cerr)
+		}
+	}
 	if q.listShowArtworkStmt != nil {
 		if cerr := q.listShowArtworkStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing listShowArtworkStmt: %w", cerr)
+		}
+	}
+	if q.listShowArtworkInFoldersStmt != nil {
+		if cerr := q.listShowArtworkInFoldersStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listShowArtworkInFoldersStmt: %w", cerr)
 		}
 	}
 	if q.listShowEpisodeArtworkStmt != nil {
@@ -2707,9 +2825,19 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing listShowEpisodeArtworkStmt: %w", cerr)
 		}
 	}
+	if q.listShowEpisodeArtworkInFoldersStmt != nil {
+		if cerr := q.listShowEpisodeArtworkInFoldersStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listShowEpisodeArtworkInFoldersStmt: %w", cerr)
+		}
+	}
 	if q.listShowSeasonArtworkStmt != nil {
 		if cerr := q.listShowSeasonArtworkStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing listShowSeasonArtworkStmt: %w", cerr)
+		}
+	}
+	if q.listShowSeasonArtworkInFoldersStmt != nil {
+		if cerr := q.listShowSeasonArtworkInFoldersStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listShowSeasonArtworkInFoldersStmt: %w", cerr)
 		}
 	}
 	if q.listWatchRoomIDsByMovieIDStmt != nil {
@@ -3746,17 +3874,33 @@ type Queries struct {
 	linkMusicTrackSpotifyStmt                   *sql.Stmt
 	linkShowEpisodeFileStmt                     *sql.Stmt
 	listAlbumArtworkStmt                        *sql.Stmt
+	listAlbumArtworkInFoldersStmt               *sql.Stmt
 	listArtistArtworkStmt                       *sql.Stmt
+	listArtistArtworkInFoldersStmt              *sql.Stmt
 	listLibraryMountPointsStmt                  *sql.Stmt
 	listMovieArtworkStmt                        *sql.Stmt
+	listMovieArtworkInFoldersStmt               *sql.Stmt
 	listMusicTrackScanIndexStmt                 *sql.Stmt
 	listMusicTrackScanIndexUnderStmt            *sql.Stmt
 	listMusicianArtworkStmt                     *sql.Stmt
+	listMusicianArtworkInFoldersStmt            *sql.Stmt
 	listNetworkArtworkStmt                      *sql.Stmt
+	listNetworkArtworkInFoldersStmt             *sql.Stmt
 	listNotificationsForUserStmt                *sql.Stmt
+	listPendingAlbumArtworkStmt                 *sql.Stmt
+	listPendingArtistArtworkStmt                *sql.Stmt
+	listPendingMovieArtworkStmt                 *sql.Stmt
+	listPendingMusicianArtworkStmt              *sql.Stmt
+	listPendingNetworkArtworkStmt               *sql.Stmt
+	listPendingShowArtworkStmt                  *sql.Stmt
+	listPendingShowEpisodeArtworkStmt           *sql.Stmt
+	listPendingShowSeasonArtworkStmt            *sql.Stmt
 	listShowArtworkStmt                         *sql.Stmt
+	listShowArtworkInFoldersStmt                *sql.Stmt
 	listShowEpisodeArtworkStmt                  *sql.Stmt
+	listShowEpisodeArtworkInFoldersStmt         *sql.Stmt
 	listShowSeasonArtworkStmt                   *sql.Stmt
+	listShowSeasonArtworkInFoldersStmt          *sql.Stmt
 	listWatchRoomIDsByMovieIDStmt               *sql.Stmt
 	listWatchRoomIDsByOwnerIDStmt               *sql.Stmt
 	markAllNotificationsReadForUserStmt         *sql.Stmt
@@ -4178,17 +4322,33 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		linkMusicTrackSpotifyStmt:                   q.linkMusicTrackSpotifyStmt,
 		linkShowEpisodeFileStmt:                     q.linkShowEpisodeFileStmt,
 		listAlbumArtworkStmt:                        q.listAlbumArtworkStmt,
+		listAlbumArtworkInFoldersStmt:               q.listAlbumArtworkInFoldersStmt,
 		listArtistArtworkStmt:                       q.listArtistArtworkStmt,
+		listArtistArtworkInFoldersStmt:              q.listArtistArtworkInFoldersStmt,
 		listLibraryMountPointsStmt:                  q.listLibraryMountPointsStmt,
 		listMovieArtworkStmt:                        q.listMovieArtworkStmt,
+		listMovieArtworkInFoldersStmt:               q.listMovieArtworkInFoldersStmt,
 		listMusicTrackScanIndexStmt:                 q.listMusicTrackScanIndexStmt,
 		listMusicTrackScanIndexUnderStmt:            q.listMusicTrackScanIndexUnderStmt,
 		listMusicianArtworkStmt:                     q.listMusicianArtworkStmt,
+		listMusicianArtworkInFoldersStmt:            q.listMusicianArtworkInFoldersStmt,
 		listNetworkArtworkStmt:                      q.listNetworkArtworkStmt,
+		listNetworkArtworkInFoldersStmt:             q.listNetworkArtworkInFoldersStmt,
 		listNotificationsForUserStmt:                q.listNotificationsForUserStmt,
+		listPendingAlbumArtworkStmt:                 q.listPendingAlbumArtworkStmt,
+		listPendingArtistArtworkStmt:                q.listPendingArtistArtworkStmt,
+		listPendingMovieArtworkStmt:                 q.listPendingMovieArtworkStmt,
+		listPendingMusicianArtworkStmt:              q.listPendingMusicianArtworkStmt,
+		listPendingNetworkArtworkStmt:               q.listPendingNetworkArtworkStmt,
+		listPendingShowArtworkStmt:                  q.listPendingShowArtworkStmt,
+		listPendingShowEpisodeArtworkStmt:           q.listPendingShowEpisodeArtworkStmt,
+		listPendingShowSeasonArtworkStmt:            q.listPendingShowSeasonArtworkStmt,
 		listShowArtworkStmt:                         q.listShowArtworkStmt,
+		listShowArtworkInFoldersStmt:                q.listShowArtworkInFoldersStmt,
 		listShowEpisodeArtworkStmt:                  q.listShowEpisodeArtworkStmt,
+		listShowEpisodeArtworkInFoldersStmt:         q.listShowEpisodeArtworkInFoldersStmt,
 		listShowSeasonArtworkStmt:                   q.listShowSeasonArtworkStmt,
+		listShowSeasonArtworkInFoldersStmt:          q.listShowSeasonArtworkInFoldersStmt,
 		listWatchRoomIDsByMovieIDStmt:               q.listWatchRoomIDsByMovieIDStmt,
 		listWatchRoomIDsByOwnerIDStmt:               q.listWatchRoomIDsByOwnerIDStmt,
 		markAllNotificationsReadForUserStmt:         q.markAllNotificationsReadForUserStmt,

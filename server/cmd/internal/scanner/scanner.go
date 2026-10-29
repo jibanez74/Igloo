@@ -110,8 +110,9 @@ type StartResult struct {
 type Launcher struct {
 	Wait *sync.WaitGroup
 	// Finished, when set, runs after every run, before a queued library scan
-	// starts.
-	Finished func()
+	// starts; scoped marks a run of watcher-detected changes rather than a
+	// library scan or a catch-up.
+	Finished func(scoped bool)
 
 	mu      sync.Mutex
 	running bool
@@ -185,10 +186,11 @@ func (l *Launcher) queue(request *launchRequest) {
 
 func (l *Launcher) launch(request *launchRequest, directory string) {
 	request.begin(request.changes.Scope())
+	scoped := request.changes.Scoped()
 	l.Wait.Go(func() {
 		request.run(directory, request.changes)
 		if l.Finished != nil {
-			l.Finished()
+			l.Finished(scoped)
 		}
 		l.finish()
 	})

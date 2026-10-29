@@ -174,7 +174,27 @@ func (h *harness) value(table, column string, id int64) sql.NullString {
 
 func (h *harness) pass() {
 	h.t.Helper()
-	h.syncer.pass(context.Background())
+	h.syncer.pass(context.Background(), true)
+}
+
+// passChanges runs the pass a run of watcher-detected changes asks for.
+func (h *harness) passChanges() {
+	h.t.Helper()
+	h.syncer.pass(context.Background(), false)
+}
+
+// passScopes counts the finished passes by the scope they logged.
+func (h *harness) passScopes() map[string]int {
+	scopes := map[string]int{}
+	for _, entries := range [][]scannertest.LogEntry{h.logger.InfoEntries, h.logger.DebugEntries} {
+		for _, entry := range entries {
+			isSummary := entry.Msg == "artwork pass finished" && len(entry.Args) > 1 && entry.Args[0] == "scope"
+			if isSummary {
+				scopes[fmt.Sprint(entry.Args[1])]++
+			}
+		}
+	}
+	return scopes
 }
 
 func (h *harness) exists(rel string) bool {
@@ -629,7 +649,7 @@ func TestPass_CancellationLeavesFilesForTheNextPass(t *testing.T) {
 		<-r.Context().Done()
 	}
 
-	h.syncer.pass(ctx)
+	h.syncer.pass(ctx, true)
 
 	if h.value("movies", "poster_path", 1).String != "/matrix-poster.jpg" {
 		t.Fatal("a canceled download changed the column")
@@ -658,14 +678,7 @@ func TestRequest_RunsOnePassForTheRequestsMadeDuringAPass(t *testing.T) {
 	close(release)
 	scannertest.WaitForGroup(t, h.syncer.wait, 5*time.Second, "the passes to finish")
 
-	passes := 0
-	for _, entries := range [][]scannertest.LogEntry{h.logger.InfoEntries, h.logger.DebugEntries} {
-		for _, entry := range entries {
-			if entry.Msg == "artwork pass finished" {
-				passes++
-			}
-		}
-	}
+	passes := h.passScopes()["full"]
 	if passes != 2 {
 		t.Fatalf("ran %d passes, want the first and one for the requests made during it", passes)
 	}
@@ -1162,5 +1175,478 @@ func TestPass_StopsPruningWhenTheLibrariesChange(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A pass of changes reads only the folders of the images still to download:
+// a copy deleted by hand and a file nothing points at elsewhere wait for the
+// next full pass.
+func TestPassChanges_LeavesFoldersWithoutNewImagesAlone(t *testing.T) {
+	h := newHarness(t)
+	h.addMovie(1, 603, "The Matrix", "/matrix-poster.jpg", "/matrix-backdrop.jpg")
+	h.addPerson(1, 6384, "Keanu Reeves", "/keanu.jpg")
+	h.pass()
+
+	err := os.Remove(filepath.Join(h.static, "movies", "603", "the_matrix_poster.png"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.write("people/42/old_name_profile.jpg", "orphan")
+	h.addMovie(2, 604, "Inception", "/inception-poster.jpg", "")
+	h.passChanges()
+
+	if h.value("movies", "poster_path", 2).String != local("movies/604/inception_poster.png", "w500", "/inception-poster.jpg") {
+		t.Fatalf("new poster = %q, want its copy", h.value("movies", "poster_path", 2).String)
+	}
+	if h.exists("movies/603/the_matrix_poster.png") || h.upstream.requests("/w500/matrix-poster.jpg") != 1 {
+		t.Fatal("a pass of changes healed a copy in a folder with nothing to download")
+	}
+	if !h.exists("people/42/old_name_profile.jpg") {
+		t.Fatal("a pass of changes pruned a folder with nothing to download")
+	}
+	if h.passScopes()["changes"] != 1 {
+		t.Fatalf("passes by scope = %v, want one pass of changes", h.passScopes())
+	}
+
+	h.pass()
+	if !h.exists("movies/603/the_matrix_poster.png") || h.exists("people/42/old_name_profile.jpg") {
+		t.Fatal("the next full pass did not heal the copy and remove the leftover file")
+	}
+}
+
+// A pass of changes lists every row of a folder it works in, so the images
+// already there are reused and kept, as a full pass keeps them.
+func TestPassChanges_SeesEveryImageOfAFolderItTouches(t *testing.T) {
+	h := newHarness(t)
+	h.addMovie(1, 603, "The Matrix", "/matrix-poster.jpg", "")
+	h.addShow(1, 1438, "The Wire", "/wire-poster.jpg", "")
+	h.exec(`INSERT INTO show_seasons (id, show_id, season_number, name, poster_path_source) VALUES (1, 1, 1, 'Season 1', '/season-1.jpg')`)
+	h.pass()
+	showCopy := h.value("shows", "poster_path", 1).String
+	seasonCopy := h.value("show_seasons", "poster_path", 1).String
+
+	// Another file of the same movie, and a new episode of the show.
+	h.addMovie(2, 603, "The Matrix", "/matrix-poster.jpg", "")
+	h.exec(`INSERT INTO show_episodes (id, season_id, episode_number, name, still_path_source) VALUES (1, 1, 1, 'The Target', '/pilot.jpg')`)
+	h.write("movies/603/old_title_poster.jpg", "orphan")
+	h.passChanges()
+
+	if h.upstream.requests("/w500/matrix-poster.jpg") != 1 || h.value("movies", "poster_path", 2).String != h.value("movies", "poster_path", 1).String {
+		t.Fatal("another file of the movie did not reuse its copy")
+	}
+	if h.value("show_episodes", "still_path", 1).String != local("shows/1438/s01e01_still.png", "w500", "/pilot.jpg") {
+		t.Fatalf("episode still = %q, want its copy", h.value("show_episodes", "still_path", 1).String)
+	}
+	if h.value("shows", "poster_path", 1).String != showCopy || h.value("show_seasons", "poster_path", 1).String != seasonCopy {
+		t.Fatal("the show's other images were pointed away from their copies")
+	}
+	if !h.exists("shows/1438/the_wire_poster.png") || !h.exists("shows/1438/season_01_poster.png") {
+		t.Fatal("removed copies the show's other images point at")
+	}
+	if h.upstream.requests("/w500/wire-poster.jpg") != 1 || h.upstream.requests("/w500/season-1.jpg") != 1 {
+		t.Fatal("downloaded the show's other images again")
+	}
+	if h.exists("movies/603/old_title_poster.jpg") {
+		t.Fatal("left a file nothing points at in a folder the pass worked in")
+	}
+}
+
+// A season named like its show's poster stays remote in a pass of changes too,
+// rather than overwrite the show's copy.
+func TestPassChanges_KeepsTwoImagesOfOneNameApart(t *testing.T) {
+	h := newHarness(t)
+	h.addShow(1, 1438, "Season 01", "/show-poster.jpg", "")
+	h.pass()
+
+	h.exec(`INSERT INTO show_seasons (id, show_id, season_number, name, poster_path_source) VALUES (1, 1, 1, 'Season 1', '/season-poster.jpg')`)
+	h.passChanges()
+
+	saved, err := os.ReadFile(filepath.Join(h.static, "shows", "1438", "season_01_poster.png"))
+	if err != nil || !strings.HasSuffix(string(saved), "/w500/show-poster.jpg") {
+		t.Fatalf("the show's copy holds %q, want the show poster", saved)
+	}
+	if h.value("show_seasons", "poster_path", 1).String != "/season-poster.jpg" || h.upstream.requests("/w500/season-poster.jpg") != 0 {
+		t.Fatal("downloaded an image whose file name another image holds")
+	}
+}
+
+func TestPassChanges_DownloadsEveryKindOfImage(t *testing.T) {
+	h := newHarness(t)
+	h.pass()
+
+	spotifyCover := h.upstreamURL + "/image/daylight"
+	appleCover := h.upstreamURL + "/image/night-songs"
+	musicianPhoto := h.upstreamURL + "/image/aurora"
+	h.addMovie(1, 603, "The Matrix", "/matrix-poster.jpg", "/matrix-backdrop.jpg")
+	h.addPerson(1, 6384, "Keanu Reeves", "/keanu.jpg")
+	h.addShow(1, 1438, "The Wire", "/wire-poster.jpg", "/wire-backdrop.jpg")
+	h.exec(`INSERT INTO show_seasons (id, show_id, season_number, name, poster_path_source) VALUES (1, 1, 1, 'Season 1', '/season-1.jpg')`)
+	h.exec(`INSERT INTO show_episodes (id, season_id, episode_number, name, still_path_source) VALUES (1, 1, 1, 'The Target', '/pilot.jpg')`)
+	h.exec(`INSERT INTO networks (id, tmdb_id, name, logo_source) VALUES (1, 49, 'HBO', '/hbo.png')`)
+	h.exec(`INSERT INTO albums (id, title, sort_title, spotify_id, cover_source) VALUES (1, 'Daylight', 'daylight', '4aawyAB9vmqN3uQ7FjRGTy', ?)`, spotifyCover)
+	h.exec(`INSERT INTO albums (id, title, sort_title, apple_id, cover_source) VALUES (2, 'Night Songs', 'night songs', 1440833098, ?)`, appleCover)
+	h.exec(`INSERT INTO musicians (id, name, sort_name, spotify_id, thumb_source) VALUES (1, 'Aurora', 'aurora', '1WgXqy2Dd70QQOU7Ay074N', ?)`, musicianPhoto)
+	h.passChanges()
+
+	want := []struct {
+		table, column string
+		id            int64
+		rel, size     string
+		source        string
+	}{
+		{"movies", "poster_path", 1, "movies/603/the_matrix_poster.png", "w500", "/matrix-poster.jpg"},
+		{"movies", "backdrop_path", 1, "movies/603/the_matrix_backdrop.png", "w1280", "/matrix-backdrop.jpg"},
+		{"artist", "profile", 1, "people/6384/keanu_reeves_profile.png", "w185", "/keanu.jpg"},
+		{"shows", "poster_path", 1, "shows/1438/the_wire_poster.png", "w500", "/wire-poster.jpg"},
+		{"shows", "backdrop_path", 1, "shows/1438/the_wire_backdrop.png", "w1280", "/wire-backdrop.jpg"},
+		{"show_seasons", "poster_path", 1, "shows/1438/season_01_poster.png", "w500", "/season-1.jpg"},
+		{"show_episodes", "still_path", 1, "shows/1438/s01e01_still.png", "w500", "/pilot.jpg"},
+		{"networks", "logo", 1, "networks/49/hbo_logo.png", "w92", "/hbo.png"},
+		{"albums", "cover", 1, "albums/4aawyAB9vmqN3uQ7FjRGTy/daylight_cover.png", "", spotifyCover},
+		{"albums", "cover", 2, "albums/1440833098/night_songs_cover.png", "", appleCover},
+		{"musicians", "thumb", 1, "musicians/1WgXqy2Dd70QQOU7Ay074N/aurora_thumb.png", "", musicianPhoto},
+	}
+	for _, w := range want {
+		got := h.value(w.table, w.column, w.id).String
+		if got != local(w.rel, w.size, w.source) {
+			t.Errorf("%s.%s %d = %q, want the copy at %s", w.table, w.column, w.id, got, w.rel)
+		}
+		if !h.exists(w.rel) {
+			t.Errorf("%s was not saved", w.rel)
+		}
+	}
+	if h.passScopes()["changes"] != 1 {
+		t.Fatalf("passes by scope = %v, want one pass of changes", h.passScopes())
+	}
+}
+
+// Images the provider refused stay remembered, and failures worth retrying
+// are retried on the next pass, as in a full pass.
+func TestPassChanges_RetriesFailuresLikeAFullPass(t *testing.T) {
+	h := newHarness(t)
+	h.pass()
+	h.addMovie(1, 603, "The Matrix", "/missing.jpg", "/flaky.jpg")
+	h.upstream.set("/w500/missing.jpg", http.StatusNotFound)
+	h.upstream.set("/w1280/flaky.jpg", http.StatusBadGateway)
+
+	h.passChanges()
+	h.passChanges()
+	if h.upstream.requests("/w500/missing.jpg") != 1 {
+		t.Fatalf("a refused image was requested %d times within a day", h.upstream.requests("/w500/missing.jpg"))
+	}
+	if h.upstream.requests("/w1280/flaky.jpg") != 2 {
+		t.Fatalf("a failing image was requested %d times in two passes, want each time", h.upstream.requests("/w1280/flaky.jpg"))
+	}
+
+	h.upstream.mu.Lock()
+	delete(h.upstream.statuses, "/w1280/flaky.jpg")
+	h.upstream.mu.Unlock()
+	h.passChanges()
+	if h.value("movies", "backdrop_path", 1).String != local("movies/603/the_matrix_backdrop.png", "w1280", "/flaky.jpg") {
+		t.Fatal("an image that failed was not downloaded once its provider recovered")
+	}
+	if h.value("movies", "poster_path", 1).String != "/missing.jpg" {
+		t.Fatal("a refused image did not stay remote")
+	}
+}
+
+func TestPassChanges_RunsAFullPassOnceADayHasPassed(t *testing.T) {
+	h := newHarness(t)
+	h.addMovie(1, 603, "The Matrix", "/matrix-poster.jpg", "")
+	h.pass()
+	h.write("people/42/old_name_profile.jpg", "orphan")
+
+	h.now = h.now.Add(fullPassInterval - time.Second)
+	h.passChanges()
+	if !h.exists("people/42/old_name_profile.jpg") {
+		t.Fatal("ran a full pass before a day had passed")
+	}
+
+	h.now = h.now.Add(time.Second)
+	h.passChanges()
+	if h.exists("people/42/old_name_profile.jpg") {
+		t.Fatal("did not run a full pass once a day had passed")
+	}
+	if h.passScopes()["full"] != 2 || h.passScopes()["changes"] != 1 {
+		t.Fatalf("passes by scope = %v, want two full and one of changes", h.passScopes())
+	}
+
+	// The first pass after a restart is a full one.
+	h.write("people/42/old_name_profile.jpg", "orphan")
+	h.restart()
+	h.passChanges()
+	if h.exists("people/42/old_name_profile.jpg") {
+		t.Fatal("the first pass after a restart was not a full one")
+	}
+}
+
+func TestPassChanges_RunsAFullPassAfterAFullPassFailedToWrite(t *testing.T) {
+	h := newHarness(t)
+	h.addMovie(1, 603, "The Matrix", "/matrix-poster.jpg", "")
+	h.exec(`CREATE TRIGGER fail_poster BEFORE UPDATE OF poster_path ON movies
+		WHEN NEW.poster_path LIKE '/api/static/%' BEGIN SELECT RAISE(ABORT, 'write failed'); END`)
+	h.pass()
+	h.exec(`DROP TRIGGER fail_poster`)
+
+	h.passChanges()
+	if h.passScopes()["full"] != 2 || h.passScopes()["changes"] != 0 {
+		t.Fatalf("passes by scope = %v, want a second full pass after the failed one", h.passScopes())
+	}
+	if poster := h.value("movies", "poster_path", 1).String; !strings.HasPrefix(poster, "/api/static/") {
+		t.Fatalf("poster_path = %q, want the downloaded copy", poster)
+	}
+
+	// A full pass that wrote everything leaves the next one to changes.
+	h.passChanges()
+	if h.passScopes()["changes"] != 1 {
+		t.Fatalf("passes by scope = %v, want a pass of changes after a full pass that wrote everything", h.passScopes())
+	}
+}
+
+func TestPassChanges_RunsAFullPassInANewStaticDirectory(t *testing.T) {
+	h := newHarness(t)
+	h.addMovie(1, 603, "The Matrix", "/matrix-poster.jpg", "")
+	h.pass()
+
+	h.static = t.TempDir()
+	h.passChanges()
+
+	if !h.exists("movies/603/the_matrix_poster.png") {
+		t.Fatal("a new static directory was not filled")
+	}
+	if h.passScopes()["full"] != 2 {
+		t.Fatalf("passes by scope = %v, want two full", h.passScopes())
+	}
+}
+
+// A pass of changes lists no copy outside its folders, so it checks the
+// folders that held copies before it downloads into what may be an empty
+// mount point.
+func TestPassChanges_LeavesAStaticDirectoryThatLostEveryCopyAlone(t *testing.T) {
+	h := newHarness(t)
+	h.addMovie(1, 603, "The Matrix", "/matrix-poster.jpg", "")
+	// The first pass fills an empty directory, so its folders are known only
+	// from the copies it made.
+	h.pass()
+
+	err := os.RemoveAll(filepath.Join(h.static, "movies"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.addMovie(2, 604, "Inception", "/inception-poster.jpg", "")
+	h.passChanges()
+	if h.upstream.requests("/w500/inception-poster.jpg") != 0 || h.value("movies", "poster_path", 2).String != "/inception-poster.jpg" {
+		t.Fatal("downloaded into what looks like an unmounted directory")
+	}
+	if !h.logger.WarnMentions(unmountedWarning, h.static) {
+		t.Fatal("did not warn about the empty static directory")
+	}
+
+	// After a restart, neither the full pass nor the pass of changes after
+	// it downloads there.
+	h.restart()
+	h.pass()
+	h.passChanges()
+	if h.upstream.requests("/w500/inception-poster.jpg") != 0 {
+		t.Fatal("downloaded into what looks like an unmounted directory after a restart")
+	}
+
+	err = os.MkdirAll(filepath.Join(h.static, "movies"), 0o755)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.passChanges()
+	if h.value("movies", "poster_path", 2).String != local("movies/604/inception_poster.png", "w500", "/inception-poster.jpg") {
+		t.Fatal("did not download once the folder was back")
+	}
+}
+
+// A managed folder may link to another disk outside every library; a full
+// pass writes through it, and a pass of changes does not take it for missing.
+func TestPassChanges_WritesThroughAManagedFolderThatLinksElsewhere(t *testing.T) {
+	h := newHarness(t)
+	err := os.Symlink(t.TempDir(), filepath.Join(h.static, "movies"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.addMovie(1, 603, "The Matrix", "/matrix-poster.jpg", "")
+	h.pass()
+	if !h.exists("movies/603/the_matrix_poster.png") {
+		t.Fatal("a full pass did not write through the linked folder")
+	}
+
+	h.addMovie(2, 604, "Inception", "/inception-poster.jpg", "")
+	h.passChanges()
+	if h.value("movies", "poster_path", 2).String != local("movies/604/inception_poster.png", "w500", "/inception-poster.jpg") {
+		t.Fatal("a pass of changes did not write through the linked folder")
+	}
+	if len(h.logger.WarnEntries) != 0 {
+		t.Fatalf("warned %v", h.logger.WarnEntries)
+	}
+}
+
+func TestPassChanges_TurningOffRemovesEveryCopy(t *testing.T) {
+	h := newHarness(t)
+	h.addMovie(1, 603, "The Matrix", "/matrix-poster.jpg", "")
+	h.addPerson(1, 6384, "Keanu Reeves", "/keanu.jpg")
+	h.pass()
+
+	h.enabled = false
+	h.passChanges()
+
+	if h.value("movies", "poster_path", 1).String != "/matrix-poster.jpg" || h.value("artist", "profile", 1).String != "/keanu.jpg" {
+		t.Fatal("did not point the columns back at their sources")
+	}
+	if h.exists("movies") || h.exists("people") {
+		t.Fatal("did not remove the copies")
+	}
+}
+
+// Requests made during a pass share one pass after it, a full one if any of
+// them asked for one. The first pass is a full one whatever asked for it.
+func TestRequest_AFullRequestDuringAPassWinsOverChanges(t *testing.T) {
+	tests := []struct {
+		name   string
+		during []func(*Syncer)
+		want   map[string]int
+	}{
+		{"changes only", []func(*Syncer){(*Syncer).RequestChanges, (*Syncer).RequestChanges}, map[string]int{"full": 1, "changes": 1}},
+		{"a full request among them", []func(*Syncer){(*Syncer).RequestChanges, (*Syncer).Request, (*Syncer).RequestChanges}, map[string]int{"full": 2}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newHarness(t)
+			h.addMovie(1, 603, "The Matrix", "/matrix-poster.jpg", "")
+			entered := make(chan struct{})
+			release := make(chan struct{})
+			h.upstream.handlers["/w500/matrix-poster.jpg"] = func(w http.ResponseWriter, r *http.Request) {
+				close(entered)
+				<-release
+				w.Write([]byte(pngSignature))
+			}
+
+			h.syncer.RequestChanges()
+			scannertest.WaitForSignal(t, entered, 5*time.Second, "the first pass to download")
+			for _, request := range tt.during {
+				request(h.syncer)
+			}
+			close(release)
+			scannertest.WaitForGroup(t, h.syncer.wait, 5*time.Second, "the passes to finish")
+
+			got := h.passScopes()
+			if len(got) != len(tt.want) || got["full"] != tt.want["full"] || got["changes"] != tt.want["changes"] {
+				t.Fatalf("passes by scope = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// A new provider ID returns the source again, so a pass of changes downloads
+// the image into the new folder, and a pass that works in the old folder
+// finds no row pointing there to keep a copy for.
+func TestPassChanges_FollowsARowToTheFolderOfItsNewProviderID(t *testing.T) {
+	h := newHarness(t)
+	h.addMovie(1, 603, "The Matrix", "/matrix-poster.jpg", "")
+	h.pass()
+
+	h.exec(`UPDATE movies SET tmdb_id = 604 WHERE id = 1`)
+	if h.value("movies", "poster_path", 1).String != "/matrix-poster.jpg" {
+		t.Fatalf("poster = %q, want its source once the ID changed", h.value("movies", "poster_path", 1).String)
+	}
+
+	// Another movie selects the old folder in the same pass.
+	h.addMovie(2, 603, "The Matrix Reloaded", "/reloaded-poster.jpg", "")
+	h.passChanges()
+
+	if h.value("movies", "poster_path", 1).String != local("movies/604/the_matrix_poster.png", "w500", "/matrix-poster.jpg") || !h.exists("movies/604/the_matrix_poster.png") {
+		t.Fatalf("poster = %q, want its copy in the new folder", h.value("movies", "poster_path", 1).String)
+	}
+	if !h.exists("movies/603/the_matrix_reloaded_poster.png") {
+		t.Fatal("did not download the other movie's poster")
+	}
+	if h.exists("movies/603/the_matrix_poster.png") {
+		t.Fatal("left the copy in the old folder, which nothing points at")
+	}
+}
+
+// Seasons and episodes are in their show's folder, so a new show ID returns
+// their sources too.
+func TestPass_ANewShowIDReturnsTheSourcesOfItsSeasonsAndEpisodes(t *testing.T) {
+	h := newHarness(t)
+	h.addShow(1, 1438, "The Wire", "/wire-poster.jpg", "")
+	h.exec(`INSERT INTO show_seasons (id, show_id, season_number, name, poster_path_source) VALUES (1, 1, 1, 'Season 1', '/season-1.jpg')`)
+	h.exec(`INSERT INTO show_episodes (id, season_id, episode_number, name, still_path_source) VALUES (1, 1, 1, 'The Target', '/pilot.jpg')`)
+	h.pass()
+
+	h.exec(`UPDATE shows SET tmdb_id = 1439 WHERE id = 1`)
+	if h.value("shows", "poster_path", 1).String != "/wire-poster.jpg" ||
+		h.value("show_seasons", "poster_path", 1).String != "/season-1.jpg" ||
+		h.value("show_episodes", "still_path", 1).String != "/pilot.jpg" {
+		t.Fatal("a new show ID left images pointing into the old folder")
+	}
+
+	h.passChanges()
+	if h.value("show_episodes", "still_path", 1).String != local("shows/1439/s01e01_still.png", "w500", "/pilot.jpg") {
+		t.Fatalf("episode still = %q, want its copy in the new folder", h.value("show_episodes", "still_path", 1).String)
+	}
+}
+
+// A copy is only pointed at while the row's ID still names its folder: an ID
+// written during the download returned the source, and wins.
+func TestPass_ANewProviderIDDuringTheDownloadWins(t *testing.T) {
+	h := newHarness(t)
+	h.addMovie(1, 603, "The Matrix", "/matrix-poster.jpg", "")
+	h.upstream.handlers["/w500/matrix-poster.jpg"] = func(w http.ResponseWriter, r *http.Request) {
+		_, err := h.db.Exec(`UPDATE movies SET tmdb_id = 604 WHERE id = 1`)
+		if err != nil {
+			t.Error(err)
+		}
+		w.Write([]byte(pngSignature))
+	}
+
+	h.pass()
+
+	if h.value("movies", "poster_path", 1).String != "/matrix-poster.jpg" {
+		t.Fatalf("poster = %q, want its source", h.value("movies", "poster_path", 1).String)
+	}
+	if h.exists("movies/603/the_matrix_poster.png") {
+		t.Fatal("kept a copy in a folder the row no longer belongs in")
+	}
+
+	delete(h.upstream.handlers, "/w500/matrix-poster.jpg")
+	h.passChanges()
+	if h.value("movies", "poster_path", 1).String != local("movies/604/the_matrix_poster.png", "w500", "/matrix-poster.jpg") {
+		t.Fatal("the next pass did not download into the new folder")
+	}
+}
+
+// A pass of changes sees only the copies of its folders, so every one of them
+// missing says nothing about a mount; a managed folder that links to another
+// disk is written through.
+func TestPassChanges_HealsACopyInAManagedFolderThatLinksElsewhere(t *testing.T) {
+	h := newHarness(t)
+	err := os.Symlink(t.TempDir(), filepath.Join(h.static, "movies"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.addMovie(1, 603, "The Matrix", "/matrix-poster.jpg", "")
+	h.addMovie(2, 604, "Inception", "/inception-poster.jpg", "")
+	h.pass()
+
+	err = os.Remove(filepath.Join(h.static, "movies", "603", "the_matrix_poster.png"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.exec(`UPDATE movies SET backdrop_path_source = '/matrix-backdrop.jpg' WHERE id = 1`)
+	h.passChanges()
+
+	if !h.exists("movies/603/the_matrix_poster.png") || h.value("movies", "poster_path", 1).String != local("movies/603/the_matrix_poster.png", "w500", "/matrix-poster.jpg") {
+		t.Fatal("did not download the deleted poster again")
+	}
+	if h.value("movies", "backdrop_path", 1).String != local("movies/603/the_matrix_backdrop.png", "w1280", "/matrix-backdrop.jpg") {
+		t.Fatalf("backdrop = %q, want its copy", h.value("movies", "backdrop_path", 1).String)
+	}
+	if len(h.logger.WarnEntries) != 0 {
+		t.Fatalf("warned %v", h.logger.WarnEntries)
 	}
 }

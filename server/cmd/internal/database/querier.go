@@ -177,6 +177,13 @@ type Querier interface {
 	// the API returns and its _source column the provider reference; the triggers
 	// at the end of schema.sql keep the two in step for every other writer. The
 	// syncer's writes leave updated_at alone, like the triggers.
+	//
+	// A full pass lists every table with List*Artwork. A pass of changes lists the
+	// images that still return their source with ListPending*Artwork, through the
+	// partial indexes they name, then every row of the folders those belong in
+	// with List*ArtworkInFolders. Each repeats its table's List*Artwork columns,
+	// so one mapper reads all three; keys arrive as a JSON array of strings, which
+	// integer columns compare as numbers.
 	GetArtworkStaticDir(ctx context.Context) (string, error)
 	// Audio streams for a movie (for technical details and playback settings).
 	GetAudioStreamsByMovieID(ctx context.Context, movieID int64) ([]AudioStream, error)
@@ -536,23 +543,41 @@ type Querier interface {
 	// An album is matched by Spotify or by Apple, never both; the ID of the one
 	// that matched it names its folder.
 	ListAlbumArtwork(ctx context.Context, arg ListAlbumArtworkParams) ([]ListAlbumArtworkRow, error)
+	// Either ID may name a folder, so both are matched; the syncer keeps the
+	// albums whose own folder it asked for.
+	ListAlbumArtworkInFolders(ctx context.Context, keys string) ([]ListAlbumArtworkInFoldersRow, error)
 	ListArtistArtwork(ctx context.Context, arg ListArtistArtworkParams) ([]ListArtistArtworkRow, error)
+	ListArtistArtworkInFolders(ctx context.Context, keys string) ([]ListArtistArtworkInFoldersRow, error)
 	ListLibraryMountPoints(ctx context.Context, root string) ([]string, error)
 	ListMovieArtwork(ctx context.Context, arg ListMovieArtworkParams) ([]ListMovieArtworkRow, error)
+	ListMovieArtworkInFolders(ctx context.Context, keys string) ([]ListMovieArtworkInFoldersRow, error)
 	ListMusicTrackScanIndex(ctx context.Context) ([]ListMusicTrackScanIndexRow, error)
 	// ListMusicTrackScanIndex for one path a run of watcher-detected changes
 	// covers; lower and upper bound its children as in GetMovieScanIndexUnder.
 	ListMusicTrackScanIndexUnder(ctx context.Context, arg ListMusicTrackScanIndexUnderParams) ([]ListMusicTrackScanIndexUnderRow, error)
 	ListMusicianArtwork(ctx context.Context, arg ListMusicianArtworkParams) ([]ListMusicianArtworkRow, error)
+	ListMusicianArtworkInFolders(ctx context.Context, keys string) ([]ListMusicianArtworkInFoldersRow, error)
 	ListNetworkArtwork(ctx context.Context, arg ListNetworkArtworkParams) ([]ListNetworkArtworkRow, error)
+	ListNetworkArtworkInFolders(ctx context.Context, keys string) ([]ListNetworkArtworkInFoldersRow, error)
 	// The shared admin request queue, newest first. Visibility is admin-only and
 	// enforced by the handlers; user_id here only selects the viewer's read state
 	// from notification_reads.
 	ListNotificationsForUser(ctx context.Context, arg ListNotificationsForUserParams) ([]ListNotificationsForUserRow, error)
+	ListPendingAlbumArtwork(ctx context.Context, arg ListPendingAlbumArtworkParams) ([]ListPendingAlbumArtworkRow, error)
+	ListPendingArtistArtwork(ctx context.Context, arg ListPendingArtistArtworkParams) ([]ListPendingArtistArtworkRow, error)
+	ListPendingMovieArtwork(ctx context.Context, arg ListPendingMovieArtworkParams) ([]ListPendingMovieArtworkRow, error)
+	ListPendingMusicianArtwork(ctx context.Context, arg ListPendingMusicianArtworkParams) ([]ListPendingMusicianArtworkRow, error)
+	ListPendingNetworkArtwork(ctx context.Context, arg ListPendingNetworkArtworkParams) ([]ListPendingNetworkArtworkRow, error)
+	ListPendingShowArtwork(ctx context.Context, arg ListPendingShowArtworkParams) ([]ListPendingShowArtworkRow, error)
+	ListPendingShowEpisodeArtwork(ctx context.Context, arg ListPendingShowEpisodeArtworkParams) ([]ListPendingShowEpisodeArtworkRow, error)
+	ListPendingShowSeasonArtwork(ctx context.Context, arg ListPendingShowSeasonArtworkParams) ([]ListPendingShowSeasonArtworkRow, error)
 	ListShowArtwork(ctx context.Context, arg ListShowArtworkParams) ([]ListShowArtworkRow, error)
+	ListShowArtworkInFolders(ctx context.Context, keys string) ([]ListShowArtworkInFoldersRow, error)
 	ListShowEpisodeArtwork(ctx context.Context, arg ListShowEpisodeArtworkParams) ([]ListShowEpisodeArtworkRow, error)
+	ListShowEpisodeArtworkInFolders(ctx context.Context, keys string) ([]ListShowEpisodeArtworkInFoldersRow, error)
 	// Season and episode copies live in their show's folder, named by its TMDB id.
 	ListShowSeasonArtwork(ctx context.Context, arg ListShowSeasonArtworkParams) ([]ListShowSeasonArtworkRow, error)
+	ListShowSeasonArtworkInFolders(ctx context.Context, keys string) ([]ListShowSeasonArtworkInFoldersRow, error)
 	ListWatchRoomIDsByMovieID(ctx context.Context, movieID int64) ([]int64, error)
 	// Deleting a user cascades away the rooms they own; the ids are read in the
 	// same transaction so the rooms' live state can be torn down after the commit.
@@ -698,7 +723,9 @@ type Querier interface {
 	SetArtworkStaticDir(ctx context.Context, staticDir string) error
 	SetMovieBackdropArtwork(ctx context.Context, arg SetMovieBackdropArtworkParams) (int64, error)
 	// Applies only while the source the value was made from is still the row's,
-	// so a source a scanner wrote meanwhile wins.
+	// so a source a scanner wrote meanwhile wins, and a copy only while the row's
+	// provider ID still names the folder key it is in: a new ID returned the
+	// source, and a copy in the old folder would be taken for an orphan.
 	SetMoviePosterArtwork(ctx context.Context, arg SetMoviePosterArtworkParams) (int64, error)
 	SetMusicAlbumAppleID(ctx context.Context, arg SetMusicAlbumAppleIDParams) error
 	SetMusicAlbumSpotifyID(ctx context.Context, arg SetMusicAlbumSpotifyIDParams) error

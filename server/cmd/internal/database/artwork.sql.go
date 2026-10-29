@@ -28,6 +28,13 @@ SELECT static_dir FROM artwork_state WHERE id = 1
 // the API returns and its _source column the provider reference; the triggers
 // at the end of schema.sql keep the two in step for every other writer. The
 // syncer's writes leave updated_at alone, like the triggers.
+//
+// A full pass lists every table with List*Artwork. A pass of changes lists the
+// images that still return their source with ListPending*Artwork, through the
+// partial indexes they name, then every row of the folders those belong in
+// with List*ArtworkInFolders. Each repeats its table's List*Artwork columns,
+// so one mapper reads all three; keys arrive as a JSON array of strings, which
+// integer columns compare as numbers.
 func (q *Queries) GetArtworkStaticDir(ctx context.Context) (string, error) {
 	row := q.queryRow(ctx, q.getArtworkStaticDirStmt, getArtworkStaticDir)
 	var static_dir string
@@ -89,6 +96,56 @@ func (q *Queries) ListAlbumArtwork(ctx context.Context, arg ListAlbumArtworkPara
 	return items, nil
 }
 
+const listAlbumArtworkInFolders = `-- name: ListAlbumArtworkInFolders :many
+SELECT id, spotify_id, apple_id, title, cover, cover_source
+FROM albums
+WHERE (spotify_id IN (SELECT value FROM json_each(CAST(?1 AS TEXT)))
+    OR apple_id IN (SELECT value FROM json_each(CAST(?1 AS TEXT))))
+  AND (cover IS NOT NULL OR cover_source IS NOT NULL)
+ORDER BY id
+`
+
+type ListAlbumArtworkInFoldersRow struct {
+	ID          int64          `json:"id"`
+	SpotifyID   sql.NullString `json:"spotify_id"`
+	AppleID     sql.NullInt64  `json:"apple_id"`
+	Title       string         `json:"title"`
+	Cover       sql.NullString `json:"cover"`
+	CoverSource sql.NullString `json:"-"`
+}
+
+// Either ID may name a folder, so both are matched; the syncer keeps the
+// albums whose own folder it asked for.
+func (q *Queries) ListAlbumArtworkInFolders(ctx context.Context, keys string) ([]ListAlbumArtworkInFoldersRow, error) {
+	rows, err := q.query(ctx, q.listAlbumArtworkInFoldersStmt, listAlbumArtworkInFolders, keys)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAlbumArtworkInFoldersRow{}
+	for rows.Next() {
+		var i ListAlbumArtworkInFoldersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SpotifyID,
+			&i.AppleID,
+			&i.Title,
+			&i.Cover,
+			&i.CoverSource,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listArtistArtwork = `-- name: ListArtistArtwork :many
 SELECT id, tmdb_id, name, profile, profile_source
 FROM artist
@@ -119,6 +176,51 @@ func (q *Queries) ListArtistArtwork(ctx context.Context, arg ListArtistArtworkPa
 	items := []ListArtistArtworkRow{}
 	for rows.Next() {
 		var i ListArtistArtworkRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TmdbID,
+			&i.Name,
+			&i.Profile,
+			&i.ProfileSource,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listArtistArtworkInFolders = `-- name: ListArtistArtworkInFolders :many
+SELECT id, tmdb_id, name, profile, profile_source
+FROM artist
+WHERE tmdb_id IN (SELECT value FROM json_each(CAST(?1 AS TEXT)))
+  AND (profile IS NOT NULL OR profile_source IS NOT NULL)
+ORDER BY id
+`
+
+type ListArtistArtworkInFoldersRow struct {
+	ID            int64          `json:"id"`
+	TmdbID        int64          `json:"tmdb_id"`
+	Name          string         `json:"name"`
+	Profile       sql.NullString `json:"profile"`
+	ProfileSource sql.NullString `json:"-"`
+}
+
+func (q *Queries) ListArtistArtworkInFolders(ctx context.Context, keys string) ([]ListArtistArtworkInFoldersRow, error) {
+	rows, err := q.query(ctx, q.listArtistArtworkInFoldersStmt, listArtistArtworkInFolders, keys)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListArtistArtworkInFoldersRow{}
+	for rows.Next() {
+		var i ListArtistArtworkInFoldersRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.TmdbID,
@@ -194,6 +296,55 @@ func (q *Queries) ListMovieArtwork(ctx context.Context, arg ListMovieArtworkPara
 	return items, nil
 }
 
+const listMovieArtworkInFolders = `-- name: ListMovieArtworkInFolders :many
+SELECT id, tmdb_id, title, poster_path, poster_path_source, backdrop_path, backdrop_path_source
+FROM movies
+WHERE tmdb_id IN (SELECT value FROM json_each(CAST(?1 AS TEXT)))
+  AND (poster_path IS NOT NULL OR poster_path_source IS NOT NULL OR backdrop_path IS NOT NULL OR backdrop_path_source IS NOT NULL)
+ORDER BY id
+`
+
+type ListMovieArtworkInFoldersRow struct {
+	ID                 int64          `json:"id"`
+	TmdbID             sql.NullInt64  `json:"tmdb_id"`
+	Title              string         `json:"title"`
+	PosterPath         sql.NullString `json:"poster_path"`
+	PosterPathSource   sql.NullString `json:"-"`
+	BackdropPath       sql.NullString `json:"backdrop_path"`
+	BackdropPathSource sql.NullString `json:"-"`
+}
+
+func (q *Queries) ListMovieArtworkInFolders(ctx context.Context, keys string) ([]ListMovieArtworkInFoldersRow, error) {
+	rows, err := q.query(ctx, q.listMovieArtworkInFoldersStmt, listMovieArtworkInFolders, keys)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListMovieArtworkInFoldersRow{}
+	for rows.Next() {
+		var i ListMovieArtworkInFoldersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TmdbID,
+			&i.Title,
+			&i.PosterPath,
+			&i.PosterPathSource,
+			&i.BackdropPath,
+			&i.BackdropPathSource,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMusicianArtwork = `-- name: ListMusicianArtwork :many
 SELECT id, spotify_id, name, thumb, thumb_source
 FROM musicians
@@ -224,6 +375,51 @@ func (q *Queries) ListMusicianArtwork(ctx context.Context, arg ListMusicianArtwo
 	items := []ListMusicianArtworkRow{}
 	for rows.Next() {
 		var i ListMusicianArtworkRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SpotifyID,
+			&i.Name,
+			&i.Thumb,
+			&i.ThumbSource,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMusicianArtworkInFolders = `-- name: ListMusicianArtworkInFolders :many
+SELECT id, spotify_id, name, thumb, thumb_source
+FROM musicians
+WHERE spotify_id IN (SELECT value FROM json_each(CAST(?1 AS TEXT)))
+  AND (thumb IS NOT NULL OR thumb_source IS NOT NULL)
+ORDER BY id
+`
+
+type ListMusicianArtworkInFoldersRow struct {
+	ID          int64          `json:"id"`
+	SpotifyID   sql.NullString `json:"spotify_id"`
+	Name        string         `json:"name"`
+	Thumb       sql.NullString `json:"thumb"`
+	ThumbSource sql.NullString `json:"-"`
+}
+
+func (q *Queries) ListMusicianArtworkInFolders(ctx context.Context, keys string) ([]ListMusicianArtworkInFoldersRow, error) {
+	rows, err := q.query(ctx, q.listMusicianArtworkInFoldersStmt, listMusicianArtworkInFolders, keys)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListMusicianArtworkInFoldersRow{}
+	for rows.Next() {
+		var i ListMusicianArtworkInFoldersRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.SpotifyID,
@@ -294,6 +490,470 @@ func (q *Queries) ListNetworkArtwork(ctx context.Context, arg ListNetworkArtwork
 	return items, nil
 }
 
+const listNetworkArtworkInFolders = `-- name: ListNetworkArtworkInFolders :many
+SELECT id, tmdb_id, name, logo, logo_source
+FROM networks
+WHERE tmdb_id IN (SELECT value FROM json_each(CAST(?1 AS TEXT)))
+  AND (logo IS NOT NULL OR logo_source IS NOT NULL)
+ORDER BY id
+`
+
+type ListNetworkArtworkInFoldersRow struct {
+	ID         int64          `json:"id"`
+	TmdbID     int64          `json:"tmdb_id"`
+	Name       string         `json:"name"`
+	Logo       sql.NullString `json:"logo"`
+	LogoSource sql.NullString `json:"-"`
+}
+
+func (q *Queries) ListNetworkArtworkInFolders(ctx context.Context, keys string) ([]ListNetworkArtworkInFoldersRow, error) {
+	rows, err := q.query(ctx, q.listNetworkArtworkInFoldersStmt, listNetworkArtworkInFolders, keys)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListNetworkArtworkInFoldersRow{}
+	for rows.Next() {
+		var i ListNetworkArtworkInFoldersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TmdbID,
+			&i.Name,
+			&i.Logo,
+			&i.LogoSource,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPendingAlbumArtwork = `-- name: ListPendingAlbumArtwork :many
+SELECT id, spotify_id, apple_id, title, cover, cover_source
+FROM albums INDEXED BY idx_albums_artwork_pending
+WHERE id > ?1 AND cover_source IS NOT NULL AND cover IS cover_source
+ORDER BY id
+LIMIT ?2
+`
+
+type ListPendingAlbumArtworkParams struct {
+	AfterID  int64 `json:"after_id"`
+	PageSize int64 `json:"page_size"`
+}
+
+type ListPendingAlbumArtworkRow struct {
+	ID          int64          `json:"id"`
+	SpotifyID   sql.NullString `json:"spotify_id"`
+	AppleID     sql.NullInt64  `json:"apple_id"`
+	Title       string         `json:"title"`
+	Cover       sql.NullString `json:"cover"`
+	CoverSource sql.NullString `json:"-"`
+}
+
+func (q *Queries) ListPendingAlbumArtwork(ctx context.Context, arg ListPendingAlbumArtworkParams) ([]ListPendingAlbumArtworkRow, error) {
+	rows, err := q.query(ctx, q.listPendingAlbumArtworkStmt, listPendingAlbumArtwork, arg.AfterID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPendingAlbumArtworkRow{}
+	for rows.Next() {
+		var i ListPendingAlbumArtworkRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SpotifyID,
+			&i.AppleID,
+			&i.Title,
+			&i.Cover,
+			&i.CoverSource,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPendingArtistArtwork = `-- name: ListPendingArtistArtwork :many
+SELECT id, tmdb_id, name, profile, profile_source
+FROM artist INDEXED BY idx_artist_artwork_pending
+WHERE id > ?1 AND profile_source IS NOT NULL AND profile IS profile_source
+ORDER BY id
+LIMIT ?2
+`
+
+type ListPendingArtistArtworkParams struct {
+	AfterID  int64 `json:"after_id"`
+	PageSize int64 `json:"page_size"`
+}
+
+type ListPendingArtistArtworkRow struct {
+	ID            int64          `json:"id"`
+	TmdbID        int64          `json:"tmdb_id"`
+	Name          string         `json:"name"`
+	Profile       sql.NullString `json:"profile"`
+	ProfileSource sql.NullString `json:"-"`
+}
+
+func (q *Queries) ListPendingArtistArtwork(ctx context.Context, arg ListPendingArtistArtworkParams) ([]ListPendingArtistArtworkRow, error) {
+	rows, err := q.query(ctx, q.listPendingArtistArtworkStmt, listPendingArtistArtwork, arg.AfterID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPendingArtistArtworkRow{}
+	for rows.Next() {
+		var i ListPendingArtistArtworkRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TmdbID,
+			&i.Name,
+			&i.Profile,
+			&i.ProfileSource,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPendingMovieArtwork = `-- name: ListPendingMovieArtwork :many
+SELECT id, tmdb_id, title, poster_path, poster_path_source, backdrop_path, backdrop_path_source
+FROM movies INDEXED BY idx_movies_artwork_pending
+WHERE id > ?1
+  AND ((poster_path_source IS NOT NULL AND poster_path IS poster_path_source)
+   OR (backdrop_path_source IS NOT NULL AND backdrop_path IS backdrop_path_source))
+ORDER BY id
+LIMIT ?2
+`
+
+type ListPendingMovieArtworkParams struct {
+	AfterID  int64 `json:"after_id"`
+	PageSize int64 `json:"page_size"`
+}
+
+type ListPendingMovieArtworkRow struct {
+	ID                 int64          `json:"id"`
+	TmdbID             sql.NullInt64  `json:"tmdb_id"`
+	Title              string         `json:"title"`
+	PosterPath         sql.NullString `json:"poster_path"`
+	PosterPathSource   sql.NullString `json:"-"`
+	BackdropPath       sql.NullString `json:"backdrop_path"`
+	BackdropPathSource sql.NullString `json:"-"`
+}
+
+func (q *Queries) ListPendingMovieArtwork(ctx context.Context, arg ListPendingMovieArtworkParams) ([]ListPendingMovieArtworkRow, error) {
+	rows, err := q.query(ctx, q.listPendingMovieArtworkStmt, listPendingMovieArtwork, arg.AfterID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPendingMovieArtworkRow{}
+	for rows.Next() {
+		var i ListPendingMovieArtworkRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TmdbID,
+			&i.Title,
+			&i.PosterPath,
+			&i.PosterPathSource,
+			&i.BackdropPath,
+			&i.BackdropPathSource,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPendingMusicianArtwork = `-- name: ListPendingMusicianArtwork :many
+SELECT id, spotify_id, name, thumb, thumb_source
+FROM musicians INDEXED BY idx_musicians_artwork_pending
+WHERE id > ?1 AND thumb_source IS NOT NULL AND thumb IS thumb_source
+ORDER BY id
+LIMIT ?2
+`
+
+type ListPendingMusicianArtworkParams struct {
+	AfterID  int64 `json:"after_id"`
+	PageSize int64 `json:"page_size"`
+}
+
+type ListPendingMusicianArtworkRow struct {
+	ID          int64          `json:"id"`
+	SpotifyID   sql.NullString `json:"spotify_id"`
+	Name        string         `json:"name"`
+	Thumb       sql.NullString `json:"thumb"`
+	ThumbSource sql.NullString `json:"-"`
+}
+
+func (q *Queries) ListPendingMusicianArtwork(ctx context.Context, arg ListPendingMusicianArtworkParams) ([]ListPendingMusicianArtworkRow, error) {
+	rows, err := q.query(ctx, q.listPendingMusicianArtworkStmt, listPendingMusicianArtwork, arg.AfterID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPendingMusicianArtworkRow{}
+	for rows.Next() {
+		var i ListPendingMusicianArtworkRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SpotifyID,
+			&i.Name,
+			&i.Thumb,
+			&i.ThumbSource,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPendingNetworkArtwork = `-- name: ListPendingNetworkArtwork :many
+SELECT id, tmdb_id, name, logo, logo_source
+FROM networks INDEXED BY idx_networks_artwork_pending
+WHERE id > ?1 AND logo_source IS NOT NULL AND logo IS logo_source
+ORDER BY id
+LIMIT ?2
+`
+
+type ListPendingNetworkArtworkParams struct {
+	AfterID  int64 `json:"after_id"`
+	PageSize int64 `json:"page_size"`
+}
+
+type ListPendingNetworkArtworkRow struct {
+	ID         int64          `json:"id"`
+	TmdbID     int64          `json:"tmdb_id"`
+	Name       string         `json:"name"`
+	Logo       sql.NullString `json:"logo"`
+	LogoSource sql.NullString `json:"-"`
+}
+
+func (q *Queries) ListPendingNetworkArtwork(ctx context.Context, arg ListPendingNetworkArtworkParams) ([]ListPendingNetworkArtworkRow, error) {
+	rows, err := q.query(ctx, q.listPendingNetworkArtworkStmt, listPendingNetworkArtwork, arg.AfterID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPendingNetworkArtworkRow{}
+	for rows.Next() {
+		var i ListPendingNetworkArtworkRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TmdbID,
+			&i.Name,
+			&i.Logo,
+			&i.LogoSource,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPendingShowArtwork = `-- name: ListPendingShowArtwork :many
+SELECT id, tmdb_id, name, poster_path, poster_path_source, backdrop_path, backdrop_path_source
+FROM shows INDEXED BY idx_shows_artwork_pending
+WHERE id > ?1
+  AND ((poster_path_source IS NOT NULL AND poster_path IS poster_path_source)
+   OR (backdrop_path_source IS NOT NULL AND backdrop_path IS backdrop_path_source))
+ORDER BY id
+LIMIT ?2
+`
+
+type ListPendingShowArtworkParams struct {
+	AfterID  int64 `json:"after_id"`
+	PageSize int64 `json:"page_size"`
+}
+
+type ListPendingShowArtworkRow struct {
+	ID                 int64          `json:"id"`
+	TmdbID             sql.NullInt64  `json:"tmdb_id"`
+	Name               string         `json:"name"`
+	PosterPath         sql.NullString `json:"poster_path"`
+	PosterPathSource   sql.NullString `json:"-"`
+	BackdropPath       sql.NullString `json:"backdrop_path"`
+	BackdropPathSource sql.NullString `json:"-"`
+}
+
+func (q *Queries) ListPendingShowArtwork(ctx context.Context, arg ListPendingShowArtworkParams) ([]ListPendingShowArtworkRow, error) {
+	rows, err := q.query(ctx, q.listPendingShowArtworkStmt, listPendingShowArtwork, arg.AfterID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPendingShowArtworkRow{}
+	for rows.Next() {
+		var i ListPendingShowArtworkRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TmdbID,
+			&i.Name,
+			&i.PosterPath,
+			&i.PosterPathSource,
+			&i.BackdropPath,
+			&i.BackdropPathSource,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPendingShowEpisodeArtwork = `-- name: ListPendingShowEpisodeArtwork :many
+SELECT e.id, sh.tmdb_id AS show_tmdb_id, se.season_number, e.episode_number, e.still_path, e.still_path_source
+FROM show_episodes e INDEXED BY idx_show_episodes_artwork_pending
+JOIN show_seasons se ON se.id = e.season_id
+JOIN shows sh ON sh.id = se.show_id
+WHERE e.id > ?1 AND e.still_path_source IS NOT NULL AND e.still_path IS e.still_path_source
+ORDER BY e.id
+LIMIT ?2
+`
+
+type ListPendingShowEpisodeArtworkParams struct {
+	AfterID  int64 `json:"after_id"`
+	PageSize int64 `json:"page_size"`
+}
+
+type ListPendingShowEpisodeArtworkRow struct {
+	ID              int64          `json:"id"`
+	ShowTmdbID      sql.NullInt64  `json:"show_tmdb_id"`
+	SeasonNumber    int64          `json:"season_number"`
+	EpisodeNumber   int64          `json:"episode_number"`
+	StillPath       sql.NullString `json:"still_path"`
+	StillPathSource sql.NullString `json:"-"`
+}
+
+func (q *Queries) ListPendingShowEpisodeArtwork(ctx context.Context, arg ListPendingShowEpisodeArtworkParams) ([]ListPendingShowEpisodeArtworkRow, error) {
+	rows, err := q.query(ctx, q.listPendingShowEpisodeArtworkStmt, listPendingShowEpisodeArtwork, arg.AfterID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPendingShowEpisodeArtworkRow{}
+	for rows.Next() {
+		var i ListPendingShowEpisodeArtworkRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ShowTmdbID,
+			&i.SeasonNumber,
+			&i.EpisodeNumber,
+			&i.StillPath,
+			&i.StillPathSource,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPendingShowSeasonArtwork = `-- name: ListPendingShowSeasonArtwork :many
+SELECT se.id, sh.tmdb_id AS show_tmdb_id, se.season_number, se.poster_path, se.poster_path_source
+FROM show_seasons se INDEXED BY idx_show_seasons_artwork_pending
+JOIN shows sh ON sh.id = se.show_id
+WHERE se.id > ?1 AND se.poster_path_source IS NOT NULL AND se.poster_path IS se.poster_path_source
+ORDER BY se.id
+LIMIT ?2
+`
+
+type ListPendingShowSeasonArtworkParams struct {
+	AfterID  int64 `json:"after_id"`
+	PageSize int64 `json:"page_size"`
+}
+
+type ListPendingShowSeasonArtworkRow struct {
+	ID               int64          `json:"id"`
+	ShowTmdbID       sql.NullInt64  `json:"show_tmdb_id"`
+	SeasonNumber     int64          `json:"season_number"`
+	PosterPath       sql.NullString `json:"poster_path"`
+	PosterPathSource sql.NullString `json:"-"`
+}
+
+func (q *Queries) ListPendingShowSeasonArtwork(ctx context.Context, arg ListPendingShowSeasonArtworkParams) ([]ListPendingShowSeasonArtworkRow, error) {
+	rows, err := q.query(ctx, q.listPendingShowSeasonArtworkStmt, listPendingShowSeasonArtwork, arg.AfterID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPendingShowSeasonArtworkRow{}
+	for rows.Next() {
+		var i ListPendingShowSeasonArtworkRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ShowTmdbID,
+			&i.SeasonNumber,
+			&i.PosterPath,
+			&i.PosterPathSource,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listShowArtwork = `-- name: ListShowArtwork :many
 SELECT id, tmdb_id, name, poster_path, poster_path_source, backdrop_path, backdrop_path_source
 FROM shows
@@ -327,6 +987,55 @@ func (q *Queries) ListShowArtwork(ctx context.Context, arg ListShowArtworkParams
 	items := []ListShowArtworkRow{}
 	for rows.Next() {
 		var i ListShowArtworkRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TmdbID,
+			&i.Name,
+			&i.PosterPath,
+			&i.PosterPathSource,
+			&i.BackdropPath,
+			&i.BackdropPathSource,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listShowArtworkInFolders = `-- name: ListShowArtworkInFolders :many
+SELECT id, tmdb_id, name, poster_path, poster_path_source, backdrop_path, backdrop_path_source
+FROM shows
+WHERE tmdb_id IN (SELECT value FROM json_each(CAST(?1 AS TEXT)))
+  AND (poster_path IS NOT NULL OR poster_path_source IS NOT NULL OR backdrop_path IS NOT NULL OR backdrop_path_source IS NOT NULL)
+ORDER BY id
+`
+
+type ListShowArtworkInFoldersRow struct {
+	ID                 int64          `json:"id"`
+	TmdbID             sql.NullInt64  `json:"tmdb_id"`
+	Name               string         `json:"name"`
+	PosterPath         sql.NullString `json:"poster_path"`
+	PosterPathSource   sql.NullString `json:"-"`
+	BackdropPath       sql.NullString `json:"backdrop_path"`
+	BackdropPathSource sql.NullString `json:"-"`
+}
+
+func (q *Queries) ListShowArtworkInFolders(ctx context.Context, keys string) ([]ListShowArtworkInFoldersRow, error) {
+	rows, err := q.query(ctx, q.listShowArtworkInFoldersStmt, listShowArtworkInFolders, keys)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListShowArtworkInFoldersRow{}
+	for rows.Next() {
+		var i ListShowArtworkInFoldersRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.TmdbID,
@@ -403,6 +1112,55 @@ func (q *Queries) ListShowEpisodeArtwork(ctx context.Context, arg ListShowEpisod
 	return items, nil
 }
 
+const listShowEpisodeArtworkInFolders = `-- name: ListShowEpisodeArtworkInFolders :many
+SELECT e.id, sh.tmdb_id AS show_tmdb_id, se.season_number, e.episode_number, e.still_path, e.still_path_source
+FROM show_episodes e
+JOIN show_seasons se ON se.id = e.season_id
+JOIN shows sh ON sh.id = se.show_id
+WHERE sh.tmdb_id IN (SELECT value FROM json_each(CAST(?1 AS TEXT)))
+  AND (e.still_path IS NOT NULL OR e.still_path_source IS NOT NULL)
+ORDER BY e.id
+`
+
+type ListShowEpisodeArtworkInFoldersRow struct {
+	ID              int64          `json:"id"`
+	ShowTmdbID      sql.NullInt64  `json:"show_tmdb_id"`
+	SeasonNumber    int64          `json:"season_number"`
+	EpisodeNumber   int64          `json:"episode_number"`
+	StillPath       sql.NullString `json:"still_path"`
+	StillPathSource sql.NullString `json:"-"`
+}
+
+func (q *Queries) ListShowEpisodeArtworkInFolders(ctx context.Context, keys string) ([]ListShowEpisodeArtworkInFoldersRow, error) {
+	rows, err := q.query(ctx, q.listShowEpisodeArtworkInFoldersStmt, listShowEpisodeArtworkInFolders, keys)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListShowEpisodeArtworkInFoldersRow{}
+	for rows.Next() {
+		var i ListShowEpisodeArtworkInFoldersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ShowTmdbID,
+			&i.SeasonNumber,
+			&i.EpisodeNumber,
+			&i.StillPath,
+			&i.StillPathSource,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listShowSeasonArtwork = `-- name: ListShowSeasonArtwork :many
 SELECT se.id, sh.tmdb_id AS show_tmdb_id, se.season_number, se.poster_path, se.poster_path_source
 FROM show_seasons se
@@ -435,6 +1193,52 @@ func (q *Queries) ListShowSeasonArtwork(ctx context.Context, arg ListShowSeasonA
 	items := []ListShowSeasonArtworkRow{}
 	for rows.Next() {
 		var i ListShowSeasonArtworkRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ShowTmdbID,
+			&i.SeasonNumber,
+			&i.PosterPath,
+			&i.PosterPathSource,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listShowSeasonArtworkInFolders = `-- name: ListShowSeasonArtworkInFolders :many
+SELECT se.id, sh.tmdb_id AS show_tmdb_id, se.season_number, se.poster_path, se.poster_path_source
+FROM show_seasons se
+JOIN shows sh ON sh.id = se.show_id
+WHERE sh.tmdb_id IN (SELECT value FROM json_each(CAST(?1 AS TEXT)))
+  AND (se.poster_path IS NOT NULL OR se.poster_path_source IS NOT NULL)
+ORDER BY se.id
+`
+
+type ListShowSeasonArtworkInFoldersRow struct {
+	ID               int64          `json:"id"`
+	ShowTmdbID       sql.NullInt64  `json:"show_tmdb_id"`
+	SeasonNumber     int64          `json:"season_number"`
+	PosterPath       sql.NullString `json:"poster_path"`
+	PosterPathSource sql.NullString `json:"-"`
+}
+
+func (q *Queries) ListShowSeasonArtworkInFolders(ctx context.Context, keys string) ([]ListShowSeasonArtworkInFoldersRow, error) {
+	rows, err := q.query(ctx, q.listShowSeasonArtworkInFoldersStmt, listShowSeasonArtworkInFolders, keys)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListShowSeasonArtworkInFoldersRow{}
+	for rows.Next() {
+		var i ListShowSeasonArtworkInFoldersRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.ShowTmdbID,
@@ -577,16 +1381,23 @@ func (q *Queries) RevertShowSeasonPosterArtwork(ctx context.Context) (int64, err
 
 const setAlbumCoverArtwork = `-- name: SetAlbumCoverArtwork :execrows
 UPDATE albums SET cover = ?1 WHERE id = ?2 AND cover_source IS ?3
+  AND (?1 IS ?3 OR spotify_id IS CAST(?4 AS TEXT) OR CAST(apple_id AS TEXT) IS CAST(?4 AS TEXT))
 `
 
 type SetAlbumCoverArtworkParams struct {
 	Value  sql.NullString `json:"value"`
 	ID     int64          `json:"id"`
 	Source sql.NullString `json:"-"`
+	Key    string         `json:"key"`
 }
 
 func (q *Queries) SetAlbumCoverArtwork(ctx context.Context, arg SetAlbumCoverArtworkParams) (int64, error) {
-	result, err := q.exec(ctx, q.setAlbumCoverArtworkStmt, setAlbumCoverArtwork, arg.Value, arg.ID, arg.Source)
+	result, err := q.exec(ctx, q.setAlbumCoverArtworkStmt, setAlbumCoverArtwork,
+		arg.Value,
+		arg.ID,
+		arg.Source,
+		arg.Key,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -595,16 +1406,23 @@ func (q *Queries) SetAlbumCoverArtwork(ctx context.Context, arg SetAlbumCoverArt
 
 const setArtistProfileArtwork = `-- name: SetArtistProfileArtwork :execrows
 UPDATE artist SET profile = ?1 WHERE id = ?2 AND profile_source IS ?3
+  AND (?1 IS ?3 OR CAST(tmdb_id AS TEXT) IS CAST(?4 AS TEXT))
 `
 
 type SetArtistProfileArtworkParams struct {
 	Value  sql.NullString `json:"value"`
 	ID     int64          `json:"id"`
 	Source sql.NullString `json:"-"`
+	Key    string         `json:"key"`
 }
 
 func (q *Queries) SetArtistProfileArtwork(ctx context.Context, arg SetArtistProfileArtworkParams) (int64, error) {
-	result, err := q.exec(ctx, q.setArtistProfileArtworkStmt, setArtistProfileArtwork, arg.Value, arg.ID, arg.Source)
+	result, err := q.exec(ctx, q.setArtistProfileArtworkStmt, setArtistProfileArtwork,
+		arg.Value,
+		arg.ID,
+		arg.Source,
+		arg.Key,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -623,16 +1441,23 @@ func (q *Queries) SetArtworkStaticDir(ctx context.Context, staticDir string) err
 
 const setMovieBackdropArtwork = `-- name: SetMovieBackdropArtwork :execrows
 UPDATE movies SET backdrop_path = ?1 WHERE id = ?2 AND backdrop_path_source IS ?3
+  AND (?1 IS ?3 OR CAST(tmdb_id AS TEXT) IS CAST(?4 AS TEXT))
 `
 
 type SetMovieBackdropArtworkParams struct {
 	Value  sql.NullString `json:"value"`
 	ID     int64          `json:"id"`
 	Source sql.NullString `json:"-"`
+	Key    string         `json:"key"`
 }
 
 func (q *Queries) SetMovieBackdropArtwork(ctx context.Context, arg SetMovieBackdropArtworkParams) (int64, error) {
-	result, err := q.exec(ctx, q.setMovieBackdropArtworkStmt, setMovieBackdropArtwork, arg.Value, arg.ID, arg.Source)
+	result, err := q.exec(ctx, q.setMovieBackdropArtworkStmt, setMovieBackdropArtwork,
+		arg.Value,
+		arg.ID,
+		arg.Source,
+		arg.Key,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -641,18 +1466,27 @@ func (q *Queries) SetMovieBackdropArtwork(ctx context.Context, arg SetMovieBackd
 
 const setMoviePosterArtwork = `-- name: SetMoviePosterArtwork :execrows
 UPDATE movies SET poster_path = ?1 WHERE id = ?2 AND poster_path_source IS ?3
+  AND (?1 IS ?3 OR CAST(tmdb_id AS TEXT) IS CAST(?4 AS TEXT))
 `
 
 type SetMoviePosterArtworkParams struct {
 	Value  sql.NullString `json:"value"`
 	ID     int64          `json:"id"`
 	Source sql.NullString `json:"-"`
+	Key    string         `json:"key"`
 }
 
 // Applies only while the source the value was made from is still the row's,
-// so a source a scanner wrote meanwhile wins.
+// so a source a scanner wrote meanwhile wins, and a copy only while the row's
+// provider ID still names the folder key it is in: a new ID returned the
+// source, and a copy in the old folder would be taken for an orphan.
 func (q *Queries) SetMoviePosterArtwork(ctx context.Context, arg SetMoviePosterArtworkParams) (int64, error) {
-	result, err := q.exec(ctx, q.setMoviePosterArtworkStmt, setMoviePosterArtwork, arg.Value, arg.ID, arg.Source)
+	result, err := q.exec(ctx, q.setMoviePosterArtworkStmt, setMoviePosterArtwork,
+		arg.Value,
+		arg.ID,
+		arg.Source,
+		arg.Key,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -661,16 +1495,23 @@ func (q *Queries) SetMoviePosterArtwork(ctx context.Context, arg SetMoviePosterA
 
 const setMusicianThumbArtwork = `-- name: SetMusicianThumbArtwork :execrows
 UPDATE musicians SET thumb = ?1 WHERE id = ?2 AND thumb_source IS ?3
+  AND (?1 IS ?3 OR spotify_id IS CAST(?4 AS TEXT))
 `
 
 type SetMusicianThumbArtworkParams struct {
 	Value  sql.NullString `json:"value"`
 	ID     int64          `json:"id"`
 	Source sql.NullString `json:"-"`
+	Key    string         `json:"key"`
 }
 
 func (q *Queries) SetMusicianThumbArtwork(ctx context.Context, arg SetMusicianThumbArtworkParams) (int64, error) {
-	result, err := q.exec(ctx, q.setMusicianThumbArtworkStmt, setMusicianThumbArtwork, arg.Value, arg.ID, arg.Source)
+	result, err := q.exec(ctx, q.setMusicianThumbArtworkStmt, setMusicianThumbArtwork,
+		arg.Value,
+		arg.ID,
+		arg.Source,
+		arg.Key,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -679,16 +1520,23 @@ func (q *Queries) SetMusicianThumbArtwork(ctx context.Context, arg SetMusicianTh
 
 const setNetworkLogoArtwork = `-- name: SetNetworkLogoArtwork :execrows
 UPDATE networks SET logo = ?1 WHERE id = ?2 AND logo_source IS ?3
+  AND (?1 IS ?3 OR CAST(tmdb_id AS TEXT) IS CAST(?4 AS TEXT))
 `
 
 type SetNetworkLogoArtworkParams struct {
 	Value  sql.NullString `json:"value"`
 	ID     int64          `json:"id"`
 	Source sql.NullString `json:"-"`
+	Key    string         `json:"key"`
 }
 
 func (q *Queries) SetNetworkLogoArtwork(ctx context.Context, arg SetNetworkLogoArtworkParams) (int64, error) {
-	result, err := q.exec(ctx, q.setNetworkLogoArtworkStmt, setNetworkLogoArtwork, arg.Value, arg.ID, arg.Source)
+	result, err := q.exec(ctx, q.setNetworkLogoArtworkStmt, setNetworkLogoArtwork,
+		arg.Value,
+		arg.ID,
+		arg.Source,
+		arg.Key,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -697,16 +1545,23 @@ func (q *Queries) SetNetworkLogoArtwork(ctx context.Context, arg SetNetworkLogoA
 
 const setShowBackdropArtwork = `-- name: SetShowBackdropArtwork :execrows
 UPDATE shows SET backdrop_path = ?1 WHERE id = ?2 AND backdrop_path_source IS ?3
+  AND (?1 IS ?3 OR CAST(tmdb_id AS TEXT) IS CAST(?4 AS TEXT))
 `
 
 type SetShowBackdropArtworkParams struct {
 	Value  sql.NullString `json:"value"`
 	ID     int64          `json:"id"`
 	Source sql.NullString `json:"-"`
+	Key    string         `json:"key"`
 }
 
 func (q *Queries) SetShowBackdropArtwork(ctx context.Context, arg SetShowBackdropArtworkParams) (int64, error) {
-	result, err := q.exec(ctx, q.setShowBackdropArtworkStmt, setShowBackdropArtwork, arg.Value, arg.ID, arg.Source)
+	result, err := q.exec(ctx, q.setShowBackdropArtworkStmt, setShowBackdropArtwork,
+		arg.Value,
+		arg.ID,
+		arg.Source,
+		arg.Key,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -714,17 +1569,26 @@ func (q *Queries) SetShowBackdropArtwork(ctx context.Context, arg SetShowBackdro
 }
 
 const setShowEpisodeStillArtwork = `-- name: SetShowEpisodeStillArtwork :execrows
-UPDATE show_episodes SET still_path = ?1 WHERE id = ?2 AND still_path_source IS ?3
+UPDATE show_episodes SET still_path = ?1
+WHERE show_episodes.id = ?2 AND show_episodes.still_path_source IS ?3
+  AND (?1 IS ?3
+    OR (SELECT CAST(sh.tmdb_id AS TEXT) FROM show_seasons se JOIN shows sh ON sh.id = se.show_id WHERE se.id = show_episodes.season_id) IS CAST(?4 AS TEXT))
 `
 
 type SetShowEpisodeStillArtworkParams struct {
 	Value  sql.NullString `json:"value"`
 	ID     int64          `json:"id"`
 	Source sql.NullString `json:"-"`
+	Key    string         `json:"key"`
 }
 
 func (q *Queries) SetShowEpisodeStillArtwork(ctx context.Context, arg SetShowEpisodeStillArtworkParams) (int64, error) {
-	result, err := q.exec(ctx, q.setShowEpisodeStillArtworkStmt, setShowEpisodeStillArtwork, arg.Value, arg.ID, arg.Source)
+	result, err := q.exec(ctx, q.setShowEpisodeStillArtworkStmt, setShowEpisodeStillArtwork,
+		arg.Value,
+		arg.ID,
+		arg.Source,
+		arg.Key,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -733,16 +1597,23 @@ func (q *Queries) SetShowEpisodeStillArtwork(ctx context.Context, arg SetShowEpi
 
 const setShowPosterArtwork = `-- name: SetShowPosterArtwork :execrows
 UPDATE shows SET poster_path = ?1 WHERE id = ?2 AND poster_path_source IS ?3
+  AND (?1 IS ?3 OR CAST(tmdb_id AS TEXT) IS CAST(?4 AS TEXT))
 `
 
 type SetShowPosterArtworkParams struct {
 	Value  sql.NullString `json:"value"`
 	ID     int64          `json:"id"`
 	Source sql.NullString `json:"-"`
+	Key    string         `json:"key"`
 }
 
 func (q *Queries) SetShowPosterArtwork(ctx context.Context, arg SetShowPosterArtworkParams) (int64, error) {
-	result, err := q.exec(ctx, q.setShowPosterArtworkStmt, setShowPosterArtwork, arg.Value, arg.ID, arg.Source)
+	result, err := q.exec(ctx, q.setShowPosterArtworkStmt, setShowPosterArtwork,
+		arg.Value,
+		arg.ID,
+		arg.Source,
+		arg.Key,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -750,17 +1621,26 @@ func (q *Queries) SetShowPosterArtwork(ctx context.Context, arg SetShowPosterArt
 }
 
 const setShowSeasonPosterArtwork = `-- name: SetShowSeasonPosterArtwork :execrows
-UPDATE show_seasons SET poster_path = ?1 WHERE id = ?2 AND poster_path_source IS ?3
+UPDATE show_seasons SET poster_path = ?1
+WHERE show_seasons.id = ?2 AND show_seasons.poster_path_source IS ?3
+  AND (?1 IS ?3
+    OR (SELECT CAST(sh.tmdb_id AS TEXT) FROM shows sh WHERE sh.id = show_seasons.show_id) IS CAST(?4 AS TEXT))
 `
 
 type SetShowSeasonPosterArtworkParams struct {
 	Value  sql.NullString `json:"value"`
 	ID     int64          `json:"id"`
 	Source sql.NullString `json:"-"`
+	Key    string         `json:"key"`
 }
 
 func (q *Queries) SetShowSeasonPosterArtwork(ctx context.Context, arg SetShowSeasonPosterArtworkParams) (int64, error) {
-	result, err := q.exec(ctx, q.setShowSeasonPosterArtworkStmt, setShowSeasonPosterArtwork, arg.Value, arg.ID, arg.Source)
+	result, err := q.exec(ctx, q.setShowSeasonPosterArtworkStmt, setShowSeasonPosterArtwork,
+		arg.Value,
+		arg.ID,
+		arg.Source,
+		arg.Key,
+	)
 	if err != nil {
 		return 0, err
 	}
