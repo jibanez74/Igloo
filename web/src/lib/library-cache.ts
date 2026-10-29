@@ -35,6 +35,7 @@ import {
   SHOWS_LIBRARY_KEY,
   SHOWS_STATS_KEY,
   TRACKS_INFINITE_KEY,
+  WATCH_ROOM_KEY,
   WATCH_ROOMS_KEY,
 } from "@/lib/constants";
 import { isApiFailure } from "@/lib/is-api-failure";
@@ -42,8 +43,8 @@ import { showActionFailed, showSuccess } from "@/lib/toast-helpers";
 
 // Every query a scan or a bulk change to one library can leave stale: its
 // lists, details, statistics and playlists, the search results that list its
-// items, and the rows elsewhere that show them (continue watching; a watch
-// room's movie title and poster).
+// items, and the rows elsewhere that show them (continue watching; the watch
+// room list's and an open room's movie title and poster).
 const LIBRARY_QUERY_KEYS = {
   movies: [
     MOVIES_STATS_KEY,
@@ -61,6 +62,7 @@ const LIBRARY_QUERY_KEYS = {
     SEARCH_CATEGORY_KEYS.movies,
     CONTINUE_WATCHING_KEY,
     WATCH_ROOMS_KEY,
+    WATCH_ROOM_KEY,
   ],
   music: [
     MUSIC_STATS_KEY,

@@ -4,9 +4,11 @@ import {
   CONTINUE_WATCHING_KEY,
   SEARCH_ALL_KEY,
   SEARCH_CATEGORY_KEYS,
+  WATCH_ROOM_KEY,
   WATCH_ROOMS_KEY,
 } from "@/lib/constants";
 import {
+  invalidateArtworkQueries,
   invalidateLibraryQueries,
   refreshLibraryWithToasts,
 } from "@/lib/library-cache";
@@ -29,6 +31,7 @@ const KEYS = {
   searchAlbums: [SEARCH_CATEGORY_KEYS.albums, "harbor", 1, 24],
   continueWatching: [CONTINUE_WATCHING_KEY],
   watchRooms: [WATCH_ROOMS_KEY],
+  watchRoom: [WATCH_ROOM_KEY, 5],
 };
 
 function seededClient() {
@@ -56,6 +59,7 @@ describe("invalidateLibraryQueries", () => {
       "searchMovies",
       "continueWatching",
       "watchRooms",
+      "watchRoom",
     ]);
   });
 
@@ -77,6 +81,16 @@ describe("invalidateLibraryQueries", () => {
     invalidateLibraryQueries(queryClient, "music");
 
     expect(staleKeys(queryClient)).toEqual(["searchAll", "searchAlbums"]);
+  });
+});
+
+describe("invalidateArtworkQueries", () => {
+  it("reaches an open watch room, whose poster may be a deleted copy", () => {
+    const queryClient = seededClient();
+
+    invalidateArtworkQueries(queryClient);
+
+    expect(staleKeys(queryClient)).toContain("watchRoom");
   });
 });
 
