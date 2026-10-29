@@ -424,6 +424,15 @@ func TestPass_RemembersARefusedImageForADay(t *testing.T) {
 	if h.upstream.requests("/w500/missing.jpg") != 2 {
 		t.Fatal("a refused image was not requested again after a day")
 	}
+
+	// A refusal is forgotten once it has expired, even when its source
+	// changed and nothing asks for it again.
+	h.exec(`UPDATE movies SET poster_path_source = '/found.jpg' WHERE id = 1`)
+	h.now = h.now.Add(failureRetryAfter + time.Minute)
+	h.pass()
+	if len(h.syncer.failures) != 0 {
+		t.Fatalf("remembered %d expired refusals", len(h.syncer.failures))
+	}
 }
 
 func TestPass_KeepsImagesItWillNotStoreRemote(t *testing.T) {

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
@@ -329,6 +330,11 @@ func (s *Syncer) plan(staticDir string, images []image, skipped map[string]strin
 	// and its source wins a stem that two sources share.
 	jobs := make(map[string]*download)
 	now := s.now()
+	// An expired failure skips nothing, and one whose source changed is
+	// never looked up again, so neither is kept.
+	maps.DeleteFunc(s.failures, func(_ string, failedAt time.Time) bool {
+		return now.Sub(failedAt) >= failureRetryAfter
+	})
 	for _, c := range candidates {
 		img, want := c.img, c.want
 		stemPath := want.folder + "/" + img.stem
