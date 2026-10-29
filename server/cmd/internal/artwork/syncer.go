@@ -74,8 +74,7 @@ type Syncer struct {
 	pending bool
 
 	// Only the pass goroutine reads and writes these.
-	failures      map[string]time.Time
-	lastStaticDir string
+	failures map[string]time.Time
 	// cleanedDir is the static directory the copies were last removed
 	// from. Nothing can make copies while the setting stays off, so the
 	// passes after scans skip it until the setting or the directory changes.

@@ -83,10 +83,12 @@ type harness struct {
 	// upstreamURL serves the music sources too: they are full URLs.
 	upstreamURL string
 	syncer      *Syncer
-	static      string
-	enabled     bool
-	libraries   []string
-	now         time.Time
+	// deps builds the syncer, again on restart.
+	deps      Dependencies
+	static    string
+	enabled   bool
+	libraries []string
+	now       time.Time
 }
 
 func newHarness(t *testing.T) *harness {
@@ -116,7 +118,7 @@ func newHarness(t *testing.T) *harness {
 		wait.Wait()
 	})
 
-	h.syncer = New(Dependencies{
+	h.deps = Dependencies{
 		DB:               db,
 		Queries:          queries,
 		Logger:           h.logger,
@@ -128,9 +130,16 @@ func newHarness(t *testing.T) *harness {
 		TmdbImageBaseURL: func() string { return server.URL },
 		HTTPClient:       server.Client(),
 		Now:              func() time.Time { return h.now },
-	})
+	}
+	h.syncer = New(h.deps)
 
 	return h
+}
+
+// restart replaces the syncer with a new one over the same database and
+// settings, as a server restart does.
+func (h *harness) restart() {
+	h.syncer = New(h.deps)
 }
 
 func (h *harness) exec(query string, args ...any) {
@@ -335,6 +344,41 @@ func TestPass_LeavesAStaticDirectoryThatLostEveryCopyAlone(t *testing.T) {
 	h.pass()
 	if !h.exists("movies/603/the_matrix_poster.png") || h.value("movies", "poster_path", 1).String != copyURL {
 		t.Fatal("a new static directory was not filled")
+	}
+}
+
+// The database records the directory the copies were made in, so a disk that
+// has not mounted by the first pass after a restart is left alone too.
+func TestPass_LeavesAnEmptyStaticDirectoryAloneAfterARestart(t *testing.T) {
+	h := newHarness(t)
+	h.addMovie(1, 603, "The Matrix", "/matrix-poster.jpg", "/matrix-backdrop.jpg")
+	h.pass()
+	copyURL := h.value("movies", "poster_path", 1).String
+
+	err := os.RemoveAll(filepath.Join(h.static, "movies"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.restart()
+	h.pass()
+
+	if h.upstream.total() != 2 {
+		t.Fatalf("made %d requests into what looks like an unmounted directory after a restart", h.upstream.total()-2)
+	}
+	if h.value("movies", "poster_path", 1).String != copyURL {
+		t.Fatal("pointed a column away from its copy while the directory looked unmounted")
+	}
+	if !h.logger.WarnMentions("skipping artwork pass: no downloaded artwork is left in the static directory; is it mounted?", h.static) {
+		t.Fatal("did not warn about the empty static directory")
+	}
+
+	// Turning the setting off and on again downloads the copies again.
+	h.enabled = false
+	h.pass()
+	h.enabled = true
+	h.pass()
+	if !h.exists("movies/603/the_matrix_poster.png") || h.value("movies", "poster_path", 1).String != copyURL {
+		t.Fatal("turning the setting off and on again did not download the copies")
 	}
 }
 

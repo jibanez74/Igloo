@@ -40,7 +40,6 @@ func (s *Syncer) removeCopies(ctx context.Context, staticDir string) {
 		return
 	}
 	clear(s.failures)
-	s.lastStaticDir = ""
 
 	reverted, err := s.revertAll(ctx, "")
 	if err != nil {
@@ -203,12 +202,12 @@ func (s *Syncer) keepCopies(ctx context.Context, staticDir string) {
 	}
 
 	p := s.plan(staticDir, images, skipped)
-	// A static directory that held copies on the last pass and holds none now
-	// is most likely an unmounted disk; healing would download everything
-	// again beneath the mount point.
+	// Every copy listed is in the directory the database records, since a
+	// new one was just pointed back, so one that holds none of them now is
+	// most likely an unmounted disk, also on the first pass after a restart;
+	// healing would download everything again beneath the mount point.
 	allMissing := p.localSeen > 0 && p.localMissing == p.localSeen
-	sameDir := staticDir == s.lastStaticDir
-	if allMissing && sameDir {
+	if allMissing {
 		s.logger.Warn("skipping artwork pass: no downloaded artwork is left in the static directory; is it mounted?", "static_dir", staticDir, "copies", p.localSeen)
 		return
 	}
@@ -239,7 +238,6 @@ func (s *Syncer) keepCopies(ctx context.Context, staticDir string) {
 	canPrune := !applyFailed && ctx.Err() == nil && s.enabled() && !librariesChanged()
 	if canPrune {
 		removed, _ = s.prune(ctx, staticDir, p.kept, skipped, librariesChanged)
-		s.lastStaticDir = staticDir
 	}
 
 	changed := downloaded > 0 || reused > 0 || failed > 0 || reverted > 0 || removed > 0
