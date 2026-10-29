@@ -274,6 +274,11 @@ func (s *Syncer) keepCopies(ctx context.Context, staticDir string, full bool) {
 		dir, _, _ := strings.Cut(rel, "/")
 		s.copyDirs[dir] = true
 	}
+	// A full pass whose writes failed may leave a column on a copy it should
+	// have left, which no pass of changes lists, so the next pass is full too.
+	if full && applyFailed {
+		s.lastFullPass = time.Time{}
+	}
 
 	// A copy is only removed once every image of its folder was read, every
 	// write landed, and the setting is still on; otherwise a copy a column

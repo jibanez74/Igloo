@@ -1380,6 +1380,29 @@ func TestPassChanges_RunsAFullPassOnceADayHasPassed(t *testing.T) {
 	}
 }
 
+func TestPassChanges_RunsAFullPassAfterAFullPassFailedToWrite(t *testing.T) {
+	h := newHarness(t)
+	h.addMovie(1, 603, "The Matrix", "/matrix-poster.jpg", "")
+	h.exec(`CREATE TRIGGER fail_poster BEFORE UPDATE OF poster_path ON movies
+		WHEN NEW.poster_path LIKE '/api/static/%' BEGIN SELECT RAISE(ABORT, 'write failed'); END`)
+	h.pass()
+	h.exec(`DROP TRIGGER fail_poster`)
+
+	h.passChanges()
+	if h.passScopes()["full"] != 2 || h.passScopes()["changes"] != 0 {
+		t.Fatalf("passes by scope = %v, want a second full pass after the failed one", h.passScopes())
+	}
+	if poster := h.value("movies", "poster_path", 1).String; !strings.HasPrefix(poster, "/api/static/") {
+		t.Fatalf("poster_path = %q, want the downloaded copy", poster)
+	}
+
+	// A full pass that wrote everything leaves the next one to changes.
+	h.passChanges()
+	if h.passScopes()["changes"] != 1 {
+		t.Fatalf("passes by scope = %v, want a pass of changes after a full pass that wrote everything", h.passScopes())
+	}
+}
+
 func TestPassChanges_RunsAFullPassInANewStaticDirectory(t *testing.T) {
 	h := newHarness(t)
 	h.addMovie(1, 603, "The Matrix", "/matrix-poster.jpg", "")
