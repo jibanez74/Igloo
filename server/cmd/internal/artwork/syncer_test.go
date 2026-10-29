@@ -590,6 +590,19 @@ func TestPass_NeverManagesAFolderThatOverlapsALibrary(t *testing.T) {
 		t.Fatal("a folder that does not overlap was skipped too")
 	}
 
+	// Passes run after every scan, so the overlap is reported once, until
+	// it changes.
+	const overlapMessage = "not managing artwork in a folder that overlaps a media library; choose another static directory"
+	h.pass()
+	if n := h.logger.ErrorCount(overlapMessage); n != 1 {
+		t.Fatalf("reported the overlap %d times over two passes, want once", n)
+	}
+	h.libraries = []string{filepath.Join(h.static, "movies", "1999")}
+	h.pass()
+	if n := h.logger.ErrorCount(overlapMessage); n != 2 {
+		t.Fatalf("reported the overlap %d times after it changed, want twice in all", n)
+	}
+
 	h.enabled = false
 	h.pass()
 	if !h.exists("movies/1999/a_poster.jpg") {

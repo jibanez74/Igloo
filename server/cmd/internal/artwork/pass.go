@@ -171,9 +171,7 @@ func (s *Syncer) keepCopies(ctx context.Context, staticDir string) {
 	// save that changed them starts another.
 	roots, librariesChanged := s.watchLibraries()
 	skipped := s.overlappingDirs(staticDir, roots)
-	for dir, library := range skipped {
-		s.logger.Error("not managing artwork in a folder that overlaps a media library; choose another static directory", "folder", filepath.Join(staticDir, dir), "library", library)
-	}
+	s.reportOverlaps(staticDir, skipped)
 
 	// The files in a directory other than the one the copies were made in
 	// may be older than their sources, even when their names and the
@@ -705,6 +703,31 @@ func (s *Syncer) overlappingDirs(staticDir string, roots []string) map[string]st
 	}
 
 	return overlapping
+}
+
+// reportOverlaps logs each managed folder that overlaps a library, once for
+// as long as the same folders overlap the same libraries: a pass runs after
+// every scan.
+func (s *Syncer) reportOverlaps(staticDir string, skipped map[string]string) {
+	if len(skipped) == 0 {
+		s.reportedOverlaps = ""
+		return
+	}
+
+	pairs := make([]string, 0, len(skipped))
+	for dir, library := range skipped {
+		pairs = append(pairs, dir+"="+library)
+	}
+	slices.Sort(pairs)
+	key := staticDir + "\n" + strings.Join(pairs, "\n")
+	if key == s.reportedOverlaps {
+		return
+	}
+	s.reportedOverlaps = key
+
+	for dir, library := range skipped {
+		s.logger.Error("not managing artwork in a folder that overlaps a media library; choose another static directory", "folder", filepath.Join(staticDir, dir), "library", library)
+	}
 }
 
 // resolvedPath is the absolute path p leads to with every symlink in it

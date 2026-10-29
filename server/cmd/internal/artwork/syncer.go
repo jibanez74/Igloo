@@ -79,6 +79,9 @@ type Syncer struct {
 	// from. Nothing can make copies while the setting stays off, so the
 	// passes after scans skip it until the setting or the directory changes.
 	cleanedDir string
+	// reportedOverlaps names the managed folders last reported as
+	// overlapping a library, so later passes do not report them again.
+	reportedOverlaps string
 }
 
 func New(deps Dependencies) *Syncer {
