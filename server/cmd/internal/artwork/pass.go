@@ -49,8 +49,10 @@ func (s *Syncer) removeCopies(ctx context.Context, staticDir string) {
 	}
 
 	// A folder that overlaps a library was never written, so there is
-	// nothing to remove from it.
-	removed, complete := s.prune(ctx, staticDir, nil, s.overlappingDirs(staticDir, s.libraryDirs()))
+	// nothing to remove from it. A removal stopped by new roots is not
+	// complete, so the pass the save requests runs it again with them.
+	roots, librariesChanged := s.watchLibraries()
+	removed, complete := s.prune(ctx, staticDir, nil, s.overlappingDirs(staticDir, roots), librariesChanged)
 	if complete && ctx.Err() == nil {
 		s.cleanedDir = staticDir
 	}
@@ -167,8 +169,7 @@ func (s *Syncer) keepCopies(ctx context.Context, staticDir string) {
 	// The overlap check holds for the library roots it was made with, so a
 	// pass whose roots change while it runs stops writing and deleting; the
 	// save that changed them starts another.
-	roots := s.libraryDirs()
-	librariesChanged := func() bool { return !slices.Equal(roots, s.libraryDirs()) }
+	roots, librariesChanged := s.watchLibraries()
 	skipped := s.overlappingDirs(staticDir, roots)
 	for dir, library := range skipped {
 		s.logger.Error("not managing artwork in a folder that overlaps a media library; choose another static directory", "folder", filepath.Join(staticDir, dir), "library", library)
@@ -237,7 +238,7 @@ func (s *Syncer) keepCopies(ctx context.Context, staticDir string) {
 	removed := 0
 	canPrune := !applyFailed && ctx.Err() == nil && s.enabled() && !librariesChanged()
 	if canPrune {
-		removed, _ = s.prune(ctx, staticDir, p.kept, skipped)
+		removed, _ = s.prune(ctx, staticDir, p.kept, skipped, librariesChanged)
 		s.lastStaticDir = staticDir
 	}
 
@@ -572,11 +573,17 @@ func isPermanentDownloadFailure(err error) bool {
 // prune removes the managed files that are not in kept (every one when kept
 // is nil) from the managed folders not in skipped, then the folders left
 // empty. It reports how many files it removed, and whether it got through
-// every folder without a filesystem error.
-func (s *Syncer) prune(ctx context.Context, staticDir string, kept map[string]bool, skipped map[string]string) (int, bool) {
+// every folder without a filesystem error. It stops before the next file or
+// folder, incomplete, at shutdown or once the library roots that skipped was
+// made with change: a folder it would delete from may be a library's now.
+func (s *Syncer) prune(ctx context.Context, staticDir string, kept map[string]bool, skipped map[string]string, librariesChanged func() bool) (int, bool) {
+	stopped := func() bool { return ctx.Err() != nil || librariesChanged() }
 	removed := 0
 	complete := true
 	for _, dir := range managedDirs() {
+		if stopped() {
+			return removed, false
+		}
 		_, isSkipped := skipped[dir]
 		if isSkipped {
 			continue
@@ -594,18 +601,21 @@ func (s *Syncer) prune(ctx context.Context, staticDir string, kept map[string]bo
 		}
 
 		for _, key := range keys {
-			if ctx.Err() != nil {
+			if stopped() {
 				return removed, false
 			}
 			isKeyFolder := key.IsDir() && helpers.IsPlainPathSegment(key.Name(), "")
 			if !isKeyFolder {
 				continue
 			}
-			n, folderComplete := s.pruneFolder(dir, filepath.Join(root, key.Name()), key.Name(), kept)
+			n, folderComplete := s.pruneFolder(dir, filepath.Join(root, key.Name()), key.Name(), kept, stopped)
 			removed += n
 			complete = complete && folderComplete
 		}
 
+		if stopped() {
+			return removed, false
+		}
 		if kept == nil {
 			// Fails, as it should, while anything else is in the folder.
 			_ = os.Remove(root)
@@ -615,7 +625,10 @@ func (s *Syncer) prune(ctx context.Context, staticDir string, kept map[string]bo
 	return removed, complete
 }
 
-func (s *Syncer) pruneFolder(dir, folder, key string, kept map[string]bool) (int, bool) {
+// pruneFolder removes the managed files in one key folder that are not in
+// kept, then the folder if that left it empty, stopping before the next
+// removal once stopped reports true.
+func (s *Syncer) pruneFolder(dir, folder, key string, kept map[string]bool, stopped func() bool) (int, bool) {
 	files, err := os.ReadDir(folder)
 	if err != nil {
 		s.logger.Error("failed to read artwork folder", "path", folder, "error", err)
@@ -632,6 +645,9 @@ func (s *Syncer) pruneFolder(dir, folder, key string, kept map[string]bool) (int
 		if kept[dir+"/"+key+"/"+file.Name()] {
 			continue
 		}
+		if stopped() {
+			return removed, false
+		}
 
 		err = os.Remove(filepath.Join(folder, file.Name()))
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
@@ -642,10 +658,22 @@ func (s *Syncer) pruneFolder(dir, folder, key string, kept map[string]bool) (int
 		removed++
 	}
 
+	if stopped() {
+		return removed, false
+	}
 	// Fails, as it should, while anything is left in the folder.
 	_ = os.Remove(folder)
 
 	return removed, complete
+}
+
+// watchLibraries reads the library roots and returns a check that reports
+// when they no longer match. The overlap check holds only for the roots it
+// was made with.
+func (s *Syncer) watchLibraries() ([]string, func() bool) {
+	roots := s.libraryDirs()
+	librariesChanged := func() bool { return !slices.Equal(roots, s.libraryDirs()) }
+	return roots, librariesChanged
 }
 
 // overlappingDirs reports the managed folders that are, contain or lie inside

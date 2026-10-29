@@ -1026,3 +1026,52 @@ func TestPass_StopsWritingAndDeletingWhenTheLibrariesChange(t *testing.T) {
 		t.Fatal("the next pass deleted a file from the library's folder")
 	}
 }
+
+// Pruning stops before its next file or folder once the library roots change,
+// whether downloads are on or being turned off: the folder it would delete
+// from may be a library's now. The pass the save starts leaves the library's
+// files alone.
+func TestPass_StopsPruningWhenTheLibrariesChange(t *testing.T) {
+	for _, enabled := range []bool{true, false} {
+		t.Run(fmt.Sprintf("enabled=%v", enabled), func(t *testing.T) {
+			h := newHarness(t)
+			h.enabled = enabled
+			first := "movies/101/a_backdrop.jpg"
+			// Later in the same key folder, then in a later key folder.
+			later := []string{"movies/101/b_poster.jpg", "movies/1999/valuable_poster.jpg"}
+			h.write(first, "orphan")
+			for _, rel := range later {
+				h.write(rel, "the library's own")
+			}
+			// The movies folder becomes a library once the first file is gone.
+			h.syncer.libraryDirs = func() []string {
+				if h.exists(first) {
+					return nil
+				}
+				return []string{filepath.Join(h.static, "movies")}
+			}
+
+			h.pass()
+
+			if h.exists(first) {
+				t.Fatal("did not prune before the libraries changed")
+			}
+			for _, rel := range later {
+				if !h.exists(rel) {
+					t.Fatalf("deleted %s after its folder became a library", rel)
+				}
+			}
+			if h.syncer.cleanedDir != "" {
+				t.Fatal("recorded a stopped removal as complete")
+			}
+
+			h.pass()
+
+			for _, rel := range later {
+				if !h.exists(rel) {
+					t.Fatalf("the next pass deleted %s from the library's folder", rel)
+				}
+			}
+		})
+	}
+}
