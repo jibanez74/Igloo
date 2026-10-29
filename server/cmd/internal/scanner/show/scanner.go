@@ -34,8 +34,8 @@ type Dependencies struct {
 	// so the API drops the runtime caches derived from the replaced rows.
 	InvalidateCommittedShowFile func(fileID int64, episodeIDs []int64)
 	// ScanFinished runs when each run ends, to download the artwork it
-	// brought.
-	ScanFinished func()
+	// brought; scoped marks a run of watcher-detected changes.
+	ScanFinished func(scoped bool)
 }
 
 const (

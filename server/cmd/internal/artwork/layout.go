@@ -128,185 +128,368 @@ type image struct {
 	value  sql.NullString // what the API returns now
 }
 
-// table lists the managed images of one catalog table a page of rows at a
-// time, each row giving one image per managed column. It returns the last row
-// id read and the number of rows, which is below pageSize on the last page.
+// table lists the managed images of one catalog table, each row giving one
+// image per managed column. list reads a page of the rows after afterID, every
+// row with an image or, when pending, only those with an image that still
+// returns its source; it returns the last row id read and the number of rows,
+// which is below pageSize on the last page. listInFolders reads every row
+// whose key, one of the JSON array keys, names a folder of dir.
 type table struct {
-	name string
-	list func(ctx context.Context, q *database.Queries, afterID int64) ([]image, int64, int, error)
+	name          string
+	dir           string
+	list          func(ctx context.Context, q *database.Queries, afterID int64, pending bool) ([]image, int64, int, error)
+	listInFolders func(ctx context.Context, q *database.Queries, keys string) ([]image, error)
 }
 
 var tables = []table{
-	{name: "movies", list: listMovieImages},
-	{name: "artist", list: listArtistImages},
-	{name: "shows", list: listShowImages},
-	{name: "show_seasons", list: listSeasonImages},
-	{name: "show_episodes", list: listEpisodeImages},
-	{name: "networks", list: listNetworkImages},
-	{name: "albums", list: listAlbumImages},
-	{name: "musicians", list: listMusicianImages},
+	{name: "movies", dir: moviePoster.dir, list: listMovieImages, listInFolders: listMovieImagesInFolders},
+	{name: "artist", dir: artistProfile.dir, list: listArtistImages, listInFolders: listArtistImagesInFolders},
+	{name: "shows", dir: showPoster.dir, list: listShowImages, listInFolders: listShowImagesInFolders},
+	{name: "show_seasons", dir: seasonPoster.dir, list: listSeasonImages, listInFolders: listSeasonImagesInFolders},
+	{name: "show_episodes", dir: episodeStill.dir, list: listEpisodeImages, listInFolders: listEpisodeImagesInFolders},
+	{name: "networks", dir: networkLogo.dir, list: listNetworkImages, listInFolders: listNetworkImagesInFolders},
+	{name: "albums", dir: albumCover.dir, list: listAlbumImages, listInFolders: listAlbumImagesInFolders},
+	{name: "musicians", dir: musicianThumb.dir, list: listMusicianImages, listInFolders: listMusicianImagesInFolders},
 }
 
-func listMovieImages(ctx context.Context, q *database.Queries, afterID int64) ([]image, int64, int, error) {
-	rows, err := q.ListMovieArtwork(ctx, database.ListMovieArtworkParams{AfterID: afterID, PageSize: pageSize})
-	if err != nil {
-		return nil, 0, 0, err
-	}
-
-	images := make([]image, 0, 2*len(rows))
-	var lastID int64
+// mapRows maps rows to their images, with the id of the last row and the
+// number of rows. Every row gives at least one image, so the last image is the
+// last row's.
+func mapRows[R any](rows []R, rowImages func(R) []image) ([]image, int64, int) {
+	var images []image
 	for _, row := range rows {
-		key := tmdbKey(row.TmdbID)
-		title := slug(row.Title)
-		images = append(images,
-			image{column: moviePoster, rowID: row.ID, key: key, stem: title + "_" + moviePoster.role, source: row.PosterPathSource, value: row.PosterPath},
-			image{column: movieBackdrop, rowID: row.ID, key: key, stem: title + "_" + movieBackdrop.role, source: row.BackdropPathSource, value: row.BackdropPath},
-		)
-		lastID = row.ID
+		images = append(images, rowImages(row)...)
 	}
 
-	return images, lastID, len(rows), nil
+	var lastID int64
+	hasImages := len(images) > 0
+	if hasImages {
+		lastID = images[len(images)-1].rowID
+	}
+
+	return images, lastID, len(rows)
 }
 
-func listArtistImages(ctx context.Context, q *database.Queries, afterID int64) ([]image, int64, int, error) {
-	rows, err := q.ListArtistArtwork(ctx, database.ListArtistArtworkParams{AfterID: afterID, PageSize: pageSize})
-	if err != nil {
-		return nil, 0, 0, err
+func movieImages(row database.ListMovieArtworkRow) []image {
+	key := tmdbKey(row.TmdbID)
+	title := slug(row.Title)
+	return []image{
+		{column: moviePoster, rowID: row.ID, key: key, stem: title + "_" + moviePoster.role, source: row.PosterPathSource, value: row.PosterPath},
+		{column: movieBackdrop, rowID: row.ID, key: key, stem: title + "_" + movieBackdrop.role, source: row.BackdropPathSource, value: row.BackdropPath},
 	}
-
-	images := make([]image, 0, len(rows))
-	var lastID int64
-	for _, row := range rows {
-		images = append(images, image{
-			column: artistProfile, rowID: row.ID, key: strconv.FormatInt(row.TmdbID, 10),
-			stem: slug(row.Name) + "_" + artistProfile.role, source: row.ProfileSource, value: row.Profile,
-		})
-		lastID = row.ID
-	}
-
-	return images, lastID, len(rows), nil
 }
 
-func listShowImages(ctx context.Context, q *database.Queries, afterID int64) ([]image, int64, int, error) {
-	rows, err := q.ListShowArtwork(ctx, database.ListShowArtworkParams{AfterID: afterID, PageSize: pageSize})
-	if err != nil {
-		return nil, 0, 0, err
-	}
-
-	images := make([]image, 0, 2*len(rows))
-	var lastID int64
-	for _, row := range rows {
-		key := tmdbKey(row.TmdbID)
-		name := slug(row.Name)
-		images = append(images,
-			image{column: showPoster, rowID: row.ID, key: key, stem: name + "_" + showPoster.role, source: row.PosterPathSource, value: row.PosterPath},
-			image{column: showBackdrop, rowID: row.ID, key: key, stem: name + "_" + showBackdrop.role, source: row.BackdropPathSource, value: row.BackdropPath},
-		)
-		lastID = row.ID
-	}
-
-	return images, lastID, len(rows), nil
-}
-
-func listSeasonImages(ctx context.Context, q *database.Queries, afterID int64) ([]image, int64, int, error) {
-	rows, err := q.ListShowSeasonArtwork(ctx, database.ListShowSeasonArtworkParams{AfterID: afterID, PageSize: pageSize})
-	if err != nil {
-		return nil, 0, 0, err
-	}
-
-	images := make([]image, 0, len(rows))
-	var lastID int64
-	for _, row := range rows {
-		images = append(images, image{
-			column: seasonPoster, rowID: row.ID, key: tmdbKey(row.ShowTmdbID),
-			stem:   fmt.Sprintf("season_%02d_%s", row.SeasonNumber, seasonPoster.role),
-			source: row.PosterPathSource, value: row.PosterPath,
-		})
-		lastID = row.ID
-	}
-
-	return images, lastID, len(rows), nil
-}
-
-func listEpisodeImages(ctx context.Context, q *database.Queries, afterID int64) ([]image, int64, int, error) {
-	rows, err := q.ListShowEpisodeArtwork(ctx, database.ListShowEpisodeArtworkParams{AfterID: afterID, PageSize: pageSize})
-	if err != nil {
-		return nil, 0, 0, err
-	}
-
-	images := make([]image, 0, len(rows))
-	var lastID int64
-	for _, row := range rows {
-		images = append(images, image{
-			column: episodeStill, rowID: row.ID, key: tmdbKey(row.ShowTmdbID),
-			stem:   fmt.Sprintf("s%02de%02d_%s", row.SeasonNumber, row.EpisodeNumber, episodeStill.role),
-			source: row.StillPathSource, value: row.StillPath,
-		})
-		lastID = row.ID
-	}
-
-	return images, lastID, len(rows), nil
-}
-
-func listNetworkImages(ctx context.Context, q *database.Queries, afterID int64) ([]image, int64, int, error) {
-	rows, err := q.ListNetworkArtwork(ctx, database.ListNetworkArtworkParams{AfterID: afterID, PageSize: pageSize})
-	if err != nil {
-		return nil, 0, 0, err
-	}
-
-	images := make([]image, 0, len(rows))
-	var lastID int64
-	for _, row := range rows {
-		images = append(images, image{
-			column: networkLogo, rowID: row.ID, key: strconv.FormatInt(row.TmdbID, 10),
-			stem: slug(row.Name) + "_" + networkLogo.role, source: row.LogoSource, value: row.Logo,
-		})
-		lastID = row.ID
-	}
-
-	return images, lastID, len(rows), nil
-}
-
-func listAlbumImages(ctx context.Context, q *database.Queries, afterID int64) ([]image, int64, int, error) {
-	rows, err := q.ListAlbumArtwork(ctx, database.ListAlbumArtworkParams{AfterID: afterID, PageSize: pageSize})
-	if err != nil {
-		return nil, 0, 0, err
-	}
-
-	images := make([]image, 0, len(rows))
-	var lastID int64
-	for _, row := range rows {
-		key := providerKey(row.SpotifyID)
-		if key == "" && row.AppleID.Valid {
-			key = strconv.FormatInt(row.AppleID.Int64, 10)
+func listMovieImages(ctx context.Context, q *database.Queries, afterID int64, pending bool) ([]image, int64, int, error) {
+	page := database.ListMovieArtworkParams{AfterID: afterID, PageSize: pageSize}
+	if pending {
+		rows, err := q.ListPendingMovieArtwork(ctx, database.ListPendingMovieArtworkParams(page))
+		if err != nil {
+			return nil, 0, 0, err
 		}
-		images = append(images, image{
-			column: albumCover, rowID: row.ID, key: key,
-			stem: slug(row.Title) + "_" + albumCover.role, source: row.CoverSource, value: row.Cover,
+		images, lastID, n := mapRows(rows, func(row database.ListPendingMovieArtworkRow) []image {
+			return movieImages(database.ListMovieArtworkRow(row))
 		})
-		lastID = row.ID
+		return images, lastID, n, nil
 	}
 
-	return images, lastID, len(rows), nil
-}
-
-func listMusicianImages(ctx context.Context, q *database.Queries, afterID int64) ([]image, int64, int, error) {
-	rows, err := q.ListMusicianArtwork(ctx, database.ListMusicianArtworkParams{AfterID: afterID, PageSize: pageSize})
+	rows, err := q.ListMovieArtwork(ctx, page)
 	if err != nil {
 		return nil, 0, 0, err
 	}
+	images, lastID, n := mapRows(rows, movieImages)
+	return images, lastID, n, nil
+}
 
-	images := make([]image, 0, len(rows))
-	var lastID int64
-	for _, row := range rows {
-		images = append(images, image{
-			column: musicianThumb, rowID: row.ID, key: providerKey(row.SpotifyID),
-			stem: slug(row.Name) + "_" + musicianThumb.role, source: row.ThumbSource, value: row.Thumb,
+func listMovieImagesInFolders(ctx context.Context, q *database.Queries, keys string) ([]image, error) {
+	rows, err := q.ListMovieArtworkInFolders(ctx, keys)
+	if err != nil {
+		return nil, err
+	}
+	images, _, _ := mapRows(rows, func(row database.ListMovieArtworkInFoldersRow) []image {
+		return movieImages(database.ListMovieArtworkRow(row))
+	})
+	return images, nil
+}
+
+func artistImages(row database.ListArtistArtworkRow) []image {
+	return []image{{
+		column: artistProfile, rowID: row.ID, key: strconv.FormatInt(row.TmdbID, 10),
+		stem: slug(row.Name) + "_" + artistProfile.role, source: row.ProfileSource, value: row.Profile,
+	}}
+}
+
+func listArtistImages(ctx context.Context, q *database.Queries, afterID int64, pending bool) ([]image, int64, int, error) {
+	page := database.ListArtistArtworkParams{AfterID: afterID, PageSize: pageSize}
+	if pending {
+		rows, err := q.ListPendingArtistArtwork(ctx, database.ListPendingArtistArtworkParams(page))
+		if err != nil {
+			return nil, 0, 0, err
+		}
+		images, lastID, n := mapRows(rows, func(row database.ListPendingArtistArtworkRow) []image {
+			return artistImages(database.ListArtistArtworkRow(row))
 		})
-		lastID = row.ID
+		return images, lastID, n, nil
 	}
 
-	return images, lastID, len(rows), nil
+	rows, err := q.ListArtistArtwork(ctx, page)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	images, lastID, n := mapRows(rows, artistImages)
+	return images, lastID, n, nil
+}
+
+func listArtistImagesInFolders(ctx context.Context, q *database.Queries, keys string) ([]image, error) {
+	rows, err := q.ListArtistArtworkInFolders(ctx, keys)
+	if err != nil {
+		return nil, err
+	}
+	images, _, _ := mapRows(rows, func(row database.ListArtistArtworkInFoldersRow) []image {
+		return artistImages(database.ListArtistArtworkRow(row))
+	})
+	return images, nil
+}
+
+func showImages(row database.ListShowArtworkRow) []image {
+	key := tmdbKey(row.TmdbID)
+	name := slug(row.Name)
+	return []image{
+		{column: showPoster, rowID: row.ID, key: key, stem: name + "_" + showPoster.role, source: row.PosterPathSource, value: row.PosterPath},
+		{column: showBackdrop, rowID: row.ID, key: key, stem: name + "_" + showBackdrop.role, source: row.BackdropPathSource, value: row.BackdropPath},
+	}
+}
+
+func listShowImages(ctx context.Context, q *database.Queries, afterID int64, pending bool) ([]image, int64, int, error) {
+	page := database.ListShowArtworkParams{AfterID: afterID, PageSize: pageSize}
+	if pending {
+		rows, err := q.ListPendingShowArtwork(ctx, database.ListPendingShowArtworkParams(page))
+		if err != nil {
+			return nil, 0, 0, err
+		}
+		images, lastID, n := mapRows(rows, func(row database.ListPendingShowArtworkRow) []image {
+			return showImages(database.ListShowArtworkRow(row))
+		})
+		return images, lastID, n, nil
+	}
+
+	rows, err := q.ListShowArtwork(ctx, page)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	images, lastID, n := mapRows(rows, showImages)
+	return images, lastID, n, nil
+}
+
+func listShowImagesInFolders(ctx context.Context, q *database.Queries, keys string) ([]image, error) {
+	rows, err := q.ListShowArtworkInFolders(ctx, keys)
+	if err != nil {
+		return nil, err
+	}
+	images, _, _ := mapRows(rows, func(row database.ListShowArtworkInFoldersRow) []image {
+		return showImages(database.ListShowArtworkRow(row))
+	})
+	return images, nil
+}
+
+func seasonImages(row database.ListShowSeasonArtworkRow) []image {
+	return []image{{
+		column: seasonPoster, rowID: row.ID, key: tmdbKey(row.ShowTmdbID),
+		stem:   fmt.Sprintf("season_%02d_%s", row.SeasonNumber, seasonPoster.role),
+		source: row.PosterPathSource, value: row.PosterPath,
+	}}
+}
+
+func listSeasonImages(ctx context.Context, q *database.Queries, afterID int64, pending bool) ([]image, int64, int, error) {
+	page := database.ListShowSeasonArtworkParams{AfterID: afterID, PageSize: pageSize}
+	if pending {
+		rows, err := q.ListPendingShowSeasonArtwork(ctx, database.ListPendingShowSeasonArtworkParams(page))
+		if err != nil {
+			return nil, 0, 0, err
+		}
+		images, lastID, n := mapRows(rows, func(row database.ListPendingShowSeasonArtworkRow) []image {
+			return seasonImages(database.ListShowSeasonArtworkRow(row))
+		})
+		return images, lastID, n, nil
+	}
+
+	rows, err := q.ListShowSeasonArtwork(ctx, page)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	images, lastID, n := mapRows(rows, seasonImages)
+	return images, lastID, n, nil
+}
+
+func listSeasonImagesInFolders(ctx context.Context, q *database.Queries, keys string) ([]image, error) {
+	rows, err := q.ListShowSeasonArtworkInFolders(ctx, keys)
+	if err != nil {
+		return nil, err
+	}
+	images, _, _ := mapRows(rows, func(row database.ListShowSeasonArtworkInFoldersRow) []image {
+		return seasonImages(database.ListShowSeasonArtworkRow(row))
+	})
+	return images, nil
+}
+
+func episodeImages(row database.ListShowEpisodeArtworkRow) []image {
+	return []image{{
+		column: episodeStill, rowID: row.ID, key: tmdbKey(row.ShowTmdbID),
+		stem:   fmt.Sprintf("s%02de%02d_%s", row.SeasonNumber, row.EpisodeNumber, episodeStill.role),
+		source: row.StillPathSource, value: row.StillPath,
+	}}
+}
+
+func listEpisodeImages(ctx context.Context, q *database.Queries, afterID int64, pending bool) ([]image, int64, int, error) {
+	page := database.ListShowEpisodeArtworkParams{AfterID: afterID, PageSize: pageSize}
+	if pending {
+		rows, err := q.ListPendingShowEpisodeArtwork(ctx, database.ListPendingShowEpisodeArtworkParams(page))
+		if err != nil {
+			return nil, 0, 0, err
+		}
+		images, lastID, n := mapRows(rows, func(row database.ListPendingShowEpisodeArtworkRow) []image {
+			return episodeImages(database.ListShowEpisodeArtworkRow(row))
+		})
+		return images, lastID, n, nil
+	}
+
+	rows, err := q.ListShowEpisodeArtwork(ctx, page)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	images, lastID, n := mapRows(rows, episodeImages)
+	return images, lastID, n, nil
+}
+
+func listEpisodeImagesInFolders(ctx context.Context, q *database.Queries, keys string) ([]image, error) {
+	rows, err := q.ListShowEpisodeArtworkInFolders(ctx, keys)
+	if err != nil {
+		return nil, err
+	}
+	images, _, _ := mapRows(rows, func(row database.ListShowEpisodeArtworkInFoldersRow) []image {
+		return episodeImages(database.ListShowEpisodeArtworkRow(row))
+	})
+	return images, nil
+}
+
+func networkImages(row database.ListNetworkArtworkRow) []image {
+	return []image{{
+		column: networkLogo, rowID: row.ID, key: strconv.FormatInt(row.TmdbID, 10),
+		stem: slug(row.Name) + "_" + networkLogo.role, source: row.LogoSource, value: row.Logo,
+	}}
+}
+
+func listNetworkImages(ctx context.Context, q *database.Queries, afterID int64, pending bool) ([]image, int64, int, error) {
+	page := database.ListNetworkArtworkParams{AfterID: afterID, PageSize: pageSize}
+	if pending {
+		rows, err := q.ListPendingNetworkArtwork(ctx, database.ListPendingNetworkArtworkParams(page))
+		if err != nil {
+			return nil, 0, 0, err
+		}
+		images, lastID, n := mapRows(rows, func(row database.ListPendingNetworkArtworkRow) []image {
+			return networkImages(database.ListNetworkArtworkRow(row))
+		})
+		return images, lastID, n, nil
+	}
+
+	rows, err := q.ListNetworkArtwork(ctx, page)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	images, lastID, n := mapRows(rows, networkImages)
+	return images, lastID, n, nil
+}
+
+func listNetworkImagesInFolders(ctx context.Context, q *database.Queries, keys string) ([]image, error) {
+	rows, err := q.ListNetworkArtworkInFolders(ctx, keys)
+	if err != nil {
+		return nil, err
+	}
+	images, _, _ := mapRows(rows, func(row database.ListNetworkArtworkInFoldersRow) []image {
+		return networkImages(database.ListNetworkArtworkRow(row))
+	})
+	return images, nil
+}
+
+func albumImages(row database.ListAlbumArtworkRow) []image {
+	key := providerKey(row.SpotifyID)
+	if key == "" && row.AppleID.Valid {
+		key = strconv.FormatInt(row.AppleID.Int64, 10)
+	}
+	return []image{{
+		column: albumCover, rowID: row.ID, key: key,
+		stem: slug(row.Title) + "_" + albumCover.role, source: row.CoverSource, value: row.Cover,
+	}}
+}
+
+func listAlbumImages(ctx context.Context, q *database.Queries, afterID int64, pending bool) ([]image, int64, int, error) {
+	page := database.ListAlbumArtworkParams{AfterID: afterID, PageSize: pageSize}
+	if pending {
+		rows, err := q.ListPendingAlbumArtwork(ctx, database.ListPendingAlbumArtworkParams(page))
+		if err != nil {
+			return nil, 0, 0, err
+		}
+		images, lastID, n := mapRows(rows, func(row database.ListPendingAlbumArtworkRow) []image {
+			return albumImages(database.ListAlbumArtworkRow(row))
+		})
+		return images, lastID, n, nil
+	}
+
+	rows, err := q.ListAlbumArtwork(ctx, page)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	images, lastID, n := mapRows(rows, albumImages)
+	return images, lastID, n, nil
+}
+
+func listAlbumImagesInFolders(ctx context.Context, q *database.Queries, keys string) ([]image, error) {
+	rows, err := q.ListAlbumArtworkInFolders(ctx, keys)
+	if err != nil {
+		return nil, err
+	}
+	images, _, _ := mapRows(rows, func(row database.ListAlbumArtworkInFoldersRow) []image {
+		return albumImages(database.ListAlbumArtworkRow(row))
+	})
+	return images, nil
+}
+
+func musicianImages(row database.ListMusicianArtworkRow) []image {
+	return []image{{
+		column: musicianThumb, rowID: row.ID, key: providerKey(row.SpotifyID),
+		stem: slug(row.Name) + "_" + musicianThumb.role, source: row.ThumbSource, value: row.Thumb,
+	}}
+}
+
+func listMusicianImages(ctx context.Context, q *database.Queries, afterID int64, pending bool) ([]image, int64, int, error) {
+	page := database.ListMusicianArtworkParams{AfterID: afterID, PageSize: pageSize}
+	if pending {
+		rows, err := q.ListPendingMusicianArtwork(ctx, database.ListPendingMusicianArtworkParams(page))
+		if err != nil {
+			return nil, 0, 0, err
+		}
+		images, lastID, n := mapRows(rows, func(row database.ListPendingMusicianArtworkRow) []image {
+			return musicianImages(database.ListMusicianArtworkRow(row))
+		})
+		return images, lastID, n, nil
+	}
+
+	rows, err := q.ListMusicianArtwork(ctx, page)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	images, lastID, n := mapRows(rows, musicianImages)
+	return images, lastID, n, nil
+}
+
+func listMusicianImagesInFolders(ctx context.Context, q *database.Queries, keys string) ([]image, error) {
+	rows, err := q.ListMusicianArtworkInFolders(ctx, keys)
+	if err != nil {
+		return nil, err
+	}
+	images, _, _ := mapRows(rows, func(row database.ListMusicianArtworkInFoldersRow) []image {
+		return musicianImages(database.ListMusicianArtworkRow(row))
+	})
+	return images, nil
 }
 
 // providerKey names the folder of an entity matched on Spotify, whose IDs are

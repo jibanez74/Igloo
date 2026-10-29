@@ -121,10 +121,12 @@ type Application struct {
 	// starts and stops it.
 	Watcher *watch.Watcher
 	// Artwork keeps the library artwork downloaded while download_images is
-	// on; Request starts a pass, and Revert points the image columns back at
-	// their sources at once.
+	// on; Request starts a full pass, RequestChanges a pass of the folders
+	// with images still to download, and Revert points the image columns back
+	// at their sources at once.
 	Artwork interface {
 		Request()
+		RequestChanges()
 		Revert(ctx context.Context) error
 	}
 }
@@ -283,7 +285,7 @@ func (app *Application) initScanners(musicSpotify music.SpotifyProvider, musicAp
 		InvalidateCommittedTrack: func(trackID int64) {
 			app.StreamFileCache.invalidate(trackStreamFileKey(trackID))
 		},
-		ScanFinished: app.syncArtwork,
+		ScanFinished: app.syncArtworkAfterScan,
 	})
 
 	app.ShowScanner = show.New(show.Dependencies{
@@ -299,7 +301,7 @@ func (app *Application) initScanners(musicSpotify music.SpotifyProvider, musicAp
 			return app.CurrentSettings().ShowsDir
 		},
 		InvalidateCommittedShowFile: app.invalidateCommittedShowFile,
-		ScanFinished:                app.syncArtwork,
+		ScanFinished:                app.syncArtworkAfterScan,
 	})
 
 	app.MovieScanner = movie.New(movie.Dependencies{
@@ -316,7 +318,7 @@ func (app *Application) initScanners(musicSpotify music.SpotifyProvider, musicAp
 		},
 		InvalidateCommittedMovie:    app.invalidateCommittedMovie,
 		InvalidateDeletedWatchRooms: app.invalidateDeletedWatchRooms,
-		ScanFinished:                app.syncArtwork,
+		ScanFinished:                app.syncArtworkAfterScan,
 	})
 
 	// The watcher reads the scanner fields at each run, so a test that swaps
@@ -384,6 +386,20 @@ func (app *Application) initArtwork() {
 // download_images is on and removes the downloads while it is off.
 func (app *Application) syncArtwork() {
 	if app.Artwork == nil {
+		return
+	}
+	app.Artwork.Request()
+}
+
+// syncArtworkAfterScan requests the artwork pass that follows a scanner run:
+// a run of watcher-detected changes asks for a pass of changes, which leaves
+// what it cannot see to the next full pass, and any other run for a full one.
+func (app *Application) syncArtworkAfterScan(scoped bool) {
+	if app.Artwork == nil {
+		return
+	}
+	if scoped {
+		app.Artwork.RequestChanges()
 		return
 	}
 	app.Artwork.Request()

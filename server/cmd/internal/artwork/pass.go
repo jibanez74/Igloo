@@ -3,6 +3,7 @@ package artwork
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -22,12 +23,14 @@ import (
 )
 
 // pass brings the copies in line with the setting: one for every image while
-// it is on, none while it is off.
-func (s *Syncer) pass(ctx context.Context) {
+// it is on, none while it is off. A pass of changes, one that is not full,
+// keeps copies only in the folders of the images that still return their
+// source; removing them covers every folder whatever the pass.
+func (s *Syncer) pass(ctx context.Context, full bool) {
 	staticDir := s.staticDir()
 	enabled := s.enabled()
 	if enabled {
-		s.keepCopies(ctx, staticDir)
+		s.keepCopies(ctx, staticDir, full)
 		return
 	}
 	s.removeCopies(ctx, staticDir)
@@ -52,7 +55,7 @@ func (s *Syncer) removeCopies(ctx context.Context, staticDir string) {
 	// nothing to remove from it. A removal stopped by new roots is not
 	// complete, so the pass the save requests runs it again with them.
 	roots, librariesChanged := s.watchLibraries()
-	removed, complete := s.prune(ctx, staticDir, nil, s.overlappingDirs(staticDir, roots), librariesChanged)
+	removed, complete := s.prune(ctx, staticDir, nil, s.overlappingDirs(staticDir, roots), nil, librariesChanged)
 	if complete && ctx.Err() == nil {
 		s.cleanedDir = staticDir
 	}
@@ -162,9 +165,15 @@ type update struct {
 	rel   string
 }
 
+// unmountedWarning is logged by a pass that finds no copy where copies were
+// made: healing would download everything again beneath the mount point.
+const unmountedWarning = "skipping artwork pass: no downloaded artwork is left in the static directory; is it mounted? Turn Download images off and on to download it again"
+
 // keepCopies makes sure every image has a current copy and that the columns
-// point at it, then removes the copies nothing points at.
-func (s *Syncer) keepCopies(ctx context.Context, staticDir string) {
+// point at it, then removes the copies nothing points at. A pass of changes
+// does so only in the key folders of the images that still return their
+// source.
+func (s *Syncer) keepCopies(ctx context.Context, staticDir string, full bool) {
 	s.cleanedDir = ""
 	started := s.now()
 	// The overlap check holds for the library roots it was made with, so a
@@ -195,13 +204,40 @@ func (s *Syncer) keepCopies(ctx context.Context, staticDir string) {
 		}
 	}
 
-	images, err := s.listImages(ctx)
+	// A new directory has every copy to download, and the copies a pass of
+	// changes leaves behind wait at most a day for a full pass; the zero time
+	// makes the first pass after a restart a full one.
+	isFullDue := started.Sub(s.lastFullPass) >= fullPassInterval
+	full = full || isNewDir || isFullDue
+	scope := "full"
+	var folders map[string]bool
+	var images []image
+	if full {
+		images, err = s.listImages(ctx, false)
+	} else {
+		scope = "changes"
+		folders, images, err = s.listChanges(ctx, skipped)
+	}
 	if err != nil {
 		s.logFailure(ctx, "failed to list library artwork", err)
 		return
 	}
 
+	// A pass of changes lists no copy outside its folders, so the folders
+	// that held copies tell it whether the directory is still mounted. They
+	// are followed through symlinks, since a full pass writes through a
+	// managed folder that links to another disk.
+	isUnmounted := len(folders) > 0 && len(s.copyDirs) > 0 && !anyDirExists(staticDir, s.copyDirs, os.Stat)
+	if isUnmounted {
+		s.logger.Warn(unmountedWarning, "static_dir", staticDir)
+		return
+	}
+
 	p := s.plan(staticDir, images, skipped)
+	if full {
+		s.lastFullPass = started
+		s.copyDirs = maps.Clone(p.localDirs)
+	}
 	// Every copy listed is in the directory the database records, since a
 	// new one was just pointed back, so one that holds none of them, nor the
 	// folders they were in, is most likely an unmounted disk, also on the
@@ -209,8 +245,8 @@ func (s *Syncer) keepCopies(ctx context.Context, staticDir string) {
 	// beneath the mount point. Files deleted from a folder that is still
 	// there are downloaded again.
 	allMissing := p.localSeen > 0 && p.localMissing == p.localSeen
-	if allMissing && !anyDirExists(staticDir, p.localDirs) {
-		s.logger.Warn("skipping artwork pass: no downloaded artwork is left in the static directory; is it mounted? Turn Download images off and on to download it again", "static_dir", staticDir, "copies", p.localSeen)
+	if allMissing && !anyDirExists(staticDir, p.localDirs, os.Lstat) {
+		s.logger.Warn(unmountedWarning, "static_dir", staticDir, "copies", p.localSeen)
 		return
 	}
 
@@ -232,19 +268,23 @@ func (s *Syncer) keepCopies(ctx context.Context, staticDir string) {
 		applyFailed = true
 		s.logFailure(ctx, "failed to point artwork at downloaded copies", err)
 	}
+	for rel := range p.kept {
+		dir, _, _ := strings.Cut(rel, "/")
+		s.copyDirs[dir] = true
+	}
 
-	// A copy is only removed once the whole catalog was read, every write
-	// landed, and the setting is still on; otherwise a copy a column points
-	// at could be taken for an orphan.
+	// A copy is only removed once every image of its folder was read, every
+	// write landed, and the setting is still on; otherwise a copy a column
+	// points at could be taken for an orphan.
 	removed := 0
 	canPrune := !applyFailed && ctx.Err() == nil && s.enabled() && !librariesChanged()
 	if canPrune {
-		removed, _ = s.prune(ctx, staticDir, p.kept, skipped, librariesChanged)
+		removed, _ = s.prune(ctx, staticDir, p.kept, skipped, folders, librariesChanged)
 	}
 
 	changed := downloaded > 0 || reused > 0 || failed > 0 || reverted > 0 || removed > 0
 	summary := []any{
-		"downloaded", downloaded, "reused", reused, "failed", failed,
+		"scope", scope, "downloaded", downloaded, "reused", reused, "failed", failed,
 		"skipped_after_failure", p.remembered, "reverted", reverted, "removed_files", removed,
 		"duration", s.now().Sub(started).Round(time.Millisecond),
 	}
@@ -255,12 +295,14 @@ func (s *Syncer) keepCopies(ctx context.Context, staticDir string) {
 	s.logger.Debug("artwork pass finished", summary...)
 }
 
-func (s *Syncer) listImages(ctx context.Context) ([]image, error) {
+// listImages lists every image, or only the images of the rows with an image
+// that still returns its source.
+func (s *Syncer) listImages(ctx context.Context, pending bool) ([]image, error) {
 	var images []image
 	for _, t := range tables {
 		var afterID int64
 		for {
-			page, lastID, rows, err := t.list(ctx, s.queries, afterID)
+			page, lastID, rows, err := t.list(ctx, s.queries, afterID, pending)
 			if err != nil {
 				return nil, fmt.Errorf("list %s artwork: %w", t.name, err)
 			}
@@ -274,6 +316,60 @@ func (s *Syncer) listImages(ctx context.Context) ([]image, error) {
 	}
 
 	return images, nil
+}
+
+// listChanges lists the key folders of the images that still return their
+// source and every image in them. The folders are fixed before any is listed,
+// so a row a scanner writes meanwhile cannot leave one half listed, and their
+// images come in the order of a full pass, so plan treats each folder as a
+// full pass would.
+func (s *Syncer) listChanges(ctx context.Context, skipped map[string]string) (map[string]bool, []image, error) {
+	pending, err := s.listImages(ctx, true)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	folders := make(map[string]bool)
+	keys := make(map[string][]string)
+	for _, img := range pending {
+		// The other image of a pending row may point at a copy already, and
+		// a folder that overlaps a library is never written.
+		isPending := img.source.Valid && img.value == img.source
+		_, isSkipped := skipped[img.column.dir]
+		want, ok := s.target(img)
+		isNewFolder := isPending && !isSkipped && ok && !folders[want.folder]
+		if !isNewFolder {
+			continue
+		}
+		folders[want.folder] = true
+		keys[img.column.dir] = append(keys[img.column.dir], img.key)
+	}
+
+	var images []image
+	for _, t := range tables {
+		dirKeys := keys[t.dir]
+		if len(dirKeys) == 0 {
+			continue
+		}
+		encoded, err := json.Marshal(dirKeys)
+		if err != nil {
+			return nil, nil, err
+		}
+		found, err := t.listInFolders(ctx, s.queries, string(encoded))
+		if err != nil {
+			return nil, nil, fmt.Errorf("list %s artwork: %w", t.name, err)
+		}
+		// An album is found by either of its IDs, and only one names its
+		// folder.
+		for _, img := range found {
+			inFolder := folders[img.column.dir+"/"+img.key]
+			if inFolder {
+				images = append(images, img)
+			}
+		}
+	}
+
+	return folders, images, nil
 }
 
 // plan sorts the images into copies to keep, columns to point back at their
@@ -577,12 +673,13 @@ func isPermanentDownloadFailure(err error) bool {
 }
 
 // prune removes the managed files that are not in kept (every one when kept
-// is nil) from the managed folders not in skipped, then the folders left
-// empty. It reports how many files it removed, and whether it got through
-// every folder without a filesystem error. It stops before the next file or
-// folder, incomplete, at shutdown or once the library roots that skipped was
-// made with change: a folder it would delete from may be a library's now.
-func (s *Syncer) prune(ctx context.Context, staticDir string, kept map[string]bool, skipped map[string]string, librariesChanged func() bool) (int, bool) {
+// is nil) from the key folders in folders (every one when folders is nil) of
+// the managed folders not in skipped, then the folders left empty. It reports
+// how many files it removed, and whether it got through every folder without
+// a filesystem error. It stops before the next file or folder, incomplete, at
+// shutdown or once the library roots that skipped was made with change: a
+// folder it would delete from may be a library's now.
+func (s *Syncer) prune(ctx context.Context, staticDir string, kept map[string]bool, skipped map[string]string, folders map[string]bool, librariesChanged func() bool) (int, bool) {
 	stopped := func() bool { return ctx.Err() != nil || librariesChanged() }
 	removed := 0
 	complete := true
@@ -596,7 +693,7 @@ func (s *Syncer) prune(ctx context.Context, staticDir string, kept map[string]bo
 		}
 
 		root := filepath.Join(staticDir, dir)
-		keys, err := os.ReadDir(root)
+		keys, err := keyFolders(root, dir, folders)
 		if errors.Is(err, fs.ErrNotExist) {
 			continue
 		}
@@ -629,6 +726,33 @@ func (s *Syncer) prune(ctx context.Context, staticDir string, kept map[string]bo
 	}
 
 	return removed, complete
+}
+
+// keyFolders lists the key folders of root, the managed folder dir: every one
+// when folders is nil, otherwise those that folders names, each looked up on
+// its own so a large managed folder is never read whole.
+func keyFolders(root, dir string, folders map[string]bool) ([]fs.DirEntry, error) {
+	if folders == nil {
+		return os.ReadDir(root)
+	}
+
+	var entries []fs.DirEntry
+	for folder := range folders {
+		key, inDir := strings.CutPrefix(folder, dir+"/")
+		if !inDir {
+			continue
+		}
+		info, err := os.Lstat(filepath.Join(root, key))
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		entries = append(entries, fs.FileInfoToDirEntry(info))
+	}
+
+	return entries, nil
 }
 
 // pruneFolder removes the managed files in one key folder that are not in
@@ -817,11 +941,11 @@ func fileExists(staticDir, rel string) bool {
 	return err == nil && file.Mode().IsRegular()
 }
 
-// anyDirExists reports whether one of the managed folders dirs is a real
-// directory in staticDir.
-func anyDirExists(staticDir string, dirs map[string]bool) bool {
+// anyDirExists reports whether one of the managed folders dirs is a directory
+// in staticDir, as stat sees it: os.Lstat counts only a real one.
+func anyDirExists(staticDir string, dirs map[string]bool, stat func(string) (fs.FileInfo, error)) bool {
 	for dir := range dirs {
-		info, err := os.Lstat(filepath.Join(staticDir, dir))
+		info, err := stat(filepath.Join(staticDir, dir))
 		if err == nil && info.IsDir() {
 			return true
 		}

@@ -1784,3 +1784,36 @@ WHEN new.thumb_source IS NOT old.thumb_source
 BEGIN
   UPDATE musicians SET thumb = new.thumb_source WHERE id = new.id;
 END;
+
+-- The image columns that still return their source: new rows and sources, and
+-- images that failed or stay remote. With downloads on they are few, so the
+-- artwork pass after a run of watcher-detected changes finds them without
+-- reading the tables. The ListPending*Artwork queries name these indexes and
+-- repeat their WHERE clauses term for term: SQLite uses a partial index only
+-- for a query that contains its terms, and refuses to prepare one that names
+-- it otherwise.
+CREATE INDEX IF NOT EXISTS idx_movies_artwork_pending ON movies (id)
+WHERE (poster_path_source IS NOT NULL AND poster_path IS poster_path_source)
+   OR (backdrop_path_source IS NOT NULL AND backdrop_path IS backdrop_path_source);
+
+CREATE INDEX IF NOT EXISTS idx_artist_artwork_pending ON artist (id)
+WHERE profile_source IS NOT NULL AND profile IS profile_source;
+
+CREATE INDEX IF NOT EXISTS idx_shows_artwork_pending ON shows (id)
+WHERE (poster_path_source IS NOT NULL AND poster_path IS poster_path_source)
+   OR (backdrop_path_source IS NOT NULL AND backdrop_path IS backdrop_path_source);
+
+CREATE INDEX IF NOT EXISTS idx_show_seasons_artwork_pending ON show_seasons (id)
+WHERE poster_path_source IS NOT NULL AND poster_path IS poster_path_source;
+
+CREATE INDEX IF NOT EXISTS idx_show_episodes_artwork_pending ON show_episodes (id)
+WHERE still_path_source IS NOT NULL AND still_path IS still_path_source;
+
+CREATE INDEX IF NOT EXISTS idx_networks_artwork_pending ON networks (id)
+WHERE logo_source IS NOT NULL AND logo IS logo_source;
+
+CREATE INDEX IF NOT EXISTS idx_albums_artwork_pending ON albums (id)
+WHERE cover_source IS NOT NULL AND cover IS cover_source;
+
+CREATE INDEX IF NOT EXISTS idx_musicians_artwork_pending ON musicians (id)
+WHERE thumb_source IS NOT NULL AND thumb IS thumb_source;

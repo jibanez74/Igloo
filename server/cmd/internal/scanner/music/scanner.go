@@ -50,8 +50,8 @@ type Dependencies struct {
 	CurrentMusicDirectory    func() sql.NullString
 	InvalidateCommittedTrack func(trackID int64)
 	// ScanFinished runs when each run ends, to download the artwork it
-	// brought.
-	ScanFinished func()
+	// brought; scoped marks a run of watcher-detected changes.
+	ScanFinished func(scoped bool)
 }
 
 // Scanner scans and persists the configured music library.

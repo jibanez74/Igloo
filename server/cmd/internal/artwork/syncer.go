@@ -30,6 +30,10 @@ const (
 	failureRetryAfter = 24 * time.Hour
 	// progressLogInterval spaces the progress lines of a long pass.
 	progressLogInterval = 10 * time.Second
+	// fullPassInterval is the longest a pass of changes waits for a full
+	// pass, the only kind that finds the copies of deleted rows, copies under
+	// an old name and copies deleted by hand.
+	fullPassInterval = 24 * time.Hour
 )
 
 // Dependencies are the application services a Syncer uses. DB, Queries and
@@ -72,9 +76,18 @@ type Syncer struct {
 	mu      sync.Mutex
 	running bool
 	pending bool
+	// pendingFull makes the pending pass a full one.
+	pendingFull bool
 
 	// Only the pass goroutine reads and writes these.
 	failures map[string]time.Time
+	// lastFullPass is when the last full pass listed the catalog.
+	lastFullPass time.Time
+	// copyDirs names the managed folders that held copies after the last full
+	// pass, or were filled since. A pass of changes reads no copy it does not
+	// list, so it checks them to tell an unmounted static directory from one
+	// it can download into.
+	copyDirs map[string]bool
 	// cleanedDir is the static directory the copies were last removed
 	// from. Nothing can make copies while the setting stays off, so the
 	// passes after scans skip it until the setting or the directory changes.
@@ -126,17 +139,32 @@ func New(deps Dependencies) *Syncer {
 		client:           deps.HTTPClient,
 		now:              deps.Now,
 		failures:         make(map[string]time.Time),
+		copyDirs:         make(map[string]bool),
 	}
 }
 
-// Request asks for a pass. Requests made while a pass runs share one pass
-// after it, which reads the setting and the catalog as they are then.
+// Request asks for a full pass, which reads the whole catalog. Requests made
+// while a pass runs share one pass after it, which reads the setting and the
+// catalog as they are then, and is a full one if any of them asked for one.
 func (s *Syncer) Request() {
+	s.request(true)
+}
+
+// RequestChanges asks for a pass of changes, which reads only the folders of
+// the images that still return their source. A run of watcher-detected
+// changes asks for one; the next full pass removes what such runs leave
+// behind.
+func (s *Syncer) RequestChanges() {
+	s.request(false)
+}
+
+func (s *Syncer) request(full bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if s.running {
 		s.pending = true
+		s.pendingFull = s.pendingFull || full
 		return
 	}
 
@@ -146,16 +174,18 @@ func (s *Syncer) Request() {
 	}
 
 	s.running = true
-	s.wait.Go(s.loop)
+	s.wait.Go(func() { s.loop(full) })
 }
 
-func (s *Syncer) loop() {
+func (s *Syncer) loop(full bool) {
 	for {
-		s.pass(s.ctx)
+		s.pass(s.ctx, full)
 
 		s.mu.Lock()
 		again := s.pending && s.ctx.Err() == nil
+		full = s.pendingFull
 		s.pending = false
+		s.pendingFull = false
 		if !again {
 			s.running = false
 			s.mu.Unlock()

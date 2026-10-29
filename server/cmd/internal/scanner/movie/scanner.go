@@ -36,8 +36,8 @@ type Dependencies struct {
 	InvalidateCommittedMovie    func(movieID int64)
 	InvalidateDeletedWatchRooms func(roomIDs []int64)
 	// ScanFinished runs when each run ends, to download the artwork it
-	// brought.
-	ScanFinished func()
+	// brought; scoped marks a run of watcher-detected changes.
+	ScanFinished func(scoped bool)
 }
 
 // Scanner scans and persists the configured movie library.
