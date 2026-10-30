@@ -6,6 +6,7 @@ import {
   DIALOG_SCROLL_BODY_CLASS,
   DIALOG_SCROLL_CONTENT_CLASS,
   DIALOG_SCROLL_HEADER_CLASS,
+  FLOATING_SURFACE_SHADOW_CLASS,
   FOCUS_VISIBLE_RING_CLASS,
   HOME_ALBUM_GRID_CLASS,
   HOME_POSTER_GRID_CLASS,
@@ -17,6 +18,7 @@ import {
   MOVIES_LIKED_KEY,
   MOVIE_VOLUME_STEP,
   MOVIES_PER_PAGE,
+  MOTION_MEDIA_DIALOG_SURFACE_CLASS,
   MOTION_PLAYER_CHROME_BUTTON_CLASS,
   MUSICIANS_PAGINATED_KEY,
   MUSICIANS_PER_PAGE,
@@ -114,6 +116,15 @@ describe("constants contracts", () => {
     expect(DIALOG_SCROLL_HEADER_CLASS).toContain("shrink-0");
     expect(DIALOG_SCROLL_BODY_CLASS).toContain("overflow-y-auto");
     expect(DIALOG_SCROLL_BODY_CLASS).toContain("min-h-0");
+  });
+
+  it("softens floating-surface shadows in light and keeps them in dark (design-system §1.4)", () => {
+    const classes = FLOATING_SURFACE_SHADOW_CLASS.split(" ");
+    expect(classes).toContain("shadow-black/15");
+    expect(classes).toContain("dark:shadow-black/50");
+    for (const cls of classes) {
+      expect(MOTION_MEDIA_DIALOG_SURFACE_CLASS.split(" ")).toContain(cls);
+    }
   });
 
   it("keeps the missing-media tile on the fixed token pair (design-system §1.2)", () => {

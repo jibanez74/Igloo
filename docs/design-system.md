@@ -189,7 +189,11 @@ Rules:
   thumbnail.
 - **Elevation**: `shadow-xs`–`shadow-2xl`. Interactive media cards add a
   glacier glow on hover (`hover:shadow-xl hover:shadow-primary/20`); the
-  EmptyState orb uses `shadow-primary/5`.
+  EmptyState orb uses `shadow-primary/5`. Floating surfaces on the canvas —
+  the mini player, Now Playing art, the up-next card, media dialogs — share
+  `FLOATING_SURFACE_SHADOW_CLASS` (`shadow-2xl shadow-black/15
+  dark:shadow-black/50`): a 50 % black shadow reads as a haze on the light
+  canvas. Shadows over posters and video stay literal (§1.2).
 
 ### 1.5 Motion
 
@@ -524,7 +528,10 @@ explaining what it owns. The styling families:
   library grid) and `LIBRARY_MENU_ITEM_CLASS` (items in a library page's More
   menu), `HOME_POSTER_GRID_CLASS` / `HOME_ALBUM_GRID_CLASS` (§3.2), `MINI_PLAYER_CLEARANCE_*` (the shell's
   reserved space under the mini bar, §3.1), `SETTINGS_*` (card surface, input,
-  select and reset-button chrome for the Settings pages, §3.7).
+  select and reset-button chrome for the Settings pages, §3.7),
+  `PLAYER_FRAME_SHELL_CLASS` / `PLAYER_FRAME_CLASS` (the windowed player's
+  frame, §3.5) and `FLOATING_SURFACE_SHADOW_CLASS` (elevation for floating
+  surfaces on the canvas, §1.4).
 - **Lists** — `TRACK_LIST_CONTAINER_CLASS` (library/search lists),
   `DETAIL_TRACK_LIST_CONTAINER_CLASS` (the softer glacier-tinted frame shared
   by the album and musician detail pages and the show episode list), and the
@@ -1186,7 +1193,12 @@ require the full playback test pass.
   TV icon, title — "Show · S1 E3 · Episode" for TV — artwork, not-found copy,
   where Back falls back to, and the `posterUrl` — the movie backdrop or the
   episode still — the `<video poster>` shows in the frame until the first
-  frame paints, so the page never opens on a black box). It renders
+  frame paints, so the page never opens on a black box; while neither the
+  movie surface nor the pre-roll is mounted, because the resume offer is
+  still undecided, a placeholder in the player's geometry —
+  `PLAYER_FRAME_SHELL_CLASS` / `PLAYER_FRAME_CLASS`, shared with
+  `VideoPlayer` — shows that poster on black, so the dialog never floats
+  over a bare box). It renders
   **in-shell** as a windowed player
   (header bar: media icon + title + Back; controls footer below the video —
   progress group, time readouts in `tabular-nums`, rewind / play-pause /

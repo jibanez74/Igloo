@@ -54,7 +54,9 @@ export default function WatchRoomCard({ room }: Props) {
       )}
       aria-label={`Watch room: ${room.movie_title}`}
     >
-      <div className="relative aspect-2/3 w-16 shrink-0 overflow-hidden rounded-lg bg-muted">
+      {/* self-start keeps the 2:3 box from stretching to the card's height,
+          which cropped the poster to a 64 px column. */}
+      <div className="relative aspect-2/3 w-16 shrink-0 self-start overflow-hidden rounded-lg bg-muted">
         {posterUrl ? (
           <img
             src={posterUrl}

@@ -49,6 +49,8 @@ import {
   MOVIE_CONTROLS_IDLE_MS,
   MOVIE_SEEK_STEP_SEC,
   MOVIE_VOLUME_STEP,
+  PLAYER_FRAME_CLASS,
+  PLAYER_FRAME_SHELL_CLASS,
   PLAYER_ICON_BUTTON_CLASS,
   UP_NEXT_COUNTDOWN_SEC,
 } from "@/lib/constants";
@@ -1049,6 +1051,27 @@ export default function VideoPlaybackPage({
         onClick={chromeFullscreenMode ? handlePlaybackSurfaceClick : undefined}
       >
         {movieSurfaceMounted && videoPlayer}
+        {!movieSurfaceMounted && !prerollActive && (
+          // The resume offer is still undecided, so neither the movie nor the
+          // pre-roll is mounted; keep the frame a media frame with the poster
+          // on black rather than a bare box (design-system §3.5).
+          <div className={PLAYER_FRAME_SHELL_CLASS} aria-hidden="true">
+            <div
+              className={cn(
+                PLAYER_FRAME_CLASS,
+                "overflow-hidden rounded-lg bg-black",
+              )}
+            >
+              {posterUrl && (
+                <img
+                  src={posterUrl}
+                  alt=""
+                  className="size-full object-contain"
+                />
+              )}
+            </div>
+          </div>
+        )}
         {capacityOverlay}
         {upNextOverlay}
         {prerollActive && (

@@ -493,6 +493,24 @@ describe("movie play route trailer pre-roll", () => {
     expect(search.start).toBe(900);
   });
 
+  it("keeps a poster frame in the player's geometry while the resume offer is undecided", async () => {
+    mockMovieApi({
+      preroll: twoTrailers,
+      progress: { progress_sec: 900, duration_sec: 6000 },
+    });
+
+    await renderMovieRoute(FRESH_SEARCH);
+
+    await screen.findByRole("dialog", { name: "Resume playback?" });
+    expect(document.querySelector("video")).toBeNull();
+    const frame = document.querySelector(".aspect-video.bg-black");
+    expect(frame).not.toBeNull();
+    expect(frame?.querySelector("img")).toHaveAttribute(
+      "src",
+      "/api/tmdb/images/w1280/backdrop.jpg",
+    );
+  });
+
   it("runs the trailers on Start from beginning", async () => {
     const fetchMock = mockMovieApi({
       preroll: twoTrailers,

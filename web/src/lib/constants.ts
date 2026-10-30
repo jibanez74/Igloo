@@ -586,13 +586,28 @@ export const MOTION_TRACK_ICON_BUTTON_CLASS =
 export const MOTION_TRACK_MENU_TRIGGER_CLASS = MOTION_MICRO_COLORS_CLASS;
 export const MOTION_PLAYER_CHROME_PANEL_CLASS =
   "transition-[opacity,transform] duration-200 ease-out motion-reduce:transition-none motion-reduce:transform-none";
-export const MOTION_MEDIA_DIALOG_SURFACE_CLASS =
-  "border-border bg-card shadow-2xl shadow-black/40 motion-reduce:animate-none";
+/**
+ * Elevation for a floating surface on the canvas (mini player, Now Playing
+ * art, the up-next card, media dialogs): a 50 % black shadow reads as a haze
+ * on the light canvas, so light gets 15 % and dark keeps 50 %. Shadows over
+ * posters and video stay literal (design-system §1.4).
+ */
+export const FLOATING_SURFACE_SHADOW_CLASS =
+  "shadow-2xl shadow-black/15 dark:shadow-black/50";
+export const MOTION_MEDIA_DIALOG_SURFACE_CLASS = `border-border bg-card ${FLOATING_SURFACE_SHADOW_CLASS} motion-reduce:animate-none`;
 export const MOTION_MEDIA_OVERLAY_ENTER_CLASS =
   "animate-in fade-in zoom-in-95 slide-in-from-bottom-2 fill-mode-both duration-200 ease-out motion-reduce:animate-none motion-reduce:opacity-100 motion-reduce:scale-100 motion-reduce:translate-y-0";
 export const MOTION_PLAYER_CHROME_ENTER_CLASS =
   "animate-in fade-in slide-in-from-bottom fill-mode-both duration-200 ease-out motion-reduce:animate-none motion-reduce:opacity-100 motion-reduce:translate-y-0";
 export const MOTION_PLAYER_CHROME_BUTTON_CLASS = MOTION_MICRO_CONTROL_CLASS;
+/**
+ * The windowed player's frame: the centred shell and the 16:9 box inside it,
+ * shared by VideoPlayer and the poster placeholder VideoPlaybackPage shows
+ * while neither the movie nor the pre-roll is mounted (design-system §3.5).
+ */
+export const PLAYER_FRAME_SHELL_CLASS =
+  "relative flex min-h-0 w-full flex-1 items-center justify-center p-4";
+export const PLAYER_FRAME_CLASS = "aspect-video w-full max-w-6xl";
 export const MOTION_PAGE_ENTER_CLASS =
   "animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-300 ease-out motion-reduce:animate-none motion-reduce:opacity-100 motion-reduce:translate-y-0";
 export const MOTION_SECTION_ENTER_CLASS =

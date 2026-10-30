@@ -5,6 +5,7 @@ import type { PlayerTransportProps } from "@/components/playback/PlayerTransport
 import ProgressBar from "@/components/playback/ProgressBar";
 import VolumeControl from "@/components/playback/VolumeControl";
 import {
+  FLOATING_SURFACE_SHADOW_CLASS,
   FOCUS_VISIBLE_RING_CLASS,
   MOTION_PLAYER_CHROME_BUTTON_CLASS,
   MOTION_PLAYER_CHROME_ENTER_CLASS,
@@ -52,7 +53,8 @@ export default function MiniPlayerBar({
       data-audio-player=""
       className={cn(
         MOTION_PLAYER_CHROME_ENTER_CLASS,
-        "fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 shadow-2xl shadow-black/50 backdrop-blur-lg",
+        FLOATING_SURFACE_SHADOW_CLASS,
+        "fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 backdrop-blur-lg",
       )}
     >
       <div className="mx-auto max-w-7xl px-4 py-3">
