@@ -464,7 +464,19 @@ describe("music route tracks tab", () => {
       screen.queryByRole("heading", { name: /Tracks starting with/ }),
     ).not.toBeInTheDocument();
     expect(tracksList.querySelectorAll("h1, h2, h3, h4, [role='heading']")).toHaveLength(0);
-    expect(within(tracksList).getAllByRole("listitem").length).toBeGreaterThan(0);
+    const rows = within(tracksList).getAllByRole("listitem");
+    expect(rows.length).toBeGreaterThan(0);
+    // The first row of each letter announces the section the hidden mark
+    // stands for; the rows after it do not repeat it.
+    const firstA = rows.find(row => within(row).queryByText("Alabaster"));
+    const firstB = rows.find(row => within(row).queryByText("Borrowed Light"));
+    expect(firstA).toHaveTextContent("A section");
+    expect(firstB).toHaveTextContent("B section");
+    expect(within(firstA!).getByText("A section")).toHaveClass("sr-only");
+    const secondRows = rows.filter(row => row !== firstA && row !== firstB);
+    for (const row of secondRows) {
+      expect(row).not.toHaveTextContent(/[A-Z#] section/);
+    }
     expect(
       screen.getByRole("button", { name: "More actions for Alabaster" }),
     ).toBeInTheDocument();

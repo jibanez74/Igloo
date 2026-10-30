@@ -125,7 +125,11 @@ Rules:
   is the same in both themes, like the app icon's canvas, so the scrim and
   the white title read as they do on a poster — a `bg-muted` box is
   near-white in light and turned them into a grey-to-black smear.
-  `PosterCard`, `DetailBackdrop` and the hero's poster figure use it; a
+  `PosterCard`, `DetailBackdrop` and the hero's poster figure use it. A hero
+  whose title has a poster but no backdrop layers that poster over the tile,
+  blurred (`blur-2xl`) and scaled past the edges (`scale-110` inside an
+  `overflow-hidden` band), so the band still reads as media and the scrims
+  stay literal; the tile shows through if the poster fails to load. A
   placeholder with foreground text beside or below it (album covers,
   musician thumbs, episode stills, the watch-room thumb) keeps `bg-muted`.
   The one exception
@@ -184,7 +188,8 @@ Rules:
   show posters, `aspect-square` album covers, musician thumbs and playlist
   covers, `aspect-21/9` detail-page backdrops (clamped
   `max-h-[min(42vh,22rem)]` at `md+`; the shared `DetailBackdrop` owns the
-  scrims), `aspect-video` trailers, extras, episode stills and the up-next
+  scrims and the blurred-poster stand-in for a missing backdrop, §1.2),
+  `aspect-video` trailers, extras, episode stills and the up-next
   thumbnail.
 - **Elevation**: `shadow-xs`–`shadow-2xl`. Interactive media cards add a
   glacier glow on hover (`hover:shadow-xl hover:shadow-primary/20`); the
@@ -824,7 +829,10 @@ count left out until the list lands, and a `PlaylistCardSkeleton` authored
 beside `PlaylistCard`. The Tracks tab's A–Z letter rows are visual index
 marks (`role="presentation"`, `aria-hidden`) inside its `role="list"`, whose
 owned children must all be list items; each track row keeps its
-`aria-posinset`/`aria-setsize`, so a screen reader still hears where it is.
+`aria-posinset`/`aria-setsize`, so a screen reader still hears where it is,
+and the first row of each letter opens with a visually hidden cue ("A
+section", "Other titles section" for `#`) so the start of a letter is
+announced where the sighted reader sees the mark.
 Leaving the liked view returns focus to its toolbar
 button, and entering it focuses "Back to playlists". Both playlist pages
 share their owner row too: `PlaylistOwnerActions` (Edit and Delete text
