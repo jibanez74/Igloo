@@ -11,6 +11,7 @@ import {
   HOME_POSTER_GRID_CLASS,
   LIKED_TRACKS_KEY,
   LIKED_TRACKS_PER_PAGE,
+  MEDIA_FALLBACK_SURFACE_CLASS,
   MOVIES_BY_GENRE_KEY,
   MOVIES_LIBRARY_KEY,
   MOVIES_LIKED_KEY,
@@ -113,6 +114,13 @@ describe("constants contracts", () => {
     expect(DIALOG_SCROLL_HEADER_CLASS).toContain("shrink-0");
     expect(DIALOG_SCROLL_BODY_CLASS).toContain("overflow-y-auto");
     expect(DIALOG_SCROLL_BODY_CLASS).toContain("min-h-0");
+  });
+
+  it("keeps the missing-media tile on the fixed token pair (design-system §1.2)", () => {
+    expect(MEDIA_FALLBACK_SURFACE_CLASS.split(" ")).toEqual([
+      "bg-media-fallback",
+      "text-media-fallback-foreground",
+    ]);
   });
 
   it("keeps home grids on auto-fill so sparse sections don't stretch (design-system §3.2)", () => {

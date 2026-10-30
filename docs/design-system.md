@@ -98,6 +98,7 @@ of this palette for the website; update it in the same change as any token.
 | `aurora` / `-foreground` | `#F59E0B` / `#08131F` | same | Warm accent (sparing) |
 | `success` / `-foreground` | `#34D399` / `#08131F` | `#167050` / `#FFFFFF` | Success state |
 | `accent-teal` / `-foreground` | `#2DD4BF` / `#08131F` | `#0D9488` / `#08131F` | Secondary accent |
+| `media-fallback` / `-foreground` | `#0F1A2E` / `#8094AE` | same | Tile under over-media chrome when the media is missing |
 | `sidebar` (+ its own fg/primary/accent/border/ring set) | `#0F1A2E` | `#E8F1FA` | Sidebar chrome |
 | `chart-1..5` | glacier / teal / aurora / success / danger | same families | Data viz |
 
@@ -119,7 +120,16 @@ Rules:
   sit on posters/backdrops use literal black/white — `bg-black/30`–`/40` dim
   overlays, `bg-linear-to-t from-black/90` scrims, `text-white` titles,
   `shadow-black/30`. These must not track the theme (a poster doesn't change
-  with the theme); keep them literal, don't hunt for tokens. The one exception
+  with the theme); keep them literal, don't hunt for tokens. When the media
+  itself is missing, the box they sit on is `MEDIA_FALLBACK_SURFACE_CLASS`
+  (`bg-media-fallback` + `text-media-fallback-foreground`): a navy tile that
+  is the same in both themes, like the app icon's canvas, so the scrim and
+  the white title read as they do on a poster — a `bg-muted` box is
+  near-white in light and turned them into a grey-to-black smear.
+  `PosterCard`, `DetailBackdrop` and the hero's poster figure use it; a
+  placeholder with foreground text beside or below it (album covers,
+  musician thumbs, episode stills, the watch-room thumb) keeps `bg-muted`.
+  The one exception
   is the **login backdrop**, which swaps between a bright (`login-bg-light.webp`)
   and dark (`login-bg-dark.webp`) photo by theme, so its frost/darkening scrim
   gradient and frosted-card border in `login.tsx` are deliberately
@@ -493,7 +503,9 @@ explaining what it owns. The styling families:
   styles). Plus `CARD_MEDIA_HOVER_CLASS` (poster zoom),
   `CARD_OVERLAY_REVEAL_CLASS` / `CARD_ACTION_REVEAL_CLASS` (hover/focus-within
   overlay + scaled action reveal), `CARD_FOCUS_WITHIN_RING_CLASS` (§1.7) and
-  `OVER_MEDIA_BADGE_CLASS` (the corner chip over a poster).
+  `OVER_MEDIA_BADGE_CLASS` (the corner chip over a poster), and
+  `MEDIA_FALLBACK_SURFACE_CLASS`, the tile under a card or hero whose media
+  is missing (§1.2).
 - **Motion** — `MOTION_*`: page/section, media-overlay and -dialog,
   player-chrome, track-row and settings-surface classes, plus the
   loading/spinner states and the three `MOTION_DURATION_*_MS` numbers (§1.5).
@@ -650,7 +662,7 @@ thumbs (`MusicianCard`), or the horizontal `WatchRoomCard`. All of them wear
     <div class="aspect-2/3 bg-muted">              ← fixed-ratio box (no CLS)
       <img loading="lazy" decoding="async" fetchPriority="low"
            width={500} height={750} class="size-full object-cover" … />
-      … onError → centered muted lucide icon (usePosterFallback)
+      … onError → centered lucide icon on the media-fallback tile (usePosterFallback)
       {playLink && <div class={CARD_OVERLAY_REVEAL_CLASS} … bg-black/30 />}
       {badge}                                      ← optional corner chip
       <div class="h-[60%] bg-linear-to-t from-black via-black/90 via-50% to-transparent" />
@@ -998,7 +1010,8 @@ is unknown or empty.
 - **Fallbacks, never broken images**: `onError` swaps to a centered muted
   lucide icon (Film / Disc / User) via the `usePosterFallback` hook (tracks
   the failed URL so a changed URL retries). Verified live on covers with
-  missing art.
+  missing art. Where white over-media text sits on the box (poster cards,
+  the detail hero), the icon sits on `MEDIA_FALLBACK_SURFACE_CLASS` (§1.2).
 - **Alt policy**: decorative images (a poster inside a link that already has
   an `aria-label`, backdrops) get `alt=""`/`aria-hidden`; informative images
   get descriptive alt (`Album cover for {title}`, `Photo of {name}`,

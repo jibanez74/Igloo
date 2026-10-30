@@ -211,6 +211,16 @@ export const THEME_TOKENS: Record<ThemeName, Record<string, ThemeToken>> = {
       hex: "#08131F",
       comment: "ink #08131F — 4.99:1 on accent-teal",
     },
+    "--media-fallback": {
+      value: "oklch(0.219 0.043 261.6)",
+      hex: "#0F1A2E",
+      comment: "missing-media tile #0F1A2E — fixed across themes (design-system §1.2)",
+    },
+    "--media-fallback-foreground": {
+      value: "oklch(0.66 0.045 255.1)",
+      hex: "#8094AE",
+      comment: "icon on the missing-media tile #8094AE — AA on media-fallback",
+    },
   },
   dark: {
     "--background": {
@@ -392,6 +402,16 @@ export const THEME_TOKENS: Record<ThemeName, Record<string, ThemeToken>> = {
       value: "oklch(0.183 0.03 251.4)",
       hex: "#08131F",
       comment: "ink #08131F — 10.04:1 on accent-teal",
+    },
+    "--media-fallback": {
+      value: "oklch(0.219 0.043 261.6)",
+      hex: "#0F1A2E",
+      comment: "missing-media tile #0F1A2E — fixed across themes (design-system §1.2)",
+    },
+    "--media-fallback-foreground": {
+      value: "oklch(0.66 0.045 255.1)",
+      hex: "#8094AE",
+      comment: "icon on the missing-media tile #8094AE — AA on media-fallback",
     },
   },
 };

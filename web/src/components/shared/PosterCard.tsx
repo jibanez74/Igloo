@@ -12,6 +12,7 @@ import {
   CARD_OVERLAY_REVEAL_CLASS,
   CARD_SURFACE_CLASS,
   FOCUS_VISIBLE_RING_CLASS,
+  MEDIA_FALLBACK_SURFACE_CLASS,
   MOTION_LOADING_STATE_CLASS,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -111,11 +112,13 @@ export default function PosterCard({
             onError={onError}
           />
         ) : (
-          <div className="flex size-full items-center justify-center">
-            <FallbackIcon
-              className="size-10 text-muted-foreground"
-              aria-hidden="true"
-            />
+          <div
+            className={cn(
+              "flex size-full items-center justify-center",
+              MEDIA_FALLBACK_SURFACE_CLASS,
+            )}
+          >
+            <FallbackIcon className="size-10" aria-hidden="true" />
           </div>
         )}
         {/* Overlay - appears on hover/focus behind the play action. A

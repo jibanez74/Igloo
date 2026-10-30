@@ -646,6 +646,16 @@ export const MUSIC_DETAIL_ACTIONS_CLASS =
 export const DETAIL_HERO_CONTENT_NO_ACTIONS_CLASS =
   "pb-24 sm:pb-24 lg:pb-24";
 /**
+ * The box under over-media chrome when the media itself is missing: a navy
+ * tile that is the same in both themes (design-system §1.2), so the literal
+ * black scrims and white titles that sit on it read the same way they do on a
+ * poster. `bg-muted` is near-white in light and turned them into a smear.
+ * Shared by PosterCard, DetailBackdrop and DetailHero's poster figure; the
+ * icon inside inherits the tile's foreground.
+ */
+export const MEDIA_FALLBACK_SURFACE_CLASS =
+  "bg-media-fallback text-media-fallback-foreground";
+/**
  * Quiet informational chips (certification, capability badges) rendered over
  * the hero backdrop — literal white/black per design-system §1.2.
  */
