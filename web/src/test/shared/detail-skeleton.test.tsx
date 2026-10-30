@@ -25,6 +25,18 @@ describe("DetailSkeleton", () => {
     expect(container.querySelectorAll(".h-11")).toHaveLength(0);
   });
 
+  it("tints the hero placeholders so they show on the band in both themes (design-system §3.4)", () => {
+    const { container } = render(
+      <DetailSkeleton label="Loading movie details" withActions />,
+    );
+
+    expect(
+      container.querySelectorAll(".bg-foreground\\/10").length,
+    ).toBeGreaterThanOrEqual(7);
+    // bg-background/50 on the muted band was invisible in the light theme.
+    expect(container.querySelector(".bg-background\\/50")).toBeNull();
+  });
+
   it("reserves the action-button row when the real hero has one", () => {
     const { container } = render(
       <DetailSkeleton label="Loading movie details" withActions />,

@@ -69,7 +69,12 @@ export default function SwitchField({
             "relative mt-1 h-6 w-11 shrink-0 rounded-full border disabled:cursor-not-allowed disabled:opacity-60",
             FOCUS_VISIBLE_RING_CLASS,
             MOTION_SETTINGS_SURFACE_CLASS,
-            checked ? "border-primary bg-primary" : "border-border bg-accent",
+            // The off track is a mid grey in both themes so the white thumb
+            // reads against it; bg-accent is near-white in light and hid it
+            // (design-system §3.7).
+            checked
+              ? "border-primary bg-primary"
+              : "border-border bg-muted-foreground/25",
           )}
         >
           <span

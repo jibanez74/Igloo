@@ -1055,7 +1055,10 @@ is unknown or empty.
   card it mirrors — `PosterCardSkeleton` in `PosterCard.tsx`,
   `AlbumCardSkeleton` and `MusicianCardSkeleton` in their card files — so a
   card and its placeholder change together. Skeleton geometry is authored
-  directly in each loading layout with muted boxes and the shared
+  directly in each loading layout with muted boxes (on the detail hero's
+  muted band the placeholders are `bg-foreground/10`, a tint that shows
+  against the band in both themes where `bg-background/50` vanished in
+  light) and the shared
   `MOTION_LOADING_STATE_CLASS`, always beside the layout it must mirror — a
   skeleton moves with its layout, never on its own. `ui/spinner.tsx` (`role="status"`) uses
   `MOTION_SPINNER_STATE_CLASS`. Skeleton layouts hide their visuals with
@@ -1431,7 +1434,9 @@ require the full playback test pass.
   so it follows you across browsers and devices"), as the device cards state
   theirs. Its on/off control is the shared `SwitchField` (a real
   `role="switch"` button with its description tied in by `aria-describedby`),
-  the same row the General settings card uses.
+  the same row the General settings card uses. Its off track is
+  `bg-muted-foreground/25`, a mid grey in both themes, so the white thumb
+  reads against it: `bg-accent` is near-white in light and hid the thumb.
 - **A service that needs no credentials gets a switch, not an empty
   section.** In General → External Services each provider has a
   `ServiceSection`; one without credentials (Apple Music) holds a

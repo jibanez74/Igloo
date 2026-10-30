@@ -9,6 +9,11 @@ import {
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
+// Hero placeholders sit on the skeleton's muted band; a foreground tint shows
+// against it in both themes, where bg-background/50 vanished in light
+// (design-system §3.4).
+const HERO_PLACEHOLDER_CLASS = "bg-foreground/10";
+
 type DetailSkeletonProps = {
   /** Spoken loading label, e.g. "Loading movie details". */
   label: string;
@@ -40,19 +45,19 @@ export default function DetailSkeleton({
             !withActions && DETAIL_HERO_CONTENT_NO_ACTIONS_CLASS,
           )}
         >
-          <div className="mx-auto aspect-2/3 w-28 rounded-lg bg-background/50 sm:w-32 lg:hidden" />
-          <div className="mx-auto h-10 max-w-md rounded-sm bg-background/50 lg:mx-0" />
-          <div className="mx-auto h-5 max-w-xs rounded-sm bg-background/50 lg:mx-0" />
+          <div className={cn("mx-auto aspect-2/3 w-28 rounded-lg sm:w-32 lg:hidden", HERO_PLACEHOLDER_CLASS)} />
+          <div className={cn("mx-auto h-10 max-w-md rounded-sm lg:mx-0", HERO_PLACEHOLDER_CLASS)} />
+          <div className={cn("mx-auto h-5 max-w-xs rounded-sm lg:mx-0", HERO_PLACEHOLDER_CLASS)} />
           <div className="flex flex-wrap justify-center gap-2 lg:justify-start">
-            <div className="h-8 w-24 rounded-full bg-background/50" />
-            <div className="h-8 w-20 rounded-full bg-background/50" />
-            <div className="h-8 w-28 rounded-full bg-background/50" />
+            <div className={cn("h-8 w-24 rounded-full", HERO_PLACEHOLDER_CLASS)} />
+            <div className={cn("h-8 w-20 rounded-full", HERO_PLACEHOLDER_CLASS)} />
+            <div className={cn("h-8 w-28 rounded-full", HERO_PLACEHOLDER_CLASS)} />
           </div>
           {withActions && (
             <div className="flex flex-wrap justify-center gap-2 lg:justify-start">
-              <div className="h-11 w-28 rounded-md bg-background/50" />
-              <div className="h-11 w-28 rounded-md bg-background/50" />
-              <div className="h-11 w-28 rounded-md bg-background/50" />
+              <div className={cn("h-11 w-28 rounded-md", HERO_PLACEHOLDER_CLASS)} />
+              <div className={cn("h-11 w-28 rounded-md", HERO_PLACEHOLDER_CLASS)} />
+              <div className={cn("h-11 w-28 rounded-md", HERO_PLACEHOLDER_CLASS)} />
             </div>
           )}
         </div>
