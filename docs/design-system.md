@@ -78,8 +78,7 @@ Colors are authored in **OKLCH** in `src/lib/theme-tokens.ts` (value + hex +
 comment per token) and rendered into `styles.css` by `bun run generate:theme`
 (§2.4) — edit the module, not the CSS. Tokens are paired (`X` surface +
 `X-foreground` text) so contrast is guaranteed; every pair is verified in both
-themes by `contrast.test.ts`. `docs/web-styles.md` is the plain-language copy
-of this palette for the website; update it in the same change as any token.
+themes by `contrast.test.ts`.
 
 | Token | Dark (default) | Light | Role |
 |-------|----------------|-------|------|
@@ -583,7 +582,7 @@ their renders and checks the ICO structure, while the PNG bytes are not
 compared because they vary by Chromium version.
 
 `src/lib/theme.ts` needs no codegen — it imports the module directly and
-derives `THEME_COLORS` / `THEME_TEXT_COLORS` from the canvas tokens; it
+derives `THEME_COLORS` from the canvas tokens; it
 remains the runtime API: `getStoredTheme()` (boot-time persistence read,
 defaults `"dark"`), `getActiveTheme()` (the applied in-memory theme),
 `applyTheme()` (class + meta + active state + listeners), `setTheme()`
