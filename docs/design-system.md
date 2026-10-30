@@ -296,7 +296,10 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
   `DIALOG_SCROLL_BODY_CLASS` on the one element that scrolls. The close
   button is positioned against the non-scrolling box, so it never rides the
   scrollbar track or scrolls out of reach, and a title the dialog focuses on
-  open carries `outline-hidden` with no ring (§1.7).
+  open carries `outline-hidden` with no ring (§1.7). A body with no focusable
+  content of its own (Technical Details) is itself a tab stop — `tabIndex={0}`
+  with the shared focus ring — so a keyboard user can scroll it; a body full
+  of inputs (Edit Movie) needs none.
 - **When to add a variant vs. a constant**: a new *look* for an existing
   primitive (e.g. another Button treatment) → add a cva variant next to its
   siblings. A *cross-component* treatment (card chrome, motion, focus) → an
@@ -812,7 +815,11 @@ pages, as the Tracks tab does to the music page, but share their parts: one
 `PlaylistsTabToolbar` (count on the left; the liked view and "New playlist"
 pills on the right) that renders while loading and on error too, with the
 count left out until the list lands, and a `PlaylistCardSkeleton` authored
-beside `PlaylistCard`. Leaving the liked view returns focus to its toolbar
+beside `PlaylistCard`. The Tracks tab's A–Z letter rows are visual index
+marks (`role="presentation"`, `aria-hidden`) inside its `role="list"`, whose
+owned children must all be list items; each track row keeps its
+`aria-posinset`/`aria-setsize`, so a screen reader still hears where it is.
+Leaving the liked view returns focus to its toolbar
 button, and entering it focuses "Back to playlists". Both playlist pages
 share their owner row too: `PlaylistOwnerActions` (Edit and Delete text
 buttons, rendered only when the detail response says `is_owner`; when it does
