@@ -55,7 +55,7 @@ export default function DetailHero({
   return (
     <header className={DETAIL_HERO_SHELL_CLASS}>
       <div className={cn(DETAIL_PAGE_CONTENT_ENTER_CLASS, "absolute inset-0")}>
-        <DetailBackdrop backdropUrl={backdropUrl} />
+        <DetailBackdrop backdropUrl={backdropUrl} posterUrl={posterUrl} />
       </div>
 
       <div
