@@ -3,7 +3,12 @@ import { useQuery } from "@tanstack/react-query";
 import { movieTechnicalDetailsQueryOpts } from "@/lib/query-opts";
 import { unwrapString, unwrapInt, unwrapFloat } from "@/lib/nullable";
 import { formatBitRate, formatRuntimeMinutes } from "@/lib/format";
-import { DIALOG_SCROLL_BODY_CLASS, DIALOG_SCROLL_CONTENT_CLASS, DIALOG_SCROLL_HEADER_CLASS } from "@/lib/constants";
+import {
+  DIALOG_SCROLL_BODY_CLASS,
+  DIALOG_SCROLL_CONTENT_CLASS,
+  DIALOG_SCROLL_HEADER_CLASS,
+  FOCUS_VISIBLE_RING_CLASS,
+} from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type {
   VideoStreamType,
@@ -278,7 +283,12 @@ export default function TechnicalDetailsDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className={DIALOG_SCROLL_BODY_CLASS}>
+        {/* The body holds no focusable content of its own, so it is the tab
+            stop that lets a keyboard user scroll it (design-system §1.6). */}
+        <div
+          className={cn(DIALOG_SCROLL_BODY_CLASS, FOCUS_VISIBLE_RING_CLASS)}
+          tabIndex={0}
+        >
 
         {isPending && (
           <div className="flex justify-center py-8" role="status" aria-live="polite">

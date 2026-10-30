@@ -35,6 +35,18 @@ describe("PosterCard", () => {
     ).toBeInTheDocument();
   });
 
+  it("draws a missing poster on the fixed media tile so the scrim and white title keep their footing (design-system §1.2)", () => {
+    const missing = renderWithQueryClient(<PosterCard {...baseProps} posterUrl="" />);
+    const tile = missing.container.querySelector(".bg-media-fallback");
+    expect(tile).not.toBeNull();
+    expect(tile).toHaveClass("text-media-fallback-foreground");
+    expect(tile?.querySelector("svg.lucide-film")).not.toBeNull();
+    missing.unmount();
+
+    const { container } = renderWithQueryClient(<PosterCard {...baseProps} />);
+    expect(container.querySelector(".bg-media-fallback")).toBeNull();
+  });
+
   it("renders no play control and no hover wash for a card with nothing to play", () => {
     const { container } = renderWithQueryClient(<PosterCard {...baseProps} />);
 

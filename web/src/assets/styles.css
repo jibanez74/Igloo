@@ -46,6 +46,8 @@
   --color-success-foreground: var(--success-foreground);
   --color-accent-teal: var(--accent-teal);
   --color-accent-teal-foreground: var(--accent-teal-foreground);
+  --color-media-fallback: var(--media-fallback);
+  --color-media-fallback-foreground: var(--media-fallback-foreground);
 }
 
 /* BEGIN GENERATED: theme tokens — edit src/lib/theme-tokens.ts and run `bun run generate:theme` */
@@ -94,6 +96,8 @@
   --destructive-foreground: oklch(1 0 0); /* #FFFFFF — 6.47:1 on destructive */
   --success-foreground: oklch(1 0 0); /* #FFFFFF — 6.06:1 on success */
   --accent-teal-foreground: oklch(0.183 0.03 251.4); /* ink #08131F — 4.99:1 on accent-teal */
+  --media-fallback: oklch(0.219 0.043 261.6); /* missing-media tile #0F1A2E — fixed across themes (design-system §1.2) */
+  --media-fallback-foreground: oklch(0.66 0.045 255.1); /* icon on the missing-media tile #8094AE — AA on media-fallback */
 }
 
 .dark {
@@ -136,6 +140,8 @@
   --destructive-foreground: oklch(0.183 0.03 251.4); /* ink #08131F — 6.76:1 on destructive */
   --success-foreground: oklch(0.183 0.03 251.4); /* ink #08131F — 9.73:1 on success */
   --accent-teal-foreground: oklch(0.183 0.03 251.4); /* ink #08131F — 10.04:1 on accent-teal */
+  --media-fallback: oklch(0.219 0.043 261.6); /* missing-media tile #0F1A2E — fixed across themes (design-system §1.2) */
+  --media-fallback-foreground: oklch(0.66 0.045 255.1); /* icon on the missing-media tile #8094AE — AA on media-fallback */
 }
 /* END GENERATED: theme tokens */
 

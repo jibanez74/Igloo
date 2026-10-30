@@ -32,9 +32,10 @@ const pairs: Array<[string, string, number]> = [
   ["--accent-foreground", "--accent", 4.5],
   ["--destructive-foreground", "--destructive", 4.5],
   ["--success-foreground", "--success", 4.5],
-  ["--success", "--background", 4.5], // text-success on the canvas (§4.8)
+  ["--success", "--background", 4.5], // text-success on the canvas (§1.2)
   ["--success", "--card", 4.5], // text-success on raised surfaces
   ["--accent-teal-foreground", "--accent-teal", 4.5],
+  ["--media-fallback-foreground", "--media-fallback", 4.5], // icon on the missing-media tile (§1.2)
   ["--sidebar-foreground", "--sidebar", 7], // sidebar body text — AAA
   ["--sidebar-primary-foreground", "--sidebar-primary", 4.5],
   ["--sidebar-accent-foreground", "--sidebar-accent", 4.5],

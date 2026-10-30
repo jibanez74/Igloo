@@ -69,7 +69,7 @@ html[data-app-ready="true"] #initial-splash {
 }
 
 /* BEGIN GENERATED: theme boot colors — edit src/lib/theme-tokens.ts and run `bun run generate:theme` */
-/* Light igloo (default). Dark overrides follow under html.dark. */
+/* Light igloo palette. Dark overrides follow under html.dark; the app defaults to dark. */
 html {
   background: #f2f7fc;
   color: #0a1322;

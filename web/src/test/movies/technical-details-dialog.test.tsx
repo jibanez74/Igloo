@@ -110,6 +110,8 @@ describe("TechnicalDetailsDialog", () => {
       `.${DIALOG_SCROLL_BODY_CLASS.split(" ").join(".")}`,
     );
     expect(body).not.toBeNull();
+    // A scroll region with no focusable content is itself a tab stop.
+    expect(body).toHaveAttribute("tabindex", "0");
     expect(body).not.toContainElement(title);
     expect(body).not.toContainElement(screen.getByRole("button", { name: "Close" }));
   });

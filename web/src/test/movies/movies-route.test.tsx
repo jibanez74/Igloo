@@ -401,6 +401,18 @@ describe("movies route genres", () => {
       await within(clearButton.parentElement as HTMLElement).findByText("1 movie"),
     ).toBeInTheDocument();
   });
+
+  it("keeps the selected chip's count readable on the primary fill (AA in both themes)", async () => {
+    await renderMoviesRoute("/movies/?tab=genres&genreId=10");
+
+    await screen.findByRole("button", { name: "Clear genre filter" });
+    const selected = screen
+      .getAllByRole("button", { pressed: true })
+      .find(button => /movies?$/.test(button.textContent ?? ""));
+    expect(selected).toBeDefined();
+    expect(selected?.querySelector(".text-primary-foreground\\/85")).not.toBeNull();
+    expect(selected?.querySelector(".text-primary-foreground\\/70")).toBeNull();
+  });
 });
 
 describe("movies route genre failures", () => {

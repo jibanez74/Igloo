@@ -226,7 +226,9 @@ export default function LibraryGenresTab<
                 <span
                   className={cn(
                     "mt-1 text-xs",
-                    selected ? "text-primary-foreground/70" : "text-muted-foreground",
+                    // /85 keeps the 12 px count above AA on the primary fill
+                    // in both themes; /70 measured 3.74:1 in light.
+                    selected ? "text-primary-foreground/85" : "text-muted-foreground",
                   )}
                 >
                   {g.count} {nounForCount(g.count, noun)}

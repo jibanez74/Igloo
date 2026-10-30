@@ -128,6 +128,8 @@ describe("WatchRoomCard", () => {
     expect(card?.className).toContain(CARD_INTERACTIVE_SURFACE_CLASS);
     expect(poster).toBeTruthy();
     expect(poster?.className).toContain(CARD_MEDIA_HOVER_CLASS);
+    // The 2:3 box must not stretch to the card height, which cropped it.
+    expect(poster?.parentElement).toHaveClass("aspect-2/3", "self-start");
   });
 
   it("shows member avatars from the stored URL, uploaded or external", () => {

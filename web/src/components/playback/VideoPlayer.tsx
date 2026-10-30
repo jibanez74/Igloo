@@ -19,6 +19,8 @@ import {
   HLS_SEGMENT_STATUS_PAST_END,
   MOTION_MEDIA_OVERLAY_ENTER_CLASS,
   MOVIE_BUFFERING_SPINNER_DELAY_MS,
+  PLAYER_FRAME_CLASS,
+  PLAYER_FRAME_SHELL_CLASS,
 } from "@/lib/constants";
 import { prefersNativeHLS } from "@/lib/playback";
 import {
@@ -921,14 +923,14 @@ export default function VideoPlayer({
       className={
         isFullscreen
           ? "relative flex min-h-0 w-full flex-1 items-center justify-center bg-black"
-          : "relative flex min-h-0 w-full flex-1 items-center justify-center p-4"
+          : PLAYER_FRAME_SHELL_CLASS
       }
     >
       <div
         className={
           isFullscreen
             ? "size-full min-h-0 min-w-0"
-            : "aspect-video w-full max-w-6xl"
+            : PLAYER_FRAME_CLASS
         }
       >
         {/* Subtitle tracks are attached imperatively below, keyed on subtitleUrl. */}

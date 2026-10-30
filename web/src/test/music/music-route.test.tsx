@@ -456,12 +456,15 @@ describe("music route tracks tab", () => {
     const tracksList = await screen.findByRole("list", { name: "Tracks" });
 
     expect(tracksList).toBeInTheDocument();
+    // The A–Z marks stay visible but presentational: a list may only own
+    // list items, and the rows carry their position themselves.
+    expect(within(tracksList).getByText("A")).toHaveAttribute("aria-hidden", "true");
+    expect(within(tracksList).getByText("B")).toHaveAttribute("aria-hidden", "true");
     expect(
-      screen.getByRole("heading", { name: "Tracks starting with A" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: "Tracks starting with B" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("heading", { name: /Tracks starting with/ }),
+    ).not.toBeInTheDocument();
+    expect(tracksList.querySelectorAll("h1, h2, h3, h4, [role='heading']")).toHaveLength(0);
+    expect(within(tracksList).getAllByRole("listitem").length).toBeGreaterThan(0);
     expect(
       screen.getByRole("button", { name: "More actions for Alabaster" }),
     ).toBeInTheDocument();

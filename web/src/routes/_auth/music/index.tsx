@@ -734,14 +734,19 @@ function ShuffleButton() {
   );
 }
 
+// A visual index mark between the rows: the list role only allows list
+// items as owned children, so the letter is presentational and hidden from
+// assistive tech, which keeps its place through each row's aria-posinset
+// (design-system §3.2).
 function LetterHeader({ letter }: { letter: string }) {
   return (
-    <h3
+    <div
+      role="presentation"
+      aria-hidden="true"
       className="border-b border-primary/20 bg-muted/50 px-4 py-3 text-2xl font-bold text-primary"
-      aria-label={`Tracks starting with ${letter}`}
     >
       {letter}
-    </h3>
+    </div>
   );
 }
 

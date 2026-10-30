@@ -80,7 +80,7 @@ export function renderBootBlock(): string {
       `  color: ${tokenHex(theme, "--foreground").toLowerCase()};`,
     ].join("\n");
   return [
-    "/* Light igloo (default). Dark overrides follow under html.dark. */",
+    "/* Light igloo palette. Dark overrides follow under html.dark; the app defaults to dark. */",
     "html {",
     canvas("light"),
     "}",

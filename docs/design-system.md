@@ -78,8 +78,7 @@ Colors are authored in **OKLCH** in `src/lib/theme-tokens.ts` (value + hex +
 comment per token) and rendered into `styles.css` by `bun run generate:theme`
 (§2.4) — edit the module, not the CSS. Tokens are paired (`X` surface +
 `X-foreground` text) so contrast is guaranteed; every pair is verified in both
-themes by `contrast.test.ts`. `docs/web-styles.md` is the plain-language copy
-of this palette for the website; update it in the same change as any token.
+themes by `contrast.test.ts`.
 
 | Token | Dark (default) | Light | Role |
 |-------|----------------|-------|------|
@@ -98,6 +97,7 @@ of this palette for the website; update it in the same change as any token.
 | `aurora` / `-foreground` | `#F59E0B` / `#08131F` | same | Warm accent (sparing) |
 | `success` / `-foreground` | `#34D399` / `#08131F` | `#167050` / `#FFFFFF` | Success state |
 | `accent-teal` / `-foreground` | `#2DD4BF` / `#08131F` | `#0D9488` / `#08131F` | Secondary accent |
+| `media-fallback` / `-foreground` | `#0F1A2E` / `#8094AE` | same | Tile under over-media chrome when the media is missing |
 | `sidebar` (+ its own fg/primary/accent/border/ring set) | `#0F1A2E` | `#E8F1FA` | Sidebar chrome |
 | `chart-1..5` | glacier / teal / aurora / success / danger | same families | Data viz |
 
@@ -119,7 +119,16 @@ Rules:
   sit on posters/backdrops use literal black/white — `bg-black/30`–`/40` dim
   overlays, `bg-linear-to-t from-black/90` scrims, `text-white` titles,
   `shadow-black/30`. These must not track the theme (a poster doesn't change
-  with the theme); keep them literal, don't hunt for tokens. The one exception
+  with the theme); keep them literal, don't hunt for tokens. When the media
+  itself is missing, the box they sit on is `MEDIA_FALLBACK_SURFACE_CLASS`
+  (`bg-media-fallback` + `text-media-fallback-foreground`): a navy tile that
+  is the same in both themes, like the app icon's canvas, so the scrim and
+  the white title read as they do on a poster — a `bg-muted` box is
+  near-white in light and turned them into a grey-to-black smear.
+  `PosterCard`, `DetailBackdrop` and the hero's poster figure use it; a
+  placeholder with foreground text beside or below it (album covers,
+  musician thumbs, episode stills, the watch-room thumb) keeps `bg-muted`.
+  The one exception
   is the **login backdrop**, which swaps between a bright (`login-bg-light.webp`)
   and dark (`login-bg-dark.webp`) photo by theme, so its frost/darkening scrim
   gradient and frosted-card border in `login.tsx` are deliberately
@@ -179,7 +188,11 @@ Rules:
   thumbnail.
 - **Elevation**: `shadow-xs`–`shadow-2xl`. Interactive media cards add a
   glacier glow on hover (`hover:shadow-xl hover:shadow-primary/20`); the
-  EmptyState orb uses `shadow-primary/5`.
+  EmptyState orb uses `shadow-primary/5`. Floating surfaces on the canvas —
+  the mini player, Now Playing art, the up-next card, media dialogs — share
+  `FLOATING_SURFACE_SHADOW_CLASS` (`shadow-2xl shadow-black/15
+  dark:shadow-black/50`): a 50 % black shadow reads as a haze on the light
+  canvas. Shadows over posters and video stay literal (§1.2).
 
 ### 1.5 Motion
 
@@ -286,7 +299,10 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
   `DIALOG_SCROLL_BODY_CLASS` on the one element that scrolls. The close
   button is positioned against the non-scrolling box, so it never rides the
   scrollbar track or scrolls out of reach, and a title the dialog focuses on
-  open carries `outline-hidden` with no ring (§1.7).
+  open carries `outline-hidden` with no ring (§1.7). A body with no focusable
+  content of its own (Technical Details) is itself a tab stop — `tabIndex={0}`
+  with the shared focus ring — so a keyboard user can scroll it; a body full
+  of inputs (Edit Movie) needs none.
 - **When to add a variant vs. a constant**: a new *look* for an existing
   primitive (e.g. another Button treatment) → add a cva variant next to its
   siblings. A *cross-component* treatment (card chrome, motion, focus) → an
@@ -493,7 +509,9 @@ explaining what it owns. The styling families:
   styles). Plus `CARD_MEDIA_HOVER_CLASS` (poster zoom),
   `CARD_OVERLAY_REVEAL_CLASS` / `CARD_ACTION_REVEAL_CLASS` (hover/focus-within
   overlay + scaled action reveal), `CARD_FOCUS_WITHIN_RING_CLASS` (§1.7) and
-  `OVER_MEDIA_BADGE_CLASS` (the corner chip over a poster).
+  `OVER_MEDIA_BADGE_CLASS` (the corner chip over a poster), and
+  `MEDIA_FALLBACK_SURFACE_CLASS`, the tile under a card or hero whose media
+  is missing (§1.2).
 - **Motion** — `MOTION_*`: page/section, media-overlay and -dialog,
   player-chrome, track-row and settings-surface classes, plus the
   loading/spinner states and the three `MOTION_DURATION_*_MS` numbers (§1.5).
@@ -509,7 +527,10 @@ explaining what it owns. The styling families:
   library grid) and `LIBRARY_MENU_ITEM_CLASS` (items in a library page's More
   menu), `HOME_POSTER_GRID_CLASS` / `HOME_ALBUM_GRID_CLASS` (§3.2), `MINI_PLAYER_CLEARANCE_*` (the shell's
   reserved space under the mini bar, §3.1), `SETTINGS_*` (card surface, input,
-  select and reset-button chrome for the Settings pages, §3.7).
+  select and reset-button chrome for the Settings pages, §3.7),
+  `PLAYER_FRAME_SHELL_CLASS` / `PLAYER_FRAME_CLASS` (the windowed player's
+  frame, §3.5) and `FLOATING_SURFACE_SHADOW_CLASS` (elevation for floating
+  surfaces on the canvas, §1.4).
 - **Lists** — `TRACK_LIST_CONTAINER_CLASS` (library/search lists),
   `DETAIL_TRACK_LIST_CONTAINER_CLASS` (the softer glacier-tinted frame shared
   by the album and musician detail pages and the show episode list), and the
@@ -561,7 +582,7 @@ their renders and checks the ICO structure, while the PNG bytes are not
 compared because they vary by Chromium version.
 
 `src/lib/theme.ts` needs no codegen — it imports the module directly and
-derives `THEME_COLORS` / `THEME_TEXT_COLORS` from the canvas tokens; it
+derives `THEME_COLORS` from the canvas tokens; it
 remains the runtime API: `getStoredTheme()` (boot-time persistence read,
 defaults `"dark"`), `getActiveTheme()` (the applied in-memory theme),
 `applyTheme()` (class + meta + active state + listeners), `setTheme()`
@@ -650,7 +671,7 @@ thumbs (`MusicianCard`), or the horizontal `WatchRoomCard`. All of them wear
     <div class="aspect-2/3 bg-muted">              ← fixed-ratio box (no CLS)
       <img loading="lazy" decoding="async" fetchPriority="low"
            width={500} height={750} class="size-full object-cover" … />
-      … onError → centered muted lucide icon (usePosterFallback)
+      … onError → centered lucide icon on the media-fallback tile (usePosterFallback)
       {playLink && <div class={CARD_OVERLAY_REVEAL_CLASS} … bg-black/30 />}
       {badge}                                      ← optional corner chip
       <div class="h-[60%] bg-linear-to-t from-black via-black/90 via-50% to-transparent" />
@@ -800,7 +821,11 @@ pages, as the Tracks tab does to the music page, but share their parts: one
 `PlaylistsTabToolbar` (count on the left; the liked view and "New playlist"
 pills on the right) that renders while loading and on error too, with the
 count left out until the list lands, and a `PlaylistCardSkeleton` authored
-beside `PlaylistCard`. Leaving the liked view returns focus to its toolbar
+beside `PlaylistCard`. The Tracks tab's A–Z letter rows are visual index
+marks (`role="presentation"`, `aria-hidden`) inside its `role="list"`, whose
+owned children must all be list items; each track row keeps its
+`aria-posinset`/`aria-setsize`, so a screen reader still hears where it is.
+Leaving the liked view returns focus to its toolbar
 button, and entering it focuses "Back to playlists". Both playlist pages
 share their owner row too: `PlaylistOwnerActions` (Edit and Delete text
 buttons, rendered only when the detail response says `is_owner`; when it does
@@ -998,7 +1023,8 @@ is unknown or empty.
 - **Fallbacks, never broken images**: `onError` swaps to a centered muted
   lucide icon (Film / Disc / User) via the `usePosterFallback` hook (tracks
   the failed URL so a changed URL retries). Verified live on covers with
-  missing art.
+  missing art. Where white over-media text sits on the box (poster cards,
+  the detail hero), the icon sits on `MEDIA_FALLBACK_SURFACE_CLASS` (§1.2).
 - **Alt policy**: decorative images (a poster inside a link that already has
   an `aria-label`, backdrops) get `alt=""`/`aria-hidden`; informative images
   get descriptive alt (`Album cover for {title}`, `Photo of {name}`,
@@ -1042,7 +1068,10 @@ is unknown or empty.
   card it mirrors — `PosterCardSkeleton` in `PosterCard.tsx`,
   `AlbumCardSkeleton` and `MusicianCardSkeleton` in their card files — so a
   card and its placeholder change together. Skeleton geometry is authored
-  directly in each loading layout with muted boxes and the shared
+  directly in each loading layout with muted boxes (on the detail hero's
+  muted band the placeholders are `bg-foreground/10`, a tint that shows
+  against the band in both themes where `bg-background/50` vanished in
+  light) and the shared
   `MOTION_LOADING_STATE_CLASS`, always beside the layout it must mirror — a
   skeleton moves with its layout, never on its own. `ui/spinner.tsx` (`role="status"`) uses
   `MOTION_SPINNER_STATE_CLASS`. Skeleton layouts hide their visuals with
@@ -1163,7 +1192,12 @@ require the full playback test pass.
   TV icon, title — "Show · S1 E3 · Episode" for TV — artwork, not-found copy,
   where Back falls back to, and the `posterUrl` — the movie backdrop or the
   episode still — the `<video poster>` shows in the frame until the first
-  frame paints, so the page never opens on a black box). It renders
+  frame paints, so the page never opens on a black box; while neither the
+  movie surface nor the pre-roll is mounted, because the resume offer is
+  still undecided, a placeholder in the player's geometry —
+  `PLAYER_FRAME_SHELL_CLASS` / `PLAYER_FRAME_CLASS`, shared with
+  `VideoPlayer` — shows that poster on black, so the dialog never floats
+  over a bare box). It renders
   **in-shell** as a windowed player
   (header bar: media icon + title + Back; controls footer below the video —
   progress group, time readouts in `tabular-nums`, rewind / play-pause /
@@ -1418,7 +1452,9 @@ require the full playback test pass.
   so it follows you across browsers and devices"), as the device cards state
   theirs. Its on/off control is the shared `SwitchField` (a real
   `role="switch"` button with its description tied in by `aria-describedby`),
-  the same row the General settings card uses.
+  the same row the General settings card uses. Its off track is
+  `bg-muted-foreground/25`, a mid grey in both themes, so the white thumb
+  reads against it: `bg-accent` is near-white in light and hid the thumb.
 - **A service that needs no credentials gets a switch, not an empty
   section.** In General → External Services each provider has a
   `ServiceSection`; one without credentials (Apple Music) holds a

@@ -9,6 +9,7 @@ import {
   DETAIL_HERO_CONTENT_NO_ACTIONS_CLASS,
   DETAIL_HERO_SHELL_CLASS,
   DETAIL_PAGE_CONTENT_ENTER_CLASS,
+  MEDIA_FALLBACK_SURFACE_CLASS,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
@@ -81,14 +82,14 @@ export default function DetailHero({
               />
             ) : (
               <div
-                className="flex aspect-2/3 w-full items-center justify-center bg-muted"
+                className={cn(
+                  "flex aspect-2/3 w-full items-center justify-center",
+                  MEDIA_FALLBACK_SURFACE_CLASS,
+                )}
                 role="img"
                 aria-label="No poster available"
               >
-                <PlaceholderIcon
-                  className="size-8 text-muted-foreground"
-                  aria-hidden="true"
-                />
+                <PlaceholderIcon className="size-8" aria-hidden="true" />
               </div>
             )}
           </figure>
