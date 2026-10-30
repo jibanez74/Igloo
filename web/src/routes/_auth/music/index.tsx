@@ -639,10 +639,17 @@ function VirtualizedTracksList({
               {item.type === "letter" ? (
                 <LetterHeader letter={item.letter} />
               ) : (
-                <TrackListItem
-                  track={item.track}
-                  queueRef={allTracksRef}
-                />
+                <>
+                  {item.sectionLetter !== undefined && (
+                    <span className="sr-only">
+                      {sectionCueLabel(item.sectionLetter)}
+                    </span>
+                  )}
+                  <TrackListItem
+                    track={item.track}
+                    queueRef={allTracksRef}
+                  />
+                </>
               )}
             </div>
           );
@@ -736,7 +743,8 @@ function ShuffleButton() {
 
 // A visual index mark between the rows: the list role only allows list
 // items as owned children, so the letter is presentational and hidden from
-// assistive tech, which keeps its place through each row's aria-posinset
+// assistive tech; the first row of the letter announces the section instead
+// (`sectionCueLabel`), and every row keeps its place through aria-posinset
 // (design-system §3.2).
 function LetterHeader({ letter }: { letter: string }) {
   return (
@@ -782,6 +790,11 @@ const TrackListItem = memo(function TrackListItem({
   );
 });
 
+// The visually hidden cue read before the first track of a letter.
+function sectionCueLabel(letter: string): string {
+  return letter === "#" ? "Other titles section" : `${letter} section`;
+}
+
 // Flatten tracks into virtual items with letter headers inserted
 function flattenToVirtualItems(tracks: TrackListItemType[]): VirtualItem[] {
   const items: VirtualItem[] = [];
@@ -791,13 +804,21 @@ function flattenToVirtualItems(tracks: TrackListItemType[]): VirtualItem[] {
     const firstChar = track.title.charAt(0).toUpperCase();
     const letter = /[A-Z]/.test(firstChar) ? firstChar : "#";
 
-    // Insert letter header when we encounter a new letter
-    if (letter !== currentLetter) {
+    // Insert letter header when we encounter a new letter; the visual header
+    // is hidden from assistive tech, so the first track of the letter carries
+    // the announced section cue instead.
+    const startsSection = letter !== currentLetter;
+    if (startsSection) {
       items.push({ type: "letter", letter });
       currentLetter = letter;
     }
 
-    items.push({ type: "track", track, trackIndex: index + 1 });
+    items.push({
+      type: "track",
+      track,
+      trackIndex: index + 1,
+      sectionLetter: startsSection ? letter : undefined,
+    });
   });
 
   return items;

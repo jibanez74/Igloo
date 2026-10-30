@@ -829,7 +829,10 @@ count left out until the list lands, and a `PlaylistCardSkeleton` authored
 beside `PlaylistCard`. The Tracks tab's A–Z letter rows are visual index
 marks (`role="presentation"`, `aria-hidden`) inside its `role="list"`, whose
 owned children must all be list items; each track row keeps its
-`aria-posinset`/`aria-setsize`, so a screen reader still hears where it is.
+`aria-posinset`/`aria-setsize`, so a screen reader still hears where it is,
+and the first row of each letter opens with a visually hidden cue ("A
+section", "Other titles section" for `#`) so the start of a letter is
+announced where the sighted reader sees the mark.
 Leaving the liked view returns focus to its toolbar
 button, and entering it focuses "Back to playlists". Both playlist pages
 share their owner row too: `PlaylistOwnerActions` (Edit and Delete text

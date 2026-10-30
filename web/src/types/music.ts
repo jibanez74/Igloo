@@ -72,6 +72,8 @@ type VirtualItemTrack = {
   type: "track";
   track: TrackListItemType;
   trackIndex: number;
+  /** Set on the first track of a letter: the row carries the sr-only section cue. */
+  sectionLetter?: string;
 };
 
 export type VirtualItem = VirtualItemLetter | VirtualItemTrack;
