@@ -188,6 +188,7 @@ func (app *Application) registerMovieRoutes(r chi.Router) {
 		r.Get("/{id}/stream", app.StreamMovie)
 		r.Head("/{id}/stream", app.StreamMovie)
 		r.Get("/{id}/subtitles/{trackIndex}/web.vtt", app.SubtitleWebVTT)
+		r.Get("/{id}/subtitles/{trackIndex}/stream.mkv", app.SubtitleStream)
 
 		r.With(app.RequireAdmin).Put("/{id}/identify", app.IdentifyMovie)
 		r.With(app.RequireAdmin).Patch("/{id}", app.UpdateMovieMetadata)
@@ -219,6 +220,7 @@ func (app *Application) registerShowRoutes(r chi.Router) {
 			r.Get("/stream", app.StreamEpisode)
 			r.Head("/stream", app.StreamEpisode)
 			r.Get("/subtitles/{trackIndex}/web.vtt", app.EpisodeSubtitleWebVTT)
+			r.Get("/subtitles/{trackIndex}/stream.mkv", app.EpisodeSubtitleStream)
 		})
 	})
 }

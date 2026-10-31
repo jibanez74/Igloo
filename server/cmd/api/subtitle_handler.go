@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 
 	"github.com/go-chi/chi/v5"
@@ -54,59 +55,84 @@ func (app *Application) EpisodeSubtitleWebVTT(w http.ResponseWriter, r *http.Req
 	app.serveSubtitleWebVTT(w, r, mediaKindEpisode)
 }
 
-// trackIndex refers to the subtitle row order, not the raw ffprobe stream index.
-func (app *Application) serveSubtitleWebVTT(w http.ResponseWriter, r *http.Request, kind mediaKind) {
+// subtitleTrackRequest is a subtitle route's checked request: the media, its
+// source file, the subtitle row trackIndex names, and the session start.
+type subtitleTrackRequest struct {
+	Media    mediaRef
+	Source   playbackSource
+	Subtitle database.Subtitle
+	StartSec float64
+}
+
+// resolveSubtitleTrackRequest reads a subtitle route's id, trackIndex and
+// start, answering the request itself when they do not name a track.
+// trackIndex refers to the subtitle row order, not the raw ffprobe stream
+// index.
+func (app *Application) resolveSubtitleTrackRequest(w http.ResponseWriter, r *http.Request, kind mediaKind) (subtitleTrackRequest, bool) {
 	media, err := parseMediaID(chi.URLParam(r, "id"), kind)
 	if err != nil {
 		helpers.ErrorJSON(w, err, http.StatusBadRequest)
-		return
+		return subtitleTrackRequest{}, false
 	}
 
 	trackIndex, err := strconv.Atoi(chi.URLParam(r, "trackIndex"))
 	if err != nil || trackIndex < 0 {
 		helpers.ErrorJSON(w, errors.New("invalid subtitle track index"), http.StatusBadRequest)
-		return
+		return subtitleTrackRequest{}, false
 	}
 
 	// An HLS session started with -ss has a media timeline that begins at zero,
-	// while these cues carry absolute source timestamps. `start` is that
-	// session's offset, so the cues can be rebased onto the timeline they will
+	// while subtitle tracks carry absolute source timestamps. `start` is that
+	// session's offset, so the track can be rebased onto the timeline it will
 	// actually be played against.
 	startSec, err := parseSubtitleStartSec(r)
 	if err != nil {
 		helpers.ErrorJSON(w, err, http.StatusBadRequest)
-		return
+		return subtitleTrackRequest{}, false
 	}
 
 	source, err := app.loadPlaybackSource(r.Context(), media)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			helpers.ErrorJSON(w, errors.New(media.notFoundMessage()), http.StatusNotFound)
-			return
+			return subtitleTrackRequest{}, false
 		}
 		app.serverError(w, err, "failed to resolve media file", "failed to fetch media", "media", media.String())
-		return
+		return subtitleTrackRequest{}, false
 	}
 
 	subtitles, err := loadPlaybackSubtitles(r.Context(), app.Queries, source)
 	if err != nil {
 		app.serverError(w, err, getSubtitlesLogMessage, fetchSubtitlesMessage, "media", media.String())
-		return
+		return subtitleTrackRequest{}, false
 	}
 
 	if trackIndex >= len(subtitles) {
 		helpers.ErrorJSON(w, fmt.Errorf("subtitle track %d out of range (0–%d)", trackIndex, len(subtitles)-1), http.StatusBadRequest)
-		return
+		return subtitleTrackRequest{}, false
 	}
 
-	sub := subtitles[trackIndex]
+	return subtitleTrackRequest{
+		Media:    media,
+		Source:   source,
+		Subtitle: subtitles[trackIndex],
+		StartSec: startSec,
+	}, true
+}
+
+func (app *Application) serveSubtitleWebVTT(w http.ResponseWriter, r *http.Request, kind mediaKind) {
+	track, ok := app.resolveSubtitleTrackRequest(w, r, kind)
+	if !ok {
+		return
+	}
+	sub := track.Subtitle
 
 	if helpers.IsBitmapSubtitleCodec(sub.Codec) {
 		helpers.ErrorJSON(w, errors.New("image-based subtitles cannot be converted to WebVTT"), http.StatusUnsupportedMediaType)
 		return
 	}
 
-	cacheKey := helpers.SubtitleCacheKey(string(kind), source.FileID, sub.StreamIndex)
+	cacheKey := helpers.SubtitleCacheKey(string(kind), track.Source.FileID, sub.StreamIndex)
 
 	// Only []byte is ever stored under a subtitle key.
 	cached, _ := app.SubtitleVTTCache.Get(cacheKey)
@@ -116,22 +142,28 @@ func (app *Application) serveSubtitleWebVTT(w http.ResponseWriter, r *http.Reque
 		// its TTL rather than letting a long film outlive it. Replace leaves
 		// alone an entry a rescan invalidated after the read.
 		_ = app.SubtitleVTTCache.Replace(cacheKey, vtt, subtitleCacheTTL)
-		writeSubtitleWebVTT(w, vtt, startSec)
+		writeSubtitleWebVTT(w, vtt, track.StartSec)
 		return
 	}
 
-	out, err := app.extractSubtitleWebVTT(r.Context(), cacheKey, source.FilePath, sub.StreamIndex)
+	ref := subtitleTrackRef{
+		Kind:        kind,
+		FileID:      track.Source.FileID,
+		StreamIndex: sub.StreamIndex,
+		SourcePath:  track.Source.FilePath,
+	}
+	out, err := app.extractSubtitleWebVTT(r.Context(), cacheKey, ref)
 	if err != nil {
 		clientGone := r.Context().Err() != nil
 		if clientGone {
 			return
 		}
 		app.serverError(w, err, "subtitle extraction failed", "failed to extract subtitle track",
-			"media", media.String(), "stream_index", sub.StreamIndex, "codec", sub.Codec)
+			"media", track.Media.String(), "stream_index", sub.StreamIndex, "codec", sub.Codec)
 		return
 	}
 
-	writeSubtitleWebVTT(w, out, startSec)
+	writeSubtitleWebVTT(w, out, track.StartSec)
 }
 
 // extractSubtitleWebVTT converts a track once for every request waiting on it
@@ -144,7 +176,7 @@ func (app *Application) serveSubtitleWebVTT(w http.ResponseWriter, r *http.Reque
 // app.Wait before the caller can return, so shutdown never passes
 // app.Wait.Wait() with a run still to start; the caller stops waiting when its
 // own request ends.
-func (app *Application) extractSubtitleWebVTT(ctx context.Context, cacheKey string, filePath string, streamIndex int64) ([]byte, error) {
+func (app *Application) extractSubtitleWebVTT(ctx context.Context, cacheKey string, ref subtitleTrackRef) ([]byte, error) {
 	// Buffered, so the goroutine never blocks on a caller that stopped waiting.
 	results := make(chan singleflight.Result, 1)
 	app.Wait.Add(1)
@@ -163,7 +195,7 @@ func (app *Application) extractSubtitleWebVTT(ctx context.Context, cacheKey stri
 			extractCtx, cancel := context.WithTimeout(app.HLSShutdown, subtitleExtractTimeout)
 			defer cancel()
 
-			out, err := app.FFmpeg.ExtractSubtitleAsWebVTT(extractCtx, filePath, streamIndex)
+			out, err := app.convertSubtitleToWebVTT(extractCtx, ref)
 			if err != nil {
 				return nil, err
 			}
@@ -187,6 +219,26 @@ func (app *Application) extractSubtitleWebVTT(ctx context.Context, cacheKey stri
 	// The flight returns []byte whenever it succeeds.
 	out, _ := result.Val.([]byte)
 	return out, nil
+}
+
+// convertSubtitleToWebVTT converts the track's cached copy when there is one,
+// a read of a few kilobytes, and otherwise the media file, which for Matroska
+// means reading all of it. It never starts a copy into the cache, nor waits
+// for one.
+func (app *Application) convertSubtitleToWebVTT(ctx context.Context, ref subtitleTrackRef) ([]byte, error) {
+	cachePath := app.cachedSubtitleTrack(ref)
+	if cachePath != "" {
+		out, err := app.FFmpeg.ExtractCachedSubtitleAsWebVTT(ctx, cachePath)
+		if err == nil {
+			return out, nil
+		}
+		if ctx.Err() != nil {
+			return nil, err
+		}
+		app.Logger.Warn("cached subtitle track could not be converted; reading the media file",
+			"track", ref.String(), "error", err)
+	}
+	return app.FFmpeg.ExtractSubtitleAsWebVTT(ctx, ref.SourcePath, ref.StreamIndex)
 }
 
 // parseSubtitleStartSec reads the optional `start` query parameter naming the

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -36,6 +37,16 @@ type fakeFFmpeg struct {
 	plans         []fakeFFmpegRunPlan
 	calls         []ffmpeg.HLSParams
 	subtitleCalls int
+	// cachedSubtitleCalls records the cached tracks converted to WebVTT, and
+	// cachedSubtitleErr fails those conversions.
+	cachedSubtitleCalls []string
+	cachedSubtitleErr   error
+	// streamFunc answers StreamSubtitleMatroska and extractTrackFunc
+	// ExtractSubtitleMatroska; unset, both fail. Their calls are recorded.
+	streamFunc        func(ctx context.Context, params ffmpeg.SubtitleStreamParams) (ffmpeg.SubtitleStream, error)
+	extractTrackFunc  func(ctx context.Context, params ffmpeg.SubtitleExtractParams) error
+	streamCalls       []ffmpeg.SubtitleStreamParams
+	extractTrackCalls []ffmpeg.SubtitleExtractParams
 	// capabilities, when non-nil, is what Capabilities() reports. The default
 	// unprobed value is trusted by the explicit-audio encoder gate, matching
 	// ResolveHLSDevice's treatment of unprobed builds.
@@ -88,6 +99,57 @@ func (f *fakeFFmpeg) ExtractSubtitleAsWebVTT(_ context.Context, _ string, _ int6
 	f.subtitleCalls++
 	f.mu.Unlock()
 	return []byte("WEBVTT\n"), nil
+}
+
+func (f *fakeFFmpeg) ExtractCachedSubtitleAsWebVTT(_ context.Context, cachePath string) ([]byte, error) {
+	f.mu.Lock()
+	f.cachedSubtitleCalls = append(f.cachedSubtitleCalls, cachePath)
+	err := f.cachedSubtitleErr
+	f.mu.Unlock()
+	if err != nil {
+		return nil, err
+	}
+	return []byte("WEBVTT\n\nNOTE from the cached track\n"), nil
+}
+
+func (f *fakeFFmpeg) StreamSubtitleMatroska(ctx context.Context, params ffmpeg.SubtitleStreamParams) (ffmpeg.SubtitleStream, error) {
+	f.mu.Lock()
+	f.streamCalls = append(f.streamCalls, params)
+	streamFunc := f.streamFunc
+	f.mu.Unlock()
+	if streamFunc == nil {
+		return nil, errors.New("unexpected StreamSubtitleMatroska call")
+	}
+	return streamFunc(ctx, params)
+}
+
+func (f *fakeFFmpeg) ExtractSubtitleMatroska(ctx context.Context, params ffmpeg.SubtitleExtractParams) error {
+	f.mu.Lock()
+	f.extractTrackCalls = append(f.extractTrackCalls, params)
+	extractTrackFunc := f.extractTrackFunc
+	f.mu.Unlock()
+	if extractTrackFunc == nil {
+		return errors.New("unexpected ExtractSubtitleMatroska call")
+	}
+	return extractTrackFunc(ctx, params)
+}
+
+func (f *fakeFFmpeg) StreamCalls() []ffmpeg.SubtitleStreamParams {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.streamCalls)
+}
+
+func (f *fakeFFmpeg) ExtractTrackCalls() []ffmpeg.SubtitleExtractParams {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.extractTrackCalls)
+}
+
+func (f *fakeFFmpeg) CachedSubtitleCalls() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.cachedSubtitleCalls)
 }
 
 func (f *fakeFFmpeg) SubtitleCallCount() int {

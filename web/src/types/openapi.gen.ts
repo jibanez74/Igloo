@@ -1165,9 +1165,29 @@ export interface paths {
         };
         /**
          * Extract a subtitle track as WebVTT
-         * @description Converts the text subtitle track at trackIndex, a zero-based position in the media's subtitle list (not the raw stream index), to WebVTT, with cues rebased by start. Image-based tracks return 415. Concurrent requests for the same file and track share one extraction, which keeps running when the request that started it goes away; it fails with 500 after 60 seconds or when the server begins shutting down. The result is cached per file and track for an hour, each cache hit renewing that hour, and a rescan of the file drops it.
+         * @description Converts the text subtitle track at trackIndex, a zero-based position in the media's subtitle list (not the raw stream index), to WebVTT, with cues rebased by start. Image-based tracks return 415. Concurrent requests for the same file and track share one extraction, which keeps running when the request that started it goes away; it fails with 500 after 60 seconds or when the server begins shutting down. The result is cached per file and track for an hour, each cache hit renewing that hour, and a rescan of the file drops it. When the track has a copy on the server, made for a subtitle stream of the same track, the conversion reads that copy instead of the media file.
          */
         get: operations["episodeSubtitleWebVTT"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/shows/episodes/{id}/subtitles/{trackIndex}/stream.mkv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stream a subtitle track as Matroska
+         * @description Streams the subtitle track at trackIndex, a zero-based position in the media's subtitle list (not the raw stream index), as a single-track Matroska stream for players that render subtitles themselves, such as the Android TV client while it plays an HLS session. Matroska carries SubRip, ASS/SSA, PGS, DVB and VobSub tracks as they are; mov_text, EIA-608 and other text tracks are converted to SubRip. Packet timestamps are the source's minus start, and packets before start are left out, so the track lines up with the session that start names. The stream is not seekable: a player that seeks inside the session requests it again from its beginning. A track this server has already copied is read from its copy; otherwise the media file is read from start onward, and once such a stream has stayed open for 30 seconds the track is copied in the background for later requests. Every error is a JSON response sent before the stream begins; a failure afterwards closes the connection without the final chunk, so a player can tell a broken stream from a complete one.
+         */
+        get: operations["episodeSubtitleStream"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1627,9 +1647,29 @@ export interface paths {
         };
         /**
          * Extract a subtitle track as WebVTT
-         * @description Converts the text subtitle track at trackIndex, a zero-based position in the media's subtitle list (not the raw stream index), to WebVTT, with cues rebased by start. Image-based tracks return 415. Concurrent requests for the same file and track share one extraction, which keeps running when the request that started it goes away; it fails with 500 after 60 seconds or when the server begins shutting down. The result is cached per file and track for an hour, each cache hit renewing that hour, and a rescan of the file drops it.
+         * @description Converts the text subtitle track at trackIndex, a zero-based position in the media's subtitle list (not the raw stream index), to WebVTT, with cues rebased by start. Image-based tracks return 415. Concurrent requests for the same file and track share one extraction, which keeps running when the request that started it goes away; it fails with 500 after 60 seconds or when the server begins shutting down. The result is cached per file and track for an hour, each cache hit renewing that hour, and a rescan of the file drops it. When the track has a copy on the server, made for a subtitle stream of the same track, the conversion reads that copy instead of the media file.
          */
         get: operations["subtitleWebVTT"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/movies/{id}/subtitles/{trackIndex}/stream.mkv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stream a subtitle track as Matroska
+         * @description Streams the subtitle track at trackIndex, a zero-based position in the media's subtitle list (not the raw stream index), as a single-track Matroska stream for players that render subtitles themselves, such as the Android TV client while it plays an HLS session. Matroska carries SubRip, ASS/SSA, PGS, DVB and VobSub tracks as they are; mov_text, EIA-608 and other text tracks are converted to SubRip. Packet timestamps are the source's minus start, and packets before start are left out, so the track lines up with the session that start names. The stream is not seekable: a player that seeks inside the session requests it again from its beginning. A track this server has already copied is read from its copy; otherwise the media file is read from start onward, and once such a stream has stayed open for 30 seconds the track is copied in the background for later requests. Every error is a JSON response sent before the stream begins; a failure afterwards closes the connection without the final chunk, so a player can tell a broken stream from a complete one.
+         */
+        get: operations["subtitleStream"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5835,6 +5875,27 @@ export interface components {
                 "text/vtt": string;
             };
         };
+        /** @description A single-track Matroska stream, sent chunked with no Content-Length and without Range support. The Segment has an unknown size. An empty Cluster at timestamp 0 follows Tracks, so a player's demuxer is ready before the first cue, which can lie minutes into the source; elements FFmpeg writes after Tracks, such as Tags, follow it. While the server reads ahead to the next cue, Void elements may appear between Clusters to keep the connection alive. */
+        SubtitleMatroskaStreamResponse: {
+            headers: {
+                "Cache-Control"?: "no-store";
+                [name: string]: unknown;
+            };
+            content: {
+                "video/x-matroska": string;
+            };
+        };
+        /** @description Every subtitle stream slot on the server is in use, or the server is shutting down. Retryable. */
+        SubtitleStreamUnavailable: {
+            headers: {
+                /** @description Seconds to wait before retrying. */
+                "Retry-After": number;
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
         /** @description Watch-room list response. */
         WatchRoomsResponse: {
             headers: {
@@ -6488,6 +6549,8 @@ export interface components {
         HLSAudioChannelsQuery: components["schemas"]["HLSAudioChannelLimit"];
         /** @description The HLS session's actual media start in seconds: X-Igloo-Actual-Start from the manifest response when present, otherwise the normalized start. Cues are extracted with absolute source timestamps, so they are shifted by this value to match the session's media timeline. Omit for direct play and sessions starting at zero. */
         SubtitleStartQuery: number;
+        /** @description The HLS session's actual media start in seconds: X-Igloo-Actual-Start from the manifest response when present, otherwise the normalized start. Packets are rebased by this value onto the session's media timeline, and packets before it are left out. Omit, or send 0, for the whole track on the source's own timeline. */
+        SubtitleStreamStartQuery: number;
         /** @description Entity-tag precondition. Direct streams compare against their strong ETag. Static files and HLS assets emit no ETag, so only * matches an existing representation. A failed precondition returns an empty 412. */
         IfMatchHeader: string;
         /** @description A matching entity tag or * returns bodyless 304. Direct streams emit strong ETags; static files and HLS assets emit none, so only * matches there. Takes precedence over If-Modified-Since. */
@@ -8099,6 +8162,31 @@ export interface operations {
             500: components["responses"]["InternalServerError"];
         };
     };
+    episodeSubtitleStream: {
+        parameters: {
+            query?: {
+                /** @description The HLS session's actual media start in seconds: X-Igloo-Actual-Start from the manifest response when present, otherwise the normalized start. Packets are rebased by this value onto the session's media timeline, and packets before it are left out. Omit, or send 0, for the whole track on the source's own timeline. */
+                start?: components["parameters"]["SubtitleStreamStartQuery"];
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["IdPath"];
+                /** @description Zero-based index into the media's subtitle rows ordered by stream_index. An index past the last subtitle returns 400. */
+                trackIndex: components["parameters"]["TrackIndexPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["SubtitleMatroskaStreamResponse"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalServerError"];
+            503: components["responses"]["SubtitleStreamUnavailable"];
+        };
+    };
     getContinueWatching: {
         parameters: {
             query?: never;
@@ -8840,6 +8928,31 @@ export interface operations {
             404: components["responses"]["NotFound"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalServerError"];
+        };
+    };
+    subtitleStream: {
+        parameters: {
+            query?: {
+                /** @description The HLS session's actual media start in seconds: X-Igloo-Actual-Start from the manifest response when present, otherwise the normalized start. Packets are rebased by this value onto the session's media timeline, and packets before it are left out. Omit, or send 0, for the whole track on the source's own timeline. */
+                start?: components["parameters"]["SubtitleStreamStartQuery"];
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["IdPath"];
+                /** @description Zero-based index into the media's subtitle rows ordered by stream_index. An index past the last subtitle returns 400. */
+                trackIndex: components["parameters"]["TrackIndexPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["SubtitleMatroskaStreamResponse"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalServerError"];
+            503: components["responses"]["SubtitleStreamUnavailable"];
         };
     };
     identifyMovie: {

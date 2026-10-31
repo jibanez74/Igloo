@@ -2485,7 +2485,7 @@
           "TV Shows"
         ],
         "summary": "Extract a subtitle track as WebVTT",
-        "description": "Converts the text subtitle track at trackIndex, a zero-based position in the media's subtitle list (not the raw stream index), to WebVTT, with cues rebased by start. Image-based tracks return 415. Concurrent requests for the same file and track share one extraction, which keeps running when the request that started it goes away; it fails with 500 after 60 seconds or when the server begins shutting down. The result is cached per file and track for an hour, each cache hit renewing that hour, and a rescan of the file drops it.",
+        "description": "Converts the text subtitle track at trackIndex, a zero-based position in the media's subtitle list (not the raw stream index), to WebVTT, with cues rebased by start. Image-based tracks return 415. Concurrent requests for the same file and track share one extraction, which keeps running when the request that started it goes away; it fails with 500 after 60 seconds or when the server begins shutting down. The result is cached per file and track for an hour, each cache hit renewing that hour, and a rescan of the file drops it. When the track has a copy on the server, made for a subtitle stream of the same track, the conversion reads that copy instead of the media file.",
         "operationId": "episodeSubtitleWebVTT",
         "parameters": [
           {
@@ -2516,6 +2516,50 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/api/shows/episodes/{id}/subtitles/{trackIndex}/stream.mkv": {
+      "get": {
+        "tags": [
+          "TV Shows"
+        ],
+        "summary": "Stream a subtitle track as Matroska",
+        "description": "Streams the subtitle track at trackIndex, a zero-based position in the media's subtitle list (not the raw stream index), as a single-track Matroska stream for players that render subtitles themselves, such as the Android TV client while it plays an HLS session. Matroska carries SubRip, ASS/SSA, PGS, DVB and VobSub tracks as they are; mov_text, EIA-608 and other text tracks are converted to SubRip. Packet timestamps are the source's minus start, and packets before start are left out, so the track lines up with the session that start names. The stream is not seekable: a player that seeks inside the session requests it again from its beginning. A track this server has already copied is read from its copy; otherwise the media file is read from start onward, and once such a stream has stayed open for 30 seconds the track is copied in the background for later requests. Every error is a JSON response sent before the stream begins; a failure afterwards closes the connection without the final chunk, so a player can tell a broken stream from a complete one.",
+        "operationId": "episodeSubtitleStream",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          },
+          {
+            "$ref": "#/components/parameters/TrackIndexPath"
+          },
+          {
+            "$ref": "#/components/parameters/SubtitleStreamStartQuery"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SubtitleMatroskaStreamResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/SubtitleStreamUnavailable"
           }
         }
       }
@@ -3729,7 +3773,7 @@
           "Movies"
         ],
         "summary": "Extract a subtitle track as WebVTT",
-        "description": "Converts the text subtitle track at trackIndex, a zero-based position in the media's subtitle list (not the raw stream index), to WebVTT, with cues rebased by start. Image-based tracks return 415. Concurrent requests for the same file and track share one extraction, which keeps running when the request that started it goes away; it fails with 500 after 60 seconds or when the server begins shutting down. The result is cached per file and track for an hour, each cache hit renewing that hour, and a rescan of the file drops it.",
+        "description": "Converts the text subtitle track at trackIndex, a zero-based position in the media's subtitle list (not the raw stream index), to WebVTT, with cues rebased by start. Image-based tracks return 415. Concurrent requests for the same file and track share one extraction, which keeps running when the request that started it goes away; it fails with 500 after 60 seconds or when the server begins shutting down. The result is cached per file and track for an hour, each cache hit renewing that hour, and a rescan of the file drops it. When the track has a copy on the server, made for a subtitle stream of the same track, the conversion reads that copy instead of the media file.",
         "operationId": "subtitleWebVTT",
         "parameters": [
           {
@@ -3760,6 +3804,50 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/api/movies/{id}/subtitles/{trackIndex}/stream.mkv": {
+      "get": {
+        "tags": [
+          "Movies"
+        ],
+        "summary": "Stream a subtitle track as Matroska",
+        "description": "Streams the subtitle track at trackIndex, a zero-based position in the media's subtitle list (not the raw stream index), as a single-track Matroska stream for players that render subtitles themselves, such as the Android TV client while it plays an HLS session. Matroska carries SubRip, ASS/SSA, PGS, DVB and VobSub tracks as they are; mov_text, EIA-608 and other text tracks are converted to SubRip. Packet timestamps are the source's minus start, and packets before start are left out, so the track lines up with the session that start names. The stream is not seekable: a player that seeks inside the session requests it again from its beginning. A track this server has already copied is read from its copy; otherwise the media file is read from start onward, and once such a stream has stayed open for 30 seconds the track is copied in the background for later requests. Every error is a JSON response sent before the stream begins; a failure afterwards closes the connection without the final chunk, so a player can tell a broken stream from a complete one.",
+        "operationId": "subtitleStream",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          },
+          {
+            "$ref": "#/components/parameters/TrackIndexPath"
+          },
+          {
+            "$ref": "#/components/parameters/SubtitleStreamStartQuery"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SubtitleMatroskaStreamResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/SubtitleStreamUnavailable"
           }
         }
       }
@@ -6613,6 +6701,16 @@
           "minimum": 0
         }
       },
+      "SubtitleStreamStartQuery": {
+        "name": "start",
+        "in": "query",
+        "required": false,
+        "description": "The HLS session's actual media start in seconds: X-Igloo-Actual-Start from the manifest response when present, otherwise the normalized start. Packets are rebased by this value onto the session's media timeline, and packets before it are left out. Omit, or send 0, for the whole track on the source's own timeline.",
+        "schema": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
       "IfMatchHeader": {
         "name": "If-Match",
         "in": "header",
@@ -8079,6 +8177,45 @@
           "text/vtt": {
             "schema": {
               "type": "string"
+            }
+          }
+        }
+      },
+      "SubtitleMatroskaStreamResponse": {
+        "description": "A single-track Matroska stream, sent chunked with no Content-Length and without Range support. The Segment has an unknown size. An empty Cluster at timestamp 0 follows Tracks, so a player's demuxer is ready before the first cue, which can lie minutes into the source; elements FFmpeg writes after Tracks, such as Tags, follow it. While the server reads ahead to the next cue, Void elements may appear between Clusters to keep the connection alive.",
+        "headers": {
+          "Cache-Control": {
+            "schema": {
+              "type": "string",
+              "const": "no-store"
+            }
+          }
+        },
+        "content": {
+          "video/x-matroska": {
+            "schema": {
+              "type": "string",
+              "format": "binary"
+            }
+          }
+        }
+      },
+      "SubtitleStreamUnavailable": {
+        "description": "Every subtitle stream slot on the server is in use, or the server is shutting down. Retryable.",
+        "headers": {
+          "Retry-After": {
+            "required": true,
+            "description": "Seconds to wait before retrying.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
             }
           }
         }

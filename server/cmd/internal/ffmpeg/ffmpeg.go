@@ -12,6 +12,9 @@ import (
 type FFmpegInterface interface {
 	RunHLS(ctx context.Context, params HLSParams, onExit func(exitErr error, stderrTail []string)) (*exec.Cmd, error)
 	ExtractSubtitleAsWebVTT(ctx context.Context, sourcePath string, streamIndex int64) ([]byte, error)
+	ExtractCachedSubtitleAsWebVTT(ctx context.Context, cachePath string) ([]byte, error)
+	StreamSubtitleMatroska(ctx context.Context, params SubtitleStreamParams) (SubtitleStream, error)
+	ExtractSubtitleMatroska(ctx context.Context, params SubtitleExtractParams) error
 	Capabilities() Capabilities
 }
 

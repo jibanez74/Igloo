@@ -6,7 +6,7 @@ Igloo uses these tools for three separate jobs:
 
 - `ffprobe` reads media metadata during library scans.
 - `ffmpeg` creates HLS output for browser playback when direct file playback is not enough.
-- `ffmpeg` converts supported text subtitle streams to WebVTT.
+- `ffmpeg` converts supported text subtitle streams to WebVTT, and streams subtitle tracks in Matroska, as they are or converted to SubRip, for players that draw subtitles themselves.
 
 Direct file streaming is separate from this flow. When the client can play a source file directly, Igloo can serve the original media without starting FFmpeg. FFmpeg is used when Igloo needs compatible HLS output, audio conversion, video transcoding, HDR tone mapping, or subtitle conversion.
 
@@ -168,11 +168,11 @@ With `download_images` on (seeded from `DOWNLOAD_IMAGES` only for a new database
 
 ## TV episode playback
 
-Movies and TV episodes share one playback pipeline: direct play, HLS remux and transcode, audio track selection, subtitle conversion, playback-settings defaults, and watch progress all run through the same code with the media addressed by a `mediaRef` — its kind (`movie` or `episode`) and id. Every playback route documented below for `/api/movies/{id}/...` except the trailer `preroll` exists one for one under `/api/shows/episodes/{id}/...` with the same query parameters, headers, status codes, and response shapes (`technical-details`, `watch-progress`, `watch-progress/watched`, `hls/session/stop`, `hls/{profile}/playlist.m3u8`, `hls/{profile}/{filename}`, `stream`, `subtitles/{trackIndex}/web.vtt`), plus `GET /api/shows/episodes/{id}` for the player header (episode, season number, show identity). That response also carries `next_episode`, which the player advances to when an episode ends: the next episode of the show in listing order (specials last) that has a file other than the one that just played, so metadata-only episodes and siblings of a combined file are skipped, with the requesting user's progress so it resumes where it was left. It is `null` after the show's last playable episode. Watch rooms are movie-only.
+Movies and TV episodes share one playback pipeline: direct play, HLS remux and transcode, audio track selection, subtitle conversion, playback-settings defaults, and watch progress all run through the same code with the media addressed by a `mediaRef` — its kind (`movie` or `episode`) and id. Every playback route documented below for `/api/movies/{id}/...` except the trailer `preroll` exists one for one under `/api/shows/episodes/{id}/...` with the same query parameters, headers, status codes, and response shapes (`technical-details`, `watch-progress`, `watch-progress/watched`, `hls/session/stop`, `hls/{profile}/playlist.m3u8`, `hls/{profile}/{filename}`, `stream`, `subtitles/{trackIndex}/web.vtt`, `subtitles/{trackIndex}/stream.mkv`), plus `GET /api/shows/episodes/{id}` for the player header (episode, season number, show identity). That response also carries `next_episode`, which the player advances to when an episode ends: the next episode of the show in listing order (specials last) that has a file other than the one that just played, so metadata-only episodes and siblings of a combined file are skipped, with the requesting user's progress so it resumes where it was left. It is `null` after the show's last playable episode. Watch rooms are movie-only.
 
 The client-facing identity is always the **episode id**: URLs, HLS session keys, watch progress, and the direct-stream cache are scoped by it, so a movie and an episode with the same numeric id never share a session or a cache entry. Behind an episode the pipeline resolves a `playbackSource`: the `show_files` row the episode is linked to (path, container, MIME type, size, update timestamp, duration) together with that file's probed stream rows. An episode linked to several files (duplicate copies) resolves to the lowest file id, deterministically.
 
-One file can back several episodes (`S01E01E02`), and playback never guesses where an episode starts inside it: **every episode linked to a combined file plays the whole file from zero**, exactly as the scanning rules above never divide file duration into episode runtimes. Watch progress is still stored per logical episode, so the two episodes keep separate positions and watched flags. Everything that depends only on the file's bytes is keyed on the file rather than the episode and is computed once for all of its episodes: the persisted keyframe index (`show_keyframe_indexes`), the remux-safety verdict (`show_remux_safety_verdicts`, both keyed by `show_files.id` + stream index with the same fingerprint rules as their movie twins), and the extracted WebVTT subtitle cache (keyed by media kind, file id, and stream index). A movie's own file identity is its movie id, so the movie tables (`keyframe_indexes`, `remux_safety_verdicts`) are keyed by movie id.
+One file can back several episodes (`S01E01E02`), and playback never guesses where an episode starts inside it: **every episode linked to a combined file plays the whole file from zero**, exactly as the scanning rules above never divide file duration into episode runtimes. Watch progress is still stored per logical episode, so the two episodes keep separate positions and watched flags. Everything that depends only on the file's bytes is keyed on the file rather than the episode and is computed once for all of its episodes: the persisted keyframe index (`show_keyframe_indexes`), the remux-safety verdict (`show_remux_safety_verdicts`, both keyed by `show_files.id` + stream index with the same fingerprint rules as their movie twins), the extracted WebVTT subtitle cache, and the subtitle track cache (both keyed by media kind, file id, and stream index). A movie's own file identity is its movie id, so the movie tables (`keyframe_indexes`, `remux_safety_verdicts`) are keyed by movie id.
 
 Episode technical details serve the show tables' own stream rows (keyed by `file_id`; the schemas are `ShowFileVideoStream`, `ShowFileAudioStream`, `ShowFileSubtitle`, `ShowFileChapter`), with chapter start times normalized into the file duration as movie chapters are. The season episode listing carries the requesting user's `progress_sec`, `duration_sec`, and `watched` per episode so the show page can render resume and watched state without a request per row; the web client's episode player is the movie player parameterized by the media ref.
 
@@ -202,7 +202,7 @@ Authentication is checked on every personal and watch-room manifest and asset re
 
 FFmpeg runs with `context.Background()` after session creation. This is deliberate: an HLS process must outlive the HTTP request that created it, because the browser will request the manifest and segments as separate requests. The session cache owns the lifecycle. Expiration, eviction, room cleanup, deletion of the owning user (which stops that user's personal sessions at once, since nothing of theirs can refresh them again), or server shutdown stops the process and removes the temp directory. `main` waits for the signal handler's cleanup to finish (`serveUntilShutdown`) rather than returning when `ListenAndServe` does, because `ListenAndServe` returns the moment the listener closes; exiting then would end the process mid-teardown and leave FFmpeg children running into directories nobody removes until the next boot sweep.
 
-Every FFmpeg child (HLS sessions and subtitle extraction) starts in its own process group, so a Ctrl-C in the server's terminal reaches only the server, whose shutdown stops each session in order, instead of every encode dying at once and being reported as a failure. On Linux it also carries a parent-death signal (`SIGKILL`): a server that dies without shutting down (a crash, `SIGKILL`, the OOM killer) takes its encodes with it, where they would otherwise run for the rest of the film into a directory the next startup deletes. macOS has no parent-death signal, so there an orphaned FFmpeg runs until it finishes or loses its output directory.
+Every FFmpeg child (HLS sessions, subtitle extraction, and subtitle streams) starts in its own process group, so a Ctrl-C in the server's terminal reaches only the server, whose shutdown stops each session in order, instead of every encode dying at once and being reported as a failure. On Linux it also carries a parent-death signal (`SIGKILL`): a server that dies without shutting down (a crash, `SIGKILL`, the OOM killer) takes its encodes with it, where they would otherwise run for the rest of the film into a directory the next startup deletes. macOS has no parent-death signal, so there an orphaned FFmpeg runs until it finishes or loses its output directory.
 
 Shutdown stops HLS before anything else, ahead of the HTTP server's graceful shutdown, because that waits for every in-flight request and a segment request long-polls for up to two minutes (a manifest for up to 45 seconds). Stopping the sessions answers those requests with the plain `404` of a lost session, which clients rebase on once the server is back. From that point no session starts or is published: a start is refused with `503` plus `Retry-After`, a start parked for a transcode permit gives up, and the cache is emptied under the same locks the publishers take, so a creation that raced the shutdown is either stopped with the rest or refused when it tries to publish. The sessions are stopped concurrently. In-flight requests then get a 10-second grace period, after which whatever is still open, such as a direct-play stream that ends only when its client stops reading, is closed.
 
@@ -604,7 +604,7 @@ Files without a usable index — avi, or containers whose seek tables are missin
 
 The manifest also carries `X-Igloo-Effective-Profile`, naming the profile FFmpeg actually ran. A `remux` request that fails the safety gate is still served from the `/hls/remux/` path, so without this the client cannot tell a stream copy from the full transcode it was silently given.
 
-Subtitles are rebased to match. The WebVTT endpoint stores cues with absolute source timestamps, and its `start` query parameter shifts them onto the requesting session's timeline when it is served. The cache stays keyed on media kind, file, and stream index alone, so shifting costs no extra extraction and no extra cache entries.
+Subtitles are rebased to match. The WebVTT endpoint stores cues with absolute source timestamps, and its `start` query parameter shifts them onto the requesting session's timeline when it is served. The cache stays keyed on media kind, file, and stream index alone, so shifting costs no extra extraction and no extra cache entries. The Matroska subtitle stream takes the same `start` and has FFmpeg rebase its packets (see Subtitle Streams).
 
 When the web client knows the movie duration, it first clamps the requested absolute playback target to that duration. For HLS it then applies the 10-second resume rewind to the clamped target and uses the result consistently for the manifest URL, session-window key, local playback offset, and absolute-time mapping. Direct playback initialization uses the same clamped absolute target.
 
@@ -656,6 +656,63 @@ These codecs are image-based and cannot be reliably converted to WebVTT text. Re
 
 After conversion, Igloo replaces escaped `\h` sequences with spaces. This handles subtitle text that uses hard-space style escapes not wanted in WebVTT output.
 
+When the track has a copy in the subtitle track cache (below), the conversion reads that copy instead of the media file, which spares a full read of a large Matroska file:
+
+```text
+ffmpeg -v error -nostdin -i <cached track> -copyts -map 0:0 -c:s webvtt -f webvtt pipe:1
+```
+
+The copy keeps the source's own timestamps and `-copyts` keeps them in the cues. The two conversions agree for every file whose timestamps start at zero, which is every Matroska and MP4 file in practice; for a source with a later start time the cached conversion keeps the raw timestamps, the convention copy-video sessions' `X-Igloo-Actual-Start` already uses, where the media-file conversion subtracts the start time. A copy that cannot be converted falls back to the media file. The WebVTT endpoint never starts a copy and never waits for one.
+
+### Subtitle Streams
+
+Players that draw subtitles themselves — the Android TV client renders PGS, VobSub, DVB, SSA and SubRip natively through Media3 — get the original track instead of WebVTT:
+
+```text
+/api/movies/{id}/subtitles/{trackIndex}/stream.mkv
+```
+
+(and its `/api/shows/episodes/{id}/...` twin) streams one track as a single-track Matroska stream, with the same `trackIndex` and `start` as the WebVTT endpoint. It is how image-based tracks reach a player while it plays an HLS session, whose fMP4 segments cannot carry them, without burning them into the video: the video keeps its copy or transcode, and the player merges the subtitle stream next to it. Direct play needs none of this: the player reads the tracks from the file.
+
+`SubtitleMatroskaPlanFor` decides how each codec travels. `subrip`, `ass`, `ssa`, `hdmv_pgs_subtitle`, `dvb_subtitle` and `dvd_subtitle` are copied. Every other text codec (`mov_text`, `eia_608`, `webvtt`, …) is converted to SubRip, which Matroska carries. `dvd_subtitle` outside a Matroska source, `xsub`, `dvb_teletext` and `arib_caption` return `415`: VobSub needs the palette Matroska keeps in the track's codec data, and the others cannot become text.
+
+```text
+ffmpeg -v error -nostdin [-seek_timestamp 1 -ss <start>] -i <source> -copyts -map 0:<stream_index> -c:s copy|srt -map_chapters -1 -map_metadata:g -1 [-ss <start> [-output_ts_offset -<start>]] -flush_packets 1 -f matroska pipe:1
+```
+
+The timestamps are the point of the argument order, and the `externalbin` test pins each combination against the real FFmpeg:
+
+- With `-copyts`, the output `-ss` drops every packet before `start` and subtracts `start` from the rest, so a packet lands at its source time minus `start`, exactly where the session that `start` names plays it. A plain input `-ss` is not enough: FFmpeg starts at the cluster before the seek point and shifts the first packet to zero, seconds early.
+- The input `-ss` only skips ahead in the file; `-seek_timestamp` makes it compare raw timestamps, as the output `-ss` does.
+- An encoder ignores the output `-ss` shift, so a converted track also takes `-output_ts_offset -<start>`.
+- A cue that starts before `start` and is still on screen at it is dropped, where the WebVTT endpoint clamps it to zero.
+- Without `start` (or with `0`), the whole track streams on the source's own timeline.
+
+The response is `video/x-matroska`, chunked, with `Cache-Control: no-store` and no Range support. FFmpeg writes a non-seekable stream: a Segment of unknown size, then SeekHead, Void, Info, Tracks and Tags, then a Cluster per cue or two. Media3's Matroska extractor only reports a stream without Cues ready at its first Cluster, which FFmpeg writes when it reaches the track's first packet after `start`, minutes into the source for a sparse forced track, and a player merging the stream with the video waits for every part to be ready. So the handler reads FFmpeg's header through Tracks and inserts an empty Cluster at timestamp 0 (`1F 43 B6 75 83 E7 81 00`) right after it; Tags and the rest follow. If the header cannot be read that way (FFmpeg exits first, or writes something else), nothing has been sent and the request gets a `500`. Past the header, the handler relays whole elements and writes a Void element (`EC 81 00`) after 15 seconds of silence at an element boundary, so a connection stays alive while FFmpeg reads ahead to a sparse track's next cue. The header up to the Segment's payload is the same for every stream, which a player that requests the stream again relies on: Media3 rejects a Segment found at another offset. Between a sparse track's cues the stream also has no newer timestamp to offer, and Media3 loads the parts of a merged source in step, continuing only the one furthest behind, so a player must not let a subtitle stream that is still loading hold the video's loading back at its last cue: IglooTV reports such a stream as having nothing left to load until its load stops.
+
+At most 8 subtitle streams are open server-wide, since each holds an FFmpeg for as long as its player plays; a request waits up to 3 seconds for a slot, which covers a TV that drops one stream and opens the next as it starts at a position, and is otherwise refused with `503` and `Retry-After: 2`, as it is once shutdown has begun. A stream ends with its request: a player that leaves, or shutdown, stops FFmpeg and ends the response normally. A stream FFmpeg leaves early is logged with its stderr tail and the connection is closed without the final chunk, so the player sees a broken stream rather than a complete one. A complete stream waits for FFmpeg to exit on its own, since it closes its output a moment before it exits.
+
+### Subtitle Track Cache
+
+A streamed track cannot be rewound in the player: Media3 keeps no back buffer, so a seek back inside a session requests the stream again from `start`, and from the media file that means reading from `start` to the seek target again. The server therefore keeps a copy of each track a player has streamed:
+
+```text
+<transcode dir>/igloo-subtitle-cache/<movie|episode>/<file id>/<stream index>-<source size>-<source mtime ns>.mkv
+```
+
+```text
+ffmpeg -v error -nostdin -y -i <source> -copyts -map 0:<stream_index> -c:s copy|srt -map_chapters -1 -map_metadata:g -1 -f matroska <temporary file>
+```
+
+The copy keeps the source's timestamps, so streams from it use the same output `-ss` with no input seek (a copy's timestamps begin at its first cue, which an input `-ss` would add to the seek point). Reading a few megabytes from the start costs nothing, and a stream from a copy matches a stream from the source packet for packet.
+
+- A copy is made only after a stream from the media file has stayed open for 30 seconds: every TV start at a position opens and drops a stream, and a track only glanced at in a menu is not worth a full read of the file. It reads the whole media file in the background, so the first play of a track always streams from the media file.
+- Streams of one track share one copy (singleflight), and one copy runs at a time server-wide so full-file reads over a network share stay sequential. A copy is skipped when the transcode filesystem has less than 2 GiB free, has a three-hour timeout, and shutdown cancels it.
+- FFmpeg writes a temporary file beside the copy, renamed into place only after FFmpeg exits cleanly, the source still has the size and modification time it had when the copy started, and the transcode directory has not moved meanwhile.
+- The source's size and modification time are in the name, so a changed file simply misses; a request that finds copies of the same stream under another fingerprint deletes them. A copy that FFmpeg cannot read is deleted and the stream falls back to the media file.
+- Serving a copy marks it used (its modification time). A sweep at startup and then daily deletes copies unused for 30 days, temporary files older than the copy timeout, and the directories left empty.
+- A rescan that commits a changed, moved or deleted file, and the admin deleting a movie, remove the file's copies; an unchanged file keeps them. Moving the Settings transcode directory deletes `igloo-subtitle-cache` in the old one and leaves everything else there alone.
+
 ## Operational Notes
 
 For binary deployments:
@@ -665,6 +722,7 @@ For binary deployments:
 - `HLS_MAX_CPU_TRANSCODES` is read at startup and limits concurrent HLS sessions that encode video on the CPU (`libx264`); it defaults to `max(1, CPU count / 4)`. `HLS_MAX_HW_TRANSCODES` does the same for hardware video encoders and defaults to `3`. Copy-video sessions count against neither, even when they encode audio. Neither is stored in Settings.
 - `HLS_MAX_SESSIONS_PER_USER` is read at startup and limits cached plus in-flight personal HLS sessions per user; remux and transcode sessions are both counted. The default is 3. It is not stored in Settings.
 - Configured media directories should be readable by the Igloo process. Igloo does not need write access to media libraries.
+- Subtitle tracks streamed to a player are copied below the Settings transcode directory, in `igloo-subtitle-cache`, which startup's `igloo-hls-*` cleanup leaves alone. A full PGS track takes tens of megabytes and a text track a few kilobytes; copies unused for 30 days are deleted, and moving the transcode directory deletes the old cache.
 
 `README.md` documents the build tags, `make` targets, and all of the environment variables above; `.env.example` lists the environment variables with their defaults; `CLAUDE.md` covers the build tags, `make` targets, and the `HLS_MAX_*` and `IGLOO_FF*_PATH` variables. At runtime, `externalbin` wrappers accept `IGLOO_FFMPEG_PATH` / `IGLOO_FFPROBE_PATH` overrides or resolve the commands on `PATH`. Make development/test prerequisites independently require `ffmpeg` and `ffprobe` on `PATH`; overrides do not bypass those checks.
 
@@ -675,14 +733,15 @@ For failures:
 - FFmpeg runtime failure is logged with the stderr tail.
 - Segment requests fail with "segment not ready", "segment does not exist", or "transcoding stopped" depending on session state.
 - Subtitle extraction failures are logged server-side and returned to clients as a generic extraction failure.
+- A subtitle stream that fails before its header is answered with a generic `500`; one that fails afterwards is logged with FFmpeg's stderr tail and cut. A failed copy into the subtitle track cache is logged as a warning and changes nothing for the player.
 
 ## Maintenance Rules
 
 When changing FFmpeg or ffprobe behavior:
 
 - Check the embedded payload version with `ffmpeg -version` and `ffprobe -version` after refreshing binaries. Prefer the current stable Jellyfin FFmpeg release line for release payloads; do not switch to a generic upstream FFmpeg build or Jellyfin prerelease branch without a specific reason.
-- Keep argument construction covered by the tests in `server/cmd/internal/ffmpeg/` (`ffmpeg_hls_args_test.go`, `ffmpeg_hls_hardware_args_test.go`, `ffmpeg_hls_run_test.go`, `ffmpeg_hls_segment_count_test.go`), capability parsing and probing by `capabilities_test.go` and `capabilities_probe_test.go`, subtitle extraction by `ffmpeg_subtitles_test.go`, and the child process group and parent-death signal by `process_attr_linux_test.go`, which checks both against the kernel.
-- Keep the `externalbin` tests passing: `ffmpeg_integration_externalbin_test.go` runs the real FFmpeg (remux and subtitles, deinterlacing and autorotation, segment count against the muxer, explicit audio profiles, the BT.601 conversion), and `ffmpeg_lifecycle_externalbin_test.go` covers binary resolution, singleton verification, and cleanup.
+- Keep argument construction covered by the tests in `server/cmd/internal/ffmpeg/` (`ffmpeg_hls_args_test.go`, `ffmpeg_hls_hardware_args_test.go`, `ffmpeg_hls_run_test.go`, `ffmpeg_hls_segment_count_test.go`), capability parsing and probing by `capabilities_test.go` and `capabilities_probe_test.go`, subtitle extraction and stream arguments by `ffmpeg_subtitles_test.go`, the Matroska primer and relay by `server/cmd/internal/helpers/matroska_stream_test.go`, and the child process group and parent-death signal by `process_attr_linux_test.go`, which checks both against the kernel.
+- Keep the `externalbin` tests passing: `ffmpeg_integration_externalbin_test.go` runs the real FFmpeg (remux and subtitles, deinterlacing and autorotation, segment count against the muxer, explicit audio profiles, the BT.601 conversion), `ffmpeg_subtitle_streams_externalbin_test.go` pins subtitle stream timestamps for copied and converted tracks from the media file and from the cache on fixtures built by `subtitletestutil` (a hand-built PGS track, VobSub converted from it, SubRip and mov_text), `server/cmd/api/subtitle_stream_externalbin_test.go` drives the routes over HTTP with the real FFmpeg, and `ffmpeg_lifecycle_externalbin_test.go` covers binary resolution, singleton verification, and cleanup.
 - Keep remux validation covered by `remux_validator_test.go`, `remux_parser_test.go`, `remux_fuzz_test.go`, and `server/cmd/api/hls_remux_safety_test.go` when changing fMP4 safety behavior.
 - Keep HLS handler and playlist tests updated when changing playlist shape, filenames, query parameters, readiness rules, or resume behavior.
 - Update `docs/openapi.json` when adding or changing HLS, subtitle, or playback settings endpoints.
