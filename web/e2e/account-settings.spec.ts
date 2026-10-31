@@ -333,7 +333,9 @@ test.describe("Account settings", () => {
       const editedName = `Playwright Account Settings Edited ${stamp}`;
       const editedEmail = `${prefix}-edited@example.com`;
       const newPassword = `AccountNewPass${stamp}!`;
-      const avatarURL = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'%3E%3Crect width='80' height='80' fill='%23f59e0b'/%3E%3C/svg%3E`;
+      // The server takes only http(s) avatar URLs; the app's own icon loads
+      // from the mocked Vite server and from a real instance alike.
+      const avatarURL = new URL("/icon-192.png", env.baseURL).href;
       const content = page.getByRole("main");
       const emailInput = page.getByRole("textbox", { name: "Your email address" });
 
