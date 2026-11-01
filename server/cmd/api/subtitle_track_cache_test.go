@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -257,12 +259,12 @@ func TestCacheSubtitleTrack_CopiesOneTrackAtATime(t *testing.T) {
 func TestCacheSubtitleTrack_DiscardsACopyThatWouldNotBeFound(t *testing.T) {
 	tests := []struct {
 		name   string
-		during func(t *testing.T, app *Application, sourcePath string)
+		during func(t *testing.T, app *Application, ref subtitleTrackRef, params ffmpeg.SubtitleExtractParams)
 	}{
 		{
 			name: "source rewritten while it was read",
-			during: func(t *testing.T, app *Application, sourcePath string) {
-				err := os.WriteFile(sourcePath, []byte("a different, longer file"), 0o644)
+			during: func(t *testing.T, app *Application, ref subtitleTrackRef, params ffmpeg.SubtitleExtractParams) {
+				err := os.WriteFile(ref.SourcePath, []byte("a different, longer file"), 0o644)
 				if err != nil {
 					t.Error(err)
 				}
@@ -270,10 +272,25 @@ func TestCacheSubtitleTrack_DiscardsACopyThatWouldNotBeFound(t *testing.T) {
 		},
 		{
 			name: "transcode directory moved",
-			during: func(t *testing.T, app *Application, sourcePath string) {
+			during: func(t *testing.T, app *Application, ref subtitleTrackRef, params ffmpeg.SubtitleExtractParams) {
 				moved := *app.CurrentSettings()
 				moved.TranscodeDir = filepath.Join(t.TempDir(), "moved")
 				app.SetSettings(&moved)
+			},
+		},
+		{
+			// A source replaced keeping its size and modification time looks
+			// unchanged to the copy; only the scanner's invalidation tells.
+			// The invalidation's removal finishes, and the copy's file is
+			// still written afterwards, as it is when the two interleave.
+			name: "track invalidated while it was read",
+			during: func(t *testing.T, app *Application, ref subtitleTrackRef, params ffmpeg.SubtitleExtractParams) {
+				app.invalidateSubtitleTrackCache(ref.Kind, ref.FileID)
+				app.Wait.Wait()
+				err := os.MkdirAll(filepath.Dir(params.OutputPath), 0o755)
+				if err != nil {
+					t.Error(err)
+				}
 			},
 		},
 	}
@@ -285,7 +302,7 @@ func TestCacheSubtitleTrack_DiscardsACopyThatWouldNotBeFound(t *testing.T) {
 			ref := testTrackRef(movieID, sourcePath)
 			cachePath := expectedCachePath(t, app, ref)
 			app.FFmpeg = &fakeFFmpeg{extractTrackFunc: func(ctx context.Context, params ffmpeg.SubtitleExtractParams) error {
-				tt.during(t, app, sourcePath)
+				tt.during(t, app, ref, params)
 				return copyingTracks(ctx, params)
 			}}
 
@@ -295,6 +312,27 @@ func TestCacheSubtitleTrack_DiscardsACopyThatWouldNotBeFound(t *testing.T) {
 			requireNoTemporaryFiles(t, filepath.Dir(cachePath))
 		})
 	}
+}
+
+func TestCacheSubtitleTrack_DiscardsACopyThatReachesTheSizeCap(t *testing.T) {
+	previous := subtitleTrackCacheMaxBytes
+	subtitleTrackCacheMaxBytes = int64(len("copied track"))
+	t.Cleanup(func() { subtitleTrackCacheMaxBytes = previous })
+	app := setupTestApp(t)
+	fake := &fakeFFmpeg{extractTrackFunc: copyingTracks}
+	app.FFmpeg = fake
+	movieID, sourcePath := insertSubtitleStreamMovie(t, app, "mkv", "hdmv_pgs_subtitle")
+	ref := testTrackRef(movieID, sourcePath)
+
+	app.cacheSubtitleTrack(ref)
+
+	calls := fake.ExtractTrackCalls()
+	if len(calls) != 1 || calls[0].MaxBytes != subtitleTrackCacheMaxBytes {
+		t.Fatalf("extract calls %+v, want one capped at %d bytes", calls, subtitleTrackCacheMaxBytes)
+	}
+	cachePath := expectedCachePath(t, app, ref)
+	requireNoFile(t, cachePath)
+	requireNoTemporaryFiles(t, filepath.Dir(cachePath))
 }
 
 func TestCacheSubtitleTrack_FailedOrCanceledCopyLeavesNothing(t *testing.T) {
@@ -480,6 +518,32 @@ func TestSubtitleStream_FallsBackToTheMediaFileWhenTheCachedCopyFails(t *testing
 	requireNoFile(t, cachePath)
 }
 
+func TestSubtitleStream_RemovesACachedCopyThatBreaksOffMidStream(t *testing.T) {
+	overrideSubtitleStreamTiming(t, time.Hour, time.Second, time.Hour)
+	app := setupTestApp(t)
+	viewer := createTestUser(t, app, "Viewer", "viewer@example.com", false)
+	broken := append(slices.Clone(testStreamHeader), testStreamCluster[:4]...)
+	app.FFmpeg = &fakeFFmpeg{streamFunc: writingSubtitleStreams(broken, errors.New("Invalid data found when processing input"))}
+	movieID, sourcePath := insertSubtitleStreamMovie(t, app, "mkv", "subrip")
+	cachePath := expectedCachePath(t, app, testTrackRef(movieID, sourcePath))
+	writeCachedTrack(t, cachePath, time.Now())
+	server := subtitleStreamServer(t, app, viewer.ID)
+
+	response, err := http.Get(server.URL + movieSubtitleStreamPath(movieID, "0", ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	_, err = io.ReadAll(response.Body)
+	if err == nil {
+		t.Fatal("a stream that broke off ended like a complete one")
+	}
+
+	// The copy goes before the connection is cut, so the next stream reads
+	// the media file instead of breaking off the same way.
+	requireNoFile(t, cachePath)
+}
+
 func TestSubtitleStream_CopiesATrackIntoTheCacheOnceItsStreamStaysOpen(t *testing.T) {
 	overrideSubtitleStreamTiming(t, time.Hour, time.Second, 20*time.Millisecond)
 	app := setupTestApp(t)
@@ -553,6 +617,7 @@ func TestSubtitleWebVTT_ConvertsTheCachedCopyWhenThereIsOne(t *testing.T) {
 	viewer := createTestUser(t, app, "Viewer", "viewer@example.com", false)
 	fake := &fakeFFmpeg{extractTrackFunc: copyingTracks}
 	app.FFmpeg = fake
+	app.Ffprobe = startTimeProbe{startTime: "0.000000"}
 	movieID, sourcePath := insertSubtitleStreamMovie(t, app, "mkv", "subrip")
 	cachePath := expectedCachePath(t, app, testTrackRef(movieID, sourcePath))
 	writeCachedTrack(t, cachePath, time.Now())
@@ -567,6 +632,52 @@ func TestSubtitleWebVTT_ConvertsTheCachedCopyWhenThereIsOne(t *testing.T) {
 	if len(cachedCalls) != 1 || cachedCalls[0] != cachePath || fake.SubtitleCallCount() != 0 {
 		t.Fatalf("cached conversions %v, media file conversions %d", cachedCalls, fake.SubtitleCallCount())
 	}
+	if starts := fake.CachedSubtitleStarts(); starts[0] != 0 {
+		t.Fatalf("cached conversion shifted by %v, want no shift for a file starting at zero", starts)
+	}
+}
+
+// The copy keeps the media file's own timestamps; converting the media file
+// subtracts its container start, so converting the copy must too.
+func TestSubtitleWebVTT_ShiftsTheCachedCopyOntoTheMediaFilesTimeline(t *testing.T) {
+	app := setupTestApp(t)
+	viewer := createTestUser(t, app, "Viewer", "viewer@example.com", false)
+	fake := &fakeFFmpeg{}
+	app.FFmpeg = fake
+	app.Ffprobe = startTimeProbe{startTime: "1.400000"}
+	movieID, sourcePath := insertSubtitleStreamMovie(t, app, "mkv", "subrip")
+	writeCachedTrack(t, expectedCachePath(t, app, testTrackRef(movieID, sourcePath)), time.Now())
+
+	recorder := serveSubtitleWebVTTWithQuery(t, app, viewer.ID, movieID, "0", "")
+
+	starts := fake.CachedSubtitleStarts()
+	if recorder.Code != http.StatusOK || len(starts) != 1 || starts[0] != 1.4 {
+		t.Fatalf("status %d, cached conversions shifted by %v, want 1.4 s", recorder.Code, starts)
+	}
+}
+
+func TestSubtitleWebVTT_ReadsTheMediaFileWhenItsStartTimeIsUnknown(t *testing.T) {
+	for name, probe := range map[string]startTimeProbe{
+		"probe failed":       {err: errors.New("ffprobe: Invalid data found when processing input")},
+		"invalid start time": {startTime: "soon"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			app := setupTestApp(t)
+			viewer := createTestUser(t, app, "Viewer", "viewer@example.com", false)
+			fake := &fakeFFmpeg{}
+			app.FFmpeg = fake
+			app.Ffprobe = probe
+			movieID, sourcePath := insertSubtitleStreamMovie(t, app, "mkv", "subrip")
+			writeCachedTrack(t, expectedCachePath(t, app, testTrackRef(movieID, sourcePath)), time.Now())
+
+			recorder := serveSubtitleWebVTTWithQuery(t, app, viewer.ID, movieID, "0", "")
+
+			if recorder.Code != http.StatusOK || len(fake.CachedSubtitleCalls()) != 0 || fake.SubtitleCallCount() != 1 {
+				t.Fatalf("status %d, cached conversions %v, media file conversions %d",
+					recorder.Code, fake.CachedSubtitleCalls(), fake.SubtitleCallCount())
+			}
+		})
+	}
 }
 
 func TestSubtitleWebVTT_FallsBackToTheMediaFileWhenTheCachedCopyFails(t *testing.T) {
@@ -574,6 +685,7 @@ func TestSubtitleWebVTT_FallsBackToTheMediaFileWhenTheCachedCopyFails(t *testing
 	viewer := createTestUser(t, app, "Viewer", "viewer@example.com", false)
 	fake := &fakeFFmpeg{cachedSubtitleErr: errors.New("Invalid data found when processing input")}
 	app.FFmpeg = fake
+	app.Ffprobe = startTimeProbe{startTime: "0.000000"}
 	movieID, sourcePath := insertSubtitleStreamMovie(t, app, "mkv", "subrip")
 	writeCachedTrack(t, expectedCachePath(t, app, testTrackRef(movieID, sourcePath)), time.Now())
 

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
 	"time"
@@ -104,7 +105,8 @@ func (app *Application) serveSubtitleStream(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	defer opened.cancel()
-	if !opened.fromCache {
+	fromCache := opened.cachePath != ""
+	if !fromCache {
 		app.scheduleSubtitleTrackCache(ctx, ref)
 	}
 
@@ -141,10 +143,20 @@ func (app *Application) serveSubtitleStream(w http.ResponseWriter, r *http.Reque
 			"media", track.Media.String(),
 			"stream_index", sub.StreamIndex,
 			"codec", sub.Codec,
-			"from_cache", opened.fromCache,
+			"from_cache", fromCache,
 			"error", failure,
 			"ffmpeg_error", waitErr,
 		)
+		// A copy that breaks off would break every later stream the same
+		// way, and serving it marks it used, so the sweep would keep it.
+		// A player that stopped reading says nothing about the copy.
+		readFailed := !errors.Is(relayErr, helpers.ErrMatroskaRelayWrite)
+		if fromCache && readFailed {
+			removeErr := os.Remove(opened.cachePath)
+			if removeErr != nil && !errors.Is(removeErr, fs.ErrNotExist) {
+				app.Logger.Warn("could not remove a broken cached subtitle track", "path", opened.cachePath, "error", removeErr)
+			}
+		}
 		panic(http.ErrAbortHandler)
 	}
 }
@@ -178,10 +190,11 @@ func (app *Application) acquireSubtitleStreamSlot(ctx context.Context) bool {
 // openedSubtitleStream is a running FFmpeg whose header has been read and
 // primed; src holds the rest of its output.
 type openedSubtitleStream struct {
-	stream    ffmpeg.SubtitleStream
-	src       *bufio.Reader
-	header    []byte
-	fromCache bool
+	stream ffmpeg.SubtitleStream
+	src    *bufio.Reader
+	header []byte
+	// cachePath is the cached copy FFmpeg reads, or "" for the media file.
+	cachePath string
 	// cancel ends this FFmpeg alone.
 	cancel context.CancelFunc
 }
@@ -197,7 +210,7 @@ func (app *Application) openSubtitleStream(ctx context.Context, ref subtitleTrac
 			StartSec:  startSec,
 		})
 		if err == nil {
-			opened.fromCache = true
+			opened.cachePath = cachePath
 			return opened, nil
 		}
 		if ctx.Err() != nil {

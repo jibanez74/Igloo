@@ -228,7 +228,7 @@ func (app *Application) extractSubtitleWebVTT(ctx context.Context, cacheKey stri
 func (app *Application) convertSubtitleToWebVTT(ctx context.Context, ref subtitleTrackRef) ([]byte, error) {
 	cachePath := app.cachedSubtitleTrack(ref)
 	if cachePath != "" {
-		out, err := app.FFmpeg.ExtractCachedSubtitleAsWebVTT(ctx, cachePath)
+		out, err := app.convertCachedSubtitleToWebVTT(ctx, ref, cachePath)
 		if err == nil {
 			return out, nil
 		}
@@ -239,6 +239,26 @@ func (app *Application) convertSubtitleToWebVTT(ctx context.Context, ref subtitl
 			"track", ref.String(), "error", err)
 	}
 	return app.FFmpeg.ExtractSubtitleAsWebVTT(ctx, ref.SourcePath, ref.StreamIndex)
+}
+
+// convertCachedSubtitleToWebVTT converts the cached copy on the timeline the
+// media file's conversion uses, which starts at the container's start time.
+// Reading that takes ffprobe a look at the file's header, not the full read
+// the copy spares.
+func (app *Application) convertCachedSubtitleToWebVTT(ctx context.Context, ref subtitleTrackRef, cachePath string) ([]byte, error) {
+	probe, err := app.Ffprobe.GetMetadata(ctx, ref.SourcePath)
+	if err != nil {
+		return nil, fmt.Errorf("read the media file's start time: %w", err)
+	}
+	startSec := 0.0
+	rawStart := strings.TrimSpace(probe.Format.StartTime)
+	if rawStart != "" && rawStart != "N/A" {
+		startSec, err = strconv.ParseFloat(rawStart, 64)
+		if err != nil || math.IsNaN(startSec) || math.IsInf(startSec, 0) {
+			return nil, fmt.Errorf("invalid media file start time %q", rawStart)
+		}
+	}
+	return app.FFmpeg.ExtractCachedSubtitleAsWebVTT(ctx, cachePath, startSec)
 }
 
 // parseSubtitleStartSec reads the optional `start` query parameter naming the

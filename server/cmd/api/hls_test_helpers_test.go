@@ -39,8 +39,9 @@ type fakeFFmpeg struct {
 	subtitleCalls int
 	// cachedSubtitleCalls records the cached tracks converted to WebVTT, and
 	// cachedSubtitleErr fails those conversions.
-	cachedSubtitleCalls []string
-	cachedSubtitleErr   error
+	cachedSubtitleCalls  []string
+	cachedSubtitleStarts []float64
+	cachedSubtitleErr    error
 	// streamFunc answers StreamSubtitleMatroska and extractTrackFunc
 	// ExtractSubtitleMatroska; unset, both fail. Their calls are recorded.
 	streamFunc        func(ctx context.Context, params ffmpeg.SubtitleStreamParams) (ffmpeg.SubtitleStream, error)
@@ -101,9 +102,10 @@ func (f *fakeFFmpeg) ExtractSubtitleAsWebVTT(_ context.Context, _ string, _ int6
 	return []byte("WEBVTT\n"), nil
 }
 
-func (f *fakeFFmpeg) ExtractCachedSubtitleAsWebVTT(_ context.Context, cachePath string) ([]byte, error) {
+func (f *fakeFFmpeg) ExtractCachedSubtitleAsWebVTT(_ context.Context, cachePath string, sourceStartSec float64) ([]byte, error) {
 	f.mu.Lock()
 	f.cachedSubtitleCalls = append(f.cachedSubtitleCalls, cachePath)
+	f.cachedSubtitleStarts = append(f.cachedSubtitleStarts, sourceStartSec)
 	err := f.cachedSubtitleErr
 	f.mu.Unlock()
 	if err != nil {
@@ -150,6 +152,12 @@ func (f *fakeFFmpeg) CachedSubtitleCalls() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return slices.Clone(f.cachedSubtitleCalls)
+}
+
+func (f *fakeFFmpeg) CachedSubtitleStarts() []float64 {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.cachedSubtitleStarts)
 }
 
 func (f *fakeFFmpeg) SubtitleCallCount() int {
@@ -259,6 +267,26 @@ func (noMetadataProbe) GetMetadata(context.Context, string) (*ffprobe.FfprobeRes
 
 func (noMetadataProbe) GetAudioMetadata(context.Context, string) (*ffprobe.FfprobeResult, error) {
 	return nil, errors.New("audio metadata lookup is not part of the HLS session path")
+}
+
+// startTimeProbe answers the container start time of a media file, which
+// WebVTT read from a cached track is shifted by.
+type startTimeProbe struct {
+	noMetadataProbe
+
+	startTime string
+	err       error
+}
+
+func (p startTimeProbe) GetMetadata(context.Context, string) (*ffprobe.FfprobeResult, error) {
+	if p.err != nil {
+		return nil, p.err
+	}
+	return &ffprobe.FfprobeResult{Format: ffprobe.Format{StartTime: p.startTime}}, nil
+}
+
+func (startTimeProbe) KeyframeAtOrBefore(context.Context, string, int64, float64) (float64, error) {
+	return 0, errors.New("keyframe lookup is not part of the subtitle path")
 }
 
 // stubKeyframeFfprobe answers the keyframe lookup that measures where a

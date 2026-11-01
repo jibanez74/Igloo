@@ -138,6 +138,10 @@ type Application struct {
 	// one copy run at a time.
 	SubtitleTrackCacheGroup  singleflight.Group
 	SubtitleTrackExtractSlot chan struct{}
+	// SubtitleTrackCacheMu guards SubtitleTrackCacheGeneration, which counts
+	// the cache's invalidations: a copy begun before one is not published.
+	SubtitleTrackCacheMu         sync.Mutex
+	SubtitleTrackCacheGeneration uint64
 }
 
 //go:embed all:webdist

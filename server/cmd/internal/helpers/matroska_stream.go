@@ -37,6 +37,10 @@ var matroskaVoid = []byte{0xEC, 0x81, 0x00}
 // ErrMatroskaHeader reports a stream whose header could not be primed.
 var ErrMatroskaHeader = errors.New("unexpected matroska header")
 
+// ErrMatroskaRelayWrite marks a relay that failed writing to its
+// destination, as opposed to reading a source that broke off or went bad.
+var ErrMatroskaRelayWrite = errors.New("write matroska stream")
+
 // ReadMatroskaHeader reads a Matroska stream through its Tracks element — the
 // EBML header, the Segment's ID and size, and the Segment's children up to
 // Tracks — and returns those bytes with MatroskaPrimerCluster appended. The
@@ -121,7 +125,7 @@ func RelayMatroskaElements(src *bufio.Reader, dst io.Writer, flush func() error,
 			}
 			err := writeAndFlush(dst, flush, piece.data)
 			if err != nil {
-				return err
+				return fmt.Errorf("%w: %w", ErrMatroskaRelayWrite, err)
 			}
 			atBoundary = piece.boundary
 			timer.Reset(keepalive)
@@ -129,7 +133,7 @@ func RelayMatroskaElements(src *bufio.Reader, dst io.Writer, flush func() error,
 			if atBoundary {
 				err := writeAndFlush(dst, flush, matroskaVoid)
 				if err != nil {
-					return err
+					return fmt.Errorf("%w: %w", ErrMatroskaRelayWrite, err)
 				}
 			}
 			timer.Reset(keepalive)

@@ -304,24 +304,32 @@ func TestRelayMatroskaElementsReportsAStreamCutInsideAnElement(t *testing.T) {
 func TestRelayMatroskaElementsReturnsReadAndWriteErrors(t *testing.T) {
 	t.Parallel()
 
+	// Only a failure on the destination side carries ErrMatroskaRelayWrite:
+	// the caller tells a broken source from a player that stopped reading.
 	readFailure := errors.New("pipe broke")
 	err := RelayMatroskaElements(bufio.NewReader(iotest.ErrReader(readFailure)), &relayRecorder{}, func() error { return nil }, time.Hour)
-	if !errors.Is(err, readFailure) {
-		t.Fatalf("read error = %v, want %v", err, readFailure)
+	if !errors.Is(err, readFailure) || errors.Is(err, ErrMatroskaRelayWrite) {
+		t.Fatalf("read error = %v, want %v alone", err, readFailure)
+	}
+
+	stream := newTestMatroskaStream()
+	cut := stream.afterTracks[:len(stream.afterTracks)-1]
+	err = RelayMatroskaElements(bufio.NewReader(bytes.NewReader(cut)), &relayRecorder{}, func() error { return nil }, time.Hour)
+	if !errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, ErrMatroskaRelayWrite) {
+		t.Fatalf("cut source error = %v, want io.ErrUnexpectedEOF alone", err)
 	}
 
 	writeFailure := errors.New("client gone")
 	recorder := &relayRecorder{err: writeFailure}
-	stream := newTestMatroskaStream()
 	err = RelayMatroskaElements(bufio.NewReader(bytes.NewReader(stream.afterTracks)), recorder, recorder.flush, time.Hour)
-	if !errors.Is(err, writeFailure) {
-		t.Fatalf("write error = %v, want %v", err, writeFailure)
+	if !errors.Is(err, writeFailure) || !errors.Is(err, ErrMatroskaRelayWrite) {
+		t.Fatalf("write error = %v, want %v marked as a write", err, writeFailure)
 	}
 
 	flushFailure := errors.New("flush failed")
 	err = RelayMatroskaElements(bufio.NewReader(bytes.NewReader(stream.afterTracks)), &relayRecorder{}, func() error { return flushFailure }, time.Hour)
-	if !errors.Is(err, flushFailure) {
-		t.Fatalf("flush error = %v, want %v", err, flushFailure)
+	if !errors.Is(err, flushFailure) || !errors.Is(err, ErrMatroskaRelayWrite) {
+		t.Fatalf("flush error = %v, want %v marked as a write", err, flushFailure)
 	}
 }
 

@@ -659,10 +659,10 @@ After conversion, Igloo replaces escaped `\h` sequences with spaces. This handle
 When the track has a copy in the subtitle track cache (below), the conversion reads that copy instead of the media file, which spares a full read of a large Matroska file:
 
 ```text
-ffmpeg -v error -nostdin -i <cached track> -copyts -map 0:0 -c:s webvtt -f webvtt pipe:1
+ffmpeg -v error -nostdin -i <cached track> -copyts -map 0:0 [-output_ts_offset -<container start>] -c:s webvtt -f webvtt pipe:1
 ```
 
-The copy keeps the source's own timestamps and `-copyts` keeps them in the cues. The two conversions agree for every file whose timestamps start at zero, which is every Matroska and MP4 file in practice; for a source with a later start time the cached conversion keeps the raw timestamps, the convention copy-video sessions' `X-Igloo-Actual-Start` already uses, where the media-file conversion subtracts the start time. A copy that cannot be converted falls back to the media file. The WebVTT endpoint never starts a copy and never waits for one.
+The copy keeps the source's own timestamps and `-copyts` keeps them in the cues, while the media-file conversion subtracts the file's container start time. So the server reads that start time from the media file's header with ffprobe, which costs a header read rather than the full read the copy spares, and subtracts it with `-output_ts_offset`, which leaves out a file starting at zero (every Matroska and MP4 file in practice); the cues are then the same whichever input they came from. A start time that cannot be read, or a copy that cannot be converted, falls back to the media file. The WebVTT endpoint never starts a copy and never waits for one.
 
 ### Subtitle Streams
 
@@ -708,8 +708,9 @@ The copy keeps the source's timestamps, so streams from it use the same output `
 
 - A copy is made only after a stream from the media file has stayed open for 30 seconds: every TV start at a position opens and drops a stream, and a track only glanced at in a menu is not worth a full read of the file. It reads the whole media file in the background, so the first play of a track always streams from the media file.
 - Streams of one track share one copy (singleflight), and one copy runs at a time server-wide so full-file reads over a network share stay sequential. A copy is skipped when the transcode filesystem has less than 2 GiB free, has a three-hour timeout, and shutdown cancels it.
-- FFmpeg writes a temporary file beside the copy, renamed into place only after FFmpeg exits cleanly, the source still has the size and modification time it had when the copy started, and the transcode directory has not moved meanwhile.
-- The source's size and modification time are in the name, so a changed file simply misses; a request that finds copies of the same stream under another fingerprint deletes them. A copy that FFmpeg cannot read is deleted and the stream falls back to the media file.
+- A copy is capped at 512 MiB (`-fs`), far above any real track (a whole film of image subtitles runs to tens of megabytes), so it cannot eat the space the transcode directory keeps free for HLS sessions. FFmpeg ends a capped copy as if the track had ended, so a copy that reaches the cap is discarded rather than kept cut short.
+- FFmpeg writes a temporary file beside the copy, renamed into place only after FFmpeg exits cleanly, the source still has the size and modification time it had when the copy started, the transcode directory has not moved meanwhile, and no invalidation (below) has happened since the copy started: a source replaced keeping its size and modification time is only told apart by the scanner. Invalidations advance a counter under a lock the rename also holds, so one either stops the rename or removes what it published.
+- The source's size and modification time are in the name, so a changed file simply misses; a request that finds copies of the same stream under another fingerprint deletes them. A copy that FFmpeg cannot read is deleted and the stream falls back to the media file. A copy that breaks off after its header was sent is deleted too, before the connection is cut, since every later stream of it would break the same way and serving it keeps it from the sweep; a player that stopped reading leaves the copy alone.
 - Serving a copy marks it used (its modification time). A sweep at startup and then daily deletes copies unused for 30 days, temporary files older than the copy timeout, and the directories left empty.
 - A rescan that commits a changed, moved or deleted file, and the admin deleting a movie, remove the file's copies; an unchanged file keeps them. Moving the Settings transcode directory deletes `igloo-subtitle-cache` in the old one and leaves everything else there alone.
 

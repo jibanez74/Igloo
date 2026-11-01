@@ -16,6 +16,7 @@ import (
 
 	"igloo/cmd/internal/ffmpeg"
 	"igloo/cmd/internal/ffmpeg/subtitletestutil"
+	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/helpers"
 	"igloo/cmd/internal/mediabin"
 )
@@ -43,8 +44,14 @@ func TestSubtitleStream_RealFFmpegEndToEnd(t *testing.T) {
 		t.Fatalf("build fixtures: %v", err)
 	}
 
+	realFfprobe, err := ffprobe.New()
+	if err != nil {
+		t.Fatalf("ffprobe.New: %v", err)
+	}
+
 	app := setupTestApp(t)
 	app.FFmpeg = realFFmpeg
+	app.Ffprobe = realFfprobe
 	viewer := createTestUser(t, app, "Viewer", "viewer@example.com", false)
 	matroskaID := insertTestHLSMovieFixtureAt(t, app, "h264", 180, fixtures.Matroska, "mkv")
 	insertTestSubtitle(t, app, matroskaID, subtitletestutil.MatroskaPGSStream, "hdmv_pgs_subtitle", "eng")
@@ -52,6 +59,8 @@ func TestSubtitleStream_RealFFmpegEndToEnd(t *testing.T) {
 	insertTestSubtitle(t, app, matroskaID, subtitletestutil.MatroskaDVDStream, "dvd_subtitle", "eng")
 	mp4ID := insertTestHLSMovieFixtureAt(t, app, "h264", 180, fixtures.MP4, "mp4")
 	insertTestSubtitle(t, app, mp4ID, subtitletestutil.MP4MovTextStream, "mov_text", "eng")
+	shiftedID := insertTestHLSMovieFixtureAt(t, app, "h264", 180, fixtures.ShiftedMatroska, "mkv")
+	insertTestSubtitle(t, app, shiftedID, subtitletestutil.MatroskaSubRipStream, "subrip", "spa")
 	server := subtitleStreamServer(t, app, viewer.ID)
 
 	get := func(t *testing.T, path string) []byte {
@@ -141,16 +150,36 @@ func TestSubtitleStream_RealFFmpegEndToEnd(t *testing.T) {
 		})
 	}
 
-	t.Run("WebVTT from the cache", func(t *testing.T) {
-		vttPath := fmt.Sprintf("/api/movies/%d/subtitles/1/web.vtt?start=3.5", matroskaID)
-		fromMediaFile := get(t, vttPath)
-		app.SubtitleVTTCache.Flush()
-		app.cacheSubtitleTrack(subtitleTrackRef{Kind: mediaKindMovie, FileID: matroskaID, StreamIndex: subtitletestutil.MatroskaSubRipStream, SourcePath: fixtures.Matroska})
-		fromCache := get(t, vttPath)
-		if !bytes.Equal(fromCache, fromMediaFile) {
-			t.Fatalf("WebVTT differs:\nmedia file:\n%s\ncache:\n%s", fromMediaFile, fromCache)
-		}
-	})
+	webVTTTracks := []struct {
+		name       string
+		movieID    int64
+		trackIndex string
+		sourcePath string
+	}{
+		{name: "WebVTT from the cache", movieID: matroskaID, trackIndex: "1", sourcePath: fixtures.Matroska},
+		// Its container starts at 2 s, which only the media file's
+		// conversion subtracts unless the server shifts the copy's.
+		{name: "WebVTT from the cache of a source with a nonzero start", movieID: shiftedID, trackIndex: "0", sourcePath: fixtures.ShiftedMatroska},
+	}
+	for _, track := range webVTTTracks {
+		t.Run(track.name, func(t *testing.T) {
+			vttPath := fmt.Sprintf("/api/movies/%d/subtitles/%s/web.vtt?start=3.5", track.movieID, track.trackIndex)
+			fromMediaFile := get(t, vttPath)
+			app.SubtitleVTTCache.Flush()
+			ref := subtitleTrackRef{Kind: mediaKindMovie, FileID: track.movieID, StreamIndex: subtitletestutil.MatroskaSubRipStream, SourcePath: track.sourcePath}
+			app.cacheSubtitleTrack(ref)
+			if app.cachedSubtitleTrack(ref) == "" {
+				t.Fatal("the track was not cached")
+			}
+			fromCache := get(t, vttPath)
+			if !bytes.Equal(fromCache, fromMediaFile) {
+				t.Fatalf("WebVTT differs:\nmedia file:\n%s\ncache:\n%s", fromMediaFile, fromCache)
+			}
+			if !bytes.Contains(fromCache, []byte("-->")) {
+				t.Fatalf("no cues to compare:\n%s", fromCache)
+			}
+		})
+	}
 }
 
 func requireTimesNear(t *testing.T, label string, got []float64, want []float64) {

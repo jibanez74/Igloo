@@ -309,12 +309,15 @@ func TestStreamSubtitleMatroskaCancellationEndsTheProcess(t *testing.T) {
 
 func TestExtractSubtitleMatroskaWritesASingleTrackWithSourceTimestamps(t *testing.T) {
 	tests := []struct {
-		name    string
-		convert bool
-		codec   string
+		name     string
+		convert  bool
+		maxBytes int64
+		codec    string
+		limit    []string
 	}{
 		{name: "copied", codec: "copy"},
 		{name: "converted to SubRip", convert: true, codec: "srt"},
+		{name: "capped", maxBytes: 1024, codec: "copy", limit: []string{"-fs", "1024"}},
 	}
 
 	for _, tt := range tests {
@@ -329,6 +332,7 @@ func TestExtractSubtitleMatroskaWritesASingleTrackWithSourceTimestamps(t *testin
 				StreamIndex:     7,
 				ConvertToSubRip: tt.convert,
 				OutputPath:      outputPath,
+				MaxBytes:        tt.maxBytes,
 			})
 			if err != nil {
 				t.Fatalf("ExtractSubtitleMatroska: %v", err)
@@ -338,8 +342,9 @@ func TestExtractSubtitleMatroskaWritesASingleTrackWithSourceTimestamps(t *testin
 				"-v", "error", "-nostdin", "-y",
 				"-i", "/media/movie.mkv", "-copyts", "-map", "0:7", "-c:s", tt.codec,
 				"-map_chapters", "-1", "-map_metadata:g", "-1",
-				"-f", "matroska", outputPath,
 			}
+			want = append(want, tt.limit...)
+			want = append(want, "-f", "matroska", outputPath)
 			args := readArgumentLog(t, logPath)
 			if !slices.Equal(args, want) {
 				t.Fatalf("args = %q, want %q", args, want)
@@ -358,24 +363,39 @@ func TestExtractSubtitleMatroskaReportsFailure(t *testing.T) {
 	}
 }
 
-func TestExtractCachedSubtitleAsWebVTTKeepsTheCachedTimestamps(t *testing.T) {
-	logPath := filepath.Join(t.TempDir(), "arguments.log")
-	body := writeArgumentLog(logPath) + `
+func TestExtractCachedSubtitleAsWebVTTUsesTheMediaFilesTimeline(t *testing.T) {
+	tests := []struct {
+		name           string
+		sourceStartSec float64
+		offset         []string
+	}{
+		{name: "source starting at zero"},
+		{name: "source starting later", sourceStartSec: 1.4, offset: []string{"-output_ts_offset", "-1.400000"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logPath := filepath.Join(t.TempDir(), "arguments.log")
+			body := writeArgumentLog(logPath) + `
 printf '%s\n' 'WEBVTT' '' '00:01.000 --> 00:02.000' 'a\hb'
 `
-	script := writeFakeFFmpeg(t, "fake ffmpeg", body)
-	f := &ffmpeg{bin: script}
+			script := writeFakeFFmpeg(t, "fake ffmpeg", body)
+			f := &ffmpeg{bin: script}
 
-	output, err := f.ExtractCachedSubtitleAsWebVTT(context.Background(), "/cache/4.mkv")
-	if err != nil {
-		t.Fatalf("ExtractCachedSubtitleAsWebVTT: %v", err)
-	}
-	if !strings.Contains(string(output), "a b") {
-		t.Fatalf("hard-space normalization failed: %q", output)
-	}
-	want := []string{"-v", "error", "-nostdin", "-i", "/cache/4.mkv", "-copyts", "-map", "0:0", "-c:s", "webvtt", "-f", "webvtt", "pipe:1"}
-	args := readArgumentLog(t, logPath)
-	if !slices.Equal(args, want) {
-		t.Fatalf("args = %q, want %q", args, want)
+			output, err := f.ExtractCachedSubtitleAsWebVTT(context.Background(), "/cache/4.mkv", tt.sourceStartSec)
+			if err != nil {
+				t.Fatalf("ExtractCachedSubtitleAsWebVTT: %v", err)
+			}
+			if !strings.Contains(string(output), "a b") {
+				t.Fatalf("hard-space normalization failed: %q", output)
+			}
+			want := []string{"-v", "error", "-nostdin", "-i", "/cache/4.mkv", "-copyts", "-map", "0:0"}
+			want = append(want, tt.offset...)
+			want = append(want, "-c:s", "webvtt", "-f", "webvtt", "pipe:1")
+			args := readArgumentLog(t, logPath)
+			if !slices.Equal(args, want) {
+				t.Fatalf("args = %q, want %q", args, want)
+			}
+		})
 	}
 }

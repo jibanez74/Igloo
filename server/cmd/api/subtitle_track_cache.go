@@ -33,6 +33,12 @@ const (
 	subtitleTrackTempExt        = ".tmp"
 )
 
+// subtitleTrackCacheMaxBytes caps a copy, far above any real track — a whole
+// film of image subtitles runs to tens of megabytes — so a copy cannot eat the
+// space the transcode directory keeps free for HLS sessions. A copy that
+// reaches it is discarded. A variable so tests can shrink it.
+var subtitleTrackCacheMaxBytes int64 = 512 << 20
+
 // subtitleTrackCacheGate is how long a stream must stay open before its
 // track is copied: a TV opens and drops a stream on every start at a
 // position, and copying a track only glanced at in a menu wastes a full read
@@ -161,6 +167,7 @@ func (app *Application) extractSubtitleTrackToCache(ref subtitleTrackRef) {
 	if cached != "" {
 		return
 	}
+	generation := app.subtitleTrackCacheGeneration()
 	before, err := os.Stat(ref.SourcePath)
 	if err != nil {
 		return
@@ -196,12 +203,22 @@ func (app *Application) extractSubtitleTrackToCache(ref subtitleTrackRef) {
 		StreamIndex:     ref.StreamIndex,
 		ConvertToSubRip: ref.ConvertToSubRip,
 		OutputPath:      tempPath,
+		MaxBytes:        subtitleTrackCacheMaxBytes,
 	})
 	if err != nil {
 		shuttingDown := app.hlsShuttingDown()
 		if !shuttingDown {
 			app.Logger.Warn("subtitle track cache extraction failed", "track", ref.String(), "error", err)
 		}
+		return
+	}
+	copied, err := os.Stat(tempPath)
+	if err != nil {
+		return
+	}
+	if copied.Size() >= subtitleTrackCacheMaxBytes {
+		app.Logger.Warn("not caching subtitle track: it is larger than the cache allows",
+			"track", ref.String(), "max_bytes", subtitleTrackCacheMaxBytes)
 		return
 	}
 
@@ -213,7 +230,20 @@ func (app *Application) extractSubtitleTrackToCache(ref subtitleTrackRef) {
 	if !sourceUnchanged || !rootUnchanged {
 		return
 	}
-	err = os.Rename(tempPath, cachePath)
+	// A source replaced without changing its size or modification time is
+	// only told apart by the scanner, whose invalidation may already have
+	// removed this directory. Holding the lock across the rename means an
+	// invalidation either comes first and stops it, or comes after and removes
+	// what it published.
+	app.SubtitleTrackCacheMu.Lock()
+	invalidated := app.SubtitleTrackCacheGeneration != generation
+	if !invalidated {
+		err = os.Rename(tempPath, cachePath)
+	}
+	app.SubtitleTrackCacheMu.Unlock()
+	if invalidated {
+		return
+	}
 	if err != nil {
 		app.Logger.Warn("could not publish cached subtitle track", "track", ref.String(), "error", err)
 		return
@@ -231,14 +261,30 @@ func (app *Application) extractSubtitleTrackToCache(ref subtitleTrackRef) {
 	)
 }
 
-// invalidateSubtitleTrackCache deletes every cached track of one media file.
-// It runs off the caller's goroutine because the scanner calls it holding its
-// lock.
+func (app *Application) subtitleTrackCacheGeneration() uint64 {
+	app.SubtitleTrackCacheMu.Lock()
+	defer app.SubtitleTrackCacheMu.Unlock()
+	return app.SubtitleTrackCacheGeneration
+}
+
+// advanceSubtitleTrackCacheGeneration stops every copy being made from being
+// published. It must run before the removal it announces is scheduled.
+func (app *Application) advanceSubtitleTrackCacheGeneration() {
+	app.SubtitleTrackCacheMu.Lock()
+	defer app.SubtitleTrackCacheMu.Unlock()
+	app.SubtitleTrackCacheGeneration++
+}
+
+// invalidateSubtitleTrackCache deletes every cached track of one media file,
+// and keeps a copy being made of any track from being published, since it may
+// have been read from the old file. The deletion runs off the caller's
+// goroutine because the scanner calls it holding its lock.
 func (app *Application) invalidateSubtitleTrackCache(kind mediaKind, fileID int64) {
 	transcodeRoot := app.hlsTranscodeRoot()
 	if strings.TrimSpace(transcodeRoot) == "" {
 		return
 	}
+	app.advanceSubtitleTrackCacheGeneration()
 	dir := subtitleTrackCacheDir(transcodeRoot, kind, fileID)
 	app.Wait.Go(func() {
 		err := os.RemoveAll(dir)
@@ -254,6 +300,7 @@ func (app *Application) removeSubtitleTrackCacheRoot(transcodeRoot string) {
 	if strings.TrimSpace(transcodeRoot) == "" {
 		return
 	}
+	app.advanceSubtitleTrackCacheGeneration()
 	root := subtitleTrackCacheRoot(transcodeRoot)
 	app.Wait.Go(func() {
 		err := os.RemoveAll(root)

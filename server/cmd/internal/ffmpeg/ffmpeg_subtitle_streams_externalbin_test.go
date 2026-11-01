@@ -176,8 +176,15 @@ func TestExternalFFmpegSubtitleStreamsLandOnTheSessionTimeline(t *testing.T) {
 		textTracks := []subtitleStreamFixtureTrack{
 			{name: "SubRip", path: fixtures.Matroska, stream: subtitletestutil.MatroskaSubRipStream},
 			{name: "mov_text", path: fixtures.MP4, stream: subtitletestutil.MP4MovTextStream, convert: true},
+			// The media file's conversion subtracts its 2 s container start;
+			// the copy keeps the raw timestamps, so its conversion is shifted.
+			{name: "SubRip in a source with a nonzero start", path: fixtures.ShiftedMatroska, stream: subtitletestutil.MatroskaSubRipStream},
 		}
 		for _, track := range textTracks {
+			sourceStart, startErr := subtitletestutil.ContainerStart(ffprobePath, track.path)
+			if startErr != nil {
+				t.Fatal(startErr)
+			}
 			ctx, cancel := context.WithTimeout(context.Background(), externalFFmpegIntegrationTimeout)
 			cachePath := filepath.Join(t.TempDir(), "track.tmp")
 			extractErr := f.ExtractSubtitleMatroska(ctx, SubtitleExtractParams{
@@ -188,7 +195,7 @@ func TestExternalFFmpegSubtitleStreamsLandOnTheSessionTimeline(t *testing.T) {
 				t.Fatalf("%s: ExtractSubtitleMatroska: %v", track.name, extractErr)
 			}
 			fromSource, sourceErr := f.ExtractSubtitleAsWebVTT(ctx, track.path, track.stream)
-			fromCache, cacheErr := f.ExtractCachedSubtitleAsWebVTT(ctx, cachePath)
+			fromCache, cacheErr := f.ExtractCachedSubtitleAsWebVTT(ctx, cachePath, sourceStart)
 			cancel()
 			if sourceErr != nil || cacheErr != nil {
 				t.Fatalf("%s: WebVTT from source: %v, from cache: %v", track.name, sourceErr, cacheErr)
@@ -196,6 +203,29 @@ func TestExternalFFmpegSubtitleStreamsLandOnTheSessionTimeline(t *testing.T) {
 			if !bytes.Equal(fromSource, fromCache) {
 				t.Fatalf("%s: WebVTT differs\nsource:\n%s\ncache:\n%s", track.name, fromSource, fromCache)
 			}
+			if !bytes.Contains(fromSource, []byte("-->")) {
+				t.Fatalf("%s: no cues to compare:\n%s", track.name, fromSource)
+			}
+		}
+	})
+
+	t.Run("a copy that reaches its size cap is reported by its size", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), externalFFmpegIntegrationTimeout)
+		defer cancel()
+		cachePath := filepath.Join(t.TempDir(), "track.tmp")
+		const maxBytes = 512
+		err := f.ExtractSubtitleMatroska(ctx, SubtitleExtractParams{
+			SourcePath: fixtures.Matroska, StreamIndex: subtitletestutil.MatroskaPGSStream, OutputPath: cachePath, MaxBytes: maxBytes,
+		})
+		if err != nil {
+			t.Fatalf("ExtractSubtitleMatroska: %v", err)
+		}
+		info, err := os.Stat(cachePath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Size() < maxBytes {
+			t.Fatalf("capped copy is %d bytes, under its %d-byte cap: a cut copy would pass as complete", info.Size(), maxBytes)
 		}
 	})
 }

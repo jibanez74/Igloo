@@ -246,3 +246,18 @@ func StreamLanguage(ffprobePath string, path string, streamIndex int) (string, e
 	}
 	return strings.TrimSpace(string(output)), nil
 }
+
+// ContainerStart reads a file's container start time in seconds with the
+// ffprobe binary at ffprobePath, as the server reads it.
+func ContainerStart(ffprobePath string, path string) (float64, error) {
+	output, err := exec.Command(ffprobePath, "-v", "error",
+		"-show_entries", "format=start_time", "-of", "csv=p=0", path).Output()
+	if err != nil {
+		return 0, fmt.Errorf("ffprobe start time of %s: %w", path, err)
+	}
+	value, err := strconv.ParseFloat(strings.TrimSpace(string(output)), 64)
+	if err != nil {
+		return 0, fmt.Errorf("ffprobe start time %q: %w", output, err)
+	}
+	return value, nil
+}

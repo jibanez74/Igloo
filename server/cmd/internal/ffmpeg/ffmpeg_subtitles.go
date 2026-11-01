@@ -46,6 +46,10 @@ type SubtitleExtractParams struct {
 	StreamIndex     int64
 	ConvertToSubRip bool
 	OutputPath      string
+	// MaxBytes, when positive, stops the copy once its file reaches that
+	// size (FFmpeg's -fs). FFmpeg then exits as if the track had ended, so
+	// the caller must treat a file that reached it as cut short.
+	MaxBytes int64
 }
 
 // SubtitleStream is a running FFmpeg writing one subtitle track as Matroska.
@@ -110,19 +114,23 @@ func (f *ffmpeg) ExtractSubtitleAsWebVTT(
 	return f.runSubtitleWebVTT(ctx, args)
 }
 
-// ExtractCachedSubtitleAsWebVTT converts a cached text track to WebVTT. The
-// cache keeps the source's timestamps, and -copyts keeps them in the cues.
-func (f *ffmpeg) ExtractCachedSubtitleAsWebVTT(ctx context.Context, cachePath string) ([]byte, error) {
+// ExtractCachedSubtitleAsWebVTT converts a cached text track to WebVTT on the
+// timeline ExtractSubtitleAsWebVTT gives the media file. The cache keeps the
+// source's own timestamps, which -copyts keeps in the cues, while FFmpeg
+// converting the media file subtracts its container start time:
+// sourceStartSec, which -output_ts_offset subtracts here.
+func (f *ffmpeg) ExtractCachedSubtitleAsWebVTT(ctx context.Context, cachePath string, sourceStartSec float64) ([]byte, error) {
 	args := []string{
 		"-v", "error",
 		"-nostdin",
 		"-i", cachePath,
 		"-copyts",
 		"-map", "0:0",
-		"-c:s", "webvtt",
-		"-f", "webvtt",
-		"pipe:1",
 	}
+	if sourceStartSec != 0 {
+		args = append(args, "-output_ts_offset", strconv.FormatFloat(-sourceStartSec, 'f', 6, 64))
+	}
+	args = append(args, "-c:s", "webvtt", "-f", "webvtt", "pipe:1")
 	return f.runSubtitleWebVTT(ctx, args)
 }
 
@@ -180,9 +188,11 @@ func (f *ffmpeg) ExtractSubtitleMatroska(ctx context.Context, params SubtitleExt
 		"-c:s", subtitleMatroskaCodec(params.ConvertToSubRip),
 		"-map_chapters", "-1",
 		"-map_metadata:g", "-1",
-		"-f", "matroska",
-		params.OutputPath,
 	}
+	if params.MaxBytes > 0 {
+		args = append(args, "-fs", strconv.FormatInt(params.MaxBytes, 10))
+	}
+	args = append(args, "-f", "matroska", params.OutputPath)
 
 	cmd := exec.CommandContext(ctx, f.bin, args...)
 	cmd.SysProcAttr = childProcessAttributes()
