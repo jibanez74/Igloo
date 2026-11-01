@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/http"
 	"os"
@@ -114,15 +115,10 @@ func (app *Application) serveSubtitleStream(w http.ResponseWriter, r *http.Reque
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusOK)
 	controller := http.NewResponseController(w)
-	_, writeErr := w.Write(opened.header)
-	if writeErr == nil {
-		writeErr = controller.Flush()
-	}
-	relayErr := writeErr
+	relayErr := writeSubtitleStreamHeader(w, controller.Flush, opened.header)
 	if relayErr == nil {
 		relayErr = helpers.RelayMatroskaElements(opened.src, w, controller.Flush, subtitleStreamKeepalive)
 	}
-	endedByCaller := r.Context().Err() != nil || app.hlsShuttingDown()
 	// FFmpeg closes its output a moment before it exits: after a complete
 	// stream it is left to exit on its own, since stopping it in that moment
 	// would turn a good run into a failed one.
@@ -130,6 +126,9 @@ func (app *Application) serveSubtitleStream(w http.ResponseWriter, r *http.Reque
 		opened.cancel()
 	}
 	waitErr := opened.stream.Wait()
+	// Checked once FFmpeg is gone: a player leaving in that last moment kills
+	// it, and the run it cut short is no failure of the stream.
+	endedByCaller := r.Context().Err() != nil || app.hlsShuttingDown()
 	if endedByCaller {
 		return
 	}
@@ -159,6 +158,19 @@ func (app *Application) serveSubtitleStream(w http.ResponseWriter, r *http.Reque
 		}
 		panic(http.ErrAbortHandler)
 	}
+}
+
+// writeSubtitleStreamHeader sends the primed header. A failure is on the
+// player's side, as one writing the elements that follow is.
+func writeSubtitleStreamHeader(w io.Writer, flush func() error, header []byte) error {
+	_, err := w.Write(header)
+	if err == nil {
+		err = flush()
+	}
+	if err != nil {
+		return fmt.Errorf("%w: %w", helpers.ErrMatroskaRelayWrite, err)
+	}
+	return nil
 }
 
 // writeSubtitleStreamUnavailable answers a retryable refusal: every slot is

@@ -289,6 +289,17 @@ func (startTimeProbe) KeyframeAtOrBefore(context.Context, string, int64, float64
 	return 0, errors.New("keyframe lookup is not part of the subtitle path")
 }
 
+// stuckProbe never answers: it returns only when its context ends, as a
+// probe stuck on an unresponsive share does.
+type stuckProbe struct {
+	startTimeProbe
+}
+
+func (stuckProbe) GetMetadata(ctx context.Context, _ string) (*ffprobe.FfprobeResult, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
 // stubKeyframeFfprobe answers the keyframe lookup that measures where a
 // copy-video session's media really begins.
 type stubKeyframeFfprobe struct {

@@ -139,9 +139,12 @@ type Application struct {
 	SubtitleTrackCacheGroup  singleflight.Group
 	SubtitleTrackExtractSlot chan struct{}
 	// SubtitleTrackCacheMu guards SubtitleTrackCacheGeneration, which counts
-	// the cache's invalidations: a copy begun before one is not published.
+	// the cache's invalidations: a copy begun before one is not published;
+	// and SubtitleTrackCacheRemoving, the cache directories an invalidation
+	// is still removing, whose copies are no longer served.
 	SubtitleTrackCacheMu         sync.Mutex
 	SubtitleTrackCacheGeneration uint64
+	SubtitleTrackCacheRemoving   map[string]int
 }
 
 //go:embed all:webdist

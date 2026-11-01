@@ -39,6 +39,10 @@ const (
 // reaches it is discarded. A variable so tests can shrink it.
 var subtitleTrackCacheMaxBytes int64 = 512 << 20
 
+// removeSubtitleTrackCacheDir removes an invalidated directory. A variable so
+// tests can hold a removal in progress.
+var removeSubtitleTrackCacheDir = os.RemoveAll
+
 // subtitleTrackCacheGate is how long a stream must stay open before its
 // track is copied: a TV opens and drops a stream on every start at a
 // position, and copying a track only glanced at in a menu wastes a full read
@@ -86,6 +90,9 @@ func (app *Application) cachedSubtitleTrack(ref subtitleTrackRef) string {
 		return ""
 	}
 	cachePath := subtitleTrackCachePath(transcodeRoot, ref, info)
+	if app.subtitleTrackCacheDirRemoving(filepath.Dir(cachePath)) {
+		return ""
+	}
 	removeStaleSubtitleTrackCopies(filepath.Dir(cachePath), ref.StreamIndex, filepath.Base(cachePath))
 
 	cached, err := os.Stat(cachePath)
@@ -275,22 +282,43 @@ func (app *Application) advanceSubtitleTrackCacheGeneration() {
 	app.SubtitleTrackCacheGeneration++
 }
 
+func (app *Application) subtitleTrackCacheDirRemoving(dir string) bool {
+	app.SubtitleTrackCacheMu.Lock()
+	defer app.SubtitleTrackCacheMu.Unlock()
+	return app.SubtitleTrackCacheRemoving[dir] > 0
+}
+
 // invalidateSubtitleTrackCache deletes every cached track of one media file,
 // and keeps a copy being made of any track from being published, since it may
 // have been read from the old file. The deletion runs off the caller's
-// goroutine because the scanner calls it holding its lock.
+// goroutine because the scanner calls it holding its lock; until it is done
+// the file's copies are not served, since a source replaced keeping its size
+// and modification time would still find its old copy.
 func (app *Application) invalidateSubtitleTrackCache(kind mediaKind, fileID int64) {
 	transcodeRoot := app.hlsTranscodeRoot()
 	if strings.TrimSpace(transcodeRoot) == "" {
 		return
 	}
-	app.advanceSubtitleTrackCacheGeneration()
 	dir := subtitleTrackCacheDir(transcodeRoot, kind, fileID)
+	app.SubtitleTrackCacheMu.Lock()
+	app.SubtitleTrackCacheGeneration++
+	if app.SubtitleTrackCacheRemoving == nil {
+		app.SubtitleTrackCacheRemoving = make(map[string]int)
+	}
+	app.SubtitleTrackCacheRemoving[dir]++
+	app.SubtitleTrackCacheMu.Unlock()
+
 	app.Wait.Go(func() {
-		err := os.RemoveAll(dir)
+		err := removeSubtitleTrackCacheDir(dir)
 		if err != nil {
 			app.Logger.Warn("could not remove cached subtitle tracks", "path", dir, "error", err)
 		}
+		app.SubtitleTrackCacheMu.Lock()
+		app.SubtitleTrackCacheRemoving[dir]--
+		if app.SubtitleTrackCacheRemoving[dir] == 0 {
+			delete(app.SubtitleTrackCacheRemoving, dir)
+		}
+		app.SubtitleTrackCacheMu.Unlock()
 	})
 }
 

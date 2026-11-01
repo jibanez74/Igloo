@@ -18,6 +18,11 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
+// subtitleStartProbeTimeout bounds the header read that finds a media file's
+// container start before its cached track is converted. A variable so tests
+// can shorten it.
+var subtitleStartProbeTimeout = 10 * time.Second
+
 const (
 	subtitleWebVTTContentType = "text/vtt"
 	subtitleExtractTimeout    = 60 * time.Second
@@ -246,7 +251,11 @@ func (app *Application) convertSubtitleToWebVTT(ctx context.Context, ref subtitl
 // Reading that takes ffprobe a look at the file's header, not the full read
 // the copy spares.
 func (app *Application) convertCachedSubtitleToWebVTT(ctx context.Context, ref subtitleTrackRef, cachePath string) ([]byte, error) {
-	probe, err := app.Ffprobe.GetMetadata(ctx, ref.SourcePath)
+	// A probe of its own budget, so one stuck on a slow share leaves the
+	// conversion time to fall back to the media file.
+	probeCtx, cancel := context.WithTimeout(ctx, subtitleStartProbeTimeout)
+	defer cancel()
+	probe, err := app.Ffprobe.GetMetadata(probeCtx, ref.SourcePath)
 	if err != nil {
 		return nil, fmt.Errorf("read the media file's start time: %w", err)
 	}

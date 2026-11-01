@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"igloo/cmd/internal/ffmpeg"
+	"igloo/cmd/internal/helpers"
 )
 
 // testTrackRef names the subtitle insertSubtitleStreamMovie inserted.
@@ -398,6 +399,39 @@ func TestInvalidateCommitted_RemovesTheFilesCachedTracks(t *testing.T) {
 	requireNoFile(t, showFileDir)
 }
 
+// A source replaced keeping its size and modification time still finds its
+// old copy by name, until the invalidation's removal, which runs in the
+// background, is done.
+func TestCachedSubtitleTrack_IsNotServedWhileItsInvalidationRuns(t *testing.T) {
+	removing := make(chan struct{})
+	release := make(chan struct{})
+	previous := removeSubtitleTrackCacheDir
+	removeSubtitleTrackCacheDir = func(dir string) error {
+		close(removing)
+		<-release
+		return os.RemoveAll(dir)
+	}
+	t.Cleanup(func() { removeSubtitleTrackCacheDir = previous })
+	app := setupTestApp(t)
+	movieID, sourcePath := insertSubtitleStreamMovie(t, app, "mkv", "subrip")
+	ref := testTrackRef(movieID, sourcePath)
+	writeCachedTrack(t, expectedCachePath(t, app, ref), time.Now())
+
+	app.invalidateSubtitleTrackCache(ref.Kind, ref.FileID)
+	<-removing
+	found := app.cachedSubtitleTrack(ref)
+	close(release)
+	app.Wait.Wait()
+
+	if found != "" {
+		t.Fatalf("served %s while its invalidation was still removing it", found)
+	}
+	writeCachedTrack(t, expectedCachePath(t, app, ref), time.Now())
+	if app.cachedSubtitleTrack(ref) == "" {
+		t.Fatal("a copy made after the invalidation finished is not served")
+	}
+}
+
 func TestSweepSubtitleTrackCache_RemovesWhatIsNoLongerUsed(t *testing.T) {
 	app := setupTestApp(t)
 	root := app.hlsTranscodeRoot()
@@ -544,6 +578,90 @@ func TestSubtitleStream_RemovesACachedCopyThatBreaksOffMidStream(t *testing.T) {
 	requireNoFile(t, cachePath)
 }
 
+// FFmpeg closes its output a moment before it exits; a player leaving in that
+// moment kills it, and the run it cut short says nothing about the copy.
+func TestSubtitleStream_KeepsACachedCopyWhenThePlayerLeavesAsFFmpegExits(t *testing.T) {
+	overrideSubtitleStreamTiming(t, time.Hour, time.Second, time.Hour)
+	app := setupTestApp(t)
+	viewer := createTestUser(t, app, "Viewer", "viewer@example.com", false)
+	streams := make(chan *scriptedSubtitleStream, 1)
+	app.FFmpeg = &fakeFFmpeg{streamFunc: heldSubtitleStreams(streams)}
+	movieID, sourcePath := insertSubtitleStreamMovie(t, app, "mkv", "subrip")
+	cachePath := expectedCachePath(t, app, testTrackRef(movieID, sourcePath))
+	writeCachedTrack(t, cachePath, time.Now())
+	server := subtitleStreamServer(t, app, viewer.ID)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, server.URL+movieSubtitleStreamPath(movieID, "0", ""), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	responses := make(chan *http.Response, 1)
+	go func() {
+		response, doErr := http.DefaultClient.Do(request)
+		if doErr == nil {
+			responses <- response
+		}
+	}()
+	stream := receiveStream(t, streams)
+	if !stream.params.FromCache {
+		t.Fatalf("stream = %+v, want the cached copy", stream.params)
+	}
+	// The whole stream, then its output closes while FFmpeg has yet to exit.
+	stream.write(t, append(slices.Clone(testStreamHeader), testStreamCluster...))
+	_ = stream.writer.Close()
+	response := <-responses
+	defer response.Body.Close()
+	_ = readExactly(t, response.Body, len(testPrimedStream(testStreamCluster)))
+
+	cancel()
+	waitForStreamEnd(t, stream)
+	deadline := time.Now().Add(5 * time.Second)
+	for len(app.SubtitleStreamSlots) != 0 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if len(app.SubtitleStreamSlots) != 0 {
+		t.Fatal("the handler did not finish")
+	}
+
+	_, err = os.Stat(cachePath)
+	if err != nil {
+		t.Fatalf("a good copy was deleted when its player left: %v", err)
+	}
+}
+
+func TestWriteSubtitleStreamHeader_MarksFailuresAsThePlayersSide(t *testing.T) {
+	gone := errors.New("connection reset by peer")
+	tests := map[string]struct {
+		writer io.Writer
+		flush  func() error
+	}{
+		"write fails": {writer: failingWriter{err: gone}, flush: func() error { return nil }},
+		"flush fails": {writer: io.Discard, flush: func() error { return gone }},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			err := writeSubtitleStreamHeader(tt.writer, tt.flush, testPrimedStream())
+			if !errors.Is(err, gone) || !errors.Is(err, helpers.ErrMatroskaRelayWrite) {
+				t.Fatalf("error = %v, want %v marked as the player's side", err, gone)
+			}
+		})
+	}
+	err := writeSubtitleStreamHeader(io.Discard, func() error { return nil }, testPrimedStream())
+	if err != nil {
+		t.Fatalf("a header that was sent reported %v", err)
+	}
+}
+
+type failingWriter struct {
+	err error
+}
+
+func (w failingWriter) Write([]byte) (int, error) {
+	return 0, w.err
+}
+
 func TestSubtitleStream_CopiesATrackIntoTheCacheOnceItsStreamStaysOpen(t *testing.T) {
 	overrideSubtitleStreamTiming(t, time.Hour, time.Second, 20*time.Millisecond)
 	app := setupTestApp(t)
@@ -653,6 +771,28 @@ func TestSubtitleWebVTT_ShiftsTheCachedCopyOntoTheMediaFilesTimeline(t *testing.
 	starts := fake.CachedSubtitleStarts()
 	if recorder.Code != http.StatusOK || len(starts) != 1 || starts[0] != 1.4 {
 		t.Fatalf("status %d, cached conversions shifted by %v, want 1.4 s", recorder.Code, starts)
+	}
+}
+
+// A probe stuck on a slow share must not spend the conversion's whole
+// deadline, or there is none left to read the media file instead.
+func TestSubtitleWebVTT_ReadsTheMediaFileWhenTheStartTimeProbeStalls(t *testing.T) {
+	previous := subtitleStartProbeTimeout
+	subtitleStartProbeTimeout = 20 * time.Millisecond
+	t.Cleanup(func() { subtitleStartProbeTimeout = previous })
+	app := setupTestApp(t)
+	viewer := createTestUser(t, app, "Viewer", "viewer@example.com", false)
+	fake := &fakeFFmpeg{}
+	app.FFmpeg = fake
+	app.Ffprobe = stuckProbe{}
+	movieID, sourcePath := insertSubtitleStreamMovie(t, app, "mkv", "subrip")
+	writeCachedTrack(t, expectedCachePath(t, app, testTrackRef(movieID, sourcePath)), time.Now())
+
+	recorder := serveSubtitleWebVTTWithQuery(t, app, viewer.ID, movieID, "0", "")
+
+	if recorder.Code != http.StatusOK || fake.SubtitleCallCount() != 1 {
+		t.Fatalf("status %d, media file conversions %d, want the media file read after the probe gave up",
+			recorder.Code, fake.SubtitleCallCount())
 	}
 }
 
