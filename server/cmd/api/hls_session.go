@@ -997,7 +997,12 @@ func stopHLSSession(session *HLSSession) {
 }
 
 func (app *Application) hlsTranscodeRoot() string {
-	settings := app.CurrentSettings()
+	return app.transcodeRootOf(app.CurrentSettings())
+}
+
+// transcodeRootOf is the transcode directory settings name, or the startup
+// config's when they name none.
+func (app *Application) transcodeRootOf(settings *database.Setting) string {
 	if strings.TrimSpace(settings.TranscodeDir) != "" {
 		return settings.TranscodeDir
 	}

@@ -16,6 +16,54 @@ func IsBitmapSubtitleCodec(codec string) bool {
 	return bitmapSubtitleCodecs[normalizeCodec(codec)]
 }
 
+// SubtitleMatroskaPlan says how one subtitle stream travels in a single-track
+// Matroska stream.
+type SubtitleMatroskaPlan int
+
+const (
+	SubtitleMatroskaUnsupported SubtitleMatroskaPlan = iota
+	SubtitleMatroskaCopy
+	SubtitleMatroskaSubRip
+)
+
+// Matroska carries these codecs as they are.
+var matroskaCopySubtitleCodecs = map[string]bool{
+	"subrip":            true,
+	"ass":               true,
+	"ssa":               true,
+	"hdmv_pgs_subtitle": true,
+	"dvd_subtitle":      true,
+	"dvb_subtitle":      true,
+}
+
+// Image-based or data codecs that FFmpeg cannot convert to SubRip, besides the
+// bitmap codecs above.
+var unconvertibleSubtitleCodecs = map[string]bool{
+	"xsub":         true,
+	"dvb_teletext": true,
+	"arib_caption": true,
+}
+
+// SubtitleMatroskaPlanFor copies the codecs Matroska carries and converts
+// every other text codec (mov_text, eia_608, webvtt, …) to SubRip. A VobSub
+// track is copied only out of Matroska, which keeps its palette in the track's
+// codec data; a player cannot draw it without one.
+func SubtitleMatroskaPlanFor(codec string, container string) SubtitleMatroskaPlan {
+	name := normalizeCodec(codec)
+	isVobSubOutsideMatroska := name == "dvd_subtitle" && normalizeCodec(container) != "mkv"
+	if isVobSubOutsideMatroska {
+		return SubtitleMatroskaUnsupported
+	}
+	if matroskaCopySubtitleCodecs[name] {
+		return SubtitleMatroskaCopy
+	}
+	isImageBased := bitmapSubtitleCodecs[name] || unconvertibleSubtitleCodecs[name]
+	if isImageBased || name == "" {
+		return SubtitleMatroskaUnsupported
+	}
+	return SubtitleMatroskaSubRip
+}
+
 // SubtitleCacheKey names one extracted track. kind separates the movie and
 // show file id spaces; fileID is the physical file (a movie id, or a show file
 // id shared by every episode in that file), since the VTT depends only on the

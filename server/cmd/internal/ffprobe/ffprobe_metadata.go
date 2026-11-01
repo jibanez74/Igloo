@@ -97,9 +97,12 @@ func (t *StreamTags) UnmarshalJSON(data []byte) error {
 }
 
 type Format struct {
-	Duration string     `json:"duration"`
-	BitRate  string     `json:"bit_rate"`
-	Tags     FormatTags `json:"tags"`
+	Duration string `json:"duration"`
+	// StartTime is the container's start, which FFmpeg subtracts from every
+	// timestamp it reads unless told to keep them.
+	StartTime string     `json:"start_time"`
+	BitRate   string     `json:"bit_rate"`
+	Tags      FormatTags `json:"tags"`
 }
 
 type FormatTags struct {

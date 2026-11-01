@@ -256,7 +256,12 @@ func TestExtractSubtitleWebVTT_ShutdownWaitsForARunItsCallerLeft(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, _ = app.extractSubtitleWebVTT(ctx, cacheKey, "/media/movie.mkv", testSubtitleStreamIndex)
+	_, _ = app.extractSubtitleWebVTT(ctx, cacheKey, subtitleTrackRef{
+		Kind:        mediaKindMovie,
+		FileID:      1,
+		StreamIndex: testSubtitleStreamIndex,
+		SourcePath:  "/media/movie.mkv",
+	})
 
 	app.Wait.Wait()
 	if fake.SubtitleCallCount() != 1 {

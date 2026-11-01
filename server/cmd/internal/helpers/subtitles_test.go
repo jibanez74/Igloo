@@ -59,3 +59,42 @@ func TestSubtitleCachePrefixDoesNotMatchOtherFileIDs(t *testing.T) {
 		t.Errorf("prefix for file 1 (%q) also matches a key for file 12", prefix)
 	}
 }
+
+func TestSubtitleMatroskaPlanFor(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		codec     string
+		container string
+		want      SubtitleMatroskaPlan
+	}{
+		{name: "SubRip is copied", codec: "subrip", container: "mkv", want: SubtitleMatroskaCopy},
+		{name: "ASS is copied", codec: "ass", container: "mkv", want: SubtitleMatroskaCopy},
+		{name: "SSA is copied", codec: "ssa", container: "mkv", want: SubtitleMatroskaCopy},
+		{name: "PGS is copied", codec: "hdmv_pgs_subtitle", container: "mkv", want: SubtitleMatroskaCopy},
+		{name: "PGS in MP4 is copied", codec: "hdmv_pgs_subtitle", container: "mp4", want: SubtitleMatroskaCopy},
+		{name: "DVB is copied", codec: "dvb_subtitle", container: "mkv", want: SubtitleMatroskaCopy},
+		{name: "VobSub in Matroska is copied", codec: "dvd_subtitle", container: "mkv", want: SubtitleMatroskaCopy},
+		{name: "VobSub elsewhere has no palette", codec: "dvd_subtitle", container: "mp4", want: SubtitleMatroskaUnsupported},
+		{name: "case and whitespace", codec: " HDMV_PGS_SUBTITLE ", container: " MKV ", want: SubtitleMatroskaCopy},
+		{name: "mov_text is converted", codec: "mov_text", container: "mp4", want: SubtitleMatroskaSubRip},
+		{name: "EIA-608 is converted", codec: "eia_608", container: "mp4", want: SubtitleMatroskaSubRip},
+		{name: "WebVTT is converted", codec: "webvtt", container: "mkv", want: SubtitleMatroskaSubRip},
+		{name: "plain text is converted", codec: "text", container: "mkv", want: SubtitleMatroskaSubRip},
+		{name: "XSUB is unsupported", codec: "xsub", container: "avi", want: SubtitleMatroskaUnsupported},
+		{name: "teletext is unsupported", codec: "dvb_teletext", container: "mkv", want: SubtitleMatroskaUnsupported},
+		{name: "empty codec is unsupported", codec: "", container: "mkv", want: SubtitleMatroskaUnsupported},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := SubtitleMatroskaPlanFor(tt.codec, tt.container)
+			if got != tt.want {
+				t.Fatalf("SubtitleMatroskaPlanFor(%q, %q) = %v, want %v", tt.codec, tt.container, got, tt.want)
+			}
+		})
+	}
+}

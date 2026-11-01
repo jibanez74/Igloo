@@ -240,6 +240,11 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 		return
 	}
 	app.syncWatcher()
+	previousTranscodeRoot := app.transcodeRootOf(&previous)
+	transcodeRootMoved := previousTranscodeRoot != app.transcodeRootOf(&updatedSettings)
+	if transcodeRootMoved {
+		app.removeSubtitleTrackCacheRoot(previousTranscodeRoot)
+	}
 	// Copies stop being served when downloads go off, and the URLs of the
 	// old directory's copies stop resolving when it moves.
 	dropsCopies := previous.DownloadImages &&

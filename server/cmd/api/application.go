@@ -129,6 +129,22 @@ type Application struct {
 		RequestChanges()
 		Revert(ctx context.Context) error
 	}
+
+	// SubtitleStreamSlots bounds the subtitle streams open at once; each
+	// holds an FFmpeg process for as long as its player plays.
+	SubtitleStreamSlots chan struct{}
+	// SubtitleTrackCacheGroup shares a copy of one track into the cache
+	// between the streams that ask for it, and SubtitleTrackExtractSlot lets
+	// one copy run at a time.
+	SubtitleTrackCacheGroup  singleflight.Group
+	SubtitleTrackExtractSlot chan struct{}
+	// SubtitleTrackCacheMu guards SubtitleTrackCacheGeneration, which counts
+	// the cache's invalidations: a copy begun before one is not published;
+	// and SubtitleTrackCacheRemoving, the cache directories an invalidation
+	// is still removing, whose copies are no longer served.
+	SubtitleTrackCacheMu         sync.Mutex
+	SubtitleTrackCacheGeneration uint64
+	SubtitleTrackCacheRemoving   map[string]int
 }
 
 //go:embed all:webdist
@@ -452,6 +468,7 @@ func (app *Application) endDeletedOwnerRooms(roomIDs []int64) {
 // pre-rescan data until its TTL expires.
 func (app *Application) invalidateCommittedMovie(movieID int64) {
 	app.invalidateSubtitleVTTCache(mediaKindMovie, movieID)
+	app.invalidateSubtitleTrackCache(mediaKindMovie, movieID)
 	app.StreamFileCache.invalidate(movieStreamFileKey(movieID))
 	app.MovieStreamsCache.invalidate(movieStreamsKey(movieID))
 	app.invalidateHLSSessionsForFile(mediaKindMovie, movieID)
@@ -466,6 +483,7 @@ func (app *Application) invalidateCommittedMovie(movieID int64) {
 // rooms do not play episodes.
 func (app *Application) invalidateCommittedShowFile(fileID int64, episodeIDs []int64) {
 	app.invalidateSubtitleVTTCache(mediaKindEpisode, fileID)
+	app.invalidateSubtitleTrackCache(mediaKindEpisode, fileID)
 	for _, episodeID := range episodeIDs {
 		app.StreamFileCache.invalidate(episodeStreamFileKey(episodeID))
 	}
@@ -495,6 +513,8 @@ func (app *Application) initRuntimeCaches() {
 
 	// Cache extracted WebVTT payloads to avoid repeated subtitle conversion work.
 	app.SubtitleVTTCache = cache.New(subtitleCacheTTL, subtitleCacheCleanup)
+	app.SubtitleStreamSlots = make(chan struct{}, subtitleStreamMaxOpen)
+	app.SubtitleTrackExtractSlot = make(chan struct{}, 1)
 	// Reads app.Tmdb as initialized above and yields an empty pool while it is nil.
 	app.PrerollTheaters = preroll.NewTheatersPool(app.Tmdb, app.Logger)
 	app.RoomHLSTombstone = cache.New(hlsRoomSessionTTL, hlsSessionCacheSweep)

@@ -49,6 +49,11 @@ func main() {
 		app.runDeviceExpirySweeper(deviceExpiryCtx)
 	})
 
+	// Ends with the scans, which every way out of the process cancels.
+	app.Wait.Go(func() {
+		app.runSubtitleTrackCacheSweeper(app.ScanContext)
+	})
+
 	startupSweepCtx, cancelStartupSweep := context.WithTimeout(deviceExpiryCtx, deviceExpirySweepTimeout)
 	app.sweepStaleDevices(startupSweepCtx)
 	cancelStartupSweep()
