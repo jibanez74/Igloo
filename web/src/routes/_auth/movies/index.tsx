@@ -209,8 +209,9 @@ function MoviesPage() {
     }));
   };
 
+  // Opened from the More menu, the menu returns focus to its trigger; only
+  // the playlists toolbar's Liked button moves it to Back to playlists.
   const handleOpenLikedMovies = () => {
-    primeEnterLikedFocus();
     navigateWithTabTransition("playlists", prev => ({
       ...prev,
       tab: "playlists",

@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -535,8 +535,17 @@ describe("movies route focus restoration", () => {
       expect(
         screen.getByRole("button", { name: "Back to playlists" }),
       ).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "More options" })).toHaveFocus();
     });
+
+    // The page's own focus move waits for the liked list and then a frame, so
+    // let both pass before checking that focus stayed on the menu trigger.
+    expect(
+      await screen.findByText("1 liked movie", { exact: true }),
+    ).toBeInTheDocument();
+    await act(async () => {
+      await new Promise(resolve => window.setTimeout(resolve, 50));
+    });
+    expect(screen.getByRole("button", { name: "More options" })).toHaveFocus();
   }, 10_000);
 
   it("disables Request Movie when TMDB search is unavailable", async () => {
