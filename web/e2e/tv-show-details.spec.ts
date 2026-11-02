@@ -86,6 +86,14 @@ test("season tabs are reachable and operable from the keyboard", async ({
   const season2 = page.getByRole("tab", { name: "Season 2" });
   await expect(season1).toBeVisible();
 
+  // Use the skip links to reach seasons without focusing library or playback
+  // links, whose preload requests this details mock does not serve.
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("link", { name: "Skip to page content" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await tabTo(page, page.getByRole("link", { name: "Skip to seasons" }));
+  await page.keyboard.press("Enter");
+
   // Only the selected tab is in the Tab order (roving tabindex).
   await tabTo(page, season1);
 
