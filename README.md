@@ -69,7 +69,7 @@ Open [http://localhost:3000](http://localhost:3000) and sign in with your admini
 
 In **Settings → Libraries**, save your movie, TV show, and music paths, then start a scan for each library you want to use. Configured libraries also scan when the server starts; with the watcher on, it walks them instead. A scan can take time, and files being written are deferred until they have been quiet for 60 seconds. Run another scan after adding or changing files, or turn on the library watcher to apply changes as they happen. Saving a path by itself does not start a scan unless the watcher is on.
 
-For TV files, use a layout such as `Show Name/Season 1/S01E02 - Episode Title.mkv`. `Specials` is supported for season zero. Combined episode files are catalogued as separate episodes, but playback runs the whole file because Igloo does not guess episode boundaries. More filename rules are in the [media guide](docs/ffmpeg.md#tv-show-scanning).
+For TV files, use a layout such as `Show Name/Season 1/S01E02 - Episode Title.mkv`. `Specials` is supported for season zero. Combined episode files are catalogued as separate episodes, but playback runs the whole file because Igloo does not guess episode boundaries. More filename rules are in the [library-scanning guide](docs/library-scanning.md#tv-show-scanning).
 
 ## Configuration
 
@@ -95,7 +95,7 @@ The `DEFAULT_ADMIN_*` values are used when there is no administrator; changing t
 
 When possible, Igloo serves the original movie or episode file directly. Otherwise, FFmpeg can remux or transcode it to HLS. Alternate audio tracks may require HLS. Supported text subtitles can be converted to WebVTT; bitmap subtitles cannot. CPU transcoding is the default, and selected hardware acceleration falls back to CPU when unavailable.
 
-For codec behavior, session limits, subtitles, HDR, and operational details, read the [FFmpeg and playback guide](docs/ffmpeg.md).
+For codec behavior, session limits, subtitles, HDR, and operational details, read the [FFmpeg and playback guide](docs/ffmpeg.md). Catalog enrichment, file-change detection, the watcher, and artwork are covered in the [library-scanning guide](docs/library-scanning.md).
 
 ## Build a production binary
 
