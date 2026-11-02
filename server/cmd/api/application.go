@@ -130,6 +130,10 @@ type Application struct {
 		Revert(ctx context.Context) error
 	}
 
+	// Orders WebVTT publication and renewal against technical invalidation.
+	SubtitleVTTCacheMu         sync.Mutex
+	SubtitleVTTCacheGeneration uint64
+
 	// SubtitleStreamSlots bounds the subtitle streams open at once; each
 	// holds an FFmpeg process for as long as its player plays.
 	SubtitleStreamSlots chan struct{}
@@ -467,8 +471,9 @@ func (app *Application) endDeletedOwnerRooms(roomIDs []int64) {
 // the test harness can wire the same list; a cache missing from here serves
 // pre-rescan data until its TTL expires.
 func (app *Application) invalidateCommittedMovie(movieID int64) {
-	app.invalidateSubtitleVTTCache(mediaKindMovie, movieID)
+	// Block old track copies before a new WebVTT generation can read them.
 	app.invalidateSubtitleTrackCache(mediaKindMovie, movieID)
+	app.invalidateSubtitleVTTCache(mediaKindMovie, movieID)
 	app.StreamFileCache.invalidate(movieStreamFileKey(movieID))
 	app.MovieStreamsCache.invalidate(movieStreamsKey(movieID))
 	app.invalidateHLSSessionsForFile(mediaKindMovie, movieID)
@@ -482,8 +487,8 @@ func (app *Application) invalidateCommittedMovie(movieID int64) {
 // MovieStreamsCache twin: that cache only serves watch-room track pins, and
 // rooms do not play episodes.
 func (app *Application) invalidateCommittedShowFile(fileID int64, episodeIDs []int64) {
-	app.invalidateSubtitleVTTCache(mediaKindEpisode, fileID)
 	app.invalidateSubtitleTrackCache(mediaKindEpisode, fileID)
+	app.invalidateSubtitleVTTCache(mediaKindEpisode, fileID)
 	for _, episodeID := range episodeIDs {
 		app.StreamFileCache.invalidate(episodeStreamFileKey(episodeID))
 	}

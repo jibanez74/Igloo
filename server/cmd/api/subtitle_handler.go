@@ -18,14 +18,15 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
-// subtitleStartProbeTimeout bounds the header read that finds a media file's
-// container start before its cached track is converted. A variable so tests
-// can shorten it.
-var subtitleStartProbeTimeout = 10 * time.Second
+// Bound the source-start probe and the shared WebVTT extraction. Variables
+// let tests exercise timeout cancellation without waiting for production budgets.
+var (
+	subtitleStartProbeTimeout = 10 * time.Second
+	subtitleExtractTimeout    = 60 * time.Second
+)
 
 const (
 	subtitleWebVTTContentType = "text/vtt"
-	subtitleExtractTimeout    = 60 * time.Second
 	subtitleCacheTTL          = time.Hour
 	subtitleCacheCleanup      = 10 * time.Minute
 )
@@ -41,6 +42,10 @@ const (
 // cache is keyed on the physical file, so a combined TV file is cleared for
 // all of its episodes at once.
 func (app *Application) invalidateSubtitleVTTCache(kind mediaKind, fileID int64) {
+	app.SubtitleVTTCacheMu.Lock()
+	defer app.SubtitleVTTCacheMu.Unlock()
+	app.SubtitleVTTCacheGeneration++
+
 	prefix := helpers.SubtitleCachePrefix(string(kind), fileID)
 	for key := range app.SubtitleVTTCache.Items() {
 		if strings.HasPrefix(key, prefix) {
@@ -126,6 +131,12 @@ func (app *Application) resolveSubtitleTrackRequest(w http.ResponseWriter, r *ht
 }
 
 func (app *Application) serveSubtitleWebVTT(w http.ResponseWriter, r *http.Request, kind mediaKind) {
+	// Capture before reading source/track rows: a rescan can commit while
+	// those queries run, before there is a physical file ID to key on.
+	app.SubtitleVTTCacheMu.Lock()
+	generation := app.SubtitleVTTCacheGeneration
+	app.SubtitleVTTCacheMu.Unlock()
+
 	track, ok := app.resolveSubtitleTrackRequest(w, r, kind)
 	if !ok {
 		return
@@ -139,14 +150,8 @@ func (app *Application) serveSubtitleWebVTT(w http.ResponseWriter, r *http.Reque
 
 	cacheKey := helpers.SubtitleCacheKey(string(kind), track.Source.FileID, sub.StreamIndex)
 
-	// Only []byte is ever stored under a subtitle key.
-	cached, _ := app.SubtitleVTTCache.Get(cacheKey)
-	vtt, isVTT := cached.([]byte)
+	vtt, isVTT := app.cachedSubtitleWebVTT(cacheKey, generation)
 	if isVTT {
-		// A track in use is asked for again on every rebase, so a hit restarts
-		// its TTL rather than letting a long film outlive it. Replace leaves
-		// alone an entry a rescan invalidated after the read.
-		_ = app.SubtitleVTTCache.Replace(cacheKey, vtt, subtitleCacheTTL)
 		writeSubtitleWebVTT(w, vtt, track.StartSec)
 		return
 	}
@@ -157,7 +162,7 @@ func (app *Application) serveSubtitleWebVTT(w http.ResponseWriter, r *http.Reque
 		StreamIndex: sub.StreamIndex,
 		SourcePath:  track.Source.FilePath,
 	}
-	out, err := app.extractSubtitleWebVTT(r.Context(), cacheKey, ref)
+	out, err := app.extractSubtitleWebVTT(r.Context(), cacheKey, ref, generation)
 	if err != nil {
 		clientGone := r.Context().Err() != nil
 		if clientGone {
@@ -171,6 +176,22 @@ func (app *Application) serveSubtitleWebVTT(w http.ResponseWriter, r *http.Reque
 	writeSubtitleWebVTT(w, out, track.StartSec)
 }
 
+// cachedSubtitleWebVTT renews a hit atomically with respect to invalidation.
+// An older request must neither renew nor overwrite a newer generation's entry.
+func (app *Application) cachedSubtitleWebVTT(cacheKey string, generation uint64) ([]byte, bool) {
+	app.SubtitleVTTCacheMu.Lock()
+	defer app.SubtitleVTTCacheMu.Unlock()
+	if generation != app.SubtitleVTTCacheGeneration {
+		return nil, false
+	}
+	cached, _ := app.SubtitleVTTCache.Get(cacheKey)
+	vtt, ok := cached.([]byte)
+	if ok {
+		_ = app.SubtitleVTTCache.Replace(cacheKey, vtt, subtitleCacheTTL)
+	}
+	return vtt, ok
+}
+
 // extractSubtitleWebVTT converts a track once for every request waiting on it
 // (every watch-room member asks for the same .vtt at once) and caches the
 // result. The run is detached from the request that starts it: a player drops
@@ -181,20 +202,18 @@ func (app *Application) serveSubtitleWebVTT(w http.ResponseWriter, r *http.Reque
 // app.Wait before the caller can return, so shutdown never passes
 // app.Wait.Wait() with a run still to start; the caller stops waiting when its
 // own request ends.
-func (app *Application) extractSubtitleWebVTT(ctx context.Context, cacheKey string, ref subtitleTrackRef) ([]byte, error) {
+func (app *Application) extractSubtitleWebVTT(ctx context.Context, cacheKey string, ref subtitleTrackRef, generation uint64) ([]byte, error) {
 	// Buffered, so the goroutine never blocks on a caller that stopped waiting.
 	results := make(chan singleflight.Result, 1)
 	app.Wait.Add(1)
 	go func() {
 		defer app.Wait.Done()
 
-		val, err, shared := app.SubtitleExtractGroup.Do(cacheKey, func() (interface{}, error) {
-			cached, found := app.SubtitleVTTCache.Get(cacheKey)
+		flightKey := fmt.Sprintf("%s:g%d", cacheKey, generation)
+		val, err, shared := app.SubtitleExtractGroup.Do(flightKey, func() (interface{}, error) {
+			cached, found := app.cachedSubtitleWebVTT(cacheKey, generation)
 			if found {
-				vtt, ok := cached.([]byte)
-				if ok {
-					return vtt, nil
-				}
+				return cached, nil
 			}
 
 			extractCtx, cancel := context.WithTimeout(app.HLSShutdown, subtitleExtractTimeout)
@@ -205,7 +224,11 @@ func (app *Application) extractSubtitleWebVTT(ctx context.Context, cacheKey stri
 				return nil, err
 			}
 
-			app.SubtitleVTTCache.Set(cacheKey, out, subtitleCacheTTL)
+			app.SubtitleVTTCacheMu.Lock()
+			if generation == app.SubtitleVTTCacheGeneration {
+				app.SubtitleVTTCache.Set(cacheKey, out, subtitleCacheTTL)
+			}
+			app.SubtitleVTTCacheMu.Unlock()
 			return out, nil
 		})
 		results <- singleflight.Result{Val: val, Err: err, Shared: shared}

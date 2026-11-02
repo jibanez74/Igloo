@@ -13,6 +13,7 @@ func TestIsBitmapSubtitleCodec(t *testing.T) {
 		codec string
 		want  bool
 	}{
+		{name: "XSUB", codec: " XSUB ", want: true},
 		{name: "PGS", codec: "hdmv_pgs_subtitle", want: true},
 		{name: "DVD", codec: "dvd_subtitle", want: true},
 		{name: "DVB case insensitive", codec: "DVB_SUBTITLE", want: true},

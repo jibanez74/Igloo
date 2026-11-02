@@ -8,10 +8,11 @@ var bitmapSubtitleCodecs = map[string]bool{
 	"hdmv_pgs_subtitle": true,
 	"dvd_subtitle":      true,
 	"dvb_subtitle":      true,
+	"xsub":              true,
 }
 
 // IsBitmapSubtitleCodec returns true for image-based subtitle codecs
-// (PGS, DVD sub) that cannot be converted to WebVTT.
+// (PGS, DVD, DVB, XSUB) that cannot be converted to WebVTT.
 func IsBitmapSubtitleCodec(codec string) bool {
 	return bitmapSubtitleCodecs[normalizeCodec(codec)]
 }
@@ -36,10 +37,8 @@ var matroskaCopySubtitleCodecs = map[string]bool{
 	"dvb_subtitle":      true,
 }
 
-// Image-based or data codecs that FFmpeg cannot convert to SubRip, besides the
-// bitmap codecs above.
+// Data codecs that FFmpeg cannot convert to SubRip.
 var unconvertibleSubtitleCodecs = map[string]bool{
-	"xsub":         true,
 	"dvb_teletext": true,
 	"arib_caption": true,
 }

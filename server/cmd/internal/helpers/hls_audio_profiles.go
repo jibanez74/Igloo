@@ -132,9 +132,9 @@ func HLSDefaultChannelLayoutName(channels int) string {
 // source stream's stored channel metadata into the profile FFmpeg runs.
 //
 // MaxChannels is a ceiling, never a target: a source within it keeps its
-// channel count and layout, and one above it is downmixed (FFmpeg's -ac
-// rematrixes every channel) to standard stereo or 5.1. The caller must have
-// verified sourceChannels > 0.
+// channel count and supplies its layout to the resampler; encoders can normalize
+// layout labels. A source above the ceiling is downmixed to stereo or 5.1.
+// The caller must have verified sourceChannels > 0.
 func ResolveHLSAudioProfile(
 	request HLSAudioProfileRequest,
 	sourceChannels int,

@@ -513,6 +513,7 @@ func TestBuildHLSArgs_ExplicitAudioProfiles(t *testing.T) {
 			params.CopyAudio = tt.copyAudio
 			params.AudioProfile = tt.audio
 			args := hlsArgs(t, params)
+			tt.want = append(tt.want, "-af aresample=out_chlayout="+tt.audio.ChannelLayout+":lfe_mix_level=0.70710678:rematrix_maxval=1")
 
 			requireArgSubstrings(t, args, tt.want, tt.notWant, nil)
 		})

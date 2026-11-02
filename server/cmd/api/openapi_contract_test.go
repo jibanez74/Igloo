@@ -844,3 +844,58 @@ func operationResponseReturnsJSON(operation *openapi3.Operation, status int) boo
 	response := operation.Responses.Status(status)
 	return response != nil && response.Value != nil && response.Value.Content["application/json"] != nil
 }
+
+// Authentication can fail before any handler validation, including on public
+// session-backed routes when a cookie cannot be loaded. Exercise the complete
+// route inventory so a new operation cannot silently omit middleware errors.
+func TestOpenAPIAllRoutesMiddlewareErrors(t *testing.T) {
+	var doc struct {
+		Paths map[string]map[string]struct {
+			OperationID string                 `json:"operationId"`
+			Security    *[]map[string][]string `json:"security"`
+		} `json:"paths"`
+	}
+	readOpenAPIDocumentJSON(t, &doc)
+	parameter := regexp.MustCompile(`\{[^}]+\}`)
+	for _, credentials := range []string{"none", "bearer", "broken cookie", "broken bearer"} {
+		t.Run(credentials, func(t *testing.T) {
+			app := setupSessionTestApp(t)
+			app.InitRouter()
+			broken := strings.HasPrefix(credentials, "broken")
+			if broken {
+				err := app.DB.Close()
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			for path, operations := range doc.Paths {
+				for method, operation := range operations {
+					public := operation.Security != nil && len(*operation.Security) == 0
+					// HEAD's body suppression is exercised through a real HTTP server by
+					// TestMediaResponsesConformToOpenAPI; a Recorder retains writes.
+					if method == "head" || path == "/api/openapi.json" || (public && credentials != "broken cookie") {
+						continue
+					}
+					t.Run(operation.OperationID, func(t *testing.T) {
+						request := newOpenAPIRequest(strings.ToUpper(method), parameter.ReplaceAllString(path, "1"), "application/json", nil)
+						if credentials == "broken cookie" {
+							request.AddCookie(&http.Cookie{Name: app.SessionManager.Cookie.Name, Value: "unavailable-session"})
+						} else if credentials != "none" {
+							request.Header.Set("Authorization", "Bearer igd_invalid")
+						}
+						response := httptest.NewRecorder()
+						app.Router.ServeHTTP(response, request)
+						want := http.StatusUnauthorized
+						if broken {
+							want = http.StatusInternalServerError
+						}
+						if response.Code != want {
+							t.Fatalf("status = %d, want %d: %s", response.Code, want, response.Body)
+						}
+						assertOpenAPIResponse(t, operation.OperationID, request, response)
+					})
+				}
+			}
+		})
+	}
+}
