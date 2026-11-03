@@ -13,6 +13,19 @@ it belongs to and cover:
 
 ## Playback
 
+### Direct watch-room creation does not check the first audio codec
+
+`POST /api/watch-rooms` (`server/cmd/api/watch_room_handler.go`) checks the container, the
+video, the audio track ordinal, and the first-track default disposition
+(`directPlayAudioSelectionUnambiguous`, which mirrors `directPlayAudioSelectionEligible` in
+`web/src/lib/playback.ts`). It does not check the first audio stream's codec against the web
+client's `BROWSER_COMPATIBLE_AUDIO_CODECS` (`isAudioDirectPlayable`). A request for a direct
+room on a movie whose first audio track is, for example, DTS or TrueHD is therefore accepted,
+and members' browsers may play it silently or fail. The OpenAPI description of the route states
+the gap. Recorded by the 2026-11-02 playback audit. Fix: mirror the web audio allowlist
+server-side next to `directPlayAudioSelectionUnambiguous`, and reject with `400`. The handler
+still cannot run members' browser probes, so server acceptance is never proof of playback.
+
 ### A copy-video resume early in a late-audio source writes an unplayable Dolby init.mp4
 
 Explicit E-AC-3/AC-3 audio is padded with silence back to output time zero, so a source whose
@@ -28,6 +41,10 @@ whose audio input has `-itsoffset 10`, remuxed with `start=3`. Fix: pad to the m
 (`first_pts` of the landing minus the start, in samples), which needs `SeekLanding` to finish
 before FFmpeg starts.
 
+Left unfixed on 2026-11-03: no library file reaches it, and the fix would delay every copy-video
+Dolby resume by the measurement (0.05–0.3 s). Reopen if a library sweep finds audio starting more
+than 4 s after video, or a TV resume fails with an `init.mp4` that has no `dec3`.
+
 ## TV app (IglooTV)
 
 ### The player's buffer budget is a loading target, not a cap
@@ -39,3 +56,6 @@ subtitle stream reads up to 1 MiB after it was last continued. On the Shield, wi
 on, the heap measured 150–168 MB of 512 MB, so the margin is wide there. A device without a
 large heap has less room. If an OutOfMemoryError comes back, the next step is a hard bound on
 sample allocations.
+
+Left as a watch item on 2026-11-03. Reopen on any OutOfMemoryError in the player, or before
+supporting a device without large-heap headroom.
