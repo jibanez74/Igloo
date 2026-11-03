@@ -34,17 +34,6 @@ start up to the target, so HLS sessions that start past zero are slow to begin. 
 the file's fault; remuxing it (for example `mkvmerge -o fixed.mkv Oppenheimer.2023.mkv`) writes a
 correct index.
 
-### A 2.1 source loses its LFE channel in explicit HLS audio
-
-With an AC-3 or E-AC-3 audio profile and a 6-channel ceiling, a 2.1 source is not downmixed, so
-`ResolveHLSAudioProfile` keeps its own layout (`server/cmd/internal/helpers/hls_audio_profiles.go`)
-and FFmpeg gets `-af aresample=out_chlayout=2.1:lfe_mix_level=0.70710678:rematrix_maxval=1`. Both
-encoders write 3.0(back) instead, and the third channel is silent: a test tone on the source's
-LFE came out with per-channel RMS 0.0707, 0.0707 and 0.0. The LFE mixing from `37454e22` only
-applies to downmixes, so nothing folds the bass into the other channels. Fix: resolve a 2.1
-source to a layout these encoders keep, or mix its LFE in as a downmix does. Then add a 2.1 case
-to `server/cmd/internal/ffmpeg/ffmpeg_audio_signal_externalbin_test.go`.
-
 ## Subtitles
 
 ### Starting playback with a subtitle opens its stream twice
