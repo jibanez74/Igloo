@@ -1,7 +1,8 @@
 # Known issues
 
 Problems found while building and testing subtitle streams for the TV (Igloo #212, IglooTV #18
-and #19, 2026-10-30 to 2026-11-01) and deliberately left unfixed, with enough detail to act on
+and #19, 2026-10-30 to 2026-11-01) and while checking the Rust port of the server against this
+one (2026-11-02, at `37454e22`), and deliberately left unfixed, with enough detail to act on
 them without rediscovering them. Delete an entry when it lands.
 
 ## Deployment
@@ -33,7 +34,28 @@ start up to the target, so HLS sessions that start past zero are slow to begin. 
 the file's fault; remuxing it (for example `mkvmerge -o fixed.mkv Oppenheimer.2023.mkv`) writes a
 correct index.
 
+### A 2.1 source loses its LFE channel in explicit HLS audio
+
+With an AC-3 or E-AC-3 audio profile and a 6-channel ceiling, a 2.1 source is not downmixed, so
+`ResolveHLSAudioProfile` keeps its own layout (`server/cmd/internal/helpers/hls_audio_profiles.go`)
+and FFmpeg gets `-af aresample=out_chlayout=2.1:lfe_mix_level=0.70710678:rematrix_maxval=1`. Both
+encoders write 3.0(back) instead, and the third channel is silent: a test tone on the source's
+LFE came out with per-channel RMS 0.0707, 0.0707 and 0.0. The LFE mixing from `37454e22` only
+applies to downmixes, so nothing folds the bass into the other channels. Fix: resolve a 2.1
+source to a layout these encoders keep, or mix its LFE in as a downmix does. Then add a 2.1 case
+to `server/cmd/internal/ffmpeg/ffmpeg_audio_signal_externalbin_test.go`.
+
 ## Subtitles
+
+### The web player offers XSUB tracks as text subtitles
+
+Since `37454e22` the server treats XSUB as a bitmap codec, so the WebVTT route answers 415 for
+it before extracting anything. The web client's list of bitmap codecs (`BITMAP_SUBTITLE_CODECS`
+in `web/src/lib/constants.ts`) still has only `hdmv_pgs_subtitle`, `dvd_subtitle` and
+`dvb_subtitle`. `isBitmapSubtitleCodec` in `web/src/lib/playback.ts` and the subtitle lists in
+`PlaybackSettingsDialog.tsx` therefore treat an XSUB track as text, and choosing it ends in the
+415. Fix: add `xsub` to the list, and add a unit test for `isBitmapSubtitleCodec`, which has none
+yet.
 
 ### Tracks marked forced only in their title are not treated as forced
 
@@ -43,9 +65,10 @@ title instead. Free Guy's English PGS track, for example, has the title "Forced"
 flag, but no forced disposition. The TV's default rule turns a default-flagged subtitle on when it
 is forced or its language differs from the audio's, so with English audio it leaves this track
 off, and the viewer has to pick it by hand to see the subtitles for the foreign-language scenes.
-An older database on this machine has `is_forced = 1` for these tracks, so an earlier scanner
-apparently read the title too. Fix: also treat a title containing "forced" as forced, and add a
-scanner test for it.
+An older database on this machine has `is_forced = 1` for these tracks, but no scanner in this
+repository's history read the title (`32f22f47` went from a hardcoded `false` to the disposition),
+so that value came from elsewhere. Fix: also treat a title containing "forced" as forced, and add
+a scanner test for it.
 
 ### Starting playback with a subtitle opens its stream twice
 
@@ -105,5 +128,8 @@ With another job using about 18 cores (load average 18–20), `make test-web` fa
 tab-transition tests (`movies-route.test.tsx`, `settings-route-transition.test.tsx`), then 97
 tests across 15 files, all timing out at 10–15 seconds. The same files pass on their own, and the
 whole suite passes with fewer workers: `cd web && bun run test --maxWorkers=3`. Neither CI run was
-affected. Options: cap vitest's workers in the config, or raise the timeouts of the transition
-tests.
+affected. On 2026-11-02, at load average 12, `music playlist route > renders the header, the
+owner actions and the tracks` (`src/test/music/playlist-route.test.tsx`) timed out the same way,
+after 11 seconds of waiting for the text "Alabaster". It then passed 5 runs alone and 2 full-suite
+runs. Options: cap vitest's workers in the config, or raise the timeouts of the transition tests
+and this one.
