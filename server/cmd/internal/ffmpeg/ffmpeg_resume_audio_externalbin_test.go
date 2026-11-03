@@ -3,16 +3,12 @@
 package ffmpeg
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"encoding/binary"
 	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
-	"strings"
 	"testing"
 
 	"igloo/cmd/internal/helpers"
@@ -109,42 +105,7 @@ func firstPacketSeconds(t *testing.T, binary string, playlist string) map[int]fl
 	if err != nil {
 		t.Fatalf("framecrc: %v", err)
 	}
-	timeBases := map[int]float64{}
-	first := map[int]float64{}
-	scanner := bufio.NewScanner(bytes.NewReader(out))
-	for scanner.Scan() {
-		line := scanner.Text()
-		if rest, ok := strings.CutPrefix(line, "#tb "); ok {
-			// "#tb 0: 1/16000"
-			index, base, _ := strings.Cut(rest, ": ")
-			num, den, _ := strings.Cut(base, "/")
-			stream, _ := strconv.Atoi(index)
-			n, _ := strconv.ParseFloat(num, 64)
-			d, _ := strconv.ParseFloat(den, 64)
-			timeBases[stream] = n / d
-			continue
-		}
-		if strings.HasPrefix(line, "#") {
-			continue
-		}
-		// "stream, dts, pts, duration, size, crc"
-		fields := strings.Split(line, ",")
-		if len(fields) < 3 {
-			continue
-		}
-		stream, err := strconv.Atoi(strings.TrimSpace(fields[0]))
-		if err != nil {
-			continue
-		}
-		if _, seen := first[stream]; seen {
-			continue
-		}
-		pts, err := strconv.ParseFloat(strings.TrimSpace(fields[2]), 64)
-		if err != nil {
-			continue
-		}
-		first[stream] = pts * timeBases[stream]
-	}
+	first := framecrcFirstPTS(out)
 	if len(first) < 2 {
 		t.Fatalf("framecrc listed %d streams:\n%s", len(first), out)
 	}

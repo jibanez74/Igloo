@@ -213,11 +213,8 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 	// ffmpeg_tail of every failure, and after about 87 minutes of encoding it
 	// overflowed the scanner and cost the real final error. -nostdin keeps a
 	// background process from ever reading the terminal.
-	args := []string{
-		"-nostdin", "-nostats",
-		"-y", "-fflags", "+genpts",
-		"-analyzeduration", "5000000", "-probesize", "5000000",
-	}
+	args := []string{"-nostdin", "-nostats", "-y"}
+	args = append(args, hlsProbeArgs()...)
 
 	deviceDecision := ResolveHLSDevice(p.HWDevice, p.Capabilities)
 	hwLower := deviceDecision.Effective
@@ -274,19 +271,7 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 		}
 	}
 
-	if p.StartSec > 0 {
-		if copyVideo {
-			// Copied video starts at the keyframe before the target, but an
-			// accurate seek trims decoded audio to the target itself, so
-			// encoded audio would begin up to a GOP late. When that gap
-			// outlasts the first segment, the fMP4 muxer writes init.mp4 before
-			// any E-AC-3 packet is parsed: no dec3, no mvex, and Media3 fails.
-			// Starting audio at the same keyframe keeps the timestamps (and
-			// A/V sync) unchanged and matches what copied audio already does.
-			args = append(args, "-noaccurate_seek")
-		}
-		args = append(args, "-ss", fmt.Sprintf("%.3f", p.StartSec))
-	}
+	args = append(args, hlsSeekArgs(p.StartSec, copyVideo)...)
 
 	if p.Capabilities.SupportsCLIOption("readrate") {
 		args = append(args, "-readrate", fmt.Sprintf("%d", hlsReadrateSpeed))
@@ -406,6 +391,35 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 	)
 
 	return args, nil
+}
+
+// hlsProbeArgs bound how much of a source FFmpeg reads to identify its
+// streams. What that probe finds also moves an input seek (see SeekLanding),
+// so every command that must land where an HLS session lands uses these.
+func hlsProbeArgs() []string {
+	return []string{
+		"-fflags", "+genpts",
+		"-analyzeduration", "5000000", "-probesize", "5000000",
+	}
+}
+
+// hlsSeekArgs are the input seek of an HLS session starting at startSec, or
+// nothing for a start at zero.
+func hlsSeekArgs(startSec float64, copyVideo bool) []string {
+	if startSec <= 0 {
+		return nil
+	}
+	if !copyVideo {
+		return []string{"-ss", fmt.Sprintf("%.3f", startSec)}
+	}
+	// Copied video starts at the keyframe the seek lands on, but an accurate
+	// seek trims decoded audio to the target itself, so encoded audio would
+	// begin up to a GOP late. When that gap outlasts the first segment, the
+	// fMP4 muxer writes init.mp4 before any E-AC-3 packet is parsed: no dec3,
+	// no mvex, and Media3 fails. Starting audio at the same keyframe keeps the
+	// timestamps (and A/V sync) unchanged and matches what copied audio
+	// already does.
+	return []string{"-noaccurate_seek", "-ss", fmt.Sprintf("%.3f", startSec)}
 }
 
 // validateHLSAudioProfile rejects a resolved audio profile whose fields did

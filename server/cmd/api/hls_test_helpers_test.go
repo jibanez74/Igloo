@@ -52,6 +52,10 @@ type fakeFFmpeg struct {
 	// unprobed value is trusted by the explicit-audio encoder gate, matching
 	// ResolveHLSDevice's treatment of unprobed builds.
 	capabilities *ffmpeg.Capabilities
+	// seekLandingFunc answers SeekLanding; unset, the measurement fails and
+	// the session's start stays unknown. Calls are recorded.
+	seekLandingFunc  func(ctx context.Context, params ffmpeg.SeekLandingParams) (float64, error)
+	seekLandingCalls []ffmpeg.SeekLandingParams
 }
 
 func (f *fakeFFmpeg) RunHLS(
@@ -93,6 +97,23 @@ func (f *fakeFFmpeg) RunHLS(
 	}
 
 	return &exec.Cmd{}, nil
+}
+
+func (f *fakeFFmpeg) SeekLanding(ctx context.Context, params ffmpeg.SeekLandingParams) (float64, error) {
+	f.mu.Lock()
+	f.seekLandingCalls = append(f.seekLandingCalls, params)
+	seekLanding := f.seekLandingFunc
+	f.mu.Unlock()
+	if seekLanding == nil {
+		return 0, errors.New("seek landing is not stubbed")
+	}
+	return seekLanding(ctx, params)
+}
+
+func (f *fakeFFmpeg) SeekLandingCalls() []ffmpeg.SeekLandingParams {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]ffmpeg.SeekLandingParams(nil), f.seekLandingCalls...)
 }
 
 func (f *fakeFFmpeg) ExtractSubtitleAsWebVTT(_ context.Context, _ string, _ int64) ([]byte, error) {
