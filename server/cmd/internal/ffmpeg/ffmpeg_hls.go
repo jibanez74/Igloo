@@ -339,9 +339,13 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 			// -ac lets it choose its own layout for the channel count, which
 			// drops the LFE of 2.1, 3.1 and 4.1. Encoders may still normalize
 			// the final layout label.
+			audioFilter := "aresample=out_chlayout=" + p.AudioProfile.ChannelLayout + ":lfe_mix_level=0.70710678:rematrix_maxval=1"
+			if hlsPadsAudioStart(p.StartSec, copyVideo) {
+				audioFilter += ":" + hlsAudioStartPadOptions
+			}
 			args = append(args,
 				"-c:a", p.AudioProfile.Encoder,
-				"-af", "aresample=out_chlayout="+p.AudioProfile.ChannelLayout+":lfe_mix_level=0.70710678:rematrix_maxval=1",
+				"-af", audioFilter,
 				"-ch_layout:a", p.AudioProfile.ChannelLayout,
 				"-b:a", p.AudioProfile.Bitrate,
 				"-ar", fmt.Sprintf("%d", p.AudioProfile.SampleRate),
@@ -420,6 +424,26 @@ func hlsSeekArgs(startSec float64, copyVideo bool) []string {
 	// timestamps (and A/V sync) unchanged and matches what copied audio
 	// already does.
 	return []string{"-noaccurate_seek", "-ss", fmt.Sprintf("%.3f", startSec)}
+}
+
+// hlsAudioStartPadOptions make aresample fill encoded audio with silence from
+// output time zero up to its first sample. async=1 turns on filling and
+// trimming without any stretching, first_pts=0 is where audio should begin,
+// and the huge min_hard_comp keeps later timestamp gaps as they are: only the
+// first frame is compared against first_pts unconditionally. On a source
+// whose audio already starts at zero the output is identical.
+const hlsAudioStartPadOptions = "async=1:first_pts=0:min_hard_comp=1000000"
+
+// hlsPadsAudioStart reports whether explicit (AC-3/E-AC-3) audio is padded
+// back to output time zero. A source whose audio starts more than a segment
+// after its video otherwise has no Dolby packet when the first segment
+// closes, and the fMP4 muxer writes init.mp4 without dec3 or mvex, which
+// Media3 cannot play. Starts at zero and accurately seeked (transcoded)
+// sessions put the video at zero, so padding there aligns audio with it.
+// A copy-video seek is excluded: its video and audio start at the keyframe
+// before the target, below zero, and first_pts=0 would trim that audio away.
+func hlsPadsAudioStart(startSec float64, copyVideo bool) bool {
+	return startSec <= 0 || !copyVideo
 }
 
 // validateHLSAudioProfile rejects a resolved audio profile whose fields did

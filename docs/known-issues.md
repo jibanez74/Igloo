@@ -23,26 +23,20 @@ play is unaffected. Fix: deploy Igloo `dev` (at or after `ac8a4d1e`) to that ser
 
 ## Playback
 
-### A source whose audio starts late writes an unplayable Dolby init.mp4
+### A copy-video resume early in a late-audio source writes an unplayable Dolby init.mp4
 
-When a source's audio track starts more than one HLS segment after its video (an audio delay of
-several seconds), explicit E-AC-3/AC-3 output has no audio packet by the time the first segment
-closes. The fMP4 muxer then writes `init.mp4` without `dec3` or `mvex` ("Cannot write moov atom
-before EAC3 packets parsed"), as resumed copy-video sessions did before `-noaccurate_seek`, and
-Media3 cannot play it. It happens at any start, including zero; a lavfi fixture with `-itsoffset 10`
-on the audio input reproduces it. No library file is affected: on 2026-11-03 an ffprobe sweep of the
-432 files in the movies library found 3 whose audio starts more than 0.5 s after the video, the latest
-by 2.42 s (`marvel/Spider-Man.Into.the.Spider-Verse.mkv`), inside the 4 s first segment. Options: pad
-the encoded audio with silence back to the video's first timestamp, or delay the init segment until
-every track has a packet.
-
-### Seeking in Oppenheimer reads the file linearly
-
-`historical/Oppenheimer.2023.mkv` in the movies library has a SeekHead whose Cues entry points
-past the end of the file. Without a usable index, every seek FFmpeg makes reads the file from the
-start up to the target, so HLS sessions that start past zero are slow to begin. This is
-the file's fault; remuxing it (for example `mkvmerge -o fixed.mkv Oppenheimer.2023.mkv`) writes a
-correct index.
+Explicit E-AC-3/AC-3 audio is padded with silence back to output time zero, so a source whose
+audio starts more than a segment after its video still gets a playable `init.mp4` at zero and
+after a transcoded seek. A copy-video session past zero is not padded: its audio starts at the
+keyframe the seek lands on, below zero, and `first_pts=0` would trim it. When such a session lands
+more than one 4 s segment before the source's audio begins, the first segment closes before any
+Dolby packet and the fMP4 muxer writes `init.mp4` without `dec3` or `mvex`, which Media3 cannot
+play. Only a resume within the first seconds of a late-audio source does this, and no library file
+can: on 2026-11-03 an ffprobe sweep of the 432 files in the movies library found the latest audio
+start at 2.42 s (`marvel/Spider-Man.Into.the.Spider-Verse.mkv`). Reproduce with a lavfi fixture
+whose audio input has `-itsoffset 10`, remuxed with `start=3`. Fix: pad to the measured landing
+(`first_pts` of the landing minus the start, in samples), which needs `SeekLanding` to finish
+before FFmpeg starts.
 
 ## TV app (IglooTV)
 
