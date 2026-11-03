@@ -26,8 +26,12 @@ const (
 // Variables so tests can shorten them.
 var (
 	// subtitleStreamKeepalive is how long a stream may stay silent between
-	// elements before a Void element keeps the connection alive.
-	subtitleStreamKeepalive = 15 * time.Second
+	// elements before a Void element keeps the connection alive. It is also
+	// how long a client that cancelled its load can hold the stream: Media3
+	// cancels by setting a flag, and its loader only notices, and closes the
+	// connection, once the next bytes arrive. So it stays short; each Void is
+	// 3 bytes.
+	subtitleStreamKeepalive = 3 * time.Second
 	// subtitleStreamSlotWait covers a TV starting at a position, which drops
 	// one stream and opens the next at the same moment.
 	subtitleStreamSlotWait = 3 * time.Second

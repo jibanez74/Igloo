@@ -361,7 +361,7 @@ ffmpeg -v error -nostdin [-seek_timestamp 1 -ss <start>] -i <source>
 
 Input seek skips work when reading the media file. Output seek drops packets starting before `start` and rebases copied packets; converted tracks additionally need the negative output offset. Cached-track input omits input seek because its first timestamp can be the first cue's timestamp. Unlike WebVTT, a cue beginning before the offset is dropped even if it spans it. Zero/absent start keeps the source packet timeline.
 
-The response is non-seekable `video/x-matroska`, without Range support or a known content length (chunked under HTTP/1.1). A client needing earlier packets must reopen it. Before sending the header, the server parses through Tracks and inserts an empty timestamp-zero Cluster so a sparse track can become ready before its first cue. The relay then writes complete elements and periodic Void keepalives at element boundaries. Clients must avoid letting a sparse subtitle input stall video loading in their merged player; no external client's implementation is assumed here.
+The response is non-seekable `video/x-matroska`, without Range support or a known content length (chunked under HTTP/1.1). A client needing earlier packets must reopen it. Before sending the header, the server parses through Tracks and inserts an empty timestamp-zero Cluster so a sparse track can become ready before its first cue. The relay then writes complete elements and periodic Void keepalives at element boundaries. The keepalive interval also bounds how long a cancelled client holds the stream: a player that cancels a load without closing its socket (Media3 sets a flag and closes once its blocked read returns) keeps FFmpeg and a stream slot until the next bytes arrive. Clients must avoid letting a sparse subtitle input stall video loading in their merged player; no external client's implementation is assumed here.
 
 The stream has a request-owned FFmpeg process. Disconnect/shutdown cancels it; successful EOF waits for process exit. Failure before the primed header returns sanitized `500`; failure afterwards aborts the response rather than reporting clean completion. Stream slots, waiting, retry, and silence intervals appear in the [settings table](#operational-settings-and-budgets).
 
@@ -415,7 +415,7 @@ This is the single reference for operational defaults and fixed budgets in this 
 | WebVTT extraction / source-start probe | 60 s / 10 s within extraction | `subtitle_handler.go` |
 | WebVTT cache idle TTL / sweep | 1 h / 10 min | Subtitle cache constants |
 | Subtitle stream slots / acquisition wait / `Retry-After` | 8 / 3 s / 2 s | `subtitle_stream_handler.go` |
-| Subtitle stream silence keepalive | 15 s at element boundaries | `subtitleStreamKeepalive` |
+| Subtitle stream silence keepalive | 3 s at element boundaries | `subtitleStreamKeepalive` |
 | Track-copy gate / concurrency / timeout / byte cap | 30 s / 1 / 3 h / 512 MiB | `subtitle_track_cache.go` |
 | Track-copy retention / sweep | 30 days since use / startup then daily | Subtitle track cache |
 | Web keepalive | 2 min | `HLS_SESSION_KEEPALIVE_INTERVAL_MS` |
