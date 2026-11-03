@@ -29,23 +29,12 @@ When a source's audio track starts more than one HLS segment after its video (an
 several seconds), explicit E-AC-3/AC-3 output has no audio packet by the time the first segment
 closes. The fMP4 muxer then writes `init.mp4` without `dec3` or `mvex` ("Cannot write moov atom
 before EAC3 packets parsed"), as resumed copy-video sessions did before `-noaccurate_seek`, and
-Media3 cannot play it. It happens at any start, including zero. The library was not searched for
-such files; a lavfi fixture with `-itsoffset 10` on the audio input reproduces it. Options: pad the
-encoded audio with silence back to the video's first timestamp, or delay the init segment until
+Media3 cannot play it. It happens at any start, including zero; a lavfi fixture with `-itsoffset 10`
+on the audio input reproduces it. No library file is affected: on 2026-11-03 an ffprobe sweep of the
+432 files in the movies library found 3 whose audio starts more than 0.5 s after the video, the latest
+by 2.42 s (`marvel/Spider-Man.Into.the.Spider-Verse.mkv`), inside the 4 s first segment. Options: pad
+the encoded audio with silence back to the video's first timestamp, or delay the init segment until
 every track has a packet.
-
-### A resumed copy-video session can advertise the wrong actual start
-
-`X-Igloo-Actual-Start` for a copy-video session comes from the keyframe index, which gives the
-last keyframe at or before the target. FFmpeg's own input seek can land on an earlier keyframe.
-Captain Marvel's remux at `start=1790` advertises `1789.997`, but FFmpeg starts at `1780.195`:
-the first segment is 9.802 s long and ends at the advertised keyframe. A client that maps local
-time by the header then shows positions, and asks for subtitle streams, 9.8 s ahead of the
-picture. Seen 2026-11-03 against a scratch server built at `d4af8b32`; the cause of the
-earlier landing (the Matroska demuxer's seek with subtitle tracks present, or Cues that skip
-that keyframe) was not established. Where to look: actual-start resolution in
-`server/cmd/api/hls_*.go` and `server/cmd/internal/keyframeindex`, against the first segment's
-duration or FFmpeg's first packet time.
 
 ### Seeking in Oppenheimer reads the file linearly
 
