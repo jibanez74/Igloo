@@ -172,7 +172,7 @@ describe("settings route tab transitions", () => {
       expect(screen.getByText("Profile Information")).toBeInTheDocument();
     });
     expect(startViewTransition).not.toHaveBeenCalled();
-  }, 10_000);
+  });
 
   it("uses shared motion contracts for settings surfaces and switches", async () => {
     await renderSettingsRoute("/settings");

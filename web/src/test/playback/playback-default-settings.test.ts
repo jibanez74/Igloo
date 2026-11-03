@@ -236,6 +236,17 @@ describe("getDefaultPlaybackSettings", () => {
     const result = getDefaultPlaybackSettings(ALL_MODES, prefs, [], subtitles);
     expect(result.subtitleTrack).toBe(1);
   });
+
+  // The server refuses XSUB on the WebVTT route, so it must not be auto-picked.
+  it("never auto-selects an XSUB subtitle for the preferred language", () => {
+    const prefs = makePrefs({ preferredSubtitleLanguage: "en" });
+    const subtitles = [
+      { ...subtitleStream(0, "eng"), codec: "xsub" },
+      subtitleStream(1, "eng"),
+    ];
+    const result = getDefaultPlaybackSettings(ALL_MODES, prefs, [], subtitles);
+    expect(result.subtitleTrack).toBe(1);
+  });
 });
 
 describe("resolvePlaybackSettings", () => {

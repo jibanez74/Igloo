@@ -107,6 +107,58 @@ func TestResolveHLSAudioProfile(t *testing.T) {
 			},
 		},
 		{
+			// -ac 3 used to turn 2.1 into 3.0(back) and drop the LFE; the
+			// encoders keep 2.1 when it is named.
+			name:           "2.1 within a maximum of six keeps its LFE layout",
+			request:        HLSAudioProfileRequest{Codec: HLSAudioCodecAC3, MaxChannels: 6},
+			sourceChannels: 3,
+			sourceLayout:   "2.1",
+			want: HLSResolvedAudioProfile{
+				Codec: HLSAudioCodecAC3, Encoder: "ac3", Channels: 3,
+				ChannelLayout: "2.1", Bitrate: "448k", SampleRate: 48000,
+			},
+		},
+		{
+			name:           "4.1 within a maximum of six keeps its layout",
+			request:        HLSAudioProfileRequest{Codec: HLSAudioCodecEAC3, MaxChannels: 6},
+			sourceChannels: 5,
+			sourceLayout:   "4.1",
+			want: HLSResolvedAudioProfile{
+				Codec: HLSAudioCodecEAC3, Encoder: "eac3", Channels: 5,
+				ChannelLayout: "4.1", Bitrate: "768k", SampleRate: 48000,
+			},
+		},
+		{
+			name:           "2.1 downmixed to stereo resolves standard stereo",
+			request:        HLSAudioProfileRequest{Codec: HLSAudioCodecEAC3, MaxChannels: 2},
+			sourceChannels: 3,
+			sourceLayout:   "2.1",
+			want: HLSResolvedAudioProfile{
+				Codec: HLSAudioCodecEAC3, Encoder: "eac3", Channels: 2,
+				ChannelLayout: "stereo", Bitrate: "384k", SampleRate: 48000,
+			},
+		},
+		{
+			name:           "a layout the encoders reject is remixed to the standard one",
+			request:        HLSAudioProfileRequest{Codec: HLSAudioCodecAC3, MaxChannels: 6},
+			sourceChannels: 6,
+			sourceLayout:   "hexagonal",
+			want: HLSResolvedAudioProfile{
+				Codec: HLSAudioCodecAC3, Encoder: "ac3", Channels: 6,
+				ChannelLayout: "5.1", Bitrate: "640k", SampleRate: 48000,
+			},
+		},
+		{
+			name:           "a stored layout that disagrees with the channel count is not trusted",
+			request:        HLSAudioProfileRequest{Codec: HLSAudioCodecAC3, MaxChannels: 6},
+			sourceChannels: 6,
+			sourceLayout:   "stereo",
+			want: HLSResolvedAudioProfile{
+				Codec: HLSAudioCodecAC3, Encoder: "ac3", Channels: 6,
+				ChannelLayout: "5.1", Bitrate: "640k", SampleRate: 48000,
+			},
+		},
+		{
 			name:           "a missing stored layout resolves the standard name",
 			request:        HLSAudioProfileRequest{Codec: HLSAudioCodecAC3, MaxChannels: 6},
 			sourceChannels: 5,
@@ -134,6 +186,17 @@ func TestHLSAudioEncoderHasNoLegacyMapping(t *testing.T) {
 	got := HLSAudioEncoder(HLSAudioCodecAAC)
 	if got != "" {
 		t.Errorf("HLSAudioEncoder(aac) = %q, want empty", got)
+	}
+}
+
+// Every standard layout must be one the explicit encoders accept, or a
+// downmix would resolve to a profile the argument builder rejects.
+func TestHLSDefaultChannelLayoutsAreOutputLayouts(t *testing.T) {
+	for channels := 1; channels <= HLS_AUDIO_MAX_CHANNELS_SURROUND; channels++ {
+		layout := HLSDefaultChannelLayoutName(channels)
+		if !IsHLSOutputChannelLayout(layout, channels) {
+			t.Errorf("default layout %q for %d channels is not an output layout", layout, channels)
+		}
 	}
 }
 

@@ -128,13 +128,44 @@ func HLSDefaultChannelLayoutName(channels int) string {
 	}
 }
 
+// hlsDolbyChannelLayouts maps each layout the AC-3 and E-AC-3 encoders
+// accept (both support the same set) to its channel count. The encoders reject
+// any other layout, and FFmpeg's -ac picks one of these for a channel count
+// without regard to the source: -ac 3 turns 2.1 into 3.0(back) and drops the
+// LFE. So the output layout is named explicitly and must come from this table.
+var hlsDolbyChannelLayouts = map[string]int{
+	"mono":       1,
+	"stereo":     2,
+	"2.1":        3,
+	"3.0":        3,
+	"3.0(back)":  3,
+	"3.1":        4,
+	"4.0":        4,
+	"quad":       4,
+	"quad(side)": 4,
+	"4.1":        5,
+	"5.0":        5,
+	"5.0(side)":  5,
+	"5.1":        6,
+	"5.1(side)":  6,
+}
+
+// IsHLSOutputChannelLayout reports whether an explicit encode may name layout
+// as its output layout for the given channel count.
+func IsHLSOutputChannelLayout(layout string, channels int) bool {
+	count, ok := hlsDolbyChannelLayouts[layout]
+	return ok && count == channels
+}
+
 // ResolveHLSAudioProfile turns a validated explicit request plus the selected
 // source stream's stored channel metadata into the profile FFmpeg runs.
 //
 // MaxChannels is a ceiling, never a target: a source within it keeps its
-// channel count and supplies its layout to the resampler; encoders can normalize
-// layout labels. A source above the ceiling is downmixed to stereo or 5.1.
-// The caller must have verified sourceChannels > 0.
+// channel count, and keeps its layout when the encoders support it; encoders
+// can still normalize layout labels (5.1 becomes 5.1(side)). A source layout
+// they do not support (6.0, hexagonal) is remixed to the standard layout for
+// its channel count, and a source above the ceiling is downmixed to stereo or
+// 5.1. The caller must have verified sourceChannels > 0.
 func ResolveHLSAudioProfile(
 	request HLSAudioProfileRequest,
 	sourceChannels int,
@@ -144,7 +175,7 @@ func ResolveHLSAudioProfile(
 
 	layout := strings.TrimSpace(sourceChannelLayout)
 	downmixed := channels != sourceChannels
-	if downmixed || layout == "" {
+	if downmixed || !IsHLSOutputChannelLayout(layout, channels) {
 		layout = HLSDefaultChannelLayoutName(channels)
 	}
 

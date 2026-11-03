@@ -477,10 +477,13 @@ export const SPOTIFY_BRAND_FILL_CLASS = "bg-green-500";
 
 // Subtitle and language constants used to choose supported subtitle behavior
 // and format audio/subtitle labels.
+// Matches the server's list (server/cmd/internal/helpers/subtitles.go): the
+// WebVTT route answers 415 for these codecs.
 export const BITMAP_SUBTITLE_CODECS = [
   "hdmv_pgs_subtitle",
   "dvd_subtitle",
   "dvb_subtitle",
+  "xsub",
 ] as const;
 
 /** ISO 639-2 three-letter codes → ISO 639-1 two-letter codes for the supported languages.

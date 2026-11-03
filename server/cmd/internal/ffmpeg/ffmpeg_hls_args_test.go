@@ -250,14 +250,42 @@ func TestBuildHLSArgs_SeekOffset(t *testing.T) {
 		name      string
 		startSec  float64
 		device    string
+		copyVideo bool
+		// remuxOnly sets the remux profile without CopyVideo, which still
+		// copies the video.
+		remuxOnly bool
 		wantSS    string
 		wantOrder [][2]string
+		// wantInexact expects -noaccurate_seek, which only copy-video sessions
+		// use so that encoded audio starts at the copied video's keyframe.
+		wantInexact bool
 	}{
 		{
 			name:      "positive offset precedes the input",
 			startSec:  3600,
 			wantSS:    "3600.000",
 			wantOrder: [][2]string{{"-ss", "-i"}},
+		},
+		{
+			name:        "copy video seeks inexactly so audio starts at its keyframe",
+			startSec:    1790,
+			copyVideo:   true,
+			wantSS:      "1790.000",
+			wantOrder:   [][2]string{{"-noaccurate_seek", "-ss"}, {"-ss", "-i"}},
+			wantInexact: true,
+		},
+		{
+			name:        "remux profile seeks inexactly without CopyVideo",
+			startSec:    1790,
+			remuxOnly:   true,
+			wantSS:      "1790.000",
+			wantOrder:   [][2]string{{"-noaccurate_seek", "-ss"}, {"-ss", "-i"}},
+			wantInexact: true,
+		},
+		{
+			name:      "copy video from zero needs no seek",
+			startSec:  0,
+			copyVideo: true,
 		},
 		{
 			name:     "zero offset omits the flag",
@@ -286,8 +314,19 @@ func TestBuildHLSArgs_SeekOffset(t *testing.T) {
 			params.HWDevice = device
 			params.StartSec = tt.startSec
 			params.Capabilities = Capabilities{}
+			if tt.copyVideo {
+				params.Profile = helpers.HLS_PROFILE_REMUX
+				params.CopyVideo = true
+			}
+			if tt.remuxOnly {
+				params.Profile = helpers.HLS_PROFILE_REMUX
+				params.CopyVideo = false
+			}
 			args := hlsArgs(t, params)
 
+			if got := slices.Contains(args, "-noaccurate_seek"); got != tt.wantInexact {
+				t.Fatalf("-noaccurate_seek present = %v, want %v: %v", got, tt.wantInexact, args)
+			}
 			if tt.wantSS == "" {
 				if slices.Contains(args, "-ss") {
 					t.Fatalf("-ss must be omitted for start offset %v: %v", tt.startSec, args)
@@ -456,7 +495,7 @@ func resolveTestAudioProfile(codec helpers.HLSAudioCodec, maxChannels, sourceCha
 	return &profile
 }
 
-// An explicit audio profile maps onto exactly the -c:a/-ac/-b:a/-ar the
+// An explicit audio profile maps onto exactly the -c:a/-ch_layout/-b:a/-ar the
 // resolved profile carries and wins over the legacy copy decision. How a
 // request resolves (downmix, no upmix) is the helpers package's contract.
 func TestBuildHLSArgs_ExplicitAudioProfiles(t *testing.T) {
@@ -473,15 +512,15 @@ func TestBuildHLSArgs_ExplicitAudioProfiles(t *testing.T) {
 			name:    "ac3 5.1",
 			profile: helpers.HLS_PROFILE_1080P_4MBPS,
 			audio:   resolveTestAudioProfile(helpers.HLSAudioCodecAC3, 6, 6, "5.1(side)"),
-			want:    []string{"-c:a ac3", "-ac 6", "-b:a 640k", "-ar 48000"},
-			notWant: []string{"-c:a aac", "-c:a copy", "320k"},
+			want:    []string{"-c:a ac3", "-ch_layout:a 5.1(side)", "-b:a 640k", "-ar 48000"},
+			notWant: []string{"-c:a aac", "-c:a copy", "320k", "-ac "},
 		},
 		{
 			name:    "eac3 stereo",
 			profile: helpers.HLS_PROFILE_720P_3MBPS,
 			audio:   resolveTestAudioProfile(helpers.HLSAudioCodecEAC3, 2, 6, "5.1(side)"),
-			want:    []string{"-c:a eac3", "-ac 2", "-b:a 384k", "-ar 48000"},
-			notWant: []string{"-c:a aac", "-c:a copy"},
+			want:    []string{"-c:a eac3", "-ch_layout:a stereo", "-b:a 384k", "-ar 48000"},
+			notWant: []string{"-c:a aac", "-c:a copy", "-ac "},
 		},
 		{
 			// The legacy copy decision must not leak into explicit mode even if
@@ -490,7 +529,7 @@ func TestBuildHLSArgs_ExplicitAudioProfiles(t *testing.T) {
 			profile:   helpers.HLS_PROFILE_720P_3MBPS,
 			copyAudio: true,
 			audio:     resolveTestAudioProfile(helpers.HLSAudioCodecAC3, 6, 6, "5.1(side)"),
-			want:      []string{"-c:a ac3", "-ac 6", "-b:a 640k"},
+			want:      []string{"-c:a ac3", "-ch_layout:a 5.1(side)", "-b:a 640k"},
 			notWant:   []string{"-c:a copy"},
 		},
 		{
@@ -500,8 +539,16 @@ func TestBuildHLSArgs_ExplicitAudioProfiles(t *testing.T) {
 			profile:   helpers.HLS_PROFILE_REMUX,
 			copyVideo: true,
 			audio:     resolveTestAudioProfile(helpers.HLSAudioCodecEAC3, 6, 6, "5.1(side)"),
-			want:      []string{"-c:v copy", "-c:a eac3", "-ac 6", "-b:a 768k", "-ar 48000"},
+			want:      []string{"-c:v copy", "-c:a eac3", "-ch_layout:a 5.1(side)", "-b:a 768k", "-ar 48000"},
 			notWant:   []string{"-c:a copy"},
+		},
+		{
+			// -ac 3 would let the encoder pick 3.0(back) and drop the LFE.
+			name:    "2.1 names its layout instead of a channel count",
+			profile: helpers.HLS_PROFILE_1080P_4MBPS,
+			audio:   resolveTestAudioProfile(helpers.HLSAudioCodecAC3, 6, 3, "2.1"),
+			want:    []string{"-c:a ac3", "-ch_layout:a 2.1", "-b:a 448k", "-ar 48000"},
+			notWant: []string{"-ac "},
 		},
 	}
 
@@ -551,6 +598,16 @@ func TestBuildHLSArgs_RejectsInvalidAudioProfile(t *testing.T) {
 			name:    "more than six channels",
 			mutate:  func(p *helpers.HLSResolvedAudioProfile) { p.Channels = 8 },
 			wantErr: "invalid HLS audio",
+		},
+		{
+			name:    "layout not from the layout table",
+			mutate:  func(p *helpers.HLSResolvedAudioProfile) { p.ChannelLayout = "5.1:out_sample_rate=8000" },
+			wantErr: "invalid HLS audio channel layout",
+		},
+		{
+			name:    "layout with a different channel count",
+			mutate:  func(p *helpers.HLSResolvedAudioProfile) { p.ChannelLayout = "stereo" },
+			wantErr: "invalid HLS audio channel layout",
 		},
 		{
 			name:    "bitrate not from the profile table",

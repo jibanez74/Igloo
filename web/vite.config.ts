@@ -78,9 +78,11 @@ export default defineConfig(({ mode }) => {
       setupFiles: "./src/test/setup.ts",
       include: ["src/test/**/*.test.{ts,tsx}"],
       // Full-router-load route tests (movies/movie-details/home) can exceed the
-      // 5s vitest default under parallel-suite load and cold module import,
-      // producing flaky timeouts in CI. Give them headroom.
-      testTimeout: 15000,
+      // 5s vitest default under parallel-suite load and cold module import.
+      // On a machine already busy with other work (load average 12-20) they
+      // took over 15s, so the headroom is generous; it only lengthens failing
+      // runs.
+      testTimeout: 30000,
       // Undo spies and stubbed globals between tests so no suite can leak setup
       // into the next. Individual files therefore need no restore hooks.
       restoreMocks: true,

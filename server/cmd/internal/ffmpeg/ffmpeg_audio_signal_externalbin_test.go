@@ -31,19 +31,33 @@ func TestExternalFFmpegExplicitAudioSignals(t *testing.T) {
 		name, layout      string
 		channels, ceiling int
 		active, audible   []int
+		// outLayout is the probed output layout when it is not the standard
+		// one for the output channel count.
+		outLayout string
 	}{
-		{"mono", "mono", 1, 6, []int{0}, []int{0}},
-		{"stereo", "stereo", 2, 6, []int{0, 1}, []int{0, 1}},
-		{"surround", "5.1", 6, 6, []int{0, 1, 2, 3, 4, 5}, []int{0, 1, 2, 3, 4, 5}},
-		{"DTS surround", "5.1(side)", 6, 6, []int{0, 1, 2, 3, 4, 5}, []int{0, 1, 2, 3, 4, 5}},
-		{"side surround", "5.1(side)", 6, 6, []int{0, 1, 2, 3, 4, 5}, []int{0, 1, 2, 3, 4, 5}},
-		{"7.1", "7.1", 8, 6, []int{0, 1, 2, 3, 4, 5, 6, 7}, []int{0, 1, 2, 3, 4, 5}},
-		{"7.1 side left", "7.1", 8, 6, []int{6}, []int{4}},
-		{"7.1 back right", "7.1", 8, 6, []int{5}, []int{5}},
-		{"center downmix", "5.1", 6, 2, []int{2}, []int{0, 1}},
-		{"surround left downmix", "5.1", 6, 2, []int{4}, []int{0}},
-		{"surround right downmix", "5.1", 6, 2, []int{5}, []int{1}},
-		{"LFE downmix", "5.1", 6, 2, []int{3}, []int{0, 1}},
+		{"mono", "mono", 1, 6, []int{0}, []int{0}, ""},
+		{"stereo", "stereo", 2, 6, []int{0, 1}, []int{0, 1}, ""},
+		{"surround", "5.1", 6, 6, []int{0, 1, 2, 3, 4, 5}, []int{0, 1, 2, 3, 4, 5}, ""},
+		{"DTS surround", "5.1(side)", 6, 6, []int{0, 1, 2, 3, 4, 5}, []int{0, 1, 2, 3, 4, 5}, ""},
+		{"side surround", "5.1(side)", 6, 6, []int{0, 1, 2, 3, 4, 5}, []int{0, 1, 2, 3, 4, 5}, ""},
+		{"7.1", "7.1", 8, 6, []int{0, 1, 2, 3, 4, 5, 6, 7}, []int{0, 1, 2, 3, 4, 5}, ""},
+		{"7.1 side left", "7.1", 8, 6, []int{6}, []int{4}, ""},
+		{"7.1 back right", "7.1", 8, 6, []int{5}, []int{5}, ""},
+		{"center downmix", "5.1", 6, 2, []int{2}, []int{0, 1}, ""},
+		{"surround left downmix", "5.1", 6, 2, []int{4}, []int{0}, ""},
+		{"surround right downmix", "5.1", 6, 2, []int{5}, []int{1}, ""},
+		{"LFE downmix", "5.1", 6, 2, []int{3}, []int{0, 1}, ""},
+		// Layouts kept as they are: -ac used to let the encoder choose its own
+		// layout for the channel count, which dropped these LFE channels.
+		{"2.1 LFE", "2.1", 3, 6, []int{2}, []int{2}, "2.1"},
+		{"3.1 LFE", "3.1", 4, 6, []int{3}, []int{3}, "3.1"},
+		{"4.1 LFE", "4.1", 5, 6, []int{3}, []int{3}, "4.1"},
+		{"3.0 center", "3.0", 3, 6, []int{2}, []int{2}, "3.0"},
+		{"4.0 back center", "4.0", 4, 6, []int{3}, []int{3}, "4.0"},
+		{"2.1 LFE downmix", "2.1", 3, 2, []int{2}, []int{0, 1}, ""},
+		// The encoders reject 6.0, so it is remixed to 5.1 with its back
+		// center spread over both surrounds.
+		{"6.0 back center", "6.0", 6, 6, []int{3}, []int{4, 5}, ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -55,13 +69,18 @@ func TestExternalFFmpegExplicitAudioSignals(t *testing.T) {
 				expressions[i] = "0.1*sin(2*PI*100*t)"
 			}
 			source := filepath.Join(t.TempDir(), "signal.mkv")
-			sourceCodec := "pcm_f32le"
+			// WavPack records the channel mask in Matroska; PCM does not, so a
+			// PCM source would decode as FFmpeg's guess for its channel count
+			// (2.1 for any three channels) rather than the layout under test.
+			// The tone has a duration because the WavPack encoder fails with
+			// ENOSPC when -shortest cuts an endless source.
+			sourceCodec := "wavpack"
 			if tc.name == "DTS surround" {
 				sourceCodec = "dca"
 			}
 			runExternalFFmpegCommand(t, candidate.path, lavfiSampleArgs(source,
 				"testsrc2=size=160x90:rate=24:duration=3.2",
-				"aevalsrc="+strings.Join(expressions, "|")+":s=44100:c="+tc.layout,
+				"aevalsrc="+strings.Join(expressions, "|")+":s=44100:d=3.2:c="+tc.layout,
 				"-c:a", sourceCodec, "-strict", "experimental", "-g", "24", "-shortest")...)
 			for _, codec := range []helpers.HLSAudioCodec{helpers.HLSAudioCodecAC3, helpers.HLSAudioCodecEAC3} {
 				t.Run(string(codec), func(t *testing.T) {
@@ -76,9 +95,12 @@ func TestExternalFFmpegExplicitAudioSignals(t *testing.T) {
 					playlist := filepath.Join(params.OutDir, helpers.HLS_PLAYLIST_FILENAME)
 					audio := probeExternalStream(t, prober, playlist, "audio")
 					channels := min(tc.channels, tc.ceiling)
-					layout := helpers.HLSDefaultChannelLayoutName(channels)
-					if channels == 6 {
-						layout = "5.1(side)"
+					layout := tc.outLayout
+					if layout == "" {
+						layout = helpers.HLSDefaultChannelLayoutName(channels)
+						if channels == 6 {
+							layout = "5.1(side)"
+						}
 					}
 					if audio.CodecName != string(codec) || audio.Channels != channels || audio.ChannelLayout != layout || audio.SampleRate != "48000" {
 						t.Fatalf("unexpected audio: %+v", audio)

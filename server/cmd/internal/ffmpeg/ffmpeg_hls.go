@@ -275,6 +275,16 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 	}
 
 	if p.StartSec > 0 {
+		if copyVideo {
+			// Copied video starts at the keyframe before the target, but an
+			// accurate seek trims decoded audio to the target itself, so
+			// encoded audio would begin up to a GOP late. When that gap
+			// outlasts the first segment, the fMP4 muxer writes init.mp4 before
+			// any E-AC-3 packet is parsed: no dec3, no mvex, and Media3 fails.
+			// Starting audio at the same keyframe keeps the timestamps (and
+			// A/V sync) unchanged and matches what copied audio already does.
+			args = append(args, "-noaccurate_seek")
+		}
 		args = append(args, "-ss", fmt.Sprintf("%.3f", p.StartSec))
 	}
 
@@ -340,11 +350,14 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 		case p.AudioProfile != nil:
 			// Explicit mode always encodes with the resolved server-owned
 			// profile. Include LFE in stereo downmixes and normalize the matrix
-			// to avoid clipping. Encoders may normalize the final layout label.
+			// to avoid clipping. The encoder gets the layout itself, not -ac:
+			// -ac lets it choose its own layout for the channel count, which
+			// drops the LFE of 2.1, 3.1 and 4.1. Encoders may still normalize
+			// the final layout label.
 			args = append(args,
 				"-c:a", p.AudioProfile.Encoder,
 				"-af", "aresample=out_chlayout="+p.AudioProfile.ChannelLayout+":lfe_mix_level=0.70710678:rematrix_maxval=1",
-				"-ac", fmt.Sprintf("%d", p.AudioProfile.Channels),
+				"-ch_layout:a", p.AudioProfile.ChannelLayout,
 				"-b:a", p.AudioProfile.Bitrate,
 				"-ar", fmt.Sprintf("%d", p.AudioProfile.SampleRate),
 			)
@@ -404,6 +417,9 @@ func validateHLSAudioProfile(profile *helpers.HLSResolvedAudioProfile) error {
 	}
 	if profile.Channels < 1 || profile.Channels > helpers.HLS_AUDIO_MAX_CHANNELS_SURROUND {
 		return fmt.Errorf("invalid HLS audio channel count %d", profile.Channels)
+	}
+	if !helpers.IsHLSOutputChannelLayout(profile.ChannelLayout, profile.Channels) {
+		return fmt.Errorf("invalid HLS audio channel layout %q for %d-channel output", profile.ChannelLayout, profile.Channels)
 	}
 	if profile.Bitrate != helpers.HLSAudioBitrate(profile.Codec, profile.Channels) {
 		return fmt.Errorf("invalid HLS audio bitrate %q for %s %d-channel output", profile.Bitrate, profile.Codec, profile.Channels)

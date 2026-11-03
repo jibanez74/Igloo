@@ -49,6 +49,13 @@ var removeSubtitleTrackCacheDir = os.RemoveAll
 // of the file. A variable so tests can shorten it.
 var subtitleTrackCacheGate = 30 * time.Second
 
+// subtitleTrackSmallSourceBytes is the size below which a track copy may use
+// the second copy slot. A copy reads its whole media file, so copies run one
+// at a time to keep reads from a network share sequential; but one 50 GB
+// remux then held up every other track for half an hour. Sources under this
+// size can run beside it. A variable so tests can move the line.
+var subtitleTrackSmallSourceBytes int64 = 8 << 30
+
 // subtitleTrackRef names one subtitle track of one media file.
 type subtitleTrackRef struct {
 	Kind            mediaKind
@@ -148,21 +155,56 @@ func (app *Application) scheduleSubtitleTrackCache(streamCtx context.Context, re
 }
 
 // cacheSubtitleTrack copies ref into the cache unless a copy already
-// matches its source. Requests for one track share a run, and one run at a
-// time reads a media file server-wide, so full-file reads over a network
-// share stay sequential.
+// matches its source. Requests for one track share a run. Runs wait for a
+// copy slot (acquireSubtitleTrackExtractSlot), so at most one large and one
+// small media file are read at a time server-wide.
 func (app *Application) cacheSubtitleTrack(ref subtitleTrackRef) {
 	_, _, _ = app.SubtitleTrackCacheGroup.Do(ref.String(), func() (any, error) {
-		select {
-		case app.SubtitleTrackExtractSlot <- struct{}{}:
-		case <-app.HLSShutdown.Done():
+		release, ok := app.acquireSubtitleTrackExtractSlot(ref)
+		if !ok {
 			return nil, nil
 		}
-		defer func() { <-app.SubtitleTrackExtractSlot }()
+		defer release()
 
 		app.extractSubtitleTrackToCache(ref)
 		return nil, nil
 	})
+}
+
+// acquireSubtitleTrackExtractSlot waits for a copy slot for ref and returns
+// its release. A source of subtitleTrackSmallSourceBytes or more takes only
+// the main slot, so large files are copied one at a time. A smaller source
+// prefers the small slot and takes whichever frees first, so it never waits
+// behind a large copy. It reports false when the server shuts down first.
+func (app *Application) acquireSubtitleTrackExtractSlot(ref subtitleTrackRef) (func(), bool) {
+	main := app.SubtitleTrackExtractSlot
+	small := app.SubtitleTrackSmallExtractSlot
+	releaseMain := func() { <-main }
+	releaseSmall := func() { <-small }
+
+	info, err := os.Stat(ref.SourcePath)
+	if err != nil || info.Size() >= subtitleTrackSmallSourceBytes {
+		select {
+		case main <- struct{}{}:
+			return releaseMain, true
+		case <-app.HLSShutdown.Done():
+			return nil, false
+		}
+	}
+
+	select {
+	case small <- struct{}{}:
+		return releaseSmall, true
+	default:
+	}
+	select {
+	case small <- struct{}{}:
+		return releaseSmall, true
+	case main <- struct{}{}:
+		return releaseMain, true
+	case <-app.HLSShutdown.Done():
+		return nil, false
+	}
 }
 
 func (app *Application) extractSubtitleTrackToCache(ref subtitleTrackRef) {

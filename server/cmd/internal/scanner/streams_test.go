@@ -54,3 +54,47 @@ func TestClassifyStreamsStopsOnFirstError(t *testing.T) {
 		t.Fatalf("count=%d calls=%d err=%v", count, calls, err)
 	}
 }
+
+func TestClassifyStreamsReadsForcedFromTitle(t *testing.T) {
+	tests := []struct {
+		name   string
+		title  string
+		forced int
+		want   bool
+	}{
+		{"title only", "Forced", 0, true},
+		{"language and forced", "English (Forced)", 0, true},
+		{"lower case with more words", "forced subs", 0, true},
+		{"separator before", "ENG.FORCED", 0, true},
+		{"disposition only", "", 1, true},
+		{"disposition and plain title", "English", 1, true},
+		{"negated with a hyphen", "Non-Forced", 0, false},
+		{"negated with a word", "Full (not forced)", 0, false},
+		{"no forced", "English no forced", 0, false},
+		{"other word containing forced", "Unforced", 0, false},
+		{"plain title", "Full", 0, false},
+		{"no title", "", 0, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stream := ffprobe.Stream{
+				Index:       3,
+				CodecType:   "subtitle",
+				CodecName:   "hdmv_pgs_subtitle",
+				Tags:        ffprobe.StreamTags{Title: tt.title},
+				Disposition: ffprobe.StreamDisposition{Forced: tt.forced},
+			}
+			var subtitles []SubtitleFields
+			_, err := ClassifyStreams([]ffprobe.Stream{stream},
+				func(VideoStreamFields) error { return nil },
+				func(AudioStreamFields) error { return nil },
+				func(s SubtitleFields) error { subtitles = append(subtitles, s); return nil })
+			if err != nil || len(subtitles) != 1 {
+				t.Fatalf("subtitles=%d err=%v", len(subtitles), err)
+			}
+			if subtitles[0].IsForced != tt.want {
+				t.Fatalf("title %q forced disposition %d: IsForced=%v, want %v", tt.title, tt.forced, subtitles[0].IsForced, tt.want)
+			}
+		})
+	}
+}
