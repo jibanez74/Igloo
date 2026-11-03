@@ -47,16 +47,6 @@ to `server/cmd/internal/ffmpeg/ffmpeg_audio_signal_externalbin_test.go`.
 
 ## Subtitles
 
-### The web player offers XSUB tracks as text subtitles
-
-Since `37454e22` the server treats XSUB as a bitmap codec, so the WebVTT route answers 415 for
-it before extracting anything. The web client's list of bitmap codecs (`BITMAP_SUBTITLE_CODECS`
-in `web/src/lib/constants.ts`) still has only `hdmv_pgs_subtitle`, `dvd_subtitle` and
-`dvb_subtitle`. `isBitmapSubtitleCodec` in `web/src/lib/playback.ts` and the subtitle lists in
-`PlaybackSettingsDialog.tsx` therefore treat an XSUB track as text, and choosing it ends in the
-415. Fix: add `xsub` to the list, and add a unit test for `isBitmapSubtitleCodec`, which has none
-yet.
-
 ### Tracks marked forced only in their title are not treated as forced
 
 The scanner sets `is_forced` from the stream's forced disposition alone
