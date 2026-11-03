@@ -1,10 +1,15 @@
 # Known issues
 
-Problems found while building and testing subtitle streams for the TV (Igloo #212, IglooTV #18
-and #19, 2026-10-30 to 2026-11-01), while checking the Rust port of the server against this one
-(2026-11-02, at `37454e22`), and while fixing the earlier entries (2026-11-03), and deliberately
-left unfixed, with enough detail to act on them without rediscovering them. Delete an entry when
-it lands.
+Problems found and deliberately left unfixed, each with enough detail to act on it without
+rediscovering it. Every entry below was still open on 2026-11-03.
+
+When a fix lands, delete its entry in the same change. When adding one, put it under the section
+it belongs to and cover:
+
+- what happens, and where it was seen (source file, start position, device, date, commit);
+- how to reproduce it;
+- what is known about the cause, and what is not;
+- where to look, or the options for a fix.
 
 ## Deployment
 
@@ -36,7 +41,7 @@ last keyframe at or before the target. FFmpeg's own input seek can land on an ea
 Captain Marvel's remux at `start=1790` advertises `1789.997`, but FFmpeg starts at `1780.195`:
 the first segment is 9.802 s long and ends at the advertised keyframe. A client that maps local
 time by the header then shows positions, and asks for subtitle streams, 9.8 s ahead of the
-picture. Seen 2026-11-03 against a scratch server from `fix/known-issues`; the cause of the
+picture. Seen 2026-11-03 against a scratch server built at `d4af8b32`; the cause of the
 earlier landing (the Matroska demuxer's seek with subtitle tracks present, or Cues that skip
 that keyframe) was not established. Where to look: actual-start resolution in
 `server/cmd/api/hls_*.go` and `server/cmd/internal/keyframeindex`, against the first segment's
