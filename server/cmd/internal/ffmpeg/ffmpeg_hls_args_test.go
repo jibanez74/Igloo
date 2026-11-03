@@ -250,14 +250,31 @@ func TestBuildHLSArgs_SeekOffset(t *testing.T) {
 		name      string
 		startSec  float64
 		device    string
+		copyVideo bool
 		wantSS    string
 		wantOrder [][2]string
+		// wantInexact expects -noaccurate_seek, which only copy-video sessions
+		// use so that encoded audio starts at the copied video's keyframe.
+		wantInexact bool
 	}{
 		{
 			name:      "positive offset precedes the input",
 			startSec:  3600,
 			wantSS:    "3600.000",
 			wantOrder: [][2]string{{"-ss", "-i"}},
+		},
+		{
+			name:        "copy video seeks inexactly so audio starts at its keyframe",
+			startSec:    1790,
+			copyVideo:   true,
+			wantSS:      "1790.000",
+			wantOrder:   [][2]string{{"-noaccurate_seek", "-ss"}, {"-ss", "-i"}},
+			wantInexact: true,
+		},
+		{
+			name:      "copy video from zero needs no seek",
+			startSec:  0,
+			copyVideo: true,
 		},
 		{
 			name:     "zero offset omits the flag",
@@ -286,8 +303,15 @@ func TestBuildHLSArgs_SeekOffset(t *testing.T) {
 			params.HWDevice = device
 			params.StartSec = tt.startSec
 			params.Capabilities = Capabilities{}
+			if tt.copyVideo {
+				params.Profile = helpers.HLS_PROFILE_REMUX
+				params.CopyVideo = true
+			}
 			args := hlsArgs(t, params)
 
+			if got := slices.Contains(args, "-noaccurate_seek"); got != tt.wantInexact {
+				t.Fatalf("-noaccurate_seek present = %v, want %v: %v", got, tt.wantInexact, args)
+			}
 			if tt.wantSS == "" {
 				if slices.Contains(args, "-ss") {
 					t.Fatalf("-ss must be omitted for start offset %v: %v", tt.startSec, args)

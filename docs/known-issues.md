@@ -17,14 +17,16 @@ play is unaffected. Fix: deploy Igloo `dev` (at or after `ac8a4d1e`) to that ser
 
 ## Playback
 
-### Resuming a DTS movie that needs E-AC-3 conversion fails on the TV
+### A source whose audio starts late writes an unplayable Dolby init.mp4
 
-A remux session that converts DTS audio to E-AC-3 and starts past zero writes an `init.mp4`
-without an `mvex` box. FFmpeg logs "Cannot write moov atom before EAC3 packets parsed", and
-Media3 then fails with a NullPointerException, so resuming such a movie on the TV ends in a
-playback error. It reproduces with bare FFmpeg, outside Igloo. A session starting at zero is
-not affected. Where to look: the remux arguments for converted audio in `server/cmd/api/hls_*.go`
-and `docs/ffmpeg.md` (audio conversion).
+When a source's audio track starts more than one HLS segment after its video (an audio delay of
+several seconds), explicit E-AC-3/AC-3 output has no audio packet by the time the first segment
+closes. The fMP4 muxer then writes `init.mp4` without `dec3` or `mvex` ("Cannot write moov atom
+before EAC3 packets parsed"), as resumed copy-video sessions did before `-noaccurate_seek`, and
+Media3 cannot play it. It happens at any start, including zero. The library was not searched for
+such files; a lavfi fixture with `-itsoffset 10` on the audio input reproduces it. Options: pad the
+encoded audio with silence back to the video's first timestamp, or delay the init segment until
+every track has a packet.
 
 ### Seeking in Oppenheimer reads the file linearly
 

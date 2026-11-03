@@ -275,6 +275,16 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 	}
 
 	if p.StartSec > 0 {
+		if p.CopyVideo {
+			// Copied video starts at the keyframe before the target, but an
+			// accurate seek trims decoded audio to the target itself, so
+			// encoded audio would begin up to a GOP late. When that gap
+			// outlasts the first segment, the fMP4 muxer writes init.mp4 before
+			// any E-AC-3 packet is parsed: no dec3, no mvex, and Media3 fails.
+			// Starting audio at the same keyframe keeps the timestamps (and
+			// A/V sync) unchanged and matches what copied audio already does.
+			args = append(args, "-noaccurate_seek")
+		}
 		args = append(args, "-ss", fmt.Sprintf("%.3f", p.StartSec))
 	}
 
