@@ -49,13 +49,3 @@ subtitle stream reads up to 1 MiB after it was last continued. On the Shield, wi
 on, the heap measured 150–168 MB of 512 MB, so the margin is wide there. A device without a
 large heap has less room. If an OutOfMemoryError comes back, the next step is a hard bound on
 sample allocations.
-
-## Test suite
-
-### A web test run under heavy load reported one unhandled error
-
-After the test and testing-library timeouts were raised (30 s and 10 s), three full `bun run test`
-runs beside 18 busy loops (load average 13-38) passed all 1,584 tests. The first of them still
-exited 1 with "Errors 1 error", an unhandled error outside any test; its text was not captured,
-and the next two runs were clean. If it recurs, capture the full output (`bun run test > log 2>&1`)
-and look for the error section above the summary.
