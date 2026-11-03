@@ -11,16 +11,6 @@ it belongs to and cover:
 - what is known about the cause, and what is not;
 - where to look, or the options for a fix.
 
-## Deployment
-
-### The QA server does not serve subtitle streams yet
-
-The Shield runs IglooTV `dev`, which plays every subtitle under HLS from
-`GET .../subtitles/{trackIndex}/stream.mkv`. The server it uses (`192.168.172.241:8080`) was not
-redeployed from Igloo `dev`, so that route is missing there: picking a subtitle during an HLS
-session shows "Subtitles unavailable for this track" and the movie plays on without it. Direct
-play is unaffected. Fix: deploy Igloo `dev` (at or after `ac8a4d1e`) to that server.
-
 ## Playback
 
 ### A copy-video resume early in a late-audio source writes an unplayable Dolby init.mp4
