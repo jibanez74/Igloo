@@ -19,15 +19,15 @@ type SeekLandingParams struct {
 	StartSec         float64
 }
 
-// SeekLanding returns the source time, in seconds, of the first video packet a
-// copy-video HLS session starting at StartSec copies.
+// SeekLanding returns the time, in seconds relative to the container start, of
+// the first video packet a copy-video HLS session starting at StartSec copies.
 //
 // FFmpeg's input seek does not simply land on the last keyframe at or before
 // the start. When the video has B-frames, Matroska aims 3/23 s early, so a
 // start just past a keyframe lands on the one before it, a whole GOP back. MP4
 // picks keyframes by decode time, which can land a few frames after the start.
 // Rather than model those rules, the same binary runs the same seek and copies
-// a single packet with its source timestamps kept.
+// a single packet with its timestamp normalized to the container start.
 func (f *ffmpeg) SeekLanding(ctx context.Context, params SeekLandingParams) (float64, error) {
 	if strings.TrimSpace(params.SourcePath) == "" {
 		return 0, fmt.Errorf("source path is required")
@@ -58,8 +58,8 @@ func (f *ffmpeg) SeekLanding(ctx context.Context, params SeekLandingParams) (flo
 }
 
 // seekLandingArgs repeat a copy-video session's probe and seek options, then
-// copy one packet of its video stream with -copyts, so the packet keeps the
-// source time it has in the file.
+// copy one packet of its video stream with -copyts -start_at_zero, preserving
+// its offset from the container start rather than its raw source timestamp.
 func seekLandingArgs(params SeekLandingParams) []string {
 	args := []string{"-v", "error", "-nostdin"}
 	args = append(args, hlsProbeArgs()...)
@@ -69,6 +69,7 @@ func seekLandingArgs(params SeekLandingParams) []string {
 		"-map", fmt.Sprintf("0:%d", params.VideoStreamIndex),
 		"-c", "copy",
 		"-copyts",
+		"-start_at_zero",
 		"-frames:v", "1",
 		"-f", "framecrc",
 		"pipe:1",

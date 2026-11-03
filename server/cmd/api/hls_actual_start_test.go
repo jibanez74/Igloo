@@ -194,6 +194,35 @@ func copyVideoManifestRequest(movieID int64) *http.Request {
 	), nil)
 }
 
+func TestHLSManifest_ActualStartUsesPlaybackTimeline(t *testing.T) {
+	app := setupTestApp(t)
+	fake := &fakeFFmpeg{
+		plans:           []fakeFFmpegRunPlan{hlsRunPlan(safeRemuxFixture)},
+		seekLandingFunc: returnSeekLanding(10),
+	}
+	app.FFmpeg = fake
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, fmt.Sprintf(
+		"/api/movies/%d/hls/remux/playlist.m3u8?audio_track=0&playback_session=%s&start=12",
+		movieID, testPlaybackSessionID,
+	), nil)
+	authenticatedRouter(t, app, 42).ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("manifest status = %d: %s", recorder.Code, recorder.Body.String())
+	}
+	got := recorder.Header().Get(hlsActualStartHeader)
+	if got != "10.000" {
+		t.Fatalf("actual start header = %q, want 10.000", got)
+	}
+	calls := fake.SeekLandingCalls()
+	if len(calls) != 1 || calls[0].StartSec != 12 {
+		t.Fatalf("SeekLanding calls = %+v, want one measurement at start 12", calls)
+	}
+}
+
 // IglooTV reads X-Igloo-Actual-Start from the first manifest only, so that
 // response waits for the measurement rather than answering without it.
 func TestHLSManifest_FirstResponseWaitsForTheActualStart(t *testing.T) {

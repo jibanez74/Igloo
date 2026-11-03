@@ -46,6 +46,7 @@ func TestSeekLandingArgsRepeatTheSessionSeek(t *testing.T) {
 			"-map", "0:2",
 			"-c", "copy",
 			"-copyts",
+			"-start_at_zero",
 			"-frames:v", "1",
 			"-f", "framecrc",
 			"pipe:1",

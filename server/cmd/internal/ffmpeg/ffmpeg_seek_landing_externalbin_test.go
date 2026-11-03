@@ -11,8 +11,49 @@ import (
 	"strconv"
 	"testing"
 
+	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/helpers"
 )
+
+func TestExternalSeekLandingRelativeToContainerStart(t *testing.T) {
+	candidate, err := resolveBinaryCandidate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &ffmpeg{bin: candidate.path, capabilities: Capabilities{Probed: true}}
+	prober, err := ffprobe.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, startPTS := range []int{0, 5} {
+		t.Run("start PTS "+strconv.Itoa(startPTS), func(t *testing.T) {
+			source := filepath.Join(t.TempDir(), "five second GOP.mkv")
+			generateLavfiSample(t, candidate.path, source,
+				"testsrc2=size=160x90:rate=25:duration=20",
+				"anullsrc=channel_layout=stereo:sample_rate=48000",
+				"-an", "-bf", "0",
+				"-g", "125", "-keyint_min", "125", "-sc_threshold", "0",
+				"-output_ts_offset", strconv.Itoa(startPTS),
+			)
+			ctx, cancel := context.WithTimeout(context.Background(), externalFFmpegIntegrationTimeout)
+			defer cancel()
+			metadata, err := prober.GetMetadata(ctx, source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			containerStart, err := strconv.ParseFloat(metadata.Format.StartTime, 64)
+			if err != nil || math.Abs(containerStart-float64(startPTS)) > 0.001 {
+				t.Fatalf("container start = %q (%v), want %d", metadata.Format.StartTime, err, startPTS)
+			}
+
+			landing := measureSeekLanding(t, f, source, 12)
+			if math.Abs(landing-10) > 0.001 {
+				t.Fatalf("start 12 landed at %.3f s relative to container start, want 10.000 s", landing)
+			}
+		})
+	}
+}
 
 // seekLandingSourceArgs encode 20 s at 25 fps with B-frames and keyframes
 // only at 0, 5, 9.96 and 15 s, so where each seek lands is unambiguous.
