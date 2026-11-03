@@ -235,13 +235,32 @@ func overrideSubtitleTrackSmallSource(t *testing.T, bytes int64) {
 	t.Cleanup(func() { subtitleTrackSmallSourceBytes = original })
 }
 
+// startCopy runs a copy under app.Wait, which the harness waits on at
+// cleanup, so no copy still writes into the test's directories as they are
+// removed.
+func startCopy(app *Application, ref subtitleTrackRef) {
+	app.Wait.Go(func() { app.cacheSubtitleTrack(ref) })
+}
+
+// releaseCopiesAtCleanup returns a channel blocked copies wait on and an
+// idempotent function that opens it. Call it after setupTestApp: its cleanup
+// then opens the channel before the harness waits on app.Wait, so a test that
+// fails while copies are blocked does not hang.
+func releaseCopiesAtCleanup(t *testing.T) (<-chan struct{}, func()) {
+	t.Helper()
+	release := make(chan struct{})
+	open := sync.OnceFunc(func() { close(release) })
+	t.Cleanup(open)
+	return release, open
+}
+
 // Copying a track reads its whole media file; two large files at once over a
 // network share would each take twice as long.
 func TestCacheSubtitleTrack_CopiesOneLargeFileAtATime(t *testing.T) {
 	overrideSubtitleTrackSmallSource(t, 0)
 	app := setupTestApp(t)
+	release, open := releaseCopiesAtCleanup(t)
 	started := make(chan string, 2)
-	release := make(chan struct{})
 	fake := &fakeFFmpeg{extractTrackFunc: func(ctx context.Context, params ffmpeg.SubtitleExtractParams) error {
 		started <- params.SourcePath
 		<-release
@@ -251,16 +270,16 @@ func TestCacheSubtitleTrack_CopiesOneLargeFileAtATime(t *testing.T) {
 	firstID, firstSource := insertSubtitleStreamMovie(t, app, "mkv", "subrip")
 	secondID, secondSource := insertSubtitleStreamMovie(t, app, "mkv", "subrip")
 
-	go app.cacheSubtitleTrack(testTrackRef(firstID, firstSource))
+	startCopy(app, testTrackRef(firstID, firstSource))
 	first := <-started
-	go app.cacheSubtitleTrack(testTrackRef(secondID, secondSource))
+	startCopy(app, testTrackRef(secondID, secondSource))
 	select {
 	case second := <-started:
 		t.Fatalf("%s started while %s was still being copied", second, first)
 	case <-time.After(100 * time.Millisecond):
 	}
 
-	close(release)
+	open()
 	select {
 	case <-started:
 	case <-time.After(5 * time.Second):
@@ -274,28 +293,23 @@ func TestCacheSubtitleTrack_SmallSourcesSkipAheadOfALargeCopy(t *testing.T) {
 	overrideSubtitleTrackSmallSource(t, 1<<20)
 	app := setupTestApp(t)
 	started := make(chan string, 3)
-	release := map[string]chan struct{}{}
-	var releaseMu sync.Mutex
-	gate := func(source string) chan struct{} {
-		releaseMu.Lock()
-		defer releaseMu.Unlock()
-		if release[source] == nil {
-			release[source] = make(chan struct{})
-		}
-		return release[source]
-	}
-	fake := &fakeFFmpeg{extractTrackFunc: func(ctx context.Context, params ffmpeg.SubtitleExtractParams) error {
-		started <- params.SourcePath
-		<-gate(params.SourcePath)
-		return copyingTracks(ctx, params)
-	}}
-	app.FFmpeg = fake
 	largeID, largeSource := insertSubtitleStreamMovie(t, app, "mkv", "subrip")
 	if err := os.Truncate(largeSource, 2<<20); err != nil {
 		t.Fatalf("grow the large source: %v", err)
 	}
 	smallID, smallSource := insertSubtitleStreamMovie(t, app, "mkv", "subrip")
 	thirdID, thirdSource := insertSubtitleStreamMovie(t, app, "mkv", "subrip")
+	gates := map[string]<-chan struct{}{}
+	open := map[string]func(){}
+	for _, source := range []string{largeSource, smallSource, thirdSource} {
+		gates[source], open[source] = releaseCopiesAtCleanup(t)
+	}
+	fake := &fakeFFmpeg{extractTrackFunc: func(ctx context.Context, params ffmpeg.SubtitleExtractParams) error {
+		started <- params.SourcePath
+		<-gates[params.SourcePath]
+		return copyingTracks(ctx, params)
+	}}
+	app.FFmpeg = fake
 	waitStart := func(want string) {
 		t.Helper()
 		select {
@@ -308,30 +322,28 @@ func TestCacheSubtitleTrack_SmallSourcesSkipAheadOfALargeCopy(t *testing.T) {
 		}
 	}
 
-	go app.cacheSubtitleTrack(testTrackRef(largeID, largeSource))
+	startCopy(app, testTrackRef(largeID, largeSource))
 	waitStart(largeSource)
-	go app.cacheSubtitleTrack(testTrackRef(smallID, smallSource))
+	startCopy(app, testTrackRef(smallID, smallSource))
 	waitStart(smallSource)
 
-	go app.cacheSubtitleTrack(testTrackRef(thirdID, thirdSource))
+	startCopy(app, testTrackRef(thirdID, thirdSource))
 	select {
 	case got := <-started:
 		t.Fatalf("%s started while both copy slots were busy", got)
 	case <-time.After(100 * time.Millisecond):
 	}
 
-	close(gate(largeSource))
+	open[largeSource]()
 	waitStart(thirdSource)
-	close(gate(smallSource))
-	close(gate(thirdSource))
 }
 
 // A large source never takes the small slot, even when it is free.
 func TestCacheSubtitleTrack_LargeSourceWaitsForTheMainSlot(t *testing.T) {
 	overrideSubtitleTrackSmallSource(t, 1<<20)
 	app := setupTestApp(t)
+	release, open := releaseCopiesAtCleanup(t)
 	started := make(chan string, 2)
-	release := make(chan struct{})
 	fake := &fakeFFmpeg{extractTrackFunc: func(ctx context.Context, params ffmpeg.SubtitleExtractParams) error {
 		started <- params.SourcePath
 		<-release
@@ -346,15 +358,15 @@ func TestCacheSubtitleTrack_LargeSourceWaitsForTheMainSlot(t *testing.T) {
 		}
 	}
 
-	go app.cacheSubtitleTrack(testTrackRef(firstID, firstSource))
+	startCopy(app, testTrackRef(firstID, firstSource))
 	<-started
-	go app.cacheSubtitleTrack(testTrackRef(secondID, secondSource))
+	startCopy(app, testTrackRef(secondID, secondSource))
 	select {
 	case got := <-started:
 		t.Fatalf("large %s started beside another large copy", got)
 	case <-time.After(100 * time.Millisecond):
 	}
-	close(release)
+	open()
 	select {
 	case <-started:
 	case <-time.After(5 * time.Second):
