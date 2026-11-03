@@ -16,7 +16,6 @@ const versionCheckTimeout = 5 * time.Second
 type FfprobeInterface interface {
 	GetMetadata(ctx context.Context, filePath string) (*FfprobeResult, error)
 	GetAudioMetadata(ctx context.Context, filePath string) (*FfprobeResult, error)
-	KeyframeAtOrBefore(ctx context.Context, filePath string, streamIndex int64, targetSec float64) (float64, error)
 }
 
 type ffprobe struct {

@@ -231,9 +231,6 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.deleteMovieGenresStmt, err = db.PrepareContext(ctx, deleteMovieGenres); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteMovieGenres: %w", err)
 	}
-	if q.deleteMovieKeyframeIndexesStmt, err = db.PrepareContext(ctx, deleteMovieKeyframeIndexes); err != nil {
-		return nil, fmt.Errorf("error preparing query DeleteMovieKeyframeIndexes: %w", err)
-	}
 	if q.deleteMovieProductionCompaniesStmt, err = db.PrepareContext(ctx, deleteMovieProductionCompanies); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteMovieProductionCompanies: %w", err)
 	}
@@ -432,9 +429,6 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getGenresByShowIDStmt, err = db.PrepareContext(ctx, getGenresByShowID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetGenresByShowID: %w", err)
 	}
-	if q.getKeyframeIndexStmt, err = db.PrepareContext(ctx, getKeyframeIndex); err != nil {
-		return nil, fmt.Errorf("error preparing query GetKeyframeIndex: %w", err)
-	}
 	if q.getLatestAlbumsStmt, err = db.PrepareContext(ctx, getLatestAlbums); err != nil {
 		return nil, fmt.Errorf("error preparing query GetLatestAlbums: %w", err)
 	}
@@ -632,9 +626,6 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.getShowGenresWithCountsStmt, err = db.PrepareContext(ctx, getShowGenresWithCounts); err != nil {
 		return nil, fmt.Errorf("error preparing query GetShowGenresWithCounts: %w", err)
-	}
-	if q.getShowKeyframeIndexStmt, err = db.PrepareContext(ctx, getShowKeyframeIndex); err != nil {
-		return nil, fmt.Errorf("error preparing query GetShowKeyframeIndex: %w", err)
 	}
 	if q.getShowNextEpisodeStmt, err = db.PrepareContext(ctx, getShowNextEpisode); err != nil {
 		return nil, fmt.Errorf("error preparing query GetShowNextEpisode: %w", err)
@@ -1284,9 +1275,6 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.upsertExtraVideoStmt, err = db.PrepareContext(ctx, upsertExtraVideo); err != nil {
 		return nil, fmt.Errorf("error preparing query UpsertExtraVideo: %w", err)
 	}
-	if q.upsertKeyframeIndexStmt, err = db.PrepareContext(ctx, upsertKeyframeIndex); err != nil {
-		return nil, fmt.Errorf("error preparing query UpsertKeyframeIndex: %w", err)
-	}
 	if q.upsertLocalShowStmt, err = db.PrepareContext(ctx, upsertLocalShow); err != nil {
 		return nil, fmt.Errorf("error preparing query UpsertLocalShow: %w", err)
 	}
@@ -1328,9 +1316,6 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.upsertShowFingerprintStmt, err = db.PrepareContext(ctx, upsertShowFingerprint); err != nil {
 		return nil, fmt.Errorf("error preparing query UpsertShowFingerprint: %w", err)
-	}
-	if q.upsertShowKeyframeIndexStmt, err = db.PrepareContext(ctx, upsertShowKeyframeIndex); err != nil {
-		return nil, fmt.Errorf("error preparing query UpsertShowKeyframeIndex: %w", err)
 	}
 	if q.upsertShowRemuxSafetyVerdictStmt, err = db.PrepareContext(ctx, upsertShowRemuxSafetyVerdict); err != nil {
 		return nil, fmt.Errorf("error preparing query UpsertShowRemuxSafetyVerdict: %w", err)
@@ -1700,11 +1685,6 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing deleteMovieGenresStmt: %w", cerr)
 		}
 	}
-	if q.deleteMovieKeyframeIndexesStmt != nil {
-		if cerr := q.deleteMovieKeyframeIndexesStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing deleteMovieKeyframeIndexesStmt: %w", cerr)
-		}
-	}
 	if q.deleteMovieProductionCompaniesStmt != nil {
 		if cerr := q.deleteMovieProductionCompaniesStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing deleteMovieProductionCompaniesStmt: %w", cerr)
@@ -2035,11 +2015,6 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getGenresByShowIDStmt: %w", cerr)
 		}
 	}
-	if q.getKeyframeIndexStmt != nil {
-		if cerr := q.getKeyframeIndexStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing getKeyframeIndexStmt: %w", cerr)
-		}
-	}
 	if q.getLatestAlbumsStmt != nil {
 		if cerr := q.getLatestAlbumsStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getLatestAlbumsStmt: %w", cerr)
@@ -2368,11 +2343,6 @@ func (q *Queries) Close() error {
 	if q.getShowGenresWithCountsStmt != nil {
 		if cerr := q.getShowGenresWithCountsStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getShowGenresWithCountsStmt: %w", cerr)
-		}
-	}
-	if q.getShowKeyframeIndexStmt != nil {
-		if cerr := q.getShowKeyframeIndexStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing getShowKeyframeIndexStmt: %w", cerr)
 		}
 	}
 	if q.getShowNextEpisodeStmt != nil {
@@ -3455,11 +3425,6 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing upsertExtraVideoStmt: %w", cerr)
 		}
 	}
-	if q.upsertKeyframeIndexStmt != nil {
-		if cerr := q.upsertKeyframeIndexStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing upsertKeyframeIndexStmt: %w", cerr)
-		}
-	}
 	if q.upsertLocalShowStmt != nil {
 		if cerr := q.upsertLocalShowStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing upsertLocalShowStmt: %w", cerr)
@@ -3528,11 +3493,6 @@ func (q *Queries) Close() error {
 	if q.upsertShowFingerprintStmt != nil {
 		if cerr := q.upsertShowFingerprintStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing upsertShowFingerprintStmt: %w", cerr)
-		}
-	}
-	if q.upsertShowKeyframeIndexStmt != nil {
-		if cerr := q.upsertShowKeyframeIndexStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing upsertShowKeyframeIndexStmt: %w", cerr)
 		}
 	}
 	if q.upsertShowRemuxSafetyVerdictStmt != nil {
@@ -3673,7 +3633,6 @@ type Queries struct {
 	deleteMovieCrewStmt                         *sql.Stmt
 	deleteMovieExtraVideosStmt                  *sql.Stmt
 	deleteMovieGenresStmt                       *sql.Stmt
-	deleteMovieKeyframeIndexesStmt              *sql.Stmt
 	deleteMovieProductionCompaniesStmt          *sql.Stmt
 	deleteMovieRemuxSafetyVerdictsStmt          *sql.Stmt
 	deleteMovieSubtitlesStmt                    *sql.Stmt
@@ -3740,7 +3699,6 @@ type Queries struct {
 	getGenresByMovieIDStmt                      *sql.Stmt
 	getGenresByMusicianIDStmt                   *sql.Stmt
 	getGenresByShowIDStmt                       *sql.Stmt
-	getKeyframeIndexStmt                        *sql.Stmt
 	getLatestAlbumsStmt                         *sql.Stmt
 	getLatestMoviesStmt                         *sql.Stmt
 	getLatestShowsStmt                          *sql.Stmt
@@ -3807,7 +3765,6 @@ type Queries struct {
 	getShowFileEpisodeIDsStmt                   *sql.Stmt
 	getShowFileForEpisodeStmt                   *sql.Stmt
 	getShowGenresWithCountsStmt                 *sql.Stmt
-	getShowKeyframeIndexStmt                    *sql.Stmt
 	getShowNextEpisodeStmt                      *sql.Stmt
 	getShowPendingEpisodeIDsStmt                *sql.Stmt
 	getShowPendingSeasonIDsStmt                 *sql.Stmt
@@ -4024,7 +3981,6 @@ type Queries struct {
 	upsertCastStmt                              *sql.Stmt
 	upsertCrewStmt                              *sql.Stmt
 	upsertExtraVideoStmt                        *sql.Stmt
-	upsertKeyframeIndexStmt                     *sql.Stmt
 	upsertLocalShowStmt                         *sql.Stmt
 	upsertLocalShowEpisodeStmt                  *sql.Stmt
 	upsertLocalShowSeasonStmt                   *sql.Stmt
@@ -4039,7 +3995,6 @@ type Queries struct {
 	upsertShowEpisodeWatchProgressStmt          *sql.Stmt
 	upsertShowFileStmt                          *sql.Stmt
 	upsertShowFingerprintStmt                   *sql.Stmt
-	upsertShowKeyframeIndexStmt                 *sql.Stmt
 	upsertShowRemuxSafetyVerdictStmt            *sql.Stmt
 	upsertTrackStmt                             *sql.Stmt
 	upsertTrackFileFingerprintStmt              *sql.Stmt
@@ -4121,7 +4076,6 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		deleteMovieCrewStmt:                         q.deleteMovieCrewStmt,
 		deleteMovieExtraVideosStmt:                  q.deleteMovieExtraVideosStmt,
 		deleteMovieGenresStmt:                       q.deleteMovieGenresStmt,
-		deleteMovieKeyframeIndexesStmt:              q.deleteMovieKeyframeIndexesStmt,
 		deleteMovieProductionCompaniesStmt:          q.deleteMovieProductionCompaniesStmt,
 		deleteMovieRemuxSafetyVerdictsStmt:          q.deleteMovieRemuxSafetyVerdictsStmt,
 		deleteMovieSubtitlesStmt:                    q.deleteMovieSubtitlesStmt,
@@ -4188,7 +4142,6 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getGenresByMovieIDStmt:                      q.getGenresByMovieIDStmt,
 		getGenresByMusicianIDStmt:                   q.getGenresByMusicianIDStmt,
 		getGenresByShowIDStmt:                       q.getGenresByShowIDStmt,
-		getKeyframeIndexStmt:                        q.getKeyframeIndexStmt,
 		getLatestAlbumsStmt:                         q.getLatestAlbumsStmt,
 		getLatestMoviesStmt:                         q.getLatestMoviesStmt,
 		getLatestShowsStmt:                          q.getLatestShowsStmt,
@@ -4255,7 +4208,6 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getShowFileEpisodeIDsStmt:                   q.getShowFileEpisodeIDsStmt,
 		getShowFileForEpisodeStmt:                   q.getShowFileForEpisodeStmt,
 		getShowGenresWithCountsStmt:                 q.getShowGenresWithCountsStmt,
-		getShowKeyframeIndexStmt:                    q.getShowKeyframeIndexStmt,
 		getShowNextEpisodeStmt:                      q.getShowNextEpisodeStmt,
 		getShowPendingEpisodeIDsStmt:                q.getShowPendingEpisodeIDsStmt,
 		getShowPendingSeasonIDsStmt:                 q.getShowPendingSeasonIDsStmt,
@@ -4472,7 +4424,6 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		upsertCastStmt:                              q.upsertCastStmt,
 		upsertCrewStmt:                              q.upsertCrewStmt,
 		upsertExtraVideoStmt:                        q.upsertExtraVideoStmt,
-		upsertKeyframeIndexStmt:                     q.upsertKeyframeIndexStmt,
 		upsertLocalShowStmt:                         q.upsertLocalShowStmt,
 		upsertLocalShowEpisodeStmt:                  q.upsertLocalShowEpisodeStmt,
 		upsertLocalShowSeasonStmt:                   q.upsertLocalShowSeasonStmt,
@@ -4487,7 +4438,6 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		upsertShowEpisodeWatchProgressStmt:          q.upsertShowEpisodeWatchProgressStmt,
 		upsertShowFileStmt:                          q.upsertShowFileStmt,
 		upsertShowFingerprintStmt:                   q.upsertShowFingerprintStmt,
-		upsertShowKeyframeIndexStmt:                 q.upsertShowKeyframeIndexStmt,
 		upsertShowRemuxSafetyVerdictStmt:            q.upsertShowRemuxSafetyVerdictStmt,
 		upsertTrackStmt:                             q.upsertTrackStmt,
 		upsertTrackFileFingerprintStmt:              q.upsertTrackFileFingerprintStmt,

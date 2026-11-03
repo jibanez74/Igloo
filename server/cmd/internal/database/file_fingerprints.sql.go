@@ -9,15 +9,6 @@ import (
 	"context"
 )
 
-const deleteMovieKeyframeIndexes = `-- name: DeleteMovieKeyframeIndexes :exec
-DELETE FROM keyframe_indexes WHERE movie_id = ?
-`
-
-func (q *Queries) DeleteMovieKeyframeIndexes(ctx context.Context, movieID int64) error {
-	_, err := q.exec(ctx, q.deleteMovieKeyframeIndexesStmt, deleteMovieKeyframeIndexes, movieID)
-	return err
-}
-
 const deleteMovieRemuxSafetyVerdicts = `-- name: DeleteMovieRemuxSafetyVerdicts :exec
 DELETE FROM remux_safety_verdicts WHERE movie_id = ?
 `

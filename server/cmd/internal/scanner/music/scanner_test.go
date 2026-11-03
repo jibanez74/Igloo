@@ -93,7 +93,6 @@ func testMusicMetadataWithTags(tags ffprobe.FormatTags) *ffprobe.FfprobeResult {
 // generic and audio metadata requests apart, which CountingProbe merges. The
 // counters are locked so the stub stays safe if music probes concurrently.
 type musicScannerFfprobeByPath struct {
-	scannertest.NoKeyframeProbe
 	mu            sync.Mutex
 	results       map[string]*ffprobe.FfprobeResult
 	metadataCalls map[string]int

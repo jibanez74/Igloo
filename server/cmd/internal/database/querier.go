@@ -99,7 +99,6 @@ type Querier interface {
 	DeleteMovieExtraVideos(ctx context.Context, movieID int64) error
 	// Remove all genre links for a movie
 	DeleteMovieGenres(ctx context.Context, movieID int64) error
-	DeleteMovieKeyframeIndexes(ctx context.Context, movieID int64) error
 	// Remove all production company links for a movie
 	DeleteMovieProductionCompanies(ctx context.Context, movieID int64) error
 	DeleteMovieRemuxSafetyVerdicts(ctx context.Context, movieID int64) error
@@ -232,9 +231,6 @@ type Querier interface {
 	GetGenresByMusicianID(ctx context.Context, musicianID int64) ([]string, error)
 	// Genres linked to a show (for details view).
 	GetGenresByShowID(ctx context.Context, showID int64) ([]GetGenresByShowIDRow, error)
-	// Persisted keyframe index for one video stream; the caller compares the
-	// stored fingerprint and treats a mismatch as a miss.
-	GetKeyframeIndex(ctx context.Context, arg GetKeyframeIndexParams) (GetKeyframeIndexRow, error)
 	GetLatestAlbums(ctx context.Context) ([]GetLatestAlbumsRow, error)
 	// The home section renders title, poster and year only; certification is
 	// deliberately absent so the row matches the documented LatestMovie exactly.
@@ -406,9 +402,6 @@ type Querier interface {
 	GetShowFileForEpisode(ctx context.Context, episodeID int64) (GetShowFileForEpisodeRow, error)
 	// Show genres with counts per tag (genre_type show only).
 	GetShowGenresWithCounts(ctx context.Context) ([]GetShowGenresWithCountsRow, error)
-	// Persisted keyframe index for one video stream of a show file; the caller
-	// compares the stored fingerprint and treats a mismatch as a miss.
-	GetShowKeyframeIndex(ctx context.Context, arg GetShowKeyframeIndexParams) (GetShowKeyframeIndexRow, error)
 	// The episode the player advances to when one ends: the first episode of the
 	// same show that sorts after the current one in the order the season listing
 	// uses (specials last, then season, then episode number). A candidate has to
@@ -782,7 +775,6 @@ type Querier interface {
 	// Insert or update an extra video by external_id (e.g. TMDB video id). Use for trailers/special features.
 	// Call with a non-null external_id so conflicts are detected; then link via CreateMovieExtraVideo.
 	UpsertExtraVideo(ctx context.Context, arg UpsertExtraVideoParams) (int64, error)
-	UpsertKeyframeIndex(ctx context.Context, arg UpsertKeyframeIndexParams) error
 	UpsertLocalShow(ctx context.Context, arg UpsertLocalShowParams) (Show, error)
 	UpsertLocalShowEpisode(ctx context.Context, arg UpsertLocalShowEpisodeParams) (ShowEpisode, error)
 	UpsertLocalShowSeason(ctx context.Context, arg UpsertLocalShowSeasonParams) (ShowSeason, error)
@@ -798,7 +790,6 @@ type Querier interface {
 	UpsertShowEpisodeWatchProgress(ctx context.Context, arg UpsertShowEpisodeWatchProgressParams) error
 	UpsertShowFile(ctx context.Context, arg UpsertShowFileParams) (ShowFile, error)
 	UpsertShowFingerprint(ctx context.Context, arg UpsertShowFingerprintParams) error
-	UpsertShowKeyframeIndex(ctx context.Context, arg UpsertShowKeyframeIndexParams) error
 	UpsertShowRemuxSafetyVerdict(ctx context.Context, arg UpsertShowRemuxSafetyVerdictParams) error
 	// A changed file loses its provider pairing; the scan pairs it again with the
 	// rest of its album.

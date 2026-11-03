@@ -14,7 +14,6 @@ import (
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
-	"igloo/cmd/internal/keyframeindex"
 )
 
 // playbackEpisodeFixture is one show with one combined file backing two
@@ -726,7 +725,7 @@ func TestLoadHLSSourceForSession_Episode(t *testing.T) {
 	}
 }
 
-func TestEpisodeKeyframeAndRemuxPersistenceUseTheShowTables(t *testing.T) {
+func TestEpisodeRemuxPersistenceUsesTheShowTable(t *testing.T) {
 	app := setupTestApp(t)
 	fixture := seedPlaybackEpisode(t, app)
 	ctx := context.Background()
@@ -734,33 +733,23 @@ func TestEpisodeKeyframeAndRemuxPersistenceUseTheShowTables(t *testing.T) {
 	sibling := episodePlaybackSource(t, app, fixture.Episode2)
 	video := &database.VideoStream{StreamIndex: 0, Codec: "h264"}
 
-	fingerprint := keyframeIndexFingerprint(source, video)
-	if fingerprint != keyframeIndexFingerprint(sibling, video) {
+	verdictFingerprint := remuxSafetyFingerprint(source, video, "7.0.2")
+	if verdictFingerprint != remuxSafetyFingerprint(sibling, video, "7.0.2") {
 		t.Fatal("episodes of one file must share the file fingerprint")
 	}
-	app.setKeyframeIndex(source, 0, fingerprint, keyframeindex.Index{KeyframeSec: []float64{0, 4, 8}, DurationSec: 12})
-	idx, ok := app.getKeyframeIndex(ctx, sibling, 0, fingerprint)
-	if !ok || len(idx.KeyframeSec) != 3 {
-		t.Fatalf("sibling episode did not read the file's keyframe index: %v %v", idx, ok)
-	}
-	var rows int
-	err := app.DB.QueryRow(`SELECT COUNT(*) FROM show_keyframe_indexes WHERE file_id = ?`, fixture.FileID).Scan(&rows)
-	if err != nil || rows != 1 {
-		t.Fatalf("show_keyframe_indexes rows = %d (%v), want 1", rows, err)
-	}
-	if _, ok := app.getKeyframeIndex(ctx, playbackSourceFromMovie(database.Movie{ID: fixture.FileID}), 0, fingerprint); ok {
-		t.Fatal("a movie with the file's id must not read the show table")
-	}
-
-	verdictFingerprint := remuxSafetyFingerprint(source, video, "7.0.2")
 	app.setRemuxSafetyVerdict(source, 0, verdictFingerprint, false, "10-bit")
 	verdict, ok := app.getRemuxSafetyVerdict(ctx, sibling, 0, verdictFingerprint)
 	if !ok || verdict.Safe || verdict.Reason != "10-bit" {
 		t.Fatalf("sibling verdict = %+v %v", verdict, ok)
 	}
-	err = app.DB.QueryRow(`SELECT COUNT(*) FROM show_remux_safety_verdicts WHERE file_id = ?`, fixture.FileID).Scan(&rows)
+	var rows int
+	err := app.DB.QueryRow(`SELECT COUNT(*) FROM show_remux_safety_verdicts WHERE file_id = ?`, fixture.FileID).Scan(&rows)
 	if err != nil || rows != 1 {
 		t.Fatalf("show_remux_safety_verdicts rows = %d (%v), want 1", rows, err)
+	}
+	_, ok = app.getRemuxSafetyVerdict(ctx, playbackSourceFromMovie(database.Movie{ID: fixture.FileID}), 0, verdictFingerprint)
+	if ok {
+		t.Fatal("a movie with the file's id must not read the show table")
 	}
 }
 

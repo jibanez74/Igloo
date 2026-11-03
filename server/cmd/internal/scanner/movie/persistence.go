@@ -83,10 +83,6 @@ func (s *Scanner) persistLocalMovie(ctx context.Context, scan *movieScanContext,
 		if err != nil {
 			return err
 		}
-		err = qtx.DeleteMovieKeyframeIndexes(ctx, movieID)
-		if err != nil {
-			return err
-		}
 		err = storeMovieFingerprint(ctx, qtx, movie.params.FilePath, movie.inspection.Fingerprint)
 		if err != nil {
 			return err
