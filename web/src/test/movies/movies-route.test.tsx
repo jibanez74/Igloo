@@ -248,7 +248,7 @@ describe("movies route tab transitions", () => {
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /Action/i })).toBeInTheDocument();
     });
-  }, 10_000);
+  });
 
   it("delays swapping from genres to playlists until the fade-out completes", async () => {
     const user = userEvent.setup();
@@ -270,7 +270,7 @@ describe("movies route tab transitions", () => {
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Liked movies" })).toBeInTheDocument();
     });
-  }, 10_000);
+  });
 
   it("switches tabs without waiting when reduced motion is enabled", async () => {
     setReducedMotionPreference(true);
@@ -546,7 +546,7 @@ describe("movies route focus restoration", () => {
       await new Promise(resolve => window.setTimeout(resolve, 50));
     });
     expect(screen.getByRole("button", { name: "More options" })).toHaveFocus();
-  }, 10_000);
+  });
 
   it("disables Request Movie when TMDB search is unavailable", async () => {
     const user = userEvent.setup();

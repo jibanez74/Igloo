@@ -322,7 +322,7 @@ describe("search route", () => {
     await waitFor(() => {
       expect(screen.getByText("Casino Original Soundtrack")).toBeInTheDocument();
     });
-  }, 10_000);
+  });
 
   it("switches tabs without waiting when reduced motion is enabled", async () => {
     setReducedMotionPreference(true);

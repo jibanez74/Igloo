@@ -82,14 +82,10 @@ sample allocations.
 
 ## Test suite
 
-### Web tests time out under heavy machine load
+### A web test run under heavy load reported one unhandled error
 
-With another job using about 18 cores (load average 18–20), `make test-web` failed: first two
-tab-transition tests (`movies-route.test.tsx`, `settings-route-transition.test.tsx`), then 97
-tests across 15 files, all timing out at 10–15 seconds. The same files pass on their own, and the
-whole suite passes with fewer workers: `cd web && bun run test --maxWorkers=3`. Neither CI run was
-affected. On 2026-11-02, at load average 12, `music playlist route > renders the header, the
-owner actions and the tracks` (`src/test/music/playlist-route.test.tsx`) timed out the same way,
-after 11 seconds of waiting for the text "Alabaster". It then passed 5 runs alone and 2 full-suite
-runs. Options: cap vitest's workers in the config, or raise the timeouts of the transition tests
-and this one.
+After the test and testing-library timeouts were raised (30 s and 10 s), three full `bun run test`
+runs beside 18 busy loops (load average 13-38) passed all 1,584 tests. The first of them still
+exited 1 with "Errors 1 error", an unhandled error outside any test; its text was not captured,
+and the next two runs were clean. If it recurs, capture the full output (`bun run test > log 2>&1`)
+and look for the error section above the summary.

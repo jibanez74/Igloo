@@ -201,7 +201,7 @@ describe("tv shows route tab transitions", () => {
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /Drama/i })).toBeInTheDocument();
     });
-  }, 10_000);
+  });
 
   it("switches tabs without waiting when reduced motion is enabled", async () => {
     setReducedMotionPreference(true);

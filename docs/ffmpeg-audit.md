@@ -39,7 +39,7 @@ The new real-media signal suite uses the local Linux `8.1.3-Jellyfin` pair. For 
 | A particular Oppenheimer file has invalid Cues and slow seeks | The named source was not inspected. Bounded keyframe lookup and missing-index fallback are confirmed, but do not validate that file or its reported seek throughput. |
 | QA deployment lacks subtitle routes | Not checked against the remote deployment. The routes exist locally and subtitle HTTP tests passed. |
 | TV double subtitle opens, chapter focus, and memory budget | External-client reports not verified from this repository or on a TV device. No assertions about those client implementations were retained as server guarantees. |
-| Web tests time out under heavy load | The unrestricted run hit 41 failures in three route/transition files; all 44 tests in those files passed with one worker, and the full 1,573-test suite passed with four available CPUs. No tests or timeouts changed. |
+| Web tests time out under heavy load | The unrestricted run hit 41 failures in three route/transition files; all 44 tests in those files passed with one worker, and the full 1,573-test suite passed with four available CPUs. No tests or timeouts changed in this audit; afterwards the global test and testing-library timeouts were raised to 30 s and 10 s. |
 
 Other confirmed limitations are documented in their reference sections: [stop does not cancel in-flight creation](ffmpeg.md#refresh-failure-and-stop), [remux preflight samples only part of a file](ffmpeg.md#profiles-and-remux-fallback), and [actual-start resolution is advisory](ffmpeg.md#timeline-seeking-and-resume). They were not treated as resolved defects or stronger guarantees.
 
