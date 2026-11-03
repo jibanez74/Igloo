@@ -3,6 +3,8 @@ package scanner
 import (
 	"database/sql"
 	"strconv"
+	"strings"
+	"unicode"
 
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/helpers"
@@ -148,9 +150,33 @@ func subtitleFields(stream ffprobe.Stream) SubtitleFields {
 		Codec:       stream.CodecName,
 		Language:    helpers.NullString(stream.Tags.Language),
 		Title:       helpers.NullString(stream.Tags.Title),
-		IsForced:    stream.Disposition.Forced == 1,
+		IsForced:    stream.Disposition.Forced == 1 || titleMarksForced(stream.Tags.Title),
 		IsDefault:   stream.Disposition.Default == 1,
 	}
+}
+
+// titleMarksForced reports whether a subtitle title names the track as forced.
+// Many releases mark forced tracks only in the title ("Forced", "English
+// (Forced)") and leave the forced disposition unset, and clients' default
+// rules rely on is_forced. "forced" must be a whole word, and a negating word
+// right before it ("Non-Forced", "not forced") cancels it.
+func titleMarksForced(title string) bool {
+	words := strings.FieldsFunc(strings.ToLower(title), func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	})
+	for i, word := range words {
+		if word != "forced" {
+			continue
+		}
+		if i > 0 {
+			switch words[i-1] {
+			case "non", "not", "no":
+				continue
+			}
+		}
+		return true
+	}
+	return false
 }
 
 // parseNullInt64 maps ffprobe's optional numeric strings to NULL when absent

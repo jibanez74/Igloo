@@ -47,19 +47,6 @@ to `server/cmd/internal/ffmpeg/ffmpeg_audio_signal_externalbin_test.go`.
 
 ## Subtitles
 
-### Tracks marked forced only in their title are not treated as forced
-
-The scanner sets `is_forced` from the stream's forced disposition alone
-(`server/cmd/internal/scanner/streams.go:151`). Many releases mark forced tracks only in the
-title instead. Free Guy's English PGS track, for example, has the title "Forced" and the default
-flag, but no forced disposition. The TV's default rule turns a default-flagged subtitle on when it
-is forced or its language differs from the audio's, so with English audio it leaves this track
-off, and the viewer has to pick it by hand to see the subtitles for the foreign-language scenes.
-An older database on this machine has `is_forced = 1` for these tracks, but no scanner in this
-repository's history read the title (`32f22f47` went from a hardcoded `false` to the disposition),
-so that value came from elsewhere. Fix: also treat a title containing "forced" as forced, and add
-a scanner test for it.
-
 ### Starting playback with a subtitle opens its stream twice
 
 When the subtitle chosen before playback is not one Media3 would pick on its own (no matching

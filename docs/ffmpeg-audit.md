@@ -32,7 +32,7 @@ The new real-media signal suite uses the local Linux `8.1.3-Jellyfin` pair. For 
 
 | Existing report | Audit status |
 | --- | --- |
-| Forced subtitles identified only by their title are not automatically forced | Confirmed implementation limitation: [scanner conversion](../server/cmd/internal/scanner/streams.go), line 151, uses only the forced disposition. The reported title-specific TV experience was not exercised. |
+| Forced subtitles identified only by their title are not automatically forced | Fixed after the audit: [scanner conversion](../server/cmd/internal/scanner/streams.go) also reads a title that names the track as forced (`titleMarksForced`). Existing rows change when their file is rescanned as changed or the database is recreated. |
 | One large track extraction delays other copies | Confirmed scheduling limitation: [track cache](../server/cmd/api/subtitle_track_cache.go), `cacheSubtitleTrack`, serializes work through `SubtitleTrackExtractSlot`. The reported NAS throughput and duration were not remeasured. |
 | Cancellation may keep a TV subtitle request alive until the next keepalive | The server's silence interval and request-context cancellation are confirmed in [subtitle streaming](../server/cmd/api/subtitle_stream_handler.go). The Media3 socket/cancellation timing report was not reproduced; server behavior alone does not prove it. |
 | DTS-to-E-AC-3 HLS resume creates unusable initialization output | Not reproduced in this audit. New signal tests start DTS 5.1 playback at one second and successfully decode both Dolby HLS outputs. That generated fixture does not reproduce the reported source or establish Media3 behavior. Keep the reported missing-`mvex`/Media3 failure as an open report, not intended behavior. |
