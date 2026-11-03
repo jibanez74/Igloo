@@ -138,10 +138,12 @@ type Application struct {
 	// holds an FFmpeg process for as long as its player plays.
 	SubtitleStreamSlots chan struct{}
 	// SubtitleTrackCacheGroup shares a copy of one track into the cache
-	// between the streams that ask for it, and SubtitleTrackExtractSlot lets
-	// one copy run at a time.
-	SubtitleTrackCacheGroup  singleflight.Group
-	SubtitleTrackExtractSlot chan struct{}
+	// between the streams that ask for it. SubtitleTrackExtractSlot lets one
+	// copy of any source run at a time, and SubtitleTrackSmallExtractSlot one
+	// more of a source under subtitleTrackSmallSourceBytes.
+	SubtitleTrackCacheGroup       singleflight.Group
+	SubtitleTrackExtractSlot      chan struct{}
+	SubtitleTrackSmallExtractSlot chan struct{}
 	// SubtitleTrackCacheMu guards SubtitleTrackCacheGeneration, which counts
 	// the cache's invalidations: a copy begun before one is not published;
 	// and SubtitleTrackCacheRemoving, the cache directories an invalidation
@@ -520,6 +522,7 @@ func (app *Application) initRuntimeCaches() {
 	app.SubtitleVTTCache = cache.New(subtitleCacheTTL, subtitleCacheCleanup)
 	app.SubtitleStreamSlots = make(chan struct{}, subtitleStreamMaxOpen)
 	app.SubtitleTrackExtractSlot = make(chan struct{}, 1)
+	app.SubtitleTrackSmallExtractSlot = make(chan struct{}, 1)
 	// Reads app.Tmdb as initialized above and yields an empty pool while it is nil.
 	app.PrerollTheaters = preroll.NewTheatersPool(app.Tmdb, app.Logger)
 	app.RoomHLSTombstone = cache.New(hlsRoomSessionTTL, hlsSessionCacheSweep)

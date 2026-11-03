@@ -59,14 +59,6 @@ for 767 bytes. With the double start above, every start can briefly hold two slo
 shorter keepalive interval (`subtitleStreamKeepalive`), or a TV data source that closes its
 connection when the load is cancelled.
 
-### One large file holds up every other track copy
-
-Track copies run one at a time server-wide (`SubtitleTrackExtractSlot`), and a copy reads its
-whole media file. Free Guy's copy read 50 GB from the NAS in 25 minutes, and the Captain Marvel
-copy queued behind it the whole time. That is by design, to keep reads from a network share
-sequential, but it means one large file can delay caching for everything else. Options: let
-small files skip ahead, or allow a second copy when the files are on different devices.
-
 ## TV app (IglooTV)
 
 ### The Chapters dialog shows no D-pad focus and may let focus escape

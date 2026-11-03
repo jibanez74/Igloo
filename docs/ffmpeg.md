@@ -367,7 +367,7 @@ The stream has a request-owned FFmpeg process. Disconnect/shutdown cancels it; s
 
 ### Subtitle track cache
 
-After a source-backed Matroska stream stays open through the cache gate, the server schedules a full-file track extraction. One extraction runs at a time server-wide and identical requests share it; a large source can delay other tracks. WebVTT alone never schedules copies.
+After a source-backed Matroska stream stays open through the cache gate, the server schedules a full-file track extraction. Identical requests share an extraction. Extractions take one of two slots server-wide: a source of 8 GiB or more waits for the main slot, so large files are read one at a time, while a smaller source takes whichever slot frees first (preferring the second), so it never waits behind a large copy. At most two media files are read at once. WebVTT alone never schedules copies.
 
 Copies preserve source timestamps and use the Matroska codec plan above. They live at:
 
@@ -416,7 +416,7 @@ This is the single reference for operational defaults and fixed budgets in this 
 | WebVTT cache idle TTL / sweep | 1 h / 10 min | Subtitle cache constants |
 | Subtitle stream slots / acquisition wait / `Retry-After` | 8 / 3 s / 2 s | `subtitle_stream_handler.go` |
 | Subtitle stream silence keepalive | 3 s at element boundaries | `subtitleStreamKeepalive` |
-| Track-copy gate / concurrency / timeout / byte cap | 30 s / 1 / 3 h / 512 MiB | `subtitle_track_cache.go` |
+| Track-copy gate / concurrency / timeout / byte cap | 30 s / 1 large + 1 small (under 8 GiB) / 3 h / 512 MiB | `subtitle_track_cache.go` |
 | Track-copy retention / sweep | 30 days since use / startup then daily | Subtitle track cache |
 | Web keepalive | 2 min | `HLS_SESSION_KEEPALIVE_INTERVAL_MS` |
 | Web capacity retries / missing-header fallback delay | 6 / 5 s | `HLS_CAPACITY_RETRY_*` |
