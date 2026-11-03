@@ -352,10 +352,8 @@ func TestMovieAtomicReplacementRefreshesOnlyChangedTechnicalState(t *testing.T) 
 	if !reflect.DeepEqual(invalidated, []int64{id}) {
 		t.Fatalf("invalidated movies: %v", invalidated)
 	}
-	for _, table := range []string{"keyframe_indexes", "remux_safety_verdicts"} {
-		if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM "+table) != 0 {
-			t.Fatalf("replacement retained %s", table)
-		}
+	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM remux_safety_verdicts") != 0 {
+		t.Fatal("replacement retained remux_safety_verdicts")
 	}
 }
 

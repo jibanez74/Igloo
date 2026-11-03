@@ -11,11 +11,11 @@ import (
 	"time"
 )
 
-// subtitleStderrTailBytes caps the FFmpeg stderr tail carried in an extraction
+// stderrTailBytes caps the FFmpeg stderr tail carried in a command
 // error, which is surfaced to the caller and logged. It is unrelated to the
 // hlsStderrScanner* sizes in ffmpeg_hls.go — those bound one scanner token, not
 // a tail kept after the fact.
-const subtitleStderrTailBytes = 4096
+const stderrTailBytes = 4096
 
 // subtitleStreamWaitDelay bounds how long Wait holds on to the pipes of a
 // subtitle stream FFmpeg has already left.
@@ -71,12 +71,12 @@ type subtitleStream struct {
 func (s *subtitleStream) Wait() error {
 	err := s.cmd.Wait()
 	if err != nil {
-		return subtitleCommandError("ffmpeg subtitle stream failed", s.ctx, err, s.stderr.String())
+		return commandError("ffmpeg subtitle stream failed", s.ctx, err, s.stderr.String())
 	}
 	return nil
 }
 
-// subtitleStderr keeps the last subtitleStderrTailBytes of FFmpeg's stderr,
+// subtitleStderr keeps the last stderrTailBytes of FFmpeg's stderr,
 // so a process that runs for a whole film cannot grow it without bound. Only
 // os/exec's copying goroutine writes; Wait returns after it is done.
 type subtitleStderr struct {
@@ -85,7 +85,7 @@ type subtitleStderr struct {
 
 func (s *subtitleStderr) Write(p []byte) (int, error) {
 	s.buf = append(s.buf, p...)
-	overflow := len(s.buf) - subtitleStderrTailBytes
+	overflow := len(s.buf) - stderrTailBytes
 	if overflow > 0 {
 		s.buf = append(s.buf[:0:0], s.buf[overflow:]...)
 	}
@@ -142,7 +142,7 @@ func (f *ffmpeg) runSubtitleWebVTT(ctx context.Context, args []string) ([]byte, 
 	cmd.Stderr = &stderr
 	err := cmd.Run()
 	if err != nil {
-		return nil, subtitleCommandError("ffmpeg subtitle extraction failed", ctx, err, stderr.String())
+		return nil, commandError("ffmpeg subtitle extraction failed", ctx, err, stderr.String())
 	}
 
 	out := stdout.Bytes()
@@ -200,7 +200,7 @@ func (f *ffmpeg) ExtractSubtitleMatroska(ctx context.Context, params SubtitleExt
 	cmd.Stderr = stderr
 	err := cmd.Run()
 	if err != nil {
-		return subtitleCommandError("ffmpeg subtitle track extraction failed", ctx, err, stderr.String())
+		return commandError("ffmpeg subtitle track extraction failed", ctx, err, stderr.String())
 	}
 	return nil
 }
@@ -246,18 +246,18 @@ func subtitleMatroskaCodec(convertToSubRip bool) string {
 	return "copy"
 }
 
-// subtitleCommandError wraps a failed subtitle FFmpeg run, preferring the
+// commandError wraps a failed short FFmpeg run, preferring the
 // context's error when the run was canceled, with a bounded stderr tail cut on
 // a UTF-8 boundary.
-func subtitleCommandError(action string, ctx context.Context, err error, stderr string) error {
+func commandError(action string, ctx context.Context, err error, stderr string) error {
 	commandErr := err
 	contextErr := ctx.Err()
 	if contextErr != nil {
 		commandErr = contextErr
 	}
 	tail := strings.TrimSpace(stderr)
-	if len(tail) > subtitleStderrTailBytes {
-		tail = tail[len(tail)-subtitleStderrTailBytes:]
+	if len(tail) > stderrTailBytes {
+		tail = tail[len(tail)-stderrTailBytes:]
 	}
 	for len(tail) > 0 && tail[0]&0xC0 == 0x80 {
 		tail = tail[1:]

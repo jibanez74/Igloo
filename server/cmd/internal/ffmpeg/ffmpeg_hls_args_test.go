@@ -567,6 +567,54 @@ func TestBuildHLSArgs_ExplicitAudioProfiles(t *testing.T) {
 	}
 }
 
+// Explicit Dolby audio is padded back to output time zero, so a source whose
+// audio starts late still has a packet when the first segment closes. A
+// copy-video seek starts audio below zero, where the pad would trim it, so it
+// keeps the plain filter; legacy AAC output never gets an aresample filter.
+func TestBuildHLSArgs_ExplicitAudioPadsStart(t *testing.T) {
+	const plain = "aresample=out_chlayout=5.1(side):lfe_mix_level=0.70710678:rematrix_maxval=1"
+	const padded = plain + ":async=1:first_pts=0:min_hard_comp=1000000"
+	tests := []struct {
+		name       string
+		startSec   float64
+		copyVideo  bool
+		remuxOnly  bool
+		legacy     bool
+		copyAudio  bool
+		wantFilter string
+	}{
+		{name: "transcode from zero", wantFilter: padded},
+		{name: "transcode seek", startSec: 1790, wantFilter: padded},
+		{name: "copy video from zero", copyVideo: true, wantFilter: padded},
+		{name: "copy video seek", startSec: 1790, copyVideo: true, wantFilter: plain},
+		{name: "remux profile seek without CopyVideo", startSec: 1790, remuxOnly: true, wantFilter: plain},
+		{name: "legacy AAC encode", legacy: true},
+		{name: "legacy AAC copy", legacy: true, copyAudio: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			params := basicHLSParams(testHLSOutDir)
+			params.StartSec = tt.startSec
+			params.CopyAudio = tt.copyAudio
+			if tt.copyVideo || tt.remuxOnly {
+				params.Profile = helpers.HLS_PROFILE_REMUX
+				params.CopyVideo = tt.copyVideo
+			}
+			if !tt.legacy {
+				params.AudioProfile = resolveTestAudioProfile(helpers.HLSAudioCodecEAC3, 6, 6, "5.1(side)")
+			}
+			args := hlsArgs(t, params)
+
+			if tt.wantFilter == "" {
+				requireArgSubstrings(t, args, nil, []string{"aresample", "first_pts"}, nil)
+				return
+			}
+			requireArgumentValue(t, args, "-af", tt.wantFilter)
+		})
+	}
+}
+
 // The argument builder only accepts profiles whose fields match the
 // server-owned tables, so raw or tampered values can never reach FFmpeg.
 func TestBuildHLSArgs_RejectsInvalidAudioProfile(t *testing.T) {

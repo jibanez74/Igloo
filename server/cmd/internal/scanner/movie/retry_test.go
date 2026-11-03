@@ -148,19 +148,14 @@ func TestMovieEnrichmentRecovery(t *testing.T) {
 
 func seedMoviePlaybackWork(t *testing.T, s *Scanner, id int64) {
 	t.Helper()
-	for _, query := range []string{
-		"INSERT INTO keyframe_indexes(movie_id,stream_index,fingerprint,duration_sec,keyframes) VALUES (?,0,'old',120,'[0]')",
-		"INSERT INTO remux_safety_verdicts(movie_id,stream_index,fingerprint,safe) VALUES (?,0,'old',1)",
-	} {
-		_, err := s.tx.DB.Exec(query, id)
-		if err != nil {
-			t.Fatal(err)
-		}
+	_, err := s.tx.DB.Exec("INSERT INTO remux_safety_verdicts(movie_id,stream_index,fingerprint,safe) VALUES (?,0,'old',1)", id)
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 func assertMoviePlaybackWork(t *testing.T, s *Scanner) {
 	t.Helper()
-	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM keyframe_indexes") != 1 || scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM remux_safety_verdicts") != 1 {
+	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM remux_safety_verdicts") != 1 {
 		t.Fatal("metadata retry invalidated playback work")
 	}
 }

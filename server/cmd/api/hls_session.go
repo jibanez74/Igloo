@@ -101,8 +101,12 @@ type HLSSession struct {
 	TempFileSegments bool
 	// ActualStartSec is where the media really begins, which a copy-video
 	// session's keyframe seek can put before StartSec (see
-	// resolveHLSActualStart). Negative means unknown. Guarded by ExitMu.
+	// measureHLSActualStart). Negative means unknown. Guarded by ExitMu.
 	ActualStartSec float64
+	// actualStartReady closes once a copy-video session's start measurement
+	// has finished, whatever its outcome. Nil when the start was known at
+	// creation. Read-only after construction.
+	actualStartReady chan struct{}
 	// SourceFrameRate sizes the synthesized transcode playlist (see
 	// hlsPlaylistFrameRate). Zero means unknown. Read-only after construction.
 	SourceFrameRate float64
@@ -128,6 +132,23 @@ func (s *HLSSession) actualStartSec() float64 {
 	defer s.ExitMu.Unlock()
 
 	return s.ActualStartSec
+}
+
+// awaitActualStart waits for the session's start measurement until it
+// finishes, ctx ends, or maxWait passes. A session whose start was known at
+// creation returns at once.
+func (s *HLSSession) awaitActualStart(ctx context.Context, maxWait time.Duration) {
+	if s.actualStartReady == nil {
+		return
+	}
+
+	timer := time.NewTimer(maxWait)
+	defer timer.Stop()
+	select {
+	case <-s.actualStartReady:
+	case <-ctx.Done():
+	case <-timer.C:
+	}
 }
 
 // currentFinalPlaylist returns the finalized VOD playlist, or "" while FFmpeg
@@ -1188,43 +1209,6 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 		StartedAt:      startedAt,
 	}
 
-	// Resolving the real start is advisory, so it is skipped rather than
-	// allowed to fail a session. A persisted keyframe index answers a seek
-	// synchronously (so the first manifest response carries the header); a
-	// miss extracts the index in the background, falling back to the bounded
-	// ffprobe probe for files without a usable container index. Misses launch
-	// even at start 0 to prefetch the index for later seeks.
-	if copyVideo {
-		fingerprint := keyframeIndexFingerprint(params.Source, params.PrimaryVideo)
-		idx, hit := app.getKeyframeIndex(runCtx, params.Source, params.PrimaryVideo.StreamIndex, fingerprint)
-		switch {
-		case hit && startSec > 0:
-			keyframe, ok := keyframeAtOrBefore(idx.KeyframeSec, startSec)
-			if ok {
-				session.setActualStartSec(keyframe)
-			} else {
-				session.setActualStartSec(hlsUnknownActualStart)
-			}
-		case hit:
-			// A start of 0 is already exact.
-		default:
-			if startSec > 0 {
-				session.setActualStartSec(hlsUnknownActualStart)
-			}
-			app.Wait.Add(1)
-			// Not runCtx: the extracted index is persisted for every later
-			// session, and a seek tears this one down while a first-play
-			// extraction is often still running.
-			go app.resolveHLSActualStart(context.Background(), hlsActualStartParams{
-				Session:           session,
-				Source:            params.Source,
-				StreamIndex:       params.PrimaryVideo.StreamIndex,
-				Fingerprint:       fingerprint,
-				RequestedStartSec: startSec,
-			})
-		}
-	}
-
 	// AudioTrack is *int with nil meaning "video-only movie"; log the ordinal,
 	// not the pointer.
 	audioTrackLogValue := "none"
@@ -1367,9 +1351,21 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 		return nil, fmt.Errorf("failed to start ffmpeg: %w", err)
 	}
 
+	// Stream copy starts on whichever keyframe FFmpeg's input seek lands on,
+	// which can be a GOP before the requested start. It is measured alongside
+	// the session (see measureHLSActualStart); a start of 0 is already exact.
+	measureStart := copyVideo && startSec > 0
+	if measureStart {
+		session.setActualStartSec(hlsUnknownActualStart)
+		session.actualStartReady = make(chan struct{})
+		app.Wait.Go(func() {
+			app.measureHLSActualStart(runCtx, session, params.Source.FilePath, videoStreamIndex)
+		})
+	}
+
 	// spawn_ms isolates the server's own pre-encode overhead (directories,
-	// limiter, keyframe lookup, process launch) from encode time, so a slow
-	// ttfs_ms can be attributed to the right side.
+	// limiter, process launch) from encode time, so a slow ttfs_ms can be
+	// attributed to the right side.
 	app.Logger.Info("hls ffmpeg spawned",
 		"session_dir", filepath.Base(tempDir),
 		"media", params.Source.Ref.String(),

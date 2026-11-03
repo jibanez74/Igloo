@@ -173,18 +173,8 @@ func CountRows(t testing.TB, db *sql.DB, query string, args ...any) int {
 	return count
 }
 
-// NoKeyframeProbe completes ffprobe.FfprobeInterface for stubs that only
-// exercise scanning. Keyframe lookup is advisory on the playback path, so a
-// stub that never serves HLS refuses it rather than inventing an offset.
-type NoKeyframeProbe struct{}
-
-func (NoKeyframeProbe) KeyframeAtOrBefore(context.Context, string, int64, float64) (float64, error) {
-	return 0, errors.New("keyframe probing is not stubbed")
-}
-
 // Probe answers every metadata request through Callback.
 type Probe struct {
-	NoKeyframeProbe
 	Callback func(context.Context, string) (*ffprobe.FfprobeResult, error)
 }
 
@@ -201,7 +191,6 @@ func (p *Probe) GetAudioMetadata(ctx context.Context, path string) (*ffprobe.Ffp
 // of Default is returned. Scanners probe on worker goroutines, so the counter
 // is locked.
 type CountingProbe struct {
-	NoKeyframeProbe
 	mu      sync.Mutex
 	calls   int
 	Hook    func(context.Context, string) (*ffprobe.FfprobeResult, error)
@@ -239,7 +228,6 @@ func (p *CountingProbe) Calls() int {
 // requests never block, then waits for Release or its context. A released
 // request answers with a copy of Result.
 type GateProbe struct {
-	NoKeyframeProbe
 	Result  *ffprobe.FfprobeResult
 	Entered chan string
 	Release func()

@@ -52,6 +52,10 @@ type fakeFFmpeg struct {
 	// unprobed value is trusted by the explicit-audio encoder gate, matching
 	// ResolveHLSDevice's treatment of unprobed builds.
 	capabilities *ffmpeg.Capabilities
+	// seekLandingFunc answers SeekLanding; unset, the measurement fails and
+	// the session's start stays unknown. Calls are recorded.
+	seekLandingFunc  func(ctx context.Context, params ffmpeg.SeekLandingParams) (float64, error)
+	seekLandingCalls []ffmpeg.SeekLandingParams
 }
 
 func (f *fakeFFmpeg) RunHLS(
@@ -93,6 +97,23 @@ func (f *fakeFFmpeg) RunHLS(
 	}
 
 	return &exec.Cmd{}, nil
+}
+
+func (f *fakeFFmpeg) SeekLanding(ctx context.Context, params ffmpeg.SeekLandingParams) (float64, error) {
+	f.mu.Lock()
+	f.seekLandingCalls = append(f.seekLandingCalls, params)
+	seekLanding := f.seekLandingFunc
+	f.mu.Unlock()
+	if seekLanding == nil {
+		return 0, errors.New("seek landing is not stubbed")
+	}
+	return seekLanding(ctx, params)
+}
+
+func (f *fakeFFmpeg) SeekLandingCalls() []ffmpeg.SeekLandingParams {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]ffmpeg.SeekLandingParams(nil), f.seekLandingCalls...)
 }
 
 func (f *fakeFFmpeg) ExtractSubtitleAsWebVTT(_ context.Context, _ string, _ int64) ([]byte, error) {
@@ -257,8 +278,8 @@ func hlsRunPlan(fixture fmp4testutil.Fixture) fakeFFmpegRunPlan {
 	}
 }
 
-// noMetadataProbe completes ffprobe.FfprobeInterface for stubs that only serve
-// the HLS keyframe lookup.
+// noMetadataProbe completes ffprobe.FfprobeInterface for stubs that answer
+// only some of its requests.
 type noMetadataProbe struct{}
 
 func (noMetadataProbe) GetMetadata(context.Context, string) (*ffprobe.FfprobeResult, error) {
@@ -285,10 +306,6 @@ func (p startTimeProbe) GetMetadata(context.Context, string) (*ffprobe.FfprobeRe
 	return &ffprobe.FfprobeResult{Format: ffprobe.Format{StartTime: p.startTime}}, nil
 }
 
-func (startTimeProbe) KeyframeAtOrBefore(context.Context, string, int64, float64) (float64, error) {
-	return 0, errors.New("keyframe lookup is not part of the subtitle path")
-}
-
 // stuckProbe never answers: it returns only when its context ends, as a
 // probe stuck on an unresponsive share does.
 type stuckProbe struct {
@@ -298,36 +315,6 @@ type stuckProbe struct {
 func (stuckProbe) GetMetadata(ctx context.Context, _ string) (*ffprobe.FfprobeResult, error) {
 	<-ctx.Done()
 	return nil, ctx.Err()
-}
-
-// stubKeyframeFfprobe answers the keyframe lookup that measures where a
-// copy-video session's media really begins.
-type stubKeyframeFfprobe struct {
-	noMetadataProbe
-
-	keyframeSec float64
-	err         error
-
-	mu     sync.Mutex
-	target float64
-	calls  int
-}
-
-func (s *stubKeyframeFfprobe) KeyframeAtOrBefore(
-	_ context.Context,
-	_ string,
-	_ int64,
-	targetSec float64,
-) (float64, error) {
-	s.mu.Lock()
-	s.target = targetSec
-	s.calls++
-	s.mu.Unlock()
-
-	if s.err != nil {
-		return 0, s.err
-	}
-	return s.keyframeSec, nil
 }
 
 // blockHLSSessionCleanup wedges a session's teardown open so a test can observe

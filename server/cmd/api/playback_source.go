@@ -59,7 +59,7 @@ func invalidMediaIDMessage(kind mediaKind) string {
 
 // playbackSource is everything the playback pipeline needs to know about the
 // file behind a mediaRef. FileID is the physical-file identity the per-file
-// persistence keys on (keyframe indexes, remux verdicts, the subtitle cache):
+// persistence keys on (remux verdicts, the subtitle cache):
 // the movie id for a movie, since a movie row is its file, and show_files.id
 // for an episode, so episodes sharing a combined file share those rows.
 type playbackSource struct {

@@ -24,9 +24,6 @@ ON CONFLICT (movie_id) DO UPDATE SET
 -- name: DeleteMovieRemuxSafetyVerdicts :exec
 DELETE FROM remux_safety_verdicts WHERE movie_id = ?;
 
--- name: DeleteMovieKeyframeIndexes :exec
-DELETE FROM keyframe_indexes WHERE movie_id = ?;
-
 -- name: GetMovieFileFingerprint :one
 SELECT m.size, f.mtime_ns, f.ctime_ns, f.device, f.inode
 FROM movie_file_fingerprints f JOIN movies m ON m.id = f.movie_id

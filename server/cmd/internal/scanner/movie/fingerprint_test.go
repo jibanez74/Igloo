@@ -66,10 +66,6 @@ func TestFileFingerprintLifecycle(t *testing.T) {
 	if scanned != 0 || skipped != 1 || failures != 0 || stub.Calls() != 1 {
 		t.Fatalf("unchanged reload: %d/%d/%d probes=%d", scanned, skipped, failures, stub.Calls())
 	}
-	_, err = s.tx.DB.Exec("INSERT INTO keyframe_indexes(movie_id,stream_index,fingerprint,duration_sec,keyframes) VALUES (?,0,'old',120,'[0]')", id)
-	if err != nil {
-		t.Fatal(err)
-	}
 	_, err = s.tx.DB.Exec("INSERT INTO remux_safety_verdicts(movie_id,stream_index,fingerprint,safe) VALUES (?,0,'old',1)", id)
 	if err != nil {
 		t.Fatal(err)
@@ -89,7 +85,7 @@ func TestFileFingerprintLifecycle(t *testing.T) {
 	if scan.movieIndex[path] == baseline {
 		t.Fatal("fingerprint did not advance")
 	}
-	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM keyframe_indexes") != 0 || scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM remux_safety_verdicts") != 0 {
+	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM remux_safety_verdicts") != 0 {
 		t.Fatal("changed filesystem metadata retained playback work")
 	}
 	err = os.WriteFile(path, []byte("edited"[:5]), 0600)
@@ -110,7 +106,7 @@ func TestFileFingerprintLifecycle(t *testing.T) {
 	if err != nil || currentID != id {
 		t.Fatalf("catalog ID changed: %d -> %d, %v", id, currentID, err)
 	}
-	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM keyframe_indexes") != 0 || scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM remux_safety_verdicts") != 0 {
+	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM remux_safety_verdicts") != 0 {
 		t.Fatal("changed bytes retained playback work")
 	}
 	// A missing fingerprint always establishes a new full baseline, even when

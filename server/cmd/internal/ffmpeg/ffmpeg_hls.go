@@ -213,11 +213,8 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 	// ffmpeg_tail of every failure, and after about 87 minutes of encoding it
 	// overflowed the scanner and cost the real final error. -nostdin keeps a
 	// background process from ever reading the terminal.
-	args := []string{
-		"-nostdin", "-nostats",
-		"-y", "-fflags", "+genpts",
-		"-analyzeduration", "5000000", "-probesize", "5000000",
-	}
+	args := []string{"-nostdin", "-nostats", "-y"}
+	args = append(args, hlsProbeArgs()...)
 
 	deviceDecision := ResolveHLSDevice(p.HWDevice, p.Capabilities)
 	hwLower := deviceDecision.Effective
@@ -274,19 +271,7 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 		}
 	}
 
-	if p.StartSec > 0 {
-		if copyVideo {
-			// Copied video starts at the keyframe before the target, but an
-			// accurate seek trims decoded audio to the target itself, so
-			// encoded audio would begin up to a GOP late. When that gap
-			// outlasts the first segment, the fMP4 muxer writes init.mp4 before
-			// any E-AC-3 packet is parsed: no dec3, no mvex, and Media3 fails.
-			// Starting audio at the same keyframe keeps the timestamps (and
-			// A/V sync) unchanged and matches what copied audio already does.
-			args = append(args, "-noaccurate_seek")
-		}
-		args = append(args, "-ss", fmt.Sprintf("%.3f", p.StartSec))
-	}
+	args = append(args, hlsSeekArgs(p.StartSec, copyVideo)...)
 
 	if p.Capabilities.SupportsCLIOption("readrate") {
 		args = append(args, "-readrate", fmt.Sprintf("%d", hlsReadrateSpeed))
@@ -354,9 +339,13 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 			// -ac lets it choose its own layout for the channel count, which
 			// drops the LFE of 2.1, 3.1 and 4.1. Encoders may still normalize
 			// the final layout label.
+			audioFilter := "aresample=out_chlayout=" + p.AudioProfile.ChannelLayout + ":lfe_mix_level=0.70710678:rematrix_maxval=1"
+			if hlsPadsAudioStart(p.StartSec, copyVideo) {
+				audioFilter += ":" + hlsAudioStartPadOptions
+			}
 			args = append(args,
 				"-c:a", p.AudioProfile.Encoder,
-				"-af", "aresample=out_chlayout="+p.AudioProfile.ChannelLayout+":lfe_mix_level=0.70710678:rematrix_maxval=1",
+				"-af", audioFilter,
 				"-ch_layout:a", p.AudioProfile.ChannelLayout,
 				"-b:a", p.AudioProfile.Bitrate,
 				"-ar", fmt.Sprintf("%d", p.AudioProfile.SampleRate),
@@ -406,6 +395,55 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 	)
 
 	return args, nil
+}
+
+// hlsProbeArgs bound how much of a source FFmpeg reads to identify its
+// streams. What that probe finds also moves an input seek (see SeekLanding),
+// so every command that must land where an HLS session lands uses these.
+func hlsProbeArgs() []string {
+	return []string{
+		"-fflags", "+genpts",
+		"-analyzeduration", "5000000", "-probesize", "5000000",
+	}
+}
+
+// hlsSeekArgs are the input seek of an HLS session starting at startSec, or
+// nothing for a start at zero.
+func hlsSeekArgs(startSec float64, copyVideo bool) []string {
+	if startSec <= 0 {
+		return nil
+	}
+	if !copyVideo {
+		return []string{"-ss", fmt.Sprintf("%.3f", startSec)}
+	}
+	// Copied video starts at the keyframe the seek lands on, but an accurate
+	// seek trims decoded audio to the target itself, so encoded audio would
+	// begin up to a GOP late. When that gap outlasts the first segment, the
+	// fMP4 muxer writes init.mp4 before any E-AC-3 packet is parsed: no dec3,
+	// no mvex, and Media3 fails. Starting audio at the same keyframe keeps the
+	// timestamps (and A/V sync) unchanged and matches what copied audio
+	// already does.
+	return []string{"-noaccurate_seek", "-ss", fmt.Sprintf("%.3f", startSec)}
+}
+
+// hlsAudioStartPadOptions make aresample fill encoded audio with silence from
+// output time zero up to its first sample. async=1 turns on filling and
+// trimming without any stretching, first_pts=0 is where audio should begin,
+// and the huge min_hard_comp keeps later timestamp gaps as they are: only the
+// first frame is compared against first_pts unconditionally. On a source
+// whose audio already starts at zero the output is identical.
+const hlsAudioStartPadOptions = "async=1:first_pts=0:min_hard_comp=1000000"
+
+// hlsPadsAudioStart reports whether explicit (AC-3/E-AC-3) audio is padded
+// back to output time zero. A source whose audio starts more than a segment
+// after its video otherwise has no Dolby packet when the first segment
+// closes, and the fMP4 muxer writes init.mp4 without dec3 or mvex, which
+// Media3 cannot play. Starts at zero and accurately seeked (transcoded)
+// sessions put the video at zero, so padding there aligns audio with it.
+// A copy-video seek is excluded: its video and audio start at the keyframe
+// before the target, below zero, and first_pts=0 would trim that audio away.
+func hlsPadsAudioStart(startSec float64, copyVideo bool) bool {
+	return startSec <= 0 || !copyVideo
 }
 
 // validateHLSAudioProfile rejects a resolved audio profile whose fields did

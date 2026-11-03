@@ -375,7 +375,6 @@ func TestMovieCleanupCascadesDependentRows(t *testing.T) {
  INSERT INTO movie_watch_progress(user_id,movie_id) SELECT 1,id FROM movies;
  INSERT INTO user_liked_movies(user_id,movie_id) SELECT 1,id FROM movies;
  INSERT INTO watch_rooms(owner_user_id,movie_id,playback_mode) SELECT 1,id,'direct' FROM movies;
- INSERT INTO keyframe_indexes(movie_id,stream_index,fingerprint,duration_sec,keyframes) SELECT id,0,'old',120,'[0]' FROM movies;
  INSERT INTO remux_safety_verdicts(movie_id,stream_index,fingerprint,safe) SELECT id,0,'old',1 FROM movies;
  INSERT INTO genres(tag,genre_type) VALUES('Drama','movie');
  INSERT INTO movie_genres(movie_id,genre_id) SELECT m.id,g.id FROM movies m CROSS JOIN genres g;
@@ -388,7 +387,7 @@ func TestMovieCleanupCascadesDependentRows(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.scan(root)
-	for _, table := range []string{"movies", "movie_file_fingerprints", "video_streams", "audio_streams", "subtitles", "chapters", "movie_genres", "movie_watch_progress", "user_liked_movies", "playlist_movies", "watch_rooms", "keyframe_indexes", "remux_safety_verdicts"} {
+	for _, table := range []string{"movies", "movie_file_fingerprints", "video_streams", "audio_streams", "subtitles", "chapters", "movie_genres", "movie_watch_progress", "user_liked_movies", "playlist_movies", "watch_rooms", "remux_safety_verdicts"} {
 		count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM "+table)
 		if count != 0 {
 			t.Fatalf("cleanup left %d rows in %s", count, table)

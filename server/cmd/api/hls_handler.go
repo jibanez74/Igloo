@@ -192,6 +192,9 @@ func (app *Application) serveHLSManifest(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
+	// A client may read X-Igloo-Actual-Start from the first manifest only.
+	session.awaitActualStart(r.Context(), hlsActualStartWait)
+
 	refreshed := app.RefreshHLSSessionTTL(key, session)
 	if !refreshed {
 		helpers.ErrorJSON(w, errors.New("session not found; request the manifest again"), http.StatusNotFound)

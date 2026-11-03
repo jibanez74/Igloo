@@ -15,6 +15,7 @@ type FFmpegInterface interface {
 	ExtractCachedSubtitleAsWebVTT(ctx context.Context, cachePath string, sourceStartSec float64) ([]byte, error)
 	StreamSubtitleMatroska(ctx context.Context, params SubtitleStreamParams) (SubtitleStream, error)
 	ExtractSubtitleMatroska(ctx context.Context, params SubtitleExtractParams) error
+	SeekLanding(ctx context.Context, params SeekLandingParams) (float64, error)
 	Capabilities() Capabilities
 }
 

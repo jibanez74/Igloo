@@ -483,18 +483,6 @@ CREATE TABLE IF NOT EXISTS remux_safety_verdicts (
   FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
--- File-identity fingerprints invalidate cached container seek data. keyframes
--- is a JSON array of ascending presentation times in seconds.
-CREATE TABLE IF NOT EXISTS keyframe_indexes (
-  movie_id INTEGER NOT NULL,
-  stream_index INTEGER NOT NULL,
-  fingerprint TEXT NOT NULL,
-  duration_sec REAL NOT NULL,
-  keyframes TEXT NOT NULL,
-  PRIMARY KEY (movie_id, stream_index),
-  FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE ON UPDATE CASCADE
-);
-
 CREATE TABLE IF NOT EXISTS chapters (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   title TEXT NOT NULL,
@@ -1483,25 +1471,15 @@ CREATE TABLE
     FOREIGN KEY (file_id) REFERENCES show_files (id) ON DELETE CASCADE ON UPDATE CASCADE
   );
 CREATE INDEX IF NOT EXISTS idx_show_chapters_file ON show_chapters(file_id, start_time);
--- Per-file playback caches for TV. One show_files row can back several
--- episodes, so these key on the physical file, exactly as the movie twins key
--- on the movie row. Same fingerprint rules as remux_safety_verdicts and
--- keyframe_indexes above.
+-- Per-file playback cache for TV. One show_files row can back several
+-- episodes, so it keys on the physical file, exactly as its movie twin keys on
+-- the movie row. Same fingerprint rules as remux_safety_verdicts above.
 CREATE TABLE IF NOT EXISTS show_remux_safety_verdicts (
   file_id INTEGER NOT NULL,
   stream_index INTEGER NOT NULL,
   fingerprint TEXT NOT NULL,
   safe BOOLEAN NOT NULL,
   reason TEXT NOT NULL DEFAULT '',
-  PRIMARY KEY (file_id, stream_index),
-  FOREIGN KEY (file_id) REFERENCES show_files (id) ON DELETE CASCADE ON UPDATE CASCADE
-);
-CREATE TABLE IF NOT EXISTS show_keyframe_indexes (
-  file_id INTEGER NOT NULL,
-  stream_index INTEGER NOT NULL,
-  fingerprint TEXT NOT NULL,
-  duration_sec REAL NOT NULL,
-  keyframes TEXT NOT NULL,
   PRIMARY KEY (file_id, stream_index),
   FOREIGN KEY (file_id) REFERENCES show_files (id) ON DELETE CASCADE ON UPDATE CASCADE
 );

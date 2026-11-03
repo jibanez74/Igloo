@@ -7759,7 +7759,7 @@
             }
           },
           "X-Igloo-Actual-Start": {
-            "description": "Seconds into the source file where the session's media really begins. Stream copy cannot cut mid-GOP, so a copy-video session starts at the source keyframe at or before the requested start. Omitted when it has not been measured.",
+            "description": "Seconds into the source file where the session's media really begins, at or before the requested start. Stream copy cannot cut mid-GOP, so a copy-video session starts on the source keyframe FFmpeg's input seek lands on, which the server measures; that can be more than one keyframe before the requested start. The value is the time of that first copied video packet: in an MP4 source the session's first audio packet can precede it by up to about 0.1 s. Omitted when it has not been measured.",
             "schema": {
               "type": "number",
               "minimum": 0

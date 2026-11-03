@@ -3,14 +3,16 @@
 package ffmpeg
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/binary"
+	"fmt"
 	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -68,6 +70,158 @@ func TestExternalFFmpegCopyVideoResumeStartsEncodedAudioWithVideo(t *testing.T) 
 	}
 }
 
+// A source whose audio starts 10 s after its video had no Dolby packet when
+// the first 4 s segment closed, so the fMP4 muxer wrote init.mp4 without dec3
+// or mvex. Encoded audio is padded with silence back to the video's start,
+// keeping the tone where the source put it.
+func TestExternalFFmpegLateSourceAudioWritesDolbyInit(t *testing.T) {
+	candidate, err := resolveBinaryCandidate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &ffmpeg{bin: candidate.path, capabilities: Capabilities{Probed: true}}
+
+	const audioDelay = 10.0
+	source := filepath.Join(t.TempDir(), "late-audio.mkv")
+	runExternalFFmpegCommand(t, candidate.path,
+		"-y", "-v", "error",
+		"-f", "lavfi", "-i", "testsrc2=size=160x90:rate=24:duration=20",
+		"-itsoffset", fmt.Sprintf("%g", audioDelay),
+		"-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=10",
+		"-map", "0:v", "-map", "1:a",
+		"-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-g", "48",
+		"-c:a", "ac3", source)
+
+	for _, codec := range []helpers.HLSAudioCodec{helpers.HLSAudioCodecEAC3, helpers.HLSAudioCodecAC3} {
+		for _, start := range []struct {
+			name      string
+			sec       float64
+			copyVideo bool
+		}{
+			{name: "remux from zero", copyVideo: true},
+			{name: "transcode seek", sec: 3},
+		} {
+			t.Run(string(codec)+" "+start.name, func(t *testing.T) {
+				params := basicHLSParams(t.TempDir())
+				params.SourcePath = source
+				params.StartSec = start.sec
+				if start.copyVideo {
+					params.Profile = helpers.HLS_PROFILE_REMUX
+					params.CopyVideo = true
+				}
+				params.AudioProfile = resolveTestAudioProfile(codec, 2, 1, "mono")
+				runExternalHLSAndWait(t, f, params)
+				assertCompleteSequentialHLSOutput(t, params.OutDir)
+
+				init, err := os.ReadFile(filepath.Join(params.OutDir, helpers.HLS_INIT_FILENAME))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !mp4HasBoxPath(init, "moov", "mvex") {
+					t.Fatalf("init.mp4 has no moov/mvex (%d bytes)", len(init))
+				}
+				// The codec configuration box sits under stsd, a full box
+				// mp4HasBoxPath cannot walk into, so search the bytes.
+				configBox := "dac3"
+				if codec == helpers.HLSAudioCodecEAC3 {
+					configBox = "dec3"
+				}
+				if !bytes.Contains(init, []byte(configBox)) {
+					t.Fatalf("init.mp4 has no %s box (%d bytes)", configBox, len(init))
+				}
+
+				playlist := filepath.Join(params.OutDir, helpers.HLS_PLAYLIST_FILENAME)
+				first := firstPacketSeconds(t, candidate.path, playlist)
+				video, audio := first[0], first[1]
+				if math.Abs(audio-video) > 0.2 {
+					t.Fatalf("padded audio starts at %.3f s but video at %.3f s", audio, video)
+				}
+				wantTone := audioDelay - start.sec
+				if tone := firstSoundSeconds(t, candidate.path, playlist); math.Abs(tone-wantTone) > 0.1 {
+					t.Fatalf("tone starts at %.3f s, want %.3f s", tone, wantTone)
+				}
+			})
+		}
+	}
+}
+
+// The start pad must leave a source whose audio starts with its video
+// untouched: the same audio packets as the unpadded filter.
+func TestExternalFFmpegAudioStartPadLeavesAlignedAudio(t *testing.T) {
+	candidate, err := resolveBinaryCandidate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &ffmpeg{bin: candidate.path, capabilities: Capabilities{Probed: true}}
+
+	source := filepath.Join(t.TempDir(), "aligned.mkv")
+	runExternalFFmpegCommand(t, candidate.path, lavfiSampleArgs(source,
+		"testsrc2=size=160x90:rate=24:duration=12",
+		"sine=frequency=440:sample_rate=48000:duration=12",
+		"-g", "48", "-c:a", "ac3", "-shortest")...)
+
+	for _, start := range []float64{0, 3.4} {
+		t.Run(fmt.Sprintf("start %g", start), func(t *testing.T) {
+			params := basicHLSParams(t.TempDir())
+			params.SourcePath = source
+			params.StartSec = start
+			params.AudioProfile = resolveTestAudioProfile(helpers.HLSAudioCodecEAC3, 6, 2, "stereo")
+			runExternalHLSAndWait(t, f, params)
+
+			unpadded := params
+			unpadded.OutDir = t.TempDir()
+			args := hlsArgs(t, unpadded)
+			filter := slices.Index(args, "-af") + 1
+			plain, found := strings.CutSuffix(args[filter], ":"+hlsAudioStartPadOptions)
+			if !found {
+				t.Fatalf("-af %q has no start pad", args[filter])
+			}
+			args[filter] = plain
+			runExternalFFmpegCommand(t, candidate.path, args...)
+
+			got := audioFramecrc(t, candidate.path, filepath.Join(params.OutDir, helpers.HLS_PLAYLIST_FILENAME))
+			want := audioFramecrc(t, candidate.path, filepath.Join(unpadded.OutDir, helpers.HLS_PLAYLIST_FILENAME))
+			if got != want {
+				t.Fatalf("padding changed aligned audio:\npadded:\n%s\nunpadded:\n%s", got, want)
+			}
+		})
+	}
+}
+
+// audioFramecrc lists the HLS output's audio packets with their checksums.
+func audioFramecrc(t *testing.T, binary string, playlist string) string {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), externalFFmpegIntegrationTimeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, binary, "-v", "error", "-i", playlist, "-map", "0:a", "-c", "copy", "-f", "framecrc", "-").Output()
+	if err != nil {
+		t.Fatalf("framecrc: %v", err)
+	}
+	return string(out)
+}
+
+// firstSoundSeconds returns where the first silence of the HLS output's audio
+// ends, which for a tone after leading silence is where the tone begins.
+func firstSoundSeconds(t *testing.T, binary string, playlist string) float64 {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), externalFFmpegIntegrationTimeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, binary, "-hide_banner", "-nostats", "-i", playlist,
+		"-map", "0:a", "-af", "silencedetect=n=-40dB:d=0.5", "-f", "null", "-").CombinedOutput()
+	if err != nil {
+		t.Fatalf("silencedetect: %v: %s", err, out)
+	}
+	match := regexp.MustCompile(`silence_end: ([0-9.]+)`).FindSubmatch(out)
+	if match == nil {
+		t.Fatalf("no leading silence in the audio:\n%s", out)
+	}
+	seconds, err := strconv.ParseFloat(string(match[1]), 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return seconds
+}
+
 // mp4HasBoxPath reports whether data holds the nested box path, for example
 // moov then mvex, walking only the top level of each container on the way.
 func mp4HasBoxPath(data []byte, path ...string) bool {
@@ -109,42 +263,7 @@ func firstPacketSeconds(t *testing.T, binary string, playlist string) map[int]fl
 	if err != nil {
 		t.Fatalf("framecrc: %v", err)
 	}
-	timeBases := map[int]float64{}
-	first := map[int]float64{}
-	scanner := bufio.NewScanner(bytes.NewReader(out))
-	for scanner.Scan() {
-		line := scanner.Text()
-		if rest, ok := strings.CutPrefix(line, "#tb "); ok {
-			// "#tb 0: 1/16000"
-			index, base, _ := strings.Cut(rest, ": ")
-			num, den, _ := strings.Cut(base, "/")
-			stream, _ := strconv.Atoi(index)
-			n, _ := strconv.ParseFloat(num, 64)
-			d, _ := strconv.ParseFloat(den, 64)
-			timeBases[stream] = n / d
-			continue
-		}
-		if strings.HasPrefix(line, "#") {
-			continue
-		}
-		// "stream, dts, pts, duration, size, crc"
-		fields := strings.Split(line, ",")
-		if len(fields) < 3 {
-			continue
-		}
-		stream, err := strconv.Atoi(strings.TrimSpace(fields[0]))
-		if err != nil {
-			continue
-		}
-		if _, seen := first[stream]; seen {
-			continue
-		}
-		pts, err := strconv.ParseFloat(strings.TrimSpace(fields[2]), 64)
-		if err != nil {
-			continue
-		}
-		first[stream] = pts * timeBases[stream]
-	}
+	first := framecrcFirstPTS(out)
 	if len(first) < 2 {
 		t.Fatalf("framecrc listed %d streams:\n%s", len(first), out)
 	}
