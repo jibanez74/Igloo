@@ -1,9 +1,10 @@
 # Known issues
 
 Problems found while building and testing subtitle streams for the TV (Igloo #212, IglooTV #18
-and #19, 2026-10-30 to 2026-11-01) and while checking the Rust port of the server against this
-one (2026-11-02, at `37454e22`), and deliberately left unfixed, with enough detail to act on
-them without rediscovering them. Delete an entry when it lands.
+and #19, 2026-10-30 to 2026-11-01), while checking the Rust port of the server against this one
+(2026-11-02, at `37454e22`), and while fixing the earlier entries (2026-11-03), and deliberately
+left unfixed, with enough detail to act on them without rediscovering them. Delete an entry when
+it lands.
 
 ## Deployment
 
@@ -28,6 +29,19 @@ such files; a lavfi fixture with `-itsoffset 10` on the audio input reproduces i
 encoded audio with silence back to the video's first timestamp, or delay the init segment until
 every track has a packet.
 
+### A resumed copy-video session can advertise the wrong actual start
+
+`X-Igloo-Actual-Start` for a copy-video session comes from the keyframe index, which gives the
+last keyframe at or before the target. FFmpeg's own input seek can land on an earlier keyframe.
+Captain Marvel's remux at `start=1790` advertises `1789.997`, but FFmpeg starts at `1780.195`:
+the first segment is 9.802 s long and ends at the advertised keyframe. A client that maps local
+time by the header then shows positions, and asks for subtitle streams, 9.8 s ahead of the
+picture. Seen 2026-11-03 against a scratch server from `fix/known-issues`; the cause of the
+earlier landing (the Matroska demuxer's seek with subtitle tracks present, or Cues that skip
+that keyframe) was not established. Where to look: actual-start resolution in
+`server/cmd/api/hls_*.go` and `server/cmd/internal/keyframeindex`, against the first segment's
+duration or FFmpeg's first packet time.
+
 ### Seeking in Oppenheimer reads the file linearly
 
 `historical/Oppenheimer.2023.mkv` in the movies library has a SeekHead whose Cues entry points
@@ -36,39 +50,7 @@ start up to the target, so HLS sessions that start past zero are slow to begin. 
 the file's fault; remuxing it (for example `mkvmerge -o fixed.mkv Oppenheimer.2023.mkv`) writes a
 correct index.
 
-## Subtitles
-
-### Starting playback with a subtitle opens its stream twice
-
-When the subtitle chosen before playback is not one Media3 would pick on its own (no matching
-preferred language or default flag), Media3 first prepares the merged source without it. The
-stream it has started loading is then cancelled, and the TV's track override restarts it from
-byte 0. The server sees two requests at every such start: a short first one (767 bytes for Free
-Guy, 15 KB for Captain Marvel) and then the real stream. Each one starts FFmpeg and takes one of
-the server's 8 stream slots. Fix: make Media3 select the merged subtitle on the first selection,
-for example by setting the chosen track's language as the preferred text language before
-`prepare`, and check the server log for a single request.
-
-### A cancelled subtitle stream stays open up to 15 seconds
-
-Media3 cancels a load by setting a flag, but the loader thread stays blocked in the socket read
-until data arrives. While FFmpeg is reading toward a sparse track's next cue, the next data is
-the server's Void keepalive, written after 15 seconds of silence. Until then, the server keeps
-FFmpeg running and the stream slot taken. The first Free Guy request above lasted 15.4 seconds
-for 767 bytes. With the double start above, every start can briefly hold two slots. Options: a
-shorter keepalive interval (`subtitleStreamKeepalive`), or a TV data source that closes its
-connection when the load is cancelled.
-
 ## TV app (IglooTV)
-
-### The Chapters dialog shows no D-pad focus and may let focus escape
-
-On the Shield, no row in the Chapters dialog showed a focus highlight while moving with the
-D-pad. After pressing Up from Done and then Select, the player closed, as if focus had left the
-dialog for the player's Back button. Taps on chapter rows did not select a chapter either,
-while taps work in the Subtitles and Quality dialogs. This was not confirmed with a debug build.
-Check that the dialog traps focus and that rows draw a focus indicator
-(`ChapterMenuDialog` in `feature/player/VideoPlayerScreen.kt`).
 
 ### The player's buffer budget is a loading target, not a cap
 
