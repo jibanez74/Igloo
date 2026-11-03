@@ -275,7 +275,7 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 	}
 
 	if p.StartSec > 0 {
-		if p.CopyVideo {
+		if copyVideo {
 			// Copied video starts at the keyframe before the target, but an
 			// accurate seek trims decoded audio to the target itself, so
 			// encoded audio would begin up to a GOP late. When that gap

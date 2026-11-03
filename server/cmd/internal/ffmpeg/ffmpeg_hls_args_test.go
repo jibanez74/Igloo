@@ -251,6 +251,9 @@ func TestBuildHLSArgs_SeekOffset(t *testing.T) {
 		startSec  float64
 		device    string
 		copyVideo bool
+		// remuxOnly sets the remux profile without CopyVideo, which still
+		// copies the video.
+		remuxOnly bool
 		wantSS    string
 		wantOrder [][2]string
 		// wantInexact expects -noaccurate_seek, which only copy-video sessions
@@ -267,6 +270,14 @@ func TestBuildHLSArgs_SeekOffset(t *testing.T) {
 			name:        "copy video seeks inexactly so audio starts at its keyframe",
 			startSec:    1790,
 			copyVideo:   true,
+			wantSS:      "1790.000",
+			wantOrder:   [][2]string{{"-noaccurate_seek", "-ss"}, {"-ss", "-i"}},
+			wantInexact: true,
+		},
+		{
+			name:        "remux profile seeks inexactly without CopyVideo",
+			startSec:    1790,
+			remuxOnly:   true,
 			wantSS:      "1790.000",
 			wantOrder:   [][2]string{{"-noaccurate_seek", "-ss"}, {"-ss", "-i"}},
 			wantInexact: true,
@@ -306,6 +317,10 @@ func TestBuildHLSArgs_SeekOffset(t *testing.T) {
 			if tt.copyVideo {
 				params.Profile = helpers.HLS_PROFILE_REMUX
 				params.CopyVideo = true
+			}
+			if tt.remuxOnly {
+				params.Profile = helpers.HLS_PROFILE_REMUX
+				params.CopyVideo = false
 			}
 			args := hlsArgs(t, params)
 
