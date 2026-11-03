@@ -41,7 +41,9 @@ func (f *ffmpeg) SeekLanding(ctx context.Context, params SeekLandingParams) (flo
 
 	cmd := exec.CommandContext(ctx, f.bin, seekLandingArgs(params)...)
 	cmd.SysProcAttr = childProcessAttributes()
-	var stdout, stderr bytes.Buffer
+	var stdout bytes.Buffer
+	// Only the tail of stderr reaches the error; keep no more than that.
+	var stderr subtitleStderr
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	err := cmd.Run()

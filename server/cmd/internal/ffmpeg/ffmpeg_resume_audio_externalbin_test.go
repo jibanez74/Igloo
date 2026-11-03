@@ -3,6 +3,7 @@
 package ffmpeg
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"fmt"
@@ -118,6 +119,15 @@ func TestExternalFFmpegLateSourceAudioWritesDolbyInit(t *testing.T) {
 				}
 				if !mp4HasBoxPath(init, "moov", "mvex") {
 					t.Fatalf("init.mp4 has no moov/mvex (%d bytes)", len(init))
+				}
+				// The codec configuration box sits under stsd, a full box
+				// mp4HasBoxPath cannot walk into, so search the bytes.
+				configBox := "dac3"
+				if codec == helpers.HLSAudioCodecEAC3 {
+					configBox = "dec3"
+				}
+				if !bytes.Contains(init, []byte(configBox)) {
+					t.Fatalf("init.mp4 has no %s box (%d bytes)", configBox, len(init))
 				}
 
 				playlist := filepath.Join(params.OutDir, helpers.HLS_PLAYLIST_FILENAME)
