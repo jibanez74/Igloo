@@ -57,14 +57,34 @@ func TestScanFinishedRefreshesPlannerStatisticsAndAsksForArtwork(t *testing.T) {
 }
 
 // A run that finishes while a refresh is in progress asks for one more rather
-// than starting a second refresh beside it.
+// than starting a second refresh beside it, and the refresh then runs again.
 func TestPlannerStatsRefreshRequestedWhileRunningRunsOnceMore(t *testing.T) {
-	app := &Application{Wait: &sync.WaitGroup{}}
-	app.plannerStatsRunning = true
+	app := &Application{Wait: &sync.WaitGroup{}, ScanContext: t.Context()}
+	started := make(chan struct{})
+	release := make(chan struct{})
+	var runs int
+	app.plannerStatsRefresh = func(context.Context) error {
+		runs++
+		if runs == 1 {
+			close(started)
+			<-release
+		}
+		return nil
+	}
 
 	app.requestPlannerStatsRefresh()
-	if !app.plannerStatsRerun {
-		t.Error("want a rerun requested while a refresh runs")
+	<-started
+	// Two requests while the first refresh runs coalesce into one rerun.
+	app.requestPlannerStatsRefresh()
+	app.requestPlannerStatsRefresh()
+	close(release)
+	app.Wait.Wait()
+
+	if runs != 2 {
+		t.Errorf("refresh runs = %d, want 2", runs)
+	}
+	if app.plannerStatsRunning || app.plannerStatsRerun {
+		t.Errorf("after the refreshes: running = %v, rerun = %v; want both false", app.plannerStatsRunning, app.plannerStatsRerun)
 	}
 }
 

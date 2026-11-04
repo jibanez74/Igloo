@@ -157,6 +157,9 @@ type Application struct {
 	plannerStatsMu      sync.Mutex
 	plannerStatsRunning bool
 	plannerStatsRerun   bool
+	// plannerStatsRefresh runs one refresh; nil means RefreshQueryPlannerStats.
+	// Tests replace it to count runs.
+	plannerStatsRefresh func(context.Context) error
 }
 
 //go:embed all:webdist
@@ -453,8 +456,12 @@ func (app *Application) requestPlannerStatsRefresh() {
 }
 
 func (app *Application) refreshPlannerStats() {
+	refresh := app.plannerStatsRefresh
+	if refresh == nil {
+		refresh = app.RefreshQueryPlannerStats
+	}
 	for {
-		err := app.RefreshQueryPlannerStats(app.ScanContext)
+		err := refresh(app.ScanContext)
 		canceled := app.ScanContext.Err() != nil
 		if err != nil && !canceled {
 			app.Logger.Error("failed to refresh query planner statistics", "error", err)

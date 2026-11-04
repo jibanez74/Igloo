@@ -53,8 +53,9 @@ var searchStaleStats = [][3]string{
 }
 
 // Under statistics taken while the library was tiny, each page query must
-// still run its MATCH once, as the outer loop, and look every joined row up
-// by its key, rather than re-running the prefix match for every row.
+// still run its MATCH once, as the outer loop, rather than re-running the
+// prefix match for every row. Only the outer loop is checked: every join is on
+// an INTEGER PRIMARY KEY, a rowid lookup whatever the statistics say.
 func TestSearchPageQueriesScanTheFTSTableFirstUnderStaleStatistics(t *testing.T) {
 	app := newTestDBApp(t)
 	ctx := context.Background()
@@ -198,7 +199,8 @@ func TestSearchStatementsArePreparedAtStartupAndClosed(t *testing.T) {
 	}
 
 	// The typo resolves at stage 2, so the count, the vocabulary generation
-	// and the page query all run, and none of them may prepare again.
+	// and the page query all run. The map must still hold the statements
+	// prepared at startup afterwards.
 	for range 2 {
 		results := searchEntityResults(t, app, movieSearchEntity, "Casino Roayle")
 		if len(results) != 1 {
