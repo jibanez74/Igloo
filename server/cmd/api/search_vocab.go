@@ -83,6 +83,20 @@ func (h *searchVocabNodeHeap) Pop() any {
 	return value
 }
 
+// levenshteinRowBuf holds one row of an edit-distance table on the stack: one
+// side of every comparison is a vocabulary term no longer than
+// searchVocabMaxTokenRunes.
+type levenshteinRowBuf = [searchVocabMaxTokenRunes + 1]int
+
+// levenshteinRow returns n cells of buf, or a row of its own when the term is
+// longer than buf holds.
+func levenshteinRow(buf *levenshteinRowBuf, n int) []int {
+	if n <= len(buf) {
+		return buf[:n]
+	}
+	return make([]int, n)
+}
+
 func exactLevenshtein(a, b []rune) int {
 	if len(a) > len(b) {
 		a, b = b, a
@@ -91,15 +105,9 @@ func exactLevenshtein(a, b []rune) int {
 	// The build and every lookup run this once per visited node, and one side
 	// is always a vocabulary term no longer than searchVocabMaxTokenRunes, so
 	// the rows fit on the stack.
-	var previousRow, currentRow [searchVocabMaxTokenRunes + 1]int
-	previous := previousRow[:]
-	current := currentRow[:]
-	if len(a) >= len(previousRow) {
-		previous = make([]int, len(a)+1)
-		current = make([]int, len(a)+1)
-	}
-	previous = previous[:len(a)+1]
-	current = current[:len(a)+1]
+	var previousRow, currentRow levenshteinRowBuf
+	previous := levenshteinRow(&previousRow, len(a)+1)
+	current := levenshteinRow(&currentRow, len(a)+1)
 	for i := range previous {
 		previous[i] = i
 	}
@@ -164,7 +172,11 @@ func (index *searchVocabIndex) insert(term searchVocabTerm) {
 func (index *searchVocabIndex) corrections(token string, maxDist, visitLimit int) ([]string, int) {
 	queryRunes := []rune(token)
 	metricRadius := maxDist * 2
-	frontier := &searchVocabNodeHeap{}
+	// Over a vocabulary of thousands of terms a lookup spends its whole visit
+	// limit and its frontier peaks at a few hundred nodes, so it is sized once
+	// to visitLimit; heap.Push grows it if a lookup ever holds more.
+	frontierNodes := make(searchVocabNodeHeap, 0, visitLimit)
+	frontier := &frontierNodes
 	heap.Init(frontier)
 	for length := len(queryRunes) - maxDist; length <= len(queryRunes)+maxDist; length++ {
 		if root := index.roots[length]; root != nil {
@@ -180,7 +192,7 @@ func (index *searchVocabIndex) corrections(token string, maxDist, visitLimit int
 
 		metricDistance := exactLevenshtein(queryRunes, node.value.runes)
 		if node.value.term != token && metricDistance <= metricRadius {
-			distance := damerauLevenshtein(token, node.value.term, maxDist)
+			distance := damerauLevenshtein(queryRunes, node.value.runes, maxDist)
 			if distance <= maxDist {
 				candidates = append(candidates, searchVocabCandidate{
 					term: node.value.term,
@@ -257,8 +269,12 @@ func searchVocabSelectSQL(vocabTable string) (string, error) {
 const searchVocabGenerationSQL = "SELECT generation FROM search_vocab_generations WHERE vocab_table = ?"
 
 func (app *Application) searchVocabIndex(ctx context.Context, vocabTable string) (*searchVocabIndex, error) {
+	generationStmt, err := app.SearchStatements.stmt(searchVocabGenerationSQL)
+	if err != nil {
+		return nil, err
+	}
 	var generation int64
-	err := app.DB.QueryRowContext(ctx, searchVocabGenerationSQL, vocabTable).Scan(&generation)
+	err = generationStmt.QueryRowContext(ctx, vocabTable).Scan(&generation)
 	if err != nil {
 		return nil, err
 	}
@@ -275,7 +291,7 @@ func (app *Application) searchVocabIndex(ctx context.Context, vocabTable string)
 	}
 	defer tx.Rollback()
 
-	err = tx.QueryRowContext(ctx, searchVocabGenerationSQL, vocabTable).Scan(&generation)
+	err = tx.StmtContext(ctx, generationStmt).QueryRowContext(ctx, vocabTable).Scan(&generation)
 	if err != nil {
 		return nil, err
 	}

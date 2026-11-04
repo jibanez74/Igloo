@@ -175,7 +175,7 @@ func (app *Application) closeDatabase() {
 	// Fold this run's accumulated statistics back into sqlite_stat1 so the next
 	// startup plans against them. Best effort: a failure here must not block
 	// shutdown.
-	err := app.RefreshQueryPlannerStats()
+	err := app.RefreshQueryPlannerStats(context.Background())
 	if err != nil {
 		app.Logger.Error("failed to refresh query planner statistics", "error", err)
 	}
@@ -186,6 +186,10 @@ func (app *Application) closeDatabase() {
 		if err != nil {
 			app.Logger.Error("failed to close prepared statements", "error", err)
 		}
+	}
+	err = app.SearchStatements.close()
+	if err != nil {
+		app.Logger.Error("failed to close search statements", "error", err)
 	}
 
 	err = app.DB.Close()

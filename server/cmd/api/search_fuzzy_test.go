@@ -104,7 +104,7 @@ func TestDamerauLevenshtein(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := damerauLevenshtein(tt.a, tt.b, tt.maxDist)
+			got := damerauLevenshtein([]rune(tt.a), []rune(tt.b), tt.maxDist)
 			if got != tt.want {
 				t.Fatalf("damerauLevenshtein(%q, %q, %d) = %d, want %d", tt.a, tt.b, tt.maxDist, got, tt.want)
 			}

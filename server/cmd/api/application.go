@@ -69,6 +69,7 @@ type Application struct {
 	Server                  *http.Server
 	ScannerDBMu             sync.Mutex
 	SearchVocab             searchVocabCache
+	SearchStatements        searchStatements
 	HLSSessionCache         *cache.Cache
 	HLSSessionGroup         singleflight.Group
 	HLSTranscodeLimiterMu   sync.Mutex
@@ -150,6 +151,15 @@ type Application struct {
 	SubtitleTrackCacheMu         sync.Mutex
 	SubtitleTrackCacheGeneration uint64
 	SubtitleTrackCacheRemoving   map[string]int
+
+	// plannerStats coalesces the statistics refreshes scanner runs ask for:
+	// one runs at a time, and a request while it runs asks for one more.
+	plannerStatsMu      sync.Mutex
+	plannerStatsRunning bool
+	plannerStatsRerun   bool
+	// plannerStatsRefresh runs one refresh; nil means RefreshQueryPlannerStats.
+	// Tests replace it to count runs.
+	plannerStatsRefresh func(context.Context) error
 }
 
 //go:embed all:webdist
@@ -190,7 +200,7 @@ func InitApp() (initializedApp *Application, err error) {
 		return nil, fmt.Errorf("failed to initialize database tables: %v", err)
 	}
 
-	err = app.RefreshQueryPlannerStats()
+	err = app.RefreshQueryPlannerStats(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to refresh query planner statistics: %v", err)
 	}
@@ -198,6 +208,11 @@ func InitApp() (initializedApp *Application, err error) {
 	app.Queries, err = database.Prepare(ctx, app.DB)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare database queries: %v", err)
+	}
+
+	app.SearchStatements, err = prepareSearchStatements(ctx, app.DB)
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare search queries: %v", err)
 	}
 
 	err = app.InitSettings(ctx)
@@ -306,7 +321,7 @@ func (app *Application) initScanners(musicSpotify music.SpotifyProvider, musicAp
 		InvalidateCommittedTrack: func(trackID int64) {
 			app.StreamFileCache.invalidate(trackStreamFileKey(trackID))
 		},
-		ScanFinished: app.syncArtworkAfterScan,
+		ScanFinished: app.scanFinished,
 	})
 
 	app.ShowScanner = show.New(show.Dependencies{
@@ -322,7 +337,7 @@ func (app *Application) initScanners(musicSpotify music.SpotifyProvider, musicAp
 			return app.CurrentSettings().ShowsDir
 		},
 		InvalidateCommittedShowFile: app.invalidateCommittedShowFile,
-		ScanFinished:                app.syncArtworkAfterScan,
+		ScanFinished:                app.scanFinished,
 	})
 
 	app.MovieScanner = movie.New(movie.Dependencies{
@@ -339,7 +354,7 @@ func (app *Application) initScanners(musicSpotify music.SpotifyProvider, musicAp
 		},
 		InvalidateCommittedMovie:    app.invalidateCommittedMovie,
 		InvalidateDeletedWatchRooms: app.invalidateDeletedWatchRooms,
-		ScanFinished:                app.syncArtworkAfterScan,
+		ScanFinished:                app.scanFinished,
 	})
 
 	// The watcher reads the scanner fields at each run, so a test that swaps
@@ -410,6 +425,58 @@ func (app *Application) syncArtwork() {
 		return
 	}
 	app.Artwork.Request()
+}
+
+// scanFinished runs after every scanner run, on the run's goroutine, before
+// the launcher counts the scanner idle again, so it only asks for work. A run
+// is when tables grow (a library's first scan most of all), so it asks for a
+// planner statistics refresh besides the artwork pass.
+func (app *Application) scanFinished(scoped bool) {
+	app.syncArtworkAfterScan(scoped)
+	app.requestPlannerStatsRefresh()
+}
+
+// requestPlannerStatsRefresh refreshes the planner statistics on a goroutine
+// of its own: ANALYZE can take seconds on a large library, and a scanner kept
+// running for it would refuse watcher runs and hold up a queued scan. A request
+// while a refresh runs makes it run once more, so the last of several scanners
+// finishing together still gets statistics taken after its writes. Shutdown
+// cancels ScanContext, which interrupts a refresh, and waits for app.Wait;
+// closeDatabase then takes the final statistics.
+func (app *Application) requestPlannerStatsRefresh() {
+	app.plannerStatsMu.Lock()
+	defer app.plannerStatsMu.Unlock()
+
+	if app.plannerStatsRunning {
+		app.plannerStatsRerun = true
+		return
+	}
+	app.plannerStatsRunning = true
+	app.Wait.Go(app.refreshPlannerStats)
+}
+
+func (app *Application) refreshPlannerStats() {
+	refresh := app.plannerStatsRefresh
+	if refresh == nil {
+		refresh = app.RefreshQueryPlannerStats
+	}
+	for {
+		err := refresh(app.ScanContext)
+		canceled := app.ScanContext.Err() != nil
+		if err != nil && !canceled {
+			app.Logger.Error("failed to refresh query planner statistics", "error", err)
+		}
+
+		app.plannerStatsMu.Lock()
+		rerun := app.plannerStatsRerun && !canceled
+		app.plannerStatsRerun = false
+		if !rerun {
+			app.plannerStatsRunning = false
+			app.plannerStatsMu.Unlock()
+			return
+		}
+		app.plannerStatsMu.Unlock()
+	}
 }
 
 // syncArtworkAfterScan requests the artwork pass that follows a scanner run:

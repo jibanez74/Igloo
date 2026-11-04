@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"net/http"
@@ -42,16 +43,26 @@ type searchCategoryData[T any] struct {
 //
 // bm25() column weights bias ranking toward name/title matches over
 // descriptive fields when the exact/prefix CASE buckets tie.
+//
+// The FTS table joins its rows with CROSS JOIN, which SQLite never reorders, so
+// the MATCH runs once as the outer loop. With an INNER JOIN, statistics taken
+// while a library was tiny put the FTS table on the inner side and re-ran the
+// prefix match for every row of the table. Each ORDER BY ends in the id, so the
+// join changes neither the rows nor their order.
+//
+// The ranking buckets compare with NOCASE and a plain LIKE, not LOWER() on both
+// sides, which copied every string it compared. Without ICU, lower(), NOCASE
+// and LIKE all fold ASCII letters only, so every row lands in the same bucket.
 
 const searchMoviesSQL = `
 SELECT m.id, m.title, m.poster_path, m.year, m.certification
 FROM movies_fts
-INNER JOIN movies AS m ON m.id = movies_fts.rowid
+CROSS JOIN movies AS m ON m.id = movies_fts.rowid
 WHERE movies_fts MATCH ?
 ORDER BY
   CASE
-    WHEN LOWER(m.title) = LOWER(?) THEN 0
-    WHEN LOWER(m.title) LIKE ? ESCAPE '\' THEN 1
+    WHEN m.title = ? COLLATE NOCASE THEN 0
+    WHEN m.title LIKE ? ESCAPE '\' THEN 1
     ELSE 2
   END,
   bm25(movies_fts, 10.0, 1.0, 3.0),
@@ -65,12 +76,12 @@ SELECT COUNT(*) FROM movies_fts WHERE movies_fts MATCH ?`
 const searchShowsSQL = `
 SELECT s.id, s.name, s.poster_path, s.premiere_year, s.certification
 FROM shows_fts
-INNER JOIN shows AS s ON s.id = shows_fts.rowid
+CROSS JOIN shows AS s ON s.id = shows_fts.rowid
 WHERE shows_fts MATCH ?
 ORDER BY
   CASE
-    WHEN LOWER(s.name) = LOWER(?) THEN 0
-    WHEN LOWER(s.name) LIKE ? ESCAPE '\' THEN 1
+    WHEN s.name = ? COLLATE NOCASE THEN 0
+    WHEN s.name LIKE ? ESCAPE '\' THEN 1
     ELSE 2
   END,
   bm25(shows_fts, 10.0, 1.0, 3.0),
@@ -84,14 +95,14 @@ SELECT COUNT(*) FROM shows_fts WHERE shows_fts MATCH ?`
 const searchAlbumsSQL = `
 SELECT a.id, a.title, a.cover, a.musician, a.year
 FROM albums_fts
-INNER JOIN albums AS a ON a.id = albums_fts.rowid
+CROSS JOIN albums AS a ON a.id = albums_fts.rowid
 WHERE albums_fts MATCH ?
 ORDER BY
   CASE
-    WHEN LOWER(a.title) = LOWER(?) THEN 0
-    WHEN LOWER(a.title) LIKE ? ESCAPE '\' THEN 1
-    WHEN LOWER(COALESCE(a.musician, '')) = LOWER(?) THEN 2
-    WHEN LOWER(COALESCE(a.musician, '')) LIKE ? ESCAPE '\' THEN 3
+    WHEN a.title = ? COLLATE NOCASE THEN 0
+    WHEN a.title LIKE ? ESCAPE '\' THEN 1
+    WHEN COALESCE(a.musician, '') = ? COLLATE NOCASE THEN 2
+    WHEN COALESCE(a.musician, '') LIKE ? ESCAPE '\' THEN 3
     ELSE 4
   END,
   bm25(albums_fts, 10.0, 4.0),
@@ -126,12 +137,12 @@ SELECT
     )
   ) AS track_count
 FROM musicians_fts
-INNER JOIN musicians AS m ON m.id = musicians_fts.rowid
+CROSS JOIN musicians AS m ON m.id = musicians_fts.rowid
 WHERE musicians_fts MATCH ?
 ORDER BY
   CASE
-    WHEN LOWER(m.name) = LOWER(?) OR LOWER(m.sort_name) = LOWER(?) THEN 0
-    WHEN LOWER(m.name) LIKE ? ESCAPE '\' OR LOWER(m.sort_name) LIKE ? ESCAPE '\' THEN 1
+    WHEN m.name = ? COLLATE NOCASE OR m.sort_name = ? COLLATE NOCASE THEN 0
+    WHEN m.name LIKE ? ESCAPE '\' OR m.sort_name LIKE ? ESCAPE '\' THEN 1
     ELSE 2
   END,
   bm25(musicians_fts, 10.0, 5.0),
@@ -151,16 +162,16 @@ SELECT
   a.id AS album_id, a.title AS album_title, a.cover AS album_cover,
   mu.id AS musician_id, mu.name AS musician_name
 FROM tracks_search_fts
-INNER JOIN tracks AS t ON t.id = tracks_search_fts.rowid
+CROSS JOIN tracks AS t ON t.id = tracks_search_fts.rowid
 LEFT JOIN albums AS a ON t.album_id = a.id
 LEFT JOIN musicians AS mu ON t.musician_id = mu.id
 WHERE tracks_search_fts MATCH ?
 ORDER BY
   CASE
-    WHEN LOWER(t.title) = LOWER(?) THEN 0
-    WHEN LOWER(t.title) LIKE ? ESCAPE '\' THEN 1
-    WHEN LOWER(COALESCE(a.title, '')) = LOWER(?) OR LOWER(COALESCE(mu.name, '')) = LOWER(?) OR LOWER(COALESCE(a.musician, '')) = LOWER(?) THEN 2
-    WHEN LOWER(COALESCE(a.title, '')) LIKE ? ESCAPE '\' OR LOWER(COALESCE(mu.name, '')) LIKE ? ESCAPE '\' OR LOWER(COALESCE(a.musician, '')) LIKE ? ESCAPE '\' THEN 3
+    WHEN t.title = ? COLLATE NOCASE THEN 0
+    WHEN t.title LIKE ? ESCAPE '\' THEN 1
+    WHEN COALESCE(a.title, '') = ? COLLATE NOCASE OR COALESCE(mu.name, '') = ? COLLATE NOCASE OR COALESCE(a.musician, '') = ? COLLATE NOCASE THEN 2
+    WHEN COALESCE(a.title, '') LIKE ? ESCAPE '\' OR COALESCE(mu.name, '') LIKE ? ESCAPE '\' OR COALESCE(a.musician, '') LIKE ? ESCAPE '\' THEN 3
     ELSE 4
   END,
   bm25(tracks_search_fts, 10.0, 4.0, 4.0),
@@ -288,9 +299,62 @@ func normalizeSearchPage(page, total, perPage int64) (int64, int64) {
 	return page, pages
 }
 
+// searchStatementQueries are the hand-written search queries, prepared once at
+// startup by prepareSearchStatements.
+var searchStatementQueries = []string{
+	searchMoviesSQL, searchMoviesCountSQL,
+	searchShowsSQL, searchShowsCountSQL,
+	searchAlbumsSQL, searchAlbumsCountSQL,
+	searchMusiciansSQL, searchMusiciansCountSQL,
+	searchTracksJoinedSQL, searchTracksCountSQL,
+	searchVocabGenerationSQL,
+}
+
+// searchStatements holds the search queries prepared at startup, next to
+// database.Prepare for the sqlc queries, so a search skips SQLite's parse and
+// plan for every query it runs and a broken query fails the boot rather than
+// the first search. Up to ten queries make up one /api/search request. The map
+// is written once before the server starts and only read afterwards.
+type searchStatements map[string]*sql.Stmt
+
+func prepareSearchStatements(ctx context.Context, db *sql.DB) (searchStatements, error) {
+	stmts := make(searchStatements, len(searchStatementQueries))
+	for i, query := range searchStatementQueries {
+		stmt, err := db.PrepareContext(ctx, query)
+		if err != nil {
+			closeErr := stmts.close()
+			return nil, errors.Join(fmt.Errorf("error preparing search query %d: %w", i, err), closeErr)
+		}
+		stmts[query] = stmt
+	}
+	return stmts, nil
+}
+
+func (s searchStatements) stmt(query string) (*sql.Stmt, error) {
+	stmt, ok := s[query]
+	if !ok {
+		return nil, errors.New("search statement not prepared")
+	}
+	return stmt, nil
+}
+
+func (s searchStatements) close() error {
+	var errs []error
+	for query, stmt := range s {
+		errs = append(errs, stmt.Close())
+		delete(s, query)
+	}
+	return errors.Join(errs...)
+}
+
 func (app *Application) searchCount(ctx context.Context, query, match string) (int64, error) {
+	stmt, err := app.SearchStatements.stmt(query)
+	if err != nil {
+		return 0, err
+	}
+
 	var total int64
-	err := app.DB.QueryRowContext(ctx, query, match).Scan(&total)
+	err = stmt.QueryRowContext(ctx, match).Scan(&total)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return 0, err
 	}
@@ -304,7 +368,11 @@ func searchEntityPage[T any](ctx context.Context, app *Application, e searchEnti
 	args := append([]any{match}, e.rankArgs(exact, prefix)...)
 	args = append(args, limit, offset)
 
-	rows, err := app.DB.QueryContext(ctx, e.pageSQL, args...)
+	stmt, err := app.SearchStatements.stmt(e.pageSQL)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := stmt.QueryContext(ctx, args...)
 	if err != nil {
 		return nil, err
 	}

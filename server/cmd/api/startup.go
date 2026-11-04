@@ -146,11 +146,18 @@ func (app *Application) InitTables() error {
 // library listing indexes on their real selectivity instead of on built-in
 // guesses. PRAGMA optimize only analyzes the tables that have changed enough to
 // need it, and analysis_limit bounds how much of each index it samples, so this
-// stays cheap even on a large library.
-func (app *Application) RefreshQueryPlannerStats() error {
-	// Returned unwrapped: both callers already name this operation in their own
+// stays cheap even on a large library. It runs at startup, at shutdown and,
+// through requestPlannerStatsRefresh, after every scanner run, since a scan is
+// when tables grow.
+//
+// Mask 0x10002 also checks tables this connection has not queried yet. A plain
+// optimize skips them, so a startup after a library outgrew its statistics
+// kept them: a library analyzed while it held one album planned every search
+// for one album, scanning the whole table for each match.
+func (app *Application) RefreshQueryPlannerStats(ctx context.Context) error {
+	// Returned unwrapped: every caller already names this operation in its own
 	// error or log message, so wrapping here would repeat the same prefix twice.
-	_, err := app.DB.Exec("PRAGMA analysis_limit=400; PRAGMA optimize;")
+	_, err := app.DB.ExecContext(ctx, "PRAGMA analysis_limit=400; PRAGMA optimize=0x10002;")
 	return err
 }
 
