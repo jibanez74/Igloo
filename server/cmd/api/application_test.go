@@ -1,6 +1,13 @@
 package main
 
-import "testing"
+import (
+	"bytes"
+	"context"
+	"log/slog"
+	"strings"
+	"sync"
+	"testing"
+)
 
 func TestSyncArtworkAfterScanAsksARunOfChangesForAPassOfChanges(t *testing.T) {
 	artwork := &artworkRequests{}
@@ -21,6 +28,8 @@ func TestScanFinishedRefreshesPlannerStatisticsAndAsksForArtwork(t *testing.T) {
 	app := newTestDBApp(t)
 	artwork := &artworkRequests{}
 	app.Artwork = artwork
+	app.Wait = &sync.WaitGroup{}
+	app.ScanContext = t.Context()
 
 	_, err := app.DB.Exec("INSERT INTO albums (title, sort_title) VALUES ('Album', 'album')")
 	if err != nil {
@@ -28,7 +37,12 @@ func TestScanFinishedRefreshesPlannerStatisticsAndAsksForArtwork(t *testing.T) {
 	}
 
 	app.scanFinished(false)
+	if artwork.count.Load() != 1 {
+		t.Errorf("full artwork passes = %d, want 1", artwork.count.Load())
+	}
 
+	// The refresh runs on its own goroutine, tracked by app.Wait.
+	app.Wait.Wait()
 	var analyzed int
 	err = app.DB.QueryRow("SELECT COUNT(*) FROM sqlite_stat1 WHERE tbl = 'albums'").Scan(&analyzed)
 	if err != nil {
@@ -37,7 +51,41 @@ func TestScanFinishedRefreshesPlannerStatisticsAndAsksForArtwork(t *testing.T) {
 	if analyzed == 0 {
 		t.Error("want albums analyzed after a scanner run")
 	}
-	if artwork.count.Load() != 1 {
-		t.Errorf("full artwork passes = %d, want 1", artwork.count.Load())
+	if app.plannerStatsRunning || app.plannerStatsRerun {
+		t.Errorf("after the refresh: running = %v, rerun = %v; want both false", app.plannerStatsRunning, app.plannerStatsRerun)
+	}
+}
+
+// A run that finishes while a refresh is in progress asks for one more rather
+// than starting a second refresh beside it.
+func TestPlannerStatsRefreshRequestedWhileRunningRunsOnceMore(t *testing.T) {
+	app := &Application{Wait: &sync.WaitGroup{}}
+	app.plannerStatsRunning = true
+
+	app.requestPlannerStatsRefresh()
+	if !app.plannerStatsRerun {
+		t.Error("want a rerun requested while a refresh runs")
+	}
+}
+
+// Shutdown cancels ScanContext, which interrupts a refresh: that is not an
+// error worth logging, and it must not loop on a pending rerun.
+func TestPlannerStatsRefreshCanceledAtShutdownIsQuiet(t *testing.T) {
+	app := newTestDBApp(t)
+	var logs bytes.Buffer
+	app.Logger = slog.New(slog.NewTextHandler(&logs, nil))
+	app.Wait = &sync.WaitGroup{}
+	ctx, cancel := context.WithCancel(t.Context())
+	app.ScanContext = ctx
+	cancel()
+
+	app.requestPlannerStatsRefresh()
+	app.Wait.Wait()
+
+	if strings.Contains(logs.String(), "failed to refresh query planner statistics") {
+		t.Errorf("canceled refresh logged an error: %s", logs.String())
+	}
+	if app.plannerStatsRunning {
+		t.Error("want the refresh finished after cancellation")
 	}
 }

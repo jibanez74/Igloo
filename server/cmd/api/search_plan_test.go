@@ -151,7 +151,7 @@ INSERT INTO albums (title, sort_title) SELECT 'Album ' || i, 'album ' || i FROM 
 
 	db = openSearchStatsTestDB(t, path)
 	app := &Application{DB: db}
-	err = app.RefreshQueryPlannerStats()
+	err = app.RefreshQueryPlannerStats(t.Context())
 	if err != nil {
 		t.Fatalf("RefreshQueryPlannerStats failed: %v", err)
 	}

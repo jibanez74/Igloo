@@ -151,6 +151,12 @@ type Application struct {
 	SubtitleTrackCacheMu         sync.Mutex
 	SubtitleTrackCacheGeneration uint64
 	SubtitleTrackCacheRemoving   map[string]int
+
+	// plannerStats coalesces the statistics refreshes scanner runs ask for:
+	// one runs at a time, and a request while it runs asks for one more.
+	plannerStatsMu      sync.Mutex
+	plannerStatsRunning bool
+	plannerStatsRerun   bool
 }
 
 //go:embed all:webdist
@@ -191,7 +197,7 @@ func InitApp() (initializedApp *Application, err error) {
 		return nil, fmt.Errorf("failed to initialize database tables: %v", err)
 	}
 
-	err = app.RefreshQueryPlannerStats()
+	err = app.RefreshQueryPlannerStats(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to refresh query planner statistics: %v", err)
 	}
@@ -418,16 +424,52 @@ func (app *Application) syncArtwork() {
 	app.Artwork.Request()
 }
 
-// scanFinished runs after every scanner run, on the run's goroutine, which
-// shutdown waits for before it closes the database. A run is when tables grow
-// (a library's first scan most of all), so it refreshes the planner statistics
-// before asking for the artwork pass.
+// scanFinished runs after every scanner run, on the run's goroutine, before
+// the launcher counts the scanner idle again, so it only asks for work. A run
+// is when tables grow (a library's first scan most of all), so it asks for a
+// planner statistics refresh besides the artwork pass.
 func (app *Application) scanFinished(scoped bool) {
-	err := app.RefreshQueryPlannerStats()
-	if err != nil {
-		app.Logger.Error("failed to refresh query planner statistics", "error", err)
-	}
 	app.syncArtworkAfterScan(scoped)
+	app.requestPlannerStatsRefresh()
+}
+
+// requestPlannerStatsRefresh refreshes the planner statistics on a goroutine
+// of its own: ANALYZE can take seconds on a large library, and a scanner kept
+// running for it would refuse watcher runs and hold up a queued scan. A request
+// while a refresh runs makes it run once more, so the last of several scanners
+// finishing together still gets statistics taken after its writes. Shutdown
+// cancels ScanContext, which interrupts a refresh, and waits for app.Wait;
+// closeDatabase then takes the final statistics.
+func (app *Application) requestPlannerStatsRefresh() {
+	app.plannerStatsMu.Lock()
+	defer app.plannerStatsMu.Unlock()
+
+	if app.plannerStatsRunning {
+		app.plannerStatsRerun = true
+		return
+	}
+	app.plannerStatsRunning = true
+	app.Wait.Go(app.refreshPlannerStats)
+}
+
+func (app *Application) refreshPlannerStats() {
+	for {
+		err := app.RefreshQueryPlannerStats(app.ScanContext)
+		canceled := app.ScanContext.Err() != nil
+		if err != nil && !canceled {
+			app.Logger.Error("failed to refresh query planner statistics", "error", err)
+		}
+
+		app.plannerStatsMu.Lock()
+		rerun := app.plannerStatsRerun && !canceled
+		app.plannerStatsRerun = false
+		if !rerun {
+			app.plannerStatsRunning = false
+			app.plannerStatsMu.Unlock()
+			return
+		}
+		app.plannerStatsMu.Unlock()
+	}
 }
 
 // syncArtworkAfterScan requests the artwork pass that follows a scanner run:

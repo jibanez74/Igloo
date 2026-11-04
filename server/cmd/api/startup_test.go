@@ -210,7 +210,7 @@ func TestRefreshQueryPlannerStats(t *testing.T) {
 		t.Fatalf("Failed to seed a user: %v", err)
 	}
 
-	err = app.RefreshQueryPlannerStats()
+	err = app.RefreshQueryPlannerStats(t.Context())
 	if err != nil {
 		t.Fatalf("RefreshQueryPlannerStats failed: %v", err)
 	}
