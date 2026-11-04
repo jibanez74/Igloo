@@ -187,6 +187,10 @@ func (app *Application) closeDatabase() {
 			app.Logger.Error("failed to close prepared statements", "error", err)
 		}
 	}
+	err = app.SearchStatements.close()
+	if err != nil {
+		app.Logger.Error("failed to close search statements", "error", err)
+	}
 
 	err = app.DB.Close()
 	if err != nil {

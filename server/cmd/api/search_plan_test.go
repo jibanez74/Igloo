@@ -188,3 +188,36 @@ func openSearchStatsTestDB(t *testing.T, path string) *sql.DB {
 	})
 	return db
 }
+
+func TestSearchStatementsArePreparedOnceAndClosed(t *testing.T) {
+	app := setupTestApp(t)
+	createTestMovie(t, app, "Casino Royale", "/movies/casino-royale.mkv")
+
+	// The typo resolves at stage 2, so the count, the vocabulary generation
+	// and the page query all run.
+	for range 2 {
+		results := searchEntityResults(t, app, movieSearchEntity, "Casino Roayle")
+		if len(results) != 1 {
+			t.Fatalf("want Casino Royale, got %d results", len(results))
+		}
+	}
+
+	want := []string{searchMoviesCountSQL, searchVocabGenerationSQL, searchMoviesSQL}
+	if len(app.SearchStatements.stmts) != len(want) {
+		t.Fatalf("prepared %d statements, want %d", len(app.SearchStatements.stmts), len(want))
+	}
+	for _, query := range want {
+		_, ok := app.SearchStatements.stmts[query]
+		if !ok {
+			t.Errorf("statement not prepared: %s", query)
+		}
+	}
+
+	err := app.SearchStatements.close()
+	if err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	if len(app.SearchStatements.stmts) != 0 {
+		t.Errorf("%d statements left after close", len(app.SearchStatements.stmts))
+	}
+}

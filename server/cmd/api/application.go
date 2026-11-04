@@ -69,6 +69,7 @@ type Application struct {
 	Server                  *http.Server
 	ScannerDBMu             sync.Mutex
 	SearchVocab             searchVocabCache
+	SearchStatements        searchStatements
 	HLSSessionCache         *cache.Cache
 	HLSSessionGroup         singleflight.Group
 	HLSTranscodeLimiterMu   sync.Mutex

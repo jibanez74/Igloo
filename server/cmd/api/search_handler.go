@@ -8,6 +8,7 @@ import (
 	"igloo/cmd/internal/helpers"
 	"net/http"
 	"strings"
+	"sync"
 )
 
 const searchAllTopN = 8
@@ -294,9 +295,54 @@ func normalizeSearchPage(page, total, perPage int64) (int64, int64) {
 	return page, pages
 }
 
+// searchStatements prepares each hand-written search query the first time it
+// runs and keeps it, as database.Prepare does for the sqlc queries, so a search
+// skips SQLite's parse and plan for every query it runs. Up to ten queries make
+// up one /api/search request.
+type searchStatements struct {
+	mu    sync.Mutex
+	stmts map[string]*sql.Stmt
+}
+
+func (s *searchStatements) get(ctx context.Context, db *sql.DB, query string) (*sql.Stmt, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	stmt, ok := s.stmts[query]
+	if ok {
+		return stmt, nil
+	}
+	stmt, err := db.PrepareContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	if s.stmts == nil {
+		s.stmts = make(map[string]*sql.Stmt)
+	}
+	s.stmts[query] = stmt
+	return stmt, nil
+}
+
+func (s *searchStatements) close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var errs []error
+	for query, stmt := range s.stmts {
+		errs = append(errs, stmt.Close())
+		delete(s.stmts, query)
+	}
+	return errors.Join(errs...)
+}
+
 func (app *Application) searchCount(ctx context.Context, query, match string) (int64, error) {
+	stmt, err := app.SearchStatements.get(ctx, app.DB, query)
+	if err != nil {
+		return 0, err
+	}
+
 	var total int64
-	err := app.DB.QueryRowContext(ctx, query, match).Scan(&total)
+	err = stmt.QueryRowContext(ctx, match).Scan(&total)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return 0, err
 	}
@@ -310,7 +356,11 @@ func searchEntityPage[T any](ctx context.Context, app *Application, e searchEnti
 	args := append([]any{match}, e.rankArgs(exact, prefix)...)
 	args = append(args, limit, offset)
 
-	rows, err := app.DB.QueryContext(ctx, e.pageSQL, args...)
+	stmt, err := app.SearchStatements.get(ctx, app.DB, e.pageSQL)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := stmt.QueryContext(ctx, args...)
 	if err != nil {
 		return nil, err
 	}
