@@ -164,7 +164,9 @@ func (index *searchVocabIndex) insert(term searchVocabTerm) {
 func (index *searchVocabIndex) corrections(token string, maxDist, visitLimit int) ([]string, int) {
 	queryRunes := []rune(token)
 	metricRadius := maxDist * 2
-	frontier := &searchVocabNodeHeap{}
+	// The frontier never holds more than visitLimit nodes, so it is sized once.
+	frontierNodes := make(searchVocabNodeHeap, 0, visitLimit)
+	frontier := &frontierNodes
 	heap.Init(frontier)
 	for length := len(queryRunes) - maxDist; length <= len(queryRunes)+maxDist; length++ {
 		if root := index.roots[length]; root != nil {
@@ -180,7 +182,7 @@ func (index *searchVocabIndex) corrections(token string, maxDist, visitLimit int
 
 		metricDistance := exactLevenshtein(queryRunes, node.value.runes)
 		if node.value.term != token && metricDistance <= metricRadius {
-			distance := damerauLevenshtein(token, node.value.term, maxDist)
+			distance := damerauLevenshtein(queryRunes, node.value.runes, maxDist)
 			if distance <= maxDist {
 				candidates = append(candidates, searchVocabCandidate{
 					term: node.value.term,
