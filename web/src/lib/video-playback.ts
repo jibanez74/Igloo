@@ -401,6 +401,11 @@ function shouldPersistWatchProgress(
   );
 }
 
+/**
+ * Saves one position. A failed ordinary save throws; a keepalive save never
+ * throws and resolves false when its request failed, so the caller can retry
+ * that position later. A position too short to keep resolves true.
+ */
 export async function persistWatchProgress(
   media: PlaybackMediaRef,
   progressSec: number,
@@ -408,15 +413,15 @@ export async function persistWatchProgress(
   saveSessionId: string,
   saveSequence: number,
   options?: { keepalive?: boolean },
-) {
-  if (!(durationSec > 0)) return;
+): Promise<boolean> {
+  if (!(durationSec > 0)) return true;
 
   const clampedProgress = Math.max(0, Math.min(progressSec, durationSec));
-  if (!shouldPersistWatchProgress(clampedProgress, durationSec)) return;
+  if (!shouldPersistWatchProgress(clampedProgress, durationSec)) return true;
 
   if (options?.keepalive) {
     try {
-      await fetch(`${mediaApiBasePath(media)}/watch-progress`, {
+      const response = await fetch(`${mediaApiBasePath(media)}/watch-progress`, {
         method: "PUT",
         credentials: "include",
         keepalive: true,
@@ -430,10 +435,11 @@ export async function persistWatchProgress(
           save_sequence: saveSequence,
         }),
       });
+      return response.ok;
     } catch {
       // Best-effort pagehide save; ignore network failures.
+      return false;
     }
-    return;
   }
 
   const res = await updateMediaWatchProgress(
@@ -446,4 +452,5 @@ export async function persistWatchProgress(
   if (res.error) {
     throw new Error(res.message);
   }
+  return true;
 }

@@ -286,8 +286,6 @@ export const MOVIE_VOLUME_STEP = 0.1;
 export const AUDIO_VOLUME_STEP = 0.1;
 export const MOVIE_CONTROLS_IDLE_MS = 3000;
 export const WATCH_PROGRESS_SAVE_INTERVAL_MS = 15_000;
-/** Window in which visibilitychange(hidden) + pagehide keepalive saves at the same position collapse into one PUT. */
-export const WATCH_PROGRESS_KEEPALIVE_DEDUPE_MS = 2_000;
 export const PLAYBACK_EXIT_SYNC_TIMEOUT_MS = 2_000;
 /** Seconds the up-next card counts down before starting the next episode. */
 export const UP_NEXT_COUNTDOWN_SEC = 10;

@@ -78,7 +78,7 @@ describe("watch progress saver", () => {
     const { result } = renderHook(() =>
       useWatchProgressSaver({
         media: movieMediaRef(7),
-        playing: false,
+        playing: true,
         currentTimeRef,
         durationRef,
       }),
@@ -133,7 +133,7 @@ describe("watch progress saver", () => {
     const { result } = renderHook(() =>
       useWatchProgressSaver({
         media: episodeMediaRef(70103),
-        playing: false,
+        playing: true,
         currentTimeRef,
         durationRef,
       }),
@@ -150,6 +150,7 @@ describe("watch progress saver", () => {
       1,
     );
 
+    currentTimeRef.current = 320;
     act(() => {
       window.dispatchEvent(new Event("pagehide"));
     });
@@ -170,7 +171,7 @@ describe("watch progress saver", () => {
     const { unmount } = renderHook(() =>
       useWatchProgressSaver({
         media: movieMediaRef(7),
-        playing: false,
+        playing: true,
         currentTimeRef,
         durationRef,
       }),
@@ -209,7 +210,7 @@ describe("watch progress saver", () => {
     renderHook(() =>
       useWatchProgressSaver({
         media: movieMediaRef(7),
-        playing: false,
+        playing: true,
         currentTimeRef,
         durationRef,
       }),
@@ -248,7 +249,7 @@ describe("watch progress saver", () => {
     renderHook(() =>
       useWatchProgressSaver({
         media: movieMediaRef(7),
-        playing: false,
+        playing: true,
         currentTimeRef,
         durationRef,
       }),
@@ -274,7 +275,7 @@ describe("watch progress saver", () => {
     renderHook(() =>
       useWatchProgressSaver({
         media: movieMediaRef(7),
-        playing: false,
+        playing: true,
         currentTimeRef,
         durationRef,
         fallbackDurationSec: 5400,
@@ -312,7 +313,7 @@ describe("watch progress saver", () => {
     const { result } = renderHook(() =>
       useWatchProgressSaver({
         media: movieMediaRef(7),
-        playing: false,
+        playing: true,
         currentTimeRef,
         durationRef,
       }),
@@ -362,7 +363,7 @@ describe("watch progress saver", () => {
     const { result } = renderHook(() =>
       useWatchProgressSaver({
         media: movieMediaRef(7),
-        playing: false,
+        playing: true,
         currentTimeRef,
         durationRef,
       }),
@@ -379,5 +380,234 @@ describe("watch progress saver", () => {
       expect.any(String),
       1,
     );
+  });
+
+  it("reports nothing from a page that never played", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}"));
+    vi.stubGlobal("fetch", fetchMock);
+    const currentTimeRef = { current: 300 };
+    const durationRef = { current: 1000 };
+    const { result } = renderHook(() =>
+      useWatchProgressSaver({
+        media: movieMediaRef(7),
+        playing: false,
+        currentTimeRef,
+        durationRef,
+      }),
+    );
+
+    const visibilitySpy = vi
+      .spyOn(document, "visibilityState", "get")
+      .mockReturnValue("hidden");
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+      window.dispatchEvent(new Event("pagehide"));
+      await result.current.handlePauseSave();
+      await result.current.flushProgress();
+    });
+    visibilitySpy.mockRestore();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(updateMediaWatchProgress).not.toHaveBeenCalled();
+  });
+
+  it("does not report a position again on close or exit", async () => {
+    // A paused tab left open while the viewer went on watching elsewhere: its
+    // stale position must not overwrite the newer progress.
+    updateMediaWatchProgress.mockResolvedValue(successfulUpdate);
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}"));
+    vi.stubGlobal("fetch", fetchMock);
+    const currentTimeRef = { current: 300 };
+    const durationRef = { current: 1000 };
+    const { result } = renderHook(() =>
+      useWatchProgressSaver({
+        media: movieMediaRef(7),
+        playing: true,
+        currentTimeRef,
+        durationRef,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.handlePauseSave();
+    });
+    expect(updateMediaWatchProgress).toHaveBeenCalledOnce();
+
+    currentTimeRef.current = 300.4;
+    const visibilitySpy = vi
+      .spyOn(document, "visibilityState", "get")
+      .mockReturnValue("hidden");
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+      window.dispatchEvent(new Event("pagehide"));
+      await result.current.flushProgress();
+      await result.current.handlePauseSave();
+    });
+    visibilitySpy.mockRestore();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(updateMediaWatchProgress).toHaveBeenCalledOnce();
+  });
+
+  it("reports a position moved since the last save, even while paused", async () => {
+    updateMediaWatchProgress.mockResolvedValue(successfulUpdate);
+    const currentTimeRef = { current: 300 };
+    const durationRef = { current: 1000 };
+    const { result } = renderHook(() =>
+      useWatchProgressSaver({
+        media: movieMediaRef(7),
+        playing: false,
+        currentTimeRef,
+        durationRef,
+      }),
+    );
+
+    // The end is reported even without a play seen here, which gives the
+    // page a last reported position to measure the next one from.
+    await act(async () => {
+      await result.current.handleEndedSave();
+    });
+    currentTimeRef.current = 450;
+    await act(async () => {
+      await result.current.flushProgress();
+    });
+
+    expect(updateMediaWatchProgress).toHaveBeenCalledTimes(2);
+    expect(updateMediaWatchProgress).toHaveBeenLastCalledWith(
+      { kind: "movie", id: 7 },
+      450,
+      1000,
+      expect.any(String),
+      2,
+    );
+  });
+
+  it("retries a position whose save failed", async () => {
+    updateMediaWatchProgress
+      .mockResolvedValueOnce({ error: true, message: "offline" })
+      .mockResolvedValueOnce(successfulUpdate);
+    const currentTimeRef = { current: 300 };
+    const durationRef = { current: 1000 };
+    const { result } = renderHook(() =>
+      useWatchProgressSaver({
+        media: movieMediaRef(7),
+        playing: true,
+        currentTimeRef,
+        durationRef,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.handlePauseSave();
+    });
+    await act(async () => {
+      await result.current.flushProgress();
+    });
+
+    expect(updateMediaWatchProgress).toHaveBeenCalledTimes(2);
+    expect(updateMediaWatchProgress).toHaveBeenLastCalledWith(
+      { kind: "movie", id: 7 },
+      300,
+      1000,
+      expect.any(String),
+      2,
+    );
+  });
+
+  it("retries a position whose keepalive save failed", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("{}", { status: 500 }))
+      .mockResolvedValueOnce(new Response("{}"));
+    vi.stubGlobal("fetch", fetchMock);
+    const currentTimeRef = { current: 300 };
+    const durationRef = { current: 1000 };
+    renderHook(() =>
+      useWatchProgressSaver({
+        media: movieMediaRef(7),
+        playing: true,
+        currentTimeRef,
+        durationRef,
+      }),
+    );
+
+    act(() => {
+      window.dispatchEvent(new Event("pagehide"));
+    });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+    // Let the failed response settle before the next lifecycle event.
+    await act(async () => {});
+    act(() => {
+      window.dispatchEvent(new Event("pagehide"));
+    });
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  });
+
+  it("always saves the end, even right after a pause save", async () => {
+    updateMediaWatchProgress.mockResolvedValue({
+      error: false as const,
+      data: { watched: true },
+    });
+    const currentTimeRef = { current: 999.8 };
+    const durationRef = { current: 1000 };
+    const { result } = renderHook(() =>
+      useWatchProgressSaver({
+        media: movieMediaRef(7),
+        playing: true,
+        currentTimeRef,
+        durationRef,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.handlePauseSave();
+      await result.current.handleEndedSave();
+    });
+
+    expect(updateMediaWatchProgress).toHaveBeenCalledTimes(2);
+    expect(updateMediaWatchProgress).toHaveBeenLastCalledWith(
+      { kind: "movie", id: 7 },
+      1000,
+      1000,
+      expect.any(String),
+      2,
+    );
+  });
+
+  it("skips interval saves while the position has not moved", async () => {
+    vi.useFakeTimers();
+    try {
+      updateMediaWatchProgress.mockResolvedValue(successfulUpdate);
+      const currentTimeRef = { current: 300 };
+      const durationRef = { current: 1000 };
+      renderHook(() =>
+        useWatchProgressSaver({
+          media: movieMediaRef(7),
+          playing: true,
+          currentTimeRef,
+          durationRef,
+        }),
+      );
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(15_000);
+      });
+      expect(updateMediaWatchProgress).toHaveBeenCalledOnce();
+
+      // Buffering: still playing, no time has passed in the media.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30_000);
+      });
+      expect(updateMediaWatchProgress).toHaveBeenCalledOnce();
+
+      currentTimeRef.current = 315;
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(15_000);
+      });
+      expect(updateMediaWatchProgress).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -4,10 +4,7 @@ import {
   createPlaybackSessionId,
   persistWatchProgress,
 } from "@/lib/video-playback";
-import {
-  WATCH_PROGRESS_KEEPALIVE_DEDUPE_MS,
-  WATCH_PROGRESS_SAVE_INTERVAL_MS,
-} from "@/lib/constants";
+import { WATCH_PROGRESS_SAVE_INTERVAL_MS } from "@/lib/constants";
 import { showActionFailed } from "@/lib/toast-helpers";
 import type { PlaybackMediaRef } from "@/types/playback";
 
@@ -43,6 +40,13 @@ export function useWatchProgressSaver({
   const fallbackDurationRef = useRef(fallbackDurationSec ?? 0);
   const saveSessionIdRef = useRef<string | null>(null);
   const saveSequenceRef = useRef(0);
+  // Every page load is a new save session, and the server takes any write
+  // from another session, so a page reporting a position it already reported
+  // (a paused tab closed after the viewer went on watching on the TV) would
+  // roll the newer progress back. Only a position that moved since the last
+  // save is reported; before any save, only once the media has played.
+  const lastReportedSecRef = useRef<number | null>(null);
+  const playedRef = useRef(false);
   const { kind, id } = media;
 
   if (saveSessionIdRef.current === null) {
@@ -53,37 +57,71 @@ export function useWatchProgressSaver({
     fallbackDurationRef.current = fallbackDurationSec ?? 0;
   }, [fallbackDurationSec]);
 
+  useEffect(() => {
+    if (playing && enabled) playedRef.current = true;
+  }, [playing, enabled]);
+
   const effectiveDurationSec = useCallback(() => {
     if (durationRef.current > 0) return durationRef.current;
     return fallbackDurationRef.current;
   }, [durationRef]);
 
+  const hasNewProgress = useCallback((progressSec: number) => {
+    const lastReported = lastReportedSecRef.current;
+    if (lastReported === null) return playedRef.current;
+    return Math.abs(progressSec - lastReported) >= 1;
+  }, []);
+
+  // A failed save leaves its position unreported, so the next chance retries.
+  const forgetFailedReport = useCallback((progressSec: number) => {
+    if (lastReportedSecRef.current === progressSec) {
+      lastReportedSecRef.current = null;
+    }
+  }, []);
+
   const queueProgressSave = useCallback(
     (progressSec: number, durationSec: number) => {
       const saveSequence = ++saveSequenceRef.current;
-      const save = (pendingSaveRef.current ?? Promise.resolve()).then(() =>
-        persistWatchProgress(
-          { kind, id },
-          progressSec,
-          durationSec,
-          saveSessionIdRef.current!,
-          saveSequence,
-        ),
-      );
-      pendingSaveRef.current = save.catch(() => {});
+      const previous = pendingSaveRef.current;
+      lastReportedSecRef.current = progressSec;
+      const save = (async () => {
+        await previous;
+        try {
+          await persistWatchProgress(
+            { kind, id },
+            progressSec,
+            durationSec,
+            saveSessionIdRef.current!,
+            saveSequence,
+          );
+        } catch (error) {
+          forgetFailedReport(progressSec);
+          throw error;
+        }
+      })();
+      pendingSaveRef.current = (async () => {
+        try {
+          await save;
+        } catch {
+          // The chain only orders saves; each caller handles its own failure.
+        }
+      })();
       return save;
     },
-    [kind, id],
+    [kind, id, forgetFailedReport],
   );
+
+  const saveIfNewProgress = useCallback(async () => {
+    const progressSec = currentTimeRef.current;
+    if (!hasNewProgress(progressSec)) return;
+    await queueProgressSave(progressSec, effectiveDurationSec());
+  }, [currentTimeRef, hasNewProgress, queueProgressSave, effectiveDurationSec]);
 
   useEffect(() => {
     if (!playing || !enabled) return;
     const interval = window.setInterval(async () => {
       try {
-        await queueProgressSave(
-          currentTimeRef.current,
-          effectiveDurationSec(),
-        );
+        await saveIfNewProgress();
       } catch {
         // Silent background save failure; pause/end handlers surface failures when needed.
       }
@@ -91,63 +129,65 @@ export function useWatchProgressSaver({
     return () => {
       window.clearInterval(interval);
     };
-  }, [playing, enabled, currentTimeRef, effectiveDurationSec, queueProgressSave]);
+  }, [playing, enabled, saveIfNewProgress]);
 
   useEffect(() => {
     if (!enabled) return;
+
     // On a real page close, visibilitychange (hidden) usually fires and then
-    // pagehide follows; the dedupe window keeps that from double-saving while
-    // still covering browsers/platforms that only deliver one of the two.
-    let lastKeepalive: { progressSec: number; atMs: number } | null = null;
-
-    const flushKeepalive = () => {
+    // pagehide follows; the second finds its position already reported, while
+    // browsers/platforms that only deliver one of the two are still covered.
+    const flushKeepalive = async () => {
       const progressSec = currentTimeRef.current;
-      const isDuplicate =
-        lastKeepalive !== null &&
-        Math.abs(lastKeepalive.progressSec - progressSec) < 1 &&
-        Date.now() - lastKeepalive.atMs <
-          WATCH_PROGRESS_KEEPALIVE_DEDUPE_MS;
-      if (isDuplicate) return;
+      if (!hasNewProgress(progressSec)) return;
 
-      const atMs = Date.now();
-      const durationSec = effectiveDurationSec();
       const saveSequence = ++saveSequenceRef.current;
-      lastKeepalive = { progressSec, atMs };
-      void persistWatchProgress(
+      lastReportedSecRef.current = progressSec;
+      const sent = await persistWatchProgress(
         { kind, id },
         progressSec,
-        durationSec,
+        effectiveDurationSec(),
         saveSessionIdRef.current!,
         saveSequence,
         { keepalive: true },
       );
+      if (!sent) forgetFailedReport(progressSec);
     };
 
     const handleVisibilityChange = () => {
       if (document.visibilityState !== "hidden") return;
-      flushKeepalive();
+      void flushKeepalive();
+    };
+    const handlePageHide = () => {
+      void flushKeepalive();
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("pagehide", flushKeepalive);
+    window.addEventListener("pagehide", handlePageHide);
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("pagehide", flushKeepalive);
+      window.removeEventListener("pagehide", handlePageHide);
     };
-  }, [enabled, currentTimeRef, effectiveDurationSec, kind, id]);
+  }, [
+    enabled,
+    currentTimeRef,
+    effectiveDurationSec,
+    hasNewProgress,
+    forgetFailedReport,
+    kind,
+    id,
+  ]);
 
   const handlePauseSave = async () => {
     if (!enabled) return;
     try {
-      await queueProgressSave(
-        currentTimeRef.current,
-        effectiveDurationSec(),
-      );
+      await saveIfNewProgress();
     } catch {
       // Best effort on pause; avoid interrupting playback UI with repeated toasts.
     }
   };
 
+  // Always sent: completion must not depend on an earlier save succeeding.
   const handleEndedSave = async () => {
     if (!enabled) return;
     const durationSec = effectiveDurationSec();
@@ -163,7 +203,7 @@ export function useWatchProgressSaver({
 
   const flushProgress = () => {
     if (!enabled) return Promise.resolve();
-    return queueProgressSave(currentTimeRef.current, effectiveDurationSec());
+    return saveIfNewProgress();
   };
 
   return { handlePauseSave, handleEndedSave, flushProgress };
