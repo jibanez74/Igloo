@@ -3,6 +3,7 @@ import type { RefObject } from "react";
 import {
   createPlaybackSessionId,
   persistWatchProgress,
+  shouldPersistWatchProgress,
 } from "@/lib/video-playback";
 import { WATCH_PROGRESS_SAVE_INTERVAL_MS } from "@/lib/constants";
 import { showActionFailed } from "@/lib/toast-helpers";
@@ -87,8 +88,13 @@ export function useWatchProgressSaver({
     }
   }, []);
 
+  // A save that would not be sent (no duration yet, or a position below the
+  // floor) reports nothing, so the same position is saved once it can be.
   const queueProgressSave = useCallback(
     (progressSec: number, durationSec: number) => {
+      if (!shouldPersistWatchProgress(progressSec, durationSec)) {
+        return Promise.resolve();
+      }
       const saveSequence = ++saveSequenceRef.current;
       const previous = pendingSaveRef.current;
       lastReportRef.current = {
@@ -168,6 +174,8 @@ export function useWatchProgressSaver({
       ) {
         return;
       }
+      const durationSec = effectiveDurationSec();
+      if (!shouldPersistWatchProgress(progressSec, durationSec)) return;
 
       const saveSequence = ++saveSequenceRef.current;
       lastReportRef.current = {
@@ -178,7 +186,7 @@ export function useWatchProgressSaver({
       const sent = await persistWatchProgress(
         { kind, id },
         progressSec,
-        effectiveDurationSec(),
+        durationSec,
         saveSessionIdRef.current!,
         saveSequence,
         { keepalive: true },

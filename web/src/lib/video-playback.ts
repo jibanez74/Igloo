@@ -387,7 +387,7 @@ export function shouldDirectPlayFallback(args: DirectPlayFallbackArgs): boolean 
 }
 
 // shouldPersistWatchProgress intentionally uses OR so near-complete short videos are saved when completion >= WATCH_PROGRESS_COMPLETION_THRESHOLD or clampedProgress >= WATCH_PROGRESS_MIN_SECONDS; hasEligibleResumeProgress uses AND to only surface resume for unfinished, sufficiently-long content.
-function shouldPersistWatchProgress(
+export function shouldPersistWatchProgress(
   progressSec: number,
   durationSec: number,
 ) {

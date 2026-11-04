@@ -512,6 +512,72 @@ describe("watch progress saver", () => {
     expect(updateMediaWatchProgress).toHaveBeenCalledOnce();
   });
 
+  it("does not count a save skipped for an unknown duration as reported", async () => {
+    updateMediaWatchProgress.mockResolvedValue(successfulUpdate);
+    const currentTimeRef = { current: 300 };
+    const durationRef = { current: 0 };
+    const { result } = renderHook(() =>
+      useWatchProgressSaver({
+        media: movieMediaRef(7),
+        playing: true,
+        currentTimeRef,
+        durationRef,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.handlePauseSave();
+    });
+    expect(updateMediaWatchProgress).not.toHaveBeenCalled();
+
+    durationRef.current = 1000;
+    await act(async () => {
+      await result.current.flushProgress();
+    });
+
+    expect(updateMediaWatchProgress).toHaveBeenCalledOnce();
+    expect(updateMediaWatchProgress).toHaveBeenCalledWith(
+      { kind: "movie", id: 7 },
+      300,
+      1000,
+      expect.any(String),
+      1,
+    );
+  });
+
+  it("does not count a keepalive skipped for an unknown duration as reported", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}"));
+    vi.stubGlobal("fetch", fetchMock);
+    const currentTimeRef = { current: 300 };
+    const durationRef = { current: 0 };
+    renderHook(() =>
+      useWatchProgressSaver({
+        media: movieMediaRef(7),
+        playing: true,
+        currentTimeRef,
+        durationRef,
+      }),
+    );
+
+    await act(async () => {
+      window.dispatchEvent(new Event("pagehide"));
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    durationRef.current = 1000;
+    await act(async () => {
+      window.dispatchEvent(new Event("pagehide"));
+    });
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(requestBody(fetchMock)).toEqual({
+      progress_sec: 300,
+      duration_sec: 1000,
+      save_session_id: expect.any(String),
+      save_sequence: 1,
+    });
+  });
+
   it("saves progress above the 30-second floor", async () => {
     updateMediaWatchProgress.mockResolvedValueOnce(successfulUpdate);
     const currentTimeRef = { current: 45 };
