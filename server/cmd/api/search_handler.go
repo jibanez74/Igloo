@@ -4,11 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"net/http"
 	"strings"
-	"sync"
 )
 
 const searchAllTopN = 8
@@ -299,48 +299,56 @@ func normalizeSearchPage(page, total, perPage int64) (int64, int64) {
 	return page, pages
 }
 
-// searchStatements prepares each hand-written search query the first time it
-// runs and keeps it, as database.Prepare does for the sqlc queries, so a search
-// skips SQLite's parse and plan for every query it runs. Up to ten queries make
-// up one /api/search request.
-type searchStatements struct {
-	mu    sync.Mutex
-	stmts map[string]*sql.Stmt
+// searchStatementQueries are the hand-written search queries, prepared once at
+// startup by prepareSearchStatements.
+var searchStatementQueries = []string{
+	searchMoviesSQL, searchMoviesCountSQL,
+	searchShowsSQL, searchShowsCountSQL,
+	searchAlbumsSQL, searchAlbumsCountSQL,
+	searchMusiciansSQL, searchMusiciansCountSQL,
+	searchTracksJoinedSQL, searchTracksCountSQL,
+	searchVocabGenerationSQL,
 }
 
-func (s *searchStatements) get(ctx context.Context, db *sql.DB, query string) (*sql.Stmt, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+// searchStatements holds the search queries prepared at startup, next to
+// database.Prepare for the sqlc queries, so a search skips SQLite's parse and
+// plan for every query it runs and a broken query fails the boot rather than
+// the first search. Up to ten queries make up one /api/search request. The map
+// is written once before the server starts and only read afterwards.
+type searchStatements map[string]*sql.Stmt
 
-	stmt, ok := s.stmts[query]
-	if ok {
-		return stmt, nil
+func prepareSearchStatements(ctx context.Context, db *sql.DB) (searchStatements, error) {
+	stmts := make(searchStatements, len(searchStatementQueries))
+	for i, query := range searchStatementQueries {
+		stmt, err := db.PrepareContext(ctx, query)
+		if err != nil {
+			closeErr := stmts.close()
+			return nil, errors.Join(fmt.Errorf("error preparing search query %d: %w", i, err), closeErr)
+		}
+		stmts[query] = stmt
 	}
-	stmt, err := db.PrepareContext(ctx, query)
-	if err != nil {
-		return nil, err
+	return stmts, nil
+}
+
+func (s searchStatements) stmt(query string) (*sql.Stmt, error) {
+	stmt, ok := s[query]
+	if !ok {
+		return nil, errors.New("search statement not prepared")
 	}
-	if s.stmts == nil {
-		s.stmts = make(map[string]*sql.Stmt)
-	}
-	s.stmts[query] = stmt
 	return stmt, nil
 }
 
-func (s *searchStatements) close() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
+func (s searchStatements) close() error {
 	var errs []error
-	for query, stmt := range s.stmts {
+	for query, stmt := range s {
 		errs = append(errs, stmt.Close())
-		delete(s.stmts, query)
+		delete(s, query)
 	}
 	return errors.Join(errs...)
 }
 
 func (app *Application) searchCount(ctx context.Context, query, match string) (int64, error) {
-	stmt, err := app.SearchStatements.get(ctx, app.DB, query)
+	stmt, err := app.SearchStatements.stmt(query)
 	if err != nil {
 		return 0, err
 	}
@@ -360,7 +368,7 @@ func searchEntityPage[T any](ctx context.Context, app *Application, e searchEnti
 	args := append([]any{match}, e.rankArgs(exact, prefix)...)
 	args = append(args, limit, offset)
 
-	stmt, err := app.SearchStatements.get(ctx, app.DB, e.pageSQL)
+	stmt, err := app.SearchStatements.stmt(e.pageSQL)
 	if err != nil {
 		return nil, err
 	}

@@ -259,7 +259,7 @@ func searchVocabSelectSQL(vocabTable string) (string, error) {
 const searchVocabGenerationSQL = "SELECT generation FROM search_vocab_generations WHERE vocab_table = ?"
 
 func (app *Application) searchVocabIndex(ctx context.Context, vocabTable string) (*searchVocabIndex, error) {
-	generationStmt, err := app.SearchStatements.get(ctx, app.DB, searchVocabGenerationSQL)
+	generationStmt, err := app.SearchStatements.stmt(searchVocabGenerationSQL)
 	if err != nil {
 		return nil, err
 	}
@@ -281,7 +281,7 @@ func (app *Application) searchVocabIndex(ctx context.Context, vocabTable string)
 	}
 	defer tx.Rollback()
 
-	err = tx.QueryRowContext(ctx, searchVocabGenerationSQL, vocabTable).Scan(&generation)
+	err = tx.StmtContext(ctx, generationStmt).QueryRowContext(ctx, vocabTable).Scan(&generation)
 	if err != nil {
 		return nil, err
 	}

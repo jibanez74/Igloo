@@ -202,6 +202,10 @@ func bootTestApp(t *testing.T, db *sql.DB, config RuntimeConfig) *Application {
 	if err != nil {
 		t.Fatalf("Failed to prepare queries: %v", err)
 	}
+	app.SearchStatements, err = prepareSearchStatements(t.Context(), db)
+	if err != nil {
+		t.Fatalf("Failed to prepare search queries: %v", err)
+	}
 
 	// Production boots through InitSettings before anything serves, so app
 	// settings are never nil. Tests share that invariant rather than exercising

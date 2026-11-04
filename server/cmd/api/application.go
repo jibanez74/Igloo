@@ -201,6 +201,11 @@ func InitApp() (initializedApp *Application, err error) {
 		return nil, fmt.Errorf("failed to prepare database queries: %v", err)
 	}
 
+	app.SearchStatements, err = prepareSearchStatements(ctx, app.DB)
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare search queries: %v", err)
+	}
+
 	err = app.InitSettings(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize settings: %v", err)

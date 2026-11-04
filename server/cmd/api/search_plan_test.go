@@ -189,27 +189,33 @@ func openSearchStatsTestDB(t *testing.T, path string) *sql.DB {
 	return db
 }
 
-func TestSearchStatementsArePreparedOnceAndClosed(t *testing.T) {
+func TestSearchStatementsArePreparedAtStartupAndClosed(t *testing.T) {
 	app := setupTestApp(t)
 	createTestMovie(t, app, "Casino Royale", "/movies/casino-royale.mkv")
 
+	if len(app.SearchStatements) != len(searchStatementQueries) {
+		t.Fatalf("prepared %d statements, want %d", len(app.SearchStatements), len(searchStatementQueries))
+	}
+	prepared := make(map[string]*sql.Stmt, len(searchStatementQueries))
+	for _, query := range searchStatementQueries {
+		stmt, ok := app.SearchStatements[query]
+		if !ok {
+			t.Fatalf("statement not prepared at startup: %s", query)
+		}
+		prepared[query] = stmt
+	}
+
 	// The typo resolves at stage 2, so the count, the vocabulary generation
-	// and the page query all run.
+	// and the page query all run, and none of them may prepare again.
 	for range 2 {
 		results := searchEntityResults(t, app, movieSearchEntity, "Casino Roayle")
 		if len(results) != 1 {
 			t.Fatalf("want Casino Royale, got %d results", len(results))
 		}
 	}
-
-	want := []string{searchMoviesCountSQL, searchVocabGenerationSQL, searchMoviesSQL}
-	if len(app.SearchStatements.stmts) != len(want) {
-		t.Fatalf("prepared %d statements, want %d", len(app.SearchStatements.stmts), len(want))
-	}
-	for _, query := range want {
-		_, ok := app.SearchStatements.stmts[query]
-		if !ok {
-			t.Errorf("statement not prepared: %s", query)
+	for query, stmt := range prepared {
+		if app.SearchStatements[query] != stmt {
+			t.Errorf("statement prepared again: %s", query)
 		}
 	}
 
@@ -217,8 +223,8 @@ func TestSearchStatementsArePreparedOnceAndClosed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("close: %v", err)
 	}
-	if len(app.SearchStatements.stmts) != 0 {
-		t.Errorf("%d statements left after close", len(app.SearchStatements.stmts))
+	if len(app.SearchStatements) != 0 {
+		t.Errorf("%d statements left after close", len(app.SearchStatements))
 	}
 }
 
