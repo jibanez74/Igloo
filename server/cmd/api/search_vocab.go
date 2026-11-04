@@ -83,6 +83,20 @@ func (h *searchVocabNodeHeap) Pop() any {
 	return value
 }
 
+// levenshteinRowBuf holds one row of an edit-distance table on the stack: one
+// side of every comparison is a vocabulary term no longer than
+// searchVocabMaxTokenRunes.
+type levenshteinRowBuf = [searchVocabMaxTokenRunes + 1]int
+
+// levenshteinRow returns n cells of buf, or a row of its own when the term is
+// longer than buf holds.
+func levenshteinRow(buf *levenshteinRowBuf, n int) []int {
+	if n <= len(buf) {
+		return buf[:n]
+	}
+	return make([]int, n)
+}
+
 func exactLevenshtein(a, b []rune) int {
 	if len(a) > len(b) {
 		a, b = b, a
@@ -91,15 +105,9 @@ func exactLevenshtein(a, b []rune) int {
 	// The build and every lookup run this once per visited node, and one side
 	// is always a vocabulary term no longer than searchVocabMaxTokenRunes, so
 	// the rows fit on the stack.
-	var previousRow, currentRow [searchVocabMaxTokenRunes + 1]int
-	previous := previousRow[:]
-	current := currentRow[:]
-	if len(a) >= len(previousRow) {
-		previous = make([]int, len(a)+1)
-		current = make([]int, len(a)+1)
-	}
-	previous = previous[:len(a)+1]
-	current = current[:len(a)+1]
+	var previousRow, currentRow levenshteinRowBuf
+	previous := levenshteinRow(&previousRow, len(a)+1)
+	current := levenshteinRow(&currentRow, len(a)+1)
 	for i := range previous {
 		previous[i] = i
 	}
@@ -164,7 +172,9 @@ func (index *searchVocabIndex) insert(term searchVocabTerm) {
 func (index *searchVocabIndex) corrections(token string, maxDist, visitLimit int) ([]string, int) {
 	queryRunes := []rune(token)
 	metricRadius := maxDist * 2
-	// The frontier never holds more than visitLimit nodes, so it is sized once.
+	// Over a vocabulary of thousands of terms a lookup spends its whole visit
+	// limit and its frontier peaks at a few hundred nodes, so it is sized once
+	// to visitLimit; heap.Push grows it if a lookup ever holds more.
 	frontierNodes := make(searchVocabNodeHeap, 0, visitLimit)
 	frontier := &frontierNodes
 	heap.Init(frontier)

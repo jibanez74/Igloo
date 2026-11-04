@@ -103,9 +103,10 @@ func searchTypoMaxDist(tokenLen int) int {
 	}
 }
 
-// damerauLevenshtein returns the optimal-string-alignment distance between a
-// and b (insertions, deletions, substitutions, and adjacent transpositions),
-// or maxDist+1 as soon as the distance is known to exceed maxDist.
+// damerauLevenshtein returns the optimal-string-alignment distance between
+// ra and rb (insertions, deletions, substitutions, and adjacent
+// transpositions), or maxDist+1 as soon as the distance is known to exceed
+// maxDist.
 func damerauLevenshtein(ra, rb []rune, maxDist int) int {
 	la, lb := len(ra), len(rb)
 
@@ -113,16 +114,11 @@ func damerauLevenshtein(ra, rb []rune, maxDist int) int {
 		return maxDist + 1
 	}
 
-	// rb is a vocabulary term no longer than searchVocabMaxTokenRunes on every
-	// lookup, so the rows fit on the stack.
-	var prev2Row, prevRow, curRow [searchVocabMaxTokenRunes + 1]int
-	prev2, prev, cur := prev2Row[:], prevRow[:], curRow[:]
-	if lb >= len(prevRow) {
-		prev2 = make([]int, lb+1)
-		prev = make([]int, lb+1)
-		cur = make([]int, lb+1)
-	}
-	prev2, prev, cur = prev2[:lb+1], prev[:lb+1], cur[:lb+1]
+	// rb is a vocabulary term on every lookup, so the rows fit on the stack.
+	var prev2Row, prevRow, curRow levenshteinRowBuf
+	prev2 := levenshteinRow(&prev2Row, lb+1)
+	prev := levenshteinRow(&prevRow, lb+1)
+	cur := levenshteinRow(&curRow, lb+1)
 	for j := 0; j <= lb; j++ {
 		prev[j] = j
 	}
