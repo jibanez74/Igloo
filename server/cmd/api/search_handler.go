@@ -42,11 +42,17 @@ type searchCategoryData[T any] struct {
 //
 // bm25() column weights bias ranking toward name/title matches over
 // descriptive fields when the exact/prefix CASE buckets tie.
+//
+// The FTS table joins its rows with CROSS JOIN, which SQLite never reorders, so
+// the MATCH runs once as the outer loop. With an INNER JOIN, statistics taken
+// while a library was tiny put the FTS table on the inner side and re-ran the
+// prefix match for every row of the table. Each ORDER BY ends in the id, so the
+// join changes neither the rows nor their order.
 
 const searchMoviesSQL = `
 SELECT m.id, m.title, m.poster_path, m.year, m.certification
 FROM movies_fts
-INNER JOIN movies AS m ON m.id = movies_fts.rowid
+CROSS JOIN movies AS m ON m.id = movies_fts.rowid
 WHERE movies_fts MATCH ?
 ORDER BY
   CASE
@@ -65,7 +71,7 @@ SELECT COUNT(*) FROM movies_fts WHERE movies_fts MATCH ?`
 const searchShowsSQL = `
 SELECT s.id, s.name, s.poster_path, s.premiere_year, s.certification
 FROM shows_fts
-INNER JOIN shows AS s ON s.id = shows_fts.rowid
+CROSS JOIN shows AS s ON s.id = shows_fts.rowid
 WHERE shows_fts MATCH ?
 ORDER BY
   CASE
@@ -84,7 +90,7 @@ SELECT COUNT(*) FROM shows_fts WHERE shows_fts MATCH ?`
 const searchAlbumsSQL = `
 SELECT a.id, a.title, a.cover, a.musician, a.year
 FROM albums_fts
-INNER JOIN albums AS a ON a.id = albums_fts.rowid
+CROSS JOIN albums AS a ON a.id = albums_fts.rowid
 WHERE albums_fts MATCH ?
 ORDER BY
   CASE
@@ -126,7 +132,7 @@ SELECT
     )
   ) AS track_count
 FROM musicians_fts
-INNER JOIN musicians AS m ON m.id = musicians_fts.rowid
+CROSS JOIN musicians AS m ON m.id = musicians_fts.rowid
 WHERE musicians_fts MATCH ?
 ORDER BY
   CASE
@@ -151,7 +157,7 @@ SELECT
   a.id AS album_id, a.title AS album_title, a.cover AS album_cover,
   mu.id AS musician_id, mu.name AS musician_name
 FROM tracks_search_fts
-INNER JOIN tracks AS t ON t.id = tracks_search_fts.rowid
+CROSS JOIN tracks AS t ON t.id = tracks_search_fts.rowid
 LEFT JOIN albums AS a ON t.album_id = a.id
 LEFT JOIN musicians AS mu ON t.musician_id = mu.id
 WHERE tracks_search_fts MATCH ?

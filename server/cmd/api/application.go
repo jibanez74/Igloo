@@ -306,7 +306,7 @@ func (app *Application) initScanners(musicSpotify music.SpotifyProvider, musicAp
 		InvalidateCommittedTrack: func(trackID int64) {
 			app.StreamFileCache.invalidate(trackStreamFileKey(trackID))
 		},
-		ScanFinished: app.syncArtworkAfterScan,
+		ScanFinished: app.scanFinished,
 	})
 
 	app.ShowScanner = show.New(show.Dependencies{
@@ -322,7 +322,7 @@ func (app *Application) initScanners(musicSpotify music.SpotifyProvider, musicAp
 			return app.CurrentSettings().ShowsDir
 		},
 		InvalidateCommittedShowFile: app.invalidateCommittedShowFile,
-		ScanFinished:                app.syncArtworkAfterScan,
+		ScanFinished:                app.scanFinished,
 	})
 
 	app.MovieScanner = movie.New(movie.Dependencies{
@@ -339,7 +339,7 @@ func (app *Application) initScanners(musicSpotify music.SpotifyProvider, musicAp
 		},
 		InvalidateCommittedMovie:    app.invalidateCommittedMovie,
 		InvalidateDeletedWatchRooms: app.invalidateDeletedWatchRooms,
-		ScanFinished:                app.syncArtworkAfterScan,
+		ScanFinished:                app.scanFinished,
 	})
 
 	// The watcher reads the scanner fields at each run, so a test that swaps
@@ -410,6 +410,18 @@ func (app *Application) syncArtwork() {
 		return
 	}
 	app.Artwork.Request()
+}
+
+// scanFinished runs after every scanner run, on the run's goroutine, which
+// shutdown waits for before it closes the database. A run is when tables grow
+// (a library's first scan most of all), so it refreshes the planner statistics
+// before asking for the artwork pass.
+func (app *Application) scanFinished(scoped bool) {
+	err := app.RefreshQueryPlannerStats()
+	if err != nil {
+		app.Logger.Error("failed to refresh query planner statistics", "error", err)
+	}
+	app.syncArtworkAfterScan(scoped)
 }
 
 // syncArtworkAfterScan requests the artwork pass that follows a scanner run:
