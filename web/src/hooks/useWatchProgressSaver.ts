@@ -45,7 +45,14 @@ export function useWatchProgressSaver({
   // (a paused tab closed after the viewer went on watching on the TV) would
   // roll the newer progress back. Only a position that moved since the last
   // save is reported; before any save, only once the media has played.
-  const lastReportedSecRef = useRef<number | null>(null);
+  // `seq` names the save that made the report, so a failure clears only its
+  // own report; `settled` is set once an ordinary save succeeds, or when a
+  // keepalive is dispatched (nothing later can confirm it).
+  const lastReportRef = useRef<{
+    sec: number;
+    seq: number;
+    settled: boolean;
+  } | null>(null);
   const playedRef = useRef(false);
   const { kind, id } = media;
 
@@ -67,15 +74,16 @@ export function useWatchProgressSaver({
   }, [durationRef]);
 
   const hasNewProgress = useCallback((progressSec: number) => {
-    const lastReported = lastReportedSecRef.current;
-    if (lastReported === null) return playedRef.current;
-    return Math.abs(progressSec - lastReported) >= 1;
+    const report = lastReportRef.current;
+    if (report === null) return playedRef.current;
+    return Math.abs(progressSec - report.sec) >= 1;
   }, []);
 
-  // A failed save leaves its position unreported, so the next chance retries.
-  const forgetFailedReport = useCallback((progressSec: number) => {
-    if (lastReportedSecRef.current === progressSec) {
-      lastReportedSecRef.current = null;
+  // A failed save leaves its position unreported, so the next chance retries,
+  // unless a later save has reported a position since.
+  const forgetFailedReport = useCallback((saveSequence: number) => {
+    if (lastReportRef.current?.seq === saveSequence) {
+      lastReportRef.current = null;
     }
   }, []);
 
@@ -83,7 +91,11 @@ export function useWatchProgressSaver({
     (progressSec: number, durationSec: number) => {
       const saveSequence = ++saveSequenceRef.current;
       const previous = pendingSaveRef.current;
-      lastReportedSecRef.current = progressSec;
+      lastReportRef.current = {
+        sec: progressSec,
+        seq: saveSequence,
+        settled: false,
+      };
       const save = (async () => {
         await previous;
         try {
@@ -95,9 +107,11 @@ export function useWatchProgressSaver({
             saveSequence,
           );
         } catch (error) {
-          forgetFailedReport(progressSec);
+          forgetFailedReport(saveSequence);
           throw error;
         }
+        const report = lastReportRef.current;
+        if (report?.seq === saveSequence) report.settled = true;
       })();
       pendingSaveRef.current = (async () => {
         try {
@@ -111,9 +125,15 @@ export function useWatchProgressSaver({
     [kind, id, forgetFailedReport],
   );
 
+  // A position already reported may still be on its way: the exit refreshes
+  // the watch queries once this resolves, so wait for the pending save, and
+  // retry the position if that save failed.
   const saveIfNewProgress = useCallback(async () => {
     const progressSec = currentTimeRef.current;
-    if (!hasNewProgress(progressSec)) return;
+    if (!hasNewProgress(progressSec)) {
+      await pendingSaveRef.current;
+      if (!hasNewProgress(progressSec)) return;
+    }
     await queueProgressSave(progressSec, effectiveDurationSec());
   }, [currentTimeRef, hasNewProgress, queueProgressSave, effectiveDurationSec]);
 
@@ -137,12 +157,24 @@ export function useWatchProgressSaver({
     // On a real page close, visibilitychange (hidden) usually fires and then
     // pagehide follows; the second finds its position already reported, while
     // browsers/platforms that only deliver one of the two are still covered.
+    // An ordinary save still in flight does not count: unload can cancel it.
     const flushKeepalive = async () => {
       const progressSec = currentTimeRef.current;
-      if (!hasNewProgress(progressSec)) return;
+      const report = lastReportRef.current;
+      if (
+        report === null
+          ? !playedRef.current
+          : report.settled && Math.abs(progressSec - report.sec) < 1
+      ) {
+        return;
+      }
 
       const saveSequence = ++saveSequenceRef.current;
-      lastReportedSecRef.current = progressSec;
+      lastReportRef.current = {
+        sec: progressSec,
+        seq: saveSequence,
+        settled: true,
+      };
       const sent = await persistWatchProgress(
         { kind, id },
         progressSec,
@@ -151,7 +183,7 @@ export function useWatchProgressSaver({
         saveSequence,
         { keepalive: true },
       );
-      if (!sent) forgetFailedReport(progressSec);
+      if (!sent) forgetFailedReport(saveSequence);
     };
 
     const handleVisibilityChange = () => {
@@ -172,7 +204,6 @@ export function useWatchProgressSaver({
     enabled,
     currentTimeRef,
     effectiveDurationSec,
-    hasNewProgress,
     forgetFailedReport,
     kind,
     id,
