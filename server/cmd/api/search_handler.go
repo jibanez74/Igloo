@@ -49,6 +49,10 @@ type searchCategoryData[T any] struct {
 // while a library was tiny put the FTS table on the inner side and re-ran the
 // prefix match for every row of the table. Each ORDER BY ends in the id, so the
 // join changes neither the rows nor their order.
+//
+// The ranking buckets compare with NOCASE and a plain LIKE, not LOWER() on both
+// sides, which copied every string it compared. Without ICU, lower(), NOCASE
+// and LIKE all fold ASCII letters only, so every row lands in the same bucket.
 
 const searchMoviesSQL = `
 SELECT m.id, m.title, m.poster_path, m.year, m.certification
@@ -57,8 +61,8 @@ CROSS JOIN movies AS m ON m.id = movies_fts.rowid
 WHERE movies_fts MATCH ?
 ORDER BY
   CASE
-    WHEN LOWER(m.title) = LOWER(?) THEN 0
-    WHEN LOWER(m.title) LIKE ? ESCAPE '\' THEN 1
+    WHEN m.title = ? COLLATE NOCASE THEN 0
+    WHEN m.title LIKE ? ESCAPE '\' THEN 1
     ELSE 2
   END,
   bm25(movies_fts, 10.0, 1.0, 3.0),
@@ -76,8 +80,8 @@ CROSS JOIN shows AS s ON s.id = shows_fts.rowid
 WHERE shows_fts MATCH ?
 ORDER BY
   CASE
-    WHEN LOWER(s.name) = LOWER(?) THEN 0
-    WHEN LOWER(s.name) LIKE ? ESCAPE '\' THEN 1
+    WHEN s.name = ? COLLATE NOCASE THEN 0
+    WHEN s.name LIKE ? ESCAPE '\' THEN 1
     ELSE 2
   END,
   bm25(shows_fts, 10.0, 1.0, 3.0),
@@ -95,10 +99,10 @@ CROSS JOIN albums AS a ON a.id = albums_fts.rowid
 WHERE albums_fts MATCH ?
 ORDER BY
   CASE
-    WHEN LOWER(a.title) = LOWER(?) THEN 0
-    WHEN LOWER(a.title) LIKE ? ESCAPE '\' THEN 1
-    WHEN LOWER(COALESCE(a.musician, '')) = LOWER(?) THEN 2
-    WHEN LOWER(COALESCE(a.musician, '')) LIKE ? ESCAPE '\' THEN 3
+    WHEN a.title = ? COLLATE NOCASE THEN 0
+    WHEN a.title LIKE ? ESCAPE '\' THEN 1
+    WHEN COALESCE(a.musician, '') = ? COLLATE NOCASE THEN 2
+    WHEN COALESCE(a.musician, '') LIKE ? ESCAPE '\' THEN 3
     ELSE 4
   END,
   bm25(albums_fts, 10.0, 4.0),
@@ -137,8 +141,8 @@ CROSS JOIN musicians AS m ON m.id = musicians_fts.rowid
 WHERE musicians_fts MATCH ?
 ORDER BY
   CASE
-    WHEN LOWER(m.name) = LOWER(?) OR LOWER(m.sort_name) = LOWER(?) THEN 0
-    WHEN LOWER(m.name) LIKE ? ESCAPE '\' OR LOWER(m.sort_name) LIKE ? ESCAPE '\' THEN 1
+    WHEN m.name = ? COLLATE NOCASE OR m.sort_name = ? COLLATE NOCASE THEN 0
+    WHEN m.name LIKE ? ESCAPE '\' OR m.sort_name LIKE ? ESCAPE '\' THEN 1
     ELSE 2
   END,
   bm25(musicians_fts, 10.0, 5.0),
@@ -164,10 +168,10 @@ LEFT JOIN musicians AS mu ON t.musician_id = mu.id
 WHERE tracks_search_fts MATCH ?
 ORDER BY
   CASE
-    WHEN LOWER(t.title) = LOWER(?) THEN 0
-    WHEN LOWER(t.title) LIKE ? ESCAPE '\' THEN 1
-    WHEN LOWER(COALESCE(a.title, '')) = LOWER(?) OR LOWER(COALESCE(mu.name, '')) = LOWER(?) OR LOWER(COALESCE(a.musician, '')) = LOWER(?) THEN 2
-    WHEN LOWER(COALESCE(a.title, '')) LIKE ? ESCAPE '\' OR LOWER(COALESCE(mu.name, '')) LIKE ? ESCAPE '\' OR LOWER(COALESCE(a.musician, '')) LIKE ? ESCAPE '\' THEN 3
+    WHEN t.title = ? COLLATE NOCASE THEN 0
+    WHEN t.title LIKE ? ESCAPE '\' THEN 1
+    WHEN COALESCE(a.title, '') = ? COLLATE NOCASE OR COALESCE(mu.name, '') = ? COLLATE NOCASE OR COALESCE(a.musician, '') = ? COLLATE NOCASE THEN 2
+    WHEN COALESCE(a.title, '') LIKE ? ESCAPE '\' OR COALESCE(mu.name, '') LIKE ? ESCAPE '\' OR COALESCE(a.musician, '') LIKE ? ESCAPE '\' THEN 3
     ELSE 4
   END,
   bm25(tracks_search_fts, 10.0, 4.0, 4.0),

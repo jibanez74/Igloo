@@ -221,3 +221,67 @@ func TestSearchStatementsArePreparedOnceAndClosed(t *testing.T) {
 		t.Errorf("%d statements left after close", len(app.SearchStatements.stmts))
 	}
 }
+
+// The ranking buckets compare with NOCASE and a plain LIKE rather than
+// LOWER() on both sides. Without ICU, lower(), NOCASE and LIKE all fold ASCII
+// letters only, so the two forms put every title in the same bucket.
+func TestSearchRankBucketsMatchLowerComparisons(t *testing.T) {
+	app := newTestDBApp(t)
+	ctx := context.Background()
+
+	values := []any{
+		"The Beatles", "the beatles", "THE BEATLES", "The Beatles Anthology",
+		"Élan", "élan", "ÉLAN", "Straße", "STRASSE", "Ωmega", "ωmega",
+		"100% Pure_Fun\\", "100x Purexfun", "", nil,
+	}
+	queries := []string{"the beatles", "THE", "élan", "ÉLAN", "straße", "ωmega", "Ωmega", "100% pure_", "100%", "pure_fun\\"}
+
+	_, err := app.DB.ExecContext(ctx, "CREATE TEMP TABLE rank_values (x TEXT)")
+	if err != nil {
+		t.Fatalf("create table: %v", err)
+	}
+	for _, value := range values {
+		_, err = app.DB.ExecContext(ctx, "INSERT INTO rank_values (x) VALUES (?)", value)
+		if err != nil {
+			t.Fatalf("insert %v: %v", value, err)
+		}
+	}
+
+	const compare = `
+SELECT x,
+  CASE
+    WHEN LOWER(COALESCE(x, '')) = LOWER(?1) THEN 0
+    WHEN LOWER(COALESCE(x, '')) LIKE ?2 ESCAPE '\' THEN 1
+    ELSE 2
+  END,
+  CASE
+    WHEN COALESCE(x, '') = ?1 COLLATE NOCASE THEN 0
+    WHEN COALESCE(x, '') LIKE ?2 ESCAPE '\' THEN 1
+    ELSE 2
+  END
+FROM rank_values`
+	for _, query := range queries {
+		exact, prefix := searchRankArgs(query)
+		rows, err := app.DB.QueryContext(ctx, compare, exact, prefix)
+		if err != nil {
+			t.Fatalf("compare %q: %v", query, err)
+		}
+		for rows.Next() {
+			var value sql.NullString
+			var lowered, folded int
+			err = rows.Scan(&value, &lowered, &folded)
+			if err != nil {
+				rows.Close()
+				t.Fatalf("scan: %v", err)
+			}
+			if lowered != folded {
+				t.Errorf("query %q, value %q: LOWER bucket %d, NOCASE bucket %d", query, value.String, lowered, folded)
+			}
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			t.Fatalf("read: %v", err)
+		}
+	}
+}
