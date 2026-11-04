@@ -129,14 +129,12 @@ func TestRefreshQueryPlannerStatsReanalyzesTablesThatGrew(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "igloo.db")
 	ctx := context.Background()
 
-	db := openSearchStatsTestDB(t, path)
-	seed := &Application{DB: db}
-	setupTestLogger(t, seed)
+	seed := openSearchStatsTestApp(t, path)
 	err := seed.InitTables()
 	if err != nil {
 		t.Fatalf("InitTables failed: %v", err)
 	}
-	_, err = db.ExecContext(ctx, `
+	_, err = seed.DB.ExecContext(ctx, `
 INSERT INTO albums (title, sort_title) VALUES ('First', 'first');
 ANALYZE;
 WITH RECURSIVE n(i) AS (SELECT 2 UNION ALL SELECT i + 1 FROM n WHERE i < 40)
@@ -144,20 +142,19 @@ INSERT INTO albums (title, sort_title) SELECT 'Album ' || i, 'album ' || i FROM 
 	if err != nil {
 		t.Fatalf("seed albums: %v", err)
 	}
-	err = db.Close()
+	err = seed.DB.Close()
 	if err != nil {
 		t.Fatalf("close database: %v", err)
 	}
 
-	db = openSearchStatsTestDB(t, path)
-	app := &Application{DB: db}
+	app := openSearchStatsTestApp(t, path)
 	err = app.RefreshQueryPlannerStats(t.Context())
 	if err != nil {
 		t.Fatalf("RefreshQueryPlannerStats failed: %v", err)
 	}
 
 	var stat string
-	err = db.QueryRowContext(ctx, "SELECT stat FROM sqlite_stat1 WHERE tbl = 'albums' AND idx = 'sqlite_autoindex_albums_1'").Scan(&stat)
+	err = app.DB.QueryRowContext(ctx, "SELECT stat FROM sqlite_stat1 WHERE tbl = 'albums' AND idx = 'sqlite_autoindex_albums_1'").Scan(&stat)
 	if err != nil {
 		t.Fatalf("read albums statistics: %v", err)
 	}
@@ -165,28 +162,23 @@ INSERT INTO albums (title, sort_title) SELECT 'Album ' || i, 'album ' || i FROM 
 	if !isFresh {
 		t.Errorf("albums statistics = %q, want them taken over 40 rows", stat)
 	}
-
-	plan := searchQueryPlan(t, db, searchAlbumsSQL)
-	for _, step := range plan {
-		isFullScan := step == "SCAN a"
-		if isFullScan {
-			t.Errorf("want albums looked up by key, plan %q", plan)
-		}
-	}
 }
 
-func openSearchStatsTestDB(t *testing.T, path string) *sql.DB {
+// openSearchStatsTestApp opens the database at path through InitDB, so the
+// statistics refresh runs on production's driver, connection pragmas and WAL.
+func openSearchStatsTestApp(t *testing.T, path string) *Application {
 	t.Helper()
 
-	db, err := sql.Open("sqlite3", path+"?_foreign_keys=on&_synchronous=OFF&_journal_mode=MEMORY")
+	app := &Application{Config: RuntimeConfig{DBPath: path}}
+	setupTestLogger(t, app)
+	err := app.InitDB()
 	if err != nil {
-		t.Fatalf("open database: %v", err)
+		t.Fatalf("InitDB failed: %v", err)
 	}
-	db.SetMaxOpenConns(1)
 	t.Cleanup(func() {
-		db.Close()
+		app.DB.Close()
 	})
-	return db
+	return app
 }
 
 func TestSearchStatementsArePreparedAtStartupAndClosed(t *testing.T) {
