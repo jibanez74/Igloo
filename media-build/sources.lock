@@ -1,0 +1,16 @@
+# Pinned sources for Igloo's FFmpeg build. One source per line:
+#   name  kind  ref  sha256  url
+# kind=tar: ref is the version and sha256 is the tarball digest.
+# kind=git: ref is the full commit; sha256 is "-" because the commit pins the tree.
+# Dependency commits match Jellyfin's portable builder at jellyfin-ffmpeg v8.1.3-1,
+# so parity runs compare FFmpeg configurations rather than library versions.
+ffmpeg     tar  8.1.3                                     7138d28c96d9d3e3af4ee3d8cad72741f8ffb40da90c1112235dea3ecd3178a3  https://ffmpeg.org/releases/ffmpeg-8.1.3.tar.xz
+zlib       git  f9dd6009be3ed32415edf1e89d1bc38380ecb95d  -  https://github.com/madler/zlib.git
+x264       git  0480cb05fa188d37ae87e8f4fd8f1aea3711f7ee  -  https://code.videolan.org/videolan/x264.git
+zimg       git  5e8c32222569edf3a712f83d7cff80ad4dd9ab6e  -  https://github.com/sekrit-twc/zimg.git
+dav1d      git  54706fc6bc0cdecab7e9593974a4039cc038fca7  -  https://code.videolan.org/videolan/dav1d.git
+ffnvcodec  git  451da99614412a7f9526ef301a5ee0c7a6f9ad76  -  https://github.com/FFmpeg/nv-codec-headers.git
+libvpl     git  d77f9195cf495b937631607333288fd917ae8939  -  https://github.com/intel/libvpl.git
+libdrm     git  6bfcfc725fbe0ece0918535556d61ee567b1ffff  -  https://gitlab.freedesktop.org/mesa/drm.git
+libva      git  710eb465c6277ee2cac3e6948767b01eebe7e77a  -  https://github.com/intel/libva.git
+implib     git  a3e167cf978a5b8a38ec0f710d8c4331e8dcdd9a  -  https://github.com/yugr/Implib.so.git
