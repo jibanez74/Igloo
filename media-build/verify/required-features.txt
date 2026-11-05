@@ -1,0 +1,137 @@
+# Every FFmpeg component Igloo's production code or `make test-server` uses.
+# One "<kind> <name>" per line; kinds map to ffmpeg's -encoders, -decoders,
+# -muxers, -demuxers, -filters, -hwaccels, -protocols, -devices and -bsfs lists.
+# Sources: server/cmd/internal/ffmpeg/{ffmpeg_hls,ffmpeg_subtitles,
+# ffmpeg_seek_landing,capabilities}.go, helpers/hls_*profiles.go, and the
+# *_externalbin_test.go fixtures.
+
+# Video encoding (libx264 is never capability-checked, so it is mandatory)
+encoder libx264
+encoder h264_nvenc
+encoder h264_qsv
+# Audio: default stereo AAC, explicit Dolby profiles
+encoder aac
+encoder ac3
+encoder eac3
+# Subtitles: WebVTT conversion, SubRip in Matroska streams
+encoder webvtt
+encoder srt
+encoder subrip
+# Test fixtures and decode helpers
+encoder dca
+encoder wavpack
+encoder dvdsub
+encoder mov_text
+encoder pcm_f32le
+encoder rawvideo
+
+# Library sources the scanner accepts, plus what tests generate
+decoder h264
+decoder hevc
+decoder av1
+decoder libdav1d
+decoder mpeg2video
+decoder mpeg4
+decoder vc1
+decoder vp9
+decoder mjpeg
+decoder aac
+decoder ac3
+decoder eac3
+decoder dca
+decoder truehd
+decoder flac
+decoder mp3
+decoder opus
+decoder vorbis
+decoder wavpack
+decoder pcm_s16le
+decoder subrip
+decoder ass
+decoder ssa
+decoder mov_text
+decoder webvtt
+decoder pgssub
+decoder dvdsub
+decoder cc_dec
+decoder text
+decoder microdvd
+
+muxer hls
+muxer mp4
+muxer mov
+muxer mpegts
+muxer matroska
+muxer webvtt
+muxer framecrc
+muxer null
+muxer rawvideo
+muxer f32le
+
+demuxer mov
+demuxer mp4
+demuxer matroska
+demuxer webm
+demuxer avi
+demuxer mp3
+demuxer flac
+demuxer hls
+demuxer srt
+demuxer sup
+demuxer webvtt
+demuxer ass
+demuxer aac
+demuxer ac3
+demuxer eac3
+demuxer dts
+
+# Named in argument chains and capability probes
+filter scale
+filter format
+filter setparams
+filter yadif
+filter zscale
+filter tonemap
+filter aresample
+filter hwupload
+filter scale_cuda
+filter tonemap_cuda
+filter scale_qsv
+filter testsrc2
+# Inserted by the ffmpeg CLI (autorotate, accurate seek, format negotiation)
+filter null
+filter anull
+filter aformat
+filter trim
+filter atrim
+filter transpose
+filter hflip
+filter vflip
+filter rotate
+filter buffer
+filter buffersink
+filter abuffer
+filter abuffersink
+# Test fixtures
+filter sine
+filter anullsrc
+filter aevalsrc
+filter color
+filter tinterlace
+filter setfield
+filter crop
+filter silencedetect
+
+hwaccel cuda
+hwaccel qsv
+hwaccel vaapi
+
+protocol file
+protocol pipe
+
+indev lavfi
+
+bsf aac_adtstoasc
+bsf extract_extradata
+bsf pgs_frame_merge
+bsf vp9_superframe

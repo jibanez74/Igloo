@@ -2,15 +2,18 @@
 
 Igloo is licensed under the [GNU General Public License v3.0 or later](LICENSE). It includes or builds on the third-party software listed below, each under its own license. Those licenses continue to apply to their components.
 
-## FFmpeg and ffprobe (Jellyfin FFmpeg)
+## FFmpeg and ffprobe
 
-Release binaries of Igloo embed `ffmpeg` and `ffprobe` executables from the [Jellyfin FFmpeg](https://github.com/jellyfin/jellyfin-ffmpeg) project. Igloo runs them as separate processes. They are not linked into Igloo's code.
+Release binaries of Igloo embed `ffmpeg` and `ffprobe` executables. Igloo runs them as separate processes. They are not linked into Igloo's code. [`media-build/payloads.lock`](media-build/payloads.lock) pins each embedded executable. Both builds enable GPL components, so the executables are under the GNU General Public License. Run `ffmpeg -version` and check the `configuration:` line for the exact options: `--enable-gpl` means GPL version 2 or later, and adding `--enable-version3` means GPLv3.
 
-- **License:** GNU General Public License (Jellyfin FFmpeg is built with GPL components enabled). Run `ffmpeg -version` and check the `configuration:` line for the exact options: `--enable-gpl` means GPL, and adding `--enable-version3` means GPLv3.
-- **Source code:** the complete corresponding source for each embedded build is available from the matching tagged release at <https://github.com/jellyfin/jellyfin-ffmpeg/releases>. The current Linux x64 and macOS ARM64 payloads are both from the [`v8.1.2-5`](https://github.com/jellyfin/jellyfin-ffmpeg/releases/tag/v8.1.2-5) release, which reports version `8.1.2-Jellyfin`.
+- **Linux x64:** Igloo's own build of FFmpeg 8.1.3 (`8.1.3-Igloo`), made by [`media-build/`](media-build/README.md). It is GPL version 2 or later.
+  - It links x264 (GPL-2.0-or-later), dav1d (BSD-2-Clause), zimg (WTFPL), libvpl (MIT), libva and libdrm (MIT, loaded through [Implib.so](https://github.com/yugr/Implib.so) stubs, MIT), and zlib (zlib License). It also uses the nv-codec-headers (MIT).
+  - It includes the `tonemap_cuda` patches from [Jellyfin FFmpeg](https://github.com/jellyfin/jellyfin-ffmpeg) (LGPL-2.1-or-later, like the FFmpeg files they change).
+  - **Source code:** the [`media-8.1.3-igloo.2`](https://github.com/jibanez74/Igloo/releases/tag/media-8.1.3-igloo.2) release holds the complete corresponding source, `igloo-ffmpeg-8.1.3-sources.tar`: every source tarball, the patches and the build recipe.
+- **macOS ARM64:** the [Jellyfin FFmpeg](https://github.com/jellyfin/jellyfin-ffmpeg) portable build from the [`v8.1.3-1`](https://github.com/jellyfin/jellyfin-ffmpeg/releases/tag/v8.1.3-1) release, which reports `8.1.3-Jellyfin`. The complete corresponding source is available from that release.
 - FFmpeg is a trademark of Fabrice Bellard, originator of the FFmpeg project.
 
-Development builds (`externalbin` tag) do not include FFmpeg. They use whatever `ffmpeg`/`ffprobe` is installed on the host.
+Development builds (`externalbin` tag) do not include FFmpeg. They use the `ffmpeg`/`ffprobe` on the host's `PATH`, or the pinned builds that `make media-bin` links.
 
 ## Inter typeface
 

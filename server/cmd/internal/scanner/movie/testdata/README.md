@@ -6,7 +6,7 @@ Synthetic fixtures generated with the repository's Jellyfin FFmpeg `7.1.4-Jellyf
 - `artwork-with-video.mp4`: H.264 video and AAC audio, plus attached MJPEG artwork. Only the moving video is persisted as movie video.
 - `artwork-only.mp4`: one attached MJPEG picture and no accepted video. Import must roll back all movie state.
 
-Regenerate from the repository root, setting `IGLOO_FFMPEG_PATH` to the matching Jellyfin payload for Linux x64 or macOS ARM64:
+Regenerate from the repository root, setting `IGLOO_FFMPEG_PATH` to the pinned payload that `make media-payloads` installs for Linux x64 or macOS ARM64:
 
 ```sh
 "$IGLOO_FFMPEG_PATH" -v error -y -f lavfi -i sine=frequency=440:sample_rate=8000 -f lavfi -i testsrc2=size=64x48:rate=5 -map 0:a -map 1:v -t 0.6 -c:a pcm_s16le -c:v mjpeg -threads 1 server/cmd/internal/scanner/movie/testdata/moving.avi
@@ -15,7 +15,7 @@ Regenerate from the repository root, setting `IGLOO_FFMPEG_PATH` to the matching
 "$IGLOO_FFMPEG_PATH" -v error -y -i /tmp/igloo-cover.jpg -map 0:v -c:v copy -disposition:v attached_pic server/cmd/internal/scanner/movie/testdata/artwork-only.mp4
 ```
 
-`TestMovieRealProbeVideoAndArtwork` uses the real ffprobe wrapper and the scanner database transaction. Run from `server/` with `IGLOO_FFPROBE_PATH` set to the matching Jellyfin payload:
+`TestMovieRealProbeVideoAndArtwork` uses the real ffprobe wrapper and the scanner database transaction. Run from `server/` with `IGLOO_FFPROBE_PATH` set to the matching pinned payload:
 
 ```sh
 CGO_ENABLED=1 go test -count=1 -tags 'sqlite_fts5 externalbin' ./cmd/internal/scanner/movie -run TestMovieRealProbeVideoAndArtwork -v
