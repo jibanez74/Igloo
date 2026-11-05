@@ -17,19 +17,26 @@ if [[ ${sessions:-0} != 0 ]]; then
   exit 2
 fi
 
-probe() {
-  timeout 20 "$1" -v error -init_hw_device cuda=igloo_cuda -filter_hw_device igloo_cuda \
-    -f lavfi -i testsrc2=s=256x144:d=0.1 -frames:v 1 "${@:2}" -c:v h264_nvenc -f null - 2>&1 | head -2
-  return "${PIPESTATUS[0]}"
+# run_probe <command...>: runs a probe for at most 20 s, prints "exit <status>"
+# and the first two lines of its output, and returns the probe's status.
+run_probe() {
+  local out status
+  out=$(timeout 20 "$@" 2>&1)
+  status=$?
+  echo "exit $status $(head -2 <<< "$out")"
+  return "$status"
+}
+cuda_probe() { # <bin> <vf>
+  run_probe "$1" -v error -init_hw_device cuda=igloo_cuda -filter_hw_device igloo_cuda \
+    -f lavfi -i testsrc2=s=256x144:d=0.1 -frames:v 1 -vf "$2" -c:v h264_nvenc -f null -
 }
 nvenc_failed=0
 for b in REF CAND; do bin=${!b}
   echo "== $b: $("$bin" -hide_banner -version | head -1 | cut -d' ' -f1-3)"
-  out=$(timeout 20 "$bin" -v error -f lavfi -i testsrc2=s=256x144:d=0.1 -frames:v 1 -c:v h264_nvenc -f null - 2>&1 | head -2)
-  status=${PIPESTATUS[0]}; [[ $status == 0 ]] || nvenc_failed=1
-  echo "  nvenc probe: exit $status $out"
-  out=$(probe "$bin" -vf "format=nv12,hwupload,scale_cuda=w=-2:h=144:format=yuv420p"); echo "  cuda scale probe: exit $? $out"
-  out=$(probe "$bin" -vf "setparams=color_primaries=bt2020:color_trc=smpte2084:colorspace=bt2020nc,format=p010le,hwupload,scale_cuda=w=-2:h=144:format=p010,tonemap_cuda=format=yuv420p:p=bt709:t=bt709:m=bt709:tonemap=hable:desat=0"); echo "  cuda tonemap probe: exit $? $out"
+  out=$(run_probe "$bin" -v error -f lavfi -i testsrc2=s=256x144:d=0.1 -frames:v 1 -c:v h264_nvenc -f null -) || nvenc_failed=1
+  echo "  nvenc probe: $out"
+  echo "  cuda scale probe: $(cuda_probe "$bin" "format=nv12,hwupload,scale_cuda=w=-2:h=144:format=yuv420p")"
+  echo "  cuda tonemap probe: $(cuda_probe "$bin" "setparams=color_primaries=bt2020:color_trc=smpte2084:colorspace=bt2020nc,format=p010le,hwupload,scale_cuda=w=-2:h=144:format=p010,tonemap_cuda=format=yuv420p:p=bt709:t=bt709:m=bt709:tonemap=hable:desat=0")"
 done
 if [[ $nvenc_failed == 1 ]]; then
   echo "NVENC does not open on this host (see the probe errors); not benchmarking."
