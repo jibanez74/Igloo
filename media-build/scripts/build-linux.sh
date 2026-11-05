@@ -195,6 +195,13 @@ build_ffmpeg() {
   make -j"$JOBS"
 }
 
+# build_libva turns libdrm's shared library into a stub and deletes it, so a
+# change to either pin rebuilds both: libva needs the real libdrm.so.2, and a
+# reinstalled libdrm.so would otherwise be linked instead of the stub.
+if ! built libdrm || ! built libva; then
+  rm -f "$STAMPS/libdrm" "$STAMPS/libva"
+fi
+
 for dep in implib zlib x264 zimg dav1d ffnvcodec libvpl libdrm libva; do
   if built "$dep"; then
     log "$dep: up to date"
