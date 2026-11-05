@@ -3,6 +3,9 @@
 # fetches and verifies the sources in ../sources.lock, builds the static
 # dependencies, applies ../patches to FFmpeg, and writes out/linux_amd64/.
 set -euo pipefail
+# Keep errexit inside $(...) too: fetch runs in one, and a failed submodule
+# update must not leave an incomplete tree in the source cache.
+shopt -s inherit_errexit
 source /opt/rh/gcc-toolset-15/enable
 
 B=/build
@@ -76,9 +79,24 @@ unpack() {
   tar -xf "$tarball" -C "$SRC/$1" --strip-components=1
 }
 
-# built <name>: true when <name> was already built from its current ref.
-built() { [[ -f $STAMPS/$1 && $(cat "$STAMPS/$1") == "$(lock_field "$1" 3)" ]]; }
-mark_built() { lock_field "$1" 3 > "$STAMPS/$1"; }
+# stamp_key <name>: a digest of everything a dependency's build depends on: its
+# source ref, its build function and the shared flags, plus gen_implib and
+# Implib.so's ref for the stubbed libdrm and libva. Changing any of them
+# rebuilds the dependency.
+stamp_key() {
+  {
+    lock_field "$1" 3
+    declare -f "build_$1" || true
+    echo "$CFLAGS|$CXXFLAGS|$LDFLAGS"
+    if [[ $1 == libdrm || $1 == libva ]]; then
+      declare -f gen_implib
+      lock_field implib 3
+    fi
+  } | sha256sum | cut -d' ' -f1
+}
+# built <name>: true when <name> was already built from its current inputs.
+built() { [[ -f $STAMPS/$1 && $(< "$STAMPS/$1") == "$(stamp_key "$1")" ]]; }
+mark_built() { stamp_key "$1" > "$STAMPS/$1"; }
 
 # gen_implib <lib.so> <lib.a>: a static stub that dlopens the host's library on
 # first use, so ffmpeg starts on hosts without it and uses the host's VA-API

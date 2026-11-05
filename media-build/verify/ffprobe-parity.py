@@ -32,26 +32,45 @@ STREAM_FIELDS = [
     "color_transfer", "color_primaries", "color_space", "field_order",
 ]
 DISPOSITIONS = ["attached_pic", "default", "forced"]
-# Tag lookups are case- and separator-insensitive, so compare normalized keys.
-STREAM_TAGS = {"title", "language", "lang"}
+# The tag fields Igloo stores, each with the keys ffprobe_metadata.go passes to
+# firstTagValue, in its order.
+STREAM_TAGS = {"title": ("title",), "language": ("language", "lang")}
 FORMAT_TAGS = {
-    "title", "artist", "albumartist", "composer", "album", "genre", "track", "tracknumber",
-    "disc", "discnumber", "date", "year", "copyright", "sortname", "titlesort", "sortalbum",
-    "albumsort", "sortartist", "artistsort", "language", "lang",
+    "title": ("title",), "artist": ("artist",), "album_artist": ("album_artist",),
+    "composer": ("composer",), "album": ("album",), "genre": ("genre",),
+    "track": ("track", "tracknumber"), "disc": ("disc", "discnumber"), "date": ("date", "year"),
+    "copyright": ("copyright",), "sort_name": ("sort_name", "titlesort"),
+    "sort_album": ("sort_album", "albumsort"), "sort_artist": ("sort_artist", "artistsort"),
+    "language": ("language", "lang"),
 }
 
 
-def norm_key(key):
-    return re.sub(r"[^a-z0-9]", "", key.lower())
+def normalize_tag_key(key):
+    """normalizeTagKey in ffprobe_metadata.go."""
+    return key.strip().lower().replace("_", "").replace("-", "").replace(" ", "")
 
 
-def pick_tags(tags, wanted):
-    out = {}
-    for key, value in (tags or {}).items():
-        k = norm_key(key)
-        if k in wanted and isinstance(value, str) and value:
-            out.setdefault(k, []).append(value)
-    return {k: sorted(v) for k, v in sorted(out.items())}
+def first_tag_value(tags, keys):
+    """firstTagValue in ffprobe_metadata.go: per key in order, the exact key wins,
+    then a case variant, then any key that normalizes the same; ties go to the
+    lowest key. An empty winner falls through to the next key."""
+    for canonical in keys:
+        want = normalize_tag_key(canonical)
+        best = None
+        for key, value in tags.items():
+            if normalize_tag_key(key) != want:
+                continue
+            rank = 0 if key == canonical else 1 if key.casefold() == canonical.casefold() else 2
+            if best is None or (rank, key) < best[:2]:
+                best = (rank, key, value)
+        if best and best[2]:
+            return best[2]
+    return ""
+
+
+def pick_tags(tags, fields):
+    tags = {k: v for k, v in (tags or {}).items() if isinstance(v, str)}
+    return {name: first_tag_value(tags, keys) for name, keys in fields.items()}
 
 
 def consumed(result):

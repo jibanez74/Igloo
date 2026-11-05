@@ -10,9 +10,15 @@ REF=$1; CAND=$2; PROBE=$3; SDR=$4; shift 4
 here=$(cd "$(dirname "$0")" && pwd)
 SP="setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709"
 
-sessions=$(nvidia-smi --query-gpu=encoder.stats.sessionCount --format=csv,noheader 2>/dev/null | head -1)
-echo "GPU: $(nvidia-smi --query-gpu=name,driver_version --format=csv,noheader); active NVENC sessions: $sessions"
-if [[ ${sessions:-0} != 0 ]]; then
+# Sessions on every GPU: CUDA's default device need not be the first one listed.
+counts=$(nvidia-smi --query-gpu=encoder.stats.sessionCount --format=csv,noheader 2>/dev/null) || counts=
+if [[ -z $counts ]] || grep -qv '^[0-9][0-9]*$' <<< "$counts"; then
+  echo "Cannot read the NVENC session count from nvidia-smi; not benchmarking."
+  exit 2
+fi
+sessions=$(awk '{ total += $1 } END { print total }' <<< "$counts")
+echo "GPU: $(nvidia-smi --query-gpu=name,driver_version --format=csv,noheader | paste -sd';'); active NVENC sessions: $sessions"
+if [[ $sessions != 0 ]]; then
   echo "NVENC is in use (someone may be watching); not benchmarking now."
   exit 2
 fi
@@ -47,7 +53,7 @@ session() { # <bin> <file> <height> <bitrate M> <vf> <seconds> <output...>
   local bin=$1 f=$2 h=$3 rate=$4 vf=$5 secs=$6; shift 6
   nice -n 10 "$bin" -hide_banner -nostdin -y -fflags +genpts -analyzeduration 5000000 -probesize 5000000 \
     -init_hw_device cuda=igloo_cuda -filter_hw_device igloo_cuda -hwaccel cuda -i "$f" \
-    -map 0:v:0 -map 0:a:0 -map_metadata -1 -map_chapters -1 \
+    -map 0:v:0 -map 0:a:0? -map_metadata -1 -map_chapters -1 \
     -c:v h264_nvenc -profile:v high -rc vbr -preset p4 -forced-idr 1 \
     -b:v "${rate}M" -maxrate "${rate}M" -bufsize "$((rate * 2))M" -vf "$vf" \
     -color_primaries bt709 -color_trc bt709 -colorspace bt709 \

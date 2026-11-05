@@ -13,9 +13,11 @@ if [[ ${1:-} == --clean ]]; then
   rm -rf "$root/work" "$root/out/linux_amd64"
 fi
 
-docker build -t "$image" "$root"
+# linux/amd64 on any host: the recipe builds x86_64 binaries and stubs.
+docker build --platform linux/amd64 -t "$image" "$root"
 mkdir -p "$root/cache" "$root/work" "$root/out"
 docker run --rm \
+  --platform linux/amd64 \
   -u "$(id -u):$(id -g)" \
   -e HOME=/build/work/home \
   -e JOBS="${JOBS:-$(nproc)}" \

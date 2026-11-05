@@ -24,7 +24,8 @@ sha256() {
 }
 
 tmp=$(mktemp -d)
-trap 'rm -rf "$tmp"' EXIT
+stage=
+trap 'rm -rf "$tmp"; [ -z "$stage" ] || rm -f "$stage"' EXIT
 
 for platform in "$@"; do
   found=0
@@ -34,6 +35,7 @@ for platform in "$@"; do
     found=1
     dest=$root/server/cmd/internal/${payload%%_*}/$payload
     if [ -f "$dest" ] && [ "$(sha256 "$dest")" = "$sum" ]; then
+      chmod 0755 "$dest"
       echo "$payload: up to date"
       continue
     fi
@@ -57,11 +59,14 @@ for platform in "$@"; do
       echo "$payload: sha256 $got does not match payloads.lock ($sum)" >&2
       exit 1
     fi
-    # Copy beside the destination first so the rename is atomic. The copy also
-    # gets a fresh mtime, which tells make to recompress the .zst.
-    cp "$file" "$dest.part"
-    chmod 0755 "$dest.part"
-    mv -f "$dest.part" "$dest"
+    # Copy to a file of this run's own beside the destination, so the rename is
+    # atomic and concurrent runs never share one. The copy also gets a fresh
+    # mtime, which tells make to recompress the .zst.
+    stage=$(mktemp "$dest.XXXXXX")
+    cp "$file" "$stage"
+    chmod 0755 "$stage"
+    mv -f "$stage" "$dest"
+    stage=
     echo "$payload: installed"
   done < "$lock"
   if [ "$found" = 0 ]; then
