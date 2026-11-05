@@ -265,6 +265,11 @@ media-bin: media-payloads
 	@ln -sf "$(CURDIR)/$(FFMPEG_PAYLOAD)" $(MEDIA_BIN_DIR)/ffmpeg
 	@ln -sf "$(CURDIR)/$(FFPROBE_PAYLOAD)" $(MEDIA_BIN_DIR)/ffprobe
 
+# The payload files come from media-payloads. The empty recipe makes make
+# re-read their mtimes afterwards, so under -j compression waits for the
+# download and runs only when a payload actually changed.
+$(FFMPEG_PAYLOAD) $(FFPROBE_PAYLOAD): media-payloads ;
+
 # The release binary embeds the .zst payloads; regenerate them whenever the
 # raw payloads change.
 compress-media-payloads: $(FFMPEG_PAYLOAD_ZST) $(FFPROBE_PAYLOAD_ZST)
