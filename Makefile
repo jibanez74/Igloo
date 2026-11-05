@@ -41,11 +41,12 @@ FFMPEG_PAYLOAD := $(SERVER_DIR)/cmd/internal/ffmpeg/ffmpeg_$(PAYLOAD_SUFFIX)
 FFPROBE_PAYLOAD := $(SERVER_DIR)/cmd/internal/ffprobe/ffprobe_$(PAYLOAD_SUFFIX)
 FFMPEG_PAYLOAD_ZST := $(FFMPEG_PAYLOAD).zst
 FFPROBE_PAYLOAD_ZST := $(FFPROBE_PAYLOAD).zst
+MEDIA_BIN_DIR := $(DIST_DIR)/media-bin
 
 .DEFAULT_GOAL := dev
 
 .PHONY: dev dev-profile build start stop clean help check test test-server test-music-race lint-server test-tmdb-integration test-spotify-integration test-itunes-integration test-web lint-web build-web test-openapi lint-openapi generate-openapi check-openapi preview-openapi
-.PHONY: check-go-tools check-web-tools check-sqlc-tools check-media-tools check-dev-tools check-build-tools check-server-test-tools check-platform check-media-payloads compress-media-payloads generate prepare-webdist-placeholder prepare-openapi-embed prepare-test-webdist prepare-web
+.PHONY: check-go-tools check-web-tools check-sqlc-tools check-media-tools check-dev-tools check-build-tools check-server-test-tools check-platform media-payloads media-bin compress-media-payloads generate prepare-webdist-placeholder prepare-openapi-embed prepare-test-webdist prepare-web
 
 dev: check-dev-tools generate prepare-webdist-placeholder prepare-openapi-embed
 	@echo "Starting development server..."
@@ -60,7 +61,7 @@ dev-profile: check-dev-tools generate prepare-webdist-placeholder prepare-openap
 	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go build -tags "$(PROFILE_TAGS)" -o $(DEV_BINARY) ./cmd/api
 	@env VITE_DEV_SERVER=http://localhost:3000 "$(DEV_BINARY_PATH)"
 
-build: check-build-tools check-media-payloads compress-media-payloads generate prepare-web prepare-openapi-embed
+build: check-build-tools media-payloads compress-media-payloads generate prepare-web prepare-openapi-embed
 	@echo "Building $(BINARY_NAME) for $(PLATFORM)..."
 	@mkdir -p $(DIST_DIR)
 	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go build -trimpath -tags "$(GO_TAGS)" -ldflags="$(LDFLAGS)" -o $(SERVER_BINARY) ./cmd/api
@@ -133,6 +134,8 @@ help:
 	@echo "  make start         Build and run the full application in the background"
 	@echo "  make stop          Stop the background application"
 	@echo "  make clean         Remove ignored build artifacts"
+	@echo "  make media-payloads Download this platform's pinned ffmpeg/ffprobe payloads (media-build/payloads.lock)"
+	@echo "  make media-bin     Also link them as ffmpeg/ffprobe in server/dist/media-bin, for PATH"
 	@echo "  make check         Run contract checks, backend lint and tests, web lint, web tests, and web build"
 	@echo "  make test          Run backend and web unit tests"
 	@echo "  make test-server   Run backend tests with required build tags"
@@ -249,20 +252,30 @@ check-platform:
 		*) echo "Unsupported release platform $(PLATFORM). Supported: linux-amd64 darwin-arm64."; exit 1 ;; \
 	esac
 
-check-media-payloads: check-platform
-	@test -f "$(FFMPEG_PAYLOAD)" || (echo "Missing embedded ffmpeg payload: $(FFMPEG_PAYLOAD)"; exit 1)
-	@test -f "$(FFPROBE_PAYLOAD)" || (echo "Missing embedded ffprobe payload: $(FFPROBE_PAYLOAD)"; exit 1)
-	@command -v zstd >/dev/null || (echo "zstd is required to compress media payloads"; exit 1)
+# Installs the ffmpeg/ffprobe payloads media-build/payloads.lock pins for this
+# platform, downloading any that are missing or differ from their pin.
+media-payloads: check-platform
+	@command -v curl >/dev/null || (echo "curl is required to download media payloads"; exit 1)
+	@media-build/fetch-payloads.sh $(PAYLOAD_SUFFIX)
+
+# The same payloads as ffmpeg and ffprobe commands, for PATH in development and
+# CI: export PATH="$PWD/server/dist/media-bin:$PATH"
+media-bin: media-payloads
+	@mkdir -p $(MEDIA_BIN_DIR)
+	@ln -sf "$(CURDIR)/$(FFMPEG_PAYLOAD)" $(MEDIA_BIN_DIR)/ffmpeg
+	@ln -sf "$(CURDIR)/$(FFPROBE_PAYLOAD)" $(MEDIA_BIN_DIR)/ffprobe
 
 # The release binary embeds the .zst payloads; regenerate them whenever the
 # raw payloads change.
 compress-media-payloads: $(FFMPEG_PAYLOAD_ZST) $(FFPROBE_PAYLOAD_ZST)
 
 $(FFMPEG_PAYLOAD_ZST): $(FFMPEG_PAYLOAD)
+	@command -v zstd >/dev/null || (echo "zstd is required to compress media payloads"; exit 1)
 	@echo "Compressing ffmpeg payload..."
 	@zstd -19 -T0 -f -q -o $@ $<
 
 $(FFPROBE_PAYLOAD_ZST): $(FFPROBE_PAYLOAD)
+	@command -v zstd >/dev/null || (echo "zstd is required to compress media payloads"; exit 1)
 	@echo "Compressing ffprobe payload..."
 	@zstd -19 -T0 -f -q -o $@ $<
 
