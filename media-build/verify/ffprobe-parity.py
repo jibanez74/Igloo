@@ -68,9 +68,15 @@ def first_tag_value(tags, keys):
     return ""
 
 
+def decode_tag_values(tags):
+    """decodeTagValues in ffprobe_metadata.go: string values only, trimmed,
+    empty ones dropped before any key is chosen."""
+    return {k: v.strip() for k, v in (tags or {}).items() if isinstance(v, str) and v.strip()}
+
+
 def pick_tags(tags, fields):
-    tags = {k: v for k, v in (tags or {}).items() if isinstance(v, str)}
-    return {name: first_tag_value(tags, keys) for name, keys in fields.items()}
+    values = decode_tag_values(tags)
+    return {name: first_tag_value(values, keys) for name, keys in fields.items()}
 
 
 def consumed(result):
