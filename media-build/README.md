@@ -21,7 +21,7 @@ The build writes `out/linux_amd64/` with these files:
 
 It also writes `out/igloo-ffmpeg-<version>-sources.tar`. That file is the GPL corresponding source: every source tarball, the patches and this recipe. `cache/`, `work/` and `out/` are gitignored.
 
-The build is reproducible: a clean rebuild with the same toolchain image gives byte-identical binaries.
+The build is reproducible: a clean build on a workstation and one on a GitHub runner gave byte-identical binaries. (`media-8.1.3-igloo.1` did not, because x264 embedded its OpenCL kernels in directory-listing order; x264 is now built without OpenCL.)
 
 ## Release
 

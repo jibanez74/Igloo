@@ -9,7 +9,7 @@ Release binaries of Igloo embed `ffmpeg` and `ffprobe` executables. Igloo runs t
 - **Linux x64:** Igloo's own build of FFmpeg 8.1.3 (`8.1.3-Igloo`), made by [`media-build/`](media-build/README.md). It is GPL version 2 or later.
   - It links x264 (GPL-2.0-or-later), dav1d (BSD-2-Clause), zimg (WTFPL), libvpl (MIT), libva and libdrm (MIT, loaded through [Implib.so](https://github.com/yugr/Implib.so) stubs, MIT), and zlib (zlib License). It also uses the nv-codec-headers (MIT).
   - It includes the `tonemap_cuda` patches from [Jellyfin FFmpeg](https://github.com/jellyfin/jellyfin-ffmpeg) (LGPL-2.1-or-later, like the FFmpeg files they change).
-  - **Source code:** the [`media-8.1.3-igloo.1`](https://github.com/jibanez74/Igloo/releases/tag/media-8.1.3-igloo.1) release holds the complete corresponding source, `igloo-ffmpeg-8.1.3-sources.tar`: every source tarball, the patches and the build recipe.
+  - **Source code:** the [`media-8.1.3-igloo.2`](https://github.com/jibanez74/Igloo/releases/tag/media-8.1.3-igloo.2) release holds the complete corresponding source, `igloo-ffmpeg-8.1.3-sources.tar`: every source tarball, the patches and the build recipe.
 - **macOS ARM64:** the [Jellyfin FFmpeg](https://github.com/jellyfin/jellyfin-ffmpeg) portable build from the [`v8.1.3-1`](https://github.com/jellyfin/jellyfin-ffmpeg/releases/tag/v8.1.3-1) release, which reports `8.1.3-Jellyfin`. The complete corresponding source is available from that release.
 - FFmpeg is a trademark of Fabrice Bellard, originator of the FFmpeg project.
 
