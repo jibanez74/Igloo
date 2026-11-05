@@ -102,9 +102,13 @@ build_zlib() {
   make install
 }
 
+# No OpenCL: Igloo never enables x264's OpenCL lookahead, and its Makefile
+# embeds the kernel sources in directory-listing order (make 4.2 does not sort
+# $(wildcard)), which made the binaries differ from host to host.
 build_x264() {
   cd "$SRC/x264"
-  ./configure --prefix="$PREFIX" --disable-cli --enable-static --enable-pic --disable-lavf --disable-swscale
+  ./configure --prefix="$PREFIX" --disable-cli --enable-static --enable-pic --disable-lavf --disable-swscale \
+    --disable-opencl
   make -j"$JOBS"
   make install
 }
