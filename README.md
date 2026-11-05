@@ -33,7 +33,7 @@ The web app includes light and dark themes. The Go server serves it in a product
 
 ### Prerequisites
 
-On a supported host, install Git, Make, [Go 1.27.3](server/go.mod), a C compiler for CGO/SQLite, `sqlc`, Bun, `ffmpeg`, and `ffprobe`. Put the command-line tools on your `PATH`. The development and backend test targets require host FFmpeg tools; production builds have [additional media payload requirements](#build-a-production-binary).
+On a supported host, install Git, Make, [Go 1.27.3](server/go.mod), a C compiler for CGO/SQLite, `sqlc`, Bun, and curl. Put the command-line tools on your `PATH`. The development and backend test targets also need `ffmpeg` and `ffprobe` on your `PATH`. Run `make media-bin` to download the builds that release binaries embed, then put `server/dist/media-bin` first on your `PATH`. Production builds have [additional media payload requirements](#build-a-production-binary).
 
 ### Set up the checkout
 
@@ -99,9 +99,9 @@ For codec behavior, session limits, subtitles, HDR, and operational details, rea
 
 ## Build a production binary
 
-Production builds embed the web app and FFmpeg/ffprobe. In addition to the source prerequisites, install `zstd` and provide matching **Jellyfin FFmpeg** and ffprobe payloads for your host platform. Follow the [binary strategy](docs/ffmpeg.md#binary-strategy); generic upstream binaries are not the expected payloads.
+Production builds embed the web app and FFmpeg/ffprobe. In addition to the source prerequisites, install `zstd`. `make build` downloads the ffmpeg and ffprobe payloads that [media-build/payloads.lock](media-build/payloads.lock) pins for your platform and checks their SHA-256. Linux x64 uses Igloo's own FFmpeg build ([media-build/](media-build/README.md)), and macOS ARM64 uses Jellyfin's portable build. See the [binary strategy](docs/ffmpeg.md#binary-strategy).
 
-Place the payloads at:
+The payloads are installed at:
 
 - Linux x64: `server/cmd/internal/ffmpeg/ffmpeg_linux_amd64` and `server/cmd/internal/ffprobe/ffprobe_linux_amd64`
 - macOS ARM64: `server/cmd/internal/ffmpeg/ffmpeg_darwin_arm64` and `server/cmd/internal/ffprobe/ffprobe_darwin_arm64`
@@ -150,4 +150,4 @@ Igloo is free software: you can redistribute it and/or modify it under the terms
 
 Igloo is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the [GNU General Public License](LICENSE) for more details.
 
-Igloo builds on third-party software, including the Jellyfin FFmpeg build embedded in release binaries and the Inter font. Their licenses and notices are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Igloo builds on third-party software, including the FFmpeg builds embedded in release binaries and the Inter font. Their licenses and notices are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

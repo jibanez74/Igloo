@@ -63,11 +63,11 @@ cd server && go test -tags "externalbin sqlite_fts5" -bench . -benchmem -run '^$
 
 ## Disposable movie scanner benchmark
 
-Run the opt-in scanner measurement against read-only media, with a fresh temporary SQLite database and Jellyfin ffprobe:
+Run the opt-in scanner measurement against read-only media, with a fresh temporary SQLite database and the pinned ffprobe (`make media-payloads`):
 
 ```bash
 cd server
-IGLOO_BENCH_MOVIES_DIR=/path/to/movies IGLOO_FFPROBE_PATH=/path/to/jellyfin/ffprobe \
+IGLOO_BENCH_MOVIES_DIR=/path/to/movies IGLOO_FFPROBE_PATH="$PWD/cmd/internal/ffprobe/ffprobe_linux_amd64" \
   CGO_ENABLED=1 go test -tags "externalbin sqlite_fts5" ./cmd/internal/scanner/movie \
   -run '^TestMovieLibraryBenchmark$' -count=1 -timeout=2h -v
 ```

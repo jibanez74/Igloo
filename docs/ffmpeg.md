@@ -21,9 +21,24 @@ The [OpenAPI contract](openapi.json) owns endpoint schemas, authentication, para
 
 ## Binary strategy
 
-Production builds embed zstd-compressed Jellyfin FFmpeg and ffprobe payloads for Linux x64 or macOS ARM64. Refresh the pair from the same Jellyfin release; arbitrary system builds are not equivalent substitutes. The platform files are `server/cmd/internal/ffmpeg/ffmpeg_<platform>` and `server/cmd/internal/ffprobe/ffprobe_<platform>`, with `linux_amd64` or `darwin_arm64` as the suffix. `make build` checks the native payloads and regenerates their `.zst` files when needed. See [building from source](../README.md#build-a-production-binary).
+Production builds embed zstd-compressed FFmpeg and ffprobe payloads for Linux x64 or macOS ARM64. [`media-build/payloads.lock`](../media-build/payloads.lock) pins each payload by download URL and SHA-256:
 
-During this audit, both Linux executables ran `-version` and reported `8.1.3-Jellyfin`. Both macOS files were identified as ARM64 Mach-O executables and contained `8.1.3-Jellyfin` strings; that was static inspection, not a macOS runtime check. These observations identify the available local payloads, not their download archive provenance or the latest upstream release.
+- **Linux x64** embeds Igloo's own build of FFmpeg 8.1.3, which reports `8.1.3-Igloo`. [`media-build/`](../media-build/README.md) builds it from upstream sources, and `.github/workflows/media-build.yml` publishes it as a GitHub release (`media-8.1.3-igloo.1`). Everything but glibc is linked in, and it needs glibc 2.28 or newer. For Intel QSV it loads the host's libva and libdrm on first use. The only non-upstream code is Jellyfin's `tonemap_cuda` filter, which the NVIDIA HDR chain needs. CI runs the server tests against this build.
+- **macOS ARM64** embeds Jellyfin's portable FFmpeg `v8.1.3-1` build, which reports `8.1.3-Jellyfin`.
+
+Arbitrary system builds are not equivalent substitutes. The platform files are `server/cmd/internal/ffmpeg/ffmpeg_<platform>` and `server/cmd/internal/ffprobe/ffprobe_<platform>`, with `linux_amd64` or `darwin_arm64` as the suffix. `make build` first runs `make media-payloads`, which downloads a missing payload or one that differs from its pin and refuses a download whose SHA-256 does not match. It then regenerates the `.zst` files when needed. See [building from source](../README.md#build-a-production-binary).
+
+Before the Linux switch on 2026-11-05, Igloo's build was compared with Jellyfin's `8.1.3-Jellyfin`:
+
+| Check | Result |
+| --- | --- |
+| ffprobe, 3,804 library files | No differences in any field Igloo reads |
+| Subtitles | Identical WebVTT, SubRip and Matroska subtitle output |
+| Server tests (`make check`) | Pass |
+| CPU HLS | The same remux, fallback, software tone-mapping, seek and audio behavior, at the same speed |
+| NVIDIA (GTX 1660 SUPER, driver 580) | The same NVENC and CUDA probe results, speed and picture for the SDR `scale_cuda` and HDR `tonemap_cuda` chains |
+
+Jellyfin's Intel QSV and VA-API fixes are not in Igloo's build. Both builds failed QSV the same way on the one Intel test host, so QSV success on Igloo's build is unverified. `media-build/verify/` has the comparison scripts for the next version bump.
 
 [`mediabin`](../server/cmd/internal/mediabin/mediabin.go) extracts embedded binaries into `os.UserCacheDir()/igloo/bin/<binary>-<hash>/`, using the first 16 hexadecimal characters of the compressed payload's SHA-256. Reuse checks the executable against its `.sha256` marker. A newly extracted cache entry prunes older entries for that binary. Cache failure falls back to a randomized operating-system temporary directory. Cleanup removes fallback directories and resets the wrapper singletons; cached executables remain.
 
@@ -432,11 +447,11 @@ Media libraries need read access; application cache/transcode directories need w
 
 ## Verification and maintenance
 
-Use the root Make targets with Jellyfin binaries. For this Linux checkout:
+Use the root Make targets with the pinned payloads. `make media-bin` installs them and links them as `ffmpeg` and `ffprobe` in `server/dist/media-bin/`. CI does the same:
 
 ```bash
-export IGLOO_FFMPEG_PATH="$PWD/server/cmd/internal/ffmpeg/ffmpeg_linux_amd64"
-export IGLOO_FFPROBE_PATH="$PWD/server/cmd/internal/ffprobe/ffprobe_linux_amd64"
+make media-bin
+export PATH="$PWD/server/dist/media-bin:$PATH"
 make test-server
 make test-web
 make test-openapi
