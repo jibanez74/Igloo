@@ -50,7 +50,7 @@ The workflow refuses a tag whose FFmpeg version differs from `sources.lock`. A r
   | Decoders, demuxers | Denylists, because a library can hold anything. Only classes no media library carries are left out: game, console and demo formats, screen and webcam capture, still-image formats other than cover art, and telephony and speech codecs. The `*_qsv` and `*_cuvid` decoders are left out too, because NVIDIA decode goes through the `nvdec` hwaccel and Intel decode is software. |
   | Parsers, bitstream filters | All, because they are small and muxers insert bitstream filters on their own. |
 
-  To use a new encoder, muxer or filter, add it to its list in `scripts/build-linux.sh` and to `verify/required-features.txt`. `check-features.py` then fails any build that lacks it.
+  To use a new encoder, muxer or filter, add it to its list in `scripts/build-linux.sh` under its configure name (`./configure --list-encoders`), and to `verify/required-features.txt` under the name ffmpeg lists at runtime (`ffmpeg -encoders`). The two can differ: the subtitle encoder is `movtext` to configure and `mov_text` to ffmpeg. The build script fails on a name configure does not know, and `check-features.py` then fails any build whose binaries lack a required component.
 
   The external libraries are limited to what Igloo uses:
 
