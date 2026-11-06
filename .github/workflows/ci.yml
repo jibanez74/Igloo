@@ -24,7 +24,7 @@ jobs:
           go-version: '1.27.3'
           cache-dependency-path: server/go.sum
 
-      # The pinned ffmpeg/ffprobe that release binaries embed (media-build/payloads.lock).
+      # The pinned ffmpeg/ffprobe that release binaries embed (media-payloads/payloads.lock).
       - name: Install media tools
         run: |
           make media-bin

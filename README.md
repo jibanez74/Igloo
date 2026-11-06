@@ -99,7 +99,7 @@ For codec behavior, session limits, subtitles, HDR, and operational details, rea
 
 ## Build a production binary
 
-Production builds embed the web app and FFmpeg/ffprobe. In addition to the source prerequisites, install `zstd`. `make build` downloads the ffmpeg and ffprobe payloads that [media-build/payloads.lock](media-build/payloads.lock) pins for your platform and checks their SHA-256. Linux x64 uses Igloo's own FFmpeg build ([media-build/](media-build/README.md)), and macOS ARM64 uses Jellyfin's portable build. See the [binary strategy](docs/ffmpeg.md#binary-strategy).
+Production builds embed the web app and FFmpeg/ffprobe. In addition to the source prerequisites, install `zstd`. `make build` downloads the ffmpeg and ffprobe payloads that [media-payloads/payloads.lock](media-payloads/payloads.lock) pins for your platform and checks their SHA-256. Linux x64 uses Igloo's own FFmpeg build ([igloo-ffmpeg](https://github.com/jibanez74/igloo-ffmpeg)), and macOS ARM64 uses Jellyfin's portable build. See the [binary strategy](docs/ffmpeg.md#binary-strategy).
 
 The payloads are installed at:
 
