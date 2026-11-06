@@ -31,10 +31,13 @@ size() {
 # fetch <label> <url> <file>: GitHub's release CDN has been seen to crawl at a
 # few KB/s and to drop connections mid-file, so a failed or stalled attempt
 # resumes the partial file rather than starting over. It gives up once five
-# attempts in a row add no bytes. The caller still checks the sha256 of
-# whatever lands in <file>.
+# attempts in a row add no bytes, or when a retry would start more than an
+# hour after the download began: a link that keeps adding a trickle would
+# otherwise retry for days. An hour leaves room for a 30 MB payload at about
+# 10 KB/s. The caller still checks the sha256 of whatever lands in <file>.
 fetch() {
   local label=$1 url=$2 out=$3 progress=-sS rc code before stuck=0
+  local deadline=$((SECONDS + 3600))
   if [ -t 2 ]; then progress=--progress-bar; fi
   while :; do
     before=$(size "$out.part")
@@ -54,6 +57,10 @@ fetch() {
     if [ "$(size "$out.part")" -gt "$before" ]; then stuck=0; else stuck=$((stuck + 1)); fi
     if [ "$stuck" -ge 5 ]; then
       echo "$label: download made no progress in 5 attempts, giving up" >&2
+      return 1
+    fi
+    if [ "$SECONDS" -ge "$deadline" ]; then
+      echo "$label: download still incomplete after an hour, giving up at $(size "$out.part") bytes" >&2
       return 1
     fi
     echo "$label: download interrupted (curl exit $rc), resuming at $(size "$out.part") bytes" >&2
