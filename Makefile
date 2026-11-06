@@ -134,7 +134,7 @@ help:
 	@echo "  make start         Build and run the full application in the background"
 	@echo "  make stop          Stop the background application"
 	@echo "  make clean         Remove ignored build artifacts"
-	@echo "  make media-payloads Download this platform's pinned ffmpeg/ffprobe payloads (media-build/payloads.lock)"
+	@echo "  make media-payloads Download this platform's pinned ffmpeg/ffprobe payloads (media-payloads/payloads.lock)"
 	@echo "  make media-bin     Also link them as ffmpeg/ffprobe in server/dist/media-bin, for PATH"
 	@echo "  make check         Run contract checks, backend lint and tests, web lint, web tests, and web build"
 	@echo "  make test          Run backend and web unit tests"
@@ -252,11 +252,11 @@ check-platform:
 		*) echo "Unsupported release platform $(PLATFORM). Supported: linux-amd64 darwin-arm64."; exit 1 ;; \
 	esac
 
-# Installs the ffmpeg/ffprobe payloads media-build/payloads.lock pins for this
+# Installs the ffmpeg/ffprobe payloads media-payloads/payloads.lock pins for this
 # platform, downloading any that are missing or differ from their pin.
 media-payloads: check-platform
 	@command -v curl >/dev/null || (echo "curl is required to download media payloads"; exit 1)
-	@media-build/fetch-payloads.sh $(PAYLOAD_SUFFIX)
+	@media-payloads/fetch-payloads.sh $(PAYLOAD_SUFFIX)
 
 # The same payloads as ffmpeg and ffprobe commands, for PATH in development and
 # CI: export PATH="$PWD/server/dist/media-bin:$PATH"

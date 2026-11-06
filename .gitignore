@@ -70,7 +70,3 @@ AGENTS.md
 CLAUDE.md
 web/.openapi-docs/
 
-# Self-built FFmpeg (media-build/): download cache, build tree, outputs
-/media-build/cache/
-/media-build/work/
-/media-build/out/
