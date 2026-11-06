@@ -1,0 +1,182 @@
+Igloo's fixes for Jellyfin's tonemap_cuda filter (patches 0002-0004).
+Applies on top of them; FFmpeg code under the LGPL, like the files it patches.
+
+- filter_frame kept a failed kernel launch or output buffer allocation from
+  reaching the caller (cuCtxPopCurrent's result overwrote it) and passed an
+  empty frame downstream. It now fails the graph, always pops the context it
+  pushed, and reports a failed Dolby Vision remap allocation as ENOMEM
+  instead of dropping the frame silently.
+- compile no longer leaks the Dolby Vision parameter buffers and the 3D LUT
+  when it runs again after the input color properties change.
+- A recompile no longer frees the dither texture, which only config_props
+  creates: dithering stayed off after a switch to Dolby Vision frames.
+- A Dolby Vision frame whose L1 (or L0) peak is 0 no longer yields a peak of
+  0, which made the tone curve divide by zero.
+
+Index: FFmpeg/libavfilter/colorspace.c
+===================================================================
+--- FFmpeg.orig/libavfilter/colorspace.c
++++ FFmpeg/libavfilter/colorspace.c
+@@ -217,11 +217,12 @@
+     color = av_dovi_get_color(data);
+     // L0 max
+     peak = color->source_max_pq / 4095.0f;
+-    // L1 max
+-    if (!l0_only && (ext = av_dovi_find_level(data, 1)))
++    // L1 max, when the scene carries one
++    if (!l0_only && (ext = av_dovi_find_level(data, 1)) && ext->l1.max_pq)
+         peak = ext->l1.max_pq / 4095.0f;
++    // No usable peak: fall back like untagged metadata does, never return 0
+     if (!peak)
+-        return peak;
++        return 100.0f;
+ 
+     peak = powf(peak, 1.0f / ST2084_M2);
+     peak = FFMAX(peak - ST2084_C1, 0.0f) / FFMAX((ST2084_C2 - ST2084_C3 * peak), FLOAT_EPS);
+Index: FFmpeg/libavfilter/vf_tonemap_cuda.c
+===================================================================
+--- FFmpeg.orig/libavfilter/vf_tonemap_cuda.c
++++ FFmpeg/libavfilter/vf_tonemap_cuda.c
+@@ -210,14 +210,6 @@
+             CHECK_CU(cu->cuMemFree(s->lut_buffer));
+             s->lut_buffer = 0;
+         }
+-        if (s->dither_tex) {
+-            CHECK_CU(cu->cuTexObjectDestroy(s->dither_tex));
+-            s->dither_tex = 0;
+-        }
+-        if (s->dither_buffer) {
+-            CHECK_CU(cu->cuMemFree(s->dither_buffer));
+-            s->dither_buffer = 0;
+-        }
+         if (s->cu_module) {
+             CHECK_CU(cu->cuModuleUnload(s->cu_module));
+             s->cu_func_build_lut = NULL;
+@@ -231,11 +223,37 @@
+     }
+ }
+ 
++// The dither texture is set up once in config_props, so it is freed only
++// here: uninit_common also runs before a recompile and must not drop it.
++static av_cold void uninit_dither(AVFilterContext *ctx)
++{
++    TonemapCUDAContext *s = ctx->priv;
++
++    if (s->hwctx) {
++        CudaFunctions *cu = s->hwctx->internal->cuda_dl;
++        CUcontext dummy, cuda_ctx = s->hwctx->cuda_ctx;
++
++        CHECK_CU(cu->cuCtxPushCurrent(cuda_ctx));
++
++        if (s->dither_tex) {
++            CHECK_CU(cu->cuTexObjectDestroy(s->dither_tex));
++            s->dither_tex = 0;
++        }
++        if (s->dither_buffer) {
++            CHECK_CU(cu->cuMemFree(s->dither_buffer));
++            s->dither_buffer = 0;
++        }
++
++        CHECK_CU(cu->cuCtxPopCurrent(&dummy));
++    }
++}
++
+ static av_cold void uninit(AVFilterContext *ctx)
+ {
+     TonemapCUDAContext *s = ctx->priv;
+ 
+     uninit_common(ctx);
++    uninit_dither(ctx);
+     uninit_dovi(ctx);
+ 
+     av_frame_free(&s->frame);
+@@ -285,6 +303,9 @@
+     av_assert0(sizeof(ff_fruit_dither_matrix) ==
+         sizeof(ff_fruit_dither_matrix[0]) * ff_fruit_dither_size * ff_fruit_dither_size);
+ 
++    if (s->dither_tex)
++        return 0;
++
+     if ((ret = CHECK_CU(cu->cuCtxPushCurrent(cuda_ctx))) < 0)
+         return ret;
+ 
+@@ -745,7 +766,16 @@
+         return ret;
+ 
+     if (s->dovi) {
++        av_freep(&s->dovi_pbuf);
++        if (s->dovi_buffer) {
++            CHECK_CU(cu->cuMemFree(s->dovi_buffer));
++            s->dovi_buffer = 0;
++        }
+         s->dovi_pbuf = av_mallocz(3*(params_sz+pivots_sz+coeffs_sz+mmr_sz));
++        if (!s->dovi_pbuf) {
++            ret = AVERROR(ENOMEM);
++            goto fail;
++        }
+         ret = CHECK_CU(cu->cuMemAlloc(&s->dovi_buffer, 3*(params_sz+pivots_sz+coeffs_sz+mmr_sz)));
+         if (ret < 0)
+             goto fail;
+@@ -828,6 +858,10 @@
+         int skip_tonemap = s->out_trc == AVCOL_TRC_SMPTE2084;
+         int dovi_reshape = !!s->dovi;
+ 
++        if (s->lut_buffer) {
++            CHECK_CU(cu->cuMemFree(s->lut_buffer));
++            s->lut_buffer = 0;
++        }
+         ret = CHECK_CU(cu->cuMemAlloc(&s->lut_buffer, lut_buffer_size));
+         if (ret < 0)
+             goto fail2;
+@@ -1021,7 +1055,7 @@
+     AVFrame *out = NULL;
+     AVFrameSideData *dovi_sd = NULL;
+     CUcontext dummy;
+-    int ret = 0;
++    int ret = 0, pop_ret;
+ 
+     out = av_frame_alloc();
+     if (!out) {
+@@ -1067,8 +1101,10 @@
+         if (rpu->disable_residual_flag) {
+             struct FFDOVIMetadataRemap *dovi = av_malloc(sizeof(*dovi));
+             s->dovi = dovi;
+-            if (!s->dovi)
++            if (!s->dovi) {
++                ret = AVERROR(ENOMEM);
+                 goto fail;
++            }
+ 
+             ff_map_dovi_metadata(s->dovi, metadata);
+             in->color_trc = AVCOL_TRC_SMPTE2084;
+@@ -1116,21 +1152,22 @@
+ 
+         ret = CHECK_CU(cu->cuMemcpyHtoDAsync(s->dovi_buffer, s->dovi_pbuf,
+                                              3*(params_sz+pivots_sz+coeffs_sz+mmr_sz), s->hwctx->stream));
+-        if (ret < 0) {
++        if (ret < 0)
+             av_log(ctx, AV_LOG_ERROR, "Failed to update dovi buf.\n");
+-            goto fail;
+-        }
+     }
+ 
+-    ret = do_tonemap(ctx, out, in);
++    if (ret >= 0)
++        ret = do_tonemap(ctx, out, in);
+ 
+-    if (s->dovi)
+-        av_freep(&s->dovi);
+-
+-    ret = CHECK_CU(cu->cuCtxPopCurrent(&dummy));
++    pop_ret = CHECK_CU(cu->cuCtxPopCurrent(&dummy));
++    if (ret >= 0)
++        ret = pop_ret;
+     if (ret < 0)
+         goto fail;
+ 
++    if (s->dovi)
++        av_freep(&s->dovi);
++
+     av_frame_free(&in);
+ 
+     if (s->out_trc != AVCOL_TRC_SMPTE2084) {
