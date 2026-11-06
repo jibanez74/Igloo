@@ -2,7 +2,8 @@
 # Installs the ffmpeg and ffprobe payloads pinned in payloads.lock for each
 # platform given, as server/cmd/internal/<tool>/<tool>_<platform>. A payload
 # that already matches its pin is left alone. Anything else is downloaded and
-# moved into place only after its sha256 matches. Runs on macOS's bash 3.2.
+# moved into place only after its sha256 matches. A download that stalls or
+# drops resumes where it stopped. Runs on macOS's bash 3.2.
 #   fetch-payloads.sh <platform>...   (linux_amd64, darwin_arm64)
 set -euo pipefail
 
@@ -21,6 +22,51 @@ sha256() {
   else
     shasum -a 256 "$1" | cut -d' ' -f1
   fi
+}
+
+size() {
+  if [ -f "$1" ]; then wc -c < "$1" | tr -d ' '; else echo 0; fi
+}
+
+# fetch <label> <url> <file>: GitHub's release CDN has been seen to crawl at a
+# few KB/s and to drop connections mid-file, so a failed or stalled attempt
+# resumes the partial file rather than starting over. It gives up once five
+# attempts in a row add no bytes, or when a retry would start more than an
+# hour after the download began: a link that keeps adding a trickle would
+# otherwise retry for days. An hour leaves room for a 30 MB payload at about
+# 10 KB/s. The caller still checks the sha256 of whatever lands in <file>.
+fetch() {
+  local label=$1 url=$2 out=$3 progress=-sS rc code before stuck=0
+  local deadline=$((SECONDS + 3600))
+  if [ -t 2 ]; then progress=--progress-bar; fi
+  while :; do
+    before=$(size "$out.part")
+    rc=0
+    code=$(curl -fL -C - --connect-timeout 30 --speed-limit 1024 --speed-time 60 \
+      "$progress" -w '%{http_code}' -o "$out.part" "$url") || rc=$?
+    # 416: the partial file already holds every byte.
+    if [ "$rc" = 0 ] || [ "$code" = 416 ]; then break; fi
+    case $rc in
+      # The server ignored the range request, so the next attempt starts over.
+      33) rm -f "$out.part" ;;
+      22) case $code in
+            408 | 429 | 5??) ;;
+            *) echo "$label: $url returned HTTP $code" >&2; return 1 ;;
+          esac ;;
+    esac
+    if [ "$(size "$out.part")" -gt "$before" ]; then stuck=0; else stuck=$((stuck + 1)); fi
+    if [ "$stuck" -ge 5 ]; then
+      echo "$label: download made no progress in 5 attempts, giving up" >&2
+      return 1
+    fi
+    if [ "$SECONDS" -ge "$deadline" ]; then
+      echo "$label: download still incomplete after an hour, giving up at $(size "$out.part") bytes" >&2
+      return 1
+    fi
+    echo "$label: download interrupted (curl exit $rc), resuming at $(size "$out.part") bytes" >&2
+    sleep 2
+  done
+  mv "$out.part" "$out"
 }
 
 tmp=$(mktemp -d)
@@ -44,8 +90,7 @@ for platform in "$@"; do
     download=$tmp/$(printf '%s' "$url" | cksum | cut -d' ' -f1)
     if [ ! -f "$download" ]; then
       echo "$payload: downloading $url"
-      curl -fsSL --retry 3 -o "$download.part" "$url"
-      mv "$download.part" "$download"
+      fetch "$payload" "$url" "$download"
     fi
     file=$download
     if [ -n "$member" ]; then
