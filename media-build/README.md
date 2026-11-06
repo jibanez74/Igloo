@@ -41,7 +41,18 @@ The workflow refuses a tag whose FFmpeg version differs from `sources.lock`. A r
 - **Toolchain.** `Dockerfile` pins an AlmaLinux 8 image by digest, so the binaries need glibc 2.28 or newer, the same baseline as Jellyfin's portable builds. GCC comes from gcc-toolset-15 and clang (CUDA kernels to PTX) from AppStream.
 - **Linking.** Everything is static except glibc. libva and libdrm are linked through [Implib.so](https://github.com/yugr/Implib.so) stubs that `dlopen` the host's libraries on first use. A host without VA-API can still run ffmpeg, and Intel QSV uses the host's VA-API stack and drivers. NVIDIA (ffnvcodec) and the oneVPL runtime are loaded by FFmpeg and libvpl at runtime anyway.
 - **Sources.** `sources.lock` pins every source. The FFmpeg release tarball is pinned by sha256 and git dependencies by full commit. The dependency commits match Jellyfin's portable builder at `jellyfin-ffmpeg` tag `v8.1.3-1`, so a comparison with Jellyfin isolates the FFmpeg configuration.
-- **Configure.** `scripts/build-linux.sh` holds the configure line. `--disable-autodetect` makes every external feature explicit. All native FFmpeg components stay enabled, because the library scanner and the test suite need broad decoder, demuxer and filter coverage. The external libraries are limited to what Igloo uses:
+- **Configure.** `scripts/build-linux.sh` holds the configure line. `--disable-autodetect` makes every external feature explicit. A static link carries every registered component in both binaries, so the native components are trimmed too:
+
+  | Components | Policy |
+  | --- | --- |
+  | Encoders, muxers, filters | Allowlists: what Igloo's argument chains, capability probes and tests name, what the ffmpeg CLI picks or inserts on its own, and what the testdata fixture recipes use. Each is also listed in `verify/required-features.txt`. |
+  | Input and output devices, protocols | Only the `lavfi` input device and the `file` and `pipe` protocols. |
+  | Decoders, demuxers | Denylists, because a library can hold anything. Only classes no media library carries are left out: game, console and demo formats, screen and webcam capture, still-image formats other than cover art, and telephony and speech codecs. The `*_qsv` and `*_cuvid` decoders are left out too, because NVIDIA decode goes through the `nvdec` hwaccel and Intel decode is software. |
+  | Parsers, bitstream filters | All, because they are small and muxers insert bitstream filters on their own. |
+
+  To use a new encoder, muxer or filter, add it to its list in `scripts/build-linux.sh` and to `verify/required-features.txt`. `check-features.py` then fails any build that lacks it.
+
+  The external libraries are limited to what Igloo uses:
 
   | Library | Used for |
   | --- | --- |

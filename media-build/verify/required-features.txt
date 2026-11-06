@@ -2,8 +2,10 @@
 # One "<kind> <name>" per line; kinds map to ffmpeg's -encoders, -decoders,
 # -muxers, -demuxers, -filters, -hwaccels, -protocols, -devices and -bsfs lists.
 # Sources: server/cmd/internal/ffmpeg/{ffmpeg_hls,ffmpeg_subtitles,
-# ffmpeg_seek_landing,capabilities}.go, helpers/hls_*profiles.go, and the
-# *_externalbin_test.go fixtures.
+# ffmpeg_seek_landing,capabilities}.go, helpers/hls_*profiles.go, the
+# *_externalbin_test.go fixtures, the ffmpeg CLI's own defaults, and the
+# testdata READMEs' fixture recipes. The encoder, muxer and filter lists in
+# scripts/build-linux.sh are allowlists: keep both files in step.
 
 # Video encoding (libx264 is never capability-checked, so it is mandatory)
 encoder libx264
@@ -24,6 +26,12 @@ encoder dvdsub
 encoder mov_text
 encoder pcm_f32le
 encoder rawvideo
+# The CLI's default codecs for -f null and -f framecrc
+encoder wrapped_avframe
+encoder pcm_s16le
+# scanner/movie/testdata and scanner/music/testdata fixture recipes
+encoder mjpeg
+encoder flac
 
 # Library sources the scanner accepts, plus what tests generate
 decoder h264
@@ -67,6 +75,11 @@ muxer framecrc
 muxer null
 muxer rawvideo
 muxer f32le
+# Fixture recipes
+muxer avi
+muxer image2
+muxer flac
+muxer ipod
 
 demuxer mov
 demuxer mp4
