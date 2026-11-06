@@ -41,7 +41,18 @@ The workflow refuses a tag whose FFmpeg version differs from `sources.lock`. A r
 - **Toolchain.** `Dockerfile` pins an AlmaLinux 8 image by digest, so the binaries need glibc 2.28 or newer, the same baseline as Jellyfin's portable builds. GCC comes from gcc-toolset-15 and clang (CUDA kernels to PTX) from AppStream.
 - **Linking.** Everything is static except glibc. libva and libdrm are linked through [Implib.so](https://github.com/yugr/Implib.so) stubs that `dlopen` the host's libraries on first use. A host without VA-API can still run ffmpeg, and Intel QSV uses the host's VA-API stack and drivers. NVIDIA (ffnvcodec) and the oneVPL runtime are loaded by FFmpeg and libvpl at runtime anyway.
 - **Sources.** `sources.lock` pins every source. The FFmpeg release tarball is pinned by sha256 and git dependencies by full commit. The dependency commits match Jellyfin's portable builder at `jellyfin-ffmpeg` tag `v8.1.3-1`, so a comparison with Jellyfin isolates the FFmpeg configuration.
-- **Configure.** `scripts/build-linux.sh` holds the configure line. `--disable-autodetect` makes every external feature explicit. All native FFmpeg components stay enabled, because the library scanner and the test suite need broad decoder, demuxer and filter coverage. The external libraries are limited to what Igloo uses:
+- **Configure.** `scripts/build-linux.sh` holds the configure line. `--disable-autodetect` makes every external feature explicit. A static link carries every registered component in both binaries, so the native components are trimmed too:
+
+  | Components | Policy |
+  | --- | --- |
+  | Encoders, muxers, filters | Allowlists: what Igloo's argument chains, capability probes and tests name, what the ffmpeg CLI picks or inserts on its own, and what the testdata fixture recipes use. Each is also listed in `verify/required-features.txt`. |
+  | Input and output devices, protocols | Only the `lavfi` input device and the `file` and `pipe` protocols. |
+  | Decoders, demuxers | Denylists, because a library can hold anything. Only classes no media library carries are left out: game, console and demo formats, screen and webcam capture, still-image formats other than cover art, and telephony and speech codecs. The `*_qsv` and `*_cuvid` decoders are left out too, because NVIDIA decode goes through the `nvdec` hwaccel and Intel decode is software. |
+  | Parsers, bitstream filters | All, because they are small and muxers insert bitstream filters on their own. |
+
+  To use a new encoder, muxer or filter, add it to its list in `scripts/build-linux.sh` under its configure name (`./configure --list-encoders`), and to `verify/required-features.txt` under the name ffmpeg lists at runtime (`ffmpeg -encoders`). The two can differ: the subtitle encoder is `movtext` to configure and `mov_text` to ffmpeg. The build script fails on a name configure does not know, and `check-features.py` then fails any build whose binaries lack a required component.
+
+  The external libraries are limited to what Igloo uses:
 
   | Library | Used for |
   | --- | --- |
@@ -57,15 +68,16 @@ The workflow refuses a tag whose FFmpeg version differs from `sources.lock`. A r
 
 ## Vendored patches
 
-`patches/` holds Jellyfin's CUDA tone-mapping filter, `tonemap_cuda`. Igloo's NVIDIA HDR chain uses it (`server/cmd/internal/ffmpeg/ffmpeg_hls.go`), and upstream FFmpeg has no equivalent. The files come from [jellyfin-ffmpeg](https://github.com/jellyfin/jellyfin-ffmpeg) tag `v8.1.3-1`, `debian/patches/`:
+`patches/` holds Jellyfin's CUDA tone-mapping filter, `tonemap_cuda`. Igloo's NVIDIA HDR chain uses it (`server/cmd/internal/ffmpeg/ffmpeg_hls.go`), and upstream FFmpeg has no equivalent. Patches 0002 to 0004 come from [jellyfin-ffmpeg](https://github.com/jellyfin/jellyfin-ffmpeg) tag `v8.1.3-1`, `debian/patches/` (still unchanged at `v8.1.3-2`). Patch 0005 is Igloo's own and fixes bugs in them, so 0002 to 0004 stay byte-identical to Jellyfin's:
 
 | File | Source | sha256 |
 | --- | --- | --- |
 | `0002-update-cuda-func-header.patch` | unchanged | `ac3ddd01…f0a820` |
 | `0003-dither-matrix-from-add-enhanced-cuda-pixfmt-converter-impl.patch` | only the `libavfilter/dither_matrix.h` section of `0003-add-enhanced-cuda-pixfmt-converter-impl.patch`, which `tonemap_cuda` includes; the rest of 0003 replaces upstream's `scale_cuda` and is left out | `39349e5e…b92119` |
 | `0004-add-cuda-tonemap-impl.patch` | unchanged | `867aed32…c414f` |
+| `0005-igloo-fix-tonemap-cuda-error-handling.patch` | Igloo's own fixes on top of 0002–0004: a failed kernel launch or buffer allocation fails the graph instead of sending an empty frame to the encoder, recompiles no longer leak the Dolby Vision buffers and LUT or drop the dither texture, and a Dolby Vision peak of 0 falls back to the default | `907d96ed…498c8d` |
 
-Like the files they patch, they are FFmpeg code under the LGPL. The build applies them with `--fuzz=0`, so a patch that no longer fits fails the build instead of being applied loosely.
+Like the files they patch, all four are FFmpeg code under the LGPL. The build applies them with `--fuzz=0`, so a patch that no longer fits fails the build instead of being applied loosely.
 
 ## Verify
 
@@ -92,7 +104,7 @@ To run the server test suite on a local build before it is released, point `IGLO
    ```
 
    The key is FFmpeg's release key, fingerprint `FCF9 86EA 15E6 E293 A564 4F10 B432 2F04 D676 58D8`, from <https://ffmpeg.org/ffmpeg-devel.asc>.
-2. Refresh `patches/` from the jellyfin-ffmpeg tag for the same upstream release, and update the table above.
+2. Refresh 0002 to 0004 in `patches/` from the jellyfin-ffmpeg tag for the same upstream release, and update the table above. Then check that 0005 still applies; if Jellyfin changed the code it touches, regenerate it against the new tree, or drop the fixes Jellyfin made itself.
 3. Rebuild, then run the verify scripts and `make check` against the new build. On a host with an NVIDIA GPU, run `nvidia-parity.sh` with the previous release as the reference.
 4. Commit, push, and push the next `media-<version>-igloo.<n>` tag. The workflow publishes the release.
 5. Point the Linux lines of `payloads.lock` at the new release and its sha256s, which match `SHA256SUMS`. Then run `make media-payloads` and `make check`, and update the version references in `docs/ffmpeg.md` and `THIRD_PARTY_NOTICES.md`.

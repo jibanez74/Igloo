@@ -187,7 +187,8 @@ build_libva() {
 
 # --disable-autodetect makes every external feature explicit, so the build
 # never depends on what the image happens to contain. It also turns off
-# threads, hence --enable-pthreads.
+# threads, hence --enable-pthreads. NVIDIA decode is the nvdec hwaccel
+# (-hwaccel cuda); the separate *_cuvid decoders are not built.
 FFMPEG_FEATURES=(
   --enable-gpl
   --disable-autodetect
@@ -195,8 +196,126 @@ FFMPEG_FEATURES=(
   --disable-debug --disable-doc --disable-ffplay --disable-network
   --enable-pthreads --enable-iconv --enable-zlib
   --enable-libx264 --enable-libzimg --enable-libdav1d
-  --enable-ffnvcodec --enable-cuda --enable-cuda-llvm --enable-cuvid --enable-nvdec --enable-nvenc
+  --enable-ffnvcodec --enable-cuda --enable-cuda-llvm --enable-nvdec --enable-nvenc
   --enable-libvpl --enable-vaapi --enable-libdrm
+)
+
+# Components. A static link carries every registered component in both
+# binaries, so the sets Igloo itself chooses are allowlists: the encoders,
+# muxers and filters its argument chains, capability probes and tests name
+# (verify/required-features.txt), plus what the ffmpeg CLI picks or inserts
+# on its own. Adding one means adding it here and to required-features.txt.
+#
+# Encoders: required-features, the CLI's defaults for -f null and framecrc
+# (wrapped_avframe, pcm_s16le), and the testdata READMEs' fixture recipes
+# (mjpeg, flac).
+ENCODERS=(
+  libx264 h264_nvenc h264_qsv
+  aac ac3 eac3
+  webvtt srt subrip movtext
+  dca wavpack dvdsub pcm_f32le rawvideo
+  wrapped_avframe pcm_s16le mjpeg flac
+)
+# Muxers: required-features (hls selects mov and mpegts itself) and the
+# fixture recipes' outputs.
+MUXERS=(
+  hls mp4 mov mpegts matroska webvtt framecrc null rawvideo pcm_f32le
+  avi image2 flac ipod
+)
+# Filters: the HLS chains and capability probes, the ones the CLI inserts
+# (format negotiation, -ar/-ac, accurate seek, autorotate), and the test
+# sources. buffer/buffersink are always built.
+FILTERS=(
+  scale format setparams yadif zscale tonemap aresample hwupload
+  scale_cuda tonemap_cuda scale_qsv
+  null anull aformat trim atrim transpose hflip vflip rotate
+  testsrc2 color sine anullsrc aevalsrc tinterlace setfield crop silencedetect
+)
+# Decoders and demuxers face whatever a library holds, so they are a
+# denylist: everything stays except classes no media library carries (game,
+# console and demo formats, screen and webcam capture, still-image formats
+# other than cover art, telephony and speech codecs) and the hardware
+# decoders Igloo never selects (*_qsv; NVIDIA decodes through nvdec).
+# Mainstream, legacy-PC, broadcast and professional formats all stay.
+DENY_DECODERS=(
+  # video: games, consoles, demos
+  fourxm anm argo bethsoftvid bfi bink bmv_video c93 cdtoons cdxl dfa dsicinvideo dxa
+  eacmv eamad eatgq eatgv eatqi escape124 escape130 gdv hnm4_video idcin interplay_video
+  ipu jv kmvc mdec mmvideo mobiclip motionpixels paf_video rl2 roq sanm sga
+  simbiosis_imx smacker thp tiertexseqvideo tmv truemotion1 truemotion2 truemotion2rt
+  txd vb vmdvideo vqa xan_wc3 xan_wc4 yop flic
+  # video: screen, game and webcam capture, remote desktop
+  arbc cscd tscc cpia dxtory fic flashsv flashsv2 fmvc fraps g2m lscr mimic msa1
+  mss1 mss2 mwsc rasc rscc scpr screenpresso srgc tdsc tscc2 vmnc wcmv zmbv
+  # video: text art, toys, oddities
+  ansi bintext idf xbin aura aura2 cdgraphics imm4 imm5 mxpeg pdv wnv1 vnull dxv notchlc
+  # still images other than cover-art formats
+  alias_pix brender_pix dds exr fits gem hdr pam pbm pcx pfm pgm pgmyuv pgx phm photocd
+  pictor ppm psd ptx qoi sgi sunrast targa vbn wbmp xbm xface xpm xwd
+  # audio: games, consoles, demos
+  eightsvx_exp eightsvx_fib adpcm_4xm adpcm_adx adpcm_afc adpcm_agm adpcm_aica adpcm_argo
+  adpcm_circus adpcm_ct adpcm_dtk adpcm_ea adpcm_ea_maxis_xa adpcm_ea_r1 adpcm_ea_r2
+  adpcm_ea_r3 adpcm_ea_xas adpcm_ima_acorn adpcm_ima_alp adpcm_ima_amv adpcm_ima_apc
+  adpcm_ima_apm adpcm_ima_cunning adpcm_ima_dat4 adpcm_ima_dk3 adpcm_ima_dk4
+  adpcm_ima_ea_eacs adpcm_ima_ea_sead adpcm_ima_escape adpcm_ima_hvqm2 adpcm_ima_hvqm4
+  adpcm_ima_iss adpcm_ima_magix adpcm_ima_moflex adpcm_ima_mtf adpcm_ima_pda adpcm_ima_rad
+  adpcm_ima_smjpeg adpcm_ima_ssi adpcm_ima_ws adpcm_ima_xbox adpcm_mtaf adpcm_n64 adpcm_psx
+  adpcm_psxc adpcm_sanyo adpcm_thp adpcm_thp_le adpcm_vima adpcm_xa adpcm_xmd adpcm_zork
+  ahx atrac9 binkaudio_dct binkaudio_rdft bmv_audio cbd2_dpcm derf_dpcm dsicinaudio
+  gremlin_dpcm hca interplay_dpcm interplay_acm paf_audio pcm_sga roq_dpcm sdx2_dpcm
+  smackaud sol_dpcm vmdaudio wady_dpcm ws_snd1 xan_dpcm xma1 xma2 ftr fastaudio
+  # audio: telephony, speech, Bluetooth, oddities
+  acelp_kelvin adpcm_ima_oki adpcm_sbpro_2 adpcm_sbpro_3 adpcm_sbpro_4 adpcm_g722 adpcm_g726
+  adpcm_g726le g723_1 g728 g729 comfortnoise dss_sp evrc ilbc msnsiren qcelp siren truespeech
+  sbc aptx aptx_hd dfpwm misc4 bonk osq rka wavarc hcom apac qoa pcm_vidc ffwavesynth
+  metasound on2avc iac imc
+  # hardware decoders Igloo never selects
+  av1_qsv h264_qsv hevc_qsv mjpeg_qsv mpeg2_qsv vc1_qsv vp8_qsv vp9_qsv vvc_qsv
+)
+DENY_DEMUXERS=(
+  # games, consoles, demos
+  threedostr fourxm ace acm adp ads adx afc aix alp anm argo_asf argo_brp argo_cvg ast
+  bethsoftvid bfi bfstm bink binka bmv boa brstm c93 cdxl derf dfa dsicin dxa ea ea_cdata segafilm flic
+  fsb fwse gdv genh hca hnm idcin ipmovie ipu jv kvag mca mm mmf mods moflex msf mtaf musx
+  mvi paf pp_bnk str redspark rl2 roq rpl rsd scd sdns sga siff simbiosis_imx smacker smush
+  svag svs thp tiertexseq tmv txd vag vmd vpk wady wc3 wsaud wsd wsvqa xa xmd xmv xvag
+  yop sol
+  # capture, CCTV, telephony, oddities
+  aea apac apc apm avr avs bit bonk cdg cine codec2 codec2raw dcstr dfpwm dhav dss epaf
+  filmstrip fits frm g722 g723_1 g726 g726le g728 g729 hcom hxvs idf iff ifv ilbc
+  ingenient iss iv8 kux laf lc3 lmlm4 luodat lvf mgsts msnwc_tcp msp mtv mv nc nistsphere
+  nsp pdv pmp pvf qcp qoa rka rso sbc sbg sdr2 sds sdx ser sln sox tedcaptions tty usm
+  pcm_vidc vividas vivo voc wavarc wve xbin xwma adf aa aax
+  # still images other than cover-art formats
+  image2_alias_pix image2_brender_pix image_cri_pipe image_dds_pipe image_exr_pipe
+  image_gem_pipe image_hdr_pipe image_pam_pipe image_pbm_pipe image_pcx_pipe image_pfm_pipe
+  image_pgm_pipe image_pgmyuv_pipe image_pgx_pipe image_phm_pipe image_photocd_pipe
+  image_pictor_pipe image_psd_pipe image_qdraw_pipe image_qoi_pipe image_sgi_pipe
+  image_sunrast_pipe image_svg_pipe image_vbn_pipe image_xbm_pipe image_xpm_pipe
+  image_xwd_pipe image_jpegxl_pipe jpegxl_anim
+)
+join() { local IFS=,; echo "$*"; }
+
+# check_names <kind> <name>...: configure silently ignores a component name it
+# does not know, and its names can differ from the ones ffmpeg lists (movtext,
+# not mov_text). Fail instead of building without a component.
+check_names() {
+  local kind=$1 known name status=0
+  shift
+  known=$(./configure "--list-$kind" | tr -s ' \t' '\n')
+  for name in "$@"; do
+    grep -qx -- "$name" <<< "$known" || { echo "build-linux: unknown ${kind%s} \"$name\"" >&2; status=1; }
+  done
+  return "$status"
+}
+FFMPEG_COMPONENTS=(
+  --disable-encoders --enable-encoder="$(join "${ENCODERS[@]}")"
+  --disable-muxers --enable-muxer="$(join "${MUXERS[@]}")"
+  --disable-filters --enable-filter="$(join "${FILTERS[@]}")"
+  --disable-indevs --enable-indev=lavfi --disable-outdevs
+  --disable-protocols --enable-protocol=file,pipe
+  --disable-decoder="$(join "${DENY_DECODERS[@]}")"
+  --disable-demuxer="$(join "${DENY_DEMUXERS[@]}")"
 )
 
 build_ffmpeg() {
@@ -206,6 +325,11 @@ build_ffmpeg() {
     log "applying $(basename "$patch")"
     patch -p1 --forward --fuzz=0 --no-backup-if-mismatch -s < "$patch"
   done
+  check_names encoders "${ENCODERS[@]}"
+  check_names muxers "${MUXERS[@]}"
+  check_names filters "${FILTERS[@]}"
+  check_names decoders "${DENY_DECODERS[@]}"
+  check_names demuxers "${DENY_DEMUXERS[@]}"
   # g++ links the executables so -static-libstdc++ applies to zimg and libvpl.
   ./configure --prefix="$WORK/ffmpeg-prefix" \
     --pkg-config=pkg-config --pkg-config-flags=--static \
@@ -213,7 +337,7 @@ build_ffmpeg() {
     --extra-version=Igloo \
     --extra-cflags="$CFLAGS" --extra-cxxflags="$CXXFLAGS" --extra-ldflags="$LDFLAGS" \
     --extra-ldexeflags=-pie --extra-libs=-ldl \
-    "${FFMPEG_FEATURES[@]}"
+    "${FFMPEG_FEATURES[@]}" "${FFMPEG_COMPONENTS[@]}"
   make -j"$JOBS"
 }
 

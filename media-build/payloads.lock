@@ -7,8 +7,8 @@
 # Linux x64: Igloo's own build, published by .github/workflows/media-build.yml
 # from this directory's recipe. The release also holds BUILDINFO and the
 # corresponding source.
-ffmpeg_linux_amd64   804ed56b14147d36d7e29c57cea8ec951f70347f5e5a90b987ac4d3db14ba0ef  https://github.com/jibanez74/Igloo/releases/download/media-8.1.3-igloo.2/ffmpeg_linux_amd64
-ffprobe_linux_amd64  bb510e798d82ac3e0f4563a5002a5cba2033179e9680fab1cdb3d4fc264f9480  https://github.com/jibanez74/Igloo/releases/download/media-8.1.3-igloo.2/ffprobe_linux_amd64
+ffmpeg_linux_amd64   eda586beefe53ade901a8b63a5cbc78295246f278f323f493361de59e09d8abf  https://github.com/jibanez74/Igloo/releases/download/media-8.1.3-igloo.3/ffmpeg_linux_amd64
+ffprobe_linux_amd64  eccf4ef0ed2442e5b77c2301690160d867be43d1ca0480a0a54e0346fca03566  https://github.com/jibanez74/Igloo/releases/download/media-8.1.3-igloo.3/ffprobe_linux_amd64
 # macOS ARM64: Jellyfin's portable build until this recipe covers macOS.
 ffmpeg_darwin_arm64  f043b55df439a90743faf539ce88b723c84eb8baa0ae3323a894c87b459b85ef  https://github.com/jellyfin/jellyfin-ffmpeg/releases/download/v8.1.3-1/jellyfin-ffmpeg_8.1.3-1_portable_macarm64-gpl.tar.xz  ffmpeg
 ffprobe_darwin_arm64 6e5f60f7387917b33e3c4dfdf1e2d13cc63a1e928c0ac75c4f0dcd89f1c2a90d  https://github.com/jellyfin/jellyfin-ffmpeg/releases/download/v8.1.3-1/jellyfin-ffmpeg_8.1.3-1_portable_macarm64-gpl.tar.xz  ffprobe
