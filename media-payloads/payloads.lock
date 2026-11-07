@@ -4,11 +4,10 @@
 # server/cmd/internal/{ffmpeg,ffprobe}/ and refuses any file whose sha256
 # differs from this pin.
 #
-# Linux x64: Igloo's own build, published by https://github.com/jibanez74/igloo-ffmpeg
-# (its build.yml workflow). The release also holds BUILDINFO and the
-# corresponding source.
-ffmpeg_linux_amd64   eda586beefe53ade901a8b63a5cbc78295246f278f323f493361de59e09d8abf  https://github.com/jibanez74/igloo-ffmpeg/releases/download/media-8.1.3-igloo.3/ffmpeg_linux_amd64
-ffprobe_linux_amd64  eccf4ef0ed2442e5b77c2301690160d867be43d1ca0480a0a54e0346fca03566  https://github.com/jibanez74/igloo-ffmpeg/releases/download/media-8.1.3-igloo.3/ffprobe_linux_amd64
-# macOS ARM64: Jellyfin's portable build until igloo-ffmpeg covers macOS.
-ffmpeg_darwin_arm64  f043b55df439a90743faf539ce88b723c84eb8baa0ae3323a894c87b459b85ef  https://github.com/jellyfin/jellyfin-ffmpeg/releases/download/v8.1.3-1/jellyfin-ffmpeg_8.1.3-1_portable_macarm64-gpl.tar.xz  ffmpeg
-ffprobe_darwin_arm64 6e5f60f7387917b33e3c4dfdf1e2d13cc63a1e928c0ac75c4f0dcd89f1c2a90d  https://github.com/jellyfin/jellyfin-ffmpeg/releases/download/v8.1.3-1/jellyfin-ffmpeg_8.1.3-1_portable_macarm64-gpl.tar.xz  ffprobe
+# Both platforms: Igloo's own build, published by
+# https://github.com/jibanez74/igloo-ffmpeg (its build.yml workflow). The
+# release also holds each platform's BUILDINFO and the corresponding source.
+ffmpeg_linux_amd64   768ad3caf799159e3b3f817b999579f4fdbc12edc1396988b6d33c3ba8b7d08a  https://github.com/jibanez74/igloo-ffmpeg/releases/download/media-8.1.3-igloo.4/ffmpeg_linux_amd64
+ffprobe_linux_amd64  80cd18a560499a86e1367cc1ced3025a35845feaa253cef0e2fb52ae144e8434  https://github.com/jibanez74/igloo-ffmpeg/releases/download/media-8.1.3-igloo.4/ffprobe_linux_amd64
+ffmpeg_darwin_arm64  db87ad75fbb76edd438615eac37348ccde0ac2921a8ddafa770bea1e04443c30  https://github.com/jibanez74/igloo-ffmpeg/releases/download/media-8.1.3-igloo.4/ffmpeg_darwin_arm64
+ffprobe_darwin_arm64 581ba95b3a97a28f3986d696394493e464baaaf23dac5e46d50d8355d6058cef  https://github.com/jibanez74/igloo-ffmpeg/releases/download/media-8.1.3-igloo.4/ffprobe_darwin_arm64
