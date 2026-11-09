@@ -63,6 +63,13 @@ func (s *Scanner) collectPendingShows(ctx context.Context, scan *showScanContext
 		for _, row := range rows {
 			show := row.Show
 			after = show.ID
+			// Checked before any per-show read: an unmatched show stays pending
+			// for good, and every scan passes over it.
+			lookup := row.PendingRetry || !show.TmdbID.Valid
+			backedOff := lookup && !scanner.MissBackoffElapsed(row.RetryAttempts.Int64, row.LastAttemptAt, now)
+			if backedOff {
+				continue
+			}
 			seasons, err := s.Queries.GetShowSeasons(ctx, show.ID)
 			if err != nil {
 				return nil, 0, err
@@ -74,11 +81,6 @@ func (s *Scanner) collectPendingShows(ctx context.Context, scan *showScanContext
 				}
 			}
 			if len(touched) == 0 {
-				continue
-			}
-			lookup := row.PendingRetry || !show.TmdbID.Valid
-			backedOff := lookup && !scanner.MissBackoffElapsed(row.RetryAttempts.Int64, row.LastAttemptAt, now)
-			if backedOff {
 				continue
 			}
 			item := pendingShow{show: show, lookup: lookup, seasons: touched, seasonPending: make(map[int64]bool), episodePending: make(map[int64]bool)}
