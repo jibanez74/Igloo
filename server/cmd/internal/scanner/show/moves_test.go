@@ -267,6 +267,35 @@ func TestShowFileRenamedToAnotherEpisodeIsRelinked(t *testing.T) {
 	}
 }
 
+// A move commits the new path before processing relinks the file, so a
+// reader can refill the old episode's cache with the renamed file in between.
+// The relink's after-commit eviction must therefore cover the episode it
+// unlinked as well as the one it linked.
+func TestShowFileRelinkEvictsTheFormerEpisode(t *testing.T) {
+	s, _, root := setupScanner(t)
+	scannertest.WriteFile(t, filepath.Join(root, "Show/Season 1/S01E01.mkv"), "e1")
+	scanOK(t, s, root)
+	var former int64
+	err := s.DB.QueryRow("SELECT episode_id FROM show_episode_files").Scan(&former)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var last []int64
+	s.InvalidateCommittedShowFile = func(_ int64, episodeIDs []int64) {
+		last = append([]int64(nil), episodeIDs...)
+	}
+	rename(t, root, "Show/Season 1/S01E01.mkv", "Show/Season 1/S01E02.mkv")
+	scanOK(t, s, root)
+	var linked int64
+	err = s.DB.QueryRow("SELECT episode_id FROM show_episode_files").Scan(&linked)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if linked == former || !slices.Contains(last, former) || !slices.Contains(last, linked) {
+		t.Fatalf("relink evicted %v, want former episode %d and linked episode %d", last, former, linked)
+	}
+}
+
 func rename(t *testing.T, root, from, to string) {
 	t.Helper()
 	err := os.MkdirAll(filepath.Dir(filepath.Join(root, to)), 0o755)
