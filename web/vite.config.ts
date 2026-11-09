@@ -91,8 +91,9 @@ export default defineConfig(({ mode }) => {
       // --localstorage-file it evaluates to undefined (with an
       // ExperimentalWarning) and hides jsdom's, so turn Web Storage off in the
       // workers. Node 26 names the flag --webstorage (has() lists only the
-      // positive form); older Node knows only --no-experimental-webstorage,
-      // and Node before 22 has neither.
+      // positive form). Node 22.4+ knows --no-experimental-webstorage, a
+      // no-op before 25 since Web Storage is off there by default; Node
+      // before 22.4 has neither flag.
       execArgv: process.allowedNodeEnvironmentFlags.has("--webstorage")
         ? ["--no-webstorage"]
         : process.allowedNodeEnvironmentFlags.has(
