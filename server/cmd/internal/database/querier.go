@@ -461,10 +461,9 @@ type Querier interface {
 	// pages stay stable.
 	GetTracksAlphabetical(ctx context.Context, arg GetTracksAlphabeticalParams) ([]GetTracksAlphabeticalRow, error)
 	GetTracksByAlbumID(ctx context.Context, albumID sql.NullInt64) ([]GetTracksByAlbumIDRow, error)
-	// Same UNION-of-indexed-lookups shape as GetMusiciansAlphabetical's track_count:
-	// the equivalent OR over tracks and track_musicians cannot use an index. IN
-	// ignores duplicates, so UNION ALL skips the sort that UNION would add.
-	GetTracksByMusicianID(ctx context.Context, musicianID sql.NullInt64) ([]GetTracksByMusicianIDRow, error)
+	// Reads the credits from track_musicians alone, like GetMusiciansAlphabetical's
+	// track_count, so the list and the count on the artist's card agree.
+	GetTracksByMusicianID(ctx context.Context, musicianID int64) ([]GetTracksByMusicianIDRow, error)
 	GetTracksCount(ctx context.Context) (int64, error)
 	GetUser(ctx context.Context, id int64) (User, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)

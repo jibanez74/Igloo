@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 
 	"igloo/cmd/internal/database"
@@ -81,6 +82,78 @@ func TestGetMusiciansAlphabetical_BreaksSortNameTiesByID(t *testing.T) {
 		if err != nil || len(resp.Data.Musicians) != 1 || resp.Data.Musicians[0].ID != wantID {
 			t.Fatalf("page %d = %s (%v), want musician %d", page+1, w.Body.String(), err, wantID)
 		}
+	}
+}
+
+// The scanner credits a track's primary artist through track_musicians too, so
+// the list, the detail page and search all read that table and must agree,
+// counting a track the artist only features on once.
+func TestMusicianTrackCountsAgreeAcrossListDetailAndSearch(t *testing.T) {
+	app := setupSessionTestApp(t)
+	member := createTestUser(t, app, "Member", "member@example.com", false)
+	handler := authenticatedRouter(t, app, member.ID)
+
+	_, err := app.DB.Exec(`
+		INSERT INTO musicians (id, name, sort_name) VALUES (1, 'Aurora', 'aurora'), (2, 'Borealis', 'borealis');
+		INSERT INTO tracks (
+			id, title, sort_title, file_path, file_name, container, mime_type, codec,
+			size, track_index, duration, disc, channels, channel_layout, bit_rate, profile, musician_id
+		) VALUES
+			(1, 'Sunrise', 'sunrise', '/music/sunrise.flac', 'sunrise.flac', 'flac', 'audio/flac', 'flac', 1, 1, 180, 1, '2', 'stereo', 1000, '', 1),
+			(2, 'Daybreak', 'daybreak', '/music/daybreak.flac', 'daybreak.flac', 'flac', 'audio/flac', 'flac', 1, 2, 180, 1, '2', 'stereo', 1000, '', 2);
+		INSERT INTO track_musicians (track_id, musician_id) VALUES (1, 1), (2, 2), (2, 1);
+	`)
+	if err != nil {
+		t.Fatalf("seed credits: %v", err)
+	}
+
+	type card struct {
+		ID         int64 `json:"id"`
+		TrackCount int64 `json:"track_count"`
+	}
+	var resp struct {
+		Data struct {
+			Musicians []card `json:"musicians"`
+			Results   []card `json:"results"`
+			Tracks    []struct {
+				ID int64 `json:"id"`
+			} `json:"tracks"`
+		} `json:"data"`
+	}
+	get := func(t *testing.T, target string) {
+		t.Helper()
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, target, nil))
+		if w.Code != http.StatusOK {
+			t.Fatalf("GET %s status = %d: %s", target, w.Code, w.Body.String())
+		}
+		resp.Data.Musicians, resp.Data.Results, resp.Data.Tracks = nil, nil, nil
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		if err != nil {
+			t.Fatalf("decode %s: %v", target, err)
+		}
+	}
+
+	get(t, "/api/music/musicians")
+	want := []card{{ID: 1, TrackCount: 2}, {ID: 2, TrackCount: 1}}
+	if !slices.Equal(resp.Data.Musicians, want) {
+		t.Errorf("list = %+v, want %+v", resp.Data.Musicians, want)
+	}
+
+	get(t, "/api/search/musicians?q=aurora")
+	want = []card{{ID: 1, TrackCount: 2}}
+	if !slices.Equal(resp.Data.Results, want) {
+		t.Errorf("search = %+v, want %+v", resp.Data.Results, want)
+	}
+
+	// sort_title order: Daybreak, then Sunrise.
+	get(t, "/api/music/musicians/1")
+	var tracks []int64
+	for _, track := range resp.Data.Tracks {
+		tracks = append(tracks, track.ID)
+	}
+	if !slices.Equal(tracks, []int64{2, 1}) {
+		t.Errorf("detail tracks = %v, want [2 1]", tracks)
 	}
 }
 
