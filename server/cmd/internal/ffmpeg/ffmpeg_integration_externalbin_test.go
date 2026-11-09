@@ -3,6 +3,7 @@
 package ffmpeg
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -83,6 +84,54 @@ func TestExternalFFmpegCPUHLSRemuxAndSubtitles(t *testing.T) {
 		// only ever samples the leading fragments, so the playlist must not
 		// claim independence even when this fixture happens to validate clean.
 		assertHLSPlaylistIndependence(t, outDir, false)
+	})
+
+	// Copied HEVC is tagged hvc1 and keeps its HDR signalling, and the
+	// validator accepts the CRA pictures Blu-ray-style open GOPs start on.
+	t.Run("HEVC HDR10 remux", func(t *testing.T) {
+		outDir := filepath.Join(workspace, "HEVC remux HLS")
+		err := os.Mkdir(outDir, 0755)
+		if err != nil {
+			t.Fatalf("mkdir HEVC remux output: %v", err)
+		}
+		// FFmpeg runs in its output directory, so the fixture path is absolute.
+		sourcePath, absErr := filepath.Abs(filepath.Join("testdata", "hevc-hdr10-open-gop.mkv"))
+		if absErr != nil {
+			t.Fatalf("resolve HEVC fixture: %v", absErr)
+		}
+		params := basicHLSParams(outDir)
+		params.SourcePath = sourcePath
+		params.Profile = helpers.HLS_PROFILE_REMUX
+		params.CopyVideo = true
+		params.CopyVideoTag = helpers.HLSCopyVideoTag("hevc")
+		params.CopyAudio = true
+		runExternalHLSAndWait(t, f, params)
+		segments := assertCompleteSequentialHLSOutput(t, outDir)
+		if len(segments) < 2 {
+			t.Fatalf("HEVC remux produced %d segments, want at least 2", len(segments))
+		}
+		summary, validationErr := ValidateRemuxSafety(outDir, len(segments))
+		if validationErr != nil {
+			t.Fatalf("ValidateRemuxSafety: %v", validationErr)
+		}
+		if summary.CheckedSyncSamples <= len(segments) {
+			t.Fatalf("remux validation summary = %#v, want more sync samples than the %d segments", summary, len(segments))
+		}
+
+		initData, readErr := os.ReadFile(filepath.Join(outDir, helpers.HLS_INIT_FILENAME))
+		if readErr != nil {
+			t.Fatalf("read init.mp4: %v", readErr)
+		}
+		// colr nclx with primaries 9 (BT.2020), transfer 16 (PQ), matrix 9.
+		hdr10Colr := []byte{'c', 'o', 'l', 'r', 'n', 'c', 'l', 'x', 0, 9, 0, 16, 0, 9}
+		for _, want := range [][]byte{[]byte("hvc1"), []byte("hvcC"), hdr10Colr} {
+			if !bytes.Contains(initData, want) {
+				t.Errorf("init.mp4 is missing %q", want)
+			}
+		}
+		if bytes.Contains(initData, []byte("hev1")) {
+			t.Error("init.mp4 kept FFmpeg's default hev1 sample entry")
+		}
 	})
 
 	t.Run("subtitle conversion", func(t *testing.T) {

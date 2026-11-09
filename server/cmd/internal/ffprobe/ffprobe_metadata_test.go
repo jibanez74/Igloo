@@ -315,6 +315,52 @@ func TestStreamRotationFromSideDataList(t *testing.T) {
 	}
 }
 
+func TestStreamDolbyVisionFromSideDataList(t *testing.T) {
+	cases := []struct {
+		name              string
+		payload           string
+		wantProfile       int64
+		wantCompatibility int64
+		wantRecord        bool
+	}{
+		{
+			// What the pinned ffprobe (8.1.3-Igloo) prints for a profile 7
+			// Blu-ray remux.
+			name:              "profile 7 record",
+			payload:           `{"side_data_list": [{"side_data_type": "DOVI configuration record", "dv_version_major": 1, "dv_version_minor": 0, "dv_profile": 7, "dv_level": 6, "rpu_present_flag": 1, "el_present_flag": 1, "bl_present_flag": 1, "dv_bl_signal_compatibility_id": 6, "dv_md_compression": "none"}]}`,
+			wantProfile:       7,
+			wantCompatibility: 6,
+			wantRecord:        true,
+		},
+		{
+			// Profile 5 really reports compatibility id 0, which must stay
+			// distinguishable from no record.
+			name:        "profile 5 record",
+			payload:     `{"side_data_list": [{"side_data_type": "Display Matrix", "rotation": 0}, {"side_data_type": "DOVI configuration record", "dv_profile": 5, "dv_bl_signal_compatibility_id": 0}]}`,
+			wantProfile: 5,
+			wantRecord:  true,
+		},
+		{
+			name:    "no record",
+			payload: `{"side_data_list": [{"side_data_type": "Display Matrix", "rotation": 90}]}`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var stream Stream
+			err := json.Unmarshal([]byte(tc.payload), &stream)
+			if err != nil {
+				t.Fatalf("Unmarshal failed: %v", err)
+			}
+			profile, compatibility, hasRecord := stream.DolbyVision()
+			if profile != tc.wantProfile || compatibility != tc.wantCompatibility || hasRecord != tc.wantRecord {
+				t.Errorf("DolbyVision() = (%d, %d, %v), want (%d, %d, %v)", profile, compatibility, hasRecord, tc.wantProfile, tc.wantCompatibility, tc.wantRecord)
+			}
+		})
+	}
+}
+
 func TestTagAliasSelectionIsDeterministic(t *testing.T) {
 	cases := []struct {
 		input string

@@ -38,6 +38,18 @@ func TestBuildHLSAssetQuerySuffix(t *testing.T) {
 	if got != "?audio_channels=6&audio_codec=eac3&audio_track=2&playback_session="+testPlaybackSessionID+"&reload=7&start=120" {
 		t.Fatalf("buildHLSAssetQuerySuffix() with audio profile = %q", got)
 	}
+
+	// video_codecs is part of the session key, so it rides along too.
+	got = buildHLSAssetQuerySuffix(hlsAssetQueryParams{
+		AudioTrack:      testIntPtr(2),
+		VideoCodecs:     helpers.HLSVideoCodecs{HEVC: true},
+		StartSec:        testIntPtr(120),
+		PlaybackSession: testPlaybackSessionID,
+	})
+
+	if got != "?audio_track=2&playback_session="+testPlaybackSessionID+"&start=120&video_codecs=hevc" {
+		t.Fatalf("buildHLSAssetQuerySuffix() with video codecs = %q", got)
+	}
 }
 
 func TestFinalizeEventPlaylist(t *testing.T) {

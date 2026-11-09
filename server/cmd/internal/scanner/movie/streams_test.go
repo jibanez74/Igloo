@@ -165,3 +165,68 @@ func TestProcessMovieStreamsPersistsFieldOrderAndRotation(t *testing.T) {
 		})
 	}
 }
+
+// The remux gate refuses Dolby Vision profile 5 by its compatibility id of 0,
+// so the scanner must keep 0 apart from a stream without a record.
+func TestProcessMovieStreamsPersistsDolbyVision(t *testing.T) {
+	tests := []struct {
+		name              string
+		sideData          []ffprobe.StreamSideData
+		wantProfile       sql.NullInt64
+		wantCompatibility sql.NullInt64
+	}{
+		{
+			name:              "profile 8.1",
+			sideData:          []ffprobe.StreamSideData{{SideDataType: "DOVI configuration record", DVProfile: 8, DVBLSignalCompatibilityID: 1}},
+			wantProfile:       sql.NullInt64{Int64: 8, Valid: true},
+			wantCompatibility: sql.NullInt64{Int64: 1, Valid: true},
+		},
+		{
+			name:              "profile 5 keeps compatibility 0",
+			sideData:          []ffprobe.StreamSideData{{SideDataType: "DOVI configuration record", DVProfile: 5}},
+			wantProfile:       sql.NullInt64{Int64: 5, Valid: true},
+			wantCompatibility: sql.NullInt64{Int64: 0, Valid: true},
+		},
+		{
+			name: "no record persists as NULL",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testScanner := setupMovieScanner(t)
+			ctx := context.Background()
+
+			movieID, err := testScanner.queries.UpsertMovie(ctx, database.UpsertMovieParams{
+				Title:     "Dolby Vision Movie",
+				FilePath:  "/movies/Dolby.Vision.Movie.2024.mkv",
+				FileName:  "Dolby.Vision.Movie.2024.mkv",
+				Size:      1024,
+				Container: "mkv",
+				MimeType:  helpers.VideoMimeTypes["mkv"],
+			})
+			if err != nil {
+				t.Fatalf("insert movie: %v", err)
+			}
+
+			fixture := movieScannerMetadataFixture("120")
+			fixture.Streams[0].SideDataList = tt.sideData
+
+			_, err = processMovieStreams(ctx, testScanner.queries, movieID, fixture.Streams)
+			if err != nil {
+				t.Fatalf("process movie streams: %v", err)
+			}
+
+			videoStreams, err := testScanner.queries.GetVideoStreamsByMovieID(ctx, movieID)
+			if err != nil {
+				t.Fatalf("get video streams: %v", err)
+			}
+			if len(videoStreams) == 0 {
+				t.Fatal("no video streams persisted")
+			}
+			if videoStreams[0].DvProfile != tt.wantProfile || videoStreams[0].DvBlSignalCompatibilityID != tt.wantCompatibility {
+				t.Errorf("dolby vision = %+v/%+v, want %+v/%+v", videoStreams[0].DvProfile, videoStreams[0].DvBlSignalCompatibilityID, tt.wantProfile, tt.wantCompatibility)
+			}
+		})
+	}
+}

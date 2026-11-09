@@ -49,25 +49,26 @@ func TestHLSSessionKey(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			key := HLSSessionKey(movieRef(123), "720p_3mbps", &audioTrack, tt.audioProfile, testPlaybackSessionID, 40, 456)
-			want := "user:456:movie:123:720p_3mbps:audio:2:" + tt.wantMode + ":session:" + testPlaybackSessionID + ":start:40"
+			key := HLSSessionKey(movieRef(123), "720p_3mbps", &audioTrack, tt.audioProfile, helpers.HLSVideoCodecs{}, testPlaybackSessionID, 40, 456)
+			want := "user:456:movie:123:720p_3mbps:audio:2:" + tt.wantMode + ":video:h264:session:" + testPlaybackSessionID + ":start:40"
 			if key != want {
 				t.Errorf("HLSSessionKey = %q, want %q", key, want)
 			}
 		})
 	}
 
-	base := HLSSessionKey(movieRef(123), "720p_3mbps", &audioTrack, nil, testPlaybackSessionID, 40, 456)
+	base := HLSSessionKey(movieRef(123), "720p_3mbps", &audioTrack, nil, helpers.HLSVideoCodecs{}, testPlaybackSessionID, 40, 456)
 	otherAudioTrack := 3
 	variants := map[string]string{
-		"owner":            HLSSessionKey(movieRef(123), "720p_3mbps", &audioTrack, nil, testPlaybackSessionID, 40, 457),
-		"movie":            HLSSessionKey(movieRef(124), "720p_3mbps", &audioTrack, nil, testPlaybackSessionID, 40, 456),
-		"profile":          HLSSessionKey(movieRef(123), "1080p_8mbps", &audioTrack, nil, testPlaybackSessionID, 40, 456),
-		"audio track":      HLSSessionKey(movieRef(123), "720p_3mbps", &otherAudioTrack, nil, testPlaybackSessionID, 40, 456),
-		"audio mode":       HLSSessionKey(movieRef(123), "720p_3mbps", &audioTrack, explicitAudioRequest(helpers.HLSAudioCodecAC3, 6), testPlaybackSessionID, 40, 456),
-		"playback session": HLSSessionKey(movieRef(123), "720p_3mbps", &audioTrack, nil, testOtherPlaybackSessionID, 40, 456),
-		"start":            HLSSessionKey(movieRef(123), "720p_3mbps", &audioTrack, nil, testPlaybackSessionID, 41, 456),
-		"media kind":       HLSSessionKey(episodeRef(123), "720p_3mbps", &audioTrack, nil, testPlaybackSessionID, 40, 456),
+		"owner":            HLSSessionKey(movieRef(123), "720p_3mbps", &audioTrack, nil, helpers.HLSVideoCodecs{}, testPlaybackSessionID, 40, 457),
+		"movie":            HLSSessionKey(movieRef(124), "720p_3mbps", &audioTrack, nil, helpers.HLSVideoCodecs{}, testPlaybackSessionID, 40, 456),
+		"profile":          HLSSessionKey(movieRef(123), "1080p_8mbps", &audioTrack, nil, helpers.HLSVideoCodecs{}, testPlaybackSessionID, 40, 456),
+		"audio track":      HLSSessionKey(movieRef(123), "720p_3mbps", &otherAudioTrack, nil, helpers.HLSVideoCodecs{}, testPlaybackSessionID, 40, 456),
+		"audio mode":       HLSSessionKey(movieRef(123), "720p_3mbps", &audioTrack, explicitAudioRequest(helpers.HLSAudioCodecAC3, 6), helpers.HLSVideoCodecs{}, testPlaybackSessionID, 40, 456),
+		"playback session": HLSSessionKey(movieRef(123), "720p_3mbps", &audioTrack, nil, helpers.HLSVideoCodecs{}, testOtherPlaybackSessionID, 40, 456),
+		"start":            HLSSessionKey(movieRef(123), "720p_3mbps", &audioTrack, nil, helpers.HLSVideoCodecs{}, testPlaybackSessionID, 41, 456),
+		"media kind":       HLSSessionKey(episodeRef(123), "720p_3mbps", &audioTrack, nil, helpers.HLSVideoCodecs{}, testPlaybackSessionID, 40, 456),
+		"video codecs":     HLSSessionKey(movieRef(123), "720p_3mbps", &audioTrack, nil, helpers.HLSVideoCodecs{HEVC: true}, testPlaybackSessionID, 40, 456),
 	}
 	for dimension, key := range variants {
 		if key == base {
@@ -1109,6 +1110,7 @@ func TestGetOrCreateHLSSession_EffectiveStartControlsKeyAndFFmpeg(t *testing.T) 
 				helpers.HLS_PROFILE_720P_3MBPS,
 				testIntPtr(0),
 				nil,
+				helpers.HLSVideoCodecs{},
 				testPlaybackSessionID,
 				tt.requestedStart,
 				userID,
@@ -1123,6 +1125,7 @@ func TestGetOrCreateHLSSession_EffectiveStartControlsKeyAndFFmpeg(t *testing.T) 
 				helpers.HLS_PROFILE_720P_3MBPS,
 				testIntPtr(0),
 				nil,
+				helpers.HLSVideoCodecs{},
 				testPlaybackSessionID,
 				tt.wantStart,
 				userID,
@@ -1636,7 +1639,7 @@ func TestGetOrCreateHLSSession_PreflightFallbackDoesNotRerunPreflight(t *testing
 	go func() {
 		session, _, createErr := app.GetOrCreateHLSSession(
 			context.Background(), movieRef(movieID), helpers.HLS_PROFILE_REMUX,
-			testIntPtr(0), nil, testPlaybackSessionID, 0, userID,
+			testIntPtr(0), nil, helpers.HLSVideoCodecs{}, testPlaybackSessionID, 0, userID,
 		)
 		resultCh <- createResult{session: session, err: createErr}
 	}()

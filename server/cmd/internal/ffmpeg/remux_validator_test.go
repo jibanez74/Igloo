@@ -1,6 +1,7 @@
 package ffmpeg
 
 import (
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -105,7 +106,7 @@ func TestValidateRemuxSafetyRejectsMissingVideoConfiguration(t *testing.T) {
 	dir := t.TempDir()
 	initData := fmp4testutil.BuildInitMP4()
 	_, videoTrak := videoTrakForTest(t, initData)
-	avcC, found, err := findAVCConfigBox(initData, videoTrak)
+	avcC, found, err := findVideoConfigBox(initData, videoTrak)
 	if err != nil || !found {
 		t.Fatalf("fixture did not contain avcC: found=%v err=%v", found, err)
 	}
@@ -229,5 +230,43 @@ func TestValidateRemuxSafetyReturnsPartialSummaryOnLaterSegmentFailure(t *testin
 				t.Fatalf("summary = %#v, want 1 checked segment with 1 sync sample", summary)
 			}
 		})
+	}
+}
+
+func TestValidateRemuxSafetyAcceptsHEVCIRAPFragments(t *testing.T) {
+	for _, nalType := range []byte{fmp4testutil.HEVCNALIDRWRADL, fmp4testutil.HEVCNALCRA} {
+		t.Run(fmt.Sprintf("type %d", nalType), func(t *testing.T) {
+			dir := t.TempDir()
+			segments := make([][]byte, 0, helpers.HLS_REMUX_PREVALIDATE_SEGMENTS)
+			for range helpers.HLS_REMUX_PREVALIDATE_SEGMENTS {
+				segments = append(segments, fmp4testutil.BuildSegmentWithFlags(fmp4testutil.BuildHEVCVideoSample(nalType), 0, true))
+			}
+			err := fmp4testutil.WriteFragmentFiles(dir, fmp4testutil.BuildHEVCInitMP4("hvc1"), segments...)
+			if err != nil {
+				t.Fatalf("WriteFragmentFiles: %v", err)
+			}
+
+			summary, err := ValidateRemuxSafety(dir, helpers.HLS_REMUX_PREVALIDATE_SEGMENTS)
+			if err != nil {
+				t.Fatalf("ValidateRemuxSafety returned error: %v", err)
+			}
+			if summary.CheckedSyncSamples != helpers.HLS_REMUX_PREVALIDATE_SEGMENTS {
+				t.Fatalf("CheckedSyncSamples = %d, want %d", summary.CheckedSyncSamples, helpers.HLS_REMUX_PREVALIDATE_SEGMENTS)
+			}
+		})
+	}
+}
+
+func TestValidateRemuxSafetyRejectsHEVCTrailingSyncSample(t *testing.T) {
+	dir := t.TempDir()
+	segment := fmp4testutil.BuildSegmentWithFlags(fmp4testutil.BuildHEVCVideoSample(fmp4testutil.HEVCNALTrailR), 0, false)
+	err := fmp4testutil.WriteFragmentFiles(dir, fmp4testutil.BuildHEVCInitMP4("hev1"), segment)
+	if err != nil {
+		t.Fatalf("WriteFragmentFiles: %v", err)
+	}
+
+	_, err = ValidateRemuxSafety(dir, 1)
+	if err == nil || !strings.Contains(err.Error(), "non-IRAP") {
+		t.Fatalf("error = %v, want a non-IRAP rejection", err)
 	}
 }

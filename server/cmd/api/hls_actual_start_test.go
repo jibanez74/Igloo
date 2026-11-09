@@ -291,7 +291,7 @@ func TestHLSManifest_ActualStartWaitIsBounded(t *testing.T) {
 		t.Fatalf("actual start header = %q before the measurement finished, want none", got)
 	}
 
-	key := HLSSessionKey(movieRef(movieID), helpers.HLS_PROFILE_REMUX, testIntPtr(0), nil, testPlaybackSessionID, 1790, 42)
+	key := HLSSessionKey(movieRef(movieID), helpers.HLS_PROFILE_REMUX, testIntPtr(0), nil, helpers.HLSVideoCodecs{}, testPlaybackSessionID, 1790, 42)
 	cached, found := app.HLSSessionCache.Get(key)
 	if !found {
 		t.Fatalf("session %q was not cached", key)

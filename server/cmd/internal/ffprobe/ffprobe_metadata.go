@@ -53,6 +53,9 @@ type Stream struct {
 type StreamSideData struct {
 	SideDataType string `json:"side_data_type"`
 	Rotation     int64  `json:"rotation"`
+	// Set on the "DOVI configuration record" entry.
+	DVProfile                 int64 `json:"dv_profile"`
+	DVBLSignalCompatibilityID int64 `json:"dv_bl_signal_compatibility_id"`
 }
 
 // Rotation returns the display-matrix rotation in degrees and whether a
@@ -65,6 +68,18 @@ func (s Stream) Rotation() (int64, bool) {
 		}
 	}
 	return 0, false
+}
+
+// DolbyVision returns the stream's Dolby Vision profile and base-layer
+// compatibility id, and whether it carries a configuration record at all, so
+// callers can tell a compatibility id of 0 from no Dolby Vision.
+func (s Stream) DolbyVision() (int64, int64, bool) {
+	for _, sideData := range s.SideDataList {
+		if sideData.SideDataType == "DOVI configuration record" {
+			return sideData.DVProfile, sideData.DVBLSignalCompatibilityID, true
+		}
+	}
+	return 0, 0, false
 }
 
 // StreamDisposition carries only the flags Igloo acts on: cover-art detection

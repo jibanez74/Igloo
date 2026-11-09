@@ -299,8 +299,8 @@ func TestInvalidateHLSSessionsForMovie(t *testing.T) {
 
 	const roomA = int64(41)
 	const roomB = int64(42)
-	personalKeyA := HLSSessionKey(movieRef(1), "720p_3mbps", nil, nil, "session-a", 0, 100)
-	personalKeyB := HLSSessionKey(movieRef(2), "720p_3mbps", nil, nil, "session-b", 0, 100)
+	personalKeyA := HLSSessionKey(movieRef(1), "720p_3mbps", nil, nil, helpers.HLSVideoCodecs{}, "session-a", 0, 100)
+	personalKeyB := HLSSessionKey(movieRef(2), "720p_3mbps", nil, nil, helpers.HLSVideoCodecs{}, "session-b", 0, 100)
 
 	app.HLSSessionCache.SetDefault(personalKeyA, &HLSSession{Media: movieRef(1), FileID: 1, TempDir: t.TempDir()})
 	app.HLSSessionCache.SetDefault(RoomHLSSessionKey(roomA), &HLSSession{Media: movieRef(1), FileID: 1, IsRoom: true, TempDir: t.TempDir()})

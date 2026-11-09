@@ -28,11 +28,11 @@ func sourceStreamFingerprintBase(source playbackSource, streamIndex int64) strin
 // remuxVerdictProducerRevision versions everything on our side of the verdict:
 // the remux FFmpeg arguments and ValidateRemuxSafety itself. Bump it whenever
 // either changes, so verdicts recorded against the old behavior are discarded.
-const remuxVerdictProducerRevision = 1
+const remuxVerdictProducerRevision = 2
 
 // remuxSafetyFingerprint keys the persisted remux-safety verdict. Beyond file
 // identity it includes the stream properties the safety decision reads
-// (isBrowserSafeH264RemuxCandidate), so a rescan that changes stream rows
+// (isRemuxCandidate), so a rescan that changes stream rows
 // without touching the file invalidates the verdict.
 //
 // A verdict validates FFmpeg's fMP4 output, so the producer is keyed too:
@@ -43,14 +43,19 @@ func remuxSafetyFingerprint(
 	video *database.VideoStream,
 	ffmpegVersion string,
 ) string {
+	dolbyVision := "none"
+	if video.DvBlSignalCompatibilityID.Valid {
+		dolbyVision = fmt.Sprintf("%d.%d", video.DvProfile.Int64, video.DvBlSignalCompatibilityID.Int64)
+	}
 	return fmt.Sprintf(
-		"%s:%s:%s:%d:%s:%s:p%d:%s",
+		"%s:%s:%s:%d:%s:%s:dv%s:p%d:%s",
 		sourceStreamFingerprintBase(source, video.StreamIndex),
 		video.Codec,
 		video.CodecProfile.String,
 		video.BitDepth.Int64,
 		video.PixelFormat.String,
 		video.FieldOrder.String,
+		dolbyVision,
 		remuxVerdictProducerRevision,
 		ffmpegVersion,
 	)

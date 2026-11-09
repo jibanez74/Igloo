@@ -2172,6 +2172,8 @@ SELECT
   color_transfer,
   field_order,
   rotation,
+  dv_profile,
+  dv_bl_signal_compatibility_id,
   language,
   title
 FROM show_video_streams
@@ -2180,30 +2182,32 @@ ORDER BY stream_index
 `
 
 type GetShowVideoStreamsByFileIDRow struct {
-	ID             int64          `json:"id"`
-	FileID         int64          `json:"file_id"`
-	StreamIndex    int64          `json:"stream_index"`
-	Codec          string         `json:"codec"`
-	CodecProfile   sql.NullString `json:"codec_profile"`
-	CodecLevel     sql.NullInt64  `json:"codec_level"`
-	BitRate        int64          `json:"bit_rate"`
-	Width          int64          `json:"width"`
-	Height         int64          `json:"height"`
-	CodedWidth     sql.NullInt64  `json:"coded_width"`
-	CodedHeight    sql.NullInt64  `json:"coded_height"`
-	AspectRatio    sql.NullString `json:"aspect_ratio"`
-	FrameRate      float64        `json:"frame_rate"`
-	AvgFrameRate   sql.NullString `json:"avg_frame_rate"`
-	BitDepth       sql.NullInt64  `json:"bit_depth"`
-	PixelFormat    sql.NullString `json:"pixel_format"`
-	ColorRange     sql.NullString `json:"color_range"`
-	ColorSpace     sql.NullString `json:"color_space"`
-	ColorPrimaries sql.NullString `json:"color_primaries"`
-	ColorTransfer  sql.NullString `json:"color_transfer"`
-	FieldOrder     sql.NullString `json:"field_order"`
-	Rotation       sql.NullInt64  `json:"rotation"`
-	Language       sql.NullString `json:"language"`
-	Title          sql.NullString `json:"title"`
+	ID                        int64          `json:"id"`
+	FileID                    int64          `json:"file_id"`
+	StreamIndex               int64          `json:"stream_index"`
+	Codec                     string         `json:"codec"`
+	CodecProfile              sql.NullString `json:"codec_profile"`
+	CodecLevel                sql.NullInt64  `json:"codec_level"`
+	BitRate                   int64          `json:"bit_rate"`
+	Width                     int64          `json:"width"`
+	Height                    int64          `json:"height"`
+	CodedWidth                sql.NullInt64  `json:"coded_width"`
+	CodedHeight               sql.NullInt64  `json:"coded_height"`
+	AspectRatio               sql.NullString `json:"aspect_ratio"`
+	FrameRate                 float64        `json:"frame_rate"`
+	AvgFrameRate              sql.NullString `json:"avg_frame_rate"`
+	BitDepth                  sql.NullInt64  `json:"bit_depth"`
+	PixelFormat               sql.NullString `json:"pixel_format"`
+	ColorRange                sql.NullString `json:"color_range"`
+	ColorSpace                sql.NullString `json:"color_space"`
+	ColorPrimaries            sql.NullString `json:"color_primaries"`
+	ColorTransfer             sql.NullString `json:"color_transfer"`
+	FieldOrder                sql.NullString `json:"field_order"`
+	Rotation                  sql.NullInt64  `json:"rotation"`
+	DvProfile                 sql.NullInt64  `json:"dv_profile"`
+	DvBlSignalCompatibilityID sql.NullInt64  `json:"dv_bl_signal_compatibility_id"`
+	Language                  sql.NullString `json:"language"`
+	Title                     sql.NullString `json:"title"`
 }
 
 // Video streams of a show file, in the same order the movie twin uses.
@@ -2239,6 +2243,8 @@ func (q *Queries) GetShowVideoStreamsByFileID(ctx context.Context, fileID int64)
 			&i.ColorTransfer,
 			&i.FieldOrder,
 			&i.Rotation,
+			&i.DvProfile,
+			&i.DvBlSignalCompatibilityID,
 			&i.Language,
 			&i.Title,
 		); err != nil {
@@ -2625,37 +2631,41 @@ INSERT INTO show_video_streams (
   color_transfer,
   field_order,
   rotation,
+  dv_profile,
+  dv_bl_signal_compatibility_id,
   language,
   title
 )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type InsertShowVideoStreamParams struct {
-	FileID         int64          `json:"file_id"`
-	StreamIndex    int64          `json:"stream_index"`
-	Codec          string         `json:"codec"`
-	CodecProfile   sql.NullString `json:"codec_profile"`
-	CodecLevel     sql.NullInt64  `json:"codec_level"`
-	BitRate        int64          `json:"bit_rate"`
-	Width          int64          `json:"width"`
-	Height         int64          `json:"height"`
-	CodedWidth     sql.NullInt64  `json:"coded_width"`
-	CodedHeight    sql.NullInt64  `json:"coded_height"`
-	AspectRatio    sql.NullString `json:"aspect_ratio"`
-	FrameRate      float64        `json:"frame_rate"`
-	AvgFrameRate   sql.NullString `json:"avg_frame_rate"`
-	BitDepth       sql.NullInt64  `json:"bit_depth"`
-	PixelFormat    sql.NullString `json:"pixel_format"`
-	ColorRange     sql.NullString `json:"color_range"`
-	ColorSpace     sql.NullString `json:"color_space"`
-	ColorPrimaries sql.NullString `json:"color_primaries"`
-	ColorTransfer  sql.NullString `json:"color_transfer"`
-	FieldOrder     sql.NullString `json:"field_order"`
-	Rotation       sql.NullInt64  `json:"rotation"`
-	Language       sql.NullString `json:"language"`
-	Title          sql.NullString `json:"title"`
+	FileID                    int64          `json:"file_id"`
+	StreamIndex               int64          `json:"stream_index"`
+	Codec                     string         `json:"codec"`
+	CodecProfile              sql.NullString `json:"codec_profile"`
+	CodecLevel                sql.NullInt64  `json:"codec_level"`
+	BitRate                   int64          `json:"bit_rate"`
+	Width                     int64          `json:"width"`
+	Height                    int64          `json:"height"`
+	CodedWidth                sql.NullInt64  `json:"coded_width"`
+	CodedHeight               sql.NullInt64  `json:"coded_height"`
+	AspectRatio               sql.NullString `json:"aspect_ratio"`
+	FrameRate                 float64        `json:"frame_rate"`
+	AvgFrameRate              sql.NullString `json:"avg_frame_rate"`
+	BitDepth                  sql.NullInt64  `json:"bit_depth"`
+	PixelFormat               sql.NullString `json:"pixel_format"`
+	ColorRange                sql.NullString `json:"color_range"`
+	ColorSpace                sql.NullString `json:"color_space"`
+	ColorPrimaries            sql.NullString `json:"color_primaries"`
+	ColorTransfer             sql.NullString `json:"color_transfer"`
+	FieldOrder                sql.NullString `json:"field_order"`
+	Rotation                  sql.NullInt64  `json:"rotation"`
+	DvProfile                 sql.NullInt64  `json:"dv_profile"`
+	DvBlSignalCompatibilityID sql.NullInt64  `json:"dv_bl_signal_compatibility_id"`
+	Language                  sql.NullString `json:"language"`
+	Title                     sql.NullString `json:"title"`
 }
 
 func (q *Queries) InsertShowVideoStream(ctx context.Context, arg InsertShowVideoStreamParams) error {
@@ -2681,6 +2691,8 @@ func (q *Queries) InsertShowVideoStream(ctx context.Context, arg InsertShowVideo
 		arg.ColorTransfer,
 		arg.FieldOrder,
 		arg.Rotation,
+		arg.DvProfile,
+		arg.DvBlSignalCompatibilityID,
 		arg.Language,
 		arg.Title,
 	)

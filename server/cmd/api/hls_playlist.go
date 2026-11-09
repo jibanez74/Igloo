@@ -15,7 +15,10 @@ type hlsAssetQueryParams struct {
 	// AudioProfile propagates the normalized explicit audio pair onto every
 	// rewritten init/segment URL so asset requests compute the same session
 	// key as the manifest. Nil (legacy) adds nothing.
-	AudioProfile    *helpers.HLSAudioProfileRequest
+	AudioProfile *helpers.HLSAudioProfileRequest
+	// VideoCodecs propagates video_codecs the same way; H.264 only adds
+	// nothing.
+	VideoCodecs     helpers.HLSVideoCodecs
 	StartSec        *int
 	PlaybackSession string
 	Reload          string
@@ -29,6 +32,10 @@ func buildHLSAssetQuerySuffix(query hlsAssetQueryParams) string {
 	if query.AudioProfile != nil {
 		params.Set("audio_codec", string(query.AudioProfile.Codec))
 		params.Set("audio_channels", strconv.Itoa(query.AudioProfile.MaxChannels))
+	}
+	videoCodecs := query.VideoCodecs.QueryValue()
+	if videoCodecs != "" {
+		params.Set("video_codecs", videoCodecs)
 	}
 	if query.StartSec != nil {
 		params.Set("start", strconv.Itoa(*query.StartSec))

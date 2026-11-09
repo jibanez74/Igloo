@@ -432,6 +432,10 @@ CREATE TABLE IF NOT EXISTS video_streams (
   field_order TEXT,
   -- No display matrix is NULL; an explicit zero-degree matrix is 0.
   rotation INTEGER,
+  -- The Dolby Vision configuration record, NULL without one. Compatibility
+  -- id 0 (profile 5) has no HDR10 or SDR base layer to play without it.
+  dv_profile INTEGER,
+  dv_bl_signal_compatibility_id INTEGER,
   language TEXT,
   title TEXT,
   FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE ON UPDATE CASCADE
@@ -1421,6 +1425,9 @@ CREATE TABLE
     -- Display-matrix rotation in degrees; NULL when the stream has no
     -- display matrix (an explicit 0-degree matrix persists as 0).
     rotation INTEGER,
+    -- Dolby Vision configuration record, as in video_streams.
+    dv_profile INTEGER,
+    dv_bl_signal_compatibility_id INTEGER,
     language TEXT,
     title TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,

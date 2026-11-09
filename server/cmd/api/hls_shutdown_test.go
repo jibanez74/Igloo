@@ -35,7 +35,7 @@ func TestStopHLSSessions_RefusesNewSessionsWithRetryableError(t *testing.T) {
 
 	_, _, err := app.GetOrCreateHLSSession(
 		context.Background(), movieRef(movieID), helpers.HLS_PROFILE_720P_3MBPS,
-		testIntPtr(0), nil, testPlaybackSessionID, 0, 100,
+		testIntPtr(0), nil, helpers.HLSVideoCodecs{}, testPlaybackSessionID, 0, 100,
 	)
 	if !errors.Is(err, errHLSShuttingDown) {
 		t.Fatalf("GetOrCreateHLSSession err = %v, want errHLSShuttingDown", err)
@@ -110,7 +110,7 @@ func TestStopHLSSessions_RefusesACreationThatFinishesAfterIt(t *testing.T) {
 	go func() {
 		session, _, err := app.GetOrCreateHLSSession(
 			context.Background(), movieRef(movieID), helpers.HLS_PROFILE_720P_3MBPS,
-			testIntPtr(0), nil, testPlaybackSessionID, 0, 100,
+			testIntPtr(0), nil, helpers.HLSVideoCodecs{}, testPlaybackSessionID, 0, 100,
 		)
 		resultCh <- createResult{session: session, err: err}
 	}()
@@ -158,7 +158,7 @@ func TestStopHLSSessions_ReleasesAStartParkedOnAFullPool(t *testing.T) {
 	go func() {
 		_, _, err := app.GetOrCreateHLSSession(
 			context.Background(), movieRef(movieID), helpers.HLS_PROFILE_720P_3MBPS,
-			testIntPtr(0), nil, testPlaybackSessionID, 0, 100,
+			testIntPtr(0), nil, helpers.HLSVideoCodecs{}, testPlaybackSessionID, 0, 100,
 		)
 		resultCh <- err
 	}()

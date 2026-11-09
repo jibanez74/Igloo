@@ -35,8 +35,12 @@ type VideoStreamFields struct {
 	ColorTransfer  sql.NullString
 	FieldOrder     sql.NullString
 	Rotation       sql.NullInt64
-	Language       sql.NullString
-	Title          sql.NullString
+	// DVProfile and DVBLSignalCompatibilityID are NULL without a Dolby
+	// Vision configuration record; a compatibility id of 0 is a real value.
+	DVProfile                 sql.NullInt64
+	DVBLSignalCompatibilityID sql.NullInt64
+	Language                  sql.NullString
+	Title                     sql.NullString
 }
 
 type AudioStreamFields struct {
@@ -103,29 +107,37 @@ func videoStreamFields(stream ffprobe.Stream) VideoStreamFields {
 	if hasRotation {
 		rotation = sql.NullInt64{Int64: rotationDeg, Valid: true}
 	}
+	var dvProfile, dvCompatibility sql.NullInt64
+	profile, compatibility, hasDolbyVision := stream.DolbyVision()
+	if hasDolbyVision {
+		dvProfile = sql.NullInt64{Int64: profile, Valid: true}
+		dvCompatibility = sql.NullInt64{Int64: compatibility, Valid: true}
+	}
 	return VideoStreamFields{
-		StreamIndex:    int64(stream.Index),
-		Codec:          stream.CodecName,
-		CodecProfile:   helpers.NullString(stream.Profile),
-		CodecLevel:     helpers.NullInt64(int64(stream.Level)),
-		BitRate:        helpers.ParseBitRate(stream.BitRate),
-		Width:          int64(stream.Width),
-		Height:         int64(stream.Height),
-		CodedWidth:     helpers.NullInt64(int64(stream.CodedWidth)),
-		CodedHeight:    helpers.NullInt64(int64(stream.CodedHeight)),
-		AspectRatio:    helpers.NullString(stream.AspectRatio),
-		FrameRate:      helpers.ParseFrameRate(stream.FrameRate),
-		AvgFrameRate:   helpers.NullString(stream.AvgFrameRate),
-		BitDepth:       parseNullInt64(stream.BitDepth),
-		PixelFormat:    helpers.NullString(stream.PixelFormat),
-		ColorRange:     helpers.NullString(stream.ColorRange),
-		ColorSpace:     helpers.NullString(stream.ColorSpace),
-		ColorPrimaries: helpers.NullString(stream.ColorPrimaries),
-		ColorTransfer:  helpers.NullString(stream.ColorTransfer),
-		FieldOrder:     helpers.NullString(stream.FieldOrder),
-		Rotation:       rotation,
-		Language:       helpers.NullString(stream.Tags.Language),
-		Title:          helpers.NullString(stream.Tags.Title),
+		StreamIndex:               int64(stream.Index),
+		Codec:                     stream.CodecName,
+		CodecProfile:              helpers.NullString(stream.Profile),
+		CodecLevel:                helpers.NullInt64(int64(stream.Level)),
+		BitRate:                   helpers.ParseBitRate(stream.BitRate),
+		Width:                     int64(stream.Width),
+		Height:                    int64(stream.Height),
+		CodedWidth:                helpers.NullInt64(int64(stream.CodedWidth)),
+		CodedHeight:               helpers.NullInt64(int64(stream.CodedHeight)),
+		AspectRatio:               helpers.NullString(stream.AspectRatio),
+		FrameRate:                 helpers.ParseFrameRate(stream.FrameRate),
+		AvgFrameRate:              helpers.NullString(stream.AvgFrameRate),
+		BitDepth:                  parseNullInt64(stream.BitDepth),
+		PixelFormat:               helpers.NullString(stream.PixelFormat),
+		ColorRange:                helpers.NullString(stream.ColorRange),
+		ColorSpace:                helpers.NullString(stream.ColorSpace),
+		ColorPrimaries:            helpers.NullString(stream.ColorPrimaries),
+		ColorTransfer:             helpers.NullString(stream.ColorTransfer),
+		FieldOrder:                helpers.NullString(stream.FieldOrder),
+		Rotation:                  rotation,
+		DVProfile:                 dvProfile,
+		DVBLSignalCompatibilityID: dvCompatibility,
+		Language:                  helpers.NullString(stream.Tags.Language),
+		Title:                     helpers.NullString(stream.Tags.Title),
 	}
 }
 

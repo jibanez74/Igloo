@@ -40,10 +40,21 @@ type fragmentSample struct {
 	Flags uint32
 }
 
-const avcSampleEntryHeaderSize = 78
+// visualSampleEntryHeaderSize is the fixed VisualSampleEntry header that
+// precedes an avc1/avc3/hvc1/hev1 entry's child boxes.
+const visualSampleEntryHeaderSize = 78
+
+// videoSampleFormat is what checking a video sample needs from the init
+// segment: the NAL length prefix size and which codec's NAL headers to read.
+type videoSampleFormat struct {
+	nalLengthSize int
+	hevc          bool
+}
 
 // ValidateRemuxSafety inspects FFmpeg-generated fMP4 HLS fragments and
-// verifies that every sync sample in the video track starts with an IDR frame.
+// verifies that every sync sample in the video track starts with a random
+// access picture: an IDR for H.264, an IRAP picture (IDR, CRA or BLA) for
+// HEVC, whose Blu-ray streams start most GOPs with a CRA.
 func ValidateRemuxSafety(outDir string, segmentCount int) (RemuxValidationSummary, error) {
 	if segmentCount <= 0 {
 		return RemuxValidationSummary{}, fmt.Errorf("segmentCount must be positive")
@@ -55,7 +66,7 @@ func ValidateRemuxSafety(outDir string, segmentCount int) (RemuxValidationSummar
 		return RemuxValidationSummary{}, fmt.Errorf("read init segment: %w", err)
 	}
 
-	videoTrackID, nalLengthSize, err := parseVideoTrackConfig(initData)
+	videoTrackID, format, err := parseVideoTrackConfig(initData)
 	if err != nil {
 		return RemuxValidationSummary{}, err
 	}
@@ -71,7 +82,7 @@ func ValidateRemuxSafety(outDir string, segmentCount int) (RemuxValidationSummar
 		syncSamples, inspectErr := validateSegmentVideoTrack(
 			segmentData,
 			videoTrackID,
-			nalLengthSize,
+			format,
 		)
 		if inspectErr != nil {
 			return summary, fmt.Errorf("validate segment %d: %w", i, inspectErr)
@@ -87,18 +98,18 @@ func ValidateRemuxSafety(outDir string, segmentCount int) (RemuxValidationSummar
 	return summary, nil
 }
 
-func parseVideoTrackConfig(data []byte) (uint32, int, error) {
+func parseVideoTrackConfig(data []byte) (uint32, videoSampleFormat, error) {
 	moov, ok, err := findDirectChildBox(data, 0, len(data), "moov")
 	if err != nil {
-		return 0, 0, err
+		return 0, videoSampleFormat{}, err
 	}
 	if !ok {
-		return 0, 0, fmt.Errorf("missing moov box")
+		return 0, videoSampleFormat{}, fmt.Errorf("missing moov box")
 	}
 
 	traks, err := listDirectChildBoxes(data, moov.PayloadStart, moov.End)
 	if err != nil {
-		return 0, 0, err
+		return 0, videoSampleFormat{}, err
 	}
 
 	for _, trak := range traks {
@@ -108,29 +119,40 @@ func parseVideoTrackConfig(data []byte) (uint32, int, error) {
 
 		trackID, handlerType, parseErr := parseTrackHeader(data, trak)
 		if parseErr != nil {
-			return 0, 0, parseErr
+			return 0, videoSampleFormat{}, parseErr
 		}
 		if handlerType != "vide" {
 			continue
 		}
 
-		avcC, found, findErr := findAVCConfigBox(data, trak)
+		config, found, findErr := findVideoConfigBox(data, trak)
 		if findErr != nil {
-			return 0, 0, findErr
+			return 0, videoSampleFormat{}, findErr
 		}
 		if !found {
-			return 0, 0, fmt.Errorf("missing avcC box for video track")
+			return 0, videoSampleFormat{}, fmt.Errorf("missing avcC or hvcC box for video track")
 		}
 
-		payload := data[avcC.PayloadStart:avcC.End]
-		if len(payload) < 5 {
-			return 0, 0, fmt.Errorf("invalid avcC payload")
+		// lengthSizeMinusOne is the low two bits of byte 4 in avcC and of
+		// byte 21 in hvcC.
+		payload := data[config.PayloadStart:config.End]
+		isHEVC := config.Type == "hvcC"
+		lengthSizeOffset := 4
+		if isHEVC {
+			lengthSizeOffset = 21
+		}
+		if len(payload) <= lengthSizeOffset {
+			return 0, videoSampleFormat{}, fmt.Errorf("invalid %s payload", config.Type)
 		}
 
-		return trackID, int(payload[4]&0x03) + 1, nil
+		format := videoSampleFormat{
+			nalLengthSize: int(payload[lengthSizeOffset]&0x03) + 1,
+			hevc:          isHEVC,
+		}
+		return trackID, format, nil
 	}
 
-	return 0, 0, fmt.Errorf("missing video track")
+	return 0, videoSampleFormat{}, fmt.Errorf("missing video track")
 }
 
 func parseTrackHeader(data []byte, trak mp4Box) (uint32, string, error) {
@@ -208,7 +230,7 @@ func parseHandlerType(data []byte, mdia mp4Box) (string, error) {
 	return string(payload[8:12]), nil
 }
 
-func findAVCConfigBox(data []byte, trak mp4Box) (mp4Box, bool, error) {
+func findVideoConfigBox(data []byte, trak mp4Box) (mp4Box, bool, error) {
 	mdia, ok, err := findDirectChildBox(data, trak.PayloadStart, trak.End, "mdia")
 	if err != nil {
 		return mp4Box{}, false, err
@@ -241,10 +263,19 @@ func findAVCConfigBox(data []byte, trak mp4Box) (mp4Box, bool, error) {
 		return mp4Box{}, false, fmt.Errorf("missing stsd box")
 	}
 
-	return findAVCConfigInSampleDescriptions(data, stsd)
+	return findVideoConfigInSampleDescriptions(data, stsd)
 }
 
-func findAVCConfigInSampleDescriptions(data []byte, stsd mp4Box) (mp4Box, bool, error) {
+// videoConfigBoxBySampleEntry maps the sample entries a remux writes to the
+// decoder configuration box inside them.
+var videoConfigBoxBySampleEntry = map[string]string{
+	"avc1": "avcC",
+	"avc3": "avcC",
+	"hvc1": "hvcC",
+	"hev1": "hvcC",
+}
+
+func findVideoConfigInSampleDescriptions(data []byte, stsd mp4Box) (mp4Box, bool, error) {
 	payload := data[stsd.PayloadStart:stsd.End]
 	if len(payload) < 8 {
 		return mp4Box{}, false, fmt.Errorf("invalid stsd payload")
@@ -263,18 +294,19 @@ func findAVCConfigInSampleDescriptions(data []byte, stsd mp4Box) (mp4Box, bool, 
 			return mp4Box{}, false, err
 		}
 
-		if entry.Type == "avc1" || entry.Type == "avc3" {
-			childStart := entry.PayloadStart + avcSampleEntryHeaderSize
+		configType, isVideoEntry := videoConfigBoxBySampleEntry[entry.Type]
+		if isVideoEntry {
+			childStart := entry.PayloadStart + visualSampleEntryHeaderSize
 			if childStart > entry.End {
 				return mp4Box{}, false, fmt.Errorf("invalid %s sample entry", entry.Type)
 			}
 
-			avcC, ok, findErr := findDirectChildBox(data, childStart, entry.End, "avcC")
+			config, ok, findErr := findDirectChildBox(data, childStart, entry.End, configType)
 			if findErr != nil {
 				return mp4Box{}, false, findErr
 			}
 			if ok {
-				return avcC, true, nil
+				return config, true, nil
 			}
 		}
 
@@ -284,7 +316,7 @@ func findAVCConfigInSampleDescriptions(data []byte, stsd mp4Box) (mp4Box, bool, 
 	return mp4Box{}, false, nil
 }
 
-func validateSegmentVideoTrack(data []byte, videoTrackID uint32, nalLengthSize int) (int, error) {
+func validateSegmentVideoTrack(data []byte, videoTrackID uint32, format videoSampleFormat) (int, error) {
 	topLevel, err := listDirectChildBoxes(data, 0, len(data))
 	if err != nil {
 		return 0, err
@@ -361,10 +393,13 @@ func validateSegmentVideoTrack(data []byte, videoTrackID uint32, nalLengthSize i
 
 				if isSyncSample(sample.Flags) {
 					syncSamples++
-					validateErr := validateSyncSample(
-						data[int(cursor):int(sampleEnd)],
-						nalLengthSize,
-					)
+					sampleData := data[int(cursor):int(sampleEnd)]
+					var validateErr error
+					if format.hevc {
+						validateErr = validateHEVCSyncSample(sampleData, format.nalLengthSize)
+					} else {
+						validateErr = validateSyncSample(sampleData, format.nalLengthSize)
+					}
 					if validateErr != nil {
 						return 0, validateErr
 					}
@@ -669,35 +704,77 @@ func parseTRUN(
 	return run, nil
 }
 
+// validateSyncSample checks that an H.264 sync sample's first VCL NAL unit
+// is an IDR slice (type 5).
 func validateSyncSample(sample []byte, nalLengthSize int) error {
+	nalType, err := firstVCLNALType(sample, nalLengthSize, false)
+	if err != nil {
+		return err
+	}
+	if nalType != 5 {
+		return fmt.Errorf("sync sample starts with non-IDR VCL NAL type %d", nalType)
+	}
+	return nil
+}
+
+// validateHEVCSyncSample checks that an HEVC sync sample's first VCL NAL
+// unit is an IRAP picture: BLA (16-18), IDR (19-20) or CRA (21). A CRA's RASL
+// leading pictures reference the previous GOP, and decoders drop them when
+// playback starts at the CRA, as the HEVC specification requires.
+func validateHEVCSyncSample(sample []byte, nalLengthSize int) error {
+	nalType, err := firstVCLNALType(sample, nalLengthSize, true)
+	if err != nil {
+		return err
+	}
+	isIRAP := nalType >= 16 && nalType <= 21
+	if !isIRAP {
+		return fmt.Errorf("sync sample starts with non-IRAP VCL NAL type %d", nalType)
+	}
+	return nil
+}
+
+// firstVCLNALType walks a length-prefixed sample and returns the type of its
+// first VCL NAL unit: types 1-5 in H.264's one-byte header, 0-31 in HEVC's
+// two-byte header. Parameter sets, SEI and the Dolby Vision RPU (62) and
+// enhancement layer (63) are skipped.
+func firstVCLNALType(sample []byte, nalLengthSize int, hevc bool) (byte, error) {
 	// Production callers get nalLengthSize from parseVideoTrackConfig, which
 	// can only return 1..4, so this rejects nothing there. Kept because the
 	// loop below would read past the sample otherwise, and because the parser
 	// tests call this directly with out-of-range sizes.
 	if nalLengthSize < 1 || nalLengthSize > 4 {
-		return fmt.Errorf("invalid NAL length size %d", nalLengthSize)
+		return 0, fmt.Errorf("invalid NAL length size %d", nalLengthSize)
+	}
+
+	headerSize := uint32(1)
+	if hevc {
+		headerSize = 2
 	}
 
 	offset := 0
 	for offset+nalLengthSize <= len(sample) {
 		nalSize := readNALUnitSize(sample[offset:offset+nalLengthSize], nalLengthSize)
 		offset += nalLengthSize
-		if nalSize == 0 || uint64(nalSize) > uint64(len(sample)-offset) {
-			return fmt.Errorf("invalid NAL unit size")
+		if nalSize < headerSize || uint64(nalSize) > uint64(len(sample)-offset) {
+			return 0, fmt.Errorf("invalid NAL unit size")
 		}
 
-		nalType := sample[offset] & 0x1f
-		if nalType >= 1 && nalType <= 5 {
-			if nalType != 5 {
-				return fmt.Errorf("sync sample starts with non-IDR VCL NAL type %d", nalType)
+		if hevc {
+			nalType := (sample[offset] >> 1) & 0x3f
+			if nalType <= 31 {
+				return nalType, nil
 			}
-			return nil
+		} else {
+			nalType := sample[offset] & 0x1f
+			if nalType >= 1 && nalType <= 5 {
+				return nalType, nil
+			}
 		}
 
 		offset += int(nalSize)
 	}
 
-	return fmt.Errorf("sync sample does not contain a VCL NAL")
+	return 0, fmt.Errorf("sync sample does not contain a VCL NAL")
 }
 
 func readNALUnitSize(data []byte, nalLengthSize int) uint32 {

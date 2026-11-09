@@ -31,6 +31,8 @@ export function videoStream(
     color_transfer: nullableString(),
     field_order: nullableString(),
     rotation: nullableInt64(),
+    dv_profile: nullableInt64(),
+    dv_bl_signal_compatibility_id: nullableInt64(),
     language: nullableString(),
     title: nullableString(),
     ...overrides,

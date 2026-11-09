@@ -35,7 +35,8 @@ func processStreams(
 				BitRate: v.BitRate, Width: v.Width, Height: v.Height, CodedWidth: v.CodedWidth, CodedHeight: v.CodedHeight,
 				AspectRatio: v.AspectRatio, FrameRate: v.FrameRate, AvgFrameRate: v.AvgFrameRate, BitDepth: v.BitDepth,
 				PixelFormat: v.PixelFormat, ColorRange: v.ColorRange, ColorSpace: v.ColorSpace, ColorPrimaries: v.ColorPrimaries,
-				ColorTransfer: v.ColorTransfer, FieldOrder: v.FieldOrder, Rotation: v.Rotation, Language: v.Language, Title: v.Title,
+				ColorTransfer: v.ColorTransfer, FieldOrder: v.FieldOrder, Rotation: v.Rotation,
+				DvProfile: v.DVProfile, DvBlSignalCompatibilityID: v.DVBLSignalCompatibilityID, Language: v.Language, Title: v.Title,
 			})
 			if err != nil {
 				return fmt.Errorf("insert video stream failed: %w", err)

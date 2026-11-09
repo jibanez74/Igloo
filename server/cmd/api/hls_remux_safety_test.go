@@ -100,6 +100,12 @@ func TestRemuxSafetyFingerprint_ChangesWithStreamProperties(t *testing.T) {
 		{"field order", func(_ *database.Movie, v *database.VideoStream) {
 			v.FieldOrder = sql.NullString{String: "tt", Valid: true}
 		}},
+		// The gate refuses a Dolby Vision stream by its base layer, so a
+		// rescan that finds one must not inherit the verdict of plain HEVC.
+		{"dolby vision", func(_ *database.Movie, v *database.VideoStream) {
+			v.DvProfile = sql.NullInt64{Int64: 8, Valid: true}
+			v.DvBlSignalCompatibilityID = sql.NullInt64{Int64: 1, Valid: true}
+		}},
 		{"movie size", func(m *database.Movie, _ *database.VideoStream) { m.Size = 2_000_000 }},
 		{"updated at", func(m *database.Movie, _ *database.VideoStream) { m.UpdatedAt = "2026-07-02" }},
 	}
