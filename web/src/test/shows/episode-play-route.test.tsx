@@ -89,6 +89,8 @@ const technicalDetails = {
       color_transfer: nullableString("bt709"),
       field_order: nullableString("progressive"),
       rotation: nullableInt64(null),
+      dv_profile: nullableInt64(null),
+      dv_bl_signal_compatibility_id: nullableInt64(null),
       language: nullableString("eng"),
       title: nullableString(""),
     },

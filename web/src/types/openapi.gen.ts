@@ -3427,6 +3427,10 @@ export interface components {
             color_transfer: components["schemas"]["SqlNullString"];
             field_order: components["schemas"]["SqlNullString"];
             rotation: components["schemas"]["SqlNullInt64"];
+            /** @description Dolby Vision profile from the stream's configuration record; invalid without one. */
+            dv_profile: components["schemas"]["SqlNullInt64"];
+            /** @description Dolby Vision base-layer compatibility id: 1 HDR10, 2 SDR, 4 HLG, 6 Blu-ray HDR10, 0 none (profile 5). Invalid without a configuration record. */
+            dv_bl_signal_compatibility_id: components["schemas"]["SqlNullInt64"];
             language: components["schemas"]["SqlNullString"];
             title: components["schemas"]["SqlNullString"];
         };
@@ -5117,6 +5121,10 @@ export interface components {
             color_transfer: components["schemas"]["SqlNullString"];
             field_order: components["schemas"]["SqlNullString"];
             rotation: components["schemas"]["SqlNullInt64"];
+            /** @description Dolby Vision profile from the stream's configuration record; invalid without one. */
+            dv_profile: components["schemas"]["SqlNullInt64"];
+            /** @description Dolby Vision base-layer compatibility id: 1 HDR10, 2 SDR, 4 HLG, 6 Blu-ray HDR10, 0 none (profile 5). Invalid without a configuration record. */
+            dv_bl_signal_compatibility_id: components["schemas"]["SqlNullInt64"];
             language: components["schemas"]["SqlNullString"];
             title: components["schemas"]["SqlNullString"];
         };

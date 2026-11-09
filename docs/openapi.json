@@ -11526,6 +11526,8 @@
           "color_transfer",
           "field_order",
           "rotation",
+          "dv_profile",
+          "dv_bl_signal_compatibility_id",
           "language",
           "title"
         ],
@@ -11601,6 +11603,14 @@
           },
           "rotation": {
             "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "dv_profile": {
+            "$ref": "#/components/schemas/SqlNullInt64",
+            "description": "Dolby Vision profile from the stream's configuration record; invalid without one."
+          },
+          "dv_bl_signal_compatibility_id": {
+            "$ref": "#/components/schemas/SqlNullInt64",
+            "description": "Dolby Vision base-layer compatibility id: 1 HDR10, 2 SDR, 4 HLG, 6 Blu-ray HDR10, 0 none (profile 5). Invalid without a configuration record."
           },
           "language": {
             "$ref": "#/components/schemas/SqlNullString"
@@ -17759,6 +17769,8 @@
           "color_transfer",
           "field_order",
           "rotation",
+          "dv_profile",
+          "dv_bl_signal_compatibility_id",
           "language",
           "title"
         ],
@@ -17834,6 +17846,14 @@
           },
           "rotation": {
             "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "dv_profile": {
+            "$ref": "#/components/schemas/SqlNullInt64",
+            "description": "Dolby Vision profile from the stream's configuration record; invalid without one."
+          },
+          "dv_bl_signal_compatibility_id": {
+            "$ref": "#/components/schemas/SqlNullInt64",
+            "description": "Dolby Vision base-layer compatibility id: 1 HDR10, 2 SDR, 4 HLG, 6 Blu-ray HDR10, 0 none (profile 5). Invalid without a configuration record."
           },
           "language": {
             "$ref": "#/components/schemas/SqlNullString"

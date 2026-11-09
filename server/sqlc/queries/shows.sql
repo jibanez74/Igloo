@@ -213,11 +213,13 @@ INSERT INTO show_video_streams (
   color_transfer,
   field_order,
   rotation,
+  dv_profile,
+  dv_bl_signal_compatibility_id,
   language,
   title
 )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: DeleteShowFileAudioStreams :exec
 DELETE FROM show_audio_streams
@@ -610,6 +612,8 @@ SELECT
   color_transfer,
   field_order,
   rotation,
+  dv_profile,
+  dv_bl_signal_compatibility_id,
   language,
   title
 FROM show_video_streams

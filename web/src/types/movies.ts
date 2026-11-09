@@ -147,6 +147,9 @@ export type VideoStreamType = {
   field_order: NullableString;
   /** Display-matrix rotation in degrees; null when the stream has none. */
   rotation: NullableInt64;
+  /** Dolby Vision profile and base-layer compatibility id; null without a configuration record. */
+  dv_profile: NullableInt64;
+  dv_bl_signal_compatibility_id: NullableInt64;
   language: NullableString;
   title: NullableString;
 };
