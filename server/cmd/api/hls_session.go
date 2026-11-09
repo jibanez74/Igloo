@@ -402,6 +402,72 @@ func isBrowserSafeH264RemuxCandidate(stream *database.VideoStream) (bool, string
 	return true, ""
 }
 
+// isRemuxCandidate is the static remux gate: H.264 under the browser-safe
+// rules for every client, and HEVC only for a client that declared it.
+func isRemuxCandidate(stream *database.VideoStream, videoCodecs helpers.HLSVideoCodecs) (bool, string) {
+	isHEVC := helpers.IsHEVC(stream.Codec)
+	if isHEVC && videoCodecs.HEVC {
+		return isHEVCRemuxCandidate(stream)
+	}
+	return isBrowserSafeH264RemuxCandidate(stream)
+}
+
+// remuxHEVCProfiles are the HEVC profiles a client that decodes HEVC from
+// fMP4 is expected to handle: 4:2:0 at 8 or 10 bits. Rext (4:2:2, 4:4:4,
+// 12-bit) and the multilayer profiles are left to a transcode.
+var remuxHEVCProfiles = map[string]bool{
+	"main":    true,
+	"main 10": true,
+}
+
+// remuxHEVCPixelFormats is the pixel-format twin of remuxHEVCProfiles.
+var remuxHEVCPixelFormats = map[string]bool{
+	"yuv420p":     true,
+	"yuv420p10le": true,
+}
+
+// remuxDolbyVisionBaseLayers are the base-layer compatibility ids a copy can
+// play as plain HEVC: HDR10 (1, and 6 on Blu-ray profile 7), SDR (2) and HLG
+// (4). The copy carries no Dolby Vision configuration box, so a client plays
+// the base layer and ignores the RPU and enhancement-layer NAL units. Id 0
+// (profile 5) has no such base layer: its colors are only right after Dolby
+// Vision reshaping.
+var remuxDolbyVisionBaseLayers = map[int64]bool{
+	1: true,
+	2: true,
+	4: true,
+	6: true,
+}
+
+func isHEVCRemuxCandidate(stream *database.VideoStream) (bool, string) {
+	if stream.BitDepth.Valid && stream.BitDepth.Int64 > 10 {
+		return false, fmt.Sprintf("requested remux is not supported for %d-bit HEVC", stream.BitDepth.Int64)
+	}
+
+	pixelFormat := strings.ToLower(strings.TrimSpace(stream.PixelFormat.String))
+	unsupportedPixelFormat := pixelFormat != "" && !remuxHEVCPixelFormats[pixelFormat]
+	if unsupportedPixelFormat {
+		return false, fmt.Sprintf("requested remux is not supported for pixel format %q", stream.PixelFormat.String)
+	}
+
+	profile := strings.ToLower(strings.TrimSpace(stream.CodecProfile.String))
+	unsupportedProfile := profile != "" && !remuxHEVCProfiles[profile]
+	if unsupportedProfile {
+		return false, fmt.Sprintf("requested remux is not supported for HEVC profile %q", stream.CodecProfile.String)
+	}
+
+	if isInterlacedStream(stream) {
+		return false, fmt.Sprintf("requested remux is not supported for interlaced content (field_order %q)", stream.FieldOrder.String)
+	}
+
+	unplayableBaseLayer := stream.DvBlSignalCompatibilityID.Valid && !remuxDolbyVisionBaseLayers[stream.DvBlSignalCompatibilityID.Int64]
+	if unplayableBaseLayer {
+		return false, fmt.Sprintf("requested remux is not supported for Dolby Vision profile %d without a compatible base layer", stream.DvProfile.Int64)
+	}
+
+	return true, ""
+}
+
 func isNonBrowserH264Profile(profile string) bool {
 	profile = strings.ToLower(strings.TrimSpace(profile))
 	unsupportedMarkers := []string{
@@ -461,8 +527,8 @@ func hlsAudioModeKey(audioProfile *helpers.HLSAudioProfileRequest) string {
 // HLSSessionKey returns an owner-scoped personal HLS session identity. The
 // media ref carries its kind ("movie:12", "episode:12"), so a movie and an
 // episode with the same id never share a session.
-func HLSSessionKey(media mediaRef, profile string, audioTrack *int, audioProfile *helpers.HLSAudioProfileRequest, playbackSession string, startSec int, ownerUserID int64) string {
-	return fmt.Sprintf("user:%d:%s:%s:%s:%s:session:%s:start:%d", ownerUserID, media, profile, audioTrackCacheKey(audioTrack), hlsAudioModeKey(audioProfile), playbackSession, startSec)
+func HLSSessionKey(media mediaRef, profile string, audioTrack *int, audioProfile *helpers.HLSAudioProfileRequest, videoCodecs helpers.HLSVideoCodecs, playbackSession string, startSec int, ownerUserID int64) string {
+	return fmt.Sprintf("user:%d:%s:%s:%s:%s:%s:session:%s:start:%d", ownerUserID, media, profile, audioTrackCacheKey(audioTrack), hlsAudioModeKey(audioProfile), videoCodecs.SessionKey(), playbackSession, startSec)
 }
 
 // RoomHLSSessionKey returns the HLS session cache key for a watch room.
@@ -1174,6 +1240,7 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 		AudioStreamIndex: audioStreamIndex,
 		HWDevice:         deviceDecision.Effective,
 		CopyVideo:        copyVideo,
+		CopyVideoTag:     helpers.HLSCopyVideoTag(params.PrimaryVideo.Codec),
 		CopyAudio:        copyAudio,
 		AudioProfile:     params.ResolvedAudioProfile, // nil keeps legacy sessions on CopyAudio/AAC stereo
 		StartSec:         startSec,
@@ -1394,11 +1461,12 @@ func (app *Application) lookupPersonalHLSSession(
 	profile string,
 	audioTrack *int,
 	audioProfile *helpers.HLSAudioProfileRequest,
+	videoCodecs helpers.HLSVideoCodecs,
 	playbackSession string,
 	startSec int,
 	ownerUserID int64,
 ) (*HLSSession, personalHLSSessionTarget, error) {
-	requestedKey := HLSSessionKey(media, profile, audioTrack, audioProfile, playbackSession, startSec, ownerUserID)
+	requestedKey := HLSSessionKey(media, profile, audioTrack, audioProfile, videoCodecs, playbackSession, startSec, ownerUserID)
 	target := personalHLSSessionTarget{key: requestedKey}
 
 	// Warm path first, before touching the database. The stored key uses the
@@ -1415,7 +1483,7 @@ func (app *Application) lookupPersonalHLSSession(
 	if err != nil {
 		return nil, target, err
 	}
-	target.key = HLSSessionKey(media, profile, audioTrack, audioProfile, playbackSession, effectiveStartSec, ownerUserID)
+	target.key = HLSSessionKey(media, profile, audioTrack, audioProfile, videoCodecs, playbackSession, effectiveStartSec, ownerUserID)
 	target.source = source
 	target.effectiveStartSec = effectiveStartSec
 
@@ -1440,11 +1508,12 @@ func (app *Application) RefreshHLSSession(
 	profile string,
 	audioTrack *int,
 	audioProfile *helpers.HLSAudioProfileRequest,
+	videoCodecs helpers.HLSVideoCodecs,
 	playbackSession string,
 	startSec int,
 	ownerUserID int64,
 ) (*HLSSession, string, error) {
-	cached, target, err := app.lookupPersonalHLSSession(ctx, media, profile, audioTrack, audioProfile, playbackSession, startSec, ownerUserID)
+	cached, target, err := app.lookupPersonalHLSSession(ctx, media, profile, audioTrack, audioProfile, videoCodecs, playbackSession, startSec, ownerUserID)
 	if err != nil {
 		return nil, target.key, err
 	}
@@ -1462,11 +1531,12 @@ func (app *Application) GetOrCreateHLSSession(
 	profile string,
 	audioTrack *int,
 	audioProfile *helpers.HLSAudioProfileRequest,
+	videoCodecs helpers.HLSVideoCodecs,
 	playbackSession string,
 	startSec int,
 	ownerUserID int64,
 ) (*HLSSession, string, error) {
-	cached, target, err := app.lookupPersonalHLSSession(ctx, media, profile, audioTrack, audioProfile, playbackSession, startSec, ownerUserID)
+	cached, target, err := app.lookupPersonalHLSSession(ctx, media, profile, audioTrack, audioProfile, videoCodecs, playbackSession, startSec, ownerUserID)
 	if err != nil || cached != nil {
 		return cached, target.key, err
 	}
@@ -1496,6 +1566,7 @@ func (app *Application) GetOrCreateHLSSession(
 			profile,
 			audioTrack,
 			audioProfile,
+			videoCodecs,
 			nil,
 			playbackSession,
 			effectiveStartSec,
@@ -1632,7 +1703,7 @@ func (app *Application) GetOrCreateRoomHLSSession(
 		audioTrackCopy := audioTrack
 		// Watch rooms always use legacy audio mode: room audio output is a
 		// room-level persisted setting concern, not a query-parameter one.
-		session, createErr := app.createHLSSession(ctx, &source, profile, &audioTrackCopy, nil, preloadedAudio, "", 0, true, 0)
+		session, createErr := app.createHLSSession(ctx, &source, profile, &audioTrackCopy, nil, helpers.HLSVideoCodecs{}, preloadedAudio, "", 0, true, 0)
 		if createErr != nil {
 			return nil, createErr
 		}
@@ -1736,13 +1807,14 @@ func (app *Application) createHLSSession(
 	profile string,
 	audioTrack *int,
 	audioProfile *helpers.HLSAudioProfileRequest,
+	videoCodecs helpers.HLSVideoCodecs,
 	preloadedAudio []database.AudioStream,
 	playbackSession string,
 	startSec int,
 	isRoom bool,
 	acquireWait time.Duration,
 ) (*HLSSession, error) {
-	plan, err := app.planHLSSession(ctx, source, profile, audioTrack, audioProfile, preloadedAudio, playbackSession, startSec, isRoom)
+	plan, err := app.planHLSSession(ctx, source, profile, audioTrack, audioProfile, videoCodecs, preloadedAudio, playbackSession, startSec, isRoom)
 	if err != nil {
 		return nil, err
 	}
@@ -1788,6 +1860,7 @@ func (app *Application) planHLSSession(
 	profile string,
 	audioTrack *int,
 	audioProfile *helpers.HLSAudioProfileRequest,
+	videoCodecs helpers.HLSVideoCodecs,
 	preloadedAudio []database.AudioStream,
 	playbackSession string,
 	startSec int,
@@ -1889,7 +1962,8 @@ func (app *Application) planHLSSession(
 	if requestedProfile == helpers.HLS_PROFILE_REMUX {
 		fallbackProfile = app.constrainedHLSFallbackProfile(media, primaryVideo, *source, maxTranscodeHeight, settings.ServerUploadMbps)
 
-		if ok, fallbackReason := isBrowserSafeH264RemuxCandidate(primaryVideo); !ok {
+		remuxable, fallbackReason := isRemuxCandidate(primaryVideo, videoCodecs)
+		if !remuxable {
 			// No verdict is persisted here: the static gate is deterministic
 			// from stored stream rows and must stay ahead of the verdict
 			// lookup below, which never sees statically-unsafe streams.

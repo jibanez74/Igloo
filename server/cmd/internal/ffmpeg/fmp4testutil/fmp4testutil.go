@@ -26,6 +26,9 @@ type Fixture struct {
 	SafeVideo  bool
 	AudioNoise bool
 	Segments   int
+	// HEVC writes an hvc1 track whose sync samples start on a CRA when
+	// SafeVideo is set and on a trailing picture otherwise.
+	HEVC bool
 }
 
 type sampleSpec struct {
@@ -44,12 +47,26 @@ func WriteHLSFixture(outDir string, fixture Fixture) error {
 		return fmt.Errorf("segments must be positive")
 	}
 
+	initData := BuildInitMP4()
 	videoSample := BuildVideoSample(fixture.SafeVideo)
+	if fixture.HEVC {
+		initData = BuildHEVCInitMP4("hvc1")
+		videoSample = BuildHEVCVideoSample(HEVCNALTrailR)
+		if fixture.SafeVideo {
+			videoSample = BuildHEVCVideoSample(HEVCNALCRA)
+		}
+	}
 	segments := make([][]byte, 0, fixture.Segments)
 	for i := 0; i < fixture.Segments; i++ {
-		segments = append(segments, BuildSegment(videoSample, fixture.AudioNoise))
+		// HEVC samples are always flagged sync, like the H.264 unsafe
+		// fixture, so the validator reads their NAL types.
+		segment := BuildSegment(videoSample, fixture.AudioNoise)
+		if fixture.HEVC {
+			segment = BuildSegmentWithFlags(videoSample, 0, fixture.AudioNoise)
+		}
+		segments = append(segments, segment)
 	}
-	err := WriteFragmentFiles(outDir, BuildInitMP4(), segments...)
+	err := WriteFragmentFiles(outDir, initData, segments...)
 	if err != nil {
 		return err
 	}
@@ -82,6 +99,34 @@ func WriteFragmentFiles(outDir string, initData []byte, segments ...[]byte) erro
 }
 
 func BuildInitMP4() []byte {
+	return buildInitMP4(visualSampleEntry(
+		"avc1",
+		Box("avcC", []byte{1, 0x64, 0x00, 0x1f, 0xff}),
+	))
+}
+
+// BuildHEVCInitMP4 is BuildInitMP4 with an HEVC sample entry of the given
+// type (hvc1 or hev1) and an hvcC declaring 4-byte NAL lengths.
+func BuildHEVCInitMP4(sampleEntryType string) []byte {
+	return BuildHEVCInitMP4WithConfig(sampleEntryType, HEVCConfigPayload(4))
+}
+
+// BuildHEVCInitMP4WithConfig is BuildHEVCInitMP4 with the given hvcC payload.
+func BuildHEVCInitMP4WithConfig(sampleEntryType string, hvcCPayload []byte) []byte {
+	return buildInitMP4(visualSampleEntry(sampleEntryType, Box("hvcC", hvcCPayload)))
+}
+
+// HEVCConfigPayload is a 23-byte hvcC with no parameter-set arrays whose
+// lengthSizeMinusOne (low two bits of byte 21) declares nalLengthSize.
+func HEVCConfigPayload(nalLengthSize int) []byte {
+	payload := make([]byte, 23)
+	payload[0] = 1
+	payload[1] = 0x02 // general_profile_idc 2: Main 10
+	payload[21] = 0x0c | byte(nalLengthSize-1)
+	return payload
+}
+
+func buildInitMP4(videoSampleEntry []byte) []byte {
 	videoTrack := Box(
 		"trak",
 		tkhd(1),
@@ -92,12 +137,7 @@ func BuildInitMP4() []byte {
 				"minf",
 				Box(
 					"stbl",
-					stsd(
-						avcSampleEntry(
-							"avc1",
-							Box("avcC", []byte{1, 0x64, 0x00, 0x1f, 0xff}),
-						),
-					),
+					stsd(videoSampleEntry),
 				),
 			),
 		),
@@ -114,6 +154,13 @@ func BuildInitMP4() []byte {
 }
 
 func BuildSegment(videoSample []byte, includeAudioNoise bool) []byte {
+	return BuildSegmentWithFlags(videoSample, videoSampleFlags(videoSample), includeAudioNoise)
+}
+
+// BuildSegmentWithFlags is BuildSegment with explicit video sample flags, for
+// samples whose sync status videoSampleFlags cannot read (HEVC). Zero marks
+// a sync sample.
+func BuildSegmentWithFlags(videoSample []byte, videoFlags uint32, includeAudioNoise bool) []byte {
 	tracks := make([]fragmentTrack, 0, 2)
 	mdatPayload := make([]byte, 0, len(videoSample)+3)
 
@@ -133,7 +180,7 @@ func BuildSegment(videoSample []byte, includeAudioNoise bool) []byte {
 		trackID: 1,
 		sample: sampleSpec{
 			data:  videoSample,
-			flags: videoSampleFlags(videoSample),
+			flags: videoFlags,
 		},
 	})
 	mdatPayload = append(mdatPayload, videoSample...)
@@ -175,6 +222,44 @@ func BuildVideoSample(safe bool) []byte {
 	return out
 }
 
+// HEVC NAL unit types the fixtures use.
+const (
+	HEVCNALTrailR    = 1
+	HEVCNALRASLN     = 8
+	HEVCNALBLAWLP    = 16
+	HEVCNALIDRWRADL  = 19
+	HEVCNALIDRNLP    = 20
+	HEVCNALCRA       = 21
+	HEVCNALVPS       = 32
+	HEVCNALSPS       = 33
+	HEVCNALPPS       = 34
+	HEVCNALPrefixSEI = 39
+	// HEVCNALDolbyVisionRPU and HEVCNALDolbyVisionEL are the unspecified
+	// types Dolby Vision profiles 7 and 8 carry in-band.
+	HEVCNALDolbyVisionRPU = 62
+	HEVCNALDolbyVisionEL  = 63
+)
+
+// BuildHEVCVideoSample builds a 4-byte length-prefixed HEVC access unit:
+// parameter sets and an SEI, then the given NAL types in order (VCL or
+// otherwise), as a Blu-ray or Dolby Vision copy carries them.
+func BuildHEVCVideoSample(nalTypes ...byte) []byte {
+	out := make([]byte, 0, 64)
+	for _, nalType := range []byte{HEVCNALVPS, HEVCNALSPS, HEVCNALPPS, HEVCNALPrefixSEI} {
+		out = append(out, nalu(hevcNAL(nalType))...)
+	}
+	for _, nalType := range nalTypes {
+		out = append(out, nalu(hevcNAL(nalType))...)
+	}
+	return out
+}
+
+// hevcNAL is a NAL unit with HEVC's two-byte header (layer 0, temporal id
+// plus one 1) and a short payload.
+func hevcNAL(nalType byte) []byte {
+	return []byte{nalType << 1, 0x01, 0xaf, 0x09}
+}
+
 func buildEventPlaylist(segments int) string {
 	var builder strings.Builder
 	builder.WriteString("#EXTM3U\n")
@@ -213,7 +298,7 @@ func stsd(entry []byte) []byte {
 	return Box("stsd", FullBoxPayload(0, U32(1)), entry)
 }
 
-func avcSampleEntry(typ string, childBoxes ...[]byte) []byte {
+func visualSampleEntry(typ string, childBoxes ...[]byte) []byte {
 	header := make([]byte, 78)
 	binary.BigEndian.PutUint16(header[6:8], 1)
 	return Box(typ, append([][]byte{header}, childBoxes...)...)

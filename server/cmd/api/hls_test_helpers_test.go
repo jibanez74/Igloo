@@ -242,7 +242,24 @@ func createTestHLSSessionWithAudio(
 	if err != nil {
 		return nil, err
 	}
-	return app.createHLSSession(ctx, &source, profile, audioTrack, audioProfile, nil, playbackSession, effectiveStartSec, isRoom, 0)
+	return app.createHLSSession(ctx, &source, profile, audioTrack, audioProfile, helpers.HLSVideoCodecs{}, nil, playbackSession, effectiveStartSec, isRoom, 0)
+}
+
+// createTestHLSSessionWithVideoCodecs is createTestHLSSession for a personal
+// session at zero with a video_codecs request.
+func createTestHLSSessionWithVideoCodecs(
+	app *Application,
+	ctx context.Context,
+	movieID int64,
+	profile string,
+	audioTrack *int,
+	videoCodecs helpers.HLSVideoCodecs,
+) (*HLSSession, error) {
+	source, effectiveStartSec, err := app.loadHLSSourceForSession(ctx, movieRef(movieID), 0)
+	if err != nil {
+		return nil, err
+	}
+	return app.createHLSSession(ctx, &source, profile, audioTrack, nil, videoCodecs, nil, testPlaybackSessionID, effectiveStartSec, false, 0)
 }
 
 // holdHLSTranscodePermit takes one permit from a pool for the rest of the

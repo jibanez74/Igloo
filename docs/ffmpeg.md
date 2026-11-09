@@ -78,9 +78,9 @@ A personal HLS request, for a file with audio, looks like:
 GET /api/movies/42/hls/remux/playlist.m3u8?playback_session=550e8400-e29b-41d4-a716-446655440000&start=120&audio_track=0
 ```
 
-`playback_session` must be a UUID. `start` is required, in nonnegative whole seconds. `audio_track` is required when audio exists and must be absent for video-only media. [Audio](#audio-selection-and-encoding) defines track ordinals and the optional explicit profile pair. `reload` is an opaque value echoed into asset URLs, not a cache-key component. `keepalive=1` has the refresh-only meaning defined under [session lifecycle](#session-lifecycle).
+`playback_session` must be a UUID. `start` is required, in nonnegative whole seconds. `audio_track` is required when audio exists and must be absent for video-only media. [Audio](#audio-selection-and-encoding) defines track ordinals and the optional explicit profile pair. The optional `video_codecs=hevc` declares that the client decodes HEVC from fMP4, which lets a remux copy HEVC (see [remux fallback](#profiles-and-remux-fallback)). `reload` is an opaque value echoed into asset URLs, not a cache-key component. `keepalive=1` has the refresh-only meaning defined under [session lifecycle](#session-lifecycle).
 
-Authenticate every request with a session cookie or device bearer token, including manifests, initialization files, segments, and subtitles. Playlist URLs contain no credentials. Follow the rewritten asset URLs exactly: they carry the normalized session start, UUID, selected audio, explicit audio profile when present, and reload value. An effective profile or actual-start header does **not** change the URL key.
+Authenticate every request with a session cookie or device bearer token, including manifests, initialization files, segments, and subtitles. Playlist URLs contain no credentials. Follow the rewritten asset URLs exactly: they carry the normalized session start, UUID, selected audio, explicit audio profile and `video_codecs` when present, and reload value. An effective profile or actual-start header does **not** change the URL key.
 
 Watch-room URLs use `/api/watch-rooms/{id}/hls/playlist.m3u8`, `/hls/{filename}`, or `/stream`. The room owns its mode and selected tracks. Membership is checked on requests, with successful results cached for the duration in the [settings table](#operational-settings-and-budgets); an unknown room and a nonmember both receive `403`. Room asset lookup uses the room ID and ignores query parameters. Audio/subtitle pins retain stream index and optional language: drift after a rescan returns `409` on the applicable manifest/direct-stream checks and requires recreating the room with current tracks. Asset requests do not perform those pin checks. See OpenAPI for the precise per-route rules.
 
@@ -113,16 +113,26 @@ Watch-room creation enforces the container, video, first-track selection, and di
 | `720p_3mbps` | `3M` | `6M` | 720 |
 | `remux` | Source video copied | — | Source height |
 
-The remux video gate accepts `h264`, `h.264`, `avc`, or `avc1` and rejects any of:
+The remux video gate accepts H.264 (`h264`, `h.264`, `avc`, or `avc1`) for every request and rejects any of:
 
 - Stored bit depth above 8.
 - A nonempty pixel format outside `yuv420p`, `yuvj420p`, `nv12`, `nv21`.
 - A codec profile containing `10`, `4:2:2`, `422`, `4:4:4`, or `444`.
 - Interlaced field order `tt`, `bb`, `tb`, or `bt`.
 
-Absent pixel format, bit depth, or field order does not itself reject the source. Unknown field order is treated as progressive. The server and web client keep separate copies of this gate; changes must keep them aligned. Audio processing is independent of video copy/transcode and is defined [below](#audio-selection-and-encoding).
+HEVC (`hevc`, `h265`, `h.265`) passes the gate only for a request with `video_codecs=hevc`, a client's statement that it decodes HEVC from fMP4; without it every HEVC source falls back, as before. Such a request rejects HEVC with any of:
 
-Eligible remux output undergoes fMP4 preflight unless a matching persisted verdict exists. The validator waits for initialization and the sample of complete fragments specified in the [settings table](#operational-settings-and-budgets), then checks that video sync samples begin with IDR frames. A clean early exit with at least one complete fragment can validate a shorter sample: a safe short sample applies only to that session; an unsafe result is persisted. A full sample can be validated even if FFmpeg subsequently fails. A timeout, empty clean exit, or premature failed exit falls back without storing an unsafe verdict.
+- Stored bit depth above 10.
+- A nonempty pixel format outside `yuv420p`, `yuv420p10le`.
+- A nonempty codec profile other than `Main` or `Main 10` (`Rext` covers 4:2:2, 4:4:4, and 12-bit).
+- Interlaced field order, as above.
+- A Dolby Vision base-layer compatibility id other than 1 (HDR10), 2 (SDR), 4 (HLG), or 6 (Blu-ray HDR10). Profile 5 reports 0: it has no base layer whose colors are right without Dolby Vision reshaping.
+
+HDR is not a gate criterion, and copied video keeps its HDR10 or HLG signalling: the client renders it, or tone-maps it for an SDR display. The copy is written with `-tag:v hvc1`, because FFmpeg's default `hev1` sample entry is refused by Safari. It is written without `-strict unofficial`, so FFmpeg writes no `dvcC`/`dvvC` box: a client plays a Dolby Vision profile 7 or 8 stream as plain HEVC from its base layer, and the RPU (NAL type 62) and profile 7's enhancement layer (type 63) stay in the bitstream, where HEVC decoders ignore them. `video_codecs` is part of the personal session key and propagates onto asset URLs, but it changes only what a remux may copy: transcodes always encode H.264, and watch rooms never copy HEVC. Its values are listed in OpenAPI.
+
+Absent pixel format, bit depth, profile, or field order does not itself reject the source. Unknown field order is treated as progressive. The web client keeps its own copy of the H.264 rules and sends no `video_codecs`; changes must keep the copies aligned. Audio processing is independent of video copy/transcode and is defined [below](#audio-selection-and-encoding).
+
+Eligible remux output undergoes fMP4 preflight unless a matching persisted verdict exists. The validator waits for initialization and the sample of complete fragments specified in the [settings table](#operational-settings-and-budgets), then checks that every video sync sample begins with a random-access picture: an IDR slice for H.264 (`avc1`/`avc3`), an IRAP picture (BLA, IDR, or CRA, NAL types 16 to 21) for HEVC (`hvc1`/`hev1`). Blu-ray HEVC starts most GOPs with a CRA; its RASL leading pictures reference the previous GOP, and decoders drop them when playback starts at that CRA, as the HEVC specification requires. A clean early exit with at least one complete fragment can validate a shorter sample: a safe short sample applies only to that session; an unsafe result is persisted. A full sample can be validated even if FFmpeg subsequently fails. A timeout, empty clean exit, or premature failed exit falls back without storing an unsafe verdict.
 
 Verdicts are keyed by file and stream, with the fingerprint described under [cache invalidation](#probed-metadata-and-cache-invalidation). Producer identity includes the parsed FFmpeg version and `remuxVerdictProducerRevision`, which must change when relevant arguments or validation change. The sampled fragments start at the session's offset. A safe persisted sample does not prove all later GOPs safe; copy-video playlists never advertise independent segments.
 
@@ -173,7 +183,7 @@ The normalized codec/ceiling pair participates in the personal session key and e
 
 ## Session lifecycle
 
-[`hls_session.go`](../server/cmd/api/hls_session.go) owns HLS processes and output directories independently of the manifest request. A personal cache key includes authenticated owner, media kind/ID, requested profile, audio ordinal/mode, playback UUID, and effective normalized start. Concurrent identical creations share work only within that owner. If the initiating request is canceled, a live follower retries creation under its own context, with a bounded attempt count in the [settings table](#operational-settings-and-budgets).
+[`hls_session.go`](../server/cmd/api/hls_session.go) owns HLS processes and output directories independently of the manifest request. A personal cache key includes authenticated owner, media kind/ID, requested profile, audio ordinal/mode, declared video codecs, playback UUID, and effective normalized start. Concurrent identical creations share work only within that owner. If the initiating request is canceled, a live follower retries creation under its own context, with a bounded attempt count in the [settings table](#operational-settings-and-budgets).
 
 Admission reserves a personal slot before starting FFmpeg; cached and in-flight sessions both count, including remux. At the cap, the owner's cached personal sessions are evicted in LRU order. If reservations occupy every slot, admission returns the capacity response described under [HTTP responses](#http-responses). A successful creation exchanges its reservation for a cache entry; failure releases it. Rooms and other owners are never personal-cap eviction candidates.
 
@@ -240,7 +250,7 @@ NVENC receives `-rc vbr -preset p4` and, when exposed, `-forced-idr 1`. QSV rece
 
 The software SDR chain is `scale=-2:<height>,format=<pixel format>,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709`. The pixel format is `nv12` for Intel and `yuv420p` otherwise. CUDA SDR uses `format=nv12,setparams=...,hwupload,scale_cuda=w=-2:h=<height>:format=yuv420p`; QSV SDR uses `format=nv12,hwupload=extra_hw_frames=64,scale_qsv=w=-2:h=<height>:format=nv12`. Hardware upload chains initialize a named filter device. The output `-pix_fmt yuv420p` is omitted for QSV and CUDA/VideoToolbox hardware-frame chains, which choose format in the filter graph.
 
-HDR detection uses stored `color_transfer`: `smpte2084` (PQ) or `arib-std-b67` (HLG). Copy-video does not tone-map. Transcoding HDR to the SDR profiles normally uses:
+HDR detection uses stored `color_transfer`: `smpte2084` (PQ) or `arib-std-b67` (HLG). Copy-video does not tone-map: a copied HEVC HDR stream stays HDR (see [remux fallback](#profiles-and-remux-fallback)). Transcoding HDR to the SDR profiles normally uses:
 
 ```text
 zscale=w=-2:h=<height>:t=linear:npl=100,format=gbrpf32le,
@@ -473,6 +483,6 @@ These tests provide complementary evidence:
 | Subtitle timing, caching, transport | `ffmpeg_subtitles_test.go`, `ffmpeg_subtitle_streams_externalbin_test.go`; API subtitle tests including real-FFmpeg HTTP tests; `matroska_stream_test.go` |
 | Web policies | Playback/direct-probe utilities, player/page, seek/recovery, capacity, keepalive, and watch-room unit tests under `web/src` |
 
-Real-FFmpeg tests cover generated fixtures, including CPU HLS, remux, explicit Dolby audio codec/layout/channel/sample-rate checks and decoded signal contribution (including nonzero starts and isolated center/surround/LFE mixes, and LFE kept in 2.1, 3.1, and 4.1), deinterlacing, rotation, BT.601 matrix conversion, copied/converted subtitle timestamps, and where copy-video seeks land in B-frame Matroska and MP4 sources. Hardware argument tests use constructed capabilities; they do not establish NVIDIA, Intel, or Apple playback correctness. External-client behavior requires testing that client.
+Real-FFmpeg tests cover generated fixtures, including CPU HLS, H.264 remux, HEVC HDR10 remux of an open-GOP fixture (`server/cmd/internal/ffmpeg/testdata`, made once with libx265 because Igloo's FFmpeg has no HEVC encoder) whose CRA sync samples validate, explicit Dolby audio codec/layout/channel/sample-rate checks and decoded signal contribution (including nonzero starts and isolated center/surround/LFE mixes, and LFE kept in 2.1, 3.1, and 4.1), deinterlacing, rotation, BT.601 matrix conversion, copied/converted subtitle timestamps, and where copy-video seeks land in B-frame Matroska and MP4 sources. Hardware argument tests use constructed capabilities; they do not establish NVIDIA, Intel, or Apple playback correctness. External-client behavior requires testing that client.
 
 Keep argument construction centralized in the FFmpeg wrapper. When media behavior changes, update this guide and relevant tests; update OpenAPI for contract changes and run route coverage after route changes. Profile/device changes also require reviewing playback-settings responses, client choices, and configuration docs. Follow [repository guidelines](../AGENTS.md) and the scoped server/web guidelines for required checks.

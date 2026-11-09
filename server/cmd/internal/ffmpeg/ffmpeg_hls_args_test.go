@@ -83,6 +83,7 @@ func TestBuildHLSArgs_CodecSelection(t *testing.T) {
 		audioIndex int
 		copyVideo  bool
 		copyAudio  bool
+		videoTag   string
 		want       []string
 		notWant    []string
 		notFlags   []string
@@ -129,7 +130,7 @@ func TestBuildHLSArgs_CodecSelection(t *testing.T) {
 			// Copy output splits on whatever keyframes the source carries, and
 			// the remux validator only samples four fragments, so FFmpeg must
 			// not stamp the playlist as independently decodable throughout.
-			notWant:  []string{"libx264", "-hwaccel", "independent_segments"},
+			notWant:  []string{"libx264", "-hwaccel", "independent_segments", "-tag:v"},
 			notFlags: []string{"-hls_flags"},
 		},
 		{
@@ -173,6 +174,23 @@ func TestBuildHLSArgs_CodecSelection(t *testing.T) {
 			copyVideo:  true,
 			copyAudio:  true,
 			want:       []string{"-map 0:4", "-c:v copy", "-c:a copy"},
+		},
+		{
+			// Safari refuses FFmpeg's default hev1 sample entry.
+			name:       "remux tags copied HEVC hvc1",
+			profile:    helpers.HLS_PROFILE_REMUX,
+			audioIndex: 1,
+			videoTag:   "hvc1",
+			want:       []string{"-c:v copy -tag:v hvc1"},
+		},
+		{
+			// A transcode writes its own H.264, so the source's tag is moot.
+			name:       "transcode ignores the copy tag",
+			profile:    helpers.HLS_PROFILE_1080P_8MBPS,
+			audioIndex: 1,
+			videoTag:   "hvc1",
+			want:       []string{"libx264"},
+			notFlags:   []string{"-tag:v"},
 		},
 		{
 			name:       "video-only input omits audio options",
@@ -221,6 +239,7 @@ func TestBuildHLSArgs_CodecSelection(t *testing.T) {
 			params.HWDevice = device
 			params.CopyVideo = tt.copyVideo
 			params.CopyAudio = tt.copyAudio
+			params.CopyVideoTag = tt.videoTag
 			params.Capabilities = Capabilities{}
 			args := hlsArgs(t, params)
 

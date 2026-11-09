@@ -98,7 +98,10 @@ type hlsRequestParams struct {
 	AudioTrack *int
 	// AudioProfile is the validated audio_codec/audio_channels pair; nil means
 	// legacy audio behavior.
-	AudioProfile    *helpers.HLSAudioProfileRequest
+	AudioProfile *helpers.HLSAudioProfileRequest
+	// VideoCodecs is the validated video_codecs list; the zero value is
+	// H.264 only.
+	VideoCodecs     helpers.HLSVideoCodecs
 	PlaybackSession string
 	StartSec        int
 	Reload          string
@@ -141,6 +144,7 @@ func (app *Application) serveHLSManifest(w http.ResponseWriter, r *http.Request,
 		params.Profile,
 		params.AudioTrack,
 		params.AudioProfile,
+		params.VideoCodecs,
 		params.PlaybackSession,
 		params.StartSec,
 		userID,
@@ -172,6 +176,7 @@ func (app *Application) serveHLSManifest(w http.ResponseWriter, r *http.Request,
 	querySuffix := buildHLSAssetQuerySuffix(hlsAssetQueryParams{
 		AudioTrack:      params.AudioTrack,
 		AudioProfile:    params.AudioProfile,
+		VideoCodecs:     params.VideoCodecs,
 		StartSec:        &effectiveStartSec,
 		PlaybackSession: params.PlaybackSession,
 		Reload:          params.Reload,
@@ -262,7 +267,7 @@ func (app *Application) serveHLSSegment(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	key := HLSSessionKey(params.Media, params.Profile, params.AudioTrack, params.AudioProfile, params.PlaybackSession, params.StartSec, userID)
+	key := HLSSessionKey(params.Media, params.Profile, params.AudioTrack, params.AudioProfile, params.VideoCodecs, params.PlaybackSession, params.StartSec, userID)
 	raw, ok := app.HLSSessionCache.Get(key)
 	if !ok {
 		helpers.ErrorJSON(w, errors.New(hlsSessionNotFoundMessage), http.StatusNotFound)
@@ -730,6 +735,18 @@ func parseHLSParams(w http.ResponseWriter, r *http.Request, kind mediaKind) (hls
 			Codec:       audioCodec,
 			MaxChannels: audioChannels,
 		}
+	}
+
+	// video_codecs widens what a remux may copy. Like the audio pair, an
+	// invalid value is an error rather than a silent transcode.
+	hasVideoCodecs := query.Has("video_codecs")
+	if hasVideoCodecs {
+		videoCodecs, ok := helpers.ParseHLSVideoCodecs(query.Get("video_codecs"))
+		if !ok {
+			helpers.ErrorJSON(w, errors.New("invalid video_codecs"), http.StatusBadRequest)
+			return params, false
+		}
+		params.VideoCodecs = videoCodecs
 	}
 
 	params.Reload = strings.TrimSpace(query.Get("reload"))

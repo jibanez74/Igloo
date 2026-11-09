@@ -181,6 +181,9 @@ func TestParseHLSParams(t *testing.T) {
 		fmt.Fprintf(w, "%d|%s|%s|%d|%s|%s|%s",
 			params.Media.ID, params.Profile, params.PlaybackSession, params.StartSec, audioTrack, params.Reload,
 			hlsAudioModeKey(params.AudioProfile))
+		if params.VideoCodecs.HEVC {
+			fmt.Fprint(w, "|hevc")
+		}
 	})
 
 	tests := []struct {
@@ -272,6 +275,25 @@ func TestParseHLSParams(t *testing.T) {
 			target:     "/api/movies/7/hls/720p_3mbps/playlist.m3u8?" + validQuery + "&audio_codec=ac3&audio_channels=8",
 			wantStatus: http.StatusBadRequest,
 			wantBody:   "invalid audio_channels",
+		},
+		{
+			name:       "parses video_codecs",
+			target:     "/api/movies/7/hls/remux/playlist.m3u8?" + validQuery + "&video_codecs=hevc",
+			wantStatus: http.StatusOK,
+			wantBody:   "7|remux|" + testPlaybackSessionID + "|40|none||legacy|hevc",
+		},
+		{
+			// H.264 is implied; naming it is as invalid as any unknown codec.
+			name:       "rejects h264 in video_codecs",
+			target:     "/api/movies/7/hls/remux/playlist.m3u8?" + validQuery + "&video_codecs=h264",
+			wantStatus: http.StatusBadRequest,
+			wantBody:   "invalid video_codecs",
+		},
+		{
+			name:       "rejects an empty video_codecs",
+			target:     "/api/movies/7/hls/remux/playlist.m3u8?" + validQuery + "&video_codecs=",
+			wantStatus: http.StatusBadRequest,
+			wantBody:   "invalid video_codecs",
 		},
 		{
 			name:       "rejects a non-numeric movie id",
@@ -1300,7 +1322,7 @@ func TestHLSManifest_UsesRequestedRemuxPathWhenEffectiveProfileFallsBack(t *test
 		EffectiveProfile: helpers.HLS_PROFILE_1080P_8MBPS,
 	}
 	seedReadyInitSegment(t, session.TempDir)
-	app.HLSSessionCache.SetDefault(HLSSessionKey(movieRef(movieID), helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 0, userID), session)
+	app.HLSSessionCache.SetDefault(HLSSessionKey(movieRef(movieID), helpers.HLS_PROFILE_REMUX, &audioTrack, nil, helpers.HLSVideoCodecs{}, testPlaybackSessionID, 0, userID), session)
 
 	req := httptest.NewRequest(
 		http.MethodGet,
@@ -1372,6 +1394,7 @@ func TestHLSManifest_PropagatesEffectiveStartToAssetsAndSegmentLookup(t *testing
 		helpers.HLS_PROFILE_720P_3MBPS,
 		&audioTrack,
 		nil,
+		helpers.HLSVideoCodecs{},
 		testPlaybackSessionID,
 		effectiveStart,
 		userID,
@@ -1510,7 +1533,7 @@ func TestHLSSegment_UsesRequestedRemuxKeyWhenEffectiveProfileFallsBack(t *testin
 		EffectiveProfile: helpers.HLS_PROFILE_1080P_8MBPS,
 		Exited:           true,
 	}
-	app.HLSSessionCache.SetDefault(HLSSessionKey(movieRef(5), helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 0, userID), session)
+	app.HLSSessionCache.SetDefault(HLSSessionKey(movieRef(5), helpers.HLS_PROFILE_REMUX, &audioTrack, nil, helpers.HLSVideoCodecs{}, testPlaybackSessionID, 0, userID), session)
 
 	req := httptest.NewRequest(
 		http.MethodGet,
@@ -1535,10 +1558,10 @@ func TestStopPersonalHLSSession_RemovesOnlyMatchingOwnedSession(t *testing.T) {
 	userID := int64(100)
 	audioTrack := 0
 	matchingDir := t.TempDir()
-	matchingKey := HLSSessionKey(movieRef(5), helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 0, userID)
-	otherMovieKey := HLSSessionKey(movieRef(6), helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 0, userID)
-	otherUserKey := HLSSessionKey(movieRef(5), helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 0, userID+1)
-	otherPlaybackKey := HLSSessionKey(movieRef(5), helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testOtherPlaybackSessionID, 0, userID)
+	matchingKey := HLSSessionKey(movieRef(5), helpers.HLS_PROFILE_REMUX, &audioTrack, nil, helpers.HLSVideoCodecs{}, testPlaybackSessionID, 0, userID)
+	otherMovieKey := HLSSessionKey(movieRef(6), helpers.HLS_PROFILE_REMUX, &audioTrack, nil, helpers.HLSVideoCodecs{}, testPlaybackSessionID, 0, userID)
+	otherUserKey := HLSSessionKey(movieRef(5), helpers.HLS_PROFILE_REMUX, &audioTrack, nil, helpers.HLSVideoCodecs{}, testPlaybackSessionID, 0, userID+1)
+	otherPlaybackKey := HLSSessionKey(movieRef(5), helpers.HLS_PROFILE_REMUX, &audioTrack, nil, helpers.HLSVideoCodecs{}, testOtherPlaybackSessionID, 0, userID)
 	roomKey := RoomHLSSessionKey(9)
 
 	app.HLSSessionCache.SetDefault(matchingKey, &HLSSession{Media: movieRef(5), FileID: 5, OwnerUserID: userID, PlaybackSession: testPlaybackSessionID, TempDir: matchingDir})
@@ -1581,7 +1604,7 @@ func TestHLSSegment_RejectsDifferentOwner(t *testing.T) {
 
 	audioTrack := 0
 	userID := int64(100)
-	key := HLSSessionKey(movieRef(5), helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 0, userID)
+	key := HLSSessionKey(movieRef(5), helpers.HLS_PROFILE_REMUX, &audioTrack, nil, helpers.HLSVideoCodecs{}, testPlaybackSessionID, 0, userID)
 	app.HLSSessionCache.SetDefault(key, &HLSSession{
 		Media:           movieRef(5),
 		FileID:          5,
@@ -1621,7 +1644,7 @@ func TestHLSSegment_ResolvesAuthenticatedOwnersCacheEntry(t *testing.T) {
 		if err != nil {
 			t.Fatalf("write owner %d segment: %v", userID, err)
 		}
-		key := HLSSessionKey(movieRef(5), helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 0, userID)
+		key := HLSSessionKey(movieRef(5), helpers.HLS_PROFILE_REMUX, &audioTrack, nil, helpers.HLSVideoCodecs{}, testPlaybackSessionID, 0, userID)
 		app.HLSSessionCache.SetDefault(key, &HLSSession{
 			Media:           movieRef(5),
 			FileID:          5,
@@ -1790,7 +1813,7 @@ func TestHLSSegment_RejectsBadRequests(t *testing.T) {
 	// A cache entry of the wrong type can only come from a bug, but leaving it
 	// in place would make every later request for this key fail the same way.
 	t.Run("evicts a cache entry that is not a session", func(t *testing.T) {
-		key := HLSSessionKey(movieRef(5), helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 0, userID)
+		key := HLSSessionKey(movieRef(5), helpers.HLS_PROFILE_REMUX, &audioTrack, nil, helpers.HLSVideoCodecs{}, testPlaybackSessionID, 0, userID)
 		app.HLSSessionCache.SetDefault(key, "not a session")
 
 		recorder := httptest.NewRecorder()
@@ -1812,7 +1835,7 @@ func TestHLSResponsesAreNeverCached(t *testing.T) {
 	userID := int64(100)
 	handler := authenticatedRouter(t, app, userID)
 
-	stoppedKey := HLSSessionKey(movieRef(6), helpers.HLS_PROFILE_REMUX, testIntPtr(0), nil, testPlaybackSessionID, 0, userID)
+	stoppedKey := HLSSessionKey(movieRef(6), helpers.HLS_PROFILE_REMUX, testIntPtr(0), nil, helpers.HLSVideoCodecs{}, testPlaybackSessionID, 0, userID)
 	app.HLSSessionCache.SetDefault(stoppedKey, &HLSSession{
 		Media:           movieRef(6),
 		OwnerUserID:     userID,
@@ -2103,6 +2126,7 @@ func TestHLSManifest_ExplicitAudioProfile(t *testing.T) {
 		helpers.HLS_PROFILE_720P_3MBPS,
 		&audioTrack,
 		&helpers.HLSAudioProfileRequest{Codec: helpers.HLSAudioCodecEAC3, MaxChannels: 6},
+		helpers.HLSVideoCodecs{},
 		testPlaybackSessionID,
 		0,
 		userID,

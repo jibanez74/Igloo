@@ -658,11 +658,11 @@ func TestStopEpisodeHLSSession_ConformsToOpenAPI(t *testing.T) {
 	handler := authenticatedRouter(t, app, user.ID)
 
 	media := episodeRef(fixture.Episode1)
-	key := HLSSessionKey(media, helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), nil, testPlaybackSessionID, 0, user.ID)
+	key := HLSSessionKey(media, helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), nil, helpers.HLSVideoCodecs{}, testPlaybackSessionID, 0, user.ID)
 	app.HLSSessionCache.SetDefault(key, &HLSSession{Media: media, FileID: fixture.FileID, OwnerUserID: user.ID, PlaybackSession: testPlaybackSessionID, TempDir: t.TempDir()})
 	// A movie session with the same numeric id and playback session is a
 	// different media and must survive the episode stop.
-	movieKey := HLSSessionKey(movieRef(fixture.Episode1), helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), nil, testPlaybackSessionID, 0, user.ID)
+	movieKey := HLSSessionKey(movieRef(fixture.Episode1), helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), nil, helpers.HLSVideoCodecs{}, testPlaybackSessionID, 0, user.ID)
 	app.HLSSessionCache.SetDefault(movieKey, &HLSSession{Media: movieRef(fixture.Episode1), FileID: fixture.Episode1, OwnerUserID: user.ID, PlaybackSession: testPlaybackSessionID, TempDir: t.TempDir()})
 
 	request := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/shows/episodes/%d/hls/session/stop?playback_session=%s", fixture.Episode1, testPlaybackSessionID), nil)
@@ -757,9 +757,9 @@ func TestInvalidateCommittedShowFile_EvictsOnlyThatFile(t *testing.T) {
 	app := setupTestApp(t)
 	fixture := seedPlaybackEpisode(t, app)
 
-	episodeKey := HLSSessionKey(episodeRef(fixture.Episode1), helpers.HLS_PROFILE_REMUX, nil, nil, testPlaybackSessionID, 0, 1)
-	otherEpisodeKey := HLSSessionKey(episodeRef(77), helpers.HLS_PROFILE_REMUX, nil, nil, testPlaybackSessionID, 0, 1)
-	movieKey := HLSSessionKey(movieRef(fixture.FileID), helpers.HLS_PROFILE_REMUX, nil, nil, testPlaybackSessionID, 0, 1)
+	episodeKey := HLSSessionKey(episodeRef(fixture.Episode1), helpers.HLS_PROFILE_REMUX, nil, nil, helpers.HLSVideoCodecs{}, testPlaybackSessionID, 0, 1)
+	otherEpisodeKey := HLSSessionKey(episodeRef(77), helpers.HLS_PROFILE_REMUX, nil, nil, helpers.HLSVideoCodecs{}, testPlaybackSessionID, 0, 1)
+	movieKey := HLSSessionKey(movieRef(fixture.FileID), helpers.HLS_PROFILE_REMUX, nil, nil, helpers.HLSVideoCodecs{}, testPlaybackSessionID, 0, 1)
 	app.HLSSessionCache.SetDefault(episodeKey, &HLSSession{Media: episodeRef(fixture.Episode1), FileID: fixture.FileID, TempDir: t.TempDir()})
 	app.HLSSessionCache.SetDefault(otherEpisodeKey, &HLSSession{Media: episodeRef(77), FileID: fixture.FileID + 1000, TempDir: t.TempDir()})
 	app.HLSSessionCache.SetDefault(movieKey, &HLSSession{Media: movieRef(fixture.FileID), FileID: fixture.FileID, TempDir: t.TempDir()})
@@ -892,7 +892,7 @@ func TestEpisodeHLSManifest_StartsFFmpegFromTheShowStreams(t *testing.T) {
 			t.Fatalf("episode %d manifest = %d %s", episodeID, recorder.Code, recorder.Body.String())
 		}
 
-		key := HLSSessionKey(episodeRef(episodeID), helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), nil, testPlaybackSessionID, 0, userID)
+		key := HLSSessionKey(episodeRef(episodeID), helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), nil, helpers.HLSVideoCodecs{}, testPlaybackSessionID, 0, userID)
 		raw, ok := app.HLSSessionCache.Get(key)
 		session, _ := raw.(*HLSSession)
 		if !ok || session == nil {

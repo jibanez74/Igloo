@@ -62,11 +62,16 @@ func TestMediaResponsesConformToOpenAPI(t *testing.T) {
 		}
 	}
 	audioTrack := 0
-	personalKey := HLSSessionKey(movieRef(movieID), helpers.HLS_PROFILE_720P_3MBPS, &audioTrack, nil, testPlaybackSessionID, 0, ownerID)
+	personalKey := HLSSessionKey(movieRef(movieID), helpers.HLS_PROFILE_720P_3MBPS, &audioTrack, nil, helpers.HLSVideoCodecs{}, testPlaybackSessionID, 0, ownerID)
 	app.HLSSessionCache.SetDefault(personalKey, &HLSSession{Media: movieRef(movieID), FileID: movieID, OwnerUserID: ownerID, PlaybackSession: testPlaybackSessionID, TempDir: dir, TempFileSegments: true, EffectiveProfile: helpers.HLS_PROFILE_720P_3MBPS})
 	app.HLSSessionCache.SetDefault(RoomHLSSessionKey(hlsRoom.ID), &HLSSession{Media: movieRef(movieID), FileID: movieID, TempDir: dir, TempFileSegments: true, EffectiveProfile: helpers.HLS_PROFILE_720P_3MBPS})
-	episodeKey := HLSSessionKey(episodeRef(episode.Episode1), helpers.HLS_PROFILE_720P_3MBPS, &audioTrack, nil, testPlaybackSessionID, 0, ownerID)
+	episodeKey := HLSSessionKey(episodeRef(episode.Episode1), helpers.HLS_PROFILE_720P_3MBPS, &audioTrack, nil, helpers.HLSVideoCodecs{}, testPlaybackSessionID, 0, ownerID)
 	app.HLSSessionCache.SetDefault(episodeKey, &HLSSession{Media: episodeRef(episode.Episode1), FileID: episode.FileID, OwnerUserID: ownerID, PlaybackSession: testPlaybackSessionID, TempDir: dir, TempFileSegments: true, EffectiveProfile: helpers.HLS_PROFILE_720P_3MBPS})
+	hevc := helpers.HLSVideoCodecs{HEVC: true}
+	hevcMovieKey := HLSSessionKey(movieRef(movieID), helpers.HLS_PROFILE_REMUX, &audioTrack, nil, hevc, testPlaybackSessionID, 0, ownerID)
+	app.HLSSessionCache.SetDefault(hevcMovieKey, &HLSSession{Media: movieRef(movieID), FileID: movieID, OwnerUserID: ownerID, PlaybackSession: testPlaybackSessionID, TempDir: dir, TempFileSegments: true, CopyVideo: true, EffectiveProfile: helpers.HLS_PROFILE_REMUX})
+	hevcEpisodeKey := HLSSessionKey(episodeRef(episode.Episode1), helpers.HLS_PROFILE_REMUX, &audioTrack, nil, hevc, testPlaybackSessionID, 0, ownerID)
+	app.HLSSessionCache.SetDefault(hevcEpisodeKey, &HLSSession{Media: episodeRef(episode.Episode1), FileID: episode.FileID, OwnerUserID: ownerID, PlaybackSession: testPlaybackSessionID, TempDir: dir, TempFileSegments: true, CopyVideo: true, EffectiveProfile: helpers.HLS_PROFILE_REMUX})
 	app.InitRouter()
 	cookie := newAuthSessionCookie(t, app, ownerID)
 	server := httptest.NewServer(app.Router)
@@ -121,6 +126,10 @@ func TestMediaResponsesConformToOpenAPI(t *testing.T) {
 			"watchRoomHLSSegment", fmt.Sprintf("/api/watch-rooms/%d/hls/%s?audio_track=0", hlsRoom.ID, filename), "video/mp4", false, false,
 		}, mediaEndpoint{
 			"episodeHlsSegment", fmt.Sprintf("/api/shows/episodes/%d/hls/%s/%s?audio_track=0&playback_session=%s&start=0", episode.Episode1, helpers.HLS_PROFILE_720P_3MBPS, filename, testPlaybackSessionID), "video/mp4", false, false,
+		}, mediaEndpoint{
+			"hlsSegment", fmt.Sprintf("/api/movies/%d/hls/%s/%s?audio_track=0&playback_session=%s&start=0&video_codecs=hevc", movieID, helpers.HLS_PROFILE_REMUX, filename, testPlaybackSessionID), "video/mp4", false, false,
+		}, mediaEndpoint{
+			"episodeHlsSegment", fmt.Sprintf("/api/shows/episodes/%d/hls/%s/%s?audio_track=0&playback_session=%s&start=0&video_codecs=hevc", episode.Episode1, helpers.HLS_PROFILE_REMUX, filename, testPlaybackSessionID), "video/mp4", false, false,
 		})
 	}
 	for _, endpoint := range endpoints {

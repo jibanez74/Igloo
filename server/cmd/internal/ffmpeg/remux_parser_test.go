@@ -36,15 +36,15 @@ func TestParseVideoTrackConfig_IgnoresFakeAvcCBytePatternOutsideSampleEntry(t *t
 	binary.BigEndian.PutUint32(mutated[moov.Start:], uint32(moov.End-moov.Start+len(fakeBox)))
 	binary.BigEndian.PutUint32(mutated[videoTrak.Start:], uint32(videoTrak.End-videoTrak.Start+len(fakeBox)))
 
-	trackID, nalLengthSize, err := parseVideoTrackConfig(mutated)
+	trackID, format, err := parseVideoTrackConfig(mutated)
 	if err != nil {
 		t.Fatalf("parseVideoTrackConfig returned error: %v", err)
 	}
 	if trackID != 1 {
 		t.Fatalf("trackID = %d, want 1", trackID)
 	}
-	if nalLengthSize != 4 {
-		t.Fatalf("nalLengthSize = %d, want 4", nalLengthSize)
+	if format.nalLengthSize != 4 || format.hevc {
+		t.Fatalf("format = %+v, want 4-byte H.264", format)
 	}
 }
 
@@ -337,5 +337,112 @@ func TestValidateSyncSampleRejectsMalformedOrNonIDRSamples(t *testing.T) {
 				t.Fatalf("error = %v, want %q", err, tt.want)
 			}
 		})
+	}
+}
+
+func TestParseVideoTrackConfigReadsHEVCSampleEntries(t *testing.T) {
+	for _, entryType := range []string{"hvc1", "hev1"} {
+		t.Run(entryType, func(t *testing.T) {
+			trackID, format, err := parseVideoTrackConfig(fmp4testutil.BuildHEVCInitMP4(entryType))
+			if err != nil {
+				t.Fatalf("parseVideoTrackConfig returned error: %v", err)
+			}
+			if trackID != 1 || format.nalLengthSize != 4 || !format.hevc {
+				t.Fatalf("trackID = %d, format = %+v; want track 1, 4-byte HEVC", trackID, format)
+			}
+		})
+	}
+}
+
+// hvcC keeps lengthSizeMinusOne in byte 21, where avcC keeps it in byte 4, so
+// reading the wrong offset would mis-split every sample.
+func TestParseVideoTrackConfigReadsHEVCNALLengthSize(t *testing.T) {
+	for width := 1; width <= 4; width++ {
+		t.Run(strconv.Itoa(width), func(t *testing.T) {
+			initData := fmp4testutil.BuildHEVCInitMP4WithConfig("hvc1", fmp4testutil.HEVCConfigPayload(width))
+
+			_, format, err := parseVideoTrackConfig(initData)
+			if err != nil {
+				t.Fatalf("parseVideoTrackConfig returned error: %v", err)
+			}
+			if format.nalLengthSize != width {
+				t.Fatalf("nalLengthSize = %d, want %d", format.nalLengthSize, width)
+			}
+		})
+	}
+}
+
+func TestParseVideoTrackConfigRejectsTruncatedHVCC(t *testing.T) {
+	// 21 bytes end just before lengthSizeMinusOne.
+	truncated := fmp4testutil.HEVCConfigPayload(4)[:21]
+	initData := fmp4testutil.BuildHEVCInitMP4WithConfig("hvc1", truncated)
+
+	_, _, err := parseVideoTrackConfig(initData)
+	if err == nil || !strings.Contains(err.Error(), "invalid hvcC payload") {
+		t.Fatalf("error = %v, want invalid hvcC payload", err)
+	}
+}
+
+func TestValidateHEVCSyncSampleAcceptsIRAPPictures(t *testing.T) {
+	tests := []struct {
+		name     string
+		nalTypes []byte
+	}{
+		{name: "BLA", nalTypes: []byte{fmp4testutil.HEVCNALBLAWLP}},
+		{name: "IDR with RADL", nalTypes: []byte{fmp4testutil.HEVCNALIDRWRADL}},
+		{name: "IDR without leading pictures", nalTypes: []byte{fmp4testutil.HEVCNALIDRNLP}},
+		{name: "CRA", nalTypes: []byte{fmp4testutil.HEVCNALCRA}},
+		// Dolby Vision profile 7 single-track copies carry the enhancement
+		// layer and RPU after the base-layer slices.
+		{name: "CRA with Dolby Vision layers", nalTypes: []byte{
+			fmp4testutil.HEVCNALCRA, fmp4testutil.HEVCNALCRA,
+			fmp4testutil.HEVCNALDolbyVisionEL, fmp4testutil.HEVCNALDolbyVisionRPU,
+		}},
+		// Profile 8 puts the RPU ahead of the next access unit's slices.
+		{name: "RPU before the slice", nalTypes: []byte{fmp4testutil.HEVCNALDolbyVisionRPU, fmp4testutil.HEVCNALIDRWRADL}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateHEVCSyncSample(fmp4testutil.BuildHEVCVideoSample(tt.nalTypes...), 4)
+			if err != nil {
+				t.Fatalf("validateHEVCSyncSample: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateHEVCSyncSampleRejectsNonIRAPOrMalformedSamples(t *testing.T) {
+	tests := []struct {
+		name   string
+		sample []byte
+		width  int
+		want   string
+	}{
+		{name: "trailing picture", sample: fmp4testutil.BuildHEVCVideoSample(fmp4testutil.HEVCNALTrailR), width: 4, want: "non-IRAP VCL NAL type 1"},
+		{name: "leading picture", sample: fmp4testutil.BuildHEVCVideoSample(fmp4testutil.HEVCNALRASLN), width: 4, want: "non-IRAP VCL NAL type 8"},
+		{name: "no slice", sample: fmp4testutil.BuildHEVCVideoSample(fmp4testutil.HEVCNALDolbyVisionRPU), width: 4, want: "does not contain a VCL"},
+		// A one-byte NAL unit cannot hold HEVC's two-byte header.
+		{name: "short NAL unit", sample: []byte{0, 0, 0, 1, fmp4testutil.HEVCNALCRA << 1}, width: 4, want: "invalid NAL unit size"},
+		{name: "invalid width", sample: fmp4testutil.BuildHEVCVideoSample(fmp4testutil.HEVCNALCRA), width: 0, want: "invalid NAL length size"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateHEVCSyncSample(tt.sample, tt.width)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("error = %v, want %q", err, tt.want)
+			}
+		})
+	}
+}
+
+// An H.264 IDR header byte (0x65) reads as HEVC type 50, a non-VCL type, so
+// the codec must come from the sample entry, not from guessing at the bytes.
+func TestValidateSyncSampleReadsTheTrackCodec(t *testing.T) {
+	hevcCRA := fmp4testutil.BuildHEVCVideoSample(fmp4testutil.HEVCNALCRA)
+	err := validateSyncSample(hevcCRA, 4)
+	if err == nil {
+		t.Fatal("validateSyncSample accepted an HEVC CRA as an H.264 IDR")
 	}
 }

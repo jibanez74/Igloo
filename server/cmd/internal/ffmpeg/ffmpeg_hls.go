@@ -52,7 +52,10 @@ type HLSParams struct {
 	AudioStreamIndex int
 	HWDevice         string
 	CopyVideo        bool
-	CopyAudio        bool
+	// CopyVideoTag is the MP4 sample-entry tag for copied video
+	// (helpers.HLSCopyVideoTag); empty keeps FFmpeg's default.
+	CopyVideoTag string
+	CopyAudio    bool
 	// AudioProfile, when non-nil, is a resolved explicit audio profile
 	// (server-owned encoder, channels, bitrate, sample rate) that replaces the
 	// legacy CopyAudio/AAC-stereo audio arguments. Nil keeps legacy behavior
@@ -295,6 +298,9 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 
 	if copyVideo {
 		args = append(args, "-c:v", "copy")
+		if p.CopyVideoTag != "" {
+			args = append(args, "-tag:v", p.CopyVideoTag)
+		}
 	} else {
 		encoder := hlsVideoEncoder(hwLower)
 
