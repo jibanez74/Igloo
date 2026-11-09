@@ -403,20 +403,25 @@ func TestUpdateGeneralSettings_RejectsNonAdminUser(t *testing.T) {
 
 func TestScanStatusAuthorization(t *testing.T) {
 	for _, path := range []string{"/api/settings/scan/movies", "/api/settings/scan/music", "/api/settings/scan/shows"} {
-		for _, role := range []string{"anonymous", "user", "admin"} {
+		for _, role := range []string{"anonymous", "user", "admin", "admin device"} {
 			t.Run(path+"/"+role, func(t *testing.T) {
 				app := setupSessionTestApp(t)
 				app.InitRouter()
 				request := httptest.NewRequest(http.MethodGet, path, nil)
 				expected := http.StatusUnauthorized
-				if role != "anonymous" {
-					user := createTestUser(t, app, "Viewer", role+"@example.com", role == "admin")
-					token := createTestDevice(t, app, user.ID, "Browser", "web")
-					request.Header.Set("Authorization", "Bearer "+token)
+				switch role {
+				case "user":
+					user := createTestUser(t, app, "Viewer", "user@example.com", false)
+					request.AddCookie(newAuthSessionCookie(t, app, user.ID))
 					expected = http.StatusForbidden
-					if role == "admin" {
-						expected = http.StatusOK
-					}
+				case "admin":
+					admin := createTestUser(t, app, "Admin", "admin@example.com", true)
+					request.AddCookie(newAuthSessionCookie(t, app, admin.ID))
+					expected = http.StatusOK
+				case "admin device":
+					admin := createTestUser(t, app, "Admin", "admin@example.com", true)
+					token := createTestDevice(t, app, admin.ID, "TV", "android_tv")
+					request.Header.Set("Authorization", "Bearer "+token)
 				}
 				response := httptest.NewRecorder()
 				app.Router.ServeHTTP(response, request)

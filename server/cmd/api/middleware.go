@@ -250,10 +250,15 @@ func (app *Application) forgetUserDevices(userID int64) {
 	})
 }
 
-// RequireAdmin rejects requests from non-admin users with 403.
+// RequireAdmin rejects requests from non-admin users with 403. Admin routes
+// take a session cookie only: a device bearer token gets 401, so a stolen TV
+// token cannot manage users, reset passwords or change server settings.
 func (app *Application) RequireAdmin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		userID := app.userIDFromRequest(r)
+		userID, ok := app.requireSessionUserID(w, r)
+		if !ok {
+			return
+		}
 
 		isAdmin, err := app.Queries.GetUserIsAdmin(r.Context(), userID)
 		if err != nil {

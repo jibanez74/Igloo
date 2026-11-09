@@ -338,8 +338,8 @@ func (app *Application) AdminResetUserPassword(w http.ResponseWriter, r *http.Re
 		app.serverError(w, err, "admin: failed to reset user password", internalServerErrorMessage, "target_id", targetID)
 		return
 	}
-	// An admin resetting their own password from a browser keeps that session.
-	if targetID == app.userIDFromRequest(r) && deviceAuthFrom(r.Context()) == nil {
+	// An admin resetting their own password keeps that session.
+	if targetID == app.userIDFromRequest(r) {
 		app.keepSessionAfterPasswordChange(r, targetID, version)
 	}
 
