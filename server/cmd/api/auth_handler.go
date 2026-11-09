@@ -96,7 +96,9 @@ func (app *Application) AuthenticateUser(w http.ResponseWriter, r *http.Request)
 
 	app.SessionManager.Put(r.Context(), cookieUserID, user.ID)
 	app.SessionManager.Put(r.Context(), cookieSessionVersion, user.SessionVersion)
-	app.rememberSessionVersion(user.ID, user.SessionVersion)
+	// The version was read before the password check, so a password change or
+	// delete may have landed since: observe it, never overwrite theirs.
+	app.observeSessionVersion(user.ID, user.SessionVersion)
 
 	res := helpers.JSONResponse{
 		Message: fmt.Sprintf("Hello %s, welcome to your media library!", user.Name),

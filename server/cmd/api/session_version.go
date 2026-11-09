@@ -57,10 +57,15 @@ func (app *Application) currentSessionVersion(ctx context.Context, userID int64)
 		return 0, err
 	}
 
-	// Add, not Set: a password change or delete that landed after this read
-	// already wrote the newer value, which must win.
-	_ = app.SessionVersionCache.Add(key, version, sessionVersionCacheTTL)
+	app.observeSessionVersion(userID, version)
 	return version, nil
+}
+
+// observeSessionVersion caches a version this process read. It is an Add, not
+// a Set: a password change or delete that landed after the read already wrote
+// the newer value, or the deleted-user marker, which must win.
+func (app *Application) observeSessionVersion(userID, version int64) {
+	_ = app.SessionVersionCache.Add(sessionVersionKey(userID), version, sessionVersionCacheTTL)
 }
 
 // rememberSessionVersion records a version this process just wrote.
