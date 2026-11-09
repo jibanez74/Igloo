@@ -40,7 +40,7 @@ for platform in "$@"; do
       continue
     fi
 
-    # One download per url: both macOS payloads come from the same archive.
+    # One download per url: an archive can hold several payloads.
     download=$tmp/$(printf '%s' "$url" | cksum | cut -d' ' -f1)
     if [ ! -f "$download" ]; then
       echo "$payload: downloading $url"
