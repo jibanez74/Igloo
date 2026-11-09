@@ -566,6 +566,163 @@ func TestInitTables_Idempotent(t *testing.T) {
 	t.Run("after reinitialization", assertPopulatedState)
 }
 
+// An upsert or a move names a searchable column whatever it writes. Only a
+// changed value may re-index the row and bump the vocabulary generation, which
+// makes the next search rebuild that library's typo index.
+func TestSchema_SearchTriggersFireOnlyOnChange(t *testing.T) {
+	db := newTestDBApp(t).DB
+
+	_, err := db.Exec(`
+		INSERT INTO movies (id, title, file_path, file_name, size, container, mime_type, adult)
+		VALUES (1, 'Moonrise', '/movies/moonrise.mkv', 'moonrise.mkv', 1, 'mkv', 'video/x-matroska', false);
+		INSERT INTO shows (id, directory_path, local_name, name, overview)
+		VALUES (1, '/shows/Nightfall', 'Nightfall', 'Nightfall', 'Dusk falls on a quiet town.');
+		INSERT INTO musicians (id, name, sort_name) VALUES (1, 'Aurora', 'aurora');
+		INSERT INTO albums (id, title, sort_title, musician) VALUES (1, 'Daylight', 'daylight', 'Aurora');
+		INSERT INTO tracks (
+			id, title, sort_title, file_path, file_name, container, mime_type, codec,
+			size, track_index, duration, disc, channels, channel_layout, bit_rate, profile,
+			album_id, musician_id
+		) VALUES (
+			1, 'Sunrise', 'sunrise', '/music/sunrise.flac', 'sunrise.flac', 'flac', 'audio/flac', 'flac',
+			1, 1, 180, 1, '2', 'stereo', 1000, '', 1, 1
+		);
+	`)
+	if err != nil {
+		t.Fatalf("populate catalog: %v", err)
+	}
+
+	// Every FTS write lands in the index's _data shadow table, so its block
+	// ids and sizes show a re-index that left the searchable terms the same.
+	const state = `
+		SELECT group_concat(part, ' ') FROM (
+			SELECT vocab_table || '=' || generation AS part FROM search_vocab_generations
+			UNION ALL SELECT 'movies:' || id || ':' || length(block) FROM movies_fts_data
+			UNION ALL SELECT 'shows:' || id || ':' || length(block) FROM shows_fts_data
+			UNION ALL SELECT 'albums:' || id || ':' || length(block) FROM albums_fts_data
+			UNION ALL SELECT 'musicians:' || id || ':' || length(block) FROM musicians_fts_data
+			UNION ALL SELECT 'tracks:' || id || ':' || length(block) FROM tracks_search_fts_data
+			ORDER BY part
+		)`
+	readState := func(t *testing.T) string {
+		t.Helper()
+		var got string
+		err := db.QueryRow(state).Scan(&got)
+		if err != nil {
+			t.Fatalf("read search state: %v", err)
+		}
+		return got
+	}
+	generations := func(t *testing.T) map[string]int64 {
+		t.Helper()
+		rows, err := db.Query(`SELECT vocab_table, generation FROM search_vocab_generations`)
+		if err != nil {
+			t.Fatalf("read generations: %v", err)
+		}
+		defer rows.Close()
+		got := make(map[string]int64)
+		for rows.Next() {
+			var table string
+			var generation int64
+			err = rows.Scan(&table, &generation)
+			if err != nil {
+				t.Fatalf("scan generation: %v", err)
+			}
+			got[table] = generation
+		}
+		err = rows.Err()
+		if err != nil {
+			t.Fatalf("read generations: %v", err)
+		}
+		return got
+	}
+
+	tests := []struct {
+		name      string
+		unchanged string
+		changed   string
+		bumps     []string
+		search    string
+	}{
+		{
+			name:      "movie",
+			unchanged: `UPDATE movies SET title = title, overview = overview, tag_line = tag_line WHERE id = 1`,
+			changed:   `UPDATE movies SET title = 'Sunset' WHERE id = 1`,
+			bumps:     []string{"movies_fts_vocab"},
+			search:    `SELECT COUNT(*) FROM movies_fts WHERE movies_fts MATCH 'sunset'`,
+		},
+		{
+			name:      "show",
+			unchanged: `UPDATE shows SET name = name, overview = overview, tagline = tagline WHERE id = 1`,
+			changed:   `UPDATE shows SET overview = 'Dawn breaks over the harbour.' WHERE id = 1`,
+			bumps:     []string{"shows_fts_vocab"},
+			search:    `SELECT COUNT(*) FROM shows_fts WHERE shows_fts MATCH 'harbour'`,
+		},
+		{
+			name:      "track",
+			unchanged: `UPDATE tracks SET title = title, album_id = album_id, musician_id = musician_id WHERE id = 1`,
+			changed:   `UPDATE tracks SET title = 'Daybreak' WHERE id = 1`,
+			bumps:     []string{"tracks_search_fts_vocab"},
+			search:    `SELECT COUNT(*) FROM tracks_search_fts WHERE tracks_search_fts MATCH 'daybreak'`,
+		},
+		{
+			name:      "album",
+			unchanged: `UPDATE albums SET title = title, musician = musician WHERE id = 1`,
+			changed:   `UPDATE albums SET title = 'Twilight' WHERE id = 1`,
+			bumps:     []string{"albums_fts_vocab", "tracks_search_fts_vocab"},
+			search: `SELECT (SELECT COUNT(*) FROM albums_fts WHERE albums_fts MATCH 'twilight')
+				AND (SELECT COUNT(*) FROM tracks_search_fts WHERE tracks_search_fts MATCH 'twilight')`,
+		},
+		{
+			name:      "musician",
+			unchanged: `UPDATE musicians SET name = name, sort_name = sort_name WHERE id = 1`,
+			changed:   `UPDATE musicians SET name = 'Borealis' WHERE id = 1`,
+			bumps:     []string{"musicians_fts_vocab", "tracks_search_fts_vocab"},
+			search: `SELECT (SELECT COUNT(*) FROM musicians_fts WHERE musicians_fts MATCH 'borealis')
+				AND (SELECT COUNT(*) FROM tracks_search_fts WHERE tracks_search_fts MATCH 'borealis')`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			before := readState(t)
+			_, err := db.Exec(tt.unchanged)
+			if err != nil {
+				t.Fatalf("unchanged write: %v", err)
+			}
+			after := readState(t)
+			if after != before {
+				t.Errorf("an unchanged write touched the search index:\nbefore %s\nafter  %s", before, after)
+			}
+
+			want := generations(t)
+			for _, table := range tt.bumps {
+				want[table]++
+			}
+			_, err = db.Exec(tt.changed)
+			if err != nil {
+				t.Fatalf("changed write: %v", err)
+			}
+			got := generations(t)
+			for table, generation := range want {
+				if got[table] != generation {
+					t.Errorf("%s generation = %d, want %d", table, got[table], generation)
+				}
+			}
+			if readState(t) == after {
+				t.Error("a changed write left the search index untouched")
+			}
+			var found bool
+			err = db.QueryRow(tt.search).Scan(&found)
+			if err != nil {
+				t.Fatalf("search the new term: %v", err)
+			}
+			if !found {
+				t.Error("the new term is not searchable")
+			}
+		})
+	}
+}
+
 func TestInitTables_WatchRoomTrackConstraints(t *testing.T) {
 	db := newTestDBApp(t).DB
 
