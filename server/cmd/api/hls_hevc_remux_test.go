@@ -43,6 +43,10 @@ func TestIsRemuxCandidate(t *testing.T) {
 		{name: "H.264 stays on the browser-safe rules", stream: database.VideoStream{Codec: "h264"}, want: true},
 		{name: "H.264 High 10 is still refused with hevc", stream: database.VideoStream{Codec: "h264", CodecProfile: sql.NullString{String: "High 10", Valid: true}}, videoCodecs: hevc},
 		{name: "HEVC without the request", stream: main10},
+		{name: "HEVC Main 8-bit without the request", stream: with(func(s *database.VideoStream) {
+			s.CodecProfile.String = "Main"
+			s.PixelFormat.String = "yuv420p"
+		})},
 		{name: "HEVC Main 10 HDR10", stream: main10, videoCodecs: hevc, want: true},
 		{name: "HEVC Main 8-bit", stream: with(func(s *database.VideoStream) {
 			s.CodecProfile.String = "Main"
