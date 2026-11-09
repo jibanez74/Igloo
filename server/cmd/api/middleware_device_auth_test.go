@@ -117,20 +117,85 @@ func TestDeviceTokenAuth_WebSocketRouteRejectsUnknownToken(t *testing.T) {
 	}
 }
 
-func TestDeviceTokenAuth_NonAdminDeviceCannotUseAdminRoutes(t *testing.T) {
+// Admin routes take a session cookie only. Any device token gets 401 there,
+// an admin's included, even when a valid admin cookie rides along, so a
+// stolen TV token cannot manage users or reset the admin's own password.
+func TestDeviceTokenAuth_DeviceTokensCannotUseAdminRoutes(t *testing.T) {
 	app := setupSessionTestApp(t)
 	app.InitRouter()
 
-	user := createTestUser(t, app, "Regular", "regular@example.com", false)
-	token := createTestDevice(t, app, user.ID, "Phone", "android")
+	admin := createTestUser(t, app, "Admin", "admin@example.com", true)
+	regular := createTestUser(t, app, "Regular", "regular@example.com", false)
+	adminToken := createTestDevice(t, app, admin.ID, "TV", "android_tv")
+	regularToken := createTestDevice(t, app, regular.ID, "Phone", "android")
+	adminCookie := newAuthSessionCookie(t, app, admin.ID)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/admin/users", nil)
-	req.Header.Set("Authorization", "Bearer "+token)
+	before, err := app.Queries.GetUser(context.Background(), admin.ID)
+	if err != nil {
+		t.Fatalf("load admin: %v", err)
+	}
+
+	requests := []struct {
+		method string
+		target string
+		body   string
+	}{
+		{http.MethodGet, "/api/admin/users", ""},
+		{http.MethodPut, fmt.Sprintf("/api/admin/users/%d/password", admin.ID), `{"password":"taken-over-password"}`},
+		{http.MethodGet, "/api/settings/general", ""},
+		{http.MethodPost, "/api/settings/scan/movies", ""},
+	}
+	callers := []struct {
+		name       string
+		token      string
+		withCookie bool
+	}{
+		{"admin device", adminToken, false},
+		{"admin device with admin cookie", adminToken, true},
+		{"regular device", regularToken, false},
+	}
+
+	for _, caller := range callers {
+		for _, request := range requests {
+			t.Run(caller.name+" "+request.method+" "+request.target, func(t *testing.T) {
+				req := httptest.NewRequest(request.method, request.target, strings.NewReader(request.body))
+				req.Header.Set("Content-Type", "application/json")
+				req.Header.Set("Authorization", "Bearer "+caller.token)
+				if caller.withCookie {
+					req.AddCookie(adminCookie)
+				}
+				w := httptest.NewRecorder()
+				app.Router.ServeHTTP(w, req)
+
+				if w.Code != http.StatusUnauthorized {
+					t.Fatalf("status = %d, want 401, body = %s", w.Code, w.Body.String())
+				}
+			})
+		}
+	}
+
+	after, err := app.Queries.GetUser(context.Background(), admin.ID)
+	if err != nil {
+		t.Fatalf("reload admin: %v", err)
+	}
+	if after.Password != before.Password {
+		t.Fatal("a device token reset the admin's password")
+	}
+
+	cookieOnly := httptest.NewRequest(http.MethodGet, "/api/admin/users", nil)
+	cookieOnly.AddCookie(adminCookie)
 	w := httptest.NewRecorder()
-	app.Router.ServeHTTP(w, req)
+	app.Router.ServeHTTP(w, cookieOnly)
+	if w.Code != http.StatusOK {
+		t.Fatalf("admin cookie: status = %d, want 200, body = %s", w.Code, w.Body.String())
+	}
 
-	if w.Code != http.StatusForbidden {
-		t.Fatalf("status = %d, want 403, body = %s", w.Code, w.Body.String())
+	deviceRoute := httptest.NewRequest(http.MethodGet, "/api/continue-watching", nil)
+	deviceRoute.Header.Set("Authorization", "Bearer "+adminToken)
+	w = httptest.NewRecorder()
+	app.Router.ServeHTTP(w, deviceRoute)
+	if w.Code != http.StatusOK {
+		t.Fatalf("admin device on a viewer route: status = %d, want 200, body = %s", w.Code, w.Body.String())
 	}
 }
 
