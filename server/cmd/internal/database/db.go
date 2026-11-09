@@ -537,12 +537,6 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getPendingShowsStmt, err = db.PrepareContext(ctx, getPendingShows); err != nil {
 		return nil, fmt.Errorf("error preparing query GetPendingShows: %w", err)
 	}
-	if q.getPersonLibraryMoviesStmt, err = db.PrepareContext(ctx, getPersonLibraryMovies); err != nil {
-		return nil, fmt.Errorf("error preparing query GetPersonLibraryMovies: %w", err)
-	}
-	if q.getPersonLibraryShowsStmt, err = db.PrepareContext(ctx, getPersonLibraryShows); err != nil {
-		return nil, fmt.Errorf("error preparing query GetPersonLibraryShows: %w", err)
-	}
 	if q.getPersonLocalCreditsStmt, err = db.PrepareContext(ctx, getPersonLocalCredits); err != nil {
 		return nil, fmt.Errorf("error preparing query GetPersonLocalCredits: %w", err)
 	}
@@ -674,6 +668,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.getShowsByGenreDescStmt, err = db.PrepareContext(ctx, getShowsByGenreDesc); err != nil {
 		return nil, fmt.Errorf("error preparing query GetShowsByGenreDesc: %w", err)
+	}
+	if q.getShowsByTmdbIDsStmt, err = db.PrepareContext(ctx, getShowsByTmdbIDs); err != nil {
+		return nil, fmt.Errorf("error preparing query GetShowsByTmdbIDs: %w", err)
 	}
 	if q.getShowsCountStmt, err = db.PrepareContext(ctx, getShowsCount); err != nil {
 		return nil, fmt.Errorf("error preparing query GetShowsCount: %w", err)
@@ -2195,16 +2192,6 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getPendingShowsStmt: %w", cerr)
 		}
 	}
-	if q.getPersonLibraryMoviesStmt != nil {
-		if cerr := q.getPersonLibraryMoviesStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing getPersonLibraryMoviesStmt: %w", cerr)
-		}
-	}
-	if q.getPersonLibraryShowsStmt != nil {
-		if cerr := q.getPersonLibraryShowsStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing getPersonLibraryShowsStmt: %w", cerr)
-		}
-	}
 	if q.getPersonLocalCreditsStmt != nil {
 		if cerr := q.getPersonLocalCreditsStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getPersonLocalCreditsStmt: %w", cerr)
@@ -2423,6 +2410,11 @@ func (q *Queries) Close() error {
 	if q.getShowsByGenreDescStmt != nil {
 		if cerr := q.getShowsByGenreDescStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getShowsByGenreDescStmt: %w", cerr)
+		}
+	}
+	if q.getShowsByTmdbIDsStmt != nil {
+		if cerr := q.getShowsByTmdbIDsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getShowsByTmdbIDsStmt: %w", cerr)
 		}
 	}
 	if q.getShowsCountStmt != nil {
@@ -3735,8 +3727,6 @@ type Queries struct {
 	getNotificationBadgeForUserStmt             *sql.Stmt
 	getOrCreateGenreStmt                        *sql.Stmt
 	getPendingShowsStmt                         *sql.Stmt
-	getPersonLibraryMoviesStmt                  *sql.Stmt
-	getPersonLibraryShowsStmt                   *sql.Stmt
 	getPersonLocalCreditsStmt                   *sql.Stmt
 	getPlaylistCollaboratorsStmt                *sql.Stmt
 	getPlaylistMoviesPaginatedAscStmt           *sql.Stmt
@@ -3781,6 +3771,7 @@ type Queries struct {
 	getShowVideoStreamsByFileIDStmt             *sql.Stmt
 	getShowsByGenreAscStmt                      *sql.Stmt
 	getShowsByGenreDescStmt                     *sql.Stmt
+	getShowsByTmdbIDsStmt                       *sql.Stmt
 	getShowsCountStmt                           *sql.Stmt
 	getShowsLibraryAscStmt                      *sql.Stmt
 	getShowsLibraryCountsStmt                   *sql.Stmt
@@ -4178,8 +4169,6 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getNotificationBadgeForUserStmt:             q.getNotificationBadgeForUserStmt,
 		getOrCreateGenreStmt:                        q.getOrCreateGenreStmt,
 		getPendingShowsStmt:                         q.getPendingShowsStmt,
-		getPersonLibraryMoviesStmt:                  q.getPersonLibraryMoviesStmt,
-		getPersonLibraryShowsStmt:                   q.getPersonLibraryShowsStmt,
 		getPersonLocalCreditsStmt:                   q.getPersonLocalCreditsStmt,
 		getPlaylistCollaboratorsStmt:                q.getPlaylistCollaboratorsStmt,
 		getPlaylistMoviesPaginatedAscStmt:           q.getPlaylistMoviesPaginatedAscStmt,
@@ -4224,6 +4213,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getShowVideoStreamsByFileIDStmt:             q.getShowVideoStreamsByFileIDStmt,
 		getShowsByGenreAscStmt:                      q.getShowsByGenreAscStmt,
 		getShowsByGenreDescStmt:                     q.getShowsByGenreDescStmt,
+		getShowsByTmdbIDsStmt:                       q.getShowsByTmdbIDsStmt,
 		getShowsCountStmt:                           q.getShowsCountStmt,
 		getShowsLibraryAscStmt:                      q.getShowsLibraryAscStmt,
 		getShowsLibraryCountsStmt:                   q.getShowsLibraryCountsStmt,

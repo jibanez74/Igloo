@@ -31,100 +31,6 @@ func (q *Queries) GetArtistByTmdbID(ctx context.Context, tmdbID int64) (Artist, 
 	return i, err
 }
 
-const getPersonLibraryMovies = `-- name: GetPersonLibraryMovies :many
-SELECT
-  tmdb_id,
-  CAST(MIN(id) AS INTEGER) AS id
-FROM movies
-WHERE tmdb_id IN (/*SLICE:tmdb_ids*/?)
-GROUP BY tmdb_id
-`
-
-type GetPersonLibraryMoviesRow struct {
-	TmdbID sql.NullInt64 `json:"tmdb_id"`
-	ID     int64         `json:"id"`
-}
-
-func (q *Queries) GetPersonLibraryMovies(ctx context.Context, tmdbIds []sql.NullInt64) ([]GetPersonLibraryMoviesRow, error) {
-	query := getPersonLibraryMovies
-	var queryParams []interface{}
-	if len(tmdbIds) > 0 {
-		for _, v := range tmdbIds {
-			queryParams = append(queryParams, v)
-		}
-		query = strings.Replace(query, "/*SLICE:tmdb_ids*/?", strings.Repeat(",?", len(tmdbIds))[1:], 1)
-	} else {
-		query = strings.Replace(query, "/*SLICE:tmdb_ids*/?", "NULL", 1)
-	}
-	rows, err := q.query(ctx, nil, query, queryParams...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []GetPersonLibraryMoviesRow{}
-	for rows.Next() {
-		var i GetPersonLibraryMoviesRow
-		if err := rows.Scan(&i.TmdbID, &i.ID); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getPersonLibraryShows = `-- name: GetPersonLibraryShows :many
-SELECT
-  tmdb_id,
-  CAST(MIN(id) AS INTEGER) AS id
-FROM shows
-WHERE tmdb_id IN (/*SLICE:tmdb_ids*/?)
-GROUP BY tmdb_id
-`
-
-type GetPersonLibraryShowsRow struct {
-	TmdbID sql.NullInt64 `json:"tmdb_id"`
-	ID     int64         `json:"id"`
-}
-
-func (q *Queries) GetPersonLibraryShows(ctx context.Context, tmdbIds []sql.NullInt64) ([]GetPersonLibraryShowsRow, error) {
-	query := getPersonLibraryShows
-	var queryParams []interface{}
-	if len(tmdbIds) > 0 {
-		for _, v := range tmdbIds {
-			queryParams = append(queryParams, v)
-		}
-		query = strings.Replace(query, "/*SLICE:tmdb_ids*/?", strings.Repeat(",?", len(tmdbIds))[1:], 1)
-	} else {
-		query = strings.Replace(query, "/*SLICE:tmdb_ids*/?", "NULL", 1)
-	}
-	rows, err := q.query(ctx, nil, query, queryParams...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []GetPersonLibraryShowsRow{}
-	for rows.Next() {
-		var i GetPersonLibraryShowsRow
-		if err := rows.Scan(&i.TmdbID, &i.ID); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const getPersonLocalCredits = `-- name: GetPersonLocalCredits :many
 WITH credits AS (
 SELECT
@@ -294,6 +200,54 @@ func (q *Queries) GetPersonLocalCredits(ctx context.Context, artistID int64) ([]
 			&i.Role,
 			&i.Department,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getShowsByTmdbIDs = `-- name: GetShowsByTmdbIDs :many
+SELECT
+  tmdb_id,
+  CAST(MIN(id) AS INTEGER) AS id
+FROM shows
+WHERE tmdb_id IN (/*SLICE:tmdb_ids*/?)
+GROUP BY tmdb_id
+`
+
+type GetShowsByTmdbIDsRow struct {
+	TmdbID sql.NullInt64 `json:"tmdb_id"`
+	ID     int64         `json:"id"`
+}
+
+// The show twin of GetMoviesByTmdbIDs.
+func (q *Queries) GetShowsByTmdbIDs(ctx context.Context, tmdbIds []sql.NullInt64) ([]GetShowsByTmdbIDsRow, error) {
+	query := getShowsByTmdbIDs
+	var queryParams []interface{}
+	if len(tmdbIds) > 0 {
+		for _, v := range tmdbIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:tmdb_ids*/?", strings.Repeat(",?", len(tmdbIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:tmdb_ids*/?", "NULL", 1)
+	}
+	rows, err := q.query(ctx, nil, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetShowsByTmdbIDsRow{}
+	for rows.Next() {
+		var i GetShowsByTmdbIDsRow
+		if err := rows.Scan(&i.TmdbID, &i.ID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

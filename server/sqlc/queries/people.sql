@@ -140,15 +140,8 @@ WHERE c.artist_id = sqlc.arg(artist_id)
 )
 SELECT * FROM credits;
 
--- name: GetPersonLibraryMovies :many
-SELECT
-  tmdb_id,
-  CAST(MIN(id) AS INTEGER) AS id
-FROM movies
-WHERE tmdb_id IN (sqlc.slice(tmdb_ids))
-GROUP BY tmdb_id;
-
--- name: GetPersonLibraryShows :many
+-- name: GetShowsByTmdbIDs :many
+-- The show twin of GetMoviesByTmdbIDs.
 SELECT
   tmdb_id,
   CAST(MIN(id) AS INTEGER) AS id

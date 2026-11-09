@@ -26,14 +26,16 @@ SELECT
   );
 
 -- name: GetMoviesByTmdbIDs :many
--- Resolves a whole page of TMDB ids for the search results mapper, which
--- annotates each result with "already in library". One indexed pass over
--- idx_movies_tmdb_id instead of a point query per result row.
+-- Resolves a batch of TMDB ids to library movies for the TMDB search mapper and
+-- the person page, which mark each title "already in library". One indexed
+-- pass over idx_movies_tmdb_id instead of a point query per title. tmdb_id is
+-- not unique (two files of one film), so the lowest id is the one linked.
 SELECT
-  id,
-  tmdb_id
+  tmdb_id,
+  CAST(MIN(id) AS INTEGER) AS id
 FROM movies
-WHERE tmdb_id IN (sqlc.slice(tmdb_ids));
+WHERE tmdb_id IN (sqlc.slice(tmdb_ids))
+GROUP BY tmdb_id;
 
 -- name: GetMovieScanIndex :many
 SELECT c.id, c.file_path, c.tmdb_id, r.movie_id IS NOT NULL AS pending_retry, r.attempts AS retry_attempts, r.last_attempt_at, c.size, f.mtime_ns, f.ctime_ns, f.device, f.inode
