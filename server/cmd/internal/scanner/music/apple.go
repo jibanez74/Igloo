@@ -127,6 +127,11 @@ func (s *Scanner) askAppleForCollections(ctx context.Context, scan *musicScanCon
 // collection the album's files name. An album whose collection Apple no
 // longer lists is handed to Spotify.
 func (s *Scanner) settleAppleAlbum(ctx context.Context, scan *musicScanContext, album appleAlbum, answers map[int64]*itunes.Album) error {
+	// An unmatched album listed with hints that are gone by now, deleted
+	// with its tracks after the page was read, has nothing left to settle.
+	if album.matched == 0 && len(album.collections) == 0 {
+		return nil
+	}
 	countKey := musicEntityAlbum + ":" + strconv.FormatInt(album.id, 10)
 	for _, id := range album.collections {
 		_, answered := answers[id]
