@@ -1800,7 +1800,7 @@ export interface paths {
         get?: never;
         /**
          * Reset a user's password
-         * @description Admin-only endpoint for session-authenticated admins: requests carrying a device bearer token are rejected with 401, even alongside a session cookie. New passwords must contain at least 9 Unicode characters and at most 72 UTF-8 bytes. Passwords outside these limits are rejected with 400 before hashing. An unknown user returns 404. A reset signs the user out of every browser session and revokes all of their device tokens; an administrator resetting their own password using cookie authentication keeps that browser session. A device token used to reset its own account's password is revoked too.
+         * @description Admin-only endpoint for session-authenticated admins: requests carrying a device bearer token are rejected with 401, even alongside a session cookie. New passwords must contain at least 9 Unicode characters and at most 72 UTF-8 bytes. Passwords outside these limits are rejected with 400 before hashing. An unknown user returns 404. A reset signs the user out of every browser session and revokes all of their device tokens; an administrator resetting their own password keeps that browser session.
          */
         put: operations["adminResetUserPassword"];
         post?: never;
