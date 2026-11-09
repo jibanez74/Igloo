@@ -286,3 +286,43 @@ func TestCurrentAuthUserRejectsARevokedSession(t *testing.T) {
 		t.Fatalf("revoked session on /api/auth/user = %d, want 401", w.Code)
 	}
 }
+
+// A login reads the session version before its password check, so a password
+// change or delete can land in between. The cached value either of them wrote
+// must survive the login: otherwise revoked sessions get back in, and the
+// session that changed the password is signed out, until the cache expires.
+func TestLoginKeepsANewerCachedSessionVersion(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		cached int64
+	}{
+		{"password changed", 1},
+		{"user deleted", deletedUserSessionVersion},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			app := setupSessionTestApp(t)
+			app.InitRouter()
+			user := createTestUser(t, app, "Racing", "racing@example.com", false)
+			// What the change or delete wrote after the login read version 0.
+			app.rememberSessionVersion(user.ID, tc.cached)
+
+			body := fmt.Sprintf(`{"email":"racing@example.com","password":%q}`, testUserPassword)
+			req := newOpenAPIJSONRequest(http.MethodPost, "/api/auth/login", body)
+			w := httptest.NewRecorder()
+			app.Router.ServeHTTP(w, req)
+			if w.Code != http.StatusOK {
+				t.Fatalf("login status = %d: %s", w.Code, w.Body.String())
+			}
+
+			cached, found := app.SessionVersionCache.Get(sessionVersionKey(user.ID))
+			if !found || cached.(int64) != tc.cached {
+				t.Fatalf("cached version after login = %v (found %v), want %d", cached, found, tc.cached)
+			}
+			// The login authenticated against the old version, so its own
+			// session is no longer current either.
+			if code := sessionProbe(t, app, renewedSessionCookie(t, app, w), ""); code != http.StatusUnauthorized {
+				t.Fatalf("racing login session = %d, want 401", code)
+			}
+		})
+	}
+}

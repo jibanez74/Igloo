@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -30,8 +31,9 @@ type Dependencies struct {
 	ScannerDBMu           *sync.Mutex
 	CurrentShowsDirectory func() sql.NullString
 	// InvalidateCommittedShowFile runs after a file's rows commit (rescan or
-	// deletion), under the scanner mutex, with the episode ids the file backs,
-	// so the API drops the runtime caches derived from the replaced rows.
+	// deletion), under the scanner mutex, with the episode ids the file backs
+	// and, after a relink, those it backed before, so the API drops the
+	// runtime caches derived from the replaced rows.
 	InvalidateCommittedShowFile func(fileID int64, episodeIDs []int64)
 	// ScanFinished runs when each run ends, to download the artwork it
 	// brought; scoped marks a run of watcher-detected changes.
@@ -410,6 +412,10 @@ func (s *Scanner) recordLocal(report *scanReport, scan *showScanContext, root st
 func (s *Scanner) persistFile(ctx context.Context, scan *showScanContext, result probeResult) error {
 	local, file, baseline, inspection, info := result.local, result.job.file, result.job.baseline, result.inspection, result.info
 	var entry showScanEntry
+	// evicted is every episode the file backed before or after this commit: a
+	// relink drops the former ones, whose caches a reader can have refilled
+	// with this file since a move re-keyed it.
+	var evicted []int64
 	err := s.tx.Run(ctx, func(q *database.Queries) error {
 		current, err := q.GetShowFileByPath(ctx, file.Path)
 		missing := errors.Is(err, sql.ErrNoRows)
@@ -447,6 +453,10 @@ func (s *Scanner) persistFile(ctx context.Context, scan *showScanContext, result
 			return errors.New("no accepted video stream")
 		}
 		err = processChapters(ctx, q, id, info.Chapters)
+		if err != nil {
+			return err
+		}
+		former, err := q.GetShowFileEpisodeIDs(ctx, id)
 		if err != nil {
 			return err
 		}
@@ -498,12 +508,15 @@ func (s *Scanner) persistFile(ctx context.Context, scan *showScanContext, result
 			return err
 		}
 		entry = showScanEntry{FileFingerprint: f, ID: id, SeasonID: season.ID, FilePath: file.Path, HasFingerprint: true, Episodes: linked}
+		evicted = slices.Concat(former, linked)
+		slices.Sort(evicted)
+		evicted = slices.Compact(evicted)
 		return inspection.Validate(ctx)
 	}, func() {
 		// The runtime caches describe the committed rows, so they are dropped
 		// after commit: evicting earlier lets a concurrent reader republish the
 		// pre-rescan file before the new rows land.
-		s.InvalidateCommittedShowFile(entry.ID, entry.Episodes)
+		s.InvalidateCommittedShowFile(entry.ID, evicted)
 	})
 	if err != nil {
 		return err

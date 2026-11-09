@@ -504,6 +504,23 @@ func TestAppleMergeDistinguishesUnansweredAndUnlistedOwnerCollection(t *testing.
 	}
 }
 
+// An administrator can delete an unmatched candidate between reading the
+// page and reading its collections; the delete cascades to its tracks, so it
+// arrives with none. It is skipped, not indexed: a panic there would end the
+// server, since scans run without recovery.
+func TestAppleSkipsCandidateDeletedAfterListing(t *testing.T) {
+	s := setupMusicScanner(t)
+	scan := newMusicScanContext(nil)
+	err := s.settleAppleAlbum(context.Background(), scan, appleAlbum{id: 99}, map[int64]*itunes.Album{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	outcomes := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_provider_matches")
+	if outcomes != 0 {
+		t.Fatalf("deleted candidate recorded %d outcomes", outcomes)
+	}
+}
+
 func TestAppleMergeDefersPairingUntilOwnerPageIsAnswered(t *testing.T) {
 	for _, failOwnerLookup := range []bool{false, true} {
 		name := "later page"
