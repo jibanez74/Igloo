@@ -87,6 +87,14 @@ export default defineConfig(({ mode }) => {
       // into the next. Individual files therefore need no restore hooks.
       restoreMocks: true,
       unstubGlobals: true,
+      // Node 25+ defines its own localStorage global, which throws without
+      // --localstorage-file and shadows jsdom's. Turn it off where Node knows
+      // the flag; older Node never had it.
+      execArgv: process.allowedNodeEnvironmentFlags.has(
+        "--no-experimental-webstorage",
+      )
+        ? ["--no-experimental-webstorage"]
+        : [],
       coverage: {
         provider: "v8",
         reporter: ["text", "json-summary", "html"],
