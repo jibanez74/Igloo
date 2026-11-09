@@ -295,6 +295,10 @@ CREATE TABLE IF NOT EXISTS music_album_identity (
 
 CREATE INDEX IF NOT EXISTS music_album_identity_owner ON music_album_identity (album_id);
 
+-- The artist retry candidates reach an artist's albums through artist_key
+-- alone, which the primary key cannot serve: title_key leads it.
+CREATE INDEX IF NOT EXISTS music_album_identity_artist ON music_album_identity (artist_key, album_id);
+
 CREATE TABLE IF NOT EXISTS music_genre_identity (
   identity_key TEXT PRIMARY KEY,
   genre_id INTEGER NOT NULL REFERENCES genres (id) ON DELETE CASCADE
