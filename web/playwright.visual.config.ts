@@ -38,9 +38,12 @@ export default defineConfig({
       animations: "disabled",
       caret: "hide",
       scale: "css",
-      // Both sides come from one renderer, so the comparison is exact: no
-      // colour tolerance within a pixel and no pixel allowed to differ. The
-      // default tolerance would let a border or surface shift through.
+      // Both sides come from one renderer, so nothing is tolerated: no
+      // colour difference within a pixel and no pixel allowed to differ. The
+      // default tolerance would let a surface shift through. One exception
+      // remains: Playwright's comparator (pixelmatch) does not count a
+      // differing pixel it takes for anti-aliasing, which can include a 1px
+      // border between two surfaces.
       threshold: 0,
       maxDiffPixels: 0,
     },

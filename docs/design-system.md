@@ -634,9 +634,12 @@ screenshot baselines shoot.
 (`bun run test:visual`, `make test-visual`), and are a CI job (`test-visual`),
 not part of `make check`.
 
-- **The committed set is drawn by CI's pinned image**, and the comparison is
-  exact (`threshold: 0`, `maxDiffPixels: 0`). A laptop renders text differently, so a local run
-  executes the specs without comparing pixels.
+- **The committed set is drawn by CI's pinned image**, and the comparison
+  tolerates nothing it counts (`threshold: 0`, `maxDiffPixels: 0`). It is not
+  byte-exact: Playwright's comparator skips a differing pixel it takes for
+  anti-aliasing, which can include a 1px border between two surfaces. A
+  laptop renders text differently, so a local run executes the specs without
+  comparing pixels.
 - **To prove a change is invisible locally**, draw a set on the base commit and
   compare the branch against it on the same machine:
   `VISUAL_STRICT=1 VISUAL_SNAPSHOT_DIR=/some/dir bun run test:visual:update`
