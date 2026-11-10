@@ -33,7 +33,7 @@ this doc, prefer adding a guard too.
 | Primitives and the baseline pages render the same pixels as the committed baselines, pixel for pixel, both themes (§2.5) | `web/e2e/visual/*.visual.ts` (CI job `test-visual`) |
 | The component gallery renders, and stays out of the production bundle (§2.5) | `web/src/test/gallery/gallery.test.tsx`, CI marker grep, `web/e2e/boot.spec.ts` |
 | No raw Tailwind palette classes (all 22 color families) | ESLint `no-restricted-syntax` (**error**) in `web/eslint.config.js` |
-| Class order, duplicates, unknown classes | `eslint-plugin-better-tailwindcss` (**warn**; `bun run lint` runs `--max-warnings 0`, so warnings still fail CI) |
+| Class order, duplicates, unknown and non-canonical classes — in `className`, inside `cn()`, and in every class constant and variant record (§2.3) | `eslint-plugin-better-tailwindcss` (**warn**; `bun run lint` runs `--max-warnings 0`, so warnings still fail CI) |
 
 ---
 
@@ -521,7 +521,19 @@ One module holds every shared frontend constant — query keys, protocol
 records, page sizes, TMDB image sizes, playback timings — and, in its second
 half, the cross-component class strings that act as the de facto token layer
 above Tailwind. Those are what this section is about; each carries a comment
-explaining what it owns. The styling families:
+explaining what it owns.
+
+**The name is what gets a class string linted.** The Tailwind lint rules read
+`className` attributes and `cn()` arguments, and otherwise find class strings
+by variable name (`web/eslint.config.js`): a name ending in `_CLASS`,
+`_CLASSES`, `_VARIANTS` or `_SIZES`, or in camel case `…Class`, `…Classes`,
+`…ClassName` or `…Variants`. Keep to those endings for a class string or a
+record of them, here and in a component file, and do not use them for
+anything else: a record that mixes class strings with labels has its labels
+reported as unknown classes. The order of classes inside a string is the
+linter's and carries no meaning, so a test must not depend on it.
+
+The styling families:
 
 - **Cards** — `CARD_SURFACE_CLASS`, the media-card chrome: `group relative
   overflow-hidden rounded-xl border border-border bg-card`, hover lift +

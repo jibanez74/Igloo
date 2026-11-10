@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils"
 // Variants are plain records and one function (docs/design-system.md §1.6).
 // Keep the base one literal: the motion contract test reads a transition and
 // its motion-reduce escape from the same string.
-const BUTTON_BASE =
+const BUTTON_BASE_CLASS =
   "inline-flex shrink-0 items-center justify-center gap-2 rounded-md text-sm font-medium whitespace-nowrap outline-hidden transition-[background-color,border-color,color,box-shadow,opacity] duration-150 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 motion-reduce:transition-none dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
 
 const BUTTON_VARIANTS = {
@@ -52,7 +52,7 @@ function buttonVariants({
   size = "default",
   className,
 }: ButtonVariantOptions = {}) {
-  return cn(BUTTON_BASE, BUTTON_VARIANTS[variant], BUTTON_SIZES[size], className)
+  return cn(BUTTON_BASE_CLASS, BUTTON_VARIANTS[variant], BUTTON_SIZES[size], className)
 }
 
 function Button({
