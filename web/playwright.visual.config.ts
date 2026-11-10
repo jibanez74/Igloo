@@ -28,6 +28,12 @@ export default defineConfig({
   fullyParallel: false,
   // The mock API server is stateful, as in playwright.config.ts.
   workers: 1,
+  // Chromium does not always rasterise one page to the same pixels: now and
+  // then a load comes out with a few anti-aliased pixels of a rounded corner
+  // one shade apart (about one test in a hundred). A real change differs on
+  // every load, so a comparing run gets two more tries, on fresh pages, and
+  // a test that needed one is reported as flaky rather than hidden.
+  retries: comparesPixels ? 2 : 0,
   reporter: [["list"], ["html", { open: "never" }]],
   // One canonical set: no platform or browser suffix in the file names.
   snapshotPathTemplate: `${snapshotDir}/{testFileName}/{arg}{ext}`,
@@ -40,10 +46,11 @@ export default defineConfig({
       scale: "css",
       // Both sides come from one renderer, so nothing is tolerated: no
       // colour difference within a pixel and no pixel allowed to differ. The
-      // default tolerance would let a surface shift through. One exception
-      // remains: Playwright's comparator (pixelmatch) does not count a
-      // differing pixel it takes for anti-aliasing, mostly along text and
-      // curved edges, so a change made only of such pixels would pass.
+      // default tolerance would let a surface shift through. Playwright's
+      // comparator (pixelmatch) still does not count a differing pixel it
+      // takes for anti-aliasing, mostly along text and curved edges, so the
+      // specs assert through expectScreenshot (e2e/visual/visual-helpers.ts),
+      // which follows this comparison with one that has no such allowance.
       threshold: 0,
       maxDiffPixels: 0,
     },
