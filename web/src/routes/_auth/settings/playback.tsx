@@ -22,7 +22,6 @@ import SettingsLoadingCard from "@/components/settings/SettingsLoadingCard";
 import SettingsSaveBar from "@/components/settings/SettingsSaveBar";
 import {
   MOTION_SETTINGS_SURFACE_CLASS,
-  SETTINGS_SELECT_CONTENT_CLASS,
 } from "@/lib/constants";
 import { updatePlaybackSettings } from "@/lib/api";
 import { parseMbpsInput } from "@/lib/playback";
@@ -375,7 +374,7 @@ function ServerPlaybackForm({ settings }: ServerPlaybackFormProps) {
                 >
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className={SETTINGS_SELECT_CONTENT_CLASS}>
+                <SelectContent>
                   {HARDWARE_OPTIONS.map(option => (
                     <SelectItem
                       key={option.value}

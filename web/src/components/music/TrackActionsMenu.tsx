@@ -57,7 +57,6 @@ export default function TrackActionsMenu({
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="end"
-          className="border-border bg-popover text-popover-foreground"
         >
           {/* Add to Playlist - always show */}
           <DropdownMenuItem

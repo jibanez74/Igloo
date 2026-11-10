@@ -440,7 +440,6 @@ function AlbumDetailsContent({
                     </DropdownMenuTrigger>
                     <DropdownMenuContent
                       align="end"
-                      className="border-border bg-muted"
                     >
                       <DropdownMenuItem
                         onClick={() => setIsDeleteDialogOpen(true)}

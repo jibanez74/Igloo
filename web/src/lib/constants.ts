@@ -436,16 +436,13 @@ export const PEER_FOCUS_VISIBLE_RING_CLASS =
  * Used to avoid closing a dialog when interacting with a portaled select.
  */
 export const SELECT_CONTENT_SLOT_SELECTOR = "[data-slot='select-content']";
-export const PLAYBACK_SETTINGS_SELECT_CONTENT_CLASS = "border-border bg-muted";
 
 /**
  * What is left of the Settings pages' own chrome (design-system §2.3, §3.7):
- * the surface of a select's popup and the save bar's Reset button. The cards
- * are the Card primitive's default surface and the fields its `inset`
- * variant.
+ * the save bar's Reset button. The cards are the Card primitive's default
+ * surface, the fields its `inset` variant, and a select's popup the one
+ * popup surface.
  */
-export const SETTINGS_SELECT_CONTENT_CLASS =
-  "border-border bg-card text-foreground";
 export const SETTINGS_RESET_BUTTON_CLASS =
   "border-border bg-muted/90 text-foreground hover:bg-accent hover:text-foreground";
 

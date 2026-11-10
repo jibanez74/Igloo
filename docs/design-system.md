@@ -371,10 +371,18 @@ any variant fully. The base string carries the focus ring, disabled opacity,
   there, or a class constant, is a lint error — the look is the props'. This
   is the rule every primitive family is moving to; the lint list in
   `web/eslint.config.js` (`styledByProps`) names the ones under it: the
-  fields, the dialog parts, and `Spinner`, `Label`, `Card`, `CardTitle`,
-  `Badge` and `SelectItem` so far. Class constants that set
+  fields, the dialog parts, `Spinner`, `Label`, `Card`, `CardTitle`,
+  `Badge`, the menu and select items, and the three popups
+  (`DropdownMenuContent`, `SelectContent`, `PopoverContent`) so far. Class constants that set
   no look are the exception: `DIALOG_SCROLL_*` (below), the motion constants
   (§1.5) and the shared focus rings (§1.7).
+- **Every popup is drawn on one surface.** A menu, a select's list and a
+  popover are `bg-popover text-popover-foreground` with the default border
+  and `shadow-md`, set in the primitive and nowhere else. No call site picks
+  a popup's surface: `bg-muted` there hid the highlighted item, since the
+  highlight (`accent`) is the same color as `muted` in both themes. The
+  theme test holds `popover` and `accent` apart for that reason. Width and
+  padding are still the call site's (`className="w-80 p-0"`).
 - **The small primitives take props for what call sites used to pass as
   classes**:
 
@@ -666,9 +674,10 @@ The styling families:
   `MusicDetailSkeleton`, §3.2), `LIBRARY_TABS_LIST_CLASS` /
   `LIBRARY_TAB_TRIGGER_CLASS`, `LIBRARY_POSTER_GRID_CLASS` (the fixed-column
   library grid), `HOME_POSTER_GRID_CLASS` / `HOME_ALBUM_GRID_CLASS` (§3.2), `MINI_PLAYER_CLEARANCE_*` (the shell's
-  reserved space under the mini bar, §3.1), `SETTINGS_*` (select popup and
-  reset-button chrome for the Settings pages, §3.7; its cards are the
-  `Card`'s default surface and its fields the `inset` variant, §1.6),
+  reserved space under the mini bar, §3.1), `SETTINGS_RESET_BUTTON_CLASS` (the
+  save bar's Reset, §3.7; Settings cards are the `Card`'s default surface,
+  its fields the `inset` variant and its select lists the one popup surface,
+  §1.6),
   `PLAYER_FRAME_SHELL_CLASS` / `PLAYER_FRAME_CLASS` (the windowed player's
   frame, §3.5). Elevation for floating surfaces is the `shadow-floating`
   utility, not a constant (§1.4).
@@ -1576,8 +1585,8 @@ require the full playback test pass.
   that no action of the reader's caused; the session-expiry sign-out (§3.4)
   is its app-wide use.
 - **NotificationBell** (header): ghost icon button with a glacier unread
-  badge pill ("99+" cap; count also in the `aria-label`), opening a `w-80
-  bg-card` popover — header row with "Mark all read", `max-h-96` scroll body
+  badge pill ("99+" cap; count also in the `aria-label`), opening a `w-80`
+  popover — header row with "Mark all read", `max-h-96` scroll body
   with spinner / a compact `LibraryEmptyState` ("You're all caught up." under
   a faded `BellOff`) / `divide-y` list states. Unread
   rows tint `bg-muted/40` with a glacier dot; rows show type label, message,

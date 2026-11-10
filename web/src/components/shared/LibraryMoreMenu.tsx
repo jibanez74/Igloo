@@ -44,7 +44,7 @@ export default function LibraryMoreMenu({
       >
         <MoreHorizontal className="size-5" aria-hidden="true" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="border-border bg-muted">
+      <DropdownMenuContent align="end">
         {children}
       </DropdownMenuContent>
     </DropdownMenu>
