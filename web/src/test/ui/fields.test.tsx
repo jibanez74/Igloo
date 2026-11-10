@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { lightInputClassName } from "@/lib/input-styles";
+import { expectNoClass } from "../helpers/dom";
 
 // One set of looks for every kind of field (design-system §1.6, §3.7), so a
 // form that mixes an input, a textarea and a select reads as one, and a call
@@ -74,7 +75,7 @@ describe("field variants", () => {
 
     const field = screen.getByRole("textbox", { name: "Code" });
     expect(field).toHaveClass("border-input", "bg-transparent");
-    expect(field).not.toHaveClass("bg-muted", "border-border");
+    expectNoClass(field, "bg-muted", "border-border");
   });
 
   it("draws the glass look from the shared light-input recipe", () => {
@@ -199,7 +200,7 @@ describe("SelectTrigger variants", () => {
       "bg-background/60",
       "shadow-none",
     );
-    expect(trigger).not.toHaveClass("h-9", "shadow-xs", "bg-muted");
+    expectNoClass(trigger, "h-9", "shadow-xs", "bg-muted");
   });
 
   it("keeps the bare trigger for outline", () => {

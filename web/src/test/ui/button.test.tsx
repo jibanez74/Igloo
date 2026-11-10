@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { expectNoClass } from "../helpers/dom";
 
 // A disabled primary button used to be the same glacier at half opacity, which
 // still read as a live action next to a real one (design-system §1.6).
@@ -101,7 +102,7 @@ describe("Button quiet variants", () => {
       "hover:bg-accent",
       "hover:text-foreground",
     );
-    expect(button).not.toHaveClass("bg-background", "text-foreground");
+    expectNoClass(button, "bg-background", "text-foreground");
   });
 
   it("rests a ghost-muted button in the muted text colour", () => {
@@ -115,7 +116,7 @@ describe("Button quiet variants", () => {
       "hover:bg-accent",
       "hover:text-foreground",
     );
-    expect(button).not.toHaveClass("border", "bg-muted");
+    expectNoClass(button, "border", "bg-muted");
   });
 
   it("warns on hover for a ghost-destructive button", () => {
@@ -125,7 +126,7 @@ describe("Button quiet variants", () => {
 
     const button = screen.getByRole("button", { name: "Delete" });
     expect(button).toHaveClass("text-muted-foreground", "hover:text-destructive");
-    expect(button).not.toHaveClass("hover:text-foreground", "text-destructive");
+    expectNoClass(button, "hover:text-foreground", "text-destructive");
   });
 
   it("outlines a destructive action in its colour", () => {
@@ -147,8 +148,16 @@ describe("Button quiet variants", () => {
     render(<Button variant="outline-destructive">Revoke</Button>);
 
     const button = screen.getByRole("button", { name: "Revoke" });
-    expect(button).toHaveClass("dark:hover:bg-destructive/20");
-    expect(button).not.toHaveClass(
+    // Its colours hold in both themes; dark only clears the fill and deepens
+    // the hover tint.
+    expect(button).toHaveClass(
+      "border-destructive/50",
+      "text-destructive",
+      "dark:bg-transparent",
+      "dark:hover:bg-destructive/20",
+    );
+    expectNoClass(
+      button,
       "dark:text-foreground",
       "dark:border-border",
       "dark:bg-muted/90",
