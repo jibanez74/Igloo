@@ -1,6 +1,7 @@
-import { Info, ListPlus, Pencil, Radio, Trash2 } from "lucide-react";
+import { Info, ListPlus, Pencil, Radio, Sun, Trash2 } from "lucide-react";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
 import { Button } from "@/components/ui/button";
+import { Tooltip } from "@/components/ui/tooltip";
 import {
   Dialog,
   DialogContent,
@@ -171,6 +172,16 @@ function PopoverStage() {
   );
 }
 
+function TooltipStage() {
+  return (
+    <Tooltip label="Switch to light theme" side="bottom" open>
+      <Button variant="ghost-muted" size="icon" aria-label="Switch to light theme">
+        <Sun aria-hidden="true" />
+      </Button>
+    </Tooltip>
+  );
+}
+
 const renderStage = (name: string) => {
   switch (name) {
     case "dialog":
@@ -183,6 +194,8 @@ const renderStage = (name: string) => {
       return <DropdownStage />;
     case "popover":
       return <PopoverStage />;
+    case "tooltip":
+      return <TooltipStage />;
     default:
       return null;
   }

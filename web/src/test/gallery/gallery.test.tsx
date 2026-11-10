@@ -93,6 +93,7 @@ describe("Gallery", () => {
     ["alert-dialog", "alertdialog", "Delete playlist"],
     ["dropdown", "menu", "More options"],
     ["popover", "dialog", undefined],
+    ["tooltip", "tooltip", undefined],
   ] as const)("shows the %s overlay open on its own", (name, role, label) => {
     const { container } = render(<Gallery open={name} />);
 

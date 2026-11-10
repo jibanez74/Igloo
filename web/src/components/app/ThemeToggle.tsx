@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tooltip } from "@/components/ui/tooltip";
 import { getActiveTheme, setTheme, subscribeTheme } from "@/lib/theme";
 
 export default function ThemeToggle() {
@@ -11,15 +12,16 @@ export default function ThemeToggle() {
   const Icon = nextTheme === "light" ? Sun : Moon;
 
   return (
-    <Button
-      variant="ghost-muted"
-      size="icon"
-      type="button"
-      aria-label={label}
-      title={label}
-      onClick={() => setTheme(nextTheme)}
-    >
-      <Icon aria-hidden="true" />
-    </Button>
+    <Tooltip label={label} side="bottom">
+      <Button
+        variant="ghost-muted"
+        size="icon"
+        type="button"
+        aria-label={label}
+        onClick={() => setTheme(nextTheme)}
+      >
+        <Icon aria-hidden="true" />
+      </Button>
+    </Tooltip>
   );
 }

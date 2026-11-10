@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { dismissBootSplash } from "@/lib/boot-splash";
 import { applyTheme, getStoredTheme } from "@/lib/theme";
 import App from "./App";
@@ -21,7 +22,9 @@ export default function AppBoot({ queryClient }: AppBootProps) {
   return (
     <QueryClientProvider client={queryClient}>
       <AudioPlayerProvider>
-        <App queryClient={queryClient} />
+        <TooltipProvider>
+          <App queryClient={queryClient} />
+        </TooltipProvider>
         <Toaster />
       </AudioPlayerProvider>
     </QueryClientProvider>
