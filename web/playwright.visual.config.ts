@@ -38,9 +38,10 @@ export default defineConfig({
       animations: "disabled",
       caret: "hide",
       scale: "css",
-      // Both sides come from one renderer, so the comparison can be exact;
-      // the default tolerance would let a border or surface shift through.
-      threshold: 0.1,
+      // Both sides come from one renderer, so the comparison is exact: no
+      // colour tolerance within a pixel and no pixel allowed to differ. The
+      // default tolerance would let a border or surface shift through.
+      threshold: 0,
       maxDiffPixels: 0,
     },
   },

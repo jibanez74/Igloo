@@ -138,31 +138,35 @@ jobs:
         run: cd web && bun x playwright install --with-deps chromium
 
       - name: Compare screenshots with the committed baselines
+        id: compare
         run: cd web && bun run test:visual
 
-      # A difference is either a regression or an intended change. For an
-      # intended one, download this artifact, review the images and commit
-      # them over web/e2e/visual/__screenshots__.
-      - name: Redraw the baselines for review
-        if: failure()
-        run: cd web && bun run test:visual:update
-
-      - name: Upload redrawn baselines
-        if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: visual-baselines
-          path: web/e2e/visual/__screenshots__
-          retention-days: 7
-
-      - name: Upload Playwright report
-        if: failure()
+      # Uploaded before the redraw below, which writes over the same folders:
+      # this one holds the expected, actual and diff images of what failed.
+      - name: Upload the comparison report
+        if: failure() && steps.compare.conclusion == 'failure'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: playwright-report-visual
           path: |
             web/playwright-report
             web/test-results
+          retention-days: 7
+
+      # A difference is either a regression or an intended change. For an
+      # intended one, download this artifact, review the images and commit
+      # them over web/e2e/visual/__screenshots__. Only a failed comparison
+      # redraws: after a failed install or setup there is nothing to draw from.
+      - name: Redraw the baselines for review
+        if: failure() && steps.compare.conclusion == 'failure'
+        run: cd web && bun run test:visual:update
+
+      - name: Upload redrawn baselines
+        if: failure() && steps.compare.conclusion == 'failure'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: visual-baselines
+          path: web/e2e/visual/__screenshots__
           retention-days: 7
 
   # test-frontend runs on whatever Node the runner image ships. Node 25+

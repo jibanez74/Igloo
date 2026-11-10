@@ -53,6 +53,9 @@ for (const theme of THEMES) {
       await openGallery(page, theme);
       const buttons = page.locator('[data-gallery="buttons"]');
 
+      // A real Tab, so the ring is the keyboard one (:focus-visible). The
+      // buttons section comes first in the gallery; the assertion below says
+      // so if that ever changes.
       await page.keyboard.press("Tab");
       await expect(buttons.getByRole("button").first()).toBeFocused();
       await expect

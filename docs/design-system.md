@@ -635,14 +635,15 @@ screenshot baselines shoot.
 not part of `make check`.
 
 - **The committed set is drawn by CI's pinned image**, and the comparison is
-  exact (`maxDiffPixels: 0`). A laptop renders text differently, so a local run
+  exact (`threshold: 0`, `maxDiffPixels: 0`). A laptop renders text differently, so a local run
   executes the specs without comparing pixels.
 - **To prove a change is invisible locally**, draw a set on the base commit and
   compare the branch against it on the same machine:
   `VISUAL_STRICT=1 VISUAL_SNAPSHOT_DIR=/some/dir bun run test:visual:update`
   on the base, then the same without `:update` on the branch.
 - **When a change is meant to be seen**, the `test-visual` job fails and
-  uploads a `visual-baselines` artifact with the redrawn set. Review the
+  uploads two artifacts: `playwright-report-visual` (expected, actual and
+  diff images of what failed) and `visual-baselines` (the redrawn set). Review the
   images, then commit them over `web/e2e/visual/__screenshots__/` in a commit
   of their own, naming what moved and why.
 - A Playwright upgrade or a new runner image can move pixels; regenerate the
