@@ -20,6 +20,8 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
+    "test:visual": "playwright test --config playwright.visual.config.ts",
+    "test:visual:update": "playwright test --config playwright.visual.config.ts --update-snapshots",
     "test:e2e:boot": "bun run build && E2E_PRODUCTION=1 playwright test e2e/boot.spec.ts",
     "preview": "vite preview",
     "doctor": "bun x react-doctor@0.9.12 --yes"

@@ -51,4 +51,15 @@ test.describe("production startup", () => {
       }
     });
   }
+
+  // The component gallery is a development page (src/routes/gallery.tsx). Its
+  // route stays in the build so the route tree is the same in every mode, but
+  // it must send a visitor home, here on to the sign-in page, and never render.
+  test("does not serve the component gallery", async ({ page }) => {
+    await page.goto("/gallery", { waitUntil: "networkidle" });
+
+    await expect(page).toHaveURL(/\/login(?:\?|$)/);
+    await expect(page.getByLabel("Email")).toBeVisible();
+    await expect(page.locator("[data-gallery-root]")).toHaveCount(0);
+  });
 });

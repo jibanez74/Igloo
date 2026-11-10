@@ -91,6 +91,15 @@ jobs:
       - name: Type-check and build
         run: cd web && bun run build
 
+      # The component gallery is a development page. Its marker string must
+      # not reach the bundle the Go binary embeds.
+      - name: Verify the component gallery stayed out of the build
+        run: |
+          if grep -rq igloo-ui-gallery web/dist; then
+            echo "::error::The dev-only component gallery is in the production bundle"
+            exit 1
+          fi
+
       - name: Install Playwright Chromium
         run: cd web && bun x playwright install --with-deps chromium
 
@@ -107,6 +116,57 @@ jobs:
           path: |
             web/playwright-report
             web/test-results
+          retention-days: 7
+
+  # Screenshot baselines of the component gallery and a few pages
+  # (web/e2e/visual). The committed baselines were drawn by this job, so the
+  # image is pinned: a new runner image or Playwright version can move pixels
+  # and then needs the baselines regenerated here.
+  test-visual:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+
+      - name: Install dependencies
+        run: cd web && bun install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: cd web && bun x playwright install --with-deps chromium
+
+      - name: Compare screenshots with the committed baselines
+        id: compare
+        run: cd web && bun run test:visual
+
+      # Uploaded before the redraw below, which writes over the same folders:
+      # this one holds the expected, actual and diff images of what failed.
+      - name: Upload the comparison report
+        if: failure() && steps.compare.conclusion == 'failure'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-report-visual
+          path: |
+            web/playwright-report
+            web/test-results
+          retention-days: 7
+
+      # A difference is either a regression or an intended change. For an
+      # intended one, download this artifact, review the images and commit
+      # them over web/e2e/visual/__screenshots__. Only a failed comparison
+      # redraws: after a failed install or setup there is nothing to draw from.
+      - name: Redraw the baselines for review
+        if: failure() && steps.compare.conclusion == 'failure'
+        run: cd web && bun run test:visual:update
+
+      - name: Upload redrawn baselines
+        if: failure() && steps.compare.conclusion == 'failure'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: visual-baselines
+          path: web/e2e/visual/__screenshots__
           retention-days: 7
 
   # test-frontend runs on whatever Node the runner image ships. Node 25+

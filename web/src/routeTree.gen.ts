@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthRouteRouteImport } from './routes/_auth/route'
+import { Route as GalleryRouteImport } from './routes/gallery'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthIndexRouteImport } from './routes/_auth/index'
 import { Route as AuthSplatRouteImport } from './routes/_auth/$'
@@ -38,6 +39,11 @@ import { Route as AuthTvShowsIdEpisodesEpisodeIdPlayRouteImport } from './routes
 
 const AuthRouteRoute = AuthRouteRouteImport.update({
   id: '/_auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GalleryRoute = GalleryRouteImport.update({
+  id: '/gallery',
+  path: '/gallery',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -169,6 +175,7 @@ const AuthTvShowsIdEpisodesEpisodeIdPlayRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthIndexRoute
+  '/gallery': typeof GalleryRoute
   '/login': typeof LoginRoute
   '/settings': typeof AuthSettingsRouteRouteWithChildren
   '/$': typeof AuthSplatRoute
@@ -195,6 +202,7 @@ export interface FileRoutesByFullPath {
   '/tv-shows/$id/episodes/$episodeId/play': typeof AuthTvShowsIdEpisodesEpisodeIdPlayRoute
 }
 export interface FileRoutesByTo {
+  '/gallery': typeof GalleryRoute
   '/login': typeof LoginRoute
   '/$': typeof AuthSplatRoute
   '/trailer': typeof AuthTrailerRoute
@@ -223,6 +231,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_auth': typeof AuthRouteRouteWithChildren
+  '/gallery': typeof GalleryRoute
   '/login': typeof LoginRoute
   '/_auth/settings': typeof AuthSettingsRouteRouteWithChildren
   '/_auth/$': typeof AuthSplatRoute
@@ -253,6 +262,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/gallery'
     | '/login'
     | '/settings'
     | '/$'
@@ -279,6 +289,7 @@ export interface FileRouteTypes {
     | '/tv-shows/$id/episodes/$episodeId/play'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/gallery'
     | '/login'
     | '/$'
     | '/trailer'
@@ -306,6 +317,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/_auth'
+    | '/gallery'
     | '/login'
     | '/_auth/settings'
     | '/_auth/$'
@@ -335,6 +347,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   AuthRouteRoute: typeof AuthRouteRouteWithChildren
+  GalleryRoute: typeof GalleryRoute
   LoginRoute: typeof LoginRoute
 }
 
@@ -345,6 +358,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof AuthRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/gallery': {
+      id: '/gallery'
+      path: '/gallery'
+      fullPath: '/gallery'
+      preLoaderRoute: typeof GalleryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -595,6 +615,7 @@ const AuthRouteRouteWithChildren = AuthRouteRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   AuthRouteRoute: AuthRouteRouteWithChildren,
+  GalleryRoute: GalleryRoute,
   LoginRoute: LoginRoute,
 }
 export const routeTree = rootRouteImport

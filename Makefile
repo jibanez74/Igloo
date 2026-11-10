@@ -45,7 +45,7 @@ MEDIA_BIN_DIR := $(DIST_DIR)/media-bin
 
 .DEFAULT_GOAL := dev
 
-.PHONY: dev dev-profile build start stop clean help check test test-server test-music-race lint-server test-tmdb-integration test-spotify-integration test-itunes-integration test-web lint-web build-web test-openapi lint-openapi generate-openapi check-openapi preview-openapi
+.PHONY: dev dev-profile build start stop clean help check test test-server test-music-race lint-server test-tmdb-integration test-spotify-integration test-itunes-integration test-web test-visual lint-web build-web test-openapi lint-openapi generate-openapi check-openapi preview-openapi
 .PHONY: check-go-tools check-web-tools check-sqlc-tools check-media-tools check-dev-tools check-build-tools check-server-test-tools check-platform media-payloads media-bin compress-media-payloads generate prepare-webdist-placeholder prepare-openapi-embed prepare-test-webdist prepare-web
 
 dev: check-dev-tools generate prepare-webdist-placeholder prepare-openapi-embed
@@ -145,6 +145,7 @@ help:
 	@echo "  make test-spotify-integration Run live Spotify API tests (requires SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET)"
 	@echo "  make test-itunes-integration  Run live iTunes Lookup API tests (no credentials needed)"
 	@echo "  make test-web      Run frontend unit tests"
+	@echo "  make test-visual   Run the gallery and page screenshot specs (pixels compared in CI; VISUAL_STRICT=1 to compare locally)"
 	@echo "  make lint-web      Run frontend lint"
 	@echo "  make build-web     Build and type-check the frontend"
 	@echo "  make test-openapi  Lint the OpenAPI contract and run route coverage tests"
@@ -204,6 +205,11 @@ test-itunes-integration: check-go-tools
 
 test-web: check-web-tools
 	@cd $(WEB_DIR) && bun run test
+
+# Not part of `check`: the committed baselines are drawn by CI's pinned image,
+# so only CI compares pixels by default (web/playwright.visual.config.ts).
+test-visual: check-web-tools
+	@cd $(WEB_DIR) && bun run test:visual
 
 lint-web: check-web-tools
 	@cd $(WEB_DIR) && bun run lint

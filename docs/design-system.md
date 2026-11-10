@@ -30,6 +30,8 @@ this doc, prefer adding a guard too.
 | No string in `src/` hard-codes a keyboard-shortcut hint suffix (`"Mute (M)"`) — hints go through `useShortcutHints` | `web/src/test/shared/shortcut-hint-contracts.test.ts` |
 | Input styling contracts | `web/src/test/shared/input-styles.test.ts` |
 | Shared class-string constants keep their contracts | `web/src/test/lib/constants-contracts.test.ts` |
+| Primitives and the baseline pages render the same pixels as the committed baselines, both themes (§2.5) | `web/e2e/visual/*.visual.ts` (CI job `test-visual`) |
+| The component gallery renders, and stays out of the production bundle (§2.5) | `web/src/test/gallery/gallery.test.tsx`, CI marker grep, `web/e2e/boot.spec.ts` |
 | No raw Tailwind palette classes (all 22 color families) | ESLint `no-restricted-syntax` (**error**) in `web/eslint.config.js` |
 | Class order, duplicates, unknown classes | `eslint-plugin-better-tailwindcss` (**warn**; `bun run lint` runs `--max-warnings 0`, so warnings still fail CI) |
 
@@ -602,6 +604,53 @@ carry enough decimals to round-trip exactly through
 `src/test/helpers/color.ts`; keep
 that property when editing. Live-verified: toggling updates class, storage,
 and meta correctly, and a hard reload shows no theme flash.
+
+### 2.5 Component gallery and screenshot baselines
+
+The gallery (`/gallery`, `web/src/components/gallery/`) renders every
+primitive in every variant and state, plus the overlays open
+(`/gallery?open=dialog`, `alert-dialog`, `select`, `dropdown`, `popover`). It
+is the place to look at a primitive in both themes, and it is what the
+screenshot baselines shoot.
+
+- **Development only.** `src/routes/gallery.tsx` imports the gallery behind
+  `import.meta.env.DEV`, so a production build drops its modules; the route
+  itself stays (the generated route tree is the same in every mode) and
+  redirects home. CI greps `web/dist` for the gallery's `igloo-ui-gallery`
+  marker, and `e2e/boot.spec.ts` checks the redirect.
+- **A new primitive, variant or state goes into the gallery in the same
+  change**, in the section for its family (`GalleryPrimitives.tsx`) or as an
+  overlay stage (`GalleryOverlays.tsx`). A new section also goes into
+  `SECTIONS` in `e2e/visual/gallery.visual.ts` and into
+  `src/test/gallery/gallery.test.tsx`.
+- **"Call-site recipes" rows** show a primitive with the `className` overrides
+  production passes today. When a recipe becomes a variant, switch the row to
+  the variant: its baseline must not change.
+
+**Baselines** live in `web/e2e/visual/__screenshots__/` and cover the gallery
+(`gallery.visual.ts`) and a few whole pages on the mock API server
+(`pages.visual.ts`), in both themes. They run from their own config,
+`web/playwright.visual.config.ts`, always against the dev server
+(`bun run test:visual`, `make test-visual`), and are a CI job (`test-visual`),
+not part of `make check`.
+
+- **The committed set is drawn by CI's pinned image**, and the comparison
+  tolerates nothing it counts (`threshold: 0`, `maxDiffPixels: 0`). It is not
+  byte-exact: Playwright's comparator skips a differing pixel it takes for
+  anti-aliasing, mostly along text and curved edges, so a change made only of
+  such pixels would pass. A laptop renders text differently, so a local run
+  executes the specs without comparing pixels.
+- **To prove a change is invisible locally**, draw a set on the base commit and
+  compare the branch against it on the same machine:
+  `VISUAL_STRICT=1 VISUAL_SNAPSHOT_DIR=/some/dir bun run test:visual:update`
+  on the base, then the same without `:update` on the branch.
+- **When a change is meant to be seen**, the `test-visual` job fails and
+  uploads two artifacts: `playwright-report-visual` (expected, actual and
+  diff images of what failed) and `visual-baselines` (the redrawn set). Review the
+  images, then commit them over `web/e2e/visual/__screenshots__/` in a commit
+  of their own, naming what moved and why.
+- A Playwright upgrade or a new runner image can move pixels; regenerate the
+  baselines the same way, in a commit that changes nothing else.
 
 ---
 
