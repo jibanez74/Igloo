@@ -675,7 +675,10 @@ The gallery (`/gallery`, `web/src/components/gallery/`) renders every
 primitive in every variant and state, plus the overlays open
 (`/gallery?open=dialog`, `alert-dialog`, `select`, `dropdown`, `popover`). It
 is the place to look at a primitive in both themes, and it is what the
-screenshot baselines shoot.
+screenshot baselines shoot. `/gallery?section=buttons` shows one section
+alone, which is how the baselines shoot them: where a section sits on the
+page changes a few of its anti-aliased pixels (3 to 103, measured), so on the
+full page a section that grew would move every baseline below it.
 
 - **Development only.** `src/routes/gallery.tsx` imports the gallery behind
   `import.meta.env.DEV`, so a production build drops its modules; the route
@@ -685,8 +688,8 @@ screenshot baselines shoot.
 - **A new primitive, variant or state goes into the gallery in the same
   change**, in the section for its family (`GalleryPrimitives.tsx`) or as an
   overlay stage (`GalleryOverlays.tsx`). A new section also goes into
-  `SECTIONS` in `e2e/visual/gallery.visual.ts` and into
-  `src/test/gallery/gallery.test.tsx`.
+  `SECTIONS` in `GalleryPrimitives.tsx` and in `e2e/visual/gallery.visual.ts`,
+  and into `src/test/gallery/gallery.test.tsx`.
 - **"Call-site recipes" rows** show a primitive with the `className` overrides
   production passes today. When a recipe becomes a variant, switch the row to
   the variant: its baseline must not change.

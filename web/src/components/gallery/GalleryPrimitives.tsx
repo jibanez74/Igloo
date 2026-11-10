@@ -516,15 +516,29 @@ function TokensSection() {
   );
 }
 
-export default function GalleryPrimitives() {
+// In page order. The id is each section's `data-gallery` value.
+const SECTIONS = [
+  ["buttons", ButtonsSection],
+  ["badges", BadgesSection],
+  ["fields", FieldsSection],
+  ["surfaces", SurfacesSection],
+  ["navigation", NavigationSection],
+  ["tokens", TokensSection],
+] as const;
+
+type GalleryPrimitivesProps = {
+  /** Render this section alone; an unknown id renders none. */
+  only?: string;
+};
+
+export default function GalleryPrimitives({ only }: GalleryPrimitivesProps) {
   return (
     <>
-      <ButtonsSection />
-      <BadgesSection />
-      <FieldsSection />
-      <SurfacesSection />
-      <NavigationSection />
-      <TokensSection />
+      {SECTIONS.filter(([id]) => only === undefined || id === only).map(
+        ([id, Section]) => (
+          <Section key={id} />
+        ),
+      )}
     </>
   );
 }

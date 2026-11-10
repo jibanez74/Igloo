@@ -4,6 +4,13 @@ import GalleryPrimitives from "@/components/gallery/GalleryPrimitives";
 type GalleryProps = {
   /** Name of one overlay to show open, alone on the page (`?open=dialog`). */
   open?: string;
+  /**
+   * Id of one section to show alone (`?section=buttons`). The screenshot spec
+   * shoots each section this way: where a section sits on the page changes a
+   * few of its anti-aliased pixels, so alone, at a fixed place, its picture
+   * depends on nothing but itself.
+   */
+  section?: string;
 };
 
 /**
@@ -12,7 +19,7 @@ type GalleryProps = {
  * module behind `import.meta.env.DEV`, and CI greps the production bundle for
  * the `igloo-ui-gallery` marker below to prove it stayed out.
  */
-export default function Gallery({ open }: GalleryProps) {
+export default function Gallery({ open, section }: GalleryProps) {
   return (
     <main
       data-gallery-root="igloo-ui-gallery"
@@ -25,7 +32,7 @@ export default function Gallery({ open }: GalleryProps) {
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">
             Component gallery
           </h1>
-          <GalleryPrimitives />
+          <GalleryPrimitives only={section} />
         </div>
       )}
     </main>

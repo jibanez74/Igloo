@@ -49,6 +49,28 @@ describe("Gallery", () => {
     }
   });
 
+  it.each(["buttons", "badges", "fields", "surfaces", "navigation", "tokens"])(
+    "shows the %s section alone when asked for it",
+    section => {
+      const { container } = render(<Gallery section={section} />);
+
+      const sections = Array.from(
+        container.querySelectorAll<HTMLElement>("[data-gallery]"),
+        element => element.dataset.gallery,
+      );
+      expect(sections).toEqual([section]);
+    },
+  );
+
+  it("shows no section for an id it does not have", () => {
+    const { container } = render(<Gallery section="nope" />);
+
+    expect(container.querySelector("[data-gallery]")).toBeNull();
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Component gallery" }),
+    ).toBeInTheDocument();
+  });
+
   it("names every icon-only button", () => {
     render(<Gallery />);
 

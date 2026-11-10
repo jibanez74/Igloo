@@ -65,24 +65,34 @@ async function openGallery(page: Page, theme: Theme, query = "") {
 
 for (const theme of THEMES) {
   test.describe(`gallery, ${theme}`, () => {
-    test("primitives", async ({ page }) => {
-      const tracker = trackBrowserIssues(page);
+    // Each section alone on the page (`?section=`). Where a section sits
+    // changes a few of its anti-aliased pixels, so on the full gallery a
+    // section that grew would redraw every baseline below it.
+    for (const section of SECTIONS) {
+      test(`${section} section`, async ({ page }) => {
+        const tracker = trackBrowserIssues(page);
+        await openGallery(page, theme, `?section=${section}`);
+
+        const sections = page.locator("[data-gallery]");
+        await expect(sections).toHaveCount(1);
+        await expectScreenshot(sections, `${section}-${theme}.png`);
+
+        tracker.assertClean();
+      });
+    }
+
+    test("the full gallery shows every section", async ({ page }) => {
       await openGallery(page, theme);
 
-      for (const section of SECTIONS) {
-        await expectScreenshot(
-          page.locator(`[data-gallery="${section}"]`),
-          `${section}-${theme}.png`,
-        );
-      }
-
-      tracker.assertClean();
+      await expect(page.locator("[data-gallery]")).toHaveCount(
+        SECTIONS.length,
+      );
     });
 
     test("the token utilities compute to their scale values", async ({
       page,
     }) => {
-      await openGallery(page, theme);
+      await openGallery(page, theme, "?section=tokens");
       const computed = (token: string, property: string) =>
         page
           .locator(`[data-token="${token}"]`)
@@ -108,7 +118,7 @@ for (const theme of THEMES) {
     });
 
     test("keyboard focus and hover", async ({ page }) => {
-      await openGallery(page, theme);
+      await openGallery(page, theme, "?section=buttons");
       const buttons = page.locator('[data-gallery="buttons"]');
 
       // A real Tab, so the ring is the keyboard one (:focus-visible). The
