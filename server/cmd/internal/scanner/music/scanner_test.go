@@ -29,6 +29,27 @@ func setupMusicScanner(t testing.TB) *Scanner {
 func setupMusicScannerDatabase(t testing.TB, source string) *Scanner {
 	t.Helper()
 	db, queries := scannertest.OpenDB(t, source)
+	// The musician list and search count an artist's tracks from track_musicians
+	// alone, so whatever a test drives the scanner through, a track's primary
+	// artist must be among its credits when the test ends. A failure-path test
+	// that closed the database or dropped the table leaves nothing to count;
+	// any other error means the check no longer matches the schema.
+	t.Cleanup(func() {
+		var uncredited int
+		err := db.QueryRow(`SELECT COUNT(*) FROM tracks t WHERE t.musician_id IS NOT NULL AND NOT EXISTS (
+			SELECT 1 FROM track_musicians tm WHERE tm.track_id = t.id AND tm.musician_id = t.musician_id)`).Scan(&uncredited)
+		if err != nil {
+			message := err.Error()
+			tornDown := strings.Contains(message, "database is closed") || strings.Contains(message, "no such table: tracks")
+			if !tornDown {
+				t.Errorf("count tracks whose primary artist is not credited: %v", err)
+			}
+			return
+		}
+		if uncredited != 0 {
+			t.Errorf("%d tracks have a primary artist missing from track_musicians", uncredited)
+		}
+	})
 	return New(Dependencies{DB: db, Queries: queries, Logger: &scannertest.Logger{}, Now: scannertest.SettledNow})
 }
 

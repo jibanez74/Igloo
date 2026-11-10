@@ -235,7 +235,7 @@ func (app *Application) matchPersonLibrary(ctx context.Context, groups map[strin
 		for start := 0; start < len(all); start += 500 {
 			batch := all[start:min(start+500, len(all))]
 			if mediaType == "movie" {
-				rows, err := app.Queries.GetPersonLibraryMovies(ctx, batch)
+				rows, err := app.Queries.GetMoviesByTmdbIDs(ctx, batch)
 				if err != nil {
 					return err
 				}
@@ -244,7 +244,7 @@ func (app *Application) matchPersonLibrary(ctx context.Context, groups map[strin
 					groups[fmt.Sprintf("movie:%d", row.TmdbID.Int64)].LibraryID = &id
 				}
 			} else {
-				rows, err := app.Queries.GetPersonLibraryShows(ctx, batch)
+				rows, err := app.Queries.GetShowsByTmdbIDs(ctx, batch)
 				if err != nil {
 					return err
 				}

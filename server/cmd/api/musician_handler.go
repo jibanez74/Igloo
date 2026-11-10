@@ -74,7 +74,7 @@ func (app *Application) GetMusicianDetails(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	tracks, err := app.Queries.GetTracksByMusicianID(ctx, sql.NullInt64{Int64: id, Valid: true})
+	tracks, err := app.Queries.GetTracksByMusicianID(ctx, id)
 	if err != nil {
 		app.serverError(w, err, "failed to get tracks for musician", "failed to fetch musician tracks from server",
 			"musician_id", id)

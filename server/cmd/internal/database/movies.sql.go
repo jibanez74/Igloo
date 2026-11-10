@@ -1030,20 +1030,22 @@ func (q *Queries) GetMoviesByGenreDesc(ctx context.Context, arg GetMoviesByGenre
 
 const getMoviesByTmdbIDs = `-- name: GetMoviesByTmdbIDs :many
 SELECT
-  id,
-  tmdb_id
+  tmdb_id,
+  CAST(MIN(id) AS INTEGER) AS id
 FROM movies
 WHERE tmdb_id IN (/*SLICE:tmdb_ids*/?)
+GROUP BY tmdb_id
 `
 
 type GetMoviesByTmdbIDsRow struct {
-	ID     int64         `json:"id"`
 	TmdbID sql.NullInt64 `json:"tmdb_id"`
+	ID     int64         `json:"id"`
 }
 
-// Resolves a whole page of TMDB ids for the search results mapper, which
-// annotates each result with "already in library". One indexed pass over
-// idx_movies_tmdb_id instead of a point query per result row.
+// Resolves a batch of TMDB ids to library movies for the TMDB search mapper and
+// the person page, which mark each title "already in library". One indexed
+// pass over idx_movies_tmdb_id instead of a point query per title. tmdb_id is
+// not unique (two files of one film), so the lowest id is the one linked.
 func (q *Queries) GetMoviesByTmdbIDs(ctx context.Context, tmdbIds []sql.NullInt64) ([]GetMoviesByTmdbIDsRow, error) {
 	query := getMoviesByTmdbIDs
 	var queryParams []interface{}
@@ -1063,7 +1065,7 @@ func (q *Queries) GetMoviesByTmdbIDs(ctx context.Context, tmdbIds []sql.NullInt6
 	items := []GetMoviesByTmdbIDsRow{}
 	for rows.Next() {
 		var i GetMoviesByTmdbIDsRow
-		if err := rows.Scan(&i.ID, &i.TmdbID); err != nil {
+		if err := rows.Scan(&i.TmdbID, &i.ID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

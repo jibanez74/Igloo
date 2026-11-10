@@ -133,24 +133,16 @@ SELECT
     FROM musician_albums AS ma
     WHERE ma.musician_id = m.id
   ) AS album_count,
-  -- Counts tracks credited to this musician either as the primary musician or via
-  -- track_musicians. A UNION of two indexed lookups rather than an OR over both
-  -- tables: the OR form cannot use an index and scans every track per musician.
-  -- UNION (not UNION ALL) preserves the distinct-track count.
+  -- Every credit has a track_musicians row, the primary one included: the
+  -- scanner writes tracks.musician_id and that link in one transaction, so the
+  -- link table alone counts each credited track once.
   -- searchMusiciansSQL in cmd/api/search_handler.go must keep this identical: it
   -- scans into this same row type, so a divergence shows the same artist card
   -- with two different track counts.
   (
     SELECT COUNT(*)
-    FROM (
-      SELECT t.id
-      FROM tracks AS t
-      WHERE t.musician_id = m.id
-      UNION
-      SELECT tm.track_id
-      FROM track_musicians AS tm
-      WHERE tm.musician_id = m.id
-    )
+    FROM track_musicians AS tm
+    WHERE tm.musician_id = m.id
   ) AS track_count
 FROM musicians AS m
 ORDER BY
@@ -260,19 +252,15 @@ SELECT
   a.id AS album_id,
   a.title AS album_title,
   a.cover AS album_cover
-FROM tracks AS t
+FROM track_musicians AS tm
+INNER JOIN tracks AS t
+  ON t.id = tm.track_id
 LEFT JOIN albums AS a
   ON t.album_id = a.id
-WHERE t.id IN (
-  SELECT primary_t.id
-  FROM tracks AS primary_t
-  WHERE primary_t.musician_id = ?1
-  UNION ALL
-  SELECT credited_tm.track_id
-  FROM track_musicians AS credited_tm
-  WHERE credited_tm.musician_id = ?1
-)
-ORDER BY t.sort_title ASC
+WHERE tm.musician_id = ?
+ORDER BY
+  t.sort_title ASC,
+  t.id ASC
 `
 
 type GetTracksByMusicianIDRow struct {
@@ -286,10 +274,9 @@ type GetTracksByMusicianIDRow struct {
 	AlbumCover sql.NullString `json:"album_cover"`
 }
 
-// Same UNION-of-indexed-lookups shape as GetMusiciansAlphabetical's track_count:
-// the equivalent OR over tracks and track_musicians cannot use an index. IN
-// ignores duplicates, so UNION ALL skips the sort that UNION would add.
-func (q *Queries) GetTracksByMusicianID(ctx context.Context, musicianID sql.NullInt64) ([]GetTracksByMusicianIDRow, error) {
+// Reads the credits from track_musicians alone, like GetMusiciansAlphabetical's
+// track_count, so the list and the count on the artist's card agree.
+func (q *Queries) GetTracksByMusicianID(ctx context.Context, musicianID int64) ([]GetTracksByMusicianIDRow, error) {
 	rows, err := q.query(ctx, q.getTracksByMusicianIDStmt, getTracksByMusicianID, musicianID)
 	if err != nil {
 		return nil, err

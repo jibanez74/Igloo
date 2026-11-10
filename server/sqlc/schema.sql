@@ -295,6 +295,10 @@ CREATE TABLE IF NOT EXISTS music_album_identity (
 
 CREATE INDEX IF NOT EXISTS music_album_identity_owner ON music_album_identity (album_id);
 
+-- The artist retry candidates reach an artist's albums through artist_key
+-- alone, which the primary key cannot serve: title_key leads it.
+CREATE INDEX IF NOT EXISTS music_album_identity_artist ON music_album_identity (artist_key, album_id);
+
 CREATE TABLE IF NOT EXISTS music_genre_identity (
   identity_key TEXT PRIMARY KEY,
   genre_id INTEGER NOT NULL REFERENCES genres (id) ON DELETE CASCADE
@@ -866,8 +870,9 @@ BEGIN
 END;
 
 -- Search indexing
--- UPDATE triggers name only indexed inputs; album and musician changes also
--- refresh denormalized track terms.
+-- UPDATE triggers name only indexed inputs and fire only when one of them
+-- changed: an upsert or a move names the column whatever it writes. Album and
+-- musician changes also refresh denormalized track terms.
 
 CREATE TRIGGER IF NOT EXISTS movies_ai
 AFTER INSERT ON movies
@@ -885,6 +890,7 @@ END;
 
 CREATE TRIGGER IF NOT EXISTS movies_au
 AFTER UPDATE OF title, overview, tag_line ON movies
+WHEN old.title IS NOT new.title OR old.overview IS NOT new.overview OR old.tag_line IS NOT new.tag_line
 BEGIN
   INSERT INTO movies_fts (movies_fts, rowid, title, overview, tag_line)
   VALUES ('delete', old.id, old.title, old.overview, old.tag_line);
@@ -908,6 +914,7 @@ END;
 
 CREATE TRIGGER IF NOT EXISTS albums_au
 AFTER UPDATE OF title, musician ON albums
+WHEN old.title IS NOT new.title OR old.musician IS NOT new.musician
 BEGIN
   INSERT INTO albums_fts (albums_fts, rowid, title, musician)
   VALUES ('delete', old.id, old.title, old.musician);
@@ -931,6 +938,7 @@ END;
 
 CREATE TRIGGER IF NOT EXISTS musicians_au
 AFTER UPDATE OF name, sort_name ON musicians
+WHEN old.name IS NOT new.name OR old.sort_name IS NOT new.sort_name
 BEGIN
   INSERT INTO musicians_fts (musicians_fts, rowid, name, sort_name)
   VALUES ('delete', old.id, old.name, old.sort_name);
@@ -960,6 +968,7 @@ END;
 
 CREATE TRIGGER IF NOT EXISTS tracks_search_au
 AFTER UPDATE OF title, album_id, musician_id ON tracks
+WHEN old.title IS NOT new.title OR old.album_id IS NOT new.album_id OR old.musician_id IS NOT new.musician_id
 BEGIN
   DELETE FROM tracks_search_fts WHERE rowid = old.id;
   INSERT INTO tracks_search_fts (rowid, title, album_title, musician_name)
@@ -975,6 +984,7 @@ END;
 
 CREATE TRIGGER IF NOT EXISTS tracks_search_album_au
 AFTER UPDATE OF title, musician ON albums
+WHEN old.title IS NOT new.title OR old.musician IS NOT new.musician
 BEGIN
   DELETE FROM tracks_search_fts WHERE rowid IN (
     SELECT id FROM tracks WHERE album_id = new.id
@@ -993,6 +1003,7 @@ END;
 
 CREATE TRIGGER IF NOT EXISTS tracks_search_musician_au
 AFTER UPDATE OF name ON musicians
+WHEN old.name IS NOT new.name
 BEGIN
   DELETE FROM tracks_search_fts WHERE rowid IN (
     SELECT id FROM tracks WHERE musician_id = new.id
@@ -1031,6 +1042,7 @@ END;
 
 CREATE TRIGGER IF NOT EXISTS search_vocab_movies_au
 AFTER UPDATE OF title, overview, tag_line ON movies
+WHEN old.title IS NOT new.title OR old.overview IS NOT new.overview OR old.tag_line IS NOT new.tag_line
 BEGIN
   UPDATE search_vocab_generations
   SET generation = generation + 1
@@ -1055,6 +1067,7 @@ END;
 
 CREATE TRIGGER IF NOT EXISTS search_vocab_albums_au
 AFTER UPDATE OF title, musician ON albums
+WHEN old.title IS NOT new.title OR old.musician IS NOT new.musician
 BEGIN
   UPDATE search_vocab_generations
   SET generation = generation + 1
@@ -1079,6 +1092,7 @@ END;
 
 CREATE TRIGGER IF NOT EXISTS search_vocab_musicians_au
 AFTER UPDATE OF name, sort_name ON musicians
+WHEN old.name IS NOT new.name OR old.sort_name IS NOT new.sort_name
 BEGIN
   UPDATE search_vocab_generations
   SET generation = generation + 1
@@ -1103,6 +1117,7 @@ END;
 
 CREATE TRIGGER IF NOT EXISTS search_vocab_tracks_au
 AFTER UPDATE OF title, album_id, musician_id ON tracks
+WHEN old.title IS NOT new.title OR old.album_id IS NOT new.album_id OR old.musician_id IS NOT new.musician_id
 BEGIN
   UPDATE search_vocab_generations
   SET generation = generation + 1
@@ -1291,6 +1306,7 @@ END;
 
 CREATE TRIGGER IF NOT EXISTS shows_au
 AFTER UPDATE OF name, overview, tagline ON shows
+WHEN old.name IS NOT new.name OR old.overview IS NOT new.overview OR old.tagline IS NOT new.tagline
 BEGIN
   INSERT INTO shows_fts (shows_fts, rowid, name, overview, tagline)
   VALUES ('delete', old.id, old.name, old.overview, old.tagline);
@@ -1316,6 +1332,7 @@ END;
 
 CREATE TRIGGER IF NOT EXISTS search_vocab_shows_au
 AFTER UPDATE OF name, overview, tagline ON shows
+WHEN old.name IS NOT new.name OR old.overview IS NOT new.overview OR old.tagline IS NOT new.tagline
 BEGIN
   UPDATE search_vocab_generations
   SET generation = generation + 1

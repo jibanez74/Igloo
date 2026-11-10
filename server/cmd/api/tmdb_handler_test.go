@@ -164,6 +164,21 @@ func TestSearchTmdbMovies_HTTPMarksExistingLibraryMatches(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// A second file of the same film: the result links the first one, as the
+	// person page does.
+	_, err = app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{
+		Title:     "The Matrix",
+		FilePath:  "/movies/the-matrix-remaster.mkv",
+		FileName:  "the-matrix-remaster.mkv",
+		Size:      1,
+		Container: "mkv",
+		MimeType:  "video/x-matroska",
+		Adult:     false,
+		TmdbID:    helpers.NullInt64(603),
+	})
+	if err != nil {
+		t.Fatalf("insert second file of the movie: %v", err)
+	}
 
 	stub := &stubTmdbClient{
 		searchResults: []tmdb.TmdbMovie{

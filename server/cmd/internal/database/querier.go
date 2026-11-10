@@ -265,9 +265,10 @@ type Querier interface {
 	GetMovieWatchProgress(ctx context.Context, arg GetMovieWatchProgressParams) (GetMovieWatchProgressRow, error)
 	GetMoviesByGenreAsc(ctx context.Context, arg GetMoviesByGenreAscParams) ([]GetMoviesByGenreAscRow, error)
 	GetMoviesByGenreDesc(ctx context.Context, arg GetMoviesByGenreDescParams) ([]GetMoviesByGenreDescRow, error)
-	// Resolves a whole page of TMDB ids for the search results mapper, which
-	// annotates each result with "already in library". One indexed pass over
-	// idx_movies_tmdb_id instead of a point query per result row.
+	// Resolves a batch of TMDB ids to library movies for the TMDB search mapper and
+	// the person page, which mark each title "already in library". One indexed
+	// pass over idx_movies_tmdb_id instead of a point query per title. tmdb_id is
+	// not unique (two files of one film), so the lowest id is the one linked.
 	GetMoviesByTmdbIDs(ctx context.Context, tmdbIds []sql.NullInt64) ([]GetMoviesByTmdbIDsRow, error)
 	GetMoviesCount(ctx context.Context) (int64, error)
 	// Paginated library A-Z (id tie-breaker so LIMIT/OFFSET is stable when titles match).
@@ -303,8 +304,6 @@ type Querier interface {
 	// small retry table outermost) instead of walking every season and episode of
 	// every show. The OR only builds them when a show has no show-level retry row.
 	GetPendingShows(ctx context.Context, afterID int64) ([]GetPendingShowsRow, error)
-	GetPersonLibraryMovies(ctx context.Context, tmdbIds []sql.NullInt64) ([]GetPersonLibraryMoviesRow, error)
-	GetPersonLibraryShows(ctx context.Context, tmdbIds []sql.NullInt64) ([]GetPersonLibraryShowsRow, error)
 	GetPersonLocalCredits(ctx context.Context, artistID int64) ([]GetPersonLocalCreditsRow, error)
 	GetPlaylistCollaborators(ctx context.Context, playlistID int64) ([]GetPlaylistCollaboratorsRow, error)
 	// Title order matches GET /api/movies/library sort=asc.
@@ -439,6 +438,8 @@ type Querier interface {
 	GetShowVideoStreamsByFileID(ctx context.Context, fileID int64) ([]GetShowVideoStreamsByFileIDRow, error)
 	GetShowsByGenreAsc(ctx context.Context, arg GetShowsByGenreAscParams) ([]GetShowsByGenreAscRow, error)
 	GetShowsByGenreDesc(ctx context.Context, arg GetShowsByGenreDescParams) ([]GetShowsByGenreDescRow, error)
+	// The show twin of GetMoviesByTmdbIDs.
+	GetShowsByTmdbIDs(ctx context.Context, tmdbIds []sql.NullInt64) ([]GetShowsByTmdbIDsRow, error)
 	GetShowsCount(ctx context.Context) (int64, error)
 	// Paginated library A-Z (id tie-breaker so LIMIT/OFFSET is stable when names match).
 	GetShowsLibraryAsc(ctx context.Context, arg GetShowsLibraryAscParams) ([]GetShowsLibraryAscRow, error)
@@ -461,10 +462,9 @@ type Querier interface {
 	// pages stay stable.
 	GetTracksAlphabetical(ctx context.Context, arg GetTracksAlphabeticalParams) ([]GetTracksAlphabeticalRow, error)
 	GetTracksByAlbumID(ctx context.Context, albumID sql.NullInt64) ([]GetTracksByAlbumIDRow, error)
-	// Same UNION-of-indexed-lookups shape as GetMusiciansAlphabetical's track_count:
-	// the equivalent OR over tracks and track_musicians cannot use an index. IN
-	// ignores duplicates, so UNION ALL skips the sort that UNION would add.
-	GetTracksByMusicianID(ctx context.Context, musicianID sql.NullInt64) ([]GetTracksByMusicianIDRow, error)
+	// Reads the credits from track_musicians alone, like GetMusiciansAlphabetical's
+	// track_count, so the list and the count on the artist's card agree.
+	GetTracksByMusicianID(ctx context.Context, musicianID int64) ([]GetTracksByMusicianIDRow, error)
 	GetTracksCount(ctx context.Context) (int64, error)
 	GetUser(ctx context.Context, id int64) (User, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
