@@ -52,16 +52,17 @@ const restrictedClassRule = [
   // The app-wide layers and the motion durations are tokens
   // (src/lib/theme-tokens.ts): z-chrome / z-modal / z-popover and
   // duration-micro / duration-standard / duration-page. Their numbers must
-  // not come back as literals; see docs/design-system.md sections 1.4, 1.5.
+  // not come back as literals, with or without the important modifier
+  // (`z-50!`); see docs/design-system.md sections 1.4, 1.5.
   {
     selector:
-      "Literal[value=/(?:^|[\\s:])(?:z-(?:40|50|60|100)|duration-(?:150|200|300))(?:$|\\s)/]",
+      "Literal[value=/(?:^|[\\s:])!?(?:z-(?:40|50|60|100)|duration-(?:150|200|300))!?(?:$|\\s)/]",
     message:
       "Use the layer and duration tokens (z-chrome, z-modal, z-popover; duration-micro, duration-standard, duration-page) instead of their numbers; see docs/design-system.md sections 1.4 and 1.5.",
   },
   {
     selector:
-      "TemplateElement[value.cooked=/(?:^|[\\s:])(?:z-(?:40|50|60|100)|duration-(?:150|200|300))(?:$|\\s)/]",
+      "TemplateElement[value.cooked=/(?:^|[\\s:])!?(?:z-(?:40|50|60|100)|duration-(?:150|200|300))!?(?:$|\\s)/]",
     message:
       "Use the layer and duration tokens instead of their numbers; see docs/design-system.md sections 1.4 and 1.5.",
   },

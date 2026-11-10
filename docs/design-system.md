@@ -205,8 +205,13 @@ Rules:
     mark, the player's play button, the pill call-to-actions): `shadow-lg`
     in `primary` at 20 %. Write it, not `shadow-lg shadow-primary/20`.
 
-  Both are ordinary shadow sizes to Tailwind and to `cn()`, so a shadow
-  color still combines with them and the focus ring is not replaced. Other
+  Both are ordinary shadow sizes to Tailwind and to `cn()`: they replace and
+  are replaced by `shadow-md` and the like, and the focus ring, which is a
+  separate layer, is not disturbed. A shadow-color class beside them is kept
+  by `cn()`, but only `shadow-glow` takes it (`shadow-glow shadow-primary/5`
+  is the glow at 5 %). `shadow-floating` takes its color from the theme
+  through `--elevation-floating`, which Tailwind cannot recolor, so a color
+  class changes nothing there; a different strength is a new token. Other
   glows stay literal where their strength is part of the surface:
   interactive media cards on hover (`hover:shadow-xl
   hover:shadow-primary/20`), the EmptyState orb (`shadow-primary/5`). Shadows
