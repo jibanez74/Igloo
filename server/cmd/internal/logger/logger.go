@@ -8,7 +8,11 @@ import (
 	"path/filepath"
 )
 
-const loggerMaxBytes = 1 << 20
+// loggerMaxBytes is the size at which the log file is rotated; one rotated
+// file is kept. Every request is a line of about 250 bytes, HLS segments
+// included, so 1 MiB held about an hour of an evening's streaming and a
+// scan's errors were gone by the next morning.
+const loggerMaxBytes = 8 << 20
 
 type LoggerInterface interface {
 	Debug(msg string, args ...any)
