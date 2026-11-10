@@ -322,8 +322,10 @@ func parseSubtitleStartSec(r *http.Request) (float64, error) {
 // writeSubtitleWebVTT serves the cached absolute-timestamp WebVTT, rebased onto
 // the requesting session's timeline. The cache stays keyed on file and stream
 // alone, so shifting here costs no extra extraction and no extra cache entries.
+// A film's cues are tens of kilobytes of text, sent compressed to a client
+// that accepts gzip.
 func writeSubtitleWebVTT(w http.ResponseWriter, vtt []byte, startSec float64) {
 	w.Header().Set("Content-Type", subtitleWebVTTContentType)
 	w.Header().Set("Cache-Control", "no-cache")
-	_, _ = w.Write(helpers.ShiftWebVTT(vtt, startSec))
+	_ = helpers.WriteBody(w, http.StatusOK, helpers.ShiftWebVTT(vtt, startSec))
 }

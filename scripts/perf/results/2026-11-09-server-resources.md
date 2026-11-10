@@ -17,7 +17,7 @@ k6 was not installed, so `oha` stands in for `baseline.sh browse`.
 |---|---|
 | Session decoded once, not per request (`memoSessionCodec`) | decode 26.2 µs / 190 allocs → 0.34 µs / 2 allocs per cookie request |
 | JSON encoded into a pooled buffer | 83 KB → 1.1 KB allocated for a 70 KB response |
-| gzip (BestSpeed) for JSON and HLS playlists of one packet or more | movie details 73.1 → 17.2 KB, tracks 16.8 → 3.6 KB, album details 13.2 → 1.9 KB |
+| gzip (BestSpeed) for JSON, HLS playlists and WebVTT subtitles of one packet or more | movie details 73.1 → 17.2 KB, tracks 16.8 → 3.6 KB, album details 13.2 → 1.9 KB |
 | TMDB response cache capped at 64 entries | scan peak RSS 108 → 70 MB; after the scan 103 → 61 MB |
 | Read-only transactions keep the connection on a client abort | test proves the discard and the fix; frequency in real use not measured |
 | `journal_size_limit` 16 MiB | WAL 12 MB → 1 MB after a large transaction in a check with a 1 MiB limit |
@@ -62,7 +62,8 @@ sizes; the standard library is used.
 
 Over real HTTP against the imported library: the playlist of a two-hour
 720p transcode is 245,913 bytes plain and 6,070 compressed, a young remux
-playlist 2,121 and 331. Segments and `init.mp4` carry no `Content-Encoding`,
+playlist 2,121 and 331, a film's WebVTT cues 23,049 and 10,937. Segments,
+`init.mp4` and the Matroska subtitle stream carry no `Content-Encoding`,
 and a direct-play range request still reaches `sendfile(2)` (strace).
 
 The real-instance Playwright suite (Chromium, which asks for gzip on every

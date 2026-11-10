@@ -5885,6 +5885,12 @@ export interface components {
         WebVTTResponse: {
             headers: {
                 "Cache-Control"?: "no-cache";
+                /** @description Present when the cues are 1,400 bytes or more and the request's Accept-Encoding accepts gzip; the body is then gzip-compressed. */
+                "Content-Encoding"?: "gzip";
+                /** @description Names Accept-Encoding when the cues are 1,400 bytes or more, compressed or not, alongside the session middleware's Cookie. */
+                Vary?: string;
+                /** @description Length of the body as sent, after any compression. */
+                "Content-Length"?: number;
                 [name: string]: unknown;
             };
             content: {

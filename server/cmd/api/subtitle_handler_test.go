@@ -1,13 +1,17 @@
 package main
 
 import (
+	"compress/gzip"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"igloo/cmd/internal/database"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -74,6 +78,70 @@ func TestSubtitleWebVTT_ShiftsCuesBySessionStart(t *testing.T) {
 	}
 	if fake.SubtitleCallCount() != 0 {
 		t.Fatalf("shifting must not trigger extraction, got %d calls", fake.SubtitleCallCount())
+	}
+}
+
+// A film's cues are sent compressed to a client that accepts gzip, shifted or
+// not, and unchanged to one that does not.
+func TestSubtitleWebVTT_CompressesCuesForClientsThatAcceptGzip(t *testing.T) {
+	app := setupTestApp(t)
+	viewer := createTestUser(t, app, "Viewer", "viewer@example.com", false)
+	app.FFmpeg = &fakeFFmpeg{}
+
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+	insertTestSubtitle(t, app, movieID, testSubtitleStreamIndex, "subrip", "eng")
+
+	var cues strings.Builder
+	cues.WriteString("WEBVTT\n\n")
+	for minute := 10; minute < 50; minute++ {
+		fmt.Fprintf(&cues, "00:%02d:05.000 --> 00:%02d:07.000\nA line somebody says in minute %d\n\n", minute, minute, minute)
+	}
+	app.SubtitleVTTCache.Set(helpers.SubtitleCacheKey("movie", movieID, 2), []byte(cues.String()), subtitleCacheTTL)
+
+	router := authenticatedRouter(t, app, viewer.ID)
+	for _, query := range []string{"", "?start=600"} {
+		path := fmt.Sprintf("/api/movies/%d/subtitles/0/web.vtt%s", movieID, query)
+
+		plainRequest := httptest.NewRequest(http.MethodGet, path, nil)
+		plain := httptest.NewRecorder()
+		router.ServeHTTP(plain, plainRequest)
+		if plain.Code != http.StatusOK || plain.Header().Get("Content-Encoding") != "" {
+			t.Fatalf("%q: plain response = %d, Content-Encoding %q", query, plain.Code, plain.Header().Get("Content-Encoding"))
+		}
+		if !slices.Contains(plain.Header().Values("Vary"), "Accept-Encoding") {
+			t.Errorf("%q: Vary = %q, want it to name Accept-Encoding", query, plain.Header().Values("Vary"))
+		}
+		assertOpenAPIExchange(t, "subtitleWebVTT", plainRequest, plain)
+
+		gzipRequest := httptest.NewRequest(http.MethodGet, path, nil)
+		gzipRequest.Header.Set("Accept-Encoding", "gzip")
+		compressed := httptest.NewRecorder()
+		router.ServeHTTP(compressed, gzipRequest)
+		if compressed.Code != http.StatusOK || compressed.Header().Get("Content-Encoding") != "gzip" {
+			t.Fatalf("%q: gzip response = %d, Content-Encoding %q", query, compressed.Code, compressed.Header().Get("Content-Encoding"))
+		}
+		if compressed.Header().Get("Content-Type") != subtitleWebVTTContentType {
+			t.Errorf("%q: Content-Type = %q, want %q", query, compressed.Header().Get("Content-Type"), subtitleWebVTTContentType)
+		}
+		if compressed.Header().Get("Content-Length") != strconv.Itoa(compressed.Body.Len()) {
+			t.Errorf("%q: Content-Length = %q for a body of %d bytes", query, compressed.Header().Get("Content-Length"), compressed.Body.Len())
+		}
+		if compressed.Body.Len() >= plain.Body.Len()/2 {
+			t.Errorf("%q: compressed cues are %d bytes of %d", query, compressed.Body.Len(), plain.Body.Len())
+		}
+		assertOpenAPIExchange(t, "subtitleWebVTT", gzipRequest, compressed)
+
+		reader, err := gzip.NewReader(compressed.Body)
+		if err != nil {
+			t.Fatalf("%q: cues are not gzip: %v", query, err)
+		}
+		decoded, err := io.ReadAll(reader)
+		if err != nil {
+			t.Fatalf("%q: read gzip cues: %v", query, err)
+		}
+		if string(decoded) != plain.Body.String() {
+			t.Errorf("%q: decompressed cues differ from the uncompressed ones", query)
+		}
 	}
 }
 
