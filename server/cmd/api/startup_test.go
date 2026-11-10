@@ -187,6 +187,7 @@ func TestInitDB_EveryConnectionGetsTheConnectionSettings(t *testing.T) {
 		{"synchronous", 1},
 		{"temp_store", 2},
 		{"cache_size", -16000},
+		{"journal_size_limit", 16 << 20},
 		{"foreign_keys", 1},
 		{"busy_timeout", 5000},
 	} {

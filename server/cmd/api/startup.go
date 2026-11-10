@@ -78,8 +78,10 @@ const sqliteDriverName = "sqlite3_igloo"
 
 // synchronous=NORMAL pairs with WAL so a commit skips the fsync (only an
 // OS-level crash can lose the latest commits), and temp_store=MEMORY keeps the
-// listings' sorters off the disk.
-const sqliteConnectionPragmas = "PRAGMA synchronous=NORMAL; PRAGMA temp_store=MEMORY; PRAGMA cache_size=-16000;"
+// listings' sorters off the disk. The WAL file is reused, never shrunk, so
+// without journal_size_limit it stays as large as the largest transaction
+// until shutdown; 16 MiB is four times what checkpoints normally leave.
+const sqliteConnectionPragmas = "PRAGMA synchronous=NORMAL; PRAGMA temp_store=MEMORY; PRAGMA cache_size=-16000; PRAGMA journal_size_limit=16777216;"
 
 func init() {
 	sql.Register(sqliteDriverName, &sqlite3.SQLiteDriver{
