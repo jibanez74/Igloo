@@ -51,7 +51,6 @@ import {
   LIBRARY_TABS_LIST_CLASS,
   LIKED_TRACKS_PER_PAGE,
   MOTION_MICRO_CONTROL_CLASS,
-  MOTION_SECTION_ENTER_CLASS,
   MOTION_SECTION_ENTER_DELAYED_CLASS,
   MUSIC_CARD_GRID_CLASS,
   MUSICIANS_PER_PAGE,
@@ -90,6 +89,7 @@ import {
 import { routeHead } from "@/lib/route-head";
 import { loadOnEntry } from "@/lib/route-loads";
 import SkeletonStatus from "@/components/shared/SkeletonStatus";
+import PageHeader from "@/components/shared/PageHeader";
 
 const MUSIC_HEAD = routeHead(
   "Music Library",
@@ -203,16 +203,11 @@ function MusicPage() {
 
   return (
     <div className="min-w-0">
-      {/* Page header */}
-      <header className={cn("mb-6 sm:mb-7", MOTION_SECTION_ENTER_CLASS)}>
-        <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
-          <Music className="size-6 shrink-0 text-primary" aria-hidden="true" />
-          <span>Music Library</span>
-        </h1>
-        <p className="mt-1.5 max-w-2xl text-sm text-muted-foreground md:text-base">
-          Browse your collection of musicians, albums, and tracks
-        </p>
-      </header>
+      <PageHeader
+        icon={Music}
+        title="Music Library"
+        description="Browse your collection of musicians, albums, and tracks"
+      />
 
       {/* Stats + More dropdown */}
       <div

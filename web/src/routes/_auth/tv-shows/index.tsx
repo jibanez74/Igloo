@@ -9,6 +9,7 @@ import LibraryMoreMenu, {
   RefreshLibraryMenuItem,
 } from "@/components/shared/LibraryMoreMenu";
 import LibraryStats from "@/components/shared/LibraryStats";
+import PageHeader from "@/components/shared/PageHeader";
 import { useContentFadeTransition } from "@/hooks/useContentFadeTransition";
 import {
   CONTENT_FADE_ENTER_CLASS,
@@ -16,7 +17,6 @@ import {
   CONTENT_FADE_TRANSITION_MS,
   LIBRARY_TAB_TRIGGER_CLASS,
   LIBRARY_TABS_LIST_CLASS,
-  MOTION_SECTION_ENTER_CLASS,
   MOTION_SECTION_ENTER_DELAYED_CLASS,
   SHOWS_PER_PAGE,
   LIBRARY_NOUNS,
@@ -129,16 +129,11 @@ function TvShowsPage() {
 
   return (
     <div className="min-w-0">
-      {/* Page header */}
-      <header className={cn("mb-6 sm:mb-7", MOTION_SECTION_ENTER_CLASS)}>
-        <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
-          <Tv className="size-6 shrink-0 text-primary" aria-hidden="true" />
-          <span>TV Show Library</span>
-        </h1>
-        <p className="mt-1.5 max-w-2xl text-sm text-muted-foreground md:text-base">
-          Browse and follow your series collection
-        </p>
-      </header>
+      <PageHeader
+        icon={Tv}
+        title="TV Show Library"
+        description="Browse and follow your series collection"
+      />
 
       {/* Stats + More dropdown */}
       <div
