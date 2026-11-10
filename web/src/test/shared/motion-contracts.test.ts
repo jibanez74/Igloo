@@ -37,9 +37,16 @@ import {
   MOTION_TRACK_PLAY_BUTTON_CLASS,
   MOTION_TRACK_ROW_CLASS,
 } from "@/lib/constants";
+import { MOTION_DURATIONS_MS } from "@/lib/theme-tokens";
 
+/** The `duration-<name>` utility of a duration on the motion scale. */
 function durationClass(durationMs: number) {
-  return `duration-${durationMs}`;
+  const name = Object.entries(MOTION_DURATIONS_MS).find(
+    ([, value]) => value === durationMs,
+  )?.[0];
+  if (!name) throw new Error(`${durationMs}ms is not on the motion scale`);
+
+  return `duration-${name}`;
 }
 
 function findInlineMotionViolations(name: string, source: string) {

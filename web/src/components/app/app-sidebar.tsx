@@ -145,7 +145,7 @@ export default function AppSidebar({
             MOTION_MICRO_OPACITY_CLASS,
           )}
         >
-          <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-lg shadow-primary/20">
+          <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-glow">
             <BrandMark className="size-5" />
           </div>
           <span className="text-lg font-semibold text-sidebar-foreground group-data-[collapsible=icon]:hidden">

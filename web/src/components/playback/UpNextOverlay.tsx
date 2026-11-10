@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
 import {
-  FLOATING_SURFACE_SHADOW_CLASS,
   MOTION_MEDIA_OVERLAY_ENTER_CLASS,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -80,10 +79,7 @@ export default function UpNextOverlay({
         politeness="polite"
       />
       <div
-        className={cn(
-          FLOATING_SURFACE_SHADOW_CLASS,
-          "flex w-full max-w-sm flex-col gap-3 rounded-lg border border-border bg-background/95 p-4 backdrop-blur-lg",
-        )}
+        className="flex w-full max-w-sm flex-col gap-3 rounded-lg border border-border bg-background/95 p-4 shadow-floating backdrop-blur-lg"
       >
         <div className="flex items-start gap-3">
           {item.stillUrl ? (

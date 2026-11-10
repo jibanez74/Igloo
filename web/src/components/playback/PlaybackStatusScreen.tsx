@@ -26,7 +26,7 @@ type PlaybackStatusScreenProps = {
 
 const EMPTY_STATUS_ACTIONS: StatusAction[] = [];
 
-const primaryActionClass = `inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 ${FOCUS_VISIBLE_RING_CLASS} ${MOTION_MICRO_COLORS_CLASS}`;
+const primaryActionClass = `inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-glow hover:bg-primary/90 ${FOCUS_VISIBLE_RING_CLASS} ${MOTION_MICRO_COLORS_CLASS}`;
 const secondaryActionClass = `inline-flex items-center gap-2 rounded-full border border-border px-6 py-3 font-semibold text-muted-foreground hover:bg-accent hover:text-foreground ${FOCUS_VISIBLE_RING_CLASS} ${MOTION_MICRO_COLORS_CLASS}`;
 
 function StatusActionIcon({ icon }: { icon: StatusAction["icon"] }) {

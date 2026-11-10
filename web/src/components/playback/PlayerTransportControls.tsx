@@ -47,7 +47,7 @@ const variantStyles: Record<
     group: "flex items-center gap-2",
     skipButton: "size-10 hover:bg-accent",
     skipIcon: "size-4",
-    playButton: "size-12 shadow-lg shadow-primary/20",
+    playButton: "size-12 shadow-glow",
     playIcon: "size-5",
   },
 };

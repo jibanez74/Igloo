@@ -440,8 +440,7 @@ export const PLAYBACK_SETTINGS_NATIVE_SELECT_CLASS =
   `w-full rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground outline-hidden disabled:opacity-50 ${FOCUS_VISIBLE_RING_CLASS}`;
 export const PLAYBACK_SETTINGS_SELECT_TRIGGER_CLASS =
   "w-full min-w-0 border-border bg-muted text-foreground";
-export const PLAYBACK_SETTINGS_SELECT_CONTENT_CLASS =
-  "z-100 border-border bg-muted";
+export const PLAYBACK_SETTINGS_SELECT_CONTENT_CLASS = "border-border bg-muted";
 
 /**
  * Shared chrome for the Settings pages (design-system §2.3, §3.7). The card
@@ -563,47 +562,44 @@ export const LANGUAGE_NAMES: Record<string, string> = {
 // `duration-micro` / `duration-standard` / `duration-page` utilities.
 // MICRO and PAGE have no direct importer: they are the declared duration scale
 // that the class strings below are checked against (motion-contracts.test.ts
-// derives `duration-150` / `duration-300` from them). They are load-bearing, not
+// derives `duration-micro` / `duration-page` from them). They are load-bearing, not
 // dead — deleting them silently removes that agreement check.
 export const MOTION_DURATION_MICRO_MS = MOTION_DURATIONS_MS.micro;
 export const MOTION_DURATION_STANDARD_MS = MOTION_DURATIONS_MS.standard;
 export const MOTION_DURATION_PAGE_MS = MOTION_DURATIONS_MS.page;
 
 export const MOTION_MICRO_CONTROL_CLASS =
-  "transition-[background-color,border-color,color,box-shadow,opacity] duration-150 ease-out motion-reduce:transition-none";
+  "transition-[background-color,border-color,color,box-shadow,opacity] duration-micro ease-out motion-reduce:transition-none";
 export const MOTION_MICRO_OPACITY_CLASS =
-  "transition-opacity duration-150 motion-reduce:transition-none";
+  "transition-opacity duration-micro motion-reduce:transition-none";
 export const MOTION_MICRO_COLORS_CLASS =
-  "transition-colors duration-150 motion-reduce:transition-none";
+  "transition-colors duration-micro motion-reduce:transition-none";
 export const MOTION_PROGRESS_FILL_CLASS =
-  "transition-[width] duration-150 ease-out motion-reduce:transition-none";
+  "transition-[width] duration-micro ease-out motion-reduce:transition-none";
 export const MOTION_PROGRESS_THUMB_REVEAL_CLASS = MOTION_MICRO_OPACITY_CLASS;
 export const MOTION_CONTROL_THUMB_TRANSFORM_CLASS =
-  "transition-transform duration-200 motion-reduce:transition-none";
+  "transition-transform duration-standard motion-reduce:transition-none";
 export const MOTION_SETTINGS_SURFACE_CLASS =
-  "transition-colors duration-200 motion-reduce:transition-none";
+  "transition-colors duration-standard motion-reduce:transition-none";
 export const MOTION_TRACK_ROW_CLASS =
-  "transition-[background-color,opacity,box-shadow] duration-150 motion-reduce:transition-none";
+  "transition-[background-color,opacity,box-shadow] duration-micro motion-reduce:transition-none";
 export const MOTION_TRACK_PLAY_BUTTON_CLASS =
-  "transition-[background-color,opacity] duration-150 motion-reduce:transition-none";
+  "transition-[background-color,opacity] duration-micro motion-reduce:transition-none";
 export const MOTION_TRACK_ICON_BUTTON_CLASS =
-  "transition-[color,opacity] duration-150 motion-reduce:transition-none";
+  "transition-[color,opacity] duration-micro motion-reduce:transition-none";
 export const MOTION_TRACK_MENU_TRIGGER_CLASS = MOTION_MICRO_COLORS_CLASS;
 export const MOTION_PLAYER_CHROME_PANEL_CLASS =
-  "transition-[opacity,transform] duration-200 ease-out motion-reduce:transform-none motion-reduce:transition-none";
+  "transition-[opacity,transform] duration-standard ease-out motion-reduce:transform-none motion-reduce:transition-none";
 /**
- * Elevation for a floating surface on the canvas (mini player, Now Playing
- * art, the up-next card, media dialogs): a 50 % black shadow reads as a haze
- * on the light canvas, so light gets 15 % and dark keeps 50 %. Shadows over
- * posters and video stay literal (design-system §1.4).
+ * The surface of a dialog that floats over media. `shadow-floating` is the
+ * elevation of every surface floating on the canvas (design-system §1.4).
  */
-export const FLOATING_SURFACE_SHADOW_CLASS =
-  "shadow-2xl shadow-black/15 dark:shadow-black/50";
-export const MOTION_MEDIA_DIALOG_SURFACE_CLASS = `border-border bg-card ${FLOATING_SURFACE_SHADOW_CLASS} motion-reduce:animate-none`;
+export const MOTION_MEDIA_DIALOG_SURFACE_CLASS =
+  "border-border bg-card shadow-floating motion-reduce:animate-none";
 export const MOTION_MEDIA_OVERLAY_ENTER_CLASS =
-  "animate-in duration-200 ease-out fill-mode-both zoom-in-95 fade-in slide-in-from-bottom-2 motion-reduce:translate-y-0 motion-reduce:scale-100 motion-reduce:animate-none motion-reduce:opacity-100";
+  "animate-in duration-standard ease-out fill-mode-both zoom-in-95 fade-in slide-in-from-bottom-2 motion-reduce:translate-y-0 motion-reduce:scale-100 motion-reduce:animate-none motion-reduce:opacity-100";
 export const MOTION_PLAYER_CHROME_ENTER_CLASS =
-  "animate-in duration-200 ease-out fill-mode-both fade-in slide-in-from-bottom motion-reduce:translate-y-0 motion-reduce:animate-none motion-reduce:opacity-100";
+  "animate-in duration-standard ease-out fill-mode-both fade-in slide-in-from-bottom motion-reduce:translate-y-0 motion-reduce:animate-none motion-reduce:opacity-100";
 export const MOTION_PLAYER_CHROME_BUTTON_CLASS = MOTION_MICRO_CONTROL_CLASS;
 /**
  * The windowed player's frame: the centred shell and the 16:9 box inside it,
@@ -614,11 +610,11 @@ export const PLAYER_FRAME_SHELL_CLASS =
   "relative flex min-h-0 w-full flex-1 items-center justify-center p-4";
 export const PLAYER_FRAME_CLASS = "aspect-video w-full max-w-6xl";
 export const MOTION_PAGE_ENTER_CLASS =
-  "animate-in duration-300 ease-out fill-mode-both fade-in slide-in-from-bottom-2 motion-reduce:translate-y-0 motion-reduce:animate-none motion-reduce:opacity-100";
+  "animate-in duration-page ease-out fill-mode-both fade-in slide-in-from-bottom-2 motion-reduce:translate-y-0 motion-reduce:animate-none motion-reduce:opacity-100";
 export const MOTION_SECTION_ENTER_CLASS =
-  "animate-in duration-200 ease-out fade-in-0 fill-mode-both motion-reduce:animate-none motion-reduce:opacity-100";
+  "animate-in duration-standard ease-out fade-in-0 fill-mode-both motion-reduce:animate-none motion-reduce:opacity-100";
 export const MOTION_SECTION_ENTER_DELAYED_CLASS =
-  "animate-in delay-75 duration-200 ease-out fade-in-0 fill-mode-both motion-reduce:animate-none motion-reduce:opacity-100 motion-reduce:delay-0";
+  "animate-in delay-75 duration-standard ease-out fade-in-0 fill-mode-both motion-reduce:animate-none motion-reduce:opacity-100 motion-reduce:delay-0";
 export const MOTION_LOADING_STATE_CLASS =
   "animate-pulse motion-reduce:animate-none";
 export const MOTION_SPINNER_STATE_CLASS =
@@ -683,7 +679,7 @@ export const OVER_MEDIA_SURFACE_CLASS =
   "border-white/25 bg-black/30 text-white/90";
 export const OVER_MEDIA_BADGE_CLASS = `${OVER_MEDIA_SURFACE_CLASS} px-3 py-1 text-sm`;
 export const CARD_INTERACTIVE_SURFACE_CLASS =
-  "transition-[border-color,box-shadow,transform] duration-200 ease-out motion-reduce:transition-colors motion-reduce:hover:translate-y-0";
+  "transition-[border-color,box-shadow,transform] duration-standard ease-out motion-reduce:transition-colors motion-reduce:hover:translate-y-0";
 /**
  * Shared media-card chrome: tokenized surface + glacier hover glow. Embeds
  * CARD_INTERACTIVE_SURFACE_CLASS so the hover effects always animate, even
@@ -691,11 +687,11 @@ export const CARD_INTERACTIVE_SURFACE_CLASS =
  */
 export const CARD_SURFACE_CLASS = `${CARD_INTERACTIVE_SURFACE_CLASS} group relative overflow-hidden rounded-xl border border-border bg-card hover:-translate-y-1 hover:border-primary/50 hover:shadow-xl hover:shadow-primary/20`;
 export const CARD_MEDIA_HOVER_CLASS =
-  "transition-transform duration-200 ease-out group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100";
+  "transition-transform duration-standard ease-out group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100";
 export const CARD_OVERLAY_REVEAL_CLASS =
-  "transition-opacity duration-200 ease-out motion-reduce:transition-none";
+  "transition-opacity duration-standard ease-out motion-reduce:transition-none";
 export const CARD_ACTION_REVEAL_CLASS =
-  "transition-[background-color,opacity,transform] duration-200 ease-out motion-reduce:scale-100 motion-reduce:transition-colors";
+  "transition-[background-color,opacity,transform] duration-standard ease-out motion-reduce:scale-100 motion-reduce:transition-colors";
 /**
  * Whole-card focus ring for media cards (design-system §1.7) — the intentional
  * focus-within variant of the single ring recipe, shown on the `<article>` so
@@ -813,7 +809,7 @@ export const MINI_PLAYER_CLEARANCE_BOTTOM_CLASS = "bottom-28 sm:bottom-24";
 export const CONTENT_FADE_TRANSITION_MS = MOTION_DURATION_STANDARD_MS;
 export const CONTENT_FADE_ENTER_CLASS = MOTION_SECTION_ENTER_CLASS;
 export const CONTENT_FADE_EXIT_CLASS =
-  "animate-out duration-200 ease-in fade-out-0 fill-mode-both motion-reduce:animate-none motion-reduce:opacity-100";
+  "animate-out duration-standard ease-in fade-out-0 fill-mode-both motion-reduce:animate-none motion-reduce:opacity-100";
 
 // Watch-room playback and synchronization behavior.
 export const WATCH_ROOM_SEEK_STEP_SEC = 10;

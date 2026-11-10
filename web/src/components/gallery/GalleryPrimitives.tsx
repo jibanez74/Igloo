@@ -145,7 +145,7 @@ function ButtonsSection() {
         </Button>
         <Button
           variant="accent"
-          className="font-semibold shadow-lg shadow-primary/20"
+          className="font-semibold shadow-glow"
         >
           <Play aria-hidden="true" />
           Play all

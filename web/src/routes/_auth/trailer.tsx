@@ -389,7 +389,7 @@ function TrailerPage() {
                   className={cn(
                     MOTION_PLAYER_CHROME_BUTTON_CLASS,
                     FOCUS_VISIBLE_RING_CLASS,
-                    "inline-flex items-center rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90",
+                    "inline-flex items-center rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-glow hover:bg-primary/90",
                   )}
                 >
                   <RotateCcw className="mr-2 size-4" aria-hidden="true" />
@@ -496,7 +496,7 @@ function TrailerPage() {
                   className={cn(
                     MOTION_PLAYER_CHROME_BUTTON_CLASS,
                     FOCUS_VISIBLE_RING_CLASS,
-                    "inline-flex items-center rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90",
+                    "inline-flex items-center rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-glow hover:bg-primary/90",
                   )}
                 >
                   <RotateCcw className="mr-2 size-4" aria-hidden="true" />
@@ -558,7 +558,7 @@ function TrailerPage() {
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
                   FOCUS_VISIBLE_RING_CLASS,
-                  "inline-flex items-center rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90",
+                  "inline-flex items-center rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-glow hover:bg-primary/90",
                 )}
               >
                 <ArrowLeft className="mr-2 size-4" aria-hidden="true" />
@@ -682,7 +682,7 @@ function TrailerPage() {
                 onClick={togglePlay}
                 className={cn(
                   PLAYER_PRIMARY_BUTTON_CLASS,
-                  "size-14 shadow-lg shadow-primary/20",
+                  "size-14 shadow-glow",
                 )}
                 aria-label={withShortcut(
                   isPlaying ? "Pause" : "Play",

@@ -343,7 +343,7 @@ export default function PrerollPlayer({
                   onClick={togglePlay}
                   className={cn(
                     PLAYER_PRIMARY_BUTTON_CLASS,
-                    "size-12 shadow-lg shadow-primary/20",
+                    "size-12 shadow-glow",
                   )}
                   aria-label={withShortcut(
                     isPlaying ? "Pause trailer" : "Play trailer",

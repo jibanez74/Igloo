@@ -12,7 +12,6 @@ import ProgressBar from "@/components/playback/ProgressBar";
 import VolumeControl from "@/components/playback/VolumeControl";
 import { useShortcutHints } from "@/hooks/useShortcutHints";
 import {
-  FLOATING_SURFACE_SHADOW_CLASS,
   MOTION_MEDIA_OVERLAY_ENTER_CLASS,
   PLAYER_ICON_BUTTON_CLASS,
 } from "@/lib/constants";
@@ -132,10 +131,7 @@ export default function NowPlayingDialog({
 
           <main className="flex flex-1 flex-col items-center justify-center px-8 pb-8">
             <div
-              className={cn(
-                FLOATING_SURFACE_SHADOW_CLASS,
-                "mb-8 size-72 overflow-hidden rounded-2xl sm:size-80 md:size-96",
-              )}
+              className="mb-8 size-72 overflow-hidden rounded-2xl shadow-floating sm:size-80 md:size-96"
             >
               {albumCover ? (
                 <img
