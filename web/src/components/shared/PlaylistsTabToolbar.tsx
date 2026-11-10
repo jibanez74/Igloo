@@ -51,8 +51,9 @@ export default function PlaylistsTabToolbar({
         <Button
           ref={likedButtonRef}
           variant="outline"
+          shape="pill"
           onClick={onShowLiked}
-          className="min-h-10 rounded-full"
+          className="min-h-10"
           aria-label={likedAriaLabel}
         >
           <Heart className="size-4 shrink-0" aria-hidden="true" />
@@ -60,7 +61,8 @@ export default function PlaylistsTabToolbar({
         </Button>
         <Button
           ref={createButtonRef}
-          variant="accent-pill"
+          variant="accent"
+          shape="pill"
           onClick={onCreate}
           className="min-h-10"
           aria-label={createAriaLabel}

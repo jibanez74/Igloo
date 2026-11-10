@@ -200,9 +200,8 @@ export default function DevicesCard() {
                             ? revokeButtonRef
                             : undefined
                         }
-                        variant="outline"
+                        variant="outline-destructive"
                         size="sm"
-                        className="border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive"
                         onClick={() => setDeviceToRevoke(device)}
                         aria-label={`Revoke ${device.name}`}
                       >

@@ -92,9 +92,8 @@ export default function WatchRoomCard({ room }: Props) {
           {room.is_owner && (
             <Button
               ref={closeRoomButtonRef}
-              variant="ghost"
-              size="icon"
-              className="size-8 shrink-0 text-muted-foreground hover:text-destructive"
+              variant="ghost-destructive"
+              size="icon-sm"
               aria-label={`Close watch room for ${room.movie_title}`}
               onClick={() => setConfirmOpen(true)}
             >

@@ -430,8 +430,9 @@ function AlbumDetailsContent({
                         type="button"
                         ref={moreOptionsButtonRef}
                         variant="outline"
+                        shape="pill"
                         size="lg"
-                        className="self-center rounded-full font-semibold sm:self-auto sm:px-4"
+                        className="self-center font-semibold sm:self-auto sm:px-4"
                         aria-label="More options"
                       >
                         <MoreHorizontal className="size-4" aria-hidden="true" />

@@ -565,12 +565,12 @@ function SecretInput({
         />
         <Button
           type="button"
-          variant="ghost"
+          variant="ghost-muted"
           size="icon-sm"
           onClick={() => setVisible(current => !current)}
           disabled={disabled}
           aria-label={visible ? `Hide ${label}` : `Show ${label}`}
-          className="absolute top-1 right-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="absolute top-1 right-1"
         >
           {visible ? (
             <EyeOff className="size-4" aria-hidden="true" />

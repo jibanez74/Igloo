@@ -104,10 +104,9 @@ export default function UpNextOverlay({
         <div className="flex justify-end gap-2">
           <Button
             type="button"
-            variant="outline"
+            variant="secondary"
             size="sm"
             onClick={onCancel}
-            className="border-border bg-muted text-muted-foreground hover:bg-accent hover:text-foreground"
           >
             Cancel
           </Button>

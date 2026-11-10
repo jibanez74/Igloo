@@ -12,12 +12,11 @@ export default function ThemeToggle() {
 
   return (
     <Button
-      variant="ghost"
+      variant="ghost-muted"
       size="icon"
       type="button"
       aria-label={label}
       title={label}
-      className="text-muted-foreground hover:bg-muted hover:text-foreground"
       onClick={() => setTheme(nextTheme)}
     >
       <Icon aria-hidden="true" />

@@ -550,12 +550,12 @@ function LibraryPathSection({
         {hasPathValue && (
           <Button
             type="button"
-            variant="ghost"
+            variant="ghost-destructive"
             size="sm"
             onClick={onClearPath}
             disabled={disabled}
             aria-label={config.clearLabel}
-            className="w-full text-muted-foreground hover:bg-muted hover:text-destructive sm:w-fit"
+            className="w-full sm:w-fit"
           >
             <Trash2 className="size-4" aria-hidden="true" />
             Clear path

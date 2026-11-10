@@ -16,15 +16,27 @@ const BUTTON_VARIANTS = {
     "bg-destructive text-destructive-foreground hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40",
   outline:
     "border bg-background text-foreground shadow-xs hover:bg-accent hover:text-accent-foreground dark:border-border dark:bg-muted/90 dark:text-foreground dark:shadow-none dark:hover:bg-accent dark:hover:text-foreground [&_svg]:text-current",
+  // Outline with a muted fill and text: the quiet second action beside a
+  // primary one (Cancel, Start over).
+  secondary:
+    "border border-border bg-muted text-muted-foreground shadow-xs hover:bg-accent hover:text-foreground dark:border-border dark:bg-muted/90 dark:text-foreground dark:shadow-none dark:hover:bg-accent dark:hover:text-foreground [&_svg]:text-current",
+  // Outline in the destructive colour, for a removal that is not the main
+  // action of its surface.
+  "outline-destructive":
+    "border border-destructive/50 bg-background text-destructive shadow-xs hover:bg-destructive/10 hover:text-destructive dark:border-border dark:bg-muted/90 dark:text-foreground dark:shadow-none dark:hover:bg-accent dark:hover:text-foreground [&_svg]:text-current",
   ghost: "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
+  // Ghost that rests in the muted text colour: toolbar and row icons.
+  "ghost-muted":
+    "text-muted-foreground hover:bg-accent hover:text-foreground dark:hover:bg-accent/50",
+  // Ghost-muted whose hover warns: a row's remove or delete icon.
+  "ghost-destructive":
+    "text-muted-foreground hover:bg-accent hover:text-destructive dark:hover:bg-accent/50",
   accent:
     "bg-primary text-primary-foreground shadow-md hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100 disabled:shadow-none",
-  "accent-pill":
-    "rounded-full bg-primary text-primary-foreground shadow-md hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100 disabled:shadow-none",
 } as const
 
-// Sizes set no radius: the base rounds every button and `accent-pill` alone
-// overrides it, so the pill keeps its shape at every size.
+// Sizes set no radius: the base rounds every button and the pill shape alone
+// overrides it, so a pill keeps its shape at every size.
 const BUTTON_SIZES = {
   default: "h-9 px-4 py-2 has-[>svg]:px-3",
   sm: "h-8 gap-1.5 px-3 has-[>svg]:px-2.5",
@@ -33,32 +45,49 @@ const BUTTON_SIZES = {
   "icon-sm": "size-8",
 } as const
 
+// A pill is a shape any variant can take: the primary and the outline
+// buttons that sit side by side in a toolbar are both pills.
+const BUTTON_SHAPES = {
+  default: "",
+  pill: "rounded-full",
+} as const
+
 type ButtonVariant = keyof typeof BUTTON_VARIANTS
 type ButtonSize = keyof typeof BUTTON_SIZES
+type ButtonShape = keyof typeof BUTTON_SHAPES
 
 type ButtonVariantOptions = {
   variant?: ButtonVariant
   size?: ButtonSize
+  shape?: ButtonShape
   className?: string
 }
 
 /**
  * The class string of a button, for an element that is not a `Button` (a
- * link, a Radix trigger). Later classes win: the size over the variant over
- * the base, and `className` over all three.
+ * link, a Radix trigger). Later classes win: the shape over the size over
+ * the variant over the base, and `className` over all four.
  */
 function buttonVariants({
   variant = "default",
   size = "default",
+  shape = "default",
   className,
 }: ButtonVariantOptions = {}) {
-  return cn(BUTTON_BASE_CLASS, BUTTON_VARIANTS[variant], BUTTON_SIZES[size], className)
+  return cn(
+    BUTTON_BASE_CLASS,
+    BUTTON_VARIANTS[variant],
+    BUTTON_SIZES[size],
+    BUTTON_SHAPES[shape],
+    className
+  )
 }
 
 function Button({
   className,
   variant = "default",
   size = "default",
+  shape = "default",
   asChild = false,
   ...props
 }: React.ComponentProps<"button"> &
@@ -72,7 +101,8 @@ function Button({
       data-slot="button"
       data-variant={variant}
       data-size={size}
-      className={buttonVariants({ variant, size, className })}
+      data-shape={shape}
+      className={buttonVariants({ variant, size, shape, className })}
       {...props}
     />
   )

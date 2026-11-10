@@ -72,10 +72,7 @@ export default function ConfirmDialog({
         {children}
 
         <AlertDialogFooter>
-          <AlertDialogCancel
-            disabled={pending}
-            className="border-border bg-muted text-muted-foreground hover:bg-accent hover:text-foreground"
-          >
+          <AlertDialogCancel disabled={pending}>
             Cancel
           </AlertDialogCancel>
           <Button

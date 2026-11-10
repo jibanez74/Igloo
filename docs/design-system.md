@@ -277,31 +277,42 @@ constant exists — and when you create a new recurring one, add it there so
 ### 1.6 Component variants — the contract
 
 The `Button` (`web/src/components/ui/button.tsx`) is the clearest expression
-of the system. Its supported variants are `default`, `destructive`, `outline`,
-`ghost`, **`accent`** (primary + `shadow-md`), and **`accent-pill`**
-(rounded-full primary). Its supported sizes are `default`, `sm`, `lg`, `icon`,
-and `icon-sm`. The base string carries the focus ring, disabled opacity,
+of the system. A call site picks a variant, a size and a shape; it does not
+assemble a look from classes.
+
+| Variant | Look | Used for |
+|---|---|---|
+| `default` | primary fill | the main action of a form or dialog |
+| `accent` | primary fill + `shadow-md` | the main action on a page or toolbar |
+| `outline` | bordered, canvas fill | a second action of equal weight |
+| `secondary` | bordered, muted fill and text | the quiet second action: Cancel in a confirmation, Start from beginning |
+| `ghost` | no chrome until hover | an inline action |
+| `ghost-muted` | ghost resting in the muted text color | toolbar and row icons: theme toggle, notifications, edit a user |
+| `ghost-destructive` | ghost-muted whose hover turns destructive | a row's remove or delete icon |
+| `destructive` | destructive fill | the confirming action of a deletion |
+| `outline-destructive` | outline in the destructive color | a removal that is not its surface's main action: revoke a device |
+
+Sizes are `default`, `sm`, `lg`, `icon` and `icon-sm`. `shape="pill"` rounds
+any variant fully. The base string carries the focus ring, disabled opacity,
 `aria-invalid` styling, a property-scoped 150ms transition with
-`motion-reduce:transition-none`, and stamps `data-variant`/`data-size`.
+`motion-reduce:transition-none`, and stamps `data-variant`, `data-size` and
+`data-shape`.
 
 - **A disabled primary button is grey, not dim glacier.** The primary-fill
-  variants (`default`, `accent`, `accent-pill`) swap to `bg-muted
-  text-muted-foreground` at full opacity when `disabled`, with no shadow, so
-  a "Send Request" that cannot be sent yet never reads as a second live
-  action beside the real one. Outline, ghost and destructive keep the base
-  half-opacity. Guarded by `test/ui/button.test.tsx`.
+  variants (`default`, `accent`) swap to `bg-muted text-muted-foreground` at
+  full opacity when `disabled`, with no shadow, so a "Send Request" that
+  cannot be sent yet never reads as a second live action beside the real
+  one. The other variants keep the base half-opacity. Guarded by
+  `test/ui/button.test.tsx`.
 
-- **`accent-pill` stays a pill at every size.** `buttonVariants` merges
-  base → variant → size → `className` with `cn` (`twMerge`), so the last
-  conflicting class wins. The base sets `rounded-md`, no size sets a radius,
-  and `accent-pill` alone overrides it with `rounded-full`, so call sites
-  never re-assert it (guarded by `test/ui/button.test.tsx`). Other variants
-  stay square at every size:
-  an `outline` button meant to pair with a pill (the Shuffle in
-  `PlayShuffleButtons`, the music index's "Play all" and "Liked tracks")
-  passes `rounded-full` in `className`. Watch for
-  this whenever two sibling buttons are meant to match — one picking up a
-  `size` is enough to break the pair.
+- **A pill stays a pill at every size.** `buttonVariants` merges
+  base → variant → size → shape → `className` with `cn` (`twMerge`), so the
+  last conflicting class wins. The base sets `rounded-md`, no size sets a
+  radius, and the pill shape alone overrides it with `rounded-full`, so call
+  sites never re-assert it (guarded by `test/ui/button.test.tsx`). Sibling
+  buttons meant to match — the primary and the outline pills of a toolbar
+  (`PlayShuffleButtons`, the music index's "Play all" and "Liked tracks") —
+  both take `shape="pill"`.
 - **Tabs share one look** (`web/src/components/ui/tabs.tsx`): a bordered
   `bg-muted/50` list; the active trigger is a glacier primary-fill pill
   (`data-[state=active]:bg-primary … shadow-primary/20`). Library pages layer

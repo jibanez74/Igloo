@@ -430,8 +430,7 @@ export default function CreateWatchRoomDialog({
           <DialogFooter className="border-t border-border pt-4">
             <Button
               type="button"
-              variant="ghost"
-              className="text-muted-foreground"
+              variant="ghost-muted"
               onClick={() => handleOpenChange(false)}
               disabled={mutation.isPending}
             >
