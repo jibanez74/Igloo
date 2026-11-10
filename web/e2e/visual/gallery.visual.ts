@@ -1,6 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
 import { trackBrowserIssues } from "../e2e-browser-issues";
-import { settle, THEMES, useTheme, type Theme } from "./visual-helpers";
+import {
+  expectScreenshot,
+  settle,
+  THEMES,
+  useTheme,
+  type Theme,
+} from "./visual-helpers";
 
 // Baselines of every primitive in the dev-only gallery (/gallery). A change
 // meant to be invisible must leave these untouched; a change meant to be seen
@@ -41,9 +47,10 @@ for (const theme of THEMES) {
       await openGallery(page, theme);
 
       for (const section of SECTIONS) {
-        await expect
-          .soft(page.locator(`[data-gallery="${section}"]`))
-          .toHaveScreenshot(`${section}-${theme}.png`);
+        await expectScreenshot(
+          page.locator(`[data-gallery="${section}"]`),
+          `${section}-${theme}.png`,
+        );
       }
 
       tracker.assertClean();
@@ -58,16 +65,12 @@ for (const theme of THEMES) {
       // so if that ever changes.
       await page.keyboard.press("Tab");
       await expect(buttons.getByRole("button").first()).toBeFocused();
-      await expect
-        .soft(buttons)
-        .toHaveScreenshot(`buttons-focus-${theme}.png`);
+      await expectScreenshot(buttons, `buttons-focus-${theme}.png`);
 
       await buttons
         .getByRole("button", { name: "Dialog secondary" })
         .hover();
-      await expect
-        .soft(buttons)
-        .toHaveScreenshot(`buttons-hover-${theme}.png`);
+      await expectScreenshot(buttons, `buttons-hover-${theme}.png`);
     });
 
     for (const [name, role] of OVERLAYS) {
@@ -76,7 +79,7 @@ for (const theme of THEMES) {
         await openGallery(page, theme, `?open=${name}`);
 
         await expect(page.getByRole(role)).toBeVisible();
-        await expect(page).toHaveScreenshot(`overlay-${name}-${theme}.png`);
+        await expectScreenshot(page, `overlay-${name}-${theme}.png`);
 
         tracker.assertClean();
       });

@@ -40,10 +40,11 @@ export default defineConfig({
       scale: "css",
       // Both sides come from one renderer, so nothing is tolerated: no
       // colour difference within a pixel and no pixel allowed to differ. The
-      // default tolerance would let a surface shift through. One exception
-      // remains: Playwright's comparator (pixelmatch) does not count a
-      // differing pixel it takes for anti-aliasing, mostly along text and
-      // curved edges, so a change made only of such pixels would pass.
+      // default tolerance would let a surface shift through. Playwright's
+      // comparator (pixelmatch) still does not count a differing pixel it
+      // takes for anti-aliasing, mostly along text and curved edges, so the
+      // specs assert through expectScreenshot (e2e/visual/visual-helpers.ts),
+      // which follows this comparison with one that has no such allowance.
       threshold: 0,
       maxDiffPixels: 0,
     },

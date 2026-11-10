@@ -30,7 +30,7 @@ this doc, prefer adding a guard too.
 | No string in `src/` hard-codes a keyboard-shortcut hint suffix (`"Mute (M)"`) — hints go through `useShortcutHints` | `web/src/test/shared/shortcut-hint-contracts.test.ts` |
 | Input styling contracts | `web/src/test/shared/input-styles.test.ts` |
 | Shared class-string constants keep their contracts | `web/src/test/lib/constants-contracts.test.ts` |
-| Primitives and the baseline pages render the same pixels as the committed baselines, both themes (§2.5) | `web/e2e/visual/*.visual.ts` (CI job `test-visual`) |
+| Primitives and the baseline pages render the same pixels as the committed baselines, pixel for pixel, both themes (§2.5) | `web/e2e/visual/*.visual.ts` (CI job `test-visual`) |
 | The component gallery renders, and stays out of the production bundle (§2.5) | `web/src/test/gallery/gallery.test.tsx`, CI marker grep, `web/e2e/boot.spec.ts` |
 | No raw Tailwind palette classes (all 22 color families) | ESLint `no-restricted-syntax` (**error**) in `web/eslint.config.js` |
 | Class order, duplicates, unknown classes | `eslint-plugin-better-tailwindcss` (**warn**; `bun run lint` runs `--max-warnings 0`, so warnings still fail CI) |
@@ -649,12 +649,20 @@ screenshot baselines shoot.
 (`bun run test:visual`, `make test-visual`), and are a CI job (`test-visual`),
 not part of `make check`.
 
-- **The committed set is drawn by CI's pinned image**, and the comparison
-  tolerates nothing it counts (`threshold: 0`, `maxDiffPixels: 0`). It is not
-  byte-exact: Playwright's comparator skips a differing pixel it takes for
-  anti-aliasing, mostly along text and curved edges, so a change made only of
-  such pixels would pass. A laptop renders text differently, so a local run
-  executes the specs without comparing pixels.
+- **The committed set is drawn by CI's pinned image**, and the comparison is
+  exact: a single pixel that differs in any channel fails. It runs in two
+  passes, both inside `expectScreenshot` (`e2e/visual/visual-helpers.ts`),
+  which every visual spec uses instead of `toHaveScreenshot`:
+  1. Playwright's `toHaveScreenshot` with `threshold: 0`, `maxDiffPixels: 0`.
+     It owns the baseline files and the diff images of a failure, but its
+     comparator skips a differing pixel it takes for anti-aliasing (measured:
+     5–73% of the pixels a tint, radius, text-colour or shadow change moves).
+  2. A pixel-for-pixel comparison of the same target against the baseline
+     (`e2e/visual/png.ts`), with no such allowance. Its failure names the
+     pixel count and the box that holds them. `comparator.visual.ts` checks
+     the decoder against the browser's own decoding.
+- A laptop renders text differently from CI, so a local run executes the
+  specs without comparing pixels.
 - **To prove a change is invisible locally**, draw a set on the base commit and
   compare the branch against it on the same machine:
   `VISUAL_STRICT=1 VISUAL_SNAPSHOT_DIR=/some/dir bun run test:visual:update`
