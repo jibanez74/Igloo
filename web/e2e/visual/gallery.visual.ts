@@ -12,7 +12,30 @@ import {
 // meant to be invisible must leave these untouched; a change meant to be seen
 // updates the ones it moves, on purpose, in its own commit.
 
-const SECTIONS = ["buttons", "badges", "fields", "surfaces", "navigation"];
+const SECTIONS = [
+  "buttons",
+  "badges",
+  "fields",
+  "surfaces",
+  "navigation",
+  "tokens",
+];
+
+// What each utility of the elevation, layer and duration scales
+// (src/lib/theme-tokens.ts) must compute to. The floating shadow is the one
+// value that differs by theme.
+const FLOATING_SHADOW = {
+  light: "rgba(0, 0, 0, 0.15) 0px 25px 50px -12px",
+  dark: "rgba(0, 0, 0, 0.5) 0px 25px 50px -12px",
+};
+const TOKEN_STYLES = [
+  ["z-chrome", "zIndex", "40"],
+  ["z-modal", "zIndex", "50"],
+  ["z-popover", "zIndex", "60"],
+  ["duration-micro", "transitionDuration", "0.15s"],
+  ["duration-standard", "transitionDuration", "0.2s"],
+  ["duration-page", "transitionDuration", "0.3s"],
+] as const;
 
 // Overlay name → the role its open content exposes.
 const OVERLAYS = [
@@ -54,6 +77,34 @@ for (const theme of THEMES) {
       }
 
       tracker.assertClean();
+    });
+
+    test("the token utilities compute to their scale values", async ({
+      page,
+    }) => {
+      await openGallery(page, theme);
+      const computed = (token: string, property: string) =>
+        page
+          .locator(`[data-token="${token}"]`)
+          .evaluate(
+            (element, name) =>
+              getComputedStyle(element).getPropertyValue(name),
+            property,
+          );
+
+      expect(await computed("shadow-floating", "box-shadow")).toContain(
+        FLOATING_SHADOW[theme],
+      );
+
+      // Tailwind's shadow-lg geometry, in the theme's primary at 20%.
+      const glow = await computed("shadow-glow", "box-shadow");
+      expect(glow).toMatch(/\/ 0\.2\) 0px 10px 15px -3px/);
+      expect(glow).toMatch(/\/ 0\.2\) 0px 4px 6px -4px$/);
+
+      for (const [token, property, value] of TOKEN_STYLES) {
+        const cssName = property.replace(/[A-Z]/g, c => `-${c.toLowerCase()}`);
+        expect(await computed(token, cssName), token).toBe(value);
+      }
     });
 
     test("keyboard focus and hover", async ({ page }) => {

@@ -15,14 +15,20 @@ import { readWebFile } from "../helpers/public-files";
 // and when a token's OKLCH value and hex disagree.
 
 describe("generated theme blocks match src/lib/theme-tokens.ts", () => {
-  it.each(GENERATED_TARGETS.map((target) => [target.relPath, target] as const))(
-    "%s is up to date (bun run generate:theme)",
-    (relPath, target) => {
-      expect(extractGeneratedBlock(readWebFile(relPath), target)).toBe(
+  it.each(GENERATED_TARGETS.map((target) => [target.name, target] as const))(
+    "the %s block is up to date (bun run generate:theme)",
+    (_name, target) => {
+      expect(extractGeneratedBlock(readWebFile(target.relPath), target)).toBe(
         target.render(),
       );
     },
   );
+
+  it("names every block, since two of them share a file", () => {
+    const names = GENERATED_TARGETS.map((target) => target.name);
+
+    expect(new Set(names).size).toBe(names.length);
+  });
 });
 
 describe("theme-tokens.ts is internally consistent", () => {

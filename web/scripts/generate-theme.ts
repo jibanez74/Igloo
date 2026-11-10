@@ -1,6 +1,7 @@
 // Renders the theme sync points from src/lib/theme-tokens.ts (the single
 // token source — docs/design-system.md §2.4) into the marked GENERATED blocks
-// in styles.css, boot.css, and index.html.
+// in styles.css (the Tailwind theme map and the token rules), boot.css, and
+// index.html.
 //
 //   bun run generate:theme          rewrite the generated blocks in place
 //   bun run generate:theme --check  exit 1 if any block is stale (CI-friendly)
@@ -13,10 +14,14 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   BOOT_COLORS,
+  ELEVATION_TOKENS,
+  MOTION_DURATIONS_MS,
   ROOT_ONLY_TOKENS,
+  SHADOW_SCALE,
   THEME_STORAGE_KEY,
   THEME_TOKENS,
   tokenHex,
+  Z_INDEX_SCALE,
   type ThemeName,
   type ThemeToken,
 } from "../src/lib/theme-tokens";
@@ -42,12 +47,46 @@ export function renderStylesBlock(): string {
     "     themes are contrast-verified by src/test/shared/contrast.test.ts; see",
     "     docs/design-system.md §1.2. The app boots from the stored browser",
     "     theme, defaulting to dark. */",
-    renderDeclarations({ ...ROOT_ONLY_TOKENS, ...THEME_TOKENS.light }),
+    renderDeclarations({
+      ...ROOT_ONLY_TOKENS,
+      ...THEME_TOKENS.light,
+      ...ELEVATION_TOKENS.light,
+    }),
     "}",
     "",
     ".dark {",
     "  /* Igloo palette — cool glacier primary + sparing amber aurora. */",
-    renderDeclarations(THEME_TOKENS.dark),
+    renderDeclarations({ ...THEME_TOKENS.dark, ...ELEVATION_TOKENS.dark }),
+    "}",
+  ].join("\n");
+}
+
+/**
+ * The `@theme inline` rule for src/assets/styles.css: what turns the tokens
+ * into Tailwind utilities (`bg-card`, `shadow-floating`, `z-modal`,
+ * `duration-micro`). Every color token gets a line, so adding a token to the
+ * module is all it takes for its utility to exist.
+ */
+export function renderThemeMapBlock(): string {
+  const line = (name: string, value: string | number) => `  ${name}: ${value};`;
+  return [
+    "@theme inline {",
+    line("--radius-sm", "calc(var(--radius) - 4px)"),
+    line("--radius-md", "calc(var(--radius) - 2px)"),
+    line("--radius-lg", "var(--radius)"),
+    line("--radius-xl", "calc(var(--radius) + 4px)"),
+    ...Object.keys(THEME_TOKENS.light).map((name) =>
+      line(`--color-${name.slice(2)}`, `var(${name})`),
+    ),
+    ...Object.entries(SHADOW_SCALE).map(([name, value]) =>
+      line(`--shadow-${name}`, value),
+    ),
+    ...Object.entries(Z_INDEX_SCALE).map(([name, value]) =>
+      line(`--z-index-${name}`, value),
+    ),
+    ...Object.entries(MOTION_DURATIONS_MS).map(([name, value]) =>
+      line(`--transition-duration-${name}`, `${value}ms`),
+    ),
     "}",
   ].join("\n");
 }
@@ -133,6 +172,8 @@ export function renderIndexBlock(): string {
 }
 
 export interface GeneratedTarget {
+  /** What the block holds; unique, since one file can hold several. */
+  name: string;
   /** Path relative to the web/ project root. */
   relPath: string;
   begin: string;
@@ -142,18 +183,28 @@ export interface GeneratedTarget {
 
 export const GENERATED_TARGETS: GeneratedTarget[] = [
   {
+    name: "theme map",
+    relPath: "src/assets/styles.css",
+    begin: `/* BEGIN GENERATED: theme map — ${GENERATED_HINT} */`,
+    end: "/* END GENERATED: theme map */",
+    render: renderThemeMapBlock,
+  },
+  {
+    name: "theme tokens",
     relPath: "src/assets/styles.css",
     begin: `/* BEGIN GENERATED: theme tokens — ${GENERATED_HINT} */`,
     end: "/* END GENERATED: theme tokens */",
     render: renderStylesBlock,
   },
   {
+    name: "theme boot colors",
     relPath: "src/assets/boot.css",
     begin: `/* BEGIN GENERATED: theme boot colors — ${GENERATED_HINT} */`,
     end: "/* END GENERATED: theme boot colors */",
     render: renderBootBlock,
   },
   {
+    name: "theme boot",
     relPath: "index.html",
     begin: `  <!-- BEGIN GENERATED: theme boot — ${GENERATED_HINT} -->`,
     end: "  <!-- END GENERATED: theme boot -->",
@@ -202,11 +253,11 @@ function main(check: boolean): void {
       continue;
     }
     if (check) {
-      stale.push(target.relPath);
+      stale.push(`${target.name} (${target.relPath})`);
       continue;
     }
     writeFileSync(path, spliceGeneratedBlock(content, target));
-    console.log(`generated ${target.relPath}`);
+    console.log(`generated ${target.name} in ${target.relPath}`);
   }
   if (stale.length > 0) {
     console.error(

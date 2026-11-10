@@ -1,3 +1,5 @@
+import { MOTION_DURATIONS_MS } from "@/lib/theme-tokens";
+
 /** Product name used in document titles and head metadata. */
 export const APP_NAME = "Igloo";
 
@@ -557,13 +559,15 @@ export const LANGUAGE_NAMES: Record<string, string> = {
 // Shared motion tokens and class contracts. Keep reduced-motion behavior in
 // these constants so components stay consistent.
 //
+// The numbers live in src/lib/theme-tokens.ts, which also makes them the
+// `duration-micro` / `duration-standard` / `duration-page` utilities.
 // MICRO and PAGE have no direct importer: they are the declared duration scale
 // that the class strings below are checked against (motion-contracts.test.ts
 // derives `duration-150` / `duration-300` from them). They are load-bearing, not
 // dead — deleting them silently removes that agreement check.
-export const MOTION_DURATION_MICRO_MS = 150;
-export const MOTION_DURATION_STANDARD_MS = 200;
-export const MOTION_DURATION_PAGE_MS = 300;
+export const MOTION_DURATION_MICRO_MS = MOTION_DURATIONS_MS.micro;
+export const MOTION_DURATION_STANDARD_MS = MOTION_DURATIONS_MS.standard;
+export const MOTION_DURATION_PAGE_MS = MOTION_DURATIONS_MS.page;
 
 export const MOTION_MICRO_CONTROL_CLASS =
   "transition-[background-color,border-color,color,box-shadow,opacity] duration-150 ease-out motion-reduce:transition-none";

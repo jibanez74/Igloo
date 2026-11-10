@@ -451,6 +451,71 @@ function NavigationSection() {
   );
 }
 
+// One sample per entry of the scales in src/lib/theme-tokens.ts. `data-token`
+// names the utility, so the visual spec can read back what it computes to.
+function TokensSection() {
+  return (
+    <GallerySection id="tokens" title="Elevation, layers, durations">
+      <GalleryRow label="elevation">
+        <div
+          data-token="shadow-floating"
+          className="rounded-xl border border-border bg-card px-4 py-3 text-sm text-foreground shadow-floating"
+        >
+          shadow-floating
+        </div>
+        <div
+          data-token="shadow-glow"
+          className="rounded-md bg-primary px-4 py-3 text-sm font-medium text-primary-foreground shadow-glow"
+        >
+          shadow-glow
+        </div>
+      </GalleryRow>
+
+      <GalleryRow label="layers">
+        <span
+          data-token="z-chrome"
+          className="z-chrome rounded-md border border-border px-3 py-1 text-sm text-foreground"
+        >
+          z-chrome
+        </span>
+        <span
+          data-token="z-modal"
+          className="z-modal rounded-md border border-border px-3 py-1 text-sm text-foreground"
+        >
+          z-modal
+        </span>
+        <span
+          data-token="z-popover"
+          className="z-popover rounded-md border border-border px-3 py-1 text-sm text-foreground"
+        >
+          z-popover
+        </span>
+      </GalleryRow>
+
+      <GalleryRow label="durations">
+        <span
+          data-token="duration-micro"
+          className="rounded-md border border-border px-3 py-1 text-sm text-foreground transition-opacity duration-micro motion-reduce:transition-none"
+        >
+          duration-micro
+        </span>
+        <span
+          data-token="duration-standard"
+          className="rounded-md border border-border px-3 py-1 text-sm text-foreground transition-opacity duration-standard motion-reduce:transition-none"
+        >
+          duration-standard
+        </span>
+        <span
+          data-token="duration-page"
+          className="rounded-md border border-border px-3 py-1 text-sm text-foreground transition-opacity duration-page motion-reduce:transition-none"
+        >
+          duration-page
+        </span>
+      </GalleryRow>
+    </GallerySection>
+  );
+}
+
 export default function GalleryPrimitives() {
   return (
     <>
@@ -459,6 +524,7 @@ export default function GalleryPrimitives() {
       <FieldsSection />
       <SurfacesSection />
       <NavigationSection />
+      <TokensSection />
     </>
   );
 }

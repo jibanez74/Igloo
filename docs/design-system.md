@@ -174,16 +174,17 @@ Rules:
 
 ### 1.4 Spacing, radius, elevation
 
-- **Radius**: `--radius: 0.625rem` (10px) is the only non-color CSS token.
-  Aliases: `rounded-sm` = radius−4px, `md` = −2px, `lg` = radius, `xl` = +4px.
+- **Radius**: `--radius: 0.625rem` (10px). Aliases: `rounded-sm` = radius−4px, `md` = −2px, `lg` = radius, `xl` = +4px.
   Convention: cards `rounded-xl`, buttons/inputs `rounded-md`, chips/pills
   `rounded-full`.
 - **Spacing and type stay deliberately untokenized.** Both are the standard
   Tailwind scales as utility literals. Tokenizing them was considered and
   rejected: the values are already consistent in practice, and a token layer
   over a scale that every developer already knows buys indirection, not
-  safety. Radius is the lone non-color token because it is the one value
-  the primitives read. This rule is enforced by review, not a test.
+  safety. What is tokenized beside color is what the app defines for itself
+  and Tailwind has no name for: the radius, the elevation of a floating
+  surface, the app-wide layers and the three motion durations (below, §1.5).
+  This rule is enforced by review, not a test.
   Rhythm in practice: `gap-4` in poster grids, `gap-6` between card blocks,
   page sections `mt-6 md:mt-8`, shell content padding
   `px-4 py-6 sm:px-6 lg:px-8`.
@@ -201,6 +202,17 @@ Rules:
   `FLOATING_SURFACE_SHADOW_CLASS` (`shadow-2xl shadow-black/15
   dark:shadow-black/50`): a 50 % black shadow reads as a haze on the light
   canvas. Shadows over posters and video stay literal (§1.2).
+- **Elevation tokens** (`SHADOW_SCALE` in `src/lib/theme-tokens.ts`):
+  `shadow-floating` is that floating-surface shadow as one utility, its
+  per-theme value held in `--elevation-floating`; `shadow-glow` is the
+  glacier glow under a primary control (`shadow-lg` in `primary` at 20 %).
+  They are ordinary shadow sizes to Tailwind and to `cn()`, so a shadow
+  color still combines with them and the focus ring is not replaced.
+- **Layers** (`Z_INDEX_SCALE`): `z-chrome` (40, the header and the mini
+  player), `z-modal` (50, dialogs, sheets and the full-window player) and
+  `z-popover` (60, menus, selects and popovers, which may open from inside a
+  modal). These are the layers that stack across the whole app; stacking
+  inside one component (a badge over its poster) stays a plain `z-10`.
 
 ### 1.5 Motion
 
@@ -217,6 +229,11 @@ constant exists — and when you create a new recurring one, add it there so
   Applied to floating surfaces: modal surfaces (dialog, sheet, alert-dialog)
   enter/exit at 200ms standard; anchored transient popups (popover, dropdown,
   select) at 150ms micro — this split is deliberate, don't unify it.
+  The three numbers are defined once, as `MOTION_DURATIONS_MS` in
+  `src/lib/theme-tokens.ts`: `constants.ts` re-exports them as
+  `MOTION_DURATION_*_MS`, and they are the utilities `duration-micro`,
+  `duration-standard` and `duration-page`. Easing stays on Tailwind's
+  `ease-out` / `ease-in`.
 - **Transitions enumerate properties** — e.g.
   `transition-[background-color,border-color,color,box-shadow,opacity]` —
   never `transition-all`.
@@ -466,8 +483,9 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
 
 - Configuration is CSS-first: `styles.css` starts with `@import "tailwindcss"`
   + `@import "tw-animate-css"`, declares `@custom-variant dark (&:is(.dark *))`
-  (class-based dark mode), and maps every token into Tailwind via
-  `@theme inline` (`--color-X: var(--X)`). There is no `tailwind.config.js`.
+  (class-based dark mode), and maps every token into Tailwind via a
+  generated `@theme inline` block (`--color-X: var(--X)`, §2.4). There is no
+  `tailwind.config.js`.
 - The only global CSS: `@layer base` applies `border-border outline-ring/50`
   to `*` and `bg-background text-foreground` to `body`. Keep `styles.css`
   minimal — component styling belongs in components.
@@ -578,16 +596,23 @@ adds meaning.
 ### 2.4 Theme system
 
 **`src/lib/theme-tokens.ts` is the single source of truth**: every themed
-color as OKLCH + hex + comment (`THEME_TOKENS`), the boot-only colors
-(`BOOT_COLORS`), and `THEME_STORAGE_KEY`. Three files carry generated blocks
+color as OKLCH + hex + comment (`THEME_TOKENS`), the per-theme elevation
+(`ELEVATION_TOKENS`), the scales that are the same in both themes
+(`SHADOW_SCALE`, `Z_INDEX_SCALE`, `MOTION_DURATIONS_MS`; §1.4, §1.5), the
+boot-only colors (`BOOT_COLORS`), and `THEME_STORAGE_KEY`. `cn()` reads the
+scale names from it too, so `tailwind-merge` resolves `shadow-floating`,
+`z-modal` and `duration-micro` against Tailwind's own classes
+(`src/test/lib/cn.test.ts`). Three files carry generated blocks
 rendered from it by `scripts/generate-theme.ts` between
 `BEGIN/END GENERATED` markers — **edit the module, run
 `bun run generate:theme`, never hand-edit inside the markers**
 (`--check` exits 1 if anything is stale):
 
-1. `src/assets/styles.css` — the `:root` / `.dark` token rules. (The
-   `@theme inline` mapping above them stays hand-written; add a line there
-   when adding a token.)
+1. `src/assets/styles.css` — two blocks: the `@theme inline` map that turns
+   each token into Tailwind utilities (`--color-card: var(--card)`,
+   `--shadow-floating`, `--z-index-modal`, `--transition-duration-micro`),
+   and the `:root` / `.dark` token rules. A token added to the module gets
+   its utility with no further step.
 2. `src/assets/boot.css` — pre-hydration paint: themed `html`/`body` colors,
    the canvas gradients (a glacier radial tint over a vertical wash), and the
    splash message colors. The hand-written zone keeps layout, the body font
