@@ -28,7 +28,6 @@ import {
   watchRoomInviteUsersQueryOpts,
 } from "@/lib/query-opts";
 import {
-  SETTINGS_CARD_SURFACE_CLASS,
   USER_EMAIL_MAX_LENGTH,
   USER_NAME_MAX_LENGTH,
   USER_PASSWORD_MAX_BYTES,
@@ -239,10 +238,10 @@ function UsersSettings() {
 
   return (
     <div className="space-y-8">
-      <Card className={SETTINGS_CARD_SURFACE_CLASS}>
+      <Card>
         <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <CardTitle asChild className="flex items-center gap-2 text-foreground">
+            <CardTitle asChild className="flex items-center gap-2">
               <h2>
                 <Users className="size-5 text-primary" aria-hidden="true" />
                 User Management
@@ -515,7 +514,7 @@ function CreateUserDialog({
 
         <form onSubmit={handleSubmit} noValidate className="space-y-4 py-2">
           <div className="space-y-2">
-            <Label htmlFor={nameId} className="text-muted-foreground">Name</Label>
+            <Label htmlFor={nameId} tone="muted">Name</Label>
             <Input
               id={nameId}
               name="name"
@@ -541,7 +540,7 @@ function CreateUserDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor={emailId} className="text-muted-foreground">Email</Label>
+            <Label htmlFor={emailId} tone="muted">Email</Label>
             <Input
               id={emailId}
               name="email"
@@ -569,7 +568,7 @@ function CreateUserDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor={passwordId} className="text-muted-foreground">Password</Label>
+            <Label htmlFor={passwordId} tone="muted">Password</Label>
             <Input
               id={passwordId}
               name="password"
@@ -610,7 +609,7 @@ function CreateUserDialog({
               className={ADMIN_CHECKBOX_CLASS}
               aria-label="Grant admin privileges"
             />
-            <Label htmlFor={isAdminId} className="cursor-pointer text-muted-foreground">
+            <Label htmlFor={isAdminId} tone="muted" className="cursor-pointer">
               Grant admin privileges
             </Label>
           </div>
@@ -702,7 +701,7 @@ function EditUserDialog({
 
         <form onSubmit={handleSubmit} noValidate className="space-y-4 py-2">
           <div className="space-y-2">
-            <Label htmlFor={nameId} className="text-muted-foreground">Name</Label>
+            <Label htmlFor={nameId} tone="muted">Name</Label>
             <Input
               id={nameId}
               name="name"
@@ -728,7 +727,7 @@ function EditUserDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor={emailId} className="text-muted-foreground">Email</Label>
+            <Label htmlFor={emailId} tone="muted">Email</Label>
             <Input
               id={emailId}
               name="email"
@@ -764,7 +763,7 @@ function EditUserDialog({
               className={ADMIN_CHECKBOX_CLASS}
               aria-label="Admin privileges"
             />
-            <Label htmlFor={isAdminId} className="cursor-pointer text-muted-foreground">
+            <Label htmlFor={isAdminId} tone="muted" className="cursor-pointer">
               Admin privileges
             </Label>
           </div>
@@ -829,7 +828,7 @@ function DeleteUserDialog({
 
         <div className="space-y-4 py-2">
           <div className="space-y-2">
-            <Label htmlFor={confirmId} className="text-muted-foreground">
+            <Label htmlFor={confirmId} tone="muted">
               Type <span className="font-mono font-bold">DELETE</span> to confirm:
             </Label>
             <Input
@@ -961,7 +960,7 @@ function ResetPasswordDialog({
 
         <form onSubmit={handleSubmit} noValidate className="space-y-4 py-2">
           <div className="space-y-2">
-            <Label htmlFor={passwordId} className="text-muted-foreground">New Password</Label>
+            <Label htmlFor={passwordId} tone="muted">New Password</Label>
             <Input
               id={passwordId}
               name="password"
@@ -994,7 +993,7 @@ function ResetPasswordDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor={confirmPasswordId} className="text-muted-foreground">Confirm Password</Label>
+            <Label htmlFor={confirmPasswordId} tone="muted">Confirm Password</Label>
             <Input
               id={confirmPasswordId}
               name="confirmPassword"

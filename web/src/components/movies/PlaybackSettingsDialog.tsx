@@ -171,7 +171,7 @@ function PlaybackSettingsDialogForm({
 
       <div className="space-y-5">
         <div className="space-y-2">
-          <Label htmlFor="playback-mode" className="text-foreground">
+          <Label htmlFor="playback-mode">
             Playback
           </Label>
           {prefersCoarsePointer ? (
@@ -212,7 +212,6 @@ function PlaybackSettingsDialogForm({
                   <SelectItem
                     key={m.id}
                     value={m.id}
-                    className="text-foreground"
                   >
                     {m.label}
                   </SelectItem>
@@ -223,7 +222,7 @@ function PlaybackSettingsDialogForm({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="audio-track" className="text-foreground">
+          <Label htmlFor="audio-track">
             Audio Track
           </Label>
           {prefersCoarsePointer ? (
@@ -272,7 +271,6 @@ function PlaybackSettingsDialogForm({
                       <SelectItem
                         key={stream.id}
                         value={String(index)}
-                        className="text-foreground"
                       >
                         {label}
                       </SelectItem>
@@ -281,7 +279,6 @@ function PlaybackSettingsDialogForm({
                 ) : (
                   <SelectItem
                     value={AUDIO_TRACK_SELECT_DEFAULT_VALUE}
-                    className="text-foreground"
                   >
                     {AUDIO_TRACK_DEFAULT_LABEL}
                   </SelectItem>
@@ -300,7 +297,7 @@ function PlaybackSettingsDialogForm({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="subtitles" className="text-foreground">
+          <Label htmlFor="subtitles">
             Subtitles
           </Label>
           {prefersCoarsePointer ? (
@@ -361,7 +358,6 @@ function PlaybackSettingsDialogForm({
               >
                 <SelectItem
                   value={SUBTITLE_OFF_VALUE}
-                  className="text-foreground"
                 >
                   {SUBTITLES_NONE_LABEL}
                 </SelectItem>
@@ -373,7 +369,6 @@ function PlaybackSettingsDialogForm({
                       key={stream.id}
                       value={String(index)}
                       disabled={bitmap}
-                      className={bitmap ? "text-muted-foreground" : "text-foreground"}
                     >
                       {bitmap ? `${label} (image-based)` : label}
                     </SelectItem>

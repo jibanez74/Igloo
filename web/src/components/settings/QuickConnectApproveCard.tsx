@@ -9,7 +9,6 @@ import { Spinner } from "@/components/ui/spinner";
 import { MonitorSmartphone } from "lucide-react";
 import SettingsCardHeader from "@/components/settings/SettingsCardHeader";
 import { approveQuickConnect, lookupQuickConnect } from "@/lib/api";
-import { SETTINGS_CARD_SURFACE_CLASS } from "@/lib/constants";
 import { devicesQueryOpts } from "@/lib/query-opts";
 import { showSuccess, showActionFailed } from "@/lib/toast-helpers";
 import type {
@@ -266,7 +265,7 @@ export default function QuickConnectApproveCard() {
   };
 
   return (
-    <Card className={SETTINGS_CARD_SURFACE_CLASS}>
+    <Card>
       <SettingsCardHeader
         icon={MonitorSmartphone}
         title="Quick Connect"
@@ -275,7 +274,7 @@ export default function QuickConnectApproveCard() {
       <CardContent className="max-w-2xl">
         {step === "enter" && (
           <form onSubmit={handleSubmit} className="space-y-2" noValidate>
-            <Label htmlFor={codeId} className="text-muted-foreground">
+            <Label htmlFor={codeId} tone="muted">
               Quick Connect code
             </Label>
             <div className="flex flex-col gap-2 sm:flex-row">
@@ -390,7 +389,7 @@ export default function QuickConnectApproveCard() {
               tabIndex={-1}
               className="flex items-center gap-2 text-sm font-medium text-foreground outline-hidden"
             >
-              <Spinner className="size-4 text-primary" aria-hidden="true" />
+              <Spinner tone="primary" aria-hidden="true" />
               Waiting for {pendingDevice?.device_name ?? "the device"} to
               finish signing in...
             </h3>

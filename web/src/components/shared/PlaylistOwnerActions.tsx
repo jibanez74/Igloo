@@ -120,7 +120,7 @@ export default function PlaylistOwnerActions({
           aria-label="Delete playlist"
         >
           {deleteMutation.isPending ? (
-            <Spinner className="size-4" />
+            <Spinner />
           ) : (
             <Trash2 className="size-4" aria-hidden="true" />
           )}

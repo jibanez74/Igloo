@@ -37,7 +37,6 @@ import {
   MOVIE_SCAN_STATUS_KEY,
   MUSIC_SCAN_STATUS_KEY,
   SHOW_SCAN_STATUS_KEY,
-  SETTINGS_CARD_SURFACE_CLASS,
 } from "@/lib/constants";
 import { trimmedOrNull } from "@/lib/nullable";
 import { cn } from "@/lib/utils";
@@ -373,7 +372,7 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
       noValidate
       className="max-w-5xl space-y-6"
     >
-      <Card className={SETTINGS_CARD_SURFACE_CLASS}>
+      <Card>
         <SettingsCardHeader
           icon={Library}
           title="Library Management"
@@ -581,7 +580,7 @@ function LibraryPathSection({
         >
           {scanPending ? (
             <>
-              <Spinner className="size-4" aria-hidden="true" />
+              <Spinner aria-hidden="true" />
               <span>Scanning...</span>
             </>
           ) : (
@@ -751,7 +750,7 @@ function StatItem({
         </div>
         {loading ? (
           <div role="status" className="flex items-center gap-2 text-muted-foreground">
-            <Spinner className="size-5 text-primary" aria-hidden="true" />
+            <Spinner size="md" tone="primary" aria-hidden="true" />
             <span className="sr-only">{loadingLabel}</span>
           </div>
         ) : (

@@ -100,7 +100,7 @@ export default function ResumeDialog({
             disabled={pending}
           >
             {pending && !playFrom ? (
-              <Spinner className="size-4" aria-hidden="true" />
+              <Spinner aria-hidden="true" />
             ) : null}
             {secondaryLabel}
           </Button>

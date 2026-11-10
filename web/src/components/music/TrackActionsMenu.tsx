@@ -62,7 +62,6 @@ export default function TrackActionsMenu({
           {/* Add to Playlist - always show */}
           <DropdownMenuItem
             onClick={() => setShowAddToPlaylist(true)}
-            className="cursor-pointer hover:bg-accent"
           >
             <Plus className="mr-2 size-4 text-primary" aria-hidden="true" />
             Add to Playlist
@@ -75,7 +74,6 @@ export default function TrackActionsMenu({
           {hasAlbum && (
             <DropdownMenuItem
               asChild
-              className="cursor-pointer hover:bg-accent"
             >
               <Link to="/music/album/$id" params={{ id: albumId.toString() }}>
                 <Disc3 className="mr-2 size-4 text-primary" aria-hidden="true" />
@@ -86,7 +84,6 @@ export default function TrackActionsMenu({
           {hasMusician && (
             <DropdownMenuItem
               asChild
-              className="cursor-pointer hover:bg-accent"
             >
               <Link
                 to="/music/musician/$id"
@@ -103,7 +100,6 @@ export default function TrackActionsMenu({
               <DropdownMenuItem
                 onClick={onRemoveFromPlaylist}
                 variant="destructive"
-                className="cursor-pointer"
               >
                 <Trash2 className="mr-2 size-4" aria-hidden="true" />
                 Remove from Playlist

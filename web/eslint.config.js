@@ -49,13 +49,22 @@ const styledByProps = [
   "AlertDialogContent",
   "AlertDialogTitle",
   "AlertDialogDescription",
+  "Spinner",
+  "Label",
+  "Card",
+  "CardTitle",
+  "Badge",
+  "DropdownMenuItem",
+  "SelectItem",
 ].join("|");
 const lookClass =
   "(?:^|\\s)(?:[a-z-]+:)*(?:(?:bg|text|border|shadow|placeholder:text)-(?:background|foreground|card|popover|primary|secondary|muted|accent|destructive|border|input|ring|success|aurora|white|black|transparent)|h-[0-9])";
 
-// Class constants that only lay a primitive out, and so may be passed to
-// one: the scrolling-body dialog recipe (docs/design-system.md section 1.6).
-const layoutClassConstants = "DIALOG_SCROLL_[A-Z]+_CLASS";
+// Class constants that set no look, and so may be passed to a primitive: the
+// scrolling-body dialog recipe (docs/design-system.md section 1.6), the
+// motion constants (section 1.5) and the shared focus rings (section 1.7).
+const layoutClassConstants =
+  "DIALOG_SCROLL_[A-Z]+_CLASS|MOTION_[A-Z_]+_CLASS|(?:PEER_|CARD_)?FOCUS_[A-Z_]+_CLASS";
 
 const restrictedClassRule = [
   "error",

@@ -31,9 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  LIBRARY_MENU_ITEM_CLASS,
   SETTINGS_SELECT_CONTENT_CLASS,
-  SETTINGS_SELECT_ITEM_CLASS,
 } from "@/lib/constants";
 
 // Each stage renders one overlay already open, built the way production call
@@ -61,7 +59,7 @@ function DialogStage() {
         </DialogHeader>
         <form className="space-y-4" onSubmit={event => event.preventDefault()}>
           <div className="space-y-2">
-            <Label htmlFor="gallery-dialog-name" className="text-foreground">
+            <Label htmlFor="gallery-dialog-name">
               Name
             </Label>
             <Input id="gallery-dialog-name" placeholder="Full name" />
@@ -110,7 +108,6 @@ function SelectStage() {
             <SelectItem
               key={value}
               value={value}
-              className={SETTINGS_SELECT_ITEM_CLASS}
             >
               {label}
             </SelectItem>
@@ -131,19 +128,19 @@ function DropdownStage() {
         align="start"
         className="border-border bg-muted"
       >
-        <DropdownMenuItem className={LIBRARY_MENU_ITEM_CLASS}>
+        <DropdownMenuItem>
           <Radio aria-hidden="true" />
           Watch Together
         </DropdownMenuItem>
-        <DropdownMenuItem className={LIBRARY_MENU_ITEM_CLASS}>
+        <DropdownMenuItem>
           <ListPlus aria-hidden="true" />
           Add to Playlist
         </DropdownMenuItem>
-        <DropdownMenuItem className={LIBRARY_MENU_ITEM_CLASS}>
+        <DropdownMenuItem>
           <Pencil aria-hidden="true" />
           Edit
         </DropdownMenuItem>
-        <DropdownMenuItem className={LIBRARY_MENU_ITEM_CLASS} disabled>
+        <DropdownMenuItem disabled>
           <Info aria-hidden="true" />
           Technical Details
         </DropdownMenuItem>

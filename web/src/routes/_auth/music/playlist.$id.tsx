@@ -467,7 +467,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
 
         {isLoadingTracks && (
           <div className="flex justify-center py-12">
-            <Spinner className="size-8 text-primary" />
+            <Spinner size="xl" tone="primary" />
           </div>
         )}
         {tracksLoadFailed && (
@@ -583,7 +583,7 @@ function PlaylistTracksList({
         <Suspense
           fallback={
             <div className="flex justify-center rounded-xl border border-primary/10 bg-muted/30 py-12">
-              <Spinner className="size-8 text-primary" />
+              <Spinner size="xl" tone="primary" />
             </div>
           }
         >

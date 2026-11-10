@@ -260,7 +260,7 @@ export default function CreateWatchRoomDialog({
                   role="status"
                   className="mt-3 flex items-center gap-2 text-sm text-muted-foreground"
                 >
-                  <Spinner className="size-4" aria-hidden="true" />
+                  <Spinner aria-hidden="true" />
                   {PLAYBACK_SETTINGS_SUMMARY_LOADING}
                 </p>
               ) : !techLoaded ? (
@@ -324,7 +324,7 @@ export default function CreateWatchRoomDialog({
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor={searchId} className="text-muted-foreground">
+                <Label htmlFor={searchId} tone="muted">
                   Search users
                 </Label>
                 <Input
@@ -359,7 +359,7 @@ export default function CreateWatchRoomDialog({
               <div className="rounded-lg border border-border bg-background/30">
                 {inviteUsersPending ? (
                   <div className="flex items-center justify-center gap-2 px-4 py-8 text-sm text-muted-foreground">
-                    <Spinner className="size-4" aria-hidden="true" />
+                    <Spinner aria-hidden="true" />
                     Loading users…
                   </div>
                 ) : inviteUsersData?.error ? (
@@ -443,7 +443,7 @@ export default function CreateWatchRoomDialog({
             >
               {mutation.isPending ? (
                 <>
-                  <Spinner className="size-4" />
+                  <Spinner />
                   Creating room…
                 </>
               ) : (

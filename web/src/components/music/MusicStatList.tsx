@@ -31,10 +31,7 @@ export function MusicStatChip({
 }) {
   return (
     <li>
-      <Badge
-        variant="outline"
-        className="gap-1.5 border-border/40 bg-muted/90 px-3 py-1.5 text-sm font-normal text-foreground"
-      >
+      <Badge variant="muted" size="lg" className="gap-1.5 py-1.5 font-normal">
         <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         {children}
       </Badge>

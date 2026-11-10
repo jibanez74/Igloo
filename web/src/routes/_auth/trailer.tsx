@@ -441,7 +441,7 @@ function TrailerPage() {
 
             <div className="text-center">
               <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-primary/10">
-                <Spinner className="size-10 text-primary" />
+                <Spinner size="2xl" tone="primary" />
               </div>
               <p className="text-lg font-medium text-foreground">Loading trailer...</p>
               <p className="mt-2 text-sm text-muted-foreground">Please wait</p>
@@ -621,7 +621,7 @@ function TrailerPage() {
           >
             <div className="text-center">
               <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-primary/10">
-                <Spinner className="size-8 text-primary" />
+                <Spinner size="xl" tone="primary" />
               </div>
               <p className="font-medium text-foreground">Loading trailer...</p>
             </div>

@@ -45,8 +45,6 @@ import {
   LIBRARY_TAB_TRIGGER_CLASS,
   LIBRARY_TABS_LIST_CLASS,
   MEDIA_FALLBACK_SURFACE_CLASS,
-  OVER_MEDIA_BADGE_CLASS,
-  SETTINGS_CARD_SURFACE_CLASS,
   SETTINGS_RESET_BUTTON_CLASS,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -182,7 +180,7 @@ function BadgesSection() {
             MEDIA_FALLBACK_SURFACE_CLASS,
           )}
         >
-          <Badge variant="outline" className={OVER_MEDIA_BADGE_CLASS}>
+          <Badge variant="over-media" size="lg">
             PG-13
           </Badge>
         </span>
@@ -190,10 +188,10 @@ function BadgesSection() {
 
       <GalleryRow label="spinner sizes and tone">
         <Spinner />
-        <Spinner className="size-5" />
-        <Spinner className="size-6 text-primary" />
-        <Spinner className="size-8 text-primary" />
-        <Spinner className="size-10 text-primary" />
+        <Spinner size="md" />
+        <Spinner size="lg" tone="primary" />
+        <Spinner size="xl" tone="primary" />
+        <Spinner size="2xl" tone="primary" />
       </GalleryRow>
     </GallerySection>
   );
@@ -243,15 +241,14 @@ function FieldsSection() {
           />
         </div>
         <div>
-          <Label htmlFor="gallery-input-muted" className="text-foreground">
+          <Label htmlFor="gallery-input-muted">
             Filled (the default)
           </Label>
           <Input id="gallery-input-muted" placeholder="Playlist name" />
         </div>
         <div>
           <Label
-            htmlFor="gallery-input-settings"
-            className="text-muted-foreground"
+            htmlFor="gallery-input-settings" tone="muted"
           >
             Inset, large
           </Label>
@@ -413,7 +410,7 @@ function SurfacesSection() {
   return (
     <GallerySection id="surfaces" title="Card, Alert, Avatar, Separator">
       <div className="grid gap-4 sm:grid-cols-2">
-        <Card>
+        <Card surface="raised">
           <CardHeader>
             <CardTitle>Card title</CardTitle>
             <CardDescription>Default card surface.</CardDescription>
@@ -428,7 +425,7 @@ function SurfacesSection() {
           </CardFooter>
         </Card>
 
-        <Card className={SETTINGS_CARD_SURFACE_CLASS}>
+        <Card>
           <CardHeader>
             <CardTitle asChild>
               <h3 className="flex items-center gap-2 text-foreground">

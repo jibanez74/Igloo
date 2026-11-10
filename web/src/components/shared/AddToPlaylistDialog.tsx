@@ -208,7 +208,7 @@ export default function AddToPlaylistDialog({
           <div className="max-h-64 overflow-y-auto">
             {isLoading ? (
               <div className="flex justify-center py-8">
-                <Spinner className="size-6 text-primary" />
+                <Spinner size="lg" tone="primary" />
               </div>
             ) : filteredPlaylists.length === 0 ? (
               <div className="rounded-lg border border-border/50 bg-muted/50 py-8 text-center">
@@ -278,7 +278,7 @@ export default function AddToPlaylistDialog({
           >
             {mutation.isPending ? (
               <>
-                <Spinner className="mr-2 size-4" />
+                <Spinner className="mr-2" />
                 Adding...
               </>
             ) : (

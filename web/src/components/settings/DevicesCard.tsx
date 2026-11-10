@@ -9,7 +9,7 @@ import { Pencil, Smartphone, Tv } from "lucide-react";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
 import SettingsCardHeader from "@/components/settings/SettingsCardHeader";
 import { renameDevice, revokeDevice } from "@/lib/api";
-import { DEVICES_KEY, SETTINGS_CARD_SURFACE_CLASS } from "@/lib/constants";
+import { DEVICES_KEY } from "@/lib/constants";
 import { parseServerTimestamp } from "@/lib/format";
 import { devicesQueryOpts } from "@/lib/query-opts";
 import { showSuccess, showActionFailed } from "@/lib/toast-helpers";
@@ -90,7 +90,7 @@ export default function DevicesCard() {
     data?.error === false && data.data?.devices ? data.data.devices : [];
 
   return (
-    <Card className={SETTINGS_CARD_SURFACE_CLASS}>
+    <Card>
       <SettingsCardHeader
         icon={Smartphone}
         title="Devices"

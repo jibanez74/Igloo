@@ -697,7 +697,7 @@ function PlayAllButton() {
       aria-label="Play all tracks"
     >
       {isLoading ? (
-        <Spinner className="size-4" />
+        <Spinner />
       ) : (
         <Play className="size-4 fill-current" aria-hidden="true" />
       )}
@@ -734,7 +734,7 @@ function ShuffleButton() {
       aria-label="Shuffle all tracks"
     >
       {isLoading ? (
-        <Spinner className="size-4" />
+        <Spinner />
       ) : (
         <Shuffle className="size-4" aria-hidden="true" />
       )}

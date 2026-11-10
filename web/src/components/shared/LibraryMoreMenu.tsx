@@ -10,7 +10,6 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import {
   FOCUS_VISIBLE_RING_CLASS,
-  LIBRARY_MENU_ITEM_CLASS,
   MOTION_MICRO_CONTROL_CLASS,
 } from "@/lib/constants";
 import { refreshLibraryWithToasts, type Library } from "@/lib/library-cache";
@@ -79,7 +78,6 @@ export function RefreshLibraryMenuItem({
 
   return (
     <DropdownMenuItem
-      className={LIBRARY_MENU_ITEM_CLASS}
       disabled={refreshingLibrary}
       onSelect={event => {
         // Keep the menu open while the async refresh runs so the
@@ -91,7 +89,7 @@ export function RefreshLibraryMenuItem({
       }}
     >
       {refreshingLibrary ? (
-        <Spinner className="mr-2 size-4 text-primary" />
+        <Spinner tone="primary" className="mr-2" />
       ) : (
         <RefreshCw className="mr-2 size-4" aria-hidden="true" />
       )}
@@ -134,7 +132,6 @@ export function RequestMediaMenuItem({
 
   return (
     <DropdownMenuItem
-      className={LIBRARY_MENU_ITEM_CLASS}
       disabled={disabled}
       aria-label={disabled ? `${label} unavailable. ${reason}` : label}
       title={disabled ? reason : undefined}

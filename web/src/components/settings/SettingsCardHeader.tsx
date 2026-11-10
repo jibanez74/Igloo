@@ -28,8 +28,7 @@ export default function SettingsCardHeader({
     <CardHeader>
       <CardTitle
         asChild
-        id={titleId}
-        className="flex items-center gap-2 text-foreground"
+        id={titleId} className="flex items-center gap-2"
       >
         <h2>
           <Icon className="size-5 text-primary" aria-hidden="true" />

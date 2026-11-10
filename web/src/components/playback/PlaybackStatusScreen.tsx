@@ -64,7 +64,7 @@ export default function PlaybackStatusScreen({
         className={isLoading ? "text-center" : "max-w-md text-center"}
       >
         {isLoading ? (
-          <Spinner className="mx-auto mb-6 size-10 text-primary" />
+          <Spinner size="2xl" tone="primary" className="mx-auto mb-6" />
         ) : (
           <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-destructive/10">
             <AlertCircle className="size-10 text-destructive" aria-hidden="true" />

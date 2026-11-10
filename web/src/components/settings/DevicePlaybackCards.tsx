@@ -17,16 +17,13 @@ import {
   DOWNLOAD_SPEED_MAX_MBPS,
   LANGUAGE_NAMES,
   MOTION_SETTINGS_SURFACE_CLASS,
-  SETTINGS_CARD_SURFACE_CLASS,
   SETTINGS_SELECT_CONTENT_CLASS,
-  SETTINGS_SELECT_ITEM_CLASS,
   SUBTITLE_OFF_VALUE,
 } from "@/lib/constants";
 import { useDevicePlaybackPreferences } from "@/hooks/useDevicePlaybackPreferences";
 import { parseMbpsInput } from "@/lib/playback";
 import { setDevicePlaybackPreferences } from "@/lib/playback-preferences";
 import { recommendedProfileId } from "@/lib/playback-recommendation";
-import { cn } from "@/lib/utils";
 import type { DevicePlaybackPreferences, PlaybackSettingsType } from "@/types";
 
 const NO_SELECTION_VALUE = "__none__";
@@ -116,7 +113,6 @@ function PreferenceSelect({
         <SelectContent className={SETTINGS_SELECT_CONTENT_CLASS}>
           <SelectItem
             value={NO_SELECTION_VALUE}
-            className={SETTINGS_SELECT_ITEM_CLASS}
           >
             {noSelectionLabel}
           </SelectItem>
@@ -124,7 +120,6 @@ function PreferenceSelect({
             <SelectItem
               key={option.value}
               value={option.value}
-              className={SETTINGS_SELECT_ITEM_CLASS}
             >
               {option.label}
             </SelectItem>
@@ -261,7 +256,7 @@ export default function DevicePlaybackCards({
     <>
       <LiveAnnouncer message={announcement} announcementKey={announcementKey} />
       <Card
-        className={cn(SETTINGS_CARD_SURFACE_CLASS, MOTION_SETTINGS_SURFACE_CLASS)}
+        className={MOTION_SETTINGS_SURFACE_CLASS}
       >
         <SettingsCardHeader
           icon={Gauge}
@@ -346,7 +341,7 @@ export default function DevicePlaybackCards({
       </Card>
 
       <Card
-        className={cn(SETTINGS_CARD_SURFACE_CLASS, MOTION_SETTINGS_SURFACE_CLASS)}
+        className={MOTION_SETTINGS_SURFACE_CLASS}
       >
         <SettingsCardHeader
           icon={Sliders}

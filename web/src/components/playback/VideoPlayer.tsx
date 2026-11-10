@@ -1039,7 +1039,7 @@ export default function VideoPlayer({
           )}
         >
           <div className="flex size-16 items-center justify-center rounded-full bg-background/80 backdrop-blur-sm">
-            <Spinner className="size-8 text-primary" aria-label="Buffering" />
+            <Spinner size="xl" tone="primary" aria-label="Buffering" />
           </div>
         </div>
       )}

@@ -3,12 +3,31 @@ import { Slot } from "radix-ui"
 
 import { cn } from "@/lib/utils"
 
-function Card({ className, ...props }: React.ComponentProps<"div">) {
+// `muted` is the panel the Settings pages are built from: a faint well on
+// the canvas. `raised` is the opaque card that stands off its background.
+// `error` holds a failure in place of a card's content; `danger` frames
+// actions that remove data. They differ only in how strong the border is.
+const CARD_SURFACES = {
+  muted: "border-border/50 bg-muted/30",
+  raised: "bg-card",
+  error: "border-destructive/20 bg-destructive/10",
+  danger: "border-destructive/50 bg-destructive/10",
+} as const
+
+function Card({
+  className,
+  surface = "muted",
+  ...props
+}: React.ComponentProps<"div"> & {
+  surface?: keyof typeof CARD_SURFACES
+}) {
   return (
     <div
       data-slot="card"
+      data-surface={surface}
       className={cn(
-        "flex flex-col gap-6 rounded-xl border bg-card py-6 text-card-foreground shadow-sm",
+        "flex flex-col gap-6 rounded-xl border py-6 text-card-foreground shadow-sm",
+        CARD_SURFACES[surface],
         className
       )}
       {...props}
@@ -32,15 +51,24 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
 function CardTitle({
   className,
   asChild = false,
+  tone = "default",
   ...props
-}: React.ComponentProps<"div"> & { asChild?: boolean }) {
+}: React.ComponentProps<"div"> & {
+  asChild?: boolean
+  /** `destructive` for the title of a card whose actions remove data. */
+  tone?: "default" | "destructive"
+}) {
   // Pass asChild with a heading child (e.g. <h2>) so card sections are
   // navigable by heading — see docs/design-system.md §3.7.
   const Comp = asChild ? Slot.Root : "div"
   return (
     <Comp
       data-slot="card-title"
-      className={cn("leading-none font-semibold", className)}
+      className={cn(
+        "leading-none font-semibold",
+        tone === "destructive" && "text-destructive",
+        className
+      )}
       {...props}
     />
   )

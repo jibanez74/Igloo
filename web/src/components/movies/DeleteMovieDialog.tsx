@@ -87,7 +87,7 @@ export default function DeleteMovieDialog({
           checked={deleteFile}
           onCheckedChange={(checked) => setDeleteFile(checked === true)}
         />
-        <Label htmlFor="delete-file" className="text-sm text-muted-foreground">
+        <Label htmlFor="delete-file" tone="muted" className="text-sm">
           Also delete the movie file from disk
         </Label>
       </div>

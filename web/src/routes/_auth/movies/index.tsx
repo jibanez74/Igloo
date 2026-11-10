@@ -33,7 +33,6 @@ import {
   CONTENT_FADE_EXIT_CLASS,
   CONTENT_FADE_TRANSITION_MS,
   FOCUS_VISIBLE_RING_CLASS,
-  LIBRARY_MENU_ITEM_CLASS,
   LIBRARY_TAB_TRIGGER_CLASS,
   LIBRARY_TABS_LIST_CLASS,
   MOTION_SECTION_ENTER_CLASS,
@@ -347,14 +346,12 @@ function MoreMenu({
         triggerRef={moreOptionsButtonRef}
       >
         <DropdownMenuItem
-          className={LIBRARY_MENU_ITEM_CLASS}
           onClick={onOpenLikedMovies}
         >
           <Heart className="mr-2 size-4" aria-hidden="true" />
           Liked movies
         </DropdownMenuItem>
         <DropdownMenuItem
-          className={LIBRARY_MENU_ITEM_CLASS}
           onClick={onOpenMoviePlaylists}
         >
           <ListVideo className="mr-2 size-4" aria-hidden="true" />

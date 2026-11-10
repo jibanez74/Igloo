@@ -44,7 +44,6 @@ import {
   USER_PASSWORD_MAX_BYTES,
   USER_PASSWORD_MIN_LENGTH,
   MOTION_MICRO_COLORS_CLASS,
-  SETTINGS_CARD_SURFACE_CLASS,
 } from "@/lib/constants";
 import {
   updateUserName,
@@ -554,7 +553,7 @@ function AccountSettings() {
   return (
     <div className="space-y-8">
       {/* Profile Information */}
-      <Card className={SETTINGS_CARD_SURFACE_CLASS}>
+      <Card>
         <SettingsCardHeader
           icon={User}
           title="Profile Information"
@@ -564,7 +563,7 @@ function AccountSettings() {
           <form onSubmit={handleSaveProfile} noValidate className="space-y-6">
             {/* Email */}
             <div className="space-y-2">
-              <Label htmlFor={emailId} className="text-muted-foreground">
+              <Label htmlFor={emailId} tone="muted">
                 Email
               </Label>
               <Input
@@ -593,7 +592,7 @@ function AccountSettings() {
 
             {/* Name */}
             <div className="space-y-2">
-              <Label htmlFor={nameId} className="text-muted-foreground">
+              <Label htmlFor={nameId} tone="muted">
                 Name
               </Label>
               <Input
@@ -643,7 +642,7 @@ function AccountSettings() {
       </Card>
 
       {/* Avatar */}
-      <Card className={SETTINGS_CARD_SURFACE_CLASS}>
+      <Card>
         <SettingsCardHeader
           icon={ImageIcon}
           title="Avatar"
@@ -677,7 +676,7 @@ function AccountSettings() {
 
           {/* Upload Avatar */}
           <div className="space-y-2">
-            <Label className="text-muted-foreground">Upload Image</Label>
+            <Label tone="muted">Upload Image</Label>
             <div className="flex gap-2">
               <div className="relative flex flex-1">
                 <input
@@ -730,7 +729,7 @@ function AccountSettings() {
 
           {/* Set Avatar URL */}
           <div className="space-y-2">
-            <Label htmlFor={avatarUrlId} className="text-muted-foreground">
+            <Label htmlFor={avatarUrlId} tone="muted">
               Or enter image URL
             </Label>
             <div className="flex flex-col gap-2 sm:flex-row">
@@ -775,7 +774,7 @@ function AccountSettings() {
       </Card>
 
       {/* Change Password */}
-      <Card className={SETTINGS_CARD_SURFACE_CLASS}>
+      <Card>
         <SettingsCardHeader
           icon={Lock}
           title="Change Password"
@@ -803,7 +802,7 @@ function AccountSettings() {
               hidden
             />
             <div className="space-y-2">
-              <Label htmlFor={currentPasswordId} className="text-muted-foreground">
+              <Label htmlFor={currentPasswordId} tone="muted">
                 Current Password
               </Label>
             <Input
@@ -837,7 +836,7 @@ function AccountSettings() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor={newPasswordId} className="text-muted-foreground">
+            <Label htmlFor={newPasswordId} tone="muted">
               New Password
             </Label>
             <Input
@@ -874,7 +873,7 @@ function AccountSettings() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor={confirmPasswordId} className="text-muted-foreground">
+            <Label htmlFor={confirmPasswordId} tone="muted">
               Confirm New Password
             </Label>
             <Input
@@ -932,9 +931,9 @@ function AccountSettings() {
           self-deletion, so there is no action to offer. */}
       {!user.is_admin && (
       <>
-      <Card className="border-destructive/50 bg-destructive/10">
+      <Card surface="danger">
         <CardHeader>
-          <CardTitle asChild className="flex items-center gap-2 text-destructive">
+          <CardTitle asChild tone="destructive" className="flex items-center gap-2">
             <h2>
               <AlertTriangle className="size-5" aria-hidden="true" />
               Danger Zone
@@ -984,8 +983,7 @@ function AccountSettings() {
             <div className="space-y-2">
               <Label
                 htmlFor={deleteConfirmId}
-                id={deleteConfirmHelperId}
-                className="text-muted-foreground"
+                id={deleteConfirmHelperId} tone="muted"
               >
                 Type <span className="font-mono font-bold">DELETE</span> to
                 confirm:

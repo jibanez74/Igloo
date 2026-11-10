@@ -419,7 +419,7 @@ export function WatchRoomLoading() {
   return (
     <div className="flex min-h-[60vh] items-center justify-center px-4">
       <div className="text-center">
-        <Spinner className="mx-auto mb-4 size-10 text-primary" />
+        <Spinner size="2xl" tone="primary" className="mx-auto mb-4" />
         <p className="text-lg font-medium text-foreground">
           Loading watch room...
         </p>

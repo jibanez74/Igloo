@@ -114,7 +114,7 @@ export default function MovieLikeButton({
         />
         {isLiked ? "Liked" : "Like"}
         {mutation.isPending && (
-          <Spinner className="size-4 text-primary!" aria-hidden="true" />
+          <Spinner tone="primary" aria-hidden="true" />
         )}
       </button>
     );
@@ -139,7 +139,7 @@ export default function MovieLikeButton({
       aria-pressed={isLiked}
     >
       {mutation.isPending ? (
-        <Spinner className="size-4 text-primary" />
+        <Spinner tone="primary" />
       ) : (
         <Heart
           className={`size-5 ${isLiked ? "fill-primary text-primary" : "text-white"}`}

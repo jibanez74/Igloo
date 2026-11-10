@@ -27,7 +27,6 @@ import { useIsMiniPlayerVisible } from "@/hooks/useIsMiniPlayerVisible";
 import {
   MINI_PLAYER_CLEARANCE_BOTTOM_CLASS,
   MOTION_SETTINGS_SURFACE_CLASS,
-  SETTINGS_CARD_SURFACE_CLASS,
 } from "@/lib/constants";
 import { updateGeneralSettings } from "@/lib/api";
 import { invalidateArtworkQueries } from "@/lib/library-cache";
@@ -37,7 +36,6 @@ import {
   showActionFailed,
   showSuccess,
 } from "@/lib/toast-helpers";
-import { cn } from "@/lib/utils";
 import type {
   ApiResponseType,
   GeneralSettingsResponseType,
@@ -351,7 +349,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
       className="@container max-w-5xl space-y-6 [&_:is(button,input,select)]:scroll-mb-72 sm:[&_:is(button,input,select)]:scroll-mb-44"
     >
       <Card
-        className={cn(SETTINGS_CARD_SURFACE_CLASS, MOTION_SETTINGS_SURFACE_CLASS)}
+        className={MOTION_SETTINGS_SURFACE_CLASS}
       >
         <SettingsCardHeader
           icon={Gauge}
@@ -393,7 +391,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
       </Card>
 
       <Card
-        className={cn(SETTINGS_CARD_SURFACE_CLASS, MOTION_SETTINGS_SURFACE_CLASS)}
+        className={MOTION_SETTINGS_SURFACE_CLASS}
       >
         <SettingsCardHeader
           icon={HardDrive}
@@ -427,7 +425,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
       </Card>
 
       <Card
-        className={cn(SETTINGS_CARD_SURFACE_CLASS, MOTION_SETTINGS_SURFACE_CLASS)}
+        className={MOTION_SETTINGS_SURFACE_CLASS}
       >
         <SettingsCardHeader
           icon={KeyRound}

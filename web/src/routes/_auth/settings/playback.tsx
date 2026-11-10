@@ -22,9 +22,7 @@ import SettingsLoadingCard from "@/components/settings/SettingsLoadingCard";
 import SettingsSaveBar from "@/components/settings/SettingsSaveBar";
 import {
   MOTION_SETTINGS_SURFACE_CLASS,
-  SETTINGS_CARD_SURFACE_CLASS,
   SETTINGS_SELECT_CONTENT_CLASS,
-  SETTINGS_SELECT_ITEM_CLASS,
 } from "@/lib/constants";
 import { updatePlaybackSettings } from "@/lib/api";
 import { parseMbpsInput } from "@/lib/playback";
@@ -38,7 +36,6 @@ import {
   showActionFailed,
   showSuccess,
 } from "@/lib/toast-helpers";
-import { cn } from "@/lib/utils";
 import type {
   HardwareAccelerationDevice,
   PlaybackSettingsType,
@@ -315,7 +312,7 @@ function ServerPlaybackForm({ settings }: ServerPlaybackFormProps) {
   return (
     <form onSubmit={handleSubmit} noValidate className="space-y-6">
       <Card
-        className={cn(SETTINGS_CARD_SURFACE_CLASS, MOTION_SETTINGS_SURFACE_CLASS)}
+        className={MOTION_SETTINGS_SURFACE_CLASS}
       >
         <SettingsCardHeader
           icon={Server}
@@ -383,7 +380,6 @@ function ServerPlaybackForm({ settings }: ServerPlaybackFormProps) {
                     <SelectItem
                       key={option.value}
                       value={option.value}
-                      className={SETTINGS_SELECT_ITEM_CLASS}
                     >
                       <span className="flex items-center gap-2">
                         {option.icon}

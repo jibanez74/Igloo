@@ -144,7 +144,7 @@ export default function TmdbMoviePicker({
     <div className="space-y-4">
       <div className={`grid gap-3 ${showTmdbIdInput ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
         <div className={showTmdbIdInput ? "sm:col-span-1" : ""}>
-          <Label htmlFor="tmdb-title" className="text-muted-foreground">
+          <Label htmlFor="tmdb-title" tone="muted">
             Title
           </Label>
           <Input
@@ -158,7 +158,7 @@ export default function TmdbMoviePicker({
           />
         </div>
         <div>
-          <Label htmlFor="tmdb-year" className="text-muted-foreground">
+          <Label htmlFor="tmdb-year" tone="muted">
             Year
           </Label>
           <Input
@@ -172,7 +172,7 @@ export default function TmdbMoviePicker({
         </div>
         {showTmdbIdInput && (
           <div>
-            <Label htmlFor="tmdb-id" className="text-muted-foreground">
+            <Label htmlFor="tmdb-id" tone="muted">
               TMDB ID
             </Label>
             <Input
@@ -190,7 +190,7 @@ export default function TmdbMoviePicker({
 
       <Button onClick={handleSearch} disabled={searching || !canSearch} className="w-full">
         {searching ? (
-          <Spinner className="size-4" />
+          <Spinner />
         ) : (
           <Search className="size-4" aria-hidden="true" />
         )}
@@ -234,7 +234,7 @@ export default function TmdbMoviePicker({
         variant={confirmVariant}
         className="w-full"
       >
-        {confirming && <Spinner className="size-4" />}
+        {confirming && <Spinner />}
         {confirming ? `${confirmLabel}…` : confirmLabel}
       </Button>
     </div>
