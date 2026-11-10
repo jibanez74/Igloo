@@ -66,7 +66,7 @@ function DialogStage() {
             </Label>
             <Input id="gallery-dialog-name" placeholder="Full name" />
           </div>
-          <DialogFooter className="gap-2 pt-2 sm:gap-0">
+          <DialogFooter className="pt-2">
             <Button type="button" variant="outline">
               Cancel
             </Button>

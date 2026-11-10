@@ -427,7 +427,7 @@ export default function CreateWatchRoomDialog({
             </section>
           </div>
 
-          <DialogFooter className="gap-2 border-t border-border pt-4 sm:gap-0">
+          <DialogFooter className="border-t border-border pt-4">
             <Button
               type="button"
               variant="ghost"

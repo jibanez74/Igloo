@@ -624,7 +624,7 @@ function CreateUserDialog({
             </p>
           )}
 
-          <DialogFooter className="gap-2 pt-2 sm:gap-0">
+          <DialogFooter className="pt-2">
             <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>
               Cancel
             </Button>
@@ -778,7 +778,7 @@ function EditUserDialog({
             </p>
           )}
 
-          <DialogFooter className="gap-2 pt-2 sm:gap-0">
+          <DialogFooter className="pt-2">
             <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>
               Cancel
             </Button>
@@ -862,7 +862,7 @@ function DeleteUserDialog({
           </p>
         )}
 
-        <DialogFooter className="gap-2 sm:gap-0">
+        <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={isPending}>
             Cancel
           </Button>
@@ -1038,7 +1038,7 @@ function ResetPasswordDialog({
             </p>
           )}
 
-          <DialogFooter className="gap-2 pt-2 sm:gap-0">
+          <DialogFooter className="pt-2">
             <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>
               Cancel
             </Button>

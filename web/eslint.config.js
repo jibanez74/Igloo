@@ -98,6 +98,15 @@ const restrictedClassRule = [
     message:
       "Set the look with the primitive's props (variant, size, tone, elevation) instead of classes; className is for layout. See docs/design-system.md section 1.6.",
   },
+  // Nine dialog footers once passed `gap-2 sm:gap-0`, which left their
+  // buttons touching from the `sm` breakpoint up. The footer sets its own
+  // gap.
+  {
+    selector:
+      "JSXOpeningElement[name.name=/^(?:Alert)?DialogFooter$/] > JSXAttribute[name.name='className'] Literal[value=/(?:^|\\s)(?:[a-z-]+:)*gap-/]",
+    message:
+      "DialogFooter sets the gap between its buttons; do not override it. See docs/design-system.md section 1.6.",
+  },
   {
     selector: `JSXOpeningElement[name.name=/^(?:${styledByProps})$/] > JSXAttribute[name.name='className'] Identifier[name=/(?:ClassName|_CLASS)$/]:not([name=/^(?:${layoutClassConstants})$/])`,
     message:

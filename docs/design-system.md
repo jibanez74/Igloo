@@ -350,7 +350,10 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
 
   The surface is the card (`bg-card`) for every dialog; the title takes the
   page's text color and the description is muted, so neither needs a color
-  class. `AlertDialogContent` keeps its one width.
+  class. `AlertDialogContent` keeps its one width. `DialogFooter` sets the
+  gap between its buttons, stacked on a phone and in a row from `sm` up; a
+  `gap-*` class on it is a lint error (nine footers once passed
+  `gap-2 sm:gap-0`, which left their buttons touching).
 - **A primitive's `className` is for layout**: a margin, padding around an
   icon (`pl-10`), a width, scrolling (`max-h-[85vh] overflow-y-auto`),
   `resize-none`, a font (`font-mono`), a text size. A color or height class
@@ -370,8 +373,7 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
   non-interactive.
 - **Narrow primitive contracts are intentional.** Alert is destructive-only;
   AlertDialog has one default size; dropdown items are non-inset; Select uses
-  its default trigger size and item-aligned content; Separator is horizontal
-  and decorative. Add a branch only when a production surface requires it.
+  item-aligned content; Separator is horizontal and decorative. Add a branch only when a production surface requires it.
 - **A dialog that can outgrow the viewport scrolls its body, not itself.**
   Technical Details and Edit Movie compose `DIALOG_SCROLL_CONTENT_CLASS` on
   `DialogContent` (a flex column capped at `100svh - 2rem`, no padding of its

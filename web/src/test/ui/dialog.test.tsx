@@ -10,6 +10,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogTitle,
 } from "@/components/ui/dialog";
 
@@ -80,6 +81,29 @@ describe("DialogContent", () => {
     expect(screen.getByText("Create a new user account.")).toHaveClass(
       "text-muted-foreground",
     );
+  });
+});
+
+describe("DialogFooter", () => {
+  // Call sites used to pass `gap-2 sm:gap-0`, which left the buttons
+  // touching once they sat in a row.
+  it("keeps a gap between its buttons, stacked or in a row", () => {
+    render(
+      <Dialog open onOpenChange={() => {}}>
+        <DialogContent>
+          <DialogTitle>Add User</DialogTitle>
+          <DialogDescription>Create a new user account.</DialogDescription>
+          <DialogFooter data-testid="footer">
+            <button type="button">Cancel</button>
+            <button type="button">Create User</button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>,
+    );
+
+    const footer = screen.getByTestId("footer");
+    expect(footer).toHaveClass("gap-2", "flex-col-reverse", "sm:flex-row");
+    expect(footer.className).not.toMatch(/(?:^|\s)(?:[a-z-]+:)*gap-0/);
   });
 });
 
