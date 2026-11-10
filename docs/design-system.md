@@ -450,8 +450,8 @@ any variant fully. The base string carries the focus ring, disabled opacity,
   - `CARD_FOCUS_WITHIN_RING_CLASS` — the whole-card variant, on a media card's
     `<article>`, so the card shows focus wherever it lands inside.
   - `PEER_FOCUS_VISIBLE_RING_CLASS` — for a rich `<Label>` standing in for an
-    `sr-only` radio (the TMDB and Spotify pickers), where the ring must follow
-    the peer input's focus rather than the label's.
+    `sr-only` radio (`RadioCard`, §2.2), where the ring must follow the peer
+    input's focus rather than the label's.
 
   Never hand-write a ring. `focus-contracts.test.ts` parses every file under
   `src/` and fails on a literal declaring its own ring width, a
@@ -611,12 +611,27 @@ any variant fully. The base string carries the focus ring, disabled opacity,
   `Slot`). A Radix upgrade is therefore a change to that package and, at
   most, to these files, checked by the screenshot baselines (§2.5).
 - Icons are lucide (§1.1).
-- 22 primitives live in `components/ui`: alert, alert-dialog, avatar,
+- 25 primitives live in `components/ui`: alert, alert-dialog, avatar,
   badge, button, card, checkbox, dialog, dropdown-menu, input, label,
-  native-select, pagination, popover, select, separator, sheet, sidebar,
-  sonner, spinner, tabs, textarea — plus `sidebar-context.tsx`, which holds
+  native-select, pagination, popover, radio-card, select, separator, sheet,
+  sidebar, skeleton, sonner, spinner, switch, tabs, textarea — plus `sidebar-context.tsx`, which holds
   the sidebar's context so the primitive and `AppSidebar` can both read it,
   and `field-variants.ts`, the looks the field primitives share (§1.6).
+- Three of them are Igloo's own, with no Radix part underneath:
+  - `Switch` is a `role="switch"` button: `checked`, `onCheckedChange`, and
+    a name from `aria-labelledby` or `aria-label`. `SwitchField` (§3.7) is
+    the labelled Settings row built on it.
+  - `RadioCard` is a radio drawn as a whole card. The native input stays in
+    the tree, out of sight, so a group keeps the browser's arrow keys; the
+    card is its label, so a click anywhere picks it. `footer` is content
+    under the label that is not part of the radio's name (tie it in with
+    `aria-describedby`); `as="li"` when the group is a list. The TMDB and
+    Spotify pickers are its two users.
+  - `Skeleton` is one muted box of a loading layout: size, and any radius
+    other than the small default, from `className` (`rounded-none` for a
+    square one). It has no role and does not pulse; the `SkeletonStatus`
+    around the layout does both (§3.4). `pulse` is for a box that loads on
+    its own.
 - `NativeSelect` is the browser's own `<select>` styled as a field, for where
   the platform picker is the better control: touch devices (the playback
   settings pickers switch to it on a coarse pointer) and short filter lists
@@ -1309,7 +1324,8 @@ is unknown or empty.
   skeleton renders through `SkeletonStatus`
   (`components/shared/SkeletonStatus.tsx`), which takes the spoken label
   ("Loading playlists") and, for a skeleton that pulses as one block, the
-  `MOTION_LOADING_STATE_CLASS` as its `className`.
+  `MOTION_LOADING_STATE_CLASS` as its `className`. The boxes inside are
+  `Skeleton`s (`ui/skeleton.tsx`, §2.2).
 - **A section whose query the loader awaits renders nothing instead of a
   skeleton.** `ContinueWatching` is the case: the home loader has already
   resolved the query by the time the section mounts, so a skeleton would only
@@ -1684,8 +1700,9 @@ require the full playback test pass.
   `showActionFailed` and rolls the control back. No Save bar. The
   `SettingsCardHeader` description states the scope ("Saved to your account,
   so it follows you across browsers and devices"), as the device cards state
-  theirs. Its on/off control is the shared `SwitchField` (a real
-  `role="switch"` button with its description tied in by `aria-describedby`),
+  theirs. Its on/off control is the shared `SwitchField` (the `Switch`
+  primitive, a real `role="switch"` button, with its description tied in by
+  `aria-describedby`),
   the same row the General settings card uses. Its off track is
   `bg-muted-foreground/25`, a mid grey in both themes, so the white thumb
   reads against it: `bg-accent` is near-white in light and hid the thumb.

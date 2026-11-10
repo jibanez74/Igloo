@@ -1,3 +1,4 @@
+import { Skeleton } from "@/components/ui/skeleton";
 import type { ReactNode } from "react";
 import SkeletonStatus from "@/components/shared/SkeletonStatus";
 import {
@@ -64,9 +65,9 @@ export default function DetailSkeleton({
       </div>
 
       <div className="mt-6 space-y-2 text-left">
-        <div className="h-4 w-full rounded-sm bg-muted" />
-        <div className="h-4 w-full rounded-sm bg-muted" />
-        <div className="h-4 w-3/4 rounded-sm bg-muted" />
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-3/4" />
       </div>
 
       {children}

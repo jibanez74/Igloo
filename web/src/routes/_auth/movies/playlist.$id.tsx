@@ -1,3 +1,4 @@
+import { Skeleton } from "@/components/ui/skeleton";
 import { useRef } from "react";
 import { createFileRoute, Link, stripSearchParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -271,10 +272,10 @@ function MoviePlaylistSkeleton() {
       <MoviePlaylistsBackLink />
       <SkeletonStatus label="Loading playlist" className={MOTION_LOADING_STATE_CLASS}>
         <div className="mb-8 flex items-start gap-3">
-          <div className="mt-1 size-8 shrink-0 rounded-sm bg-muted" />
+          <Skeleton className="mt-1 size-8 shrink-0" />
           <div className="min-w-0 flex-1 space-y-2">
-            <div className="h-8 max-w-sm rounded-sm bg-muted md:h-9" />
-            <div className="h-5 w-24 rounded-sm bg-muted" />
+            <Skeleton className="h-8 max-w-sm md:h-9" />
+            <Skeleton className="h-5 w-24" />
           </div>
         </div>
         <div className="mb-5 min-h-8" />

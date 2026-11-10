@@ -1,9 +1,8 @@
+import { Skeleton } from "@/components/ui/skeleton";
 import type { Ref } from "react";
 import { Heart, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { MOTION_LOADING_STATE_CLASS } from "@/lib/constants";
 import { pluralize } from "@/lib/format";
-import { cn } from "@/lib/utils";
 
 type PlaylistsTabToolbarProps = {
   /** The loaded playlist count; left out while loading and on error. */
@@ -38,7 +37,7 @@ export default function PlaylistsTabToolbar({
     <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       {isLoading ? (
         <div className="flex h-5 items-center">
-          <div className={cn("h-4 w-24 rounded-sm bg-muted", MOTION_LOADING_STATE_CLASS)} />
+          <Skeleton pulse className="h-4 w-24" />
         </div>
       ) : (
         count !== undefined && (

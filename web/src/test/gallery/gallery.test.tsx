@@ -26,6 +26,7 @@ describe("Gallery", () => {
       "buttons",
       "badges",
       "fields",
+      "controls",
       "surfaces",
       "navigation",
       "tokens",
@@ -49,7 +50,15 @@ describe("Gallery", () => {
     }
   });
 
-  it.each(["buttons", "badges", "fields", "surfaces", "navigation", "tokens"])(
+  it.each([
+    "buttons",
+    "badges",
+    "fields",
+    "controls",
+    "surfaces",
+    "navigation",
+    "tokens",
+  ])(
     "shows the %s section alone when asked for it",
     section => {
       const { container } = render(<Gallery section={section} />);

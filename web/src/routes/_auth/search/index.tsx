@@ -1,3 +1,4 @@
+import { Skeleton } from "@/components/ui/skeleton";
 import { createFileRoute, Link, redirect, stripSearchParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Search, Film, Tv, Disc3, User, Music } from "lucide-react";
@@ -29,7 +30,6 @@ import {
   LIBRARY_POSTER_GRID_CLASS,
   LIBRARY_TAB_TRIGGER_CLASS,
   LIBRARY_TABS_LIST_CLASS,
-  MOTION_LOADING_STATE_CLASS,
   MOTION_SECTION_ENTER_CLASS,
   MOTION_SECTION_ENTER_DELAYED_CLASS,
   SEARCH_PER_PAGE,
@@ -696,7 +696,7 @@ function EmptyResults({ q }: { q: string }) {
 function CategorySkeleton() {
   return (
     <SkeletonStatus label="Loading search results">
-      <div className={cn("mb-5 h-4 w-32 rounded-sm bg-muted", MOTION_LOADING_STATE_CLASS)} />
+      <Skeleton pulse className="mb-5 h-4 w-32" />
       <div className={LIBRARY_POSTER_GRID_CLASS}>
         {Array.from({ length: SEARCH_PER_PAGE }).map((_, i) => (
           <PosterCardSkeleton key={i} />
@@ -712,7 +712,7 @@ function AllResultsSkeleton() {
       <div className="space-y-10">
         {Array.from({ length: 3 }).map((_, s) => (
           <div key={s}>
-            <div className={cn("mb-4 h-6 w-40 rounded-sm bg-muted", MOTION_LOADING_STATE_CLASS)} />
+            <Skeleton pulse className="mb-4 h-6 w-40" />
             <div className={LIBRARY_POSTER_GRID_CLASS}>
               {Array.from({ length: 6 }).map((_, i) => (
                 <PosterCardSkeleton key={i} />

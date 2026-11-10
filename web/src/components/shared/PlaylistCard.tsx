@@ -1,3 +1,4 @@
+import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "@tanstack/react-router";
 import { ListMusic, ListVideo } from "lucide-react";
 import { usePosterFallback } from "@/hooks/usePosterFallback";
@@ -96,12 +97,12 @@ export function PlaylistCardSkeleton() {
         MOTION_LOADING_STATE_CLASS,
       )}
     >
-      <div className="mb-3 aspect-square w-full rounded-lg bg-muted" />
+      <Skeleton className="mb-3 aspect-square w-full rounded-lg" />
       <div className="flex h-5 items-center justify-center">
-        <div className="h-4 w-3/4 rounded-sm bg-muted" />
+        <Skeleton className="h-4 w-3/4" />
       </div>
       <div className="mt-0.5 flex h-4 items-center justify-center">
-        <div className="h-3 w-1/2 rounded-sm bg-muted" />
+        <Skeleton className="h-3 w-1/2" />
       </div>
     </div>
   );

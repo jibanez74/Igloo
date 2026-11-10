@@ -16,6 +16,7 @@ const SECTIONS = [
   "buttons",
   "badges",
   "fields",
+  "controls",
   "surfaces",
   "navigation",
   "tokens",

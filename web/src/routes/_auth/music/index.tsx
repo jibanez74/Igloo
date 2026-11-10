@@ -1,3 +1,4 @@
+import { Skeleton } from "@/components/ui/skeleton";
 import { memo, useEffect, useRef, useState, type RefObject } from "react";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
@@ -49,7 +50,6 @@ import {
   LIBRARY_TAB_TRIGGER_CLASS,
   LIBRARY_TABS_LIST_CLASS,
   LIKED_TRACKS_PER_PAGE,
-  MOTION_LOADING_STATE_CLASS,
   MOTION_MICRO_CONTROL_CLASS,
   MOTION_SECTION_ENTER_CLASS,
   MOTION_SECTION_ENTER_DELAYED_CLASS,
@@ -422,17 +422,12 @@ function TrackRowSkeleton() {
       className="flex items-center gap-2 p-3 sm:gap-4 sm:px-4"
       style={{ height: `${VIRTUAL_LIST_TRACK_HEIGHT}px` }}
     >
-      <div
-        className={cn(
-          "size-9 shrink-0 rounded-full bg-muted",
-          MOTION_LOADING_STATE_CLASS,
-        )}
-      />
+      <Skeleton pulse className="size-9 shrink-0 rounded-full" />
       <div className="min-w-0 flex-1">
-        <div className={cn("h-4 w-1/2 rounded-sm bg-muted", MOTION_LOADING_STATE_CLASS)} />
-        <div className={cn("mt-2 h-3 w-1/3 rounded-sm bg-muted", MOTION_LOADING_STATE_CLASS)} />
+        <Skeleton pulse className="h-4 w-1/2" />
+        <Skeleton pulse className="mt-2 h-3 w-1/3" />
       </div>
-      <div className={cn("h-3 w-10 shrink-0 rounded-sm bg-muted", MOTION_LOADING_STATE_CLASS)} />
+      <Skeleton pulse className="h-3 w-10 shrink-0" />
     </div>
   );
 }

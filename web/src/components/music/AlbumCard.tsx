@@ -1,3 +1,4 @@
+import { Skeleton } from "@/components/ui/skeleton";
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -160,10 +161,10 @@ export function AlbumCardSkeleton() {
         MOTION_LOADING_STATE_CLASS,
       )}
     >
-      <div className="aspect-square bg-muted" />
+      <Skeleton className="aspect-square rounded-none" />
       <div className="min-h-17 p-3">
-        <div className="h-4 w-3/4 rounded-sm bg-muted" />
-        <div className="mt-2 h-3 w-1/2 rounded-sm bg-muted" />
+        <Skeleton className="h-4 w-3/4" />
+        <Skeleton className="mt-2 h-3 w-1/2" />
       </div>
     </div>
   );

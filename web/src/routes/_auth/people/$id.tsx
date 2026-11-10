@@ -1,3 +1,4 @@
+import { Skeleton } from "@/components/ui/skeleton";
 import { useQuery } from "@tanstack/react-query";
 import {
   createFileRoute,
@@ -78,20 +79,20 @@ function PersonSkeleton() {
       label="Loading person profile"
       className={MOTION_LOADING_STATE_CLASS}
     >
-      <div className="mb-6 h-9 w-24 rounded-md bg-muted" />
+      <Skeleton className="mb-6 h-9 w-24 rounded-md" />
       <div className="flex flex-col gap-6 md:flex-row md:gap-8">
-        <div className="aspect-2/3 w-48 shrink-0 rounded-xl bg-muted md:w-64" />
+        <Skeleton className="aspect-2/3 w-48 shrink-0 rounded-xl md:w-64" />
         <div className="min-w-0 flex-1 space-y-6">
-          <div className="h-12 w-3/4 rounded-md bg-muted" />
-          <div className="h-5 w-32 rounded-md bg-muted" />
-          <div className="h-40 rounded-xl bg-muted" />
-          <div className="h-24 rounded-xl bg-muted" />
+          <Skeleton className="h-12 w-3/4 rounded-md" />
+          <Skeleton className="h-5 w-32 rounded-md" />
+          <Skeleton className="h-40 rounded-xl" />
+          <Skeleton className="h-24 rounded-xl" />
         </div>
       </div>
-      <div className="mt-8 h-7 w-40 rounded-md bg-muted" />
+      <Skeleton className="mt-8 h-7 w-40 rounded-md" />
       <div className="mt-4 space-y-3">
         {Array.from({ length: 4 }, (_, i) => (
-          <div key={i} className="h-24 rounded-xl bg-muted" />
+          <Skeleton key={i} className="h-24 rounded-xl" />
         ))}
       </div>
     </SkeletonStatus>
