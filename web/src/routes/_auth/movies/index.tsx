@@ -35,7 +35,6 @@ import {
   FOCUS_VISIBLE_RING_CLASS,
   LIBRARY_TAB_TRIGGER_CLASS,
   LIBRARY_TABS_LIST_CLASS,
-  MOTION_SECTION_ENTER_CLASS,
   MOTION_SECTION_ENTER_DELAYED_CLASS,
   MOVIES_PER_PAGE,
   MUSIC_CARD_GRID_CLASS,
@@ -64,6 +63,7 @@ import {
 import { routeHead } from "@/lib/route-head";
 import { loadOnEntry } from "@/lib/route-loads";
 import SkeletonStatus from "@/components/shared/SkeletonStatus";
+import PageHeader from "@/components/shared/PageHeader";
 import type { SortOrder } from "@/types";
 
 const MOVIES_HEAD = routeHead(
@@ -230,16 +230,11 @@ function MoviesPage() {
 
   return (
     <div className="min-w-0">
-      {/* Page header */}
-      <header className={cn("mb-6 sm:mb-7", MOTION_SECTION_ENTER_CLASS)}>
-        <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
-          <Film className="size-6 shrink-0 text-primary" aria-hidden="true" />
-          <span>Movie Library</span>
-        </h1>
-        <p className="mt-1.5 max-w-2xl text-sm text-muted-foreground md:text-base">
-          Browse, organize, and enjoy your film collection
-        </p>
-      </header>
+      <PageHeader
+        icon={Film}
+        title="Movie Library"
+        description="Browse, organize, and enjoy your film collection"
+      />
 
       {/* Stats + More dropdown */}
       <div

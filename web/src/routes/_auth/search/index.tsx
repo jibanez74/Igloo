@@ -30,7 +30,6 @@ import {
   LIBRARY_POSTER_GRID_CLASS,
   LIBRARY_TAB_TRIGGER_CLASS,
   LIBRARY_TABS_LIST_CLASS,
-  MOTION_SECTION_ENTER_CLASS,
   MOTION_SECTION_ENTER_DELAYED_CLASS,
   SEARCH_PER_PAGE,
   TRACK_LIST_CONTAINER_CLASS,
@@ -50,6 +49,7 @@ import { nounForCount, pluralize } from "@/lib/format";
 import { routeHead } from "@/lib/route-head";
 import { loadOnEntry } from "@/lib/route-loads";
 import SkeletonStatus from "@/components/shared/SkeletonStatus";
+import PageHeader from "@/components/shared/PageHeader";
 
 // The tab value doubles as the visible category word, so each one carries both
 // forms - a single result reads "1 show", not "1 shows".
@@ -167,19 +167,11 @@ function SearchPage() {
   if (!trimmed) {
     return (
       <div className="min-w-0">
-        <header className={cn("mb-6 sm:mb-7", MOTION_SECTION_ENTER_CLASS)}>
-          <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
-            <Search
-              className="size-6 shrink-0 text-primary"
-              aria-hidden="true"
-            />
-            <span>Search</span>
-          </h1>
-          <p className="mt-1.5 max-w-2xl text-sm text-muted-foreground md:text-base">
-            Type a query in the search bar above to find movies, shows,
-            albums, musicians, and tracks in your library.
-          </p>
-        </header>
+        <PageHeader
+          icon={Search}
+          title="Search"
+          description="Type a query in the search bar above to find movies, shows, albums, musicians, and tracks in your library."
+        />
       </div>
     );
   }
@@ -274,18 +266,15 @@ function SearchPage() {
 
   return (
     <div className="min-w-0">
-      <header className={cn("mb-6 sm:mb-7", MOTION_SECTION_ENTER_CLASS)}>
-        <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
-          <Search
-            className="size-6 shrink-0 text-primary"
-            aria-hidden="true"
-          />
-          <span>
+      <PageHeader
+        icon={Search}
+        title={
+          <>
             Search results for{" "}
             <span className="text-primary">&lsquo;{trimmed}&rsquo;</span>
-          </span>
-        </h1>
-      </header>
+          </>
+        }
+      />
 
       <Tabs
         value={tab}

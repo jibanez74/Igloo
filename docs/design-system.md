@@ -895,6 +895,15 @@ the labelled region alone. A new home row is a `HomeMediaSection` with one of th
 
 ### 3.2 Media cards and library pages
 
+- **A top-level page opens with `PageHeader`**
+  (`components/shared/PageHeader.tsx`): an `icon` in the primary color, the
+  `title` as the page's one `h1`, an optional one-line `description`, and the
+  section entrance (§1.5). The Movies, TV Shows and Music libraries and both
+  states of Search use it; a `title` may be markup ("Search results for
+  ‘…’"). The Settings header is still its own block: it has no entrance and
+  its description sits 2px further below the title. It moves over with the
+  Settings pass.
+
 #### Poster cards
 
 Every 2:3 poster card is `components/shared/PosterCard.tsx`, implemented once.
