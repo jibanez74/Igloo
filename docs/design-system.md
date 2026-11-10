@@ -334,6 +334,12 @@ any variant fully. The base string carries the focus ring, disabled opacity,
   so an element that is not a `Button` (a link, a Radix trigger) can take it
   as its whole `className` with no `cn()` around it. Wrap it in `cn()` only
   to add classes.
+- **A button is a `Button`.** `buttonVariants()` is for an element that is
+  not a button but takes its look: a router `Link`, an anchor, or another
+  primitive with its own `data-slot` (`PaginationLink`). A raw `<button>`
+  that calls it is a lint error: it is a `Button` with the wrapper left off,
+  missing the `data-slot`/`data-variant` hooks and anything the primitive
+  gains later.
 - **Fields share one set of looks** (`ui/field-variants.ts`), chosen with
   `variant` on `Input`, `Textarea`, `NativeSelect` and `SelectTrigger`, so a
   form that mixes them reads as one:

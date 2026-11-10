@@ -1,7 +1,6 @@
 import PersonLink from "@/components/shared/PersonLink";
 import { useState } from "react";
-import { buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 export type CrewDisclosureCredit = {
   key: string;
@@ -27,18 +26,17 @@ export default function CrewDisclosure({ credits }: CrewDisclosureProps) {
 
   return (
     <div className="mt-4">
-      <button
+      <Button
         type="button"
+        variant="outline"
+        size="sm"
         aria-expanded={expanded}
         aria-controls="crew-full-list"
         onClick={() => setExpanded(v => !v)}
-        className={cn(
-          buttonVariants({ variant: "outline", size: "sm" }),
-          "touch-manipulation",
-        )}
+        className="touch-manipulation"
       >
         {expanded ? "Show less" : "Show all crew"}
-      </button>
+      </Button>
       {expanded && (
         /* role kept because Tailwind's list-none strips list semantics in
            Safari. */

@@ -55,6 +55,9 @@ function PaginationLink({
       data-slot="pagination-link"
       data-active={isActive}
       className={cn(
+        // A primitive of its own (data-slot="pagination-link") that borrows
+        // the Button's look, not a Button with the wrapper left off.
+        // eslint-disable-next-line no-restricted-syntax
         buttonVariants({
           variant: isActive ? "outline" : "ghost",
           size,

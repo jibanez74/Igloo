@@ -124,6 +124,16 @@ const restrictedClassRule = [
     message:
       "Set the look with the primitive's props instead of a class constant. See docs/design-system.md section 1.6.",
   },
+  // A raw <button> that dresses itself with buttonVariants() is a Button with
+  // the wrapper left off: it misses the data-slot hooks and any later change
+  // to the primitive's own markup. (An anchor or Link may still borrow the
+  // look.)
+  {
+    selector:
+      "JSXOpeningElement[name.name='button'] > JSXAttribute[name.name='className'] CallExpression[callee.name='buttonVariants']",
+    message:
+      "Use <Button variant=... size=...> instead of a raw <button> with buttonVariants(); see docs/design-system.md section 1.6.",
+  },
 ];
 
 export default defineConfig([
