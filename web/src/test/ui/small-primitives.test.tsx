@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
+import { expectNoClass } from "../helpers/dom";
 
 // Spinner, Label, Card and Badge take what call sites used to pass as
 // classes: a size, a tone, a surface, a variant (design-system §1.6).
@@ -90,7 +91,7 @@ describe("Card surface", () => {
     const card = surfaceOf("raised");
 
     expect(card).toHaveClass("bg-card");
-    expect(card).not.toHaveClass("bg-muted/30", "border-border/50");
+    expectNoClass(card, "bg-muted/30", "border-border/50");
   });
 
   it.each([
@@ -100,7 +101,7 @@ describe("Card surface", () => {
     const card = surfaceOf(surface);
 
     expect(card).toHaveClass(border, "bg-destructive/10");
-    expect(card).not.toHaveClass("bg-muted/30", "bg-card");
+    expectNoClass(card, "bg-muted/30", "bg-card");
   });
 
   it("gives its title the destructive tone when asked", () => {
@@ -144,6 +145,6 @@ describe("Badge", () => {
     expect(screen.getByText("Owner")).toHaveClass("px-2.5", "py-0.5", "text-xs");
     const large = screen.getByText("HD");
     expect(large).toHaveClass("px-3", "py-1", "text-sm");
-    expect(large).not.toHaveClass("px-2.5", "py-0.5", "text-xs");
+    expectNoClass(large, "px-2.5", "py-0.5", "text-xs");
   });
 });
