@@ -139,6 +139,22 @@ describe("Button quiet variants", () => {
     );
     expect(button).not.toHaveClass("bg-destructive");
   });
+
+  // It was assembled on top of outline, whose dark fill, border and text
+  // outrank a plain colour class: in the dark theme the button was not
+  // destructive at all.
+  it("keeps the destructive colour in the dark theme", () => {
+    render(<Button variant="outline-destructive">Revoke</Button>);
+
+    const button = screen.getByRole("button", { name: "Revoke" });
+    expect(button).toHaveClass("dark:hover:bg-destructive/20");
+    expect(button).not.toHaveClass(
+      "dark:text-foreground",
+      "dark:border-border",
+      "dark:bg-muted/90",
+      "dark:hover:text-foreground",
+    );
+  });
 });
 
 // buttonVariants styles elements that are not a Button (links, Radix

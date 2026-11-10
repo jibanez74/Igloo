@@ -21,9 +21,10 @@ const BUTTON_VARIANTS = {
   secondary:
     "border border-border bg-muted text-muted-foreground shadow-xs hover:bg-accent hover:text-foreground dark:border-border dark:bg-muted/90 dark:text-foreground dark:shadow-none dark:hover:bg-accent dark:hover:text-foreground [&_svg]:text-current",
   // Outline in the destructive colour, for a removal that is not the main
-  // action of its surface.
+  // action of its surface. Destructive in both themes: it does not take
+  // outline's dark fill and text.
   "outline-destructive":
-    "border border-destructive/50 bg-background text-destructive shadow-xs hover:bg-destructive/10 hover:text-destructive dark:border-border dark:bg-muted/90 dark:text-foreground dark:shadow-none dark:hover:bg-accent dark:hover:text-foreground [&_svg]:text-current",
+    "border border-destructive/50 bg-background text-destructive shadow-xs hover:bg-destructive/10 hover:text-destructive dark:bg-transparent dark:shadow-none dark:hover:bg-destructive/20 [&_svg]:text-current",
   ghost: "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
   // Ghost that rests in the muted text colour: toolbar and row icons.
   "ghost-muted":
