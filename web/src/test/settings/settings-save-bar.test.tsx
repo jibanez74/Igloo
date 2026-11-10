@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import SettingsSaveBar from "@/components/settings/SettingsSaveBar";
+import { expectNoClass } from "../helpers/dom";
 
 function renderBar(
   props: Partial<React.ComponentProps<typeof SettingsSaveBar>> = {},
@@ -24,7 +25,7 @@ describe("SettingsSaveBar", () => {
     const bar = renderBar();
 
     expect(bar).toHaveClass("bg-card");
-    expect(bar).not.toHaveClass("sticky", "bottom-4");
+    expectNoClass(bar, "sticky", "bottom-4");
     expect(bar).toHaveTextContent("No unsaved changes");
     expect(screen.getByRole("button", { name: "Reset" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Save Settings" })).toBeDisabled();
@@ -51,7 +52,7 @@ describe("SettingsSaveBar", () => {
   it("never sticks without an offset, and drops its own chrome when embedded", () => {
     const bar = renderBar({ isDirty: true, stickyClassName: undefined, embedded: true });
 
-    expect(bar).not.toHaveClass("sticky", "shadow-lg", "rounded-lg");
+    expectNoClass(bar, "sticky", "shadow-lg", "rounded-lg");
     expect(bar).toHaveClass("border-t");
   });
 

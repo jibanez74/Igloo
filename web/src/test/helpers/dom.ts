@@ -3,7 +3,7 @@
 // undo spies and stubbed globals between tests, but `Object.defineProperty`
 // writes are not tracked, so matchMedia callers must restore it themselves.
 
-import { vi } from "vitest";
+import { expect, vi } from "vitest";
 
 const realMatchMedia = window.matchMedia;
 
@@ -50,4 +50,20 @@ export function stubMediaElement() {
   vi.spyOn(window.HTMLMediaElement.prototype, "pause").mockImplementation(
     () => {},
   );
+}
+
+/**
+ * Asserts that `element` carries none of `classNames`.
+ *
+ * `expect(element).not.toHaveClass("a", "b")` does not say that: jest-dom
+ * negates "has all of them", so it passes as soon as one class is missing,
+ * and a regression that brings one of the others back goes unnoticed.
+ */
+export function expectNoClass(
+  element: Element | null | undefined,
+  ...classNames: string[]
+) {
+  for (const className of classNames) {
+    expect(element, `must not have ${className}`).not.toHaveClass(className);
+  }
 }

@@ -13,6 +13,7 @@ import {
   DialogFooter,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { expectNoClass } from "../helpers/dom";
 
 // A dialog's surface, width, elevation and title tone are props
 // (design-system §1.6), so a call site states what the dialog is and its
@@ -44,7 +45,7 @@ describe("DialogContent", () => {
     const dialog = renderDialog();
 
     expect(dialog).toHaveClass("bg-card", "border", "sm:max-w-md", "shadow-lg");
-    expect(dialog).not.toHaveClass("bg-background", "shadow-floating");
+    expectNoClass(dialog, "bg-background", "shadow-floating");
   });
 
   it.each([

@@ -12,7 +12,7 @@ import {
 import type { AudioPlayerNowPlaying } from "@/types";
 import { runContentFadeTransitionTimeout } from "../helpers/content-fade-transition";
 import { jsonResponse, requestURL } from "../helpers/api";
-import { restoreMatchMedia } from "../helpers/dom";
+import { restoreMatchMedia, expectNoClass } from "../helpers/dom";
 import { authUserData, playbackSettings } from "../helpers/fixtures";
 import { renderRoute } from "../helpers/render-route";
 
@@ -188,7 +188,7 @@ describe("settings route tab transitions", () => {
     // Opaque and in flow while clean; the floating, translucent bar used to
     // let the form read through it (design-system §3.7).
     expect(savePanel).toHaveClass("bg-card");
-    expect(savePanel).not.toHaveClass("sticky", "backdrop-blur-md");
+    expectNoClass(savePanel, "sticky", "backdrop-blur-md");
     expect(savePanel).toHaveTextContent("No unsaved changes");
     expect(screen.getByRole("button", { name: "Reset" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Save Settings" })).toBeDisabled();

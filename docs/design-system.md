@@ -290,7 +290,7 @@ assemble a look from classes.
 | `ghost-muted` | ghost resting in the muted text color | toolbar and row icons: theme toggle, notifications, edit a user |
 | `ghost-destructive` | ghost-muted whose hover turns destructive | a row's remove or delete icon |
 | `destructive` | destructive fill | the confirming action of a deletion |
-| `outline-destructive` | outline in the destructive color | a removal that is not its surface's main action: revoke a device |
+| `outline-destructive` | outline in the destructive color, in both themes | a removal that is not its surface's main action: revoke a device |
 
 Sizes are `default`, `sm`, `lg`, `icon` and `icon-sm`. `shape="pill"` rounds
 any variant fully. The base string carries the focus ring, disabled opacity,
