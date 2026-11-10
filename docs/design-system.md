@@ -29,7 +29,7 @@ this doc, prefer adding a guard too.
 | Every focus indicator in `src/` uses a shared focus-ring recipe — no hand-written widths, offsets, or `focus:` (mouse-visible) rings | `web/src/test/shared/focus-contracts.test.ts` |
 | No string in `src/` hard-codes a keyboard-shortcut hint suffix (`"Mute (M)"`) — hints go through `useShortcutHints` | `web/src/test/shared/shortcut-hint-contracts.test.ts` |
 | Input styling contracts | `web/src/test/shared/input-styles.test.ts` |
-| Fields share their looks, and a field's `className` sets no colour or height (§1.6) | `web/src/test/ui/fields.test.tsx`, ESLint `no-restricted-syntax` (**error**) |
+| Fields share their looks; a dialog's surface, width, elevation and title tone are props; neither takes a colour or height in `className` (§1.6) | `web/src/test/ui/fields.test.tsx`, `web/src/test/ui/dialog.test.tsx`, ESLint `no-restricted-syntax` (**error**) |
 | App-wide layers and motion durations are written as tokens, not numbers (§1.4, §1.5) | ESLint `no-restricted-syntax` (**error**) |
 | Shared class-string constants keep their contracts | `web/src/test/lib/constants-contracts.test.ts` |
 | Primitives and the baseline pages render the same pixels as the committed baselines, pixel for pixel, both themes (§2.5) | `web/e2e/visual/*.visual.ts` (CI job `test-visual`) |
@@ -339,11 +339,29 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
   has no `glass`, and its `inset` sits flat (`shadow-none`) where the inset
   `Input` keeps a hairline shadow: both as the Settings forms are drawn
   today.
-- **A field's `className` is for layout**: a margin, padding around an icon
-  (`pl-10`), a width, `resize-none`, a font (`font-mono`). A colour or
-  height class there, or a class constant, is a lint error — the look is the
-  variant's. This is the rule every primitive family is moving to; the lint
-  list in `web/eslint.config.js` (`styledByProps`) names the ones under it.
+- **A dialog states what it is with props** (`ui/dialog.tsx`,
+  `ui/alert-dialog.tsx`):
+
+  | Prop | Values | Notes |
+  |---|---|---|
+  | `DialogContent size` | `md` (default), `lg`, `xl`, `2xl` | the `sm:max-w-*` it may grow to; below `sm` every dialog spans the viewport less a margin |
+  | `DialogContent elevation` | `raised` (default), `floating` | `floating` (§1.4) for a dialog that opens over media: Resume, Playback Settings |
+  | `DialogTitle tone`, `AlertDialogTitle tone` | `default`, `destructive` | `destructive` when the action cannot be undone |
+
+  The surface is the card (`bg-card`) for every dialog; the title takes the
+  page's text color and the description is muted, so neither needs a color
+  class. `AlertDialogContent` keeps its one width. `DialogFooter` sets the
+  gap between its buttons, stacked on a phone and in a row from `sm` up; a
+  `gap-*` class on it is a lint error (nine footers once passed
+  `gap-2 sm:gap-0`, which left their buttons touching).
+- **A primitive's `className` is for layout**: a margin, padding around an
+  icon (`pl-10`), a width, scrolling (`max-h-[85vh] overflow-y-auto`),
+  `resize-none`, a font (`font-mono`), a text size. A color or height class
+  there, or a class constant, is a lint error — the look is the props'. This
+  is the rule every primitive family is moving to; the lint list in
+  `web/eslint.config.js` (`styledByProps`) names the ones under it: the
+  fields and the dialog parts so far. The `DIALOG_SCROLL_*` constants are
+  the one exception, since they only lay a dialog out (below).
 - **`Badge`** (`ui/badge.tsx`) is the primitive for static pills — count
   pills, rating chips, status tags. It is non-interactive by design (a
   `span`); actionable chips are Buttons. The one rating chip is
@@ -355,8 +373,7 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
   non-interactive.
 - **Narrow primitive contracts are intentional.** Alert is destructive-only;
   AlertDialog has one default size; dropdown items are non-inset; Select uses
-  its default trigger size and item-aligned content; Separator is horizontal
-  and decorative. Add a branch only when a production surface requires it.
+  item-aligned content; Separator is horizontal and decorative. Add a branch only when a production surface requires it.
 - **A dialog that can outgrow the viewport scrolls its body, not itself.**
   Technical Details and Edit Movie compose `DIALOG_SCROLL_CONTENT_CLASS` on
   `DialogContent` (a flex column capped at `100svh - 2rem`, no padding of its

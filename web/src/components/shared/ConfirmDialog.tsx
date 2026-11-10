@@ -46,7 +46,6 @@ export default function ConfirmDialog({
   return (
     <AlertDialog open={open} onOpenChange={handleOpenChange}>
       <AlertDialogContent
-        className="border-border bg-card"
         onCloseAutoFocus={
           restoreFocusRef
             ? event => {
@@ -60,11 +59,11 @@ export default function ConfirmDialog({
         }
       >
         <AlertDialogHeader>
-          <AlertDialogTitle className="text-destructive">
+          <AlertDialogTitle tone="destructive">
             {title}
           </AlertDialogTitle>
           {description ? (
-            <AlertDialogDescription className="text-muted-foreground">
+            <AlertDialogDescription>
               {description}
             </AlertDialogDescription>
           ) : null}

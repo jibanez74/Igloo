@@ -52,10 +52,10 @@ const STREAM_PROFILES = [
 function DialogStage() {
   return (
     <Dialog open onOpenChange={noop}>
-      <DialogContent className="border-border bg-card text-foreground sm:max-w-md">
+      <DialogContent>
         <DialogHeader>
-          <DialogTitle className="text-foreground">Add User</DialogTitle>
-          <DialogDescription className="text-muted-foreground">
+          <DialogTitle>Add User</DialogTitle>
+          <DialogDescription>
             Create a new user account.
           </DialogDescription>
         </DialogHeader>
@@ -66,7 +66,7 @@ function DialogStage() {
             </Label>
             <Input id="gallery-dialog-name" placeholder="Full name" />
           </div>
-          <DialogFooter className="gap-2 pt-2 sm:gap-0">
+          <DialogFooter className="pt-2">
             <Button type="button" variant="outline">
               Cancel
             </Button>

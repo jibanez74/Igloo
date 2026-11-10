@@ -251,10 +251,8 @@ export default function TechnicalDetailsDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className={cn(
-          DIALOG_SCROLL_CONTENT_CLASS,
-          "border-border bg-card sm:max-w-2xl",
-        )}
+        size="2xl"
+        className={DIALOG_SCROLL_CONTENT_CLASS}
         onOpenAutoFocus={handleOpenAutoFocus}
         onCloseAutoFocus={
           restoreFocusRef
@@ -272,11 +270,11 @@ export default function TechnicalDetailsDialog({
             ref={titleRef}
             id="technical-details-dialog-title"
             tabIndex={-1}
-            className="text-foreground outline-hidden"
+            className="outline-hidden"
           >
             Technical details
           </DialogTitle>
-          <DialogDescription className="text-muted-foreground">
+          <DialogDescription>
             Scanner-detected file and stream information. Each line below states
             what is being described, then its value—for example, file size and
             the container format. Use headings to move between sections.

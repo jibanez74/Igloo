@@ -131,7 +131,8 @@ export default function SpotifyRequestDialog<T extends SpotifySearchResult>({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-h-[85vh] overflow-y-auto border-border bg-card sm:max-w-2xl"
+        size="2xl"
+        className="max-h-[85vh] overflow-y-auto"
         onCloseAutoFocus={
           restoreFocusRef
             ? event => {
@@ -142,8 +143,8 @@ export default function SpotifyRequestDialog<T extends SpotifySearchResult>({
         }
       >
         <DialogHeader>
-          <DialogTitle className="text-foreground">{copy.heading}</DialogTitle>
-          <DialogDescription className="text-muted-foreground">
+          <DialogTitle>{copy.heading}</DialogTitle>
+          <DialogDescription>
             {copy.description}
           </DialogDescription>
         </DialogHeader>

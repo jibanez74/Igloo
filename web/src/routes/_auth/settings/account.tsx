@@ -968,15 +968,14 @@ function AccountSettings() {
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={handleDeleteDialogOpenChange}>
         <DialogContent
-          className="border-border bg-card text-foreground sm:max-w-md"
           onCloseAutoFocus={event => {
             event.preventDefault();
             focusDialogRestoreTarget(deleteAccountButtonRef.current);
           }}
         >
           <DialogHeader>
-            <DialogTitle className="text-destructive">Delete Account</DialogTitle>
-            <DialogDescription className="text-muted-foreground">
+            <DialogTitle tone="destructive">Delete Account</DialogTitle>
+            <DialogDescription>
               This action cannot be undone. This will permanently delete your
               account and remove all associated data.
             </DialogDescription>
@@ -1019,7 +1018,7 @@ function AccountSettings() {
               )}
             </div>
           </div>
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter>
             <Button
               variant="outline"
               onClick={() => handleDeleteDialogOpenChange(false)}

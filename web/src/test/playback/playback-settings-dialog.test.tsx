@@ -4,7 +4,6 @@ import PlaybackSettingsDialog from "@/components/movies/PlaybackSettingsDialog";
 import {
   AUDIO_TRACK_MODE_NOTE,
   AUDIO_TRACK_MODE_NOTE_ID,
-  MOTION_MEDIA_DIALOG_SURFACE_CLASS,
   MOVIE_TECHNICAL_DETAILS_KEY,
   PLAYBACK_SETTINGS_SUMMARY_LOADING,
 } from "@/lib/constants";
@@ -84,9 +83,15 @@ describe("PlaybackSettingsDialog", () => {
       { queryClient },
     );
 
-    expect(screen.getByRole("dialog")).toHaveClass(
-      ...MOTION_MEDIA_DIALOG_SURFACE_CLASS.split(" "),
+    // A dialog over media: the card surface with the floating elevation,
+    // and no entrance animation under reduced motion.
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveClass(
+      "bg-card",
+      "shadow-floating",
+      "motion-reduce:animate-none",
     );
+    expect(dialog).not.toHaveClass("shadow-lg");
     expect(
       screen.getByRole("heading", { name: "Playback Settings" }),
     ).toBeInTheDocument();

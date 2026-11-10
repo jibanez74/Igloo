@@ -3,7 +3,6 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import ResumeDialog from "@/components/playback/ResumeDialog";
-import { MOTION_MEDIA_DIALOG_SURFACE_CLASS } from "@/lib/constants";
 
 function ResumeDialogHarness({
   onResume,
@@ -54,9 +53,13 @@ describe("ResumeDialog", () => {
     await waitFor(() => {
       expect(resumeButton).toHaveFocus();
     });
-    expect(screen.getByRole("dialog")).toHaveClass(
-      ...MOTION_MEDIA_DIALOG_SURFACE_CLASS.split(" "),
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveClass(
+      "bg-card",
+      "shadow-floating",
+      "motion-reduce:animate-none",
     );
+    expect(dialog).not.toHaveClass("shadow-lg");
 
     await user.click(resumeButton);
 

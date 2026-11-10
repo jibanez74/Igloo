@@ -582,12 +582,6 @@ export const MOTION_TRACK_ICON_BUTTON_CLASS =
 export const MOTION_TRACK_MENU_TRIGGER_CLASS = MOTION_MICRO_COLORS_CLASS;
 export const MOTION_PLAYER_CHROME_PANEL_CLASS =
   "transition-[opacity,transform] duration-standard ease-out motion-reduce:transform-none motion-reduce:transition-none";
-/**
- * The surface of a dialog that floats over media. `shadow-floating` is the
- * elevation of every surface floating on the canvas (design-system §1.4).
- */
-export const MOTION_MEDIA_DIALOG_SURFACE_CLASS =
-  "border-border bg-card shadow-floating motion-reduce:animate-none";
 export const MOTION_MEDIA_OVERLAY_ENTER_CLASS =
   "animate-in duration-standard ease-out fill-mode-both zoom-in-95 fade-in slide-in-from-bottom-2 motion-reduce:translate-y-0 motion-reduce:scale-100 motion-reduce:animate-none motion-reduce:opacity-100";
 export const MOTION_PLAYER_CHROME_ENTER_CLASS =

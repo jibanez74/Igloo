@@ -219,7 +219,6 @@ function PlaylistForm({
 
   return (
     <DialogContent
-      className="border-border bg-card sm:max-w-md"
       onCloseAutoFocus={
         restoreFocusRef
           ? event => {
@@ -230,8 +229,8 @@ function PlaylistForm({
       }
     >
       <DialogHeader>
-        <DialogTitle className="text-foreground">{config.title}</DialogTitle>
-        <DialogDescription className="text-muted-foreground">
+        <DialogTitle>{config.title}</DialogTitle>
+        <DialogDescription>
           {mode === "create"
             ? api.createDescription
             : "Update the playlist details."}
@@ -279,7 +278,7 @@ function PlaylistForm({
           />
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-0">
+        <DialogFooter>
           <Button
             type="button"
             variant="outline"

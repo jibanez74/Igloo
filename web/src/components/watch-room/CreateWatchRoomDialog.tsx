@@ -223,7 +223,8 @@ export default function CreateWatchRoomDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="flex max-h-[90vh] flex-col overflow-hidden border-border bg-card sm:max-w-xl"
+        size="xl"
+        className="flex max-h-[90vh] flex-col overflow-hidden"
         onCloseAutoFocus={event => {
           if (!restoreFocusRef) return;
           event.preventDefault();
@@ -232,8 +233,8 @@ export default function CreateWatchRoomDialog({
       >
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
           <DialogHeader>
-            <DialogTitle className="text-foreground">Watch together</DialogTitle>
-            <DialogDescription className="text-muted-foreground">
+            <DialogTitle>Watch together</DialogTitle>
+            <DialogDescription>
               Create a private room for <strong>{movieTitle}</strong>. Everyone
               you invite will use these playback settings and can control
               playback together.
@@ -426,7 +427,7 @@ export default function CreateWatchRoomDialog({
             </section>
           </div>
 
-          <DialogFooter className="gap-2 border-t border-border pt-4 sm:gap-0">
+          <DialogFooter className="border-t border-border pt-4">
             <Button
               type="button"
               variant="ghost"

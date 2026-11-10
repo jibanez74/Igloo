@@ -167,7 +167,6 @@ export default function AddToPlaylistDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="border-border bg-card sm:max-w-md"
         onCloseAutoFocus={
           restoreFocusRef
             ? event => {
@@ -181,8 +180,8 @@ export default function AddToPlaylistDialog({
         <LiveAnnouncer message={announcement} />
 
         <DialogHeader>
-          <DialogTitle className="text-foreground">Add to Playlist</DialogTitle>
-          <DialogDescription className="text-muted-foreground">
+          <DialogTitle>Add to Playlist</DialogTitle>
+          <DialogDescription>
             Add "{itemTitle}" to one or more playlists.
           </DialogDescription>
         </DialogHeader>
@@ -261,7 +260,7 @@ export default function AddToPlaylistDialog({
           </div>
         )}
 
-        <DialogFooter className="gap-2 sm:gap-0">
+        <DialogFooter>
           <Button
             type="button"
             variant="outline"
