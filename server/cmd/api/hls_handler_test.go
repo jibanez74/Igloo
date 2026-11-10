@@ -2,14 +2,17 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -1455,6 +1458,72 @@ func TestHLSManifest_RepeatedRequestsReusePersonalSession(t *testing.T) {
 
 	if calls := ffmpegRunner.CallCount(); calls != 1 {
 		t.Fatalf("FFmpeg calls = %d, want 1 for repeated session URL", calls)
+	}
+}
+
+// A running remux re-sends its growing playlist every few seconds, so a
+// playlist goes out compressed to a client that accepts gzip and unchanged to
+// one that does not.
+func TestHLSManifest_CompressesThePlaylistForClientsThatAcceptGzip(t *testing.T) {
+	app := setupTestApp(t)
+	// Enough segments for a playlist longer than one packet.
+	fixture := fmp4testutil.Fixture{SafeVideo: true, Segments: 40}
+	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{hlsRunPlan(fixture)}}
+
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+	handler := authenticatedRouter(t, app, 42)
+	manifestURL := fmt.Sprintf(
+		"/api/movies/%d/hls/%s/playlist.m3u8?audio_track=0&playback_session=%s&start=0",
+		movieID,
+		helpers.HLS_PROFILE_720P_3MBPS,
+		testPlaybackSessionID,
+	)
+
+	plainRequest := httptest.NewRequest(http.MethodGet, manifestURL, nil)
+	plain := httptest.NewRecorder()
+	handler.ServeHTTP(plain, plainRequest)
+	if plain.Code != http.StatusOK {
+		t.Fatalf("manifest status = %d, want 200: %s", plain.Code, plain.Body.String())
+	}
+	if plain.Header().Get("Content-Encoding") != "" {
+		t.Fatalf("Content-Encoding = %q for a client that did not ask for gzip", plain.Header().Get("Content-Encoding"))
+	}
+	if !slices.Contains(plain.Header().Values("Vary"), "Accept-Encoding") {
+		t.Errorf("Vary = %q, want it to name Accept-Encoding", plain.Header().Values("Vary"))
+	}
+	assertOpenAPIExchange(t, "hlsManifest", plainRequest, plain)
+
+	gzipRequest := httptest.NewRequest(http.MethodGet, manifestURL, nil)
+	gzipRequest.Header.Set("Accept-Encoding", "gzip")
+	compressed := httptest.NewRecorder()
+	handler.ServeHTTP(compressed, gzipRequest)
+	if compressed.Code != http.StatusOK {
+		t.Fatalf("gzip manifest status = %d, want 200: %s", compressed.Code, compressed.Body.String())
+	}
+	if compressed.Header().Get("Content-Encoding") != "gzip" {
+		t.Fatalf("Content-Encoding = %q, want gzip", compressed.Header().Get("Content-Encoding"))
+	}
+	if compressed.Header().Get("Content-Type") != hlsPlaylistContentType {
+		t.Errorf("Content-Type = %q, want %q", compressed.Header().Get("Content-Type"), hlsPlaylistContentType)
+	}
+	if compressed.Header().Get("Content-Length") != strconv.Itoa(compressed.Body.Len()) {
+		t.Errorf("Content-Length = %q for a body of %d bytes", compressed.Header().Get("Content-Length"), compressed.Body.Len())
+	}
+	if compressed.Body.Len() >= plain.Body.Len()/2 {
+		t.Errorf("compressed playlist is %d bytes of %d", compressed.Body.Len(), plain.Body.Len())
+	}
+	assertOpenAPIExchange(t, "hlsManifest", gzipRequest, compressed)
+
+	reader, err := gzip.NewReader(compressed.Body)
+	if err != nil {
+		t.Fatalf("playlist is not gzip: %v", err)
+	}
+	playlist, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("read gzip playlist: %v", err)
+	}
+	if string(playlist) != plain.Body.String() {
+		t.Error("decompressed playlist differs from the uncompressed one")
 	}
 }
 

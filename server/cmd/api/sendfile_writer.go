@@ -30,7 +30,7 @@ func restoreSendfile(next http.Handler) http.Handler {
 			return
 		}
 
-		next.ServeHTTP(&sendfileResponseWriter{ResponseWriter: w, readerFrom: readerFrom}, r)
+		next.ServeHTTP(&sendfileResponseWriter{ResponseWriter: w, readerFrom: readerFrom, acceptsGzip: acceptsGzip(r)}, r)
 	})
 }
 
@@ -52,10 +52,18 @@ func unwrapReaderFrom(w http.ResponseWriter) (io.ReaderFrom, bool) {
 	}
 }
 
+// sendfileResponseWriter is the writer a handler in the session group sees, so
+// it also carries whether the client accepts gzip to helpers.WriteBody, which
+// has no request to ask.
 type sendfileResponseWriter struct {
 	http.ResponseWriter
 	readerFrom  io.ReaderFrom
 	wroteHeader bool
+	acceptsGzip bool
+}
+
+func (w *sendfileResponseWriter) AcceptsGzip() bool {
+	return w.acceptsGzip
 }
 
 func (w *sendfileResponseWriter) Write(b []byte) (int, error) {

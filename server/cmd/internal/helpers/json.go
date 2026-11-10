@@ -1,12 +1,53 @@
 package helpers
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
+	"sync"
 	"time"
 )
+
+const (
+	// gzipMinBytes is about one TCP segment: a smaller body is a single packet
+	// either way, so compressing it only costs CPU.
+	gzipMinBytes = 1400
+	// maxPooledBuffer keeps one unusually large response from staying in the
+	// pool for the life of the process.
+	maxPooledBuffer = 1 << 20
+)
+
+var responseBuffers = sync.Pool{New: func() any { return new(bytes.Buffer) }}
+
+// BestSpeed shrinks the API's JSON to about a quarter in half the CPU of the
+// default level, which gains only another tenth.
+var gzipWriters = sync.Pool{New: func() any {
+	writer, _ := gzip.NewWriterLevel(io.Discard, gzip.BestSpeed)
+	return writer
+}}
+
+// gzipAccepter is a response writer that knows whether its client accepts
+// gzip. WriteBody takes no request, so the middleware that wraps the writer
+// records the answer on it.
+type gzipAccepter interface {
+	AcceptsGzip() bool
+}
+
+func getResponseBuffer() *bytes.Buffer {
+	buf := responseBuffers.Get().(*bytes.Buffer)
+	buf.Reset()
+	return buf
+}
+
+func putResponseBuffer(buf *bytes.Buffer) {
+	if buf.Cap() <= maxPooledBuffer {
+		responseBuffers.Put(buf)
+	}
+}
 
 // readJSONTimeout bounds how long a handler will wait for a request body.
 // http.MaxBytesReader caps the body's size but not the time taken to send it,
@@ -32,10 +73,17 @@ type JSONResponse struct {
 // WriteJSON marshals data to JSON and writes it to the response with the given status code.
 // Optional headers can be provided to add custom response headers.
 func WriteJSON(w http.ResponseWriter, status int, data any, headers ...http.Header) error {
-	out, err := json.Marshal(data)
+	buf := getResponseBuffer()
+	defer putResponseBuffer(buf)
+
+	// The encoder writes into a reused buffer where json.Marshal returns a
+	// fresh copy of every body. It ends the value with a newline that Marshal
+	// does not write.
+	err := json.NewEncoder(buf).Encode(data)
 	if err != nil {
 		return err
 	}
+	buf.Truncate(buf.Len() - 1)
 
 	if len(headers) > 0 {
 		for key, value := range headers[0] {
@@ -44,9 +92,48 @@ func WriteJSON(w http.ResponseWriter, status int, data any, headers ...http.Head
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+
+	return WriteBody(w, status, buf.Bytes())
+}
+
+// WriteBody writes a text body the handler has in full, gzip-compressed when
+// the client accepts it and the body is large enough to gain. The caller sets
+// Content-Type first. Files and media never come through here: they are
+// streamed, and compressing them would take them off the sendfile path.
+func WriteBody(w http.ResponseWriter, status int, body []byte) error {
+	header := w.Header()
+
+	accepter, negotiates := w.(gzipAccepter)
+	isCompressible := negotiates && len(body) >= gzipMinBytes
+	if isCompressible {
+		header.Add("Vary", "Accept-Encoding")
+	}
+
+	compress := isCompressible && accepter.AcceptsGzip()
+	if compress {
+		compressed := getResponseBuffer()
+		defer putResponseBuffer(compressed)
+
+		writer := gzipWriters.Get().(*gzip.Writer)
+		defer gzipWriters.Put(writer)
+		writer.Reset(compressed)
+
+		_, err := writer.Write(body)
+		if err == nil {
+			err = writer.Close()
+		}
+		if err != nil {
+			return err
+		}
+
+		body = compressed.Bytes()
+		header.Set("Content-Encoding", "gzip")
+	}
+
+	header.Set("Content-Length", strconv.Itoa(len(body)))
 	w.WriteHeader(status)
 
-	_, err = w.Write(out)
+	_, err := w.Write(body)
 
 	return err
 }

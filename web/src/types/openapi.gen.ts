@@ -5731,6 +5731,12 @@ export interface components {
         HLSPlaylistResponse: {
             headers: {
                 "Cache-Control"?: "no-store";
+                /** @description Present when the playlist is 1,400 bytes or more and the request's Accept-Encoding accepts gzip; the body is then gzip-compressed. */
+                "Content-Encoding"?: "gzip";
+                /** @description Names Accept-Encoding when the playlist is 1,400 bytes or more, compressed or not, alongside the session middleware's Cookie. */
+                Vary?: string;
+                /** @description Length of the body as sent, after any compression. */
+                "Content-Length"?: number;
                 /** @description Profile FFmpeg actually ran. This differs from the requested profile in the path when the remux safety gate forces a transcode (it copies H.264 for every client and HEVC only for a request with video_codecs=hevc), so a `remux` request can be answered with a transcode profile here, and when a requested transcode profile is taller than the effective encoder supports (software encoding runs 2160p_16mbps as 1080p_8mbps). */
                 "X-Igloo-Effective-Profile": components["schemas"]["HLSProfile"];
                 /** @description Seconds into the source file where the session's media really begins, at or before the requested start. Stream copy cannot cut mid-GOP, so a copy-video session starts on the source keyframe FFmpeg's input seek lands on, which the server measures; that can be more than one keyframe before the requested start. The value is the time of that first copied video packet: in an MP4 source the session's first audio packet can precede it by up to about 0.1 s. Omitted when it has not been measured. */

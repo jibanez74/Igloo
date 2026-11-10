@@ -354,7 +354,9 @@ func (app *Application) InitSession() {
 	sessionManager.Cookie.Secure = app.Config.SessionCookieSecure
 	sessionManager.ErrorFunc = func(w http.ResponseWriter, r *http.Request, err error) {
 		app.Logger.Error("session middleware failed", "error", err)
+		// The handler's headers describe the body this error replaces.
 		w.Header().Del("Content-Length")
+		w.Header().Del("Content-Encoding")
 		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		writer, ok := w.(*sessionErrorResponseWriter)
 		if ok {

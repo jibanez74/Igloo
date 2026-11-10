@@ -2,13 +2,19 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+
+	"igloo/cmd/internal/helpers"
 )
 
 // countingReaderFrom stands in for the real response, which reaches
@@ -162,11 +168,86 @@ func TestSessionCommitControlsSendfile(t *testing.T) {
 				if copyErr == nil || target.calls != 0 || target.body.Len() != 0 {
 					t.Fatalf("failed session streamed payload: calls=%d, error=%v", target.calls, copyErr)
 				}
-				if recorder.Code != http.StatusInternalServerError || recorder.Header().Get("Content-Length") != "" {
+				// The error replaces the handler's body, so the length is its own.
+				errorLength := strconv.Itoa(recorder.Body.Len())
+				if recorder.Code != http.StatusInternalServerError || recorder.Header().Get("Content-Length") != errorLength {
 					t.Fatalf("invalid session error headers: status=%d headers=%v", recorder.Code, recorder.Header())
 				}
 			} else if copyErr != nil || target.calls != 1 || target.body.String() != "payload" {
 				t.Fatalf("successful session lost sendfile: calls=%d, body=%q, error=%v", target.calls, target.body.String(), copyErr)
+			}
+		})
+	}
+}
+
+// The session group's writer tells helpers.WriteJSON whether the client
+// accepts gzip, and a session that fails to commit answers with a plain error
+// whatever the handler had already said about its own body.
+func TestSessionGroupCompressesJSONForClientsThatAcceptGzip(t *testing.T) {
+	data := helpers.JSONResponse{Data: map[string]any{"overview": strings.Repeat("a quiet film about snow. ", 200)}}
+
+	tests := []struct {
+		name           string
+		acceptEncoding string
+		failCommit     bool
+		wantStatus     int
+		wantEncoding   string
+	}{
+		{name: "gzip accepted", acceptEncoding: "gzip, deflate, br", wantStatus: http.StatusOK, wantEncoding: "gzip"},
+		{name: "no Accept-Encoding", wantStatus: http.StatusOK},
+		{name: "gzip refused", acceptEncoding: "gzip;q=0, identity", wantStatus: http.StatusOK},
+		{name: "session commit fails", acceptEncoding: "gzip", failCommit: true, wantStatus: http.StatusInternalServerError},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := setupSessionTestApp(t)
+			if tt.failCommit {
+				_, err := app.DB.Exec(`CREATE TRIGGER fail_session_insert BEFORE INSERT ON sessions BEGIN SELECT RAISE(FAIL, 'private storage failure'); END`)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			handler := app.LoadAndSaveSession(restoreSendfile(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				app.SessionManager.Put(r.Context(), cookieUserID, int64(1))
+				_ = helpers.WriteJSON(w, http.StatusOK, data)
+			})))
+			request := httptest.NewRequest(http.MethodGet, "/probe", nil)
+			if tt.acceptEncoding != "" {
+				request.Header.Set("Accept-Encoding", tt.acceptEncoding)
+			}
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, request)
+
+			if recorder.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d: %s", recorder.Code, tt.wantStatus, recorder.Body.String())
+			}
+			if recorder.Header().Get("Content-Encoding") != tt.wantEncoding {
+				t.Fatalf("Content-Encoding = %q, want %q", recorder.Header().Get("Content-Encoding"), tt.wantEncoding)
+			}
+			if recorder.Header().Get("Content-Length") != strconv.Itoa(recorder.Body.Len()) {
+				t.Errorf("Content-Length = %q for a body of %d bytes", recorder.Header().Get("Content-Length"), recorder.Body.Len())
+			}
+
+			body := recorder.Body.Bytes()
+			if tt.wantEncoding == "gzip" {
+				reader, err := gzip.NewReader(recorder.Body)
+				if err != nil {
+					t.Fatalf("body is not gzip: %v", err)
+				}
+				body, err = io.ReadAll(reader)
+				if err != nil {
+					t.Fatalf("read gzip body: %v", err)
+				}
+			}
+
+			var envelope helpers.JSONResponse
+			err := json.Unmarshal(body, &envelope)
+			if err != nil {
+				t.Fatalf("body is not one JSON envelope: %v: %s", err, body)
+			}
+			if envelope.Error != tt.failCommit {
+				t.Errorf("envelope error = %t, want %t: %s", envelope.Error, tt.failCommit, body)
 			}
 		})
 	}

@@ -207,7 +207,7 @@ func (app *Application) serveHLSManifest(w http.ResponseWriter, r *http.Request,
 	}
 
 	writeHLSPlaylistHeaders(w, session)
-	_, _ = w.Write([]byte(playlist))
+	_ = helpers.WriteBody(w, http.StatusOK, []byte(playlist))
 }
 
 // writeHLSPlaylistHeaders publishes the delivery shape the client cannot infer

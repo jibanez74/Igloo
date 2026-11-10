@@ -334,7 +334,7 @@ Application errors before streaming normally use the JSON error envelope. Failur
 
 Direct files emit a strong ETag derived from size and nanosecond mtime plus Last-Modified. Ready HLS assets emit Last-Modified but **no ETag**. Matching `If-None-Match` (including `*`) or applicable `If-Modified-Since` can return `304`; `If-Match` with a specific tag cannot match an HLS asset. `If-Range` validates a range or causes a full `200` when it does not match; HLS supports date validators, while direct files also support their ETag. Do not assume every non-200 response has JSON.
 
-HLS manifest, asset, and stop handlers set `Cache-Control: no-store`, including handler errors. Authentication/session middleware can answer before that header is set, and Go's range-error response strips it. Successful subtitle streams also use `no-store`. Retry delays by cause are listed once in the [settings table](#operational-settings-and-budgets).
+HLS manifest, asset, and stop handlers set `Cache-Control: no-store`, including handler errors. A playlist of 1,400 bytes or more is sent gzip-compressed to a client whose `Accept-Encoding` accepts it, since a running copy-video session re-sends its growing playlist on every reload; segments and `init.mp4` are never compressed, which keeps them on the sendfile path. Authentication/session middleware can answer before that header is set, and Go's range-error response strips it. Successful subtitle streams also use `no-store`. Retry delays by cause are listed once in the [settings table](#operational-settings-and-budgets).
 
 ### Web-client recovery policies
 
