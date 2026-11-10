@@ -45,6 +45,7 @@ const OVERLAYS = [
   ["select", "listbox"],
   ["dropdown", "menu"],
   ["popover", "dialog"],
+  ["tooltip", "tooltip"],
 ] as const;
 
 async function openGallery(page: Page, theme: Theme, query = "") {

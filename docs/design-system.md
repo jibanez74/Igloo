@@ -611,10 +611,10 @@ any variant fully. The base string carries the focus ring, disabled opacity,
   `Slot`). A Radix upgrade is therefore a change to that package and, at
   most, to these files, checked by the screenshot baselines (§2.5).
 - Icons are lucide (§1.1).
-- 25 primitives live in `components/ui`: alert, alert-dialog, avatar,
+- 26 primitives live in `components/ui`: alert, alert-dialog, avatar,
   badge, button, card, checkbox, dialog, dropdown-menu, input, label,
   native-select, pagination, popover, radio-card, select, separator, sheet,
-  sidebar, skeleton, sonner, spinner, switch, tabs, textarea — plus `sidebar-context.tsx`, which holds
+  sidebar, skeleton, sonner, spinner, switch, tabs, textarea, tooltip — plus `sidebar-context.tsx`, which holds
   the sidebar's context so the primitive and `AppSidebar` can both read it,
   and `field-variants.ts`, the looks the field primitives share (§1.6).
 - Three of them are Igloo's own, with no Radix part underneath:
@@ -632,6 +632,20 @@ any variant fully. The base string carries the focus ring, disabled opacity,
     square one). It has no role and does not pulse; the `SkeletonStatus`
     around the layout does both (§3.4). `pulse` is for a box that loads on
     its own.
+- **`Tooltip` names a control whose meaning is an icon.** It wraps the
+  control (`<Tooltip label="Switch to light theme"><Button …/></Tooltip>`)
+  and shows on hover after 500ms and at once on keyboard focus; Escape
+  closes it. Rules:
+  - It never opens on touch, so it holds nothing a touch user needs. The
+    control keeps its own `aria-label`; never a native `title`.
+  - By default it repeats the control's name and is **not** announced as its
+    description (Radix would read the name twice). `describes` is for a
+    tooltip that adds something (why a control is disabled, a shortcut).
+  - It is drawn inverted (`bg-foreground text-background`) so it never
+    reads as a menu, on the `z-popover` layer, at the micro duration.
+  - `AppBoot` mounts one `TooltipProvider`, which lets the next tooltip show
+    at once after the first; a `Tooltip` rendered outside it (a test, the
+    gallery) brings its own. Inside a fullscreen player pass `container`.
 - `NativeSelect` is the browser's own `<select>` styled as a field, for where
   the platform picker is the better control: touch devices (the playback
   settings pickers switch to it on a coarse pointer) and short filter lists
@@ -779,7 +793,7 @@ and meta correctly, and a hard reload shows no theme flash.
 
 The gallery (`/gallery`, `web/src/components/gallery/`) renders every
 primitive in every variant and state, plus the overlays open
-(`/gallery?open=dialog`, `alert-dialog`, `select`, `dropdown`, `popover`). It
+(`/gallery?open=dialog`, `alert-dialog`, `select`, `dropdown`, `popover`, `tooltip`). It
 is the place to look at a primitive in both themes, and it is what the
 screenshot baselines shoot. `/gallery?section=buttons` shows one section
 alone, which is how the baselines shoot them: where a section sits on the
