@@ -661,6 +661,12 @@ not part of `make check`.
      (`e2e/visual/png.ts`), with no such allowance. Its failure names the
      pixel count and the box that holds them. `comparator.visual.ts` checks
      the decoder against the browser's own decoding.
+- **A mismatch is retried before it fails.** Chromium does not always
+  rasterise one page to the same pixels: about one test in a hundred comes
+  out with a few anti-aliased pixels of a rounded corner one shade apart. The
+  exact pass shoots up to three times, and a comparing run retries a failed
+  test twice on a fresh page, reporting it as flaky. A real change differs
+  every time, so it still fails.
 - A laptop renders text differently from CI, so a local run executes the
   specs without comparing pixels.
 - **To prove a change is invisible locally**, draw a set on the base commit and

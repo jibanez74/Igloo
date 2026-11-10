@@ -28,6 +28,12 @@ export default defineConfig({
   fullyParallel: false,
   // The mock API server is stateful, as in playwright.config.ts.
   workers: 1,
+  // Chromium does not always rasterise one page to the same pixels: now and
+  // then a load comes out with a few anti-aliased pixels of a rounded corner
+  // one shade apart (about one test in a hundred). A real change differs on
+  // every load, so a comparing run gets two more tries, on fresh pages, and
+  // a test that needed one is reported as flaky rather than hidden.
+  retries: comparesPixels ? 2 : 0,
   reporter: [["list"], ["html", { open: "never" }]],
   // One canonical set: no platform or browser suffix in the file names.
   snapshotPathTemplate: `${snapshotDir}/{testFileName}/{arg}{ext}`,

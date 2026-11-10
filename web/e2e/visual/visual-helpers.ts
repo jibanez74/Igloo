@@ -24,6 +24,9 @@ export async function settle(page: Page) {
   await page.evaluate(() => document.fonts.ready);
 }
 
+/** Shots taken before the exact comparison gives up on a mismatch. */
+const EXACT_ATTEMPTS = 3;
+
 type ScreenshotOptions = {
   /** For a page target: the whole scrollable page instead of the viewport. */
   fullPage?: boolean;
@@ -76,10 +79,36 @@ export async function expectScreenshot(
   if (info.project.ignoreSnapshots || !existsSync(baselinePath)) return;
 
   const shared = { animations: "disabled", caret: "hide", scale: "css" } as const;
-  const actual = isPage(target)
-    ? await target.screenshot({ ...shared, fullPage })
-    : await target.screenshot(shared);
-  const difference = comparePngs(readFileSync(baselinePath), actual);
+  const shoot = () =>
+    isPage(target)
+      ? target.screenshot({ ...shared, fullPage })
+      : target.screenshot(shared);
+  const baseline = readFileSync(baselinePath);
+  const page = isPage(target) ? target : target.page();
+
+  // The same pixels are not always drawn twice: now and then a few
+  // anti-aliased pixels on a rounded corner come out one shade apart on one
+  // shot and not the next. A real change never matches the baseline, however
+  // often it is shot, so a mismatch is retried before it counts.
+  let actual = await shoot();
+  let difference = comparePngs(baseline, actual);
+  for (
+    let attempt = 1;
+    difference.kind !== "same" && attempt < EXACT_ATTEMPTS;
+    attempt += 1
+  ) {
+    await page.evaluate(
+      () => new Promise(resolve => requestAnimationFrame(resolve)),
+    );
+    actual = await shoot();
+    difference = comparePngs(baseline, actual);
+    if (difference.kind === "same") {
+      info.annotations.push({
+        type: "exact comparison retried",
+        description: `${name} matched on attempt ${attempt + 1}`,
+      });
+    }
+  }
   if (difference.kind === "same") return;
 
   // --update-snapshots rewrites only what Playwright's comparator calls
