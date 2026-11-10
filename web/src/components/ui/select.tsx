@@ -65,19 +65,20 @@ function SelectTrigger({
   )
 }
 
+// The list is portalled to the body, with no way to send it elsewhere: it is
+// positioned `fixed`, and inside an element with a transform (a centred
+// dialog, say) `fixed` is measured from that element, so the list opens away
+// from its field.
 function SelectContent({
   className,
   children,
-  container,
   ...props
 }: Omit<
   React.ComponentProps<typeof SelectPrimitive.Content>,
   "align" | "position"
-> & {
-  container?: React.ComponentProps<typeof SelectPrimitive.Portal>["container"]
-}) {
+>) {
   return (
-    <SelectPrimitive.Portal container={container}>
+    <SelectPrimitive.Portal>
       <SelectPrimitive.Content
         data-slot="select-content"
         className={cn(

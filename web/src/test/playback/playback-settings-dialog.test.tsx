@@ -315,6 +315,34 @@ describe("PlaybackSettingsDialog", () => {
     },
   );
 
+  // The list is positioned `fixed`. Inside the dialog, whose centring
+  // transform moves fixed children, it opened half a screen from its field.
+  it("opens a select's list outside the dialog on a fine pointer", () => {
+    prefersCoarse.value = false;
+    const queryClient = createTestQueryClient();
+    queryClient.setQueryData([MOVIE_TECHNICAL_DETAILS_KEY, 22], technicalDetails());
+
+    renderWithQueryClient(
+      <PlaybackSettingsDialog
+        movieId={22}
+        open
+        onOpenChange={vi.fn()}
+        settings={{ mode: "direct", audioTrack: 0, subtitleTrack: null }}
+        onSave={vi.fn()}
+      />,
+      { queryClient },
+    );
+
+    // Looked up before the list opens: an open list hides the dialog from
+    // the accessibility tree.
+    const dialog = screen.getByRole("dialog", { name: "Playback Settings" });
+    fireEvent.keyDown(screen.getByLabelText("Subtitles"), { key: "Enter" });
+
+    const list = screen.getByRole("listbox");
+    expect(dialog).not.toContainElement(list);
+    expect(list.closest("[data-slot='select-content']")).not.toBeNull();
+  });
+
   it("switches direct play to remux when a non-first audio track is picked", () => {
     prefersCoarse.value = true;
     const queryClient = createTestQueryClient();
