@@ -4,13 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
-import {
-  MOTION_MICRO_COLORS_CLASS,
-  PEER_FOCUS_VISIBLE_RING_CLASS,
-} from "@/lib/constants";
+import { RadioCard } from "@/components/ui/radio-card";
 import { pluralize } from "@/lib/format";
 import { showActionFailed, showInfo } from "@/lib/toast-helpers";
-import { cn } from "@/lib/utils";
 import { handleRadioListKey } from "@/lib/radio-list";
 import type { ApiResponseType } from "@/types";
 
@@ -249,37 +245,24 @@ function SpotifyResultCard({
     result.artist_names.length > 0
       ? result.artist_names.join(", ")
       : "Unknown artist";
-  const labelId = `${inputId}-label`;
 
   return (
-    <li
-      className={cn(
-        MOTION_MICRO_COLORS_CLASS,
-        "overflow-hidden rounded-lg border",
-        selected
-          ? "border-primary bg-primary/10"
-          : "border-border bg-muted/60 hover:border-border",
-      )}
+    <RadioCard
+      as="li"
+      id={inputId}
+      name={name}
+      checked={selected}
+      onChange={onSelect}
+      onKeyDown={onKeyDown}
+      aria-describedby={metaId}
+      footer={
+        meta ? (
+          <div id={metaId} className="px-2 pb-2 pl-21 text-sm">
+            {meta}
+          </div>
+        ) : null
+      }
     >
-      <input
-        id={inputId}
-        type="radio"
-        name={name}
-        checked={selected}
-        onChange={onSelect}
-        onKeyDown={onKeyDown}
-        aria-labelledby={labelId}
-        aria-describedby={metaId}
-        className="peer sr-only"
-      />
-      <Label
-        id={labelId}
-        htmlFor={inputId}
-        className={cn(
-          "mb-0 flex cursor-pointer gap-3 rounded-lg p-2",
-          PEER_FOCUS_VISIBLE_RING_CLASS,
-        )}
-      >
         {result.cover_url ? (
           <img
             src={result.cover_url}
@@ -309,8 +292,6 @@ function SpotifyResultCard({
             Spotify ID: {result.spotify_id}
           </p>
         </div>
-      </Label>
-      {meta ? <div id={metaId} className="px-2 pb-2 pl-21 text-sm">{meta}</div> : null}
-    </li>
+    </RadioCard>
   );
 }

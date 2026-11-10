@@ -1,3 +1,4 @@
+import { Skeleton } from "@/components/ui/skeleton";
 import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -184,9 +185,9 @@ export function EpisodeRowsPlaceholder() {
         <li key={row} className={ROW_CLASS}>
           <div className={cn(STILL_CLASS, "bg-muted")} />
           <div className="min-w-0 flex-1 space-y-2">
-            <div className="h-4 w-2/3 rounded-sm bg-muted" />
-            <div className="h-3 w-1/3 rounded-sm bg-muted" />
-            <div className="h-3 w-full rounded-sm bg-muted" />
+            <Skeleton className="h-4 w-2/3" />
+            <Skeleton className="h-3 w-1/3" />
+            <Skeleton className="h-3 w-full" />
           </div>
         </li>
       ))}

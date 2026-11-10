@@ -4,16 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
+import { RadioCard } from "@/components/ui/radio-card";
 import { searchTmdbMovies } from "@/lib/api";
 import {
-  MOTION_MICRO_COLORS_CLASS,
-  PEER_FOCUS_VISIBLE_RING_CLASS,
   TMDB_POSTER_SIZE,
 } from "@/lib/constants";
 import { catalogYear, pluralize } from "@/lib/format";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { showActionFailed, showInfo } from "@/lib/toast-helpers";
-import { cn } from "@/lib/utils";
 import { handleRadioListKey } from "@/lib/radio-list";
 import type { ApiResponseType, TmdbSearchMoviesRequest, TmdbSearchResultType } from "@/types";
 
@@ -264,37 +262,24 @@ function TmdbResultCard({
     ? buildTmdbImageUrl(result.poster_path, TMDB_POSTER_SIZE)
     : null;
   const releaseYear = catalogYear(result.release_date);
-  const labelId = `${inputId}-label`;
 
   return (
-    <li
-      className={cn(
-        MOTION_MICRO_COLORS_CLASS,
-        "overflow-hidden rounded-lg border",
-        selected
-          ? "border-primary bg-primary/10"
-          : "border-border bg-muted/60 hover:border-border",
-      )}
+    <RadioCard
+      as="li"
+      id={inputId}
+      name={name}
+      checked={selected}
+      onChange={onSelect}
+      onKeyDown={onKeyDown}
+      aria-describedby={metaId}
+      footer={
+        meta ? (
+          <div id={metaId} className="px-2 pb-2 pl-19 text-sm">
+            {meta}
+          </div>
+        ) : null
+      }
     >
-      <input
-        id={inputId}
-        type="radio"
-        name={name}
-        checked={selected}
-        onChange={onSelect}
-        onKeyDown={onKeyDown}
-        aria-labelledby={labelId}
-        aria-describedby={metaId}
-        className="peer sr-only"
-      />
-      <Label
-        id={labelId}
-        htmlFor={inputId}
-        className={cn(
-          "mb-0 flex cursor-pointer gap-3 rounded-lg p-2",
-          PEER_FOCUS_VISIBLE_RING_CLASS,
-        )}
-      >
         {posterUrl ? (
           <img
             src={posterUrl}
@@ -322,8 +307,6 @@ function TmdbResultCard({
             </p>
           )}
         </div>
-      </Label>
-      {meta ? <div id={metaId} className="px-2 pb-2 pl-19 text-sm">{meta}</div> : null}
-    </li>
+    </RadioCard>
   );
 }

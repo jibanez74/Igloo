@@ -1,3 +1,4 @@
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import ScrollRail from "@/components/shared/ScrollRail";
 import ShowSeasonEpisodeList, {
@@ -76,8 +77,8 @@ export default function ShowSeasonsSection({
 export function ShowSeasonsSectionPlaceholder() {
   return (
     <div className="mt-8 space-y-4 sm:mt-10" aria-hidden="true">
-      <div className="h-7 w-32 rounded-sm bg-muted sm:h-8" />
-      <div className="h-12 w-72 max-w-full rounded-lg bg-muted" />
+      <Skeleton className="h-7 w-32 sm:h-8" />
+      <Skeleton className="h-12 w-72 max-w-full rounded-lg" />
       <div className="mt-4">
         <EpisodeRowsPlaceholder />
       </div>

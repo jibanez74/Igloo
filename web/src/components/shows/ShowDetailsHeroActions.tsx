@@ -1,9 +1,9 @@
+import { Skeleton } from "@/components/ui/skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Play } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { seasonPlayTarget } from "@/lib/episode-playback";
-import { MOTION_LOADING_STATE_CLASS } from "@/lib/constants";
 import { episodeCode } from "@/lib/format";
 import { showSeasonEpisodesQueryOpts } from "@/lib/query-opts";
 import { cn } from "@/lib/utils";
@@ -36,11 +36,9 @@ export default function ShowDetailsHeroActions({
   if (isPending) {
     return (
       <div className={ACTIONS_ROW_CLASS} aria-hidden="true">
-        <div
-          className={cn(
-            "h-11 flex-1 rounded-md bg-muted sm:w-36 sm:flex-none",
-            MOTION_LOADING_STATE_CLASS,
-          )}
+        <Skeleton
+          pulse
+          className="h-11 flex-1 rounded-md sm:w-36 sm:flex-none"
         />
       </div>
     );

@@ -29,6 +29,9 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RadioCard } from "@/components/ui/radio-card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { NativeSelect } from "@/components/ui/native-select";
 import {
   Select,
@@ -406,6 +409,84 @@ function FieldsSection() {
   );
 }
 
+function ControlsSection() {
+  return (
+    <GallerySection id="controls" title="Switch, radio card and skeleton">
+      <GalleryRow label="Switch: off, on, disabled off, disabled on">
+        <Switch checked={false} onCheckedChange={noop} aria-label="Off" />
+        <Switch checked onCheckedChange={noop} aria-label="On" />
+        <Switch
+          checked={false}
+          onCheckedChange={noop}
+          disabled
+          aria-label="Disabled off"
+        />
+        <Switch checked onCheckedChange={noop} disabled aria-label="Disabled on" />
+      </GalleryRow>
+
+      <GalleryRow label="Radio card: picked, not picked, with a footer">
+        <ul className="grid w-full max-w-md gap-2">
+          <RadioCard
+            as="li"
+            id="gallery-radio-card-1"
+            name="gallery-radio-card"
+            checked
+            onChange={noop}
+          >
+            <div className="size-12 shrink-0 rounded-sm bg-accent" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-medium text-foreground">Signal Fire</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">2024</p>
+            </div>
+          </RadioCard>
+          <RadioCard
+            as="li"
+            id="gallery-radio-card-2"
+            name="gallery-radio-card"
+            checked={false}
+            onChange={noop}
+          >
+            <div className="size-12 shrink-0 rounded-sm bg-accent" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-medium text-foreground">Signal Fire</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">1998</p>
+            </div>
+          </RadioCard>
+          <RadioCard
+            as="li"
+            id="gallery-radio-card-3"
+            name="gallery-radio-card"
+            checked={false}
+            onChange={noop}
+            aria-describedby="gallery-radio-card-3-meta"
+            footer={
+              <div
+                id="gallery-radio-card-3-meta"
+                className="px-2 pb-2 pl-17 text-sm text-muted-foreground"
+              >
+                Already in your library
+              </div>
+            }
+          >
+            <div className="size-12 shrink-0 rounded-sm bg-accent" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-medium text-foreground">Low Tide</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">2011</p>
+            </div>
+          </RadioCard>
+        </ul>
+      </GalleryRow>
+
+      <GalleryRow label="Skeleton: text line, pill, block, square with no radius">
+        <Skeleton className="h-4 w-40" />
+        <Skeleton className="h-8 w-24 rounded-full" />
+        <Skeleton className="h-16 w-28 rounded-lg" />
+        <Skeleton className="size-16 rounded-none" />
+      </GalleryRow>
+    </GallerySection>
+  );
+}
+
 function SurfacesSection() {
   return (
     <GallerySection id="surfaces" title="Card, Alert, Avatar, Separator">
@@ -590,6 +671,7 @@ const SECTIONS = [
   ["buttons", ButtonsSection],
   ["badges", BadgesSection],
   ["fields", FieldsSection],
+  ["controls", ControlsSection],
   ["surfaces", SurfacesSection],
   ["navigation", NavigationSection],
   ["tokens", TokensSection],

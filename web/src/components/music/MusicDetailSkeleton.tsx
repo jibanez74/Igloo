@@ -1,3 +1,4 @@
+import { Skeleton } from "@/components/ui/skeleton";
 import { MusicDetailArtSkeleton } from "@/components/music/MusicDetailArt";
 import { MusicDetailBackdropSkeleton } from "@/components/music/MusicDetailBackdrop";
 import SkeletonStatus from "@/components/shared/SkeletonStatus";
@@ -59,8 +60,8 @@ function HeroSkeleton({
           <MusicDetailArtSkeleton variant={isMusician ? "musician" : "album"} />
 
           <div className="min-w-0 flex-1 text-center lg:text-left">
-            <div className="mx-auto h-10 max-w-lg rounded-sm bg-muted lg:mx-0" />
-            <div className="mx-auto mt-3 h-6 max-w-xs rounded-sm bg-muted lg:mx-0" />
+            <Skeleton className="mx-auto h-10 max-w-lg lg:mx-0" />
+            <Skeleton className="mx-auto mt-3 h-6 max-w-xs lg:mx-0" />
             {/* The musician page lists genres above its stats; the album
                 page the other way round. */}
             {isMusician ? (
@@ -83,14 +84,14 @@ function HeroSkeleton({
         <div className="space-y-8 sm:space-y-10">
           {isMusician && (
             <div>
-              <div className="mb-4 h-7 w-40 rounded-sm bg-muted" />
+              <Skeleton className="mb-4 h-7 w-40" />
               <div className={LIBRARY_POSTER_GRID_CLASS}>
                 {Array.from({ length: 6 }).map((_, i) => (
                   <div
                     key={i}
                     className="overflow-hidden rounded-xl border border-border bg-card"
                   >
-                    <div className="aspect-square bg-muted" />
+                    <Skeleton className="aspect-square rounded-none" />
                     <div className="space-y-2 p-3">
                       <div className="h-4 w-3/4 rounded-sm bg-accent" />
                       <div className="h-3 w-1/2 rounded-sm bg-accent" />
@@ -102,7 +103,7 @@ function HeroSkeleton({
           )}
 
           <div>
-            {isMusician && <div className="mb-4 h-7 w-32 rounded-sm bg-muted" />}
+            {isMusician && <Skeleton className="mb-4 h-7 w-32" />}
             <TrackRowsSkeleton />
           </div>
         </div>
@@ -115,9 +116,9 @@ function HeroSkeleton({
 function StatPillsSkeleton() {
   return (
     <div className="mt-4 flex flex-wrap justify-center gap-2 sm:gap-3 lg:justify-start">
-      <div className="h-8 w-28 rounded-full bg-muted" />
-      <div className="h-8 w-24 rounded-full bg-muted" />
-      <div className="h-8 w-24 rounded-full bg-muted" />
+      <Skeleton className="h-8 w-28 rounded-full" />
+      <Skeleton className="h-8 w-24 rounded-full" />
+      <Skeleton className="h-8 w-24 rounded-full" />
     </div>
   );
 }
@@ -126,8 +127,8 @@ function StatPillsSkeleton() {
 function GenrePillsSkeleton() {
   return (
     <div className="mt-4 flex flex-wrap justify-center gap-2 lg:justify-start">
-      <div className="h-7 w-20 rounded-full bg-muted" />
-      <div className="h-7 w-24 rounded-full bg-muted" />
+      <Skeleton className="h-7 w-20 rounded-full" />
+      <Skeleton className="h-7 w-24 rounded-full" />
     </div>
   );
 }
@@ -137,10 +138,10 @@ function GenrePillsSkeleton() {
 function ActionsSkeleton({ withMenu }: { withMenu: boolean }) {
   return (
     <div className={MUSIC_DETAIL_ACTIONS_CLASS}>
-      <div className="h-10 w-full rounded-full bg-muted sm:w-32" />
-      <div className="h-10 w-full rounded-full bg-muted sm:w-28" />
+      <Skeleton className="h-10 w-full rounded-full sm:w-32" />
+      <Skeleton className="h-10 w-full rounded-full sm:w-28" />
       {withMenu && (
-        <div className="h-10 w-12 self-center rounded-full bg-muted sm:self-auto" />
+        <Skeleton className="h-10 w-12 self-center rounded-full sm:self-auto" />
       )}
     </div>
   );
@@ -155,16 +156,16 @@ function PlaylistSkeleton() {
         <MusicDetailArtSkeleton variant="playlist" />
 
         <div className="min-w-0 flex-1 text-center lg:text-left">
-          <div className="mx-auto h-8 max-w-lg rounded-sm bg-muted sm:h-9 md:h-10 lg:mx-0 lg:h-12" />
+          <Skeleton className="mx-auto h-8 max-w-lg sm:h-9 md:h-10 lg:mx-0 lg:h-12" />
           <div className="mt-4 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 sm:gap-x-4 lg:justify-start">
-            <div className="h-4 w-16 rounded-sm bg-muted sm:h-5 lg:h-6" />
-            <div className="h-4 w-14 rounded-sm bg-muted sm:h-5 lg:h-6" />
+            <Skeleton className="h-4 w-16 sm:h-5 lg:h-6" />
+            <Skeleton className="h-4 w-14 sm:h-5 lg:h-6" />
           </div>
           <ActionsSkeleton withMenu={false} />
         </div>
       </div>
 
-      <div className="mb-4 h-7 w-24 rounded-sm bg-muted sm:h-8" />
+      <Skeleton className="mb-4 h-7 w-24 sm:h-8" />
       <TrackRowsSkeleton />
     </>
   );

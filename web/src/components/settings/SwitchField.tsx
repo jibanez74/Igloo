@@ -1,10 +1,7 @@
 import type { ReactNode, Ref } from "react";
 
-import {
-  FOCUS_VISIBLE_RING_CLASS,
-  MOTION_CONTROL_THUMB_TRANSFORM_CLASS,
-  MOTION_SETTINGS_SURFACE_CLASS,
-} from "@/lib/constants";
+import { Switch } from "@/components/ui/switch";
+import { MOTION_SETTINGS_SURFACE_CLASS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 type SwitchFieldProps = {
@@ -56,36 +53,15 @@ export default function SwitchField({
         >
           {label}
         </p>
-        <button
+        <Switch
           ref={ref}
-          type="button"
-          role="switch"
-          aria-checked={checked}
+          checked={checked}
+          onCheckedChange={onCheckedChange}
           aria-labelledby={labelId}
           aria-describedby={descriptionId}
           disabled={disabled}
-          onClick={() => onCheckedChange(!checked)}
-          className={cn(
-            "relative mt-1 h-6 w-11 shrink-0 rounded-full border disabled:cursor-not-allowed disabled:opacity-60",
-            FOCUS_VISIBLE_RING_CLASS,
-            MOTION_SETTINGS_SURFACE_CLASS,
-            // The off track is a mid grey in both themes so the white thumb
-            // reads against it; bg-accent is near-white in light and hid it
-            // (design-system §3.7).
-            checked
-              ? "border-primary bg-primary"
-              : "border-border bg-muted-foreground/25",
-          )}
-        >
-          <span
-            aria-hidden="true"
-            className={cn(
-              "absolute top-1/2 left-0 size-4 -translate-y-1/2 rounded-full bg-white shadow-sm",
-              MOTION_CONTROL_THUMB_TRANSFORM_CLASS,
-              checked ? "translate-x-5" : "translate-x-1",
-            )}
-          />
-        </button>
+          className="mt-1"
+        />
         <p
           id={descriptionId}
           className="col-span-3 text-sm text-muted-foreground min-[380px]:col-span-1 min-[380px]:col-start-2"
