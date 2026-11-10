@@ -375,10 +375,10 @@ function TrailerPage() {
               <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-destructive/10">
                 <AlertCircle className="size-10 text-destructive" aria-hidden="true" />
               </div>
-              <DialogTitle className="mb-2 text-xl font-semibold text-foreground">
+              <DialogTitle className="mb-2 text-xl">
                 Unable to Play Trailer
               </DialogTitle>
-              <DialogDescription className="mb-6 text-muted-foreground">
+              <DialogDescription className="mb-6">
                 {error}
               </DialogDescription>
               <div className="flex flex-wrap items-center justify-center gap-3">
@@ -482,10 +482,10 @@ function TrailerPage() {
               <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-destructive/10">
                 <AlertCircle className="size-10 text-destructive" aria-hidden="true" />
               </div>
-              <DialogTitle className="mb-2 text-xl font-semibold text-foreground">
+              <DialogTitle className="mb-2 text-xl">
                 Unable to Load Trailer
               </DialogTitle>
-              <DialogDescription className="mb-6 text-muted-foreground">
+              <DialogDescription className="mb-6">
                 {loadErrorMessage}
               </DialogDescription>
               <div className="flex flex-wrap items-center justify-center gap-3">
@@ -545,10 +545,10 @@ function TrailerPage() {
               <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-muted">
                 <Film className="size-10 text-muted-foreground" aria-hidden="true" />
               </div>
-              <DialogTitle className="mb-2 text-xl font-semibold text-foreground">
+              <DialogTitle className="mb-2 text-xl">
                 No Trailer Available
               </DialogTitle>
-              <DialogDescription className="mb-6 text-muted-foreground">
+              <DialogDescription className="mb-6">
                 This movie doesn't have a trailer yet.
               </DialogDescription>
               <button
@@ -798,7 +798,7 @@ function TrailerHeader({
         <Film className="size-5 shrink-0 text-primary" aria-hidden="true" />
         <div className="min-w-0">
           {titleIsDialogTitle ? (
-            <DialogTitle className="truncate text-base font-semibold text-foreground">
+            <DialogTitle className="truncate text-base">
               {title}
             </DialogTitle>
           ) : (

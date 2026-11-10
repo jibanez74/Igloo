@@ -17,7 +17,6 @@ import {
   MOTION_DURATION_PAGE_MS,
   MOTION_DURATION_STANDARD_MS,
   MOTION_LOADING_STATE_CLASS,
-  MOTION_MEDIA_DIALOG_SURFACE_CLASS,
   MOTION_MEDIA_OVERLAY_ENTER_CLASS,
   MOTION_MICRO_COLORS_CLASS,
   MOTION_MICRO_OPACITY_CLASS,
@@ -192,9 +191,6 @@ describe("motion contracts", () => {
     );
     expect(CARD_OVERLAY_REVEAL_CLASS).toContain(
       "motion-reduce:transition-none",
-    );
-    expect(MOTION_MEDIA_DIALOG_SURFACE_CLASS).toContain(
-      "motion-reduce:animate-none",
     );
     expect(MOTION_MEDIA_OVERLAY_ENTER_CLASS).toContain(
       "motion-reduce:animate-none",

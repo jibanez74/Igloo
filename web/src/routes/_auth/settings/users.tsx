@@ -507,12 +507,11 @@ function CreateUserDialog({
   return (
     <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
       <DialogContent
-        className="border-border bg-card text-foreground sm:max-w-md"
         onCloseAutoFocus={onCloseAutoFocus}
       >
         <DialogHeader>
-          <DialogTitle className="text-foreground">Add User</DialogTitle>
-          <DialogDescription className="text-muted-foreground">
+          <DialogTitle>Add User</DialogTitle>
+          <DialogDescription>
             Create a new user account.
           </DialogDescription>
         </DialogHeader>
@@ -695,12 +694,11 @@ function EditUserDialog({
   return (
     <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
       <DialogContent
-        className="border-border bg-card text-foreground sm:max-w-md"
         onCloseAutoFocus={onCloseAutoFocus}
       >
         <DialogHeader>
-          <DialogTitle className="text-foreground">Edit User</DialogTitle>
-          <DialogDescription className="text-muted-foreground">
+          <DialogTitle>Edit User</DialogTitle>
+          <DialogDescription>
             Update account information for {user.name}.
           </DialogDescription>
         </DialogHeader>
@@ -822,12 +820,11 @@ function DeleteUserDialog({
   return (
     <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
       <DialogContent
-        className="border-border bg-card text-foreground sm:max-w-md"
         onCloseAutoFocus={onCloseAutoFocus}
       >
         <DialogHeader>
-          <DialogTitle className="text-destructive">Delete User</DialogTitle>
-          <DialogDescription className="text-muted-foreground">
+          <DialogTitle tone="destructive">Delete User</DialogTitle>
+          <DialogDescription>
             This will permanently delete <strong className="text-foreground">{user.name}</strong> ({user.email}).
             This action cannot be undone.
           </DialogDescription>
@@ -956,12 +953,11 @@ function ResetPasswordDialog({
   return (
     <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
       <DialogContent
-        className="border-border bg-card text-foreground sm:max-w-md"
         onCloseAutoFocus={onCloseAutoFocus}
       >
         <DialogHeader>
-          <DialogTitle className="text-foreground">Reset Password</DialogTitle>
-          <DialogDescription className="text-muted-foreground">
+          <DialogTitle>Reset Password</DialogTitle>
+          <DialogDescription>
             Set a new password for <strong className="text-foreground">{user.name}</strong>.
           </DialogDescription>
         </DialogHeader>

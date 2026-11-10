@@ -11,8 +11,6 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { formatTimecode } from "@/lib/format";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
-import { MOTION_MEDIA_DIALOG_SURFACE_CLASS } from "@/lib/constants";
-import { cn } from "@/lib/utils";
 
 type Props = {
   open: boolean;
@@ -64,7 +62,8 @@ export default function ResumeDialog({
     <Dialog open={open}>
       <DialogContent
         showCloseButton={false}
-        className={cn(MOTION_MEDIA_DIALOG_SURFACE_CLASS)}
+        size="lg"
+        elevation="floating"
         onOpenAutoFocus={event => {
           event.preventDefault();
           resumeButtonRef.current?.focus({ preventScroll: true });
@@ -82,8 +81,8 @@ export default function ResumeDialog({
         onInteractOutside={event => event.preventDefault()}
       >
         <DialogHeader>
-          <DialogTitle className="text-foreground">Resume playback?</DialogTitle>
-          <DialogDescription className="text-muted-foreground">
+          <DialogTitle>Resume playback?</DialogTitle>
+          <DialogDescription>
             {description}
           </DialogDescription>
         </DialogHeader>

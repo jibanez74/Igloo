@@ -12,7 +12,6 @@ import {
 } from "@/lib/constants";
 import { invalidateLibraryQueries } from "@/lib/library-cache";
 import { libraryMovieDetailsQueryOpts } from "@/lib/query-opts";
-import { cn } from "@/lib/utils";
 import { unwrapInt, unwrapString } from "@/lib/nullable";
 import {
   showActionFailed,
@@ -222,10 +221,8 @@ export default function EditMovieDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className={cn(
-          DIALOG_SCROLL_CONTENT_CLASS,
-          "border-border bg-card sm:max-w-2xl",
-        )}
+        size="2xl"
+        className={DIALOG_SCROLL_CONTENT_CLASS}
         onCloseAutoFocus={(event) => {
           if (!restoreFocusRef) return;
           event.preventDefault();
@@ -233,8 +230,8 @@ export default function EditMovieDialog({
         }}
       >
         <DialogHeader className={DIALOG_SCROLL_HEADER_CLASS}>
-          <DialogTitle className="text-foreground">Edit Movie</DialogTitle>
-          <DialogDescription className="text-muted-foreground">
+          <DialogTitle>Edit Movie</DialogTitle>
+          <DialogDescription>
             Identify with TMDB to replace all metadata, or manually edit
             individual fields.
           </DialogDescription>

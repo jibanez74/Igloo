@@ -33,12 +33,33 @@ function DialogOverlay({
   )
 }
 
+// How wide a dialog may grow from the `sm` breakpoint up; below it every
+// dialog spans the viewport less a margin.
+const DIALOG_SIZES = {
+  md: "sm:max-w-md",
+  lg: "sm:max-w-lg",
+  xl: "sm:max-w-xl",
+  "2xl": "sm:max-w-2xl",
+} as const
+
+// `floating` is for a dialog that opens over media (the player's resume and
+// playback settings dialogs): the deeper shadow of a surface floating on the
+// canvas (docs/design-system.md §1.4).
+const DIALOG_ELEVATIONS = {
+  raised: "shadow-lg",
+  floating: "shadow-floating",
+} as const
+
 function DialogContent({
   className,
   children,
+  size = "md",
+  elevation = "raised",
   showCloseButton = true,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
+  size?: keyof typeof DIALOG_SIZES
+  elevation?: keyof typeof DIALOG_ELEVATIONS
   showCloseButton?: boolean
 }) {
   return (
@@ -47,7 +68,9 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "fixed top-[50%] left-[50%] z-modal grid w-full max-w-[calc(100%-2rem)] translate-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg outline-hidden duration-standard data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 motion-reduce:animate-none sm:max-w-lg",
+          "fixed top-[50%] left-[50%] z-modal grid w-full max-w-[calc(100%-2rem)] translate-[-50%] gap-4 rounded-lg border bg-card p-6 outline-hidden duration-standard data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 motion-reduce:animate-none",
+          DIALOG_SIZES[size],
+          DIALOG_ELEVATIONS[elevation],
           className
         )}
         {...props}
@@ -113,12 +136,20 @@ function DialogFooter({ className, ...props }: React.ComponentProps<"div">) {
 
 function DialogTitle({
   className,
+  tone = "default",
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Title>) {
+}: React.ComponentProps<typeof DialogPrimitive.Title> & {
+  /** `destructive` for a dialog whose action cannot be undone. */
+  tone?: "default" | "destructive"
+}) {
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn("text-lg leading-none font-semibold", className)}
+      className={cn(
+        "text-lg leading-none font-semibold",
+        tone === "destructive" && "text-destructive",
+        className
+      )}
       {...props}
     />
   )

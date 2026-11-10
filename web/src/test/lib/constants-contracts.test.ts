@@ -17,7 +17,6 @@ import {
   MOVIES_LIKED_KEY,
   MOVIE_VOLUME_STEP,
   MOVIES_PER_PAGE,
-  MOTION_MEDIA_DIALOG_SURFACE_CLASS,
   MOTION_PLAYER_CHROME_BUTTON_CLASS,
   MUSICIANS_PAGINATED_KEY,
   MUSICIANS_PER_PAGE,
@@ -126,9 +125,6 @@ describe("constants contracts", () => {
       "0 25px 50px -12px rgb(0 0 0 / 50%)",
     );
     expect(SHADOW_SCALE.floating).toBe("var(--elevation-floating)");
-    expect(MOTION_MEDIA_DIALOG_SURFACE_CLASS.split(" ")).toContain(
-      "shadow-floating",
-    );
   });
 
   it("keeps the missing-media tile on the fixed token pair (design-system §1.2)", () => {

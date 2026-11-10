@@ -35,11 +35,27 @@ const externalClassAllowlist = [
   "theme-switching",
 ];
 
-// Primitives whose look is chosen by props, and the classes that would
-// restate it: a colour on the fill, text, border or shadow, or a height.
-const styledByProps = "Input|Textarea|NativeSelect|SelectTrigger";
+// Primitives whose look is chosen by props (variant, size, tone,
+// elevation), and the classes that would restate it: a colour on the fill,
+// text, border or shadow, or a height.
+const styledByProps = [
+  "Input",
+  "Textarea",
+  "NativeSelect",
+  "SelectTrigger",
+  "DialogContent",
+  "DialogTitle",
+  "DialogDescription",
+  "AlertDialogContent",
+  "AlertDialogTitle",
+  "AlertDialogDescription",
+].join("|");
 const lookClass =
   "(?:^|\\s)(?:[a-z-]+:)*(?:(?:bg|text|border|shadow|placeholder:text)-(?:background|foreground|card|popover|primary|secondary|muted|accent|destructive|border|input|ring|success|aurora|white|black|transparent)|h-[0-9])";
+
+// Class constants that only lay a primitive out, and so may be passed to
+// one: the scrolling-body dialog recipe (docs/design-system.md section 1.6).
+const layoutClassConstants = "DIALOG_SCROLL_[A-Z]+_CLASS";
 
 const restrictedClassRule = [
   "error",
@@ -72,20 +88,20 @@ const restrictedClassRule = [
     message:
       "Use the layer and duration tokens instead of their numbers; see docs/design-system.md sections 1.4 and 1.5.",
   },
-  // A field's look comes from its `variant` and `size` props
-  // (src/components/ui/field-variants.ts), not from classes or a class
+  // A primitive's look comes from its props, not from classes or a class
   // constant at the call site. `className` is for layout: margins, padding
-  // around an icon, width, a font. The list grows as each primitive family
-  // takes its looks in; see docs/design-system.md section 1.6.
+  // around an icon, width, scrolling, a font. The list grows as each
+  // primitive family takes its looks in; see docs/design-system.md
+  // section 1.6.
   {
     selector: `JSXOpeningElement[name.name=/^(?:${styledByProps})$/] > JSXAttribute[name.name='className'] :matches(Literal[value=/${lookClass}/], TemplateElement[value.cooked=/${lookClass}/])`,
     message:
-      "Set the look with the variant and size props instead of classes; className is for layout. See docs/design-system.md section 1.6.",
+      "Set the look with the primitive's props (variant, size, tone, elevation) instead of classes; className is for layout. See docs/design-system.md section 1.6.",
   },
   {
-    selector: `JSXOpeningElement[name.name=/^(?:${styledByProps})$/] > JSXAttribute[name.name='className'] Identifier[name=/(?:ClassName|_CLASS)$/]`,
+    selector: `JSXOpeningElement[name.name=/^(?:${styledByProps})$/] > JSXAttribute[name.name='className'] Identifier[name=/(?:ClassName|_CLASS)$/]:not([name=/^(?:${layoutClassConstants})$/])`,
     message:
-      "Set the look with the variant and size props instead of a class constant. See docs/design-system.md section 1.6.",
+      "Set the look with the primitive's props instead of a class constant. See docs/design-system.md section 1.6.",
   },
 ];
 
