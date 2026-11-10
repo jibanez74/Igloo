@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
-import { buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { setMediaWatched } from "@/lib/api";
 import { episodeMediaRef } from "@/lib/media-ref";
 import { showSeasonEpisodesQueryOpts } from "@/lib/query-opts";
@@ -115,12 +115,13 @@ export default function EpisodeWatchedToggle({
   });
 
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
+      size="icon"
       onClick={() => mutation.mutate(!watched)}
       disabled={mutation.isPending}
       className={cn(
-        buttonVariants({ variant: "ghost", size: "icon" }),
         "min-h-10 min-w-10 touch-manipulation text-muted-foreground",
         watched && "text-success",
       )}
@@ -136,6 +137,6 @@ export default function EpisodeWatchedToggle({
       ) : (
         <Check className="size-4" aria-hidden="true" />
       )}
-    </button>
+    </Button>
   );
 }

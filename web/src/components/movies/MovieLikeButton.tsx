@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Heart } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
-import { buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { showActionFailed } from "@/lib/toast-helpers";
 import { toggleLikeMovie } from "@/lib/api";
 import {
@@ -89,8 +89,10 @@ export default function MovieLikeButton({
 
   if (variant === "hero") {
     return (
-      <button
+      <Button
         type="button"
+        variant="outline"
+        size="lg"
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -98,7 +100,6 @@ export default function MovieLikeButton({
         }}
         disabled={mutation.isPending || isLoading}
         className={cn(
-          buttonVariants({ variant: "outline", size: "lg" }),
           "min-h-11 touch-manipulation px-3 font-semibold sm:px-6",
           className,
         )}
@@ -116,7 +117,7 @@ export default function MovieLikeButton({
         {mutation.isPending && (
           <Spinner tone="primary" aria-hidden="true" />
         )}
-      </button>
+      </Button>
     );
   }
 

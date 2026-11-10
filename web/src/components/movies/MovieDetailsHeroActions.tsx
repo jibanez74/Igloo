@@ -13,7 +13,7 @@ import {
   Check,
 } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -201,18 +201,17 @@ export default function MovieDetailsHeroActions({
         <Play className="size-4 fill-current" aria-hidden="true" />
         Play
       </Link>
-      <button
+      <Button
         type="button"
+        variant="outline"
+        size="lg"
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
           watchedMutation.mutate(!isWatched);
         }}
         disabled={watchedMutation.isPending || watchProgressLoading}
-        className={cn(
-          buttonVariants({ variant: "outline", size: "lg" }),
-          "min-h-11 touch-manipulation px-3 font-semibold sm:px-6",
-        )}
+        className="min-h-11 touch-manipulation px-3 font-semibold sm:px-6"
         aria-label={isWatched ? "Mark movie as unwatched" : "Mark movie as watched"}
         aria-pressed={isWatched}
       >
@@ -227,7 +226,7 @@ export default function MovieDetailsHeroActions({
         {watchedMutation.isPending && (
           <Spinner tone="success" aria-hidden="true" />
         )}
-      </button>
+      </Button>
       <MovieLikeButton movieId={movieId} variant="hero" />
       <DropdownMenu>
         <DropdownMenuTrigger
