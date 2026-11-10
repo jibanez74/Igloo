@@ -17,7 +17,6 @@ import {
   DOWNLOAD_SPEED_MAX_MBPS,
   LANGUAGE_NAMES,
   MOTION_SETTINGS_SURFACE_CLASS,
-  SETTINGS_SELECT_CONTENT_CLASS,
   SUBTITLE_OFF_VALUE,
 } from "@/lib/constants";
 import { useDevicePlaybackPreferences } from "@/hooks/useDevicePlaybackPreferences";
@@ -110,7 +109,7 @@ function PreferenceSelect({
         <SelectTrigger id={selectId} variant="inset" size="lg">
           <SelectValue placeholder={noSelectionLabel} />
         </SelectTrigger>
-        <SelectContent className={SETTINGS_SELECT_CONTENT_CLASS}>
+        <SelectContent>
           <SelectItem
             value={NO_SELECTION_VALUE}
           >

@@ -19,7 +19,6 @@ import {
 import { updateTrailerPreferences } from "@/lib/api";
 import {
   MOTION_SETTINGS_SURFACE_CLASS,
-  SETTINGS_SELECT_CONTENT_CLASS,
   TRAILER_COUNT_OPTIONS,
   TRAILER_SOURCE_OPTIONS,
 } from "@/lib/constants";
@@ -181,7 +180,7 @@ export default function TrailerPreferencesCard() {
               >
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className={SETTINGS_SELECT_CONTENT_CLASS}>
+              <SelectContent>
                 {TRAILER_COUNT_OPTIONS.map((count) => (
                   <SelectItem
                     key={count}
@@ -215,7 +214,7 @@ export default function TrailerPreferencesCard() {
               >
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className={SETTINGS_SELECT_CONTENT_CLASS}>
+              <SelectContent>
                 {TRAILER_SOURCE_OPTIONS.map((option) => (
                   <SelectItem
                     key={option.value}

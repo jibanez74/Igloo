@@ -10,7 +10,6 @@ import {
   AUDIO_TRACK_MODE_NOTE,
   AUDIO_TRACK_MODE_NOTE_ID,
   AUDIO_TRACK_SELECT_DEFAULT_VALUE,
-  PLAYBACK_SETTINGS_SELECT_CONTENT_CLASS,
   PLAYBACK_SETTINGS_SUMMARY_LOADING,
   SUBTITLE_OFF_VALUE,
   SUBTITLES_NONE_LABEL,
@@ -206,7 +205,6 @@ function PlaybackSettingsDialogForm({
               </SelectTrigger>
               <SelectContent
                 container={selectPortalContainer}
-                className={PLAYBACK_SETTINGS_SELECT_CONTENT_CLASS}
               >
                 {availableModes.map(m => (
                   <SelectItem
@@ -262,7 +260,6 @@ function PlaybackSettingsDialogForm({
               </SelectTrigger>
               <SelectContent
                 container={selectPortalContainer}
-                className={PLAYBACK_SETTINGS_SELECT_CONTENT_CLASS}
               >
                 {audioStreams.length > 0 ? (
                   audioStreams.map((stream, index) => {
@@ -354,7 +351,6 @@ function PlaybackSettingsDialogForm({
               </SelectTrigger>
               <SelectContent
                 container={selectPortalContainer}
-                className={PLAYBACK_SETTINGS_SELECT_CONTENT_CLASS}
               >
                 <SelectItem
                   value={SUBTITLE_OFF_VALUE}

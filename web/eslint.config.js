@@ -55,7 +55,10 @@ const styledByProps = [
   "CardTitle",
   "Badge",
   "DropdownMenuItem",
+  "DropdownMenuContent",
   "SelectItem",
+  "SelectContent",
+  "PopoverContent",
 ].join("|");
 const lookClass =
   "(?:^|\\s)(?:[a-z-]+:)*(?:(?:bg|text|border|shadow|placeholder:text)-(?:background|foreground|card|popover|primary|secondary|muted|accent|destructive|border|input|ring|success|aurora|white|black|transparent)|h-[0-9])";

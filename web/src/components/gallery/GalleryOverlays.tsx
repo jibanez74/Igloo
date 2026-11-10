@@ -30,9 +30,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  SETTINGS_SELECT_CONTENT_CLASS,
-} from "@/lib/constants";
 
 // Each stage renders one overlay already open, built the way production call
 // sites build it today (their className overrides included), so the baseline
@@ -103,7 +100,7 @@ function SelectStage() {
         >
           <SelectValue />
         </SelectTrigger>
-        <SelectContent className={SETTINGS_SELECT_CONTENT_CLASS}>
+        <SelectContent>
           {STREAM_PROFILES.map(([value, label]) => (
             <SelectItem
               key={value}
@@ -126,7 +123,6 @@ function DropdownStage() {
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="start"
-        className="border-border bg-muted"
       >
         <DropdownMenuItem>
           <Radio aria-hidden="true" />
@@ -162,7 +158,7 @@ function PopoverStage() {
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className="w-80 border-border bg-card p-0"
+        className="w-80 p-0"
       >
         <p className="border-b border-border px-4 py-3 text-sm font-semibold text-foreground">
           Notifications

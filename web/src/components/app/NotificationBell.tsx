@@ -195,7 +195,7 @@ export default function NotificationBell() {
 
       <PopoverContent
         align="end"
-        className="w-80 border-border bg-card p-0 text-foreground"
+        className="w-80 p-0"
       >
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <h2 className="text-sm font-semibold text-foreground">Notifications</h2>
