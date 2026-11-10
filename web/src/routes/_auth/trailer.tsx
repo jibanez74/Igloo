@@ -31,7 +31,6 @@ import { routeHead } from "@/lib/route-head";
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useShortcutHints } from "@/hooks/useShortcutHints";
-import { toast } from "sonner";
 import { formatTimecode } from "@/lib/format";
 import {
   MOVIE_SEEK_STEP_SEC,
@@ -50,6 +49,7 @@ import {
   requestElementFullscreen,
 } from "@/lib/fullscreen";
 import { cn } from "@/lib/utils";
+import { showInfo } from "@/lib/toast-helpers";
 
 const TRAILER_FALLBACK_HEAD = routeHead("Trailer");
 
@@ -202,12 +202,12 @@ function TrailerPage() {
       !canRequestElementFullscreen(el) ||
       !isDocumentFullscreenEntryLikely()
     ) {
-      toast.info("Full screen isn't available in this browser.");
+      showInfo("Full screen isn't available in this browser.");
       return;
     }
 
     void requestElementFullscreen(el).catch(() => {
-      toast.info("Full screen isn't available in this browser.");
+      showInfo("Full screen isn't available in this browser.");
     });
   };
 

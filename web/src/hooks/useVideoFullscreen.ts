@@ -1,6 +1,6 @@
 import { useEffect, useReducer, useRef } from "react";
 import type { RefObject } from "react";
-import { toast } from "sonner";
+import { showInfo } from "@/lib/toast-helpers";
 import {
   canRequestElementFullscreen,
   exitDocumentFullscreen,
@@ -133,7 +133,7 @@ export function useVideoFullscreen({
       }
       fullscreenModeRef.current = "immersiveViewport";
       setFullscreenMode("immersiveViewport");
-      toast.info(
+      showInfo(
         "Full screen isn't available in this browser. Using expanded view instead.",
       );
     };
