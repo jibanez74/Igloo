@@ -42,8 +42,8 @@ export default defineConfig({
       // colour difference within a pixel and no pixel allowed to differ. The
       // default tolerance would let a surface shift through. One exception
       // remains: Playwright's comparator (pixelmatch) does not count a
-      // differing pixel it takes for anti-aliasing, which can include a 1px
-      // border between two surfaces.
+      // differing pixel it takes for anti-aliasing, mostly along text and
+      // curved edges, so a change made only of such pixels would pass.
       threshold: 0,
       maxDiffPixels: 0,
     },
