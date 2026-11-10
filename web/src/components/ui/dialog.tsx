@@ -25,7 +25,7 @@ function DialogOverlay({
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        "fixed inset-0 z-50 bg-black/50 duration-200 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0 motion-reduce:animate-none",
+        "fixed inset-0 z-modal bg-black/50 duration-standard data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0 motion-reduce:animate-none",
         className
       )}
       {...props}
@@ -47,7 +47,7 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg outline-hidden duration-200 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 motion-reduce:animate-none sm:max-w-lg",
+          "fixed top-[50%] left-[50%] z-modal grid w-full max-w-[calc(100%-2rem)] translate-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg outline-hidden duration-standard data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 motion-reduce:animate-none sm:max-w-lg",
           className
         )}
         {...props}
@@ -57,7 +57,7 @@ function DialogContent({
           <DialogPrimitive.Close
             data-slot="dialog-close"
             className={cn(
-              "absolute top-4 right-4 rounded-xs opacity-70 transition-opacity duration-150 hover:opacity-100 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground motion-reduce:transition-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+              "absolute top-4 right-4 rounded-xs opacity-70 transition-opacity duration-micro hover:opacity-100 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground motion-reduce:transition-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
               FOCUS_VISIBLE_RING_CLASS
             )}
           >
@@ -79,7 +79,7 @@ function DialogFullscreenContent({
     <DialogPortal data-slot="dialog-portal">
       <DialogPrimitive.Content
         data-slot="dialog-fullscreen-content"
-        className={cn("fixed inset-0 z-50 outline-hidden", className)}
+        className={cn("fixed inset-0 z-modal outline-hidden", className)}
         {...props}
       >
         {children}

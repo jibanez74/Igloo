@@ -303,7 +303,7 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
       className={cn(
         "bg-background text-foreground [&:-webkit-full-screen]:fixed [&:-webkit-full-screen]:inset-0 [&:-webkit-full-screen]:h-screen [&:-webkit-full-screen]:w-screen [&:fullscreen]:fixed [&:fullscreen]:inset-0 [&:fullscreen]:h-screen [&:fullscreen]:w-screen",
         isImmersiveViewport &&
-          "fixed inset-0 z-50 min-h-dvh w-full overflow-auto bg-background",
+          "fixed inset-0 z-modal min-h-dvh w-full overflow-auto bg-background",
       )}
     >
       <LiveAnnouncer message={syncAnnouncement} />

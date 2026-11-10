@@ -6,7 +6,6 @@ import {
   DIALOG_SCROLL_BODY_CLASS,
   DIALOG_SCROLL_CONTENT_CLASS,
   DIALOG_SCROLL_HEADER_CLASS,
-  FLOATING_SURFACE_SHADOW_CLASS,
   FOCUS_VISIBLE_RING_CLASS,
   HOME_ALBUM_GRID_CLASS,
   HOME_POSTER_GRID_CLASS,
@@ -44,6 +43,7 @@ import {
   WATCH_ROOM_CLIENT_EVENT_TYPES,
   WATCH_ROOM_EVENT_TYPES,
 } from "@/lib/constants";
+import { ELEVATION_TOKENS, SHADOW_SCALE } from "@/lib/theme-tokens";
 import {
   albumsPaginatedQueryOpts,
   likedMoviesQueryOpts,
@@ -119,12 +119,16 @@ describe("constants contracts", () => {
   });
 
   it("softens floating-surface shadows in light and keeps them in dark (design-system §1.4)", () => {
-    const classes = FLOATING_SURFACE_SHADOW_CLASS.split(" ");
-    expect(classes).toContain("shadow-black/15");
-    expect(classes).toContain("dark:shadow-black/50");
-    for (const cls of classes) {
-      expect(MOTION_MEDIA_DIALOG_SURFACE_CLASS.split(" ")).toContain(cls);
-    }
+    expect(ELEVATION_TOKENS.light["--elevation-floating"].value).toBe(
+      "0 25px 50px -12px rgb(0 0 0 / 15%)",
+    );
+    expect(ELEVATION_TOKENS.dark["--elevation-floating"].value).toBe(
+      "0 25px 50px -12px rgb(0 0 0 / 50%)",
+    );
+    expect(SHADOW_SCALE.floating).toBe("var(--elevation-floating)");
+    expect(MOTION_MEDIA_DIALOG_SURFACE_CLASS.split(" ")).toContain(
+      "shadow-floating",
+    );
   });
 
   it("keeps the missing-media tile on the fixed token pair (design-system §1.2)", () => {

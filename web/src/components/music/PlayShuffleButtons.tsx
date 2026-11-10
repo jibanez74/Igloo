@@ -36,7 +36,7 @@ export default function PlayShuffleButtons({
         variant="accent-pill"
         size="lg"
         onClick={onPlay}
-        className="w-full font-semibold shadow-lg shadow-primary/20 sm:w-auto"
+        className="w-full font-semibold shadow-glow sm:w-auto"
         aria-label={playAriaLabel}
       >
         {isLoading ? (

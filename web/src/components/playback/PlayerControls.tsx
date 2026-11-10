@@ -134,7 +134,7 @@ export default function PlayerControls({
               onClick={onTogglePlay}
               className={cn(
                 PLAYER_PRIMARY_BUTTON_CLASS,
-                "size-14 shadow-lg shadow-primary/20",
+                "size-14 shadow-glow",
               )}
               aria-label={withShortcut(playing ? "Pause" : "Play", "Space or K")}
             >

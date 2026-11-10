@@ -950,7 +950,7 @@ export default function VideoPlaybackPage({
       className={cn(
         "flex min-h-0 flex-1 flex-col bg-background [&:-webkit-full-screen]:fixed [&:-webkit-full-screen]:inset-0 [&:-webkit-full-screen]:h-screen [&:-webkit-full-screen]:w-screen [&:fullscreen]:fixed [&:fullscreen]:inset-0 [&:fullscreen]:h-screen [&:fullscreen]:w-screen",
         isImmersiveViewport &&
-          "fixed inset-0 z-50 min-h-dvh w-full max-w-none overflow-hidden",
+          "fixed inset-0 z-modal min-h-dvh w-full max-w-none overflow-hidden",
       )}
       role="region"
       aria-label={`Video player for ${title}`}

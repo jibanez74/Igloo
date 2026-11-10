@@ -35,7 +35,7 @@ const externalClassAllowlist = [
   "theme-switching",
 ];
 
-const rawTailwindPaletteRule = [
+const restrictedClassRule = [
   "error",
   {
     selector:
@@ -48,6 +48,23 @@ const rawTailwindPaletteRule = [
       "TemplateElement[value.cooked=/(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|100|200|300|400|500|600|700|800|900|950)/]",
     message:
       "Use semantic tokens instead of raw Tailwind palette colors; see docs/design-system.md section 1.2.",
+  },
+  // The app-wide layers and the motion durations are tokens
+  // (src/lib/theme-tokens.ts): z-chrome / z-modal / z-popover and
+  // duration-micro / duration-standard / duration-page. Their numbers must
+  // not come back as literals, with or without the important modifier
+  // (`z-50!`); see docs/design-system.md sections 1.4, 1.5.
+  {
+    selector:
+      "Literal[value=/(?:^|[\\s:])!?(?:z-(?:40|50|60|100)|duration-(?:150|200|300))!?(?:$|\\s)/]",
+    message:
+      "Use the layer and duration tokens (z-chrome, z-modal, z-popover; duration-micro, duration-standard, duration-page) instead of their numbers; see docs/design-system.md sections 1.4 and 1.5.",
+  },
+  {
+    selector:
+      "TemplateElement[value.cooked=/(?:^|[\\s:])!?(?:z-(?:40|50|60|100)|duration-(?:150|200|300))!?(?:$|\\s)/]",
+    message:
+      "Use the layer and duration tokens instead of their numbers; see docs/design-system.md sections 1.4 and 1.5.",
   },
 ];
 
@@ -115,7 +132,7 @@ export default defineConfig([
         "warn",
         { ignore: externalClassAllowlist },
       ],
-      "no-restricted-syntax": rawTailwindPaletteRule,
+      "no-restricted-syntax": restrictedClassRule,
       // Variants are plain records (docs/design-system.md §1.6); the package
       // was removed and must not come back through a copied snippet.
       "no-restricted-imports": [

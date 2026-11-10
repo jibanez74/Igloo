@@ -94,7 +94,7 @@ type AppScreenCardProps = {
 function AppScreenCard({ children, markClassName, ...liveRegion }: AppScreenCardProps) {
   return (
     <div
-      className="fixed inset-0 z-50 overflow-hidden bg-card text-foreground"
+      className="fixed inset-0 z-modal overflow-hidden bg-card text-foreground"
       {...liveRegion}
     >
       <div className="absolute inset-0 bg-background/70" aria-hidden="true" />

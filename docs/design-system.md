@@ -195,24 +195,35 @@ Rules:
   scrims and the blurred-poster stand-in for a missing backdrop, §1.2),
   `aspect-video` trailers, extras, episode stills and the up-next
   thumbnail.
-- **Elevation**: `shadow-xs`–`shadow-2xl`. Interactive media cards add a
-  glacier glow on hover (`hover:shadow-xl hover:shadow-primary/20`); the
-  EmptyState orb uses `shadow-primary/5`. Floating surfaces on the canvas —
-  the mini player, Now Playing art, the up-next card, media dialogs — share
-  `FLOATING_SURFACE_SHADOW_CLASS` (`shadow-2xl shadow-black/15
-  dark:shadow-black/50`): a 50 % black shadow reads as a haze on the light
-  canvas. Shadows over posters and video stay literal (§1.2).
-- **Elevation tokens** (`SHADOW_SCALE` in `src/lib/theme-tokens.ts`):
-  `shadow-floating` is that floating-surface shadow as one utility, its
-  per-theme value held in `--elevation-floating`; `shadow-glow` is the
-  glacier glow under a primary control (`shadow-lg` in `primary` at 20 %).
-  They are ordinary shadow sizes to Tailwind and to `cn()`, so a shadow
-  color still combines with them and the focus ring is not replaced.
+- **Elevation**: `shadow-xs`–`shadow-2xl`, plus two shadows of the app's own
+  (`SHADOW_SCALE` in `src/lib/theme-tokens.ts`):
+  - `shadow-floating` for a surface floating on the canvas — the mini player,
+    Now Playing art, the up-next card, media dialogs. Its value differs by
+    theme (`--elevation-floating`): 50 % black in dark, 15 % in light, where
+    50 % reads as a haze.
+  - `shadow-glow` for the glacier glow under a primary control (the brand
+    mark, the player's play button, the pill call-to-actions): `shadow-lg`
+    in `primary` at 20 %. Write it, not `shadow-lg shadow-primary/20`.
+
+  Both are ordinary shadow sizes to Tailwind and to `cn()`: they replace and
+  are replaced by `shadow-md` and the like, and the focus ring, which is a
+  separate layer, is not disturbed. A shadow-color class beside them is kept
+  by `cn()`, but only `shadow-glow` takes it (`shadow-glow shadow-primary/5`
+  is the glow at 5 %). `shadow-floating` takes its color from the theme
+  through `--elevation-floating`, which Tailwind cannot recolor, so a color
+  class changes nothing there; a different strength is a new token. Other
+  glows stay literal where their strength is part of the surface:
+  interactive media cards on hover (`hover:shadow-xl
+  hover:shadow-primary/20`), the EmptyState orb (`shadow-primary/5`). Shadows
+  over posters and video stay literal too (§1.2).
 - **Layers** (`Z_INDEX_SCALE`): `z-chrome` (40, the header and the mini
   player), `z-modal` (50, dialogs, sheets and the full-window player) and
   `z-popover` (60, menus, selects and popovers, which may open from inside a
   modal). These are the layers that stack across the whole app; stacking
-  inside one component (a badge over its poster) stays a plain `z-10`.
+  inside one component (a badge over its poster) stays a plain `z-10`. A
+  fixed or portalled surface takes one of the three names, never a number:
+  that is what lets a select open over the dialog it sits in without a
+  one-off `z-100`.
 
 ### 1.5 Motion
 
@@ -232,17 +243,18 @@ constant exists — and when you create a new recurring one, add it there so
   The three numbers are defined once, as `MOTION_DURATIONS_MS` in
   `src/lib/theme-tokens.ts`: `constants.ts` re-exports them as
   `MOTION_DURATION_*_MS`, and they are the utilities `duration-micro`,
-  `duration-standard` and `duration-page`. Easing stays on Tailwind's
+  `duration-standard` and `duration-page`. Class strings use those names,
+  never `duration-150` / `-200` / `-300`. Easing stays on Tailwind's
   `ease-out` / `ease-in`.
 - **Transitions enumerate properties** — e.g.
   `transition-[background-color,border-color,color,box-shadow,opacity]` —
   never `transition-all`.
 - **Enter/exit animations** come from `tw-animate-css`. A page entrance both
   fades and lifts (`MOTION_PAGE_ENTER_CLASS`:
-  `animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-300`); a
+  `animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-page`); a
   section entrance only fades (`MOTION_SECTION_ENTER_CLASS` and its `delay-75`
   staggered twin `MOTION_SECTION_ENTER_DELAYED_CLASS`:
-  `animate-in fade-in-0 fill-mode-both duration-200`) — the split is
+  `animate-in fade-in-0 fill-mode-both duration-standard`) — the split is
   deliberate, since a page full of independently sliding sections reads as
   jitter. Exits use `animate-out` + `fade-out-0`. There are no custom
   `@keyframes` in `styles.css`.
@@ -581,8 +593,8 @@ The styling families:
   reserved space under the mini bar, §3.1), `SETTINGS_*` (card surface, input,
   select and reset-button chrome for the Settings pages, §3.7),
   `PLAYER_FRAME_SHELL_CLASS` / `PLAYER_FRAME_CLASS` (the windowed player's
-  frame, §3.5) and `FLOATING_SURFACE_SHADOW_CLASS` (elevation for floating
-  surfaces on the canvas, §1.4).
+  frame, §3.5). Elevation for floating surfaces is the `shadow-floating`
+  utility, not a constant (§1.4).
 - **Lists** — `TRACK_LIST_CONTAINER_CLASS` (library/search lists),
   `DETAIL_TRACK_LIST_CONTAINER_CLASS` (the softer glacier-tinted frame shared
   by the album and musician detail pages and the show episode list), and the
@@ -1332,7 +1344,7 @@ require the full playback test pass.
   mode). Both readouts take `displayedDuration` — the catalog length while
   an HLS element has not yet reported one — so the two never disagree.
   In immersive/fullscreen mode (`isImmersiveViewport` /
-  `chromeFullscreenMode`) the container goes `fixed inset-0 z-50`, chrome
+  `chromeFullscreenMode`) the container goes `fixed inset-0 z-modal`, chrome
   becomes absolute overlay panels (`MOTION_PLAYER_CHROME_PANEL_CLASS`,
   `bg-background/95 backdrop-blur-lg`) and **auto-hides on idle**
   (`useIdleControls`), sliding back on pointer/touch/key input. A `sr-only`
@@ -1435,7 +1447,7 @@ require the full playback test pass.
   a mirrored `size-10` spacer so the title stays centred, with the artist line
   beneath on its own); "Minimize player (Escape)" (no suffix on touch, §1.7)
   collapses it to the **docked
-  mini bar** (`fixed inset-x-0 bottom-0 z-40 bg-background/95 backdrop-blur`)
+  mini bar** (`fixed inset-x-0 bottom-0 z-chrome bg-background/95 backdrop-blur`)
   with track info, transport, close, and a bottom progress strip; below `sm`
   the like and close buttons give way so the title keeps room to read (both
   stay reachable from the fullscreen view). Every track row carries the
