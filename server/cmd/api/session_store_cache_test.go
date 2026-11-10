@@ -2,8 +2,11 @@ package main
 
 import (
 	"bytes"
+	"strconv"
 	"testing"
 	"time"
+
+	"github.com/alexedwards/scs/v2"
 )
 
 // countingStore records how often the decorated store is reached so the tests
@@ -144,5 +147,96 @@ func TestCachedSessionStoreDeleteInvalidatesImmediately(t *testing.T) {
 	}
 	if backing.deletes != 1 {
 		t.Errorf("store deletes = %d, want 1", backing.deletes)
+	}
+}
+
+func encodedTestSession(t testing.TB, userID int64) ([]byte, time.Time) {
+	t.Helper()
+
+	deadline := time.Now().Add(time.Hour).UTC().Truncate(time.Second)
+	b, err := scs.GobCodec{}.Encode(deadline, map[string]any{cookieUserID: userID, cookieSessionVersion: int64(3)})
+	if err != nil {
+		t.Fatalf("encode session: %v", err)
+	}
+	return b, deadline
+}
+
+func TestMemoSessionCodecDecodesLikeGob(t *testing.T) {
+	codec := newMemoSessionCodec()
+	b, deadline := encodedTestSession(t, 7)
+
+	for i := 0; i < 3; i++ {
+		gotDeadline, values, err := codec.Decode(b)
+		if err != nil {
+			t.Fatalf("decode %d: %v", i, err)
+		}
+		if !gotDeadline.Equal(deadline) {
+			t.Errorf("decode %d deadline = %v, want %v", i, gotDeadline, deadline)
+		}
+		userID, _ := values[cookieUserID].(int64)
+		version, _ := values[cookieSessionVersion].(int64)
+		if userID != 7 || version != 3 || len(values) != 2 {
+			t.Errorf("decode %d values = %v", i, values)
+		}
+
+		// scs writes into the map it is handed, on logout and on a password
+		// change, so one request's map must never reach the next.
+		values[cookieUserID] = int64(99)
+		delete(values, cookieSessionVersion)
+	}
+}
+
+func TestMemoSessionCodecRejectsCorruptData(t *testing.T) {
+	codec := newMemoSessionCodec()
+
+	for i := 0; i < 2; i++ {
+		_, _, err := codec.Decode([]byte("not gob"))
+		if err == nil {
+			t.Fatalf("decode %d accepted corrupt session data", i)
+		}
+	}
+}
+
+func TestMemoSessionCodecStaysBounded(t *testing.T) {
+	codec := newMemoSessionCodec()
+
+	for i := 0; i < sessionCodecMemoMax+10; i++ {
+		b, _ := encodedTestSession(t, int64(i))
+		_, _, err := codec.Decode(b)
+		if err != nil {
+			t.Fatalf("decode %d: %v", i, err)
+		}
+	}
+
+	if len(codec.decoded) > sessionCodecMemoMax {
+		t.Errorf("memo holds %d sessions, want at most %d", len(codec.decoded), sessionCodecMemoMax)
+	}
+
+	b, _ := encodedTestSession(t, 5)
+	_, values, err := codec.Decode(b)
+	if err != nil {
+		t.Fatalf("decode after the memo was cleared: %v", err)
+	}
+	userID, _ := values[cookieUserID].(int64)
+	if userID != 5 {
+		t.Errorf("user id after the memo was cleared = %d, want 5", userID)
+	}
+}
+
+func BenchmarkSessionDecode(b *testing.B) {
+	data, _ := encodedTestSession(b, 7)
+	codecs := map[string]scs.Codec{"gob": scs.GobCodec{}, "memo": newMemoSessionCodec()}
+
+	for _, name := range []string{"gob", "memo"} {
+		codec := codecs[name]
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_, values, err := codec.Decode(data)
+				if err != nil || len(values) != 2 {
+					b.Fatal(strconv.Itoa(len(values)), err)
+				}
+			}
+		})
 	}
 }

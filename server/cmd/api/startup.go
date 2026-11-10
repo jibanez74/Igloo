@@ -347,6 +347,7 @@ func (app *Application) InitDefaultUser(ctx context.Context) error {
 func (app *Application) InitSession() {
 	sessionManager := scs.New()
 	sessionManager.Store = newCachedSessionStore(sqlite3store.New(app.DB))
+	sessionManager.Codec = newMemoSessionCodec()
 	sessionManager.Lifetime = 30 * 24 * time.Hour
 	sessionManager.Cookie.HttpOnly = true
 	sessionManager.Cookie.SameSite = http.SameSiteLaxMode

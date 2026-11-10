@@ -1,6 +1,8 @@
 package main
 
 import (
+	"maps"
+	"sync"
 	"time"
 
 	"github.com/alexedwards/scs/v2"
@@ -8,6 +10,10 @@ import (
 )
 
 const (
+	// sessionCodecMemoMax bounds the decoded sessions kept. A household has
+	// far fewer live sessions, so reaching it means replaced ones piled up.
+	sessionCodecMemoMax = 1024
+
 	// sessionStoreCacheTTL bounds how long a session read may be served from
 	// memory. Igloo is a single process and every mutation goes through this
 	// decorator, so the only staleness this window can expose is a session
@@ -79,4 +85,47 @@ func (s *cachedSessionStore) Delete(token string) error {
 	s.cache.Delete(token)
 
 	return s.store.Delete(token)
+}
+
+type decodedSession struct {
+	deadline time.Time
+	values   map[string]any
+}
+
+// memoSessionCodec remembers what a session's bytes decode to. scs decodes
+// them on every request, a cached read included, and gob compiles a decoder
+// for each one. The stored format stays gob. The values are copied one level
+// deep, which is enough for the integers Igloo keeps in a session.
+type memoSessionCodec struct {
+	scs.GobCodec
+	mu      sync.RWMutex
+	decoded map[string]decodedSession
+}
+
+func newMemoSessionCodec() *memoSessionCodec {
+	return &memoSessionCodec{decoded: make(map[string]decodedSession)}
+}
+
+func (c *memoSessionCodec) Decode(b []byte) (time.Time, map[string]any, error) {
+	c.mu.RLock()
+	cached, hit := c.decoded[string(b)]
+	c.mu.RUnlock()
+	if hit {
+		return cached.deadline, maps.Clone(cached.values), nil
+	}
+
+	deadline, values, err := c.GobCodec.Decode(b)
+	if err != nil {
+		return time.Time{}, nil, err
+	}
+
+	c.mu.Lock()
+	isFull := len(c.decoded) >= sessionCodecMemoMax
+	if isFull {
+		clear(c.decoded)
+	}
+	c.decoded[string(b)] = decodedSession{deadline: deadline, values: maps.Clone(values)}
+	c.mu.Unlock()
+
+	return deadline, values, nil
 }
