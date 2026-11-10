@@ -34,7 +34,7 @@ func (app *Application) GetShowDetails(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	tx, err := app.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	tx, err := app.beginReadTx(ctx)
 	if err != nil {
 		app.serverError(w, err, beginTransactionLogMessage, "failed to fetch show from server")
 		return
@@ -140,7 +140,7 @@ func (app *Application) GetShowSeasonEpisodes(w http.ResponseWriter, r *http.Req
 
 	ctx := r.Context()
 
-	tx, err := app.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	tx, err := app.beginReadTx(ctx)
 	if err != nil {
 		app.serverError(w, err, beginTransactionLogMessage, "failed to fetch season from server")
 		return

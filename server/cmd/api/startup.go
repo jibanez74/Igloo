@@ -78,8 +78,10 @@ const sqliteDriverName = "sqlite3_igloo"
 
 // synchronous=NORMAL pairs with WAL so a commit skips the fsync (only an
 // OS-level crash can lose the latest commits), and temp_store=MEMORY keeps the
-// listings' sorters off the disk.
-const sqliteConnectionPragmas = "PRAGMA synchronous=NORMAL; PRAGMA temp_store=MEMORY; PRAGMA cache_size=-16000;"
+// listings' sorters off the disk. The WAL file is reused, never shrunk, so
+// without journal_size_limit it stays as large as the largest transaction
+// until shutdown; 16 MiB is four times what checkpoints normally leave.
+const sqliteConnectionPragmas = "PRAGMA synchronous=NORMAL; PRAGMA temp_store=MEMORY; PRAGMA cache_size=-16000; PRAGMA journal_size_limit=16777216;"
 
 func init() {
 	sql.Register(sqliteDriverName, &sqlite3.SQLiteDriver{
@@ -91,6 +93,38 @@ func init() {
 			return nil
 		},
 	})
+}
+
+// beginReadTx starts a read-only transaction whose connection outlives a
+// canceled request. database/sql discards the connection of a transaction
+// whose own context is canceled, and the web client aborts every request a
+// view stops observing; each discard costs a reconnect, an empty page cache
+// and every statement prepared again. The queries inside still take the
+// request's context, so an abort stops the work and the handler rolls back.
+// database/sql no longer ends this transaction for the caller, and it holds
+// the only connection: every caller defers tx.Rollback as soon as the begin
+// succeeds, and may commit earlier to hand the connection back sooner.
+//
+// The wait for the connection still ends with the request: its cancellation
+// reaches the transaction's context until the transaction has begun, and is
+// detached from then on.
+func (app *Application) beginReadTx(ctx context.Context) (*sql.Tx, error) {
+	txCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
+	detach := context.AfterFunc(ctx, cancel)
+
+	tx, err := app.DB.BeginTx(txCtx, &sql.TxOptions{ReadOnly: true})
+	detached := detach()
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	if !detached {
+		// The request ended as the transaction began, so the
+		// transaction's context is canceled with it.
+		_ = tx.Rollback()
+		return nil, ctx.Err()
+	}
+	return tx, nil
 }
 
 func ensureDatabasePathWritable(dbPath string, databaseExists bool) error {
@@ -347,13 +381,16 @@ func (app *Application) InitDefaultUser(ctx context.Context) error {
 func (app *Application) InitSession() {
 	sessionManager := scs.New()
 	sessionManager.Store = newCachedSessionStore(sqlite3store.New(app.DB))
+	sessionManager.Codec = newMemoSessionCodec()
 	sessionManager.Lifetime = 30 * 24 * time.Hour
 	sessionManager.Cookie.HttpOnly = true
 	sessionManager.Cookie.SameSite = http.SameSiteLaxMode
 	sessionManager.Cookie.Secure = app.Config.SessionCookieSecure
 	sessionManager.ErrorFunc = func(w http.ResponseWriter, r *http.Request, err error) {
 		app.Logger.Error("session middleware failed", "error", err)
+		// The handler's headers describe the body this error replaces.
 		w.Header().Del("Content-Length")
+		w.Header().Del("Content-Encoding")
 		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		writer, ok := w.(*sessionErrorResponseWriter)
 		if ok {

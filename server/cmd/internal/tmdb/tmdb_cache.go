@@ -11,9 +11,16 @@ const (
 	tmdbMovieCacheTTL     = 15 * time.Minute
 	tmdbMovieCacheCleanup = 5 * time.Minute
 	// The home page asks for the now-playing list on every load, and TMDB
-	// changes it weekly, so it is kept longer than a movie's details.
+	// changes it weekly, so it is kept longer than a movie's details. It has
+	// a cache of its own, which a scan filling the response cache never
+	// empties.
 	tmdbInTheatersCacheTTL = time.Hour
 	inTheatersCacheKey     = "movies:in-theaters"
+	// A scan asks for each title once, so an unbounded cache holds every
+	// response of a first scan's last fifteen minutes and answers almost none
+	// of them again. The seasons of the show being scanned are asked for
+	// close together, and still hit after a full cache is emptied.
+	tmdbCacheMaxEntries = 64
 )
 
 func movieCacheKey(id int) string {
@@ -27,9 +34,22 @@ func (t *tmdbClient) getMovie(id int) (*TmdbMovie, bool) {
 }
 
 func (t *tmdbClient) setMovie(id int, movie *TmdbMovie) {
-	t.movieCache.Set(movieCacheKey(id), movie, cache.DefaultExpiration)
+	t.cacheSet(movieCacheKey(id), movie, cache.DefaultExpiration)
+}
+
+// cacheSet keeps a response, emptying the cache first when it is full. A
+// response read from the cache is stored again to renew it, which adds
+// nothing and so empties nothing.
+func (t *tmdbClient) cacheSet(key string, value any, ttl time.Duration) {
+	_, isKept := t.movieCache.Get(key)
+	isFull := !isKept && t.movieCache.ItemCount() >= tmdbCacheMaxEntries
+	if isFull {
+		t.movieCache.Flush()
+	}
+	t.movieCache.Set(key, value, ttl)
 }
 
 func (t *tmdbClient) ClearCache() {
 	t.movieCache.Flush()
+	t.inTheaters.Flush()
 }

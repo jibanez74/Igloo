@@ -198,7 +198,7 @@ func (t *tmdbClient) getMetadata(ctx context.Context, path string, params url.Va
 	if err != nil {
 		return err
 	}
-	t.movieCache.Set(key, body, cache.DefaultExpiration)
+	t.cacheSet(key, body, cache.DefaultExpiration)
 	return ctx.Err()
 }
 

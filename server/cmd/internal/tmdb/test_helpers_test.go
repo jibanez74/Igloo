@@ -24,6 +24,7 @@ func newTestClient(baseURL string) *tmdbClient {
 		maxRetries:     3,
 		retryBaseDelay: time.Millisecond,
 		movieCache:     cache.New(tmdbMovieCacheTTL, tmdbMovieCacheCleanup),
+		inTheaters:     cache.New(tmdbInTheatersCacheTTL, cache.NoExpiration),
 	}
 }
 

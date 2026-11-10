@@ -282,10 +282,11 @@ func readOpenAPIDocumentJSON(t *testing.T, target any) {
 }
 
 func loadOpenAPIContractOnce() {
-	// kin-openapi does not register Apple's HLS playlist media type by
-	// default. It is a textual response, so validate it with the same decoder
-	// used for text/plain instead of skipping the response body.
+	// kin-openapi does not register Apple's HLS playlist media type or
+	// WebVTT by default. Both are textual responses, so validate them with the
+	// same decoder used for text/plain instead of skipping the response body.
 	openapi3filter.RegisterBodyDecoder(hlsPlaylistContentType, openapi3filter.PlainBodyDecoder)
+	openapi3filter.RegisterBodyDecoder(subtitleWebVTTContentType, openapi3filter.PlainBodyDecoder)
 
 	documentPath, err := openAPIDocumentPath()
 	if err != nil {

@@ -3,7 +3,7 @@
   "info": {
     "title": "Igloo API",
     "version": "0.1.0",
-    "description": "HTTP API for the Igloo self-hosted media center. Most JSON endpoints return a shared envelope with error, optional message, and optional data fields. Except for the optional movie-deletion body, JSON request bodies must contain a single value without unknown fields and are limited to 1 MiB; malformed or oversized bodies return 400. The shared decoder applies a 15-second read deadline when the response transport supports it. Device bearer tokens issued via Quick Connect or device login (Authorization: Bearer igd_...) are accepted on most routes that accept cookieAuth, except admin-only routes, device-management, Quick Connect lookup/approval, PIN retrieval, account deletion, and email and password changes, which require a cookie session. See each operation's security block for route-specific requirements. Authentication and session middleware failures return sanitized JSON error envelopes even on media, static-file, subtitle, image-proxy, HLS, and WebSocket routes. HEAD responses never include a body, including errors; their Content-Type describes the corresponding GET representation. Movie, show, season and episode images, cast and crew photos, and network logos hold TMDB image paths such as /abc.jpg, which clients request through /api/tmdb/images/{size}/{file}; album covers and musician photos hold the Spotify or Apple image URL. While the download_images setting is on, the server downloads these images into the static directory, and a field whose image it has downloaded holds that copy's URL under /api/static/ instead, with a ?v= version; clients request it as it is, with the same authentication as the API."
+    "description": "HTTP API for the Igloo self-hosted media center. Most JSON endpoints return a shared envelope with error, optional message, and optional data fields. Except for the optional movie-deletion body, JSON request bodies must contain a single value without unknown fields and are limited to 1 MiB; malformed or oversized bodies return 400. The shared decoder applies a 15-second read deadline when the response transport supports it. Device bearer tokens issued via Quick Connect or device login (Authorization: Bearer igd_...) are accepted on most routes that accept cookieAuth, except admin-only routes, device-management, Quick Connect lookup/approval, PIN retrieval, account deletion, and email and password changes, which require a cookie session. See each operation's security block for route-specific requirements. Authentication and session middleware failures return sanitized JSON error envelopes even on media, static-file, subtitle, image-proxy, HLS, and WebSocket routes. HEAD responses never include a body, including errors; their Content-Type describes the corresponding GET representation. Movie, show, season and episode images, cast and crew photos, and network logos hold TMDB image paths such as /abc.jpg, which clients request through /api/tmdb/images/{size}/{file}; album covers and musician photos hold the Spotify or Apple image URL. While the download_images setting is on, the server downloads these images into the static directory, and a field whose image it has downloaded holds that copy's URL under /api/static/ instead, with a ?v= version; clients request it as it is, with the same authentication as the API. JSON responses, HLS playlists, and WebVTT subtitles of 1,400 bytes or more are compressed with gzip when the request's Accept-Encoding accepts it: the response then carries Content-Encoding: gzip, and a response of that size carries Vary: Accept-Encoding whether or not it was compressed. Media streams, HLS segments, Matroska subtitle streams, images, and static files are never compressed."
   },
   "servers": [
     {
@@ -7867,6 +7867,26 @@
               "const": "no-store"
             }
           },
+          "Content-Encoding": {
+            "description": "Present when the playlist is 1,400 bytes or more and the request's Accept-Encoding accepts gzip; the body is then gzip-compressed.",
+            "schema": {
+              "type": "string",
+              "const": "gzip"
+            }
+          },
+          "Vary": {
+            "description": "Names Accept-Encoding when the playlist is 1,400 bytes or more, compressed or not, alongside the session middleware's Cookie.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "Content-Length": {
+            "description": "Length of the body as sent, after any compression.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
           "X-Igloo-Effective-Profile": {
             "description": "Profile FFmpeg actually ran. This differs from the requested profile in the path when the remux safety gate forces a transcode (it copies H.264 for every client and HEVC only for a request with video_codecs=hevc), so a `remux` request can be answered with a transcode profile here, and when a requested transcode profile is taller than the effective encoder supports (software encoding runs 2160p_16mbps as 1080p_8mbps).",
             "required": true,
@@ -8286,6 +8306,26 @@
             "schema": {
               "type": "string",
               "const": "no-cache"
+            }
+          },
+          "Content-Encoding": {
+            "description": "Present when the cues are 1,400 bytes or more and the request's Accept-Encoding accepts gzip; the body is then gzip-compressed.",
+            "schema": {
+              "type": "string",
+              "const": "gzip"
+            }
+          },
+          "Vary": {
+            "description": "Names Accept-Encoding when the cues are 1,400 bytes or more, compressed or not, alongside the session middleware's Cookie.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "Content-Length": {
+            "description": "Length of the body as sent, after any compression.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
             }
           }
         },

@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"igloo/cmd/internal/database"
 )
@@ -185,6 +187,7 @@ func TestInitDB_EveryConnectionGetsTheConnectionSettings(t *testing.T) {
 		{"synchronous", 1},
 		{"temp_store", 2},
 		{"cache_size", -16000},
+		{"journal_size_limit", 16 << 20},
 		{"foreign_keys", 1},
 		{"busy_timeout", 5000},
 	} {
@@ -196,6 +199,143 @@ func TestInitDB_EveryConnectionGetsTheConnectionSettings(t *testing.T) {
 		if got != setting.want {
 			t.Errorf("new connection %s = %d, want %d", setting.pragma, got, setting.want)
 		}
+	}
+}
+
+// A temporary table lives and dies with its connection, so it tells whether
+// the pool still holds the connection a transaction ran on.
+func TestBeginReadTxKeepsTheConnectionWhenTheRequestIsCanceled(t *testing.T) {
+	tests := []struct {
+		name     string
+		begin    func(app *Application, ctx context.Context) (*sql.Tx, error)
+		wantKept bool
+	}{
+		{
+			name: "transaction on the request context",
+			begin: func(app *Application, ctx context.Context) (*sql.Tx, error) {
+				return app.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+			},
+		},
+		{
+			name: "beginReadTx",
+			begin: func(app *Application, ctx context.Context) (*sql.Tx, error) {
+				return app.beginReadTx(ctx)
+			},
+			wantKept: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := &Application{Config: RuntimeConfig{DBPath: filepath.Join(t.TempDir(), "test.db")}}
+			setupTestLogger(t, app)
+			err := app.InitDB()
+			if err != nil {
+				t.Fatalf("InitDB failed: %v", err)
+			}
+			defer app.DB.Close()
+
+			_, err = app.DB.Exec("CREATE TEMP TABLE connection_marker (id INTEGER)")
+			if err != nil {
+				t.Fatalf("mark the connection: %v", err)
+			}
+
+			ctx, cancel := context.WithCancel(context.Background())
+			tx, err := tt.begin(app, ctx)
+			if err != nil {
+				t.Fatalf("begin: %v", err)
+			}
+			var one int
+			err = tx.QueryRowContext(ctx, "SELECT 1").Scan(&one)
+			if err != nil {
+				t.Fatalf("query inside the transaction: %v", err)
+			}
+
+			cancel()
+			// A handler is inside SQLite when an abort lands, which leaves
+			// database/sql time to roll the transaction back itself. That
+			// is the rollback that discards the connection.
+			// database/sql does that on a goroutine of its own, so the case
+			// that expects it waits as long as a loaded machine may need;
+			// the loop ends as soon as it has happened.
+			wait := 200 * time.Millisecond
+			if !tt.wantKept {
+				wait = 5 * time.Second
+			}
+			rolledBackByPool := false
+			deadline := time.Now().Add(wait)
+			for time.Now().Before(deadline) && !rolledBackByPool {
+				err = tx.QueryRowContext(context.Background(), "SELECT 1").Scan(&one)
+				rolledBackByPool = errors.Is(err, sql.ErrTxDone)
+				time.Sleep(time.Millisecond)
+			}
+			if rolledBackByPool == tt.wantKept {
+				t.Fatalf("rolled back by the pool = %t, want %t", rolledBackByPool, !tt.wantKept)
+			}
+
+			// The request's own queries stop with it either way.
+			err = tx.QueryRowContext(ctx, "SELECT 1").Scan(&one)
+			if err == nil {
+				t.Error("a query on the canceled request context succeeded")
+			}
+			_ = tx.Rollback()
+
+			var marker int
+			err = app.DB.QueryRow("SELECT COUNT(*) FROM temp.connection_marker").Scan(&marker)
+			kept := err == nil
+			if kept != tt.wantKept {
+				t.Errorf("connection kept = %t, want %t (last error: %v)", kept, tt.wantKept, err)
+			}
+		})
+	}
+}
+
+// A request that waits for the only connection must stop waiting when its
+// client goes away, as it did when the transaction took the request's context.
+func TestBeginReadTxStopsWaitingForTheConnectionWhenTheRequestIsCanceled(t *testing.T) {
+	app := &Application{Config: RuntimeConfig{DBPath: filepath.Join(t.TempDir(), "test.db")}}
+	setupTestLogger(t, app)
+	err := app.InitDB()
+	if err != nil {
+		t.Fatalf("InitDB failed: %v", err)
+	}
+	defer app.DB.Close()
+
+	busy, err := app.DB.Conn(context.Background())
+	if err != nil {
+		t.Fatalf("take the only connection: %v", err)
+	}
+	defer busy.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	began := make(chan error, 1)
+	go func() {
+		tx, beginErr := app.beginReadTx(ctx)
+		if beginErr == nil {
+			_ = tx.Rollback()
+		}
+		began <- beginErr
+	}()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for app.DB.Stats().WaitCount == 0 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if app.DB.Stats().WaitCount == 0 {
+		t.Fatal("the transaction never waited for the connection")
+	}
+
+	cancel()
+	select {
+	case err = <-began:
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("begin error = %v, want context.Canceled", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("the canceled request is still waiting for the connection")
+		_ = busy.Close()
+		err = <-began
+		t.Logf("after the connection was released, begin returned: %v", err)
 	}
 }
 

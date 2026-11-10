@@ -1,12 +1,44 @@
 package helpers
 
 import (
+	"bytes"
+	"compress/gzip"
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 )
+
+// negotiatingRecorder stands in for the writer the session group hands to
+// handlers, which knows whether the client accepts gzip.
+type negotiatingRecorder struct {
+	*httptest.ResponseRecorder
+	accepts bool
+}
+
+func (r *negotiatingRecorder) AcceptsGzip() bool {
+	return r.accepts
+}
+
+type jsonTestCredit struct {
+	Name      string  `json:"name"`
+	Character string  `json:"character"`
+	Order     int     `json:"order"`
+	Profile   *string `json:"profile"`
+}
+
+func jsonTestCredits(count int) JSONResponse {
+	profile := "/pB8BM7pdSp6B6Ih7QZ4DrQ3PmJK.jpg"
+	credits := make([]jsonTestCredit, count)
+	for i := range credits {
+		credits[i] = jsonTestCredit{Name: "Person <" + strconv.Itoa(i) + "> & co", Character: "Role \"" + strconv.Itoa(i) + "\"", Order: i, Profile: &profile}
+	}
+	return JSONResponse{Data: map[string]any{"cast": credits}}
+}
 
 // headerRecorder reports whether WriteHeader was called, which the recorder's
 // default 200 Code cannot tell apart from an explicit 200.
@@ -63,6 +95,102 @@ func TestWriteJSON(t *testing.T) {
 
 		if w.Header().Get("X-Custom-Header") != "custom-value" {
 			t.Errorf("expected custom header value, got %s", w.Header().Get("X-Custom-Header"))
+		}
+	})
+
+	t.Run("writes the bytes json.Marshal produces", func(t *testing.T) {
+		for _, count := range []int{0, 1, 400} {
+			data := jsonTestCredits(count)
+			want, err := json.Marshal(data)
+			if err != nil {
+				t.Fatalf("marshal: %v", err)
+			}
+
+			w := httptest.NewRecorder()
+			err = WriteJSON(w, http.StatusOK, data)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if !bytes.Equal(w.Body.Bytes(), want) {
+				t.Errorf("%d credits: body differs from json.Marshal", count)
+			}
+			if w.Header().Get("Content-Length") != strconv.Itoa(len(want)) {
+				t.Errorf("%d credits: Content-Length = %q, want %d", count, w.Header().Get("Content-Length"), len(want))
+			}
+			if w.Header().Get("Content-Encoding") != "" || w.Header().Get("Vary") != "" {
+				t.Errorf("%d credits: a writer that does not negotiate got %v", count, w.Header())
+			}
+		}
+	})
+
+	t.Run("compresses a large body for a client that accepts gzip", func(t *testing.T) {
+		data := jsonTestCredits(400)
+		want, _ := json.Marshal(data)
+
+		w := &negotiatingRecorder{ResponseRecorder: httptest.NewRecorder(), accepts: true}
+		err := WriteJSON(w, http.StatusOK, data)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if w.Header().Get("Content-Encoding") != "gzip" || w.Header().Get("Vary") != "Accept-Encoding" {
+			t.Fatalf("headers = %v, want gzip and Vary: Accept-Encoding", w.Header())
+		}
+		if w.Header().Get("Content-Length") != strconv.Itoa(w.Body.Len()) {
+			t.Errorf("Content-Length = %q, want the compressed length %d", w.Header().Get("Content-Length"), w.Body.Len())
+		}
+		if w.Body.Len() >= len(want)/2 {
+			t.Errorf("compressed body is %d bytes of %d", w.Body.Len(), len(want))
+		}
+
+		reader, err := gzip.NewReader(w.Body)
+		if err != nil {
+			t.Fatalf("body is not gzip: %v", err)
+		}
+		got, err := io.ReadAll(reader)
+		if err != nil {
+			t.Fatalf("read gzip body: %v", err)
+		}
+		if !bytes.Equal(got, want) {
+			t.Error("decompressed body differs from json.Marshal")
+		}
+	})
+
+	t.Run("leaves a large body alone for a client that refuses gzip", func(t *testing.T) {
+		data := jsonTestCredits(400)
+		want, _ := json.Marshal(data)
+
+		w := &negotiatingRecorder{ResponseRecorder: httptest.NewRecorder()}
+		err := WriteJSON(w, http.StatusOK, data)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if w.Header().Get("Content-Encoding") != "" {
+			t.Errorf("Content-Encoding = %q for a client that refused gzip", w.Header().Get("Content-Encoding"))
+		}
+		// The other representation exists, so a cache must still key on it.
+		if w.Header().Get("Vary") != "Accept-Encoding" {
+			t.Errorf("Vary = %q, want Accept-Encoding", w.Header().Get("Vary"))
+		}
+		if !bytes.Equal(w.Body.Bytes(), want) {
+			t.Error("body differs from json.Marshal")
+		}
+	})
+
+	t.Run("leaves a body of one packet alone", func(t *testing.T) {
+		w := &negotiatingRecorder{ResponseRecorder: httptest.NewRecorder(), accepts: true}
+		err := WriteJSON(w, http.StatusOK, jsonTestCredits(3))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if w.Body.Len() >= gzipMinBytes {
+			t.Fatalf("test body is %d bytes, want one under %d", w.Body.Len(), gzipMinBytes)
+		}
+		if w.Header().Get("Content-Encoding") != "" || w.Header().Get("Vary") != "" {
+			t.Errorf("small body got %v", w.Header())
 		}
 	})
 
@@ -201,6 +329,42 @@ func TestErrorJSON(t *testing.T) {
 		body := w.Body.String()
 		if !strings.Contains(body, `"message":"not found"`) {
 			t.Errorf("expected error message in body, got %s", body)
+		}
+	})
+}
+
+// BenchmarkWriteJSON compares the pooled writer with the json.Marshal and
+// Write it replaced, on a body the size of a movie's details.
+func BenchmarkWriteJSON(b *testing.B) {
+	data := jsonTestCredits(600)
+
+	b.Run("marshal", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			w := httptest.NewRecorder()
+			w.Body = nil
+			out, _ := json.Marshal(data)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(out)
+		}
+	})
+
+	b.Run("pooled", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			w := httptest.NewRecorder()
+			w.Body = nil
+			_ = WriteJSON(w, http.StatusOK, data)
+		}
+	})
+
+	b.Run("pooled gzip", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			w := &negotiatingRecorder{ResponseRecorder: httptest.NewRecorder(), accepts: true}
+			w.Body = nil
+			_ = WriteJSON(w, http.StatusOK, data)
 		}
 	})
 }

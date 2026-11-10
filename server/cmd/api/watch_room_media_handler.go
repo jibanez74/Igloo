@@ -151,7 +151,7 @@ func (app *Application) WatchRoomHLSManifest(w http.ResponseWriter, r *http.Requ
 	}
 
 	writeHLSPlaylistHeaders(w, session)
-	_, _ = w.Write([]byte(playlist))
+	_ = helpers.WriteBody(w, http.StatusOK, []byte(playlist))
 }
 
 func (app *Application) WatchRoomHLSSegment(w http.ResponseWriter, r *http.Request) {

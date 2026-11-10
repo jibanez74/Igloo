@@ -334,7 +334,7 @@ Application errors before streaming normally use the JSON error envelope. Failur
 
 Direct files emit a strong ETag derived from size and nanosecond mtime plus Last-Modified. Ready HLS assets emit Last-Modified but **no ETag**. Matching `If-None-Match` (including `*`) or applicable `If-Modified-Since` can return `304`; `If-Match` with a specific tag cannot match an HLS asset. `If-Range` validates a range or causes a full `200` when it does not match; HLS supports date validators, while direct files also support their ETag. Do not assume every non-200 response has JSON.
 
-HLS manifest, asset, and stop handlers set `Cache-Control: no-store`, including handler errors. Authentication/session middleware can answer before that header is set, and Go's range-error response strips it. Successful subtitle streams also use `no-store`. Retry delays by cause are listed once in the [settings table](#operational-settings-and-budgets).
+HLS manifest, asset, and stop handlers set `Cache-Control: no-store`, including handler errors. A playlist of 1,400 bytes or more is sent gzip-compressed to a client whose `Accept-Encoding` accepts it, since a running copy-video session re-sends its growing playlist on every reload; segments and `init.mp4` are never compressed, which keeps them on the sendfile path. Authentication/session middleware can answer before that header is set, and Go's range-error response strips it. Successful subtitle streams also use `no-store`. Retry delays by cause are listed once in the [settings table](#operational-settings-and-budgets).
 
 ### Web-client recovery policies
 
@@ -361,7 +361,7 @@ Movie and episode subtitle endpoints use the ordinal and authentication rules un
 ffmpeg -v error -i <source> -map 0:<absolute stream index> -c:s webvtt -f webvtt pipe:1
 ```
 
-The early bitmap rejection list is PGS (`hdmv_pgs_subtitle`), DVD (`dvd_subtitle`), DVB (`dvb_subtitle`), and XSUB (`xsub`), returning `415`. This is not exhaustive classification of every unsupported subtitle codec: other unconvertible codecs can reach FFmpeg and fail with `500`. Escaped `\h` sequences in successful output become spaces.
+The early bitmap rejection list is PGS (`hdmv_pgs_subtitle`), DVD (`dvd_subtitle`), DVB (`dvb_subtitle`), and XSUB (`xsub`), returning `415`. This is not exhaustive classification of every unsupported subtitle codec: other unconvertible codecs can reach FFmpeg and fail with `500`. Escaped `\h` sequences in successful output become spaces. Cues of 1,400 bytes or more are sent gzip-compressed to a client whose `Accept-Encoding` accepts it; the Matroska subtitle stream is never compressed.
 
 Full, unshifted output is cached by media kind, physical file ID, and absolute stream index. Concurrent requests share an extraction detached from the first request, so a departing caller stops waiting without canceling others' work. Shutdown or the extraction timeout cancels it. Cache hits renew its idle lifetime. Invalidation advances a generation captured before source metadata resolution; extraction deduplication includes that generation, and cache publication and renewal are synchronized with invalidation. Older requests can finish with their original cues but cannot repopulate or renew the cache. Track copies are invalidated before the WebVTT generation advances, so new work cannot convert an invalidated copy. Eviction remains specific to the physical file and media kind; see the [settings table](#operational-settings-and-budgets).
 
