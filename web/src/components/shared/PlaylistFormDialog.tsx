@@ -17,13 +17,12 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
-import { FOCUS_VISIBLE_RING_CLASS } from "@/lib/constants";
 import { PLAYLIST_KINDS, type PlaylistKind } from "@/lib/playlist-kinds";
 import { unwrapString, unwrapStringOrUndefined } from "@/lib/nullable";
 import { playlistFieldsError } from "@/lib/form-validation";
-import { cn } from "@/lib/utils";
 import type { NullableString } from "@/types";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 
@@ -253,7 +252,6 @@ function PlaylistForm({
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="My Playlist"
-            className="border-border bg-muted text-foreground placeholder:text-muted-foreground"
             disabled={mutation.isPending}
             autoComplete="off"
             autoFocus
@@ -269,17 +267,14 @@ function PlaylistForm({
             Description{" "}
             <span className="text-sm text-muted-foreground">(optional)</span>
           </Label>
-          <textarea
+          <Textarea
             id={descriptionId}
             aria-labelledby={descriptionLabelId}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Add a description..."
             rows={3}
-            className={cn(
-              "w-full resize-none rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground disabled:opacity-50",
-              FOCUS_VISIBLE_RING_CLASS,
-            )}
+            className="resize-none"
             disabled={mutation.isPending}
           />
         </div>

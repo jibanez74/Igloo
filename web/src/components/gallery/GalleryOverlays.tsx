@@ -34,7 +34,6 @@ import {
   LIBRARY_MENU_ITEM_CLASS,
   SETTINGS_SELECT_CONTENT_CLASS,
   SETTINGS_SELECT_ITEM_CLASS,
-  SETTINGS_SELECT_TRIGGER_CLASS,
 } from "@/lib/constants";
 
 // Each stage renders one overlay already open, built the way production call
@@ -65,11 +64,7 @@ function DialogStage() {
             <Label htmlFor="gallery-dialog-name" className="text-foreground">
               Name
             </Label>
-            <Input
-              id="gallery-dialog-name"
-              placeholder="Full name"
-              className="border-border bg-muted text-foreground placeholder:text-muted-foreground"
-            />
+            <Input id="gallery-dialog-name" placeholder="Full name" />
           </div>
           <DialogFooter className="gap-2 pt-2 sm:gap-0">
             <Button type="button" variant="outline">
@@ -105,7 +100,8 @@ function SelectStage() {
       <Select open value="recommended" onValueChange={noop}>
         <SelectTrigger
           id="gallery-open-select"
-          className={SETTINGS_SELECT_TRIGGER_CLASS}
+          variant="inset"
+          size="lg"
         >
           <SelectValue />
         </SelectTrigger>

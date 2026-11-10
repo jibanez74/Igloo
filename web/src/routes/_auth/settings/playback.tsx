@@ -23,10 +23,8 @@ import SettingsSaveBar from "@/components/settings/SettingsSaveBar";
 import {
   MOTION_SETTINGS_SURFACE_CLASS,
   SETTINGS_CARD_SURFACE_CLASS,
-  SETTINGS_INPUT_CLASS,
   SETTINGS_SELECT_CONTENT_CLASS,
   SETTINGS_SELECT_ITEM_CLASS,
-  SETTINGS_SELECT_TRIGGER_CLASS,
 } from "@/lib/constants";
 import { updatePlaybackSettings } from "@/lib/api";
 import { parseMbpsInput } from "@/lib/playback";
@@ -351,7 +349,8 @@ function ServerPlaybackForm({ settings }: ServerPlaybackFormProps) {
                     ? `${serverUploadMbpsId}-description ${statusId}`
                     : `${serverUploadMbpsId}-description`
                 }
-                className={SETTINGS_INPUT_CLASS}
+                variant="inset"
+                size="lg"
               />
               <p
                 id={`${serverUploadMbpsId}-description`}
@@ -375,7 +374,7 @@ function ServerPlaybackForm({ settings }: ServerPlaybackFormProps) {
               >
                 <SelectTrigger
                   id={hardwareDeviceId}
-                  className={SETTINGS_SELECT_TRIGGER_CLASS}
+                  variant="inset" size="lg"
                 >
                   <SelectValue />
                 </SelectTrigger>

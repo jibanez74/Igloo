@@ -32,7 +32,6 @@ import { isValidEmail } from "@/lib/form-validation";
 import {
   inputIconClassName,
   lightInputActionClassName,
-  lightInputClassName,
 } from "@/lib/input-styles";
 import { cn, describedBy } from "@/lib/utils";
 import { routeHead } from "@/lib/route-head";
@@ -227,7 +226,8 @@ function LoginPage() {
                   onChange={() => {
                     if (errors.email) setErrors(current => ({ ...current, email: undefined }));
                   }}
-                  className={cn("pl-10", lightInputClassName)}
+                  variant="glass"
+                  className="pl-10"
                   disabled={isSubmitting}
                 />
               </div>
@@ -256,7 +256,8 @@ function LoginPage() {
                   onChange={() => {
                     if (errors.password) setErrors(current => ({ ...current, password: undefined }));
                   }}
-                  className={cn("px-10", lightInputClassName)}
+                  variant="glass"
+                  className="px-10"
                   disabled={isSubmitting}
                 />
                 <button

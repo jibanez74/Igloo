@@ -154,7 +154,7 @@ export default function SpotifyPicker<T extends SpotifySearchResult>({
           id={titleInputId}
           value={title}
           onChange={event => setTitle(event.target.value)}
-          className="mt-1 border-border bg-muted text-foreground"
+          className="mt-1"
           autoComplete="off"
           autoFocus
         />

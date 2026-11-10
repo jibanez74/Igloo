@@ -44,13 +44,9 @@ import {
   LIBRARY_TABS_LIST_CLASS,
   MEDIA_FALLBACK_SURFACE_CLASS,
   OVER_MEDIA_BADGE_CLASS,
-  PLAYBACK_SETTINGS_SELECT_TRIGGER_CLASS,
   SETTINGS_CARD_SURFACE_CLASS,
-  SETTINGS_INPUT_CLASS,
   SETTINGS_RESET_BUTTON_CLASS,
-  SETTINGS_SELECT_TRIGGER_CLASS,
 } from "@/lib/constants";
-import { lightInputClassName } from "@/lib/input-styles";
 import { cn } from "@/lib/utils";
 
 const BUTTON_VARIANT_NAMES = [
@@ -204,25 +200,36 @@ function FieldsSection() {
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <Label htmlFor="gallery-input-default">Default</Label>
-          <Input id="gallery-input-default" placeholder="Placeholder" />
+          <Input
+            id="gallery-input-default"
+            placeholder="Placeholder"
+            variant="outline"
+          />
         </div>
         <div>
           <Label htmlFor="gallery-input-value">With a value</Label>
           <Input
             id="gallery-input-value"
             defaultValue="Casino Royale"
+            variant="outline"
             readOnly
           />
         </div>
         <div>
           <Label htmlFor="gallery-input-disabled">Disabled</Label>
-          <Input id="gallery-input-disabled" placeholder="Disabled" disabled />
+          <Input
+            id="gallery-input-disabled"
+            placeholder="Disabled"
+            variant="outline"
+            disabled
+          />
         </div>
         <div>
           <Label htmlFor="gallery-input-invalid">Invalid</Label>
           <Input
             id="gallery-input-invalid"
             defaultValue="not-an-email"
+            variant="outline"
             aria-invalid="true"
             readOnly
           />
@@ -231,11 +238,7 @@ function FieldsSection() {
           <Label htmlFor="gallery-input-muted" className="text-foreground">
             Recipe: muted field
           </Label>
-          <Input
-            id="gallery-input-muted"
-            placeholder="Playlist name"
-            className="border-border bg-muted text-foreground placeholder:text-muted-foreground"
-          />
+          <Input id="gallery-input-muted" placeholder="Playlist name" />
         </div>
         <div>
           <Label
@@ -247,7 +250,8 @@ function FieldsSection() {
           <Input
             id="gallery-input-settings"
             placeholder="/media/static"
-            className={SETTINGS_INPUT_CLASS}
+            variant="inset"
+            size="lg"
           />
         </div>
         <div>
@@ -255,13 +259,17 @@ function FieldsSection() {
           <Input
             id="gallery-input-glass"
             placeholder="Search…"
-            className={lightInputClassName}
+            variant="glass"
           />
         </div>
         <div>
           <Label htmlFor="gallery-select-default">Select</Label>
           <Select value="recommended" onValueChange={noop}>
-            <SelectTrigger id="gallery-select-default">
+            <SelectTrigger
+              id="gallery-select-default"
+              variant="outline"
+              className="w-fit"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -276,7 +284,8 @@ function FieldsSection() {
           <Select value="two" onValueChange={noop}>
             <SelectTrigger
               id="gallery-select-settings"
-              className={SETTINGS_SELECT_TRIGGER_CLASS}
+              variant="inset"
+              size="lg"
             >
               <SelectValue />
             </SelectTrigger>
@@ -290,10 +299,7 @@ function FieldsSection() {
             Recipe: playback select
           </Label>
           <Select value="1080" onValueChange={noop}>
-            <SelectTrigger
-              id="gallery-select-playback"
-              className={PLAYBACK_SETTINGS_SELECT_TRIGGER_CLASS}
-            >
+            <SelectTrigger id="gallery-select-playback">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

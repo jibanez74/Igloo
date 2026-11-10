@@ -28,7 +28,6 @@ import {
   MINI_PLAYER_CLEARANCE_BOTTOM_CLASS,
   MOTION_SETTINGS_SURFACE_CLASS,
   SETTINGS_CARD_SURFACE_CLASS,
-  SETTINGS_INPUT_CLASS,
 } from "@/lib/constants";
 import { updateGeneralSettings } from "@/lib/api";
 import { invalidateArtworkQueries } from "@/lib/library-cache";
@@ -560,7 +559,9 @@ function SecretInput({
           disabled={disabled}
           aria-describedby={descriptionId}
           autoComplete="off"
-          className={cn(SETTINGS_INPUT_CLASS, "pr-11")}
+          variant="inset"
+          size="lg"
+          className="pr-11"
         />
         <Button
           type="button"
@@ -628,7 +629,9 @@ function PathInput({
           aria-required={required || undefined}
           aria-invalid={invalid || undefined}
           aria-describedby={descriptionId}
-          className={cn(SETTINGS_INPUT_CLASS, "pl-10")}
+          variant="inset"
+          size="lg"
+          className="pl-10"
         />
       </div>
       <p id={descriptionId} className="text-sm text-muted-foreground">

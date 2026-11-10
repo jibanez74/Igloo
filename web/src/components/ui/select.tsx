@@ -2,6 +2,11 @@ import * as React from "react"
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react"
 import { Select as SelectPrimitive } from "radix-ui"
 
+import {
+  FIELD_SIZES,
+  FIELD_VARIANTS,
+  type FieldSize,
+} from "@/components/ui/field-variants"
 import { cn } from "@/lib/utils"
 
 function Select({
@@ -16,16 +21,38 @@ function SelectValue({
   return <SelectPrimitive.Value data-slot="select-value" {...props} />
 }
 
+// The trigger takes the field looks that have a production use. Glass has
+// none, and the inset trigger sits flat on its card where the inset Input
+// keeps a hairline shadow: both are as the Settings forms are drawn today.
+const SELECT_TRIGGER_VARIANTS = {
+  filled: FIELD_VARIANTS.filled,
+  inset: `${FIELD_VARIANTS.inset} shadow-none`,
+  outline: FIELD_VARIANTS.outline,
+} as const
+
+type SelectTriggerProps = Omit<
+  React.ComponentProps<typeof SelectPrimitive.Trigger>,
+  "size"
+> & {
+  variant?: keyof typeof SELECT_TRIGGER_VARIANTS
+  size?: FieldSize
+}
+
 function SelectTrigger({
   className,
   children,
+  variant = "filled",
+  size = "default",
   ...props
-}: Omit<React.ComponentProps<typeof SelectPrimitive.Trigger>, "size">) {
+}: SelectTriggerProps) {
   return (
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
+      data-variant={variant}
       className={cn(
-        "flex h-9 w-fit items-center justify-between gap-2 rounded-md border border-input bg-transparent px-3 py-2 text-sm whitespace-nowrap shadow-xs outline-hidden transition-[color,box-shadow] duration-micro focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 data-placeholder:text-muted-foreground *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 motion-reduce:transition-none dark:bg-input/30 dark:hover:bg-input/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-muted-foreground",
+        "flex h-9 w-full min-w-0 items-center justify-between gap-2 rounded-md border border-input bg-transparent px-3 py-2 text-sm whitespace-nowrap shadow-xs outline-hidden transition-[color,box-shadow] duration-micro focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 data-placeholder:text-muted-foreground *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 motion-reduce:transition-none dark:bg-input/30 dark:hover:bg-input/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-muted-foreground",
+        SELECT_TRIGGER_VARIANTS[variant],
+        FIELD_SIZES[size],
         className
       )}
       {...props}

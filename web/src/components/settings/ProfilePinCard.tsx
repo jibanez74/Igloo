@@ -24,7 +24,6 @@ import {
   showSuccess,
   showActionFailed,
 } from "@/lib/toast-helpers";
-import { lightInputClassName } from "@/lib/input-styles";
 import { describedBy } from "@/lib/utils";
 
 type PinErrorField = "currentPin" | "newPin";
@@ -254,7 +253,8 @@ export default function ProfilePinCard() {
                   clearError("currentPin");
                 }}
                 placeholder="Enter current PIN"
-                className={`font-mono ${lightInputClassName}`}
+                variant="glass"
+                className="font-mono"
                 aria-label="Current PIN"
                 autoComplete="off"
                 maxLength={USER_PIN_LENGTH}
@@ -291,7 +291,8 @@ export default function ProfilePinCard() {
                 clearError("newPin");
               }}
               placeholder={hasPin ? "Enter new PIN" : "Enter a PIN"}
-              className={`font-mono ${lightInputClassName}`}
+              variant="glass"
+              className="font-mono"
               aria-label={hasPin ? "New PIN" : "PIN"}
               autoComplete="off"
               maxLength={USER_PIN_LENGTH}
