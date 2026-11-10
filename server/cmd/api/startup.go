@@ -101,8 +101,9 @@ func init() {
 // view stops observing; each discard costs a reconnect, an empty page cache
 // and every statement prepared again. The queries inside still take the
 // request's context, so an abort stops the work and the handler rolls back.
-// Nothing else ends this transaction, and it holds the only connection:
-// every caller defers tx.Rollback as soon as the begin succeeds.
+// database/sql no longer ends this transaction for the caller, and it holds
+// the only connection: every caller defers tx.Rollback as soon as the begin
+// succeeds, and may commit earlier to hand the connection back sooner.
 func (app *Application) beginReadTx(ctx context.Context) (*sql.Tx, error) {
 	return app.DB.BeginTx(context.WithoutCancel(ctx), &sql.TxOptions{ReadOnly: true})
 }

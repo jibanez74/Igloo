@@ -37,9 +37,12 @@ func (t *tmdbClient) setMovie(id int, movie *TmdbMovie) {
 	t.cacheSet(movieCacheKey(id), movie, cache.DefaultExpiration)
 }
 
-// cacheSet keeps a response, emptying the cache first when it is full.
+// cacheSet keeps a response, emptying the cache first when it is full. A
+// response read from the cache is stored again to renew it, which adds
+// nothing and so empties nothing.
 func (t *tmdbClient) cacheSet(key string, value any, ttl time.Duration) {
-	isFull := t.movieCache.ItemCount() >= tmdbCacheMaxEntries
+	_, isKept := t.movieCache.Get(key)
+	isFull := !isKept && t.movieCache.ItemCount() >= tmdbCacheMaxEntries
 	if isFull {
 		t.movieCache.Flush()
 	}

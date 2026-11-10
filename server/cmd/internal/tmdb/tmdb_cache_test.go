@@ -75,6 +75,23 @@ func TestCacheStaysBoundedThroughAScan(t *testing.T) {
 		t.Errorf("season requests reached TMDB %d times, want 1", calls.Load())
 	}
 
+	// A season answered from a full cache renews its own entry and must
+	// leave the others where they are.
+	for len(client.movieCache.Items()) < tmdbCacheMaxEntries {
+		client.setMovie(-len(client.movieCache.Items())-1, &TmdbMovie{})
+	}
+	_, err = client.GetSeasonDetails(context.Background(), 7, 1)
+	if err != nil {
+		t.Fatalf("season request from a full cache: %v", err)
+	}
+	if calls.Load() != 1 {
+		t.Errorf("season requests reached TMDB %d times, want 1", calls.Load())
+	}
+	count := client.movieCache.ItemCount()
+	if count != tmdbCacheMaxEntries {
+		t.Errorf("cache holds %d responses after a hit when full, want %d", count, tmdbCacheMaxEntries)
+	}
+
 	// The home page's list lasts its hour whatever a scan stores meanwhile.
 	_, err = client.GetMoviesInTheaters(context.Background())
 	if err != nil {
