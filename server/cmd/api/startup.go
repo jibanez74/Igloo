@@ -104,8 +104,27 @@ func init() {
 // database/sql no longer ends this transaction for the caller, and it holds
 // the only connection: every caller defers tx.Rollback as soon as the begin
 // succeeds, and may commit earlier to hand the connection back sooner.
+//
+// The wait for the connection still ends with the request: its cancellation
+// reaches the transaction's context until the transaction has begun, and is
+// detached from then on.
 func (app *Application) beginReadTx(ctx context.Context) (*sql.Tx, error) {
-	return app.DB.BeginTx(context.WithoutCancel(ctx), &sql.TxOptions{ReadOnly: true})
+	txCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
+	detach := context.AfterFunc(ctx, cancel)
+
+	tx, err := app.DB.BeginTx(txCtx, &sql.TxOptions{ReadOnly: true})
+	detached := detach()
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	if !detached {
+		// The request ended as the transaction began, so the
+		// transaction's context is canceled with it.
+		_ = tx.Rollback()
+		return nil, ctx.Err()
+	}
+	return tx, nil
 }
 
 func ensureDatabasePathWritable(dbPath string, databaseExists bool) error {

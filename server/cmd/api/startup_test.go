@@ -289,6 +289,56 @@ func TestBeginReadTxKeepsTheConnectionWhenTheRequestIsCanceled(t *testing.T) {
 	}
 }
 
+// A request that waits for the only connection must stop waiting when its
+// client goes away, as it did when the transaction took the request's context.
+func TestBeginReadTxStopsWaitingForTheConnectionWhenTheRequestIsCanceled(t *testing.T) {
+	app := &Application{Config: RuntimeConfig{DBPath: filepath.Join(t.TempDir(), "test.db")}}
+	setupTestLogger(t, app)
+	err := app.InitDB()
+	if err != nil {
+		t.Fatalf("InitDB failed: %v", err)
+	}
+	defer app.DB.Close()
+
+	busy, err := app.DB.Conn(context.Background())
+	if err != nil {
+		t.Fatalf("take the only connection: %v", err)
+	}
+	defer busy.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	began := make(chan error, 1)
+	go func() {
+		tx, beginErr := app.beginReadTx(ctx)
+		if beginErr == nil {
+			_ = tx.Rollback()
+		}
+		began <- beginErr
+	}()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for app.DB.Stats().WaitCount == 0 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if app.DB.Stats().WaitCount == 0 {
+		t.Fatal("the transaction never waited for the connection")
+	}
+
+	cancel()
+	select {
+	case err = <-began:
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("begin error = %v, want context.Canceled", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("the canceled request is still waiting for the connection")
+		_ = busy.Close()
+		err = <-began
+		t.Logf("after the connection was released, begin returned: %v", err)
+	}
+}
+
 func TestRefreshQueryPlannerStats(t *testing.T) {
 	app := newTestDBApp(t)
 	db := app.DB
