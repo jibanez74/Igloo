@@ -29,6 +29,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
 import {
   Select,
   SelectContent,
@@ -39,6 +40,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import {
   LIBRARY_TAB_TRIGGER_CLASS,
   LIBRARY_TABS_LIST_CLASS,
@@ -196,10 +198,13 @@ function BadgesSection() {
 
 function FieldsSection() {
   return (
-    <GallerySection id="fields" title="Input, Label, Checkbox, Switch">
+    <GallerySection
+      id="fields"
+      title="Input, Textarea, Select, Label, Checkbox, Switch"
+    >
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <Label htmlFor="gallery-input-default">Default</Label>
+          <Label htmlFor="gallery-input-default">Outline</Label>
           <Input
             id="gallery-input-default"
             placeholder="Placeholder"
@@ -207,7 +212,7 @@ function FieldsSection() {
           />
         </div>
         <div>
-          <Label htmlFor="gallery-input-value">With a value</Label>
+          <Label htmlFor="gallery-input-value">Outline, with a value</Label>
           <Input
             id="gallery-input-value"
             defaultValue="Casino Royale"
@@ -216,7 +221,7 @@ function FieldsSection() {
           />
         </div>
         <div>
-          <Label htmlFor="gallery-input-disabled">Disabled</Label>
+          <Label htmlFor="gallery-input-disabled">Outline, disabled</Label>
           <Input
             id="gallery-input-disabled"
             placeholder="Disabled"
@@ -225,7 +230,7 @@ function FieldsSection() {
           />
         </div>
         <div>
-          <Label htmlFor="gallery-input-invalid">Invalid</Label>
+          <Label htmlFor="gallery-input-invalid">Outline, invalid</Label>
           <Input
             id="gallery-input-invalid"
             defaultValue="not-an-email"
@@ -236,7 +241,7 @@ function FieldsSection() {
         </div>
         <div>
           <Label htmlFor="gallery-input-muted" className="text-foreground">
-            Recipe: muted field
+            Filled (the default)
           </Label>
           <Input id="gallery-input-muted" placeholder="Playlist name" />
         </div>
@@ -245,7 +250,7 @@ function FieldsSection() {
             htmlFor="gallery-input-settings"
             className="text-muted-foreground"
           >
-            Recipe: settings field
+            Inset, large
           </Label>
           <Input
             id="gallery-input-settings"
@@ -255,7 +260,7 @@ function FieldsSection() {
           />
         </div>
         <div>
-          <Label htmlFor="gallery-input-glass">Recipe: glass field</Label>
+          <Label htmlFor="gallery-input-glass">Glass</Label>
           <Input
             id="gallery-input-glass"
             placeholder="Search…"
@@ -263,7 +268,7 @@ function FieldsSection() {
           />
         </div>
         <div>
-          <Label htmlFor="gallery-select-default">Select</Label>
+          <Label htmlFor="gallery-select-default">Select, outline</Label>
           <Select value="recommended" onValueChange={noop}>
             <SelectTrigger
               id="gallery-select-default"
@@ -279,7 +284,7 @@ function FieldsSection() {
         </div>
         <div>
           <Label htmlFor="gallery-select-settings">
-            Recipe: settings select
+            Select, inset and large
           </Label>
           <Select value="two" onValueChange={noop}>
             <SelectTrigger
@@ -296,7 +301,7 @@ function FieldsSection() {
         </div>
         <div>
           <Label htmlFor="gallery-select-playback">
-            Recipe: playback select
+            Select, filled (the default)
           </Label>
           <Select value="1080" onValueChange={noop}>
             <SelectTrigger id="gallery-select-playback">
@@ -308,6 +313,64 @@ function FieldsSection() {
           </Select>
         </div>
       </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <Label htmlFor="gallery-textarea-filled">Textarea, filled</Label>
+          <Textarea
+            id="gallery-textarea-filled"
+            placeholder="Add a description..."
+            rows={3}
+            className="resize-none"
+          />
+        </div>
+        <div>
+          <Label htmlFor="gallery-textarea-inset">Textarea, inset</Label>
+          <Textarea
+            id="gallery-textarea-inset"
+            defaultValue="Comfort rewatches for a rainy Saturday."
+            rows={3}
+            variant="inset"
+            className="resize-none"
+            readOnly
+          />
+        </div>
+        <div>
+          <Label htmlFor="gallery-native-select">Native select, filled</Label>
+          <NativeSelect id="gallery-native-select" defaultValue="all">
+            <option value="all">All work</option>
+            <option value="acting">Acting</option>
+          </NativeSelect>
+        </div>
+        <div>
+          <Label htmlFor="gallery-native-select-disabled">
+            Native select, disabled
+          </Label>
+          <NativeSelect
+            id="gallery-native-select-disabled"
+            defaultValue="direct"
+            disabled
+          >
+            <option value="direct">Original video</option>
+          </NativeSelect>
+        </div>
+      </div>
+
+      <GalleryRow label="input sizes">
+        <Input
+          aria-label="Small"
+          placeholder="Small"
+          size="sm"
+          className="w-40"
+        />
+        <Input aria-label="Default size" placeholder="Default" className="w-40" />
+        <Input
+          aria-label="Large"
+          placeholder="Large"
+          size="lg"
+          className="w-40"
+        />
+      </GalleryRow>
 
       <GalleryRow label="checkbox">
         <Checkbox aria-label="Unchecked" />

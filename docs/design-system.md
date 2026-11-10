@@ -29,6 +29,8 @@ this doc, prefer adding a guard too.
 | Every focus indicator in `src/` uses a shared focus-ring recipe — no hand-written widths, offsets, or `focus:` (mouse-visible) rings | `web/src/test/shared/focus-contracts.test.ts` |
 | No string in `src/` hard-codes a keyboard-shortcut hint suffix (`"Mute (M)"`) — hints go through `useShortcutHints` | `web/src/test/shared/shortcut-hint-contracts.test.ts` |
 | Input styling contracts | `web/src/test/shared/input-styles.test.ts` |
+| Fields share their looks, and a field's `className` sets no colour or height (§1.6) | `web/src/test/ui/fields.test.tsx`, ESLint `no-restricted-syntax` (**error**) |
+| App-wide layers and motion durations are written as tokens, not numbers (§1.4, §1.5) | ESLint `no-restricted-syntax` (**error**) |
 | Shared class-string constants keep their contracts | `web/src/test/lib/constants-contracts.test.ts` |
 | Primitives and the baseline pages render the same pixels as the committed baselines, pixel for pixel, both themes (§2.5) | `web/e2e/visual/*.visual.ts` (CI job `test-visual`) |
 | The component gallery renders, and stays out of the production bundle (§2.5) | `web/src/test/gallery/gallery.test.tsx`, CI marker grep, `web/e2e/boot.spec.ts` |
@@ -321,6 +323,27 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
   so an element that is not a `Button` (a link, a Radix trigger) can take it
   as its whole `className` with no `cn()` around it. Wrap it in `cn()` only
   to add classes.
+- **Fields share one set of looks** (`ui/field-variants.ts`), chosen with
+  `variant` on `Input`, `Textarea`, `NativeSelect` and `SelectTrigger`, so a
+  form that mixes them reads as one:
+
+  | Variant | Look | Used for |
+  |---|---|---|
+  | `filled` (default) | a muted well: `border-border bg-muted` | dialogs, pickers |
+  | `inset` | a translucent well on a card: `bg-background/60` | the Settings forms |
+  | `glass` | the light glass field of `lib/input-styles.ts` | header search, sign-in, account and users forms |
+  | `outline` | the bare bordered field, no fill | inline rename, the quick-connect code |
+
+  `size` (`sm` 32px, `default` 36px, `lg` 40px) sets the height of `Input`
+  and `SelectTrigger`; Settings fields are `inset` at `lg`. `SelectTrigger`
+  has no `glass`, and its `inset` sits flat (`shadow-none`) where the inset
+  `Input` keeps a hairline shadow: both as the Settings forms are drawn
+  today.
+- **A field's `className` is for layout**: a margin, padding around an icon
+  (`pl-10`), a width, `resize-none`, a font (`font-mono`). A colour or
+  height class there, or a class constant, is a lint error — the look is the
+  variant's. This is the rule every primitive family is moving to; the lint
+  list in `web/eslint.config.js` (`styledByProps`) names the ones under it.
 - **`Badge`** (`ui/badge.tsx`) is the primitive for static pills — count
   pills, rating chips, status tags. It is non-interactive by design (a
   `span`); actionable chips are Buttons. The one rating chip is
@@ -526,11 +549,16 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
   `Slot`). A Radix upgrade is therefore a change to that package and, at
   most, to these files, checked by the screenshot baselines (§2.5).
 - Icons are lucide (§1.1).
-- 20 primitives live in `components/ui`: alert, alert-dialog, avatar,
+- 22 primitives live in `components/ui`: alert, alert-dialog, avatar,
   badge, button, card, checkbox, dialog, dropdown-menu, input, label,
-  pagination, popover, select, separator, sheet, sidebar, sonner, spinner,
-  tabs — plus `sidebar-context.tsx`, which holds the sidebar's context so the
-  primitive and `AppSidebar` can both read it.
+  native-select, pagination, popover, select, separator, sheet, sidebar,
+  sonner, spinner, tabs, textarea — plus `sidebar-context.tsx`, which holds
+  the sidebar's context so the primitive and `AppSidebar` can both read it,
+  and `field-variants.ts`, the looks the field primitives share (§1.6).
+- `NativeSelect` is the browser's own `<select>` styled as a field, for where
+  the platform picker is the better control: touch devices (the playback
+  settings pickers switch to it on a coarse pointer) and short filter lists
+  (the person page). `Select` is the styled listbox.
 - Their exported subcomponents are intentionally limited to production use.
   Portal, overlay, and Select scroll helpers stay private to their owning
   primitive. Sheet is the left mobile-navigation surface, and Sidebar exports
@@ -590,8 +618,9 @@ The styling families:
   `LIBRARY_TAB_TRIGGER_CLASS`, `LIBRARY_POSTER_GRID_CLASS` (the fixed-column
   library grid) and `LIBRARY_MENU_ITEM_CLASS` (items in a library page's More
   menu), `HOME_POSTER_GRID_CLASS` / `HOME_ALBUM_GRID_CLASS` (§3.2), `MINI_PLAYER_CLEARANCE_*` (the shell's
-  reserved space under the mini bar, §3.1), `SETTINGS_*` (card surface, input,
-  select and reset-button chrome for the Settings pages, §3.7),
+  reserved space under the mini bar, §3.1), `SETTINGS_*` (card surface, select
+  popup and reset-button chrome for the Settings pages, §3.7; its fields are
+  the `inset` variant, §1.6),
   `PLAYER_FRAME_SHELL_CLASS` / `PLAYER_FRAME_CLASS` (the windowed player's
   frame, §3.5). Elevation for floating surfaces is the `shadow-floating`
   utility, not a constant (§1.4).
@@ -756,8 +785,9 @@ collapse, while the mobile trigger controls the sheet.
 - Header: sticky `h-14 bg-background/95 backdrop-blur-sm`, border-b.
   Mobile-only `SidebarTrigger`, then `app/Header.tsx` — a `role="search"` form
   (submits to `/search?q=…&tab=all&page=1`), `NotificationBell`,
-  `ThemeToggle`. The search input uses the light "frosted" treatment from
-  `lib/input-styles.ts` (an allowlisted raw-color exception, §1.2).
+  `ThemeToggle`. The search input is the `glass` field variant (§1.6), the
+  light "frosted" treatment from `lib/input-styles.ts` (an allowlisted
+  raw-color exception, §1.2).
 - Content: `px-4 py-6 sm:px-6 lg:px-8`; when the mini audio player is visible
   the shell adds `MINI_PLAYER_CLEARANCE_PADDING_CLASS` (`pb-28 sm:pb-24`) so
   content never hides behind it. The desktop sidebar column takes the same
@@ -1510,7 +1540,8 @@ require the full playback test pass.
 
 - Settings pages are Cards on `SETTINGS_CARD_SURFACE_CLASS`
   (`border-border/50 bg-muted/30`) with a `SettingsCardHeader` (glacier lucide
-  icon + title + description), labeled inputs on `SETTINGS_INPUT_CLASS`,
+  icon + title + description), labeled fields in the `inset` variant at
+  `size="lg"` (§1.6),
   helper text below (`text-muted-foreground text-xs`), and per-field or
   per-card Save buttons; destructive areas get the tinted "Danger Zone" card
   (`border-destructive/*` + destructive text + outline destructive actions).
@@ -1547,10 +1578,13 @@ require the full playback test pass.
 - **Card section titles are real headings**: render `CardTitle` with `asChild`
   wrapping an `<h2>` (login's is the page `<h1>`) so card-sectioned pages are
   navigable by heading.
-- The header search + login inputs use the frosted light treatment from
+- The header search, the sign-in form and the account and users forms use
+  the `glass` field variant: the frosted light treatment from
   `lib/input-styles.ts` — the sanctioned raw-color exception (§1.2); its
   contract is pinned by `shared/input-styles.test.ts`.
-- File inputs, checkboxes, selects: use the vendored primitives; selects in
+- A multi-line field is a `Textarea`, never a hand-styled `<textarea>`; it
+  takes the same variants as `Input` (`test/ui/fields.test.tsx`).
+- File inputs, checkboxes, selects: use the primitives; selects in
   dialogs rely on the `data-slot` contract (§1.6). Destructive confirmations
   go through the shared `ConfirmDialog`, and paged lists through
   `LibraryPagination` — neither is re-implemented per page. A Save-bar form
