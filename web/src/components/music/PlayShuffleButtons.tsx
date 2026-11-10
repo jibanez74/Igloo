@@ -33,7 +33,8 @@ export default function PlayShuffleButtons({
     <>
       <Button
         type="button"
-        variant="accent-pill"
+        variant="accent"
+        shape="pill"
         size="lg"
         onClick={onPlay}
         className="w-full font-semibold shadow-glow sm:w-auto"
@@ -49,9 +50,10 @@ export default function PlayShuffleButtons({
       <Button
         type="button"
         variant="outline"
+        shape="pill"
         size="lg"
         onClick={onShuffle}
-        className="w-full rounded-full font-semibold sm:w-auto"
+        className="w-full font-semibold sm:w-auto"
         aria-label={shuffleAriaLabel}
       >
         {isLoading ? (

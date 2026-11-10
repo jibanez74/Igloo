@@ -89,7 +89,7 @@ export default function ResumeDialog({
         <DialogFooter>
           <Button
             type="button"
-            variant="outline"
+            variant="secondary"
             onClick={() => {
               if (playFrom) {
                 playFrom.select();
@@ -98,7 +98,6 @@ export default function ResumeDialog({
               onStartFromBeginning();
             }}
             disabled={pending}
-            className="border-border bg-muted text-muted-foreground hover:bg-accent hover:text-foreground"
           >
             {pending && !playFrom ? (
               <Spinner className="size-4" aria-hidden="true" />

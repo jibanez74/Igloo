@@ -690,9 +690,10 @@ function PlayAllButton() {
   return (
     <Button
       variant="outline"
+      shape="pill"
       onClick={handlePlayAll}
       aria-disabled={isLoading}
-      className="min-h-10 rounded-full aria-disabled:opacity-50"
+      className="min-h-10 aria-disabled:opacity-50"
       aria-label="Play all tracks"
     >
       {isLoading ? (
@@ -725,7 +726,8 @@ function ShuffleButton() {
 
   return (
     <Button
-      variant="accent-pill"
+      variant="accent"
+      shape="pill"
       onClick={handleShuffle}
       aria-disabled={isLoading}
       className="min-h-10 aria-disabled:opacity-50"

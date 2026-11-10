@@ -176,10 +176,10 @@ export default function NotificationBell() {
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
-          variant="ghost"
+          variant="ghost-muted"
           size="icon"
           aria-label={bellLabel}
-          className="relative text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="relative"
         >
           <Bell aria-hidden="true" />
           {unreadCount > 0 && (

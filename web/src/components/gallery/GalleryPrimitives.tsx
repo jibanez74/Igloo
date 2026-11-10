@@ -51,13 +51,15 @@ import {
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
-const BUTTON_VARIANT_NAMES = [
-  "default",
-  "accent",
-  "accent-pill",
-  "outline",
-  "ghost",
-  "destructive",
+// One row per look. The label is what the row is called on the page; the
+// pill is the accent variant in the pill shape.
+const BUTTON_ROWS = [
+  { label: "default", variant: "default", shape: "default" },
+  { label: "accent", variant: "accent", shape: "default" },
+  { label: "accent-pill", variant: "accent", shape: "pill" },
+  { label: "outline", variant: "outline", shape: "default" },
+  { label: "ghost", variant: "ghost", shape: "default" },
+  { label: "destructive", variant: "destructive", shape: "default" },
 ] as const;
 
 const noop = () => {};
@@ -65,30 +67,38 @@ const noop = () => {};
 function ButtonsSection() {
   return (
     <GallerySection id="buttons" title="Button">
-      {BUTTON_VARIANT_NAMES.map(variant => (
-        <GalleryRow key={variant} label={variant}>
-          <Button variant={variant} size="sm">
+      {BUTTON_ROWS.map(({ label, variant, shape }) => (
+        <GalleryRow key={label} label={label}>
+          <Button variant={variant} shape={shape} size="sm">
             Small
           </Button>
-          <Button variant={variant}>Default</Button>
-          <Button variant={variant} size="lg">
+          <Button variant={variant} shape={shape}>
+            Default
+          </Button>
+          <Button variant={variant} shape={shape} size="lg">
             Large
           </Button>
-          <Button variant={variant}>
+          <Button variant={variant} shape={shape}>
             <Play aria-hidden="true" />
             With icon
           </Button>
-          <Button variant={variant} size="icon" aria-label={`${variant} icon`}>
+          <Button
+            variant={variant}
+            shape={shape}
+            size="icon"
+            aria-label={`${label} icon`}
+          >
             <Plus aria-hidden="true" />
           </Button>
           <Button
             variant={variant}
+            shape={shape}
             size="icon-sm"
-            aria-label={`${variant} small icon`}
+            aria-label={`${label} small icon`}
           >
             <Plus aria-hidden="true" />
           </Button>
-          <Button variant={variant} disabled>
+          <Button variant={variant} shape={shape} disabled>
             Disabled
           </Button>
         </GalleryRow>
@@ -110,17 +120,14 @@ function ButtonsSection() {
           variant; this row must not move a pixel when it does. */}
       <GalleryRow label="call-site recipes">
         <Button
-          variant="ghost"
+          variant="ghost-muted"
           size="icon"
           aria-label="Muted ghost"
-          className="relative text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="relative"
         >
           <Bell aria-hidden="true" />
         </Button>
-        <Button
-          variant="outline"
-          className="border-border bg-muted text-muted-foreground hover:bg-accent hover:text-foreground"
-        >
+        <Button variant="secondary">
           Dialog secondary
         </Button>
         <Button
@@ -129,11 +136,7 @@ function ButtonsSection() {
         >
           Dialog cancel
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive"
-        >
+        <Button variant="outline-destructive" size="sm">
           <Trash2 aria-hidden="true" />
           Outline destructive
         </Button>
@@ -148,11 +151,11 @@ function ButtonsSection() {
           <Play aria-hidden="true" />
           Play all
         </Button>
-        <Button variant="outline" className="rounded-full font-semibold">
+        <Button variant="outline" shape="pill" className="font-semibold">
           <Shuffle aria-hidden="true" />
           Shuffle
         </Button>
-        <Button variant="outline" className="min-h-10 rounded-full">
+        <Button variant="outline" shape="pill" className="min-h-10">
           <Heart aria-hidden="true" />
           Liked
         </Button>

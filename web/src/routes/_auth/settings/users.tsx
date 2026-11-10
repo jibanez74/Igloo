@@ -336,7 +336,7 @@ function UsersSettings() {
                       ) : (
                         <>
                           <Button
-                            variant="ghost"
+                            variant="ghost-muted"
                             size="icon"
                             onClick={event =>
                               openDialog(
@@ -345,29 +345,26 @@ function UsersSettings() {
                               )
                             }
                             aria-label={`Reset password for ${user.name}`}
-                            className="text-muted-foreground hover:text-foreground"
                           >
                             <KeyRound className="size-4" aria-hidden="true" />
                           </Button>
                           <Button
-                            variant="ghost"
+                            variant="ghost-muted"
                             size="icon"
                             onClick={event =>
                               openDialog({ type: "edit", user }, event.currentTarget)
                             }
                             aria-label={`Edit ${user.name}`}
-                            className="text-muted-foreground hover:text-foreground"
                           >
                             <Pencil className="size-4" aria-hidden="true" />
                           </Button>
                           <Button
-                            variant="ghost"
+                            variant="ghost-destructive"
                             size="icon"
                             onClick={event =>
                               openDialog({ type: "delete", user }, event.currentTarget)
                             }
                             aria-label={`Delete ${user.name}`}
-                            className="text-muted-foreground hover:text-destructive"
                           >
                             <Trash2 className="size-4" aria-hidden="true" />
                           </Button>
