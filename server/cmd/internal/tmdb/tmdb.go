@@ -23,6 +23,9 @@ const (
 	tmdbHTTPMaxRetries     = 3
 	tmdbHTTPRetryBaseDelay = 250 * time.Millisecond
 	tmdbHTTPRetryMaxDelay  = 2 * time.Second
+	// The largest responses, a long-running show with its credits, are a few
+	// megabytes; a body cut off here fails to parse.
+	tmdbMaxResponseBytes = 32 << 20
 )
 
 type TmdbInterface interface {

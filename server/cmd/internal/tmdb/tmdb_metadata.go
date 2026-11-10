@@ -227,7 +227,7 @@ func (t *tmdbClient) GetMoviesInTheaters(ctx context.Context) ([]*TmdbMovie, err
 		// An empty list is not kept, so the preroll pool's short retry for
 		// one reaches TMDB again.
 		if len(results) > 0 {
-			t.movieCache.Set(inTheatersCacheKey, results, tmdbInTheatersCacheTTL)
+			t.cacheSet(inTheatersCacheKey, results, tmdbInTheatersCacheTTL)
 		}
 	}
 
@@ -306,7 +306,7 @@ func (t *tmdbClient) getJSON(ctx context.Context, requestURL string) ([]byte, in
 		resp, err := t.httpClient.Do(req)
 		if err == nil {
 			header = resp.Header
-			bodyBytes, err = io.ReadAll(resp.Body)
+			bodyBytes, err = io.ReadAll(io.LimitReader(resp.Body, tmdbMaxResponseBytes))
 			resp.Body.Close()
 		}
 
