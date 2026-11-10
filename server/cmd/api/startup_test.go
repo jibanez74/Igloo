@@ -254,8 +254,15 @@ func TestBeginReadTxKeepsTheConnectionWhenTheRequestIsCanceled(t *testing.T) {
 			// A handler is inside SQLite when an abort lands, which leaves
 			// database/sql time to roll the transaction back itself. That
 			// is the rollback that discards the connection.
+			// database/sql does that on a goroutine of its own, so the case
+			// that expects it waits as long as a loaded machine may need;
+			// the loop ends as soon as it has happened.
+			wait := 200 * time.Millisecond
+			if !tt.wantKept {
+				wait = 5 * time.Second
+			}
 			rolledBackByPool := false
-			deadline := time.Now().Add(200 * time.Millisecond)
+			deadline := time.Now().Add(wait)
 			for time.Now().Before(deadline) && !rolledBackByPool {
 				err = tx.QueryRowContext(context.Background(), "SELECT 1").Scan(&one)
 				rolledBackByPool = errors.Is(err, sql.ErrTxDone)
