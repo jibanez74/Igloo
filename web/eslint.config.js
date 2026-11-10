@@ -35,6 +35,12 @@ const externalClassAllowlist = [
   "theme-switching",
 ];
 
+// Primitives whose look is chosen by props, and the classes that would
+// restate it: a colour on the fill, text, border or shadow, or a height.
+const styledByProps = "Input|Textarea|NativeSelect|SelectTrigger";
+const lookClass =
+  "(?:^|\\s)(?:[a-z-]+:)*(?:(?:bg|text|border|shadow|placeholder:text)-(?:background|foreground|card|popover|primary|secondary|muted|accent|destructive|border|input|ring|success|aurora|white|black|transparent)|h-[0-9])";
+
 const restrictedClassRule = [
   "error",
   {
@@ -65,6 +71,21 @@ const restrictedClassRule = [
       "TemplateElement[value.cooked=/(?:^|[\\s:])!?(?:z-(?:40|50|60|100)|duration-(?:150|200|300))!?(?:$|\\s)/]",
     message:
       "Use the layer and duration tokens instead of their numbers; see docs/design-system.md sections 1.4 and 1.5.",
+  },
+  // A field's look comes from its `variant` and `size` props
+  // (src/components/ui/field-variants.ts), not from classes or a class
+  // constant at the call site. `className` is for layout: margins, padding
+  // around an icon, width, a font. The list grows as each primitive family
+  // takes its looks in; see docs/design-system.md section 1.6.
+  {
+    selector: `JSXOpeningElement[name.name=/^(?:${styledByProps})$/] > JSXAttribute[name.name='className'] :matches(Literal[value=/${lookClass}/], TemplateElement[value.cooked=/${lookClass}/])`,
+    message:
+      "Set the look with the variant and size props instead of classes; className is for layout. See docs/design-system.md section 1.6.",
+  },
+  {
+    selector: `JSXOpeningElement[name.name=/^(?:${styledByProps})$/] > JSXAttribute[name.name='className'] Identifier[name=/(?:ClassName|_CLASS)$/]`,
+    message:
+      "Set the look with the variant and size props instead of a class constant. See docs/design-system.md section 1.6.",
   },
 ];
 

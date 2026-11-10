@@ -330,7 +330,6 @@ export default function CreateWatchRoomDialog({
                   id={searchId}
                   value={search}
                   onChange={event => setSearch(event.target.value)}
-                  className="border-border bg-muted text-foreground"
                   placeholder="Search by name or email"
                   autoComplete="off"
                 />

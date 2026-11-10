@@ -195,7 +195,6 @@ export default function AddToPlaylistDialog({
             aria-label="Search playlists"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="border-border bg-muted text-foreground placeholder:text-muted-foreground"
           />
         )}
 

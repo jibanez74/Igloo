@@ -40,7 +40,6 @@ import {
   adminDeleteUser,
   adminResetUserPassword,
 } from "@/lib/api";
-import { lightInputClassName } from "@/lib/input-styles";
 import { isValidEmail, passwordRuleError } from "@/lib/form-validation";
 import { cn, codePointLength, describedBy, getInitials } from "@/lib/utils";
 import { showSuccess, showActionFailed } from "@/lib/toast-helpers";
@@ -535,7 +534,7 @@ function CreateUserDialog({
               aria-required="true"
               aria-invalid={!!errors.name || undefined}
               aria-describedby={describedBy(errors.name && nameErrorId)}
-              className={lightInputClassName}
+              variant="glass"
               aria-label="User name"
             />
             {errors.name && (
@@ -563,7 +562,7 @@ function CreateUserDialog({
               aria-required="true"
               aria-invalid={!!errors.email || undefined}
               aria-describedby={describedBy(errors.email && emailErrorId)}
-              className={lightInputClassName}
+              variant="glass"
               aria-label="User email"
             />
             {errors.email && (
@@ -593,7 +592,7 @@ function CreateUserDialog({
                 passwordDescriptionId,
                 errors.password && passwordErrorId,
               )}
-              className={lightInputClassName}
+              variant="glass"
               aria-label="User password"
             />
             <p id={passwordDescriptionId} className="text-xs text-muted-foreground">
@@ -723,7 +722,7 @@ function EditUserDialog({
               aria-required="true"
               aria-invalid={!!errors.name || undefined}
               aria-describedby={describedBy(errors.name && nameErrorId)}
-              className={lightInputClassName}
+              variant="glass"
               aria-label="User name"
             />
             {errors.name && (
@@ -751,7 +750,7 @@ function EditUserDialog({
               aria-required="true"
               aria-invalid={!!errors.email || undefined}
               aria-describedby={describedBy(errors.email && emailErrorId)}
-              className={lightInputClassName}
+              variant="glass"
               aria-label="User email"
             />
             {errors.email && (
@@ -846,7 +845,8 @@ function DeleteUserDialog({
                 setConfirmText(e.target.value);
                 onClearServerError();
               }}
-              className={`font-mono ${lightInputClassName}`}
+              variant="glass"
+              className="font-mono"
               aria-label="Type DELETE to confirm user deletion"
               aria-invalid={invalid}
               aria-describedby={describedBy(invalid && confirmErrorId)}
@@ -987,7 +987,7 @@ function ResetPasswordDialog({
                 passwordDescriptionId,
                 passwordError && passwordErrorId,
               )}
-              className={lightInputClassName}
+              variant="glass"
               aria-label="New password"
             />
             <p id={passwordDescriptionId} className="text-xs text-muted-foreground">
@@ -1018,7 +1018,7 @@ function ResetPasswordDialog({
               placeholder="Repeat new password"
               required
               aria-required="true"
-              className={lightInputClassName}
+              variant="glass"
               aria-label="Confirm new password"
               aria-invalid={!!confirmPasswordError || undefined}
               aria-describedby={describedBy(

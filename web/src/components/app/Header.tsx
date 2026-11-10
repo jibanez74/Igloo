@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import NotificationBell from "@/components/app/NotificationBell";
 import ThemeToggle from "@/components/app/ThemeToggle";
-import { inputIconClassName, lightInputClassName } from "@/lib/input-styles";
+import { inputIconClassName } from "@/lib/input-styles";
 
 export default function Header() {
   const navigate = useNavigate();
@@ -58,7 +58,8 @@ export default function Header() {
             placeholder="Search..."
             value={value}
             onChange={(e) => setValue(e.target.value)}
-            className={`pl-10 ${lightInputClassName}`}
+            variant="glass"
+            className="pl-10"
           />
         </div>
       </form>

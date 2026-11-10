@@ -151,7 +151,7 @@ export default function TmdbMoviePicker({
             id="tmdb-title"
             value={title}
             onChange={event => setTitle(event.target.value)}
-            className="mt-1 border-border bg-muted text-foreground"
+            className="mt-1"
             autoComplete="off"
             autoFocus
             onFocus={selectTitleFromStart}
@@ -166,7 +166,7 @@ export default function TmdbMoviePicker({
             type="number"
             value={year}
             onChange={event => setYear(event.target.value)}
-            className="mt-1 border-border bg-muted text-foreground"
+            className="mt-1"
             inputMode="numeric"
           />
         </div>
@@ -181,7 +181,7 @@ export default function TmdbMoviePicker({
               value={tmdbIdInput}
               onChange={event => setTmdbIdInput(event.target.value)}
               placeholder="Optional"
-              className="mt-1 border-border bg-muted text-foreground"
+              className="mt-1"
               inputMode="numeric"
             />
           </div>

@@ -18,10 +18,8 @@ import {
   LANGUAGE_NAMES,
   MOTION_SETTINGS_SURFACE_CLASS,
   SETTINGS_CARD_SURFACE_CLASS,
-  SETTINGS_INPUT_CLASS,
   SETTINGS_SELECT_CONTENT_CLASS,
   SETTINGS_SELECT_ITEM_CLASS,
-  SETTINGS_SELECT_TRIGGER_CLASS,
   SUBTITLE_OFF_VALUE,
 } from "@/lib/constants";
 import { useDevicePlaybackPreferences } from "@/hooks/useDevicePlaybackPreferences";
@@ -112,7 +110,7 @@ function PreferenceSelect({
           onChange(next === NO_SELECTION_VALUE ? null : next)
         }
       >
-        <SelectTrigger id={selectId} className={SETTINGS_SELECT_TRIGGER_CLASS}>
+        <SelectTrigger id={selectId} variant="inset" size="lg">
           <SelectValue placeholder={noSelectionLabel} />
         </SelectTrigger>
         <SelectContent className={SETTINGS_SELECT_CONTENT_CLASS}>
@@ -294,7 +292,8 @@ export default function DevicePlaybackCards({
                     ? `${downloadMbpsId}-description ${deviceStatusId}`
                     : `${downloadMbpsId}-description`
                 }
-                className={SETTINGS_INPUT_CLASS}
+                variant="inset"
+                size="lg"
               />
               <p
                 id={`${downloadMbpsId}-description`}

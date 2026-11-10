@@ -9,8 +9,6 @@ import {
   DIALOG_SCROLL_BODY_CLASS,
   DIALOG_SCROLL_CONTENT_CLASS,
   DIALOG_SCROLL_HEADER_CLASS,
-  FOCUS_VISIBLE_RING_CLASS,
-  MOTION_MICRO_CONTROL_CLASS,
 } from "@/lib/constants";
 import { invalidateLibraryQueries } from "@/lib/library-cache";
 import { libraryMovieDetailsQueryOpts } from "@/lib/query-opts";
@@ -25,6 +23,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import TmdbMoviePicker from "@/components/movies/TmdbMoviePicker";
 import {
@@ -389,7 +388,6 @@ function ManualTab({
                 value: e.target.value,
               })
             }
-            className="border-border bg-muted text-foreground"
           />
         </FieldGroup>
         <FieldGroup label="Year" htmlFor="manual-year">
@@ -404,7 +402,6 @@ function ManualTab({
                 value: e.target.value,
               })
             }
-            className="border-border bg-muted text-foreground"
           />
         </FieldGroup>
         <FieldGroup label="Release Date" htmlFor="manual-release-date">
@@ -419,7 +416,6 @@ function ManualTab({
                 value: e.target.value,
               })
             }
-            className="border-border bg-muted text-foreground"
           />
         </FieldGroup>
         <FieldGroup label="Certification" htmlFor="manual-certification">
@@ -434,7 +430,6 @@ function ManualTab({
               })
             }
             placeholder="e.g. PG-13, R"
-            className="border-border bg-muted text-foreground"
           />
         </FieldGroup>
         <FieldGroup label="Language" htmlFor="manual-language">
@@ -449,7 +444,6 @@ function ManualTab({
               })
             }
             placeholder="e.g. en"
-            className="border-border bg-muted text-foreground"
           />
         </FieldGroup>
         <FieldGroup label="Tagline" htmlFor="manual-tagline">
@@ -463,7 +457,6 @@ function ManualTab({
                 value: e.target.value,
               })
             }
-            className="border-border bg-muted text-foreground"
           />
         </FieldGroup>
         <FieldGroup label="Poster Path" htmlFor="manual-poster">
@@ -478,7 +471,6 @@ function ManualTab({
               })
             }
             placeholder="/abcdef.jpg"
-            className="border-border bg-muted text-foreground"
           />
         </FieldGroup>
         <FieldGroup label="Backdrop Path" htmlFor="manual-backdrop">
@@ -493,7 +485,6 @@ function ManualTab({
               })
             }
             placeholder="/abcdef.jpg"
-            className="border-border bg-muted text-foreground"
           />
         </FieldGroup>
       </div>
@@ -503,7 +494,7 @@ function ManualTab({
         htmlFor="manual-overview"
         labelId={MANUAL_OVERVIEW_LABEL_ID}
       >
-        <textarea
+        <Textarea
           id="manual-overview"
           aria-labelledby={MANUAL_OVERVIEW_LABEL_ID}
           value={draft.overview}
@@ -515,11 +506,6 @@ function ManualTab({
             })
           }
           rows={4}
-          className={cn(
-            MOTION_MICRO_CONTROL_CLASS,
-            FOCUS_VISIBLE_RING_CLASS,
-            "w-full rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground",
-          )}
         />
       </FieldGroup>
 

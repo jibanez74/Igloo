@@ -291,6 +291,7 @@ export default function QuickConnectApproveCard() {
                 autoCapitalize="characters"
                 spellCheck={false}
                 placeholder="e.g. XK4T7P"
+                variant="outline"
                 className="font-mono tracking-widest uppercase placeholder:tracking-normal placeholder:normal-case sm:max-w-48"
                 aria-invalid={!!error || undefined}
                 aria-describedby={error ? codeErrorId : codeDescriptionId}

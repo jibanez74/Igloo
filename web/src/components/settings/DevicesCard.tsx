@@ -144,7 +144,8 @@ export default function DevicesCard() {
                             onChange={e => setRenameValue(e.target.value)}
                             maxLength={100}
                             autoFocus
-                            className="h-8"
+                            variant="outline"
+                            size="sm"
                           />
                           <div className="flex gap-2">
                             <Button

@@ -16,13 +16,13 @@ import RetryButton from "@/components/shared/RetryButton";
 import ScrollRail from "@/components/shared/ScrollRail";
 import SkeletonStatus from "@/components/shared/SkeletonStatus";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { NativeSelect } from "@/components/ui/native-select";
 import { usePosterFallback } from "@/hooks/usePosterFallback";
 import {
   DETAIL_PAGE_CONTENT_ENTER_CLASS,
   DETAIL_SECTION_HEADING_CLASS,
   FOCUS_VISIBLE_RING_CLASS,
   MOTION_LOADING_STATE_CLASS,
-  PLAYBACK_SETTINGS_NATIVE_SELECT_CLASS,
   TMDB_POSTER_SIZE,
   TMDB_PROFILE_SIZE,
 } from "@/lib/constants";
@@ -544,18 +544,17 @@ function PersonContent({
               >
                 {label}
               </label>
-              <select
+              <NativeSelect
                 id={`person-${key}`}
                 value={search[key]}
                 onChange={(event) => changeFilter(key, event.target.value)}
-                className={PLAYBACK_SETTINGS_NATIVE_SELECT_CLASS}
               >
                 {options.map(([value, text]) => (
                   <option key={value} value={value}>
                     {text}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </div>
           ))}
         </div>

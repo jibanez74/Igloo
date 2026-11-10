@@ -10,9 +10,7 @@ import {
   AUDIO_TRACK_MODE_NOTE,
   AUDIO_TRACK_MODE_NOTE_ID,
   AUDIO_TRACK_SELECT_DEFAULT_VALUE,
-  PLAYBACK_SETTINGS_NATIVE_SELECT_CLASS,
   PLAYBACK_SETTINGS_SELECT_CONTENT_CLASS,
-  PLAYBACK_SETTINGS_SELECT_TRIGGER_CLASS,
   PLAYBACK_SETTINGS_SUMMARY_LOADING,
   SUBTITLE_OFF_VALUE,
   SUBTITLES_NONE_LABEL,
@@ -52,6 +50,7 @@ import { Button } from "@/components/ui/button";
 import LoadErrorAlert from "@/components/shared/LoadErrorAlert";
 import { apiErrorMessage } from "@/lib/is-api-failure";
 import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
 import type { RefObject } from "react";
 import { usePrefersCoarsePointer } from "@/hooks/use-coarse-pointer";
 import type { AudioStreamType, SubtitleType } from "@/types/movies";
@@ -178,9 +177,8 @@ function PlaybackSettingsDialogForm({
             Playback
           </Label>
           {prefersCoarsePointer ? (
-            <select
+            <NativeSelect
               id="playback-mode"
-              className={PLAYBACK_SETTINGS_NATIVE_SELECT_CLASS}
               value={mode ?? ""}
               onChange={e => handleModeChange(e.target.value as StreamModeId)}
               disabled={modeSelectDisabled}
@@ -195,7 +193,7 @@ function PlaybackSettingsDialogForm({
               ) : (
                 <option value="">{modePlaceholder}</option>
               )}
-            </select>
+            </NativeSelect>
           ) : (
             <Select
               value={mode ?? undefined}
@@ -204,7 +202,6 @@ function PlaybackSettingsDialogForm({
             >
               <SelectTrigger
                 id="playback-mode"
-                className={PLAYBACK_SETTINGS_SELECT_TRIGGER_CLASS}
                 aria-describedby={audioTrackNoteId}
               >
                 <SelectValue placeholder={modePlaceholder} />
@@ -232,9 +229,8 @@ function PlaybackSettingsDialogForm({
             Audio Track
           </Label>
           {prefersCoarsePointer ? (
-            <select
+            <NativeSelect
               id="audio-track"
-              className={PLAYBACK_SETTINGS_NATIVE_SELECT_CLASS}
               value={String(audioTrack)}
               onChange={e => handleAudioTrackChange(Number(e.target.value))}
               disabled={audioSelectDisabled}
@@ -254,7 +250,7 @@ function PlaybackSettingsDialogForm({
                   {AUDIO_TRACK_DEFAULT_LABEL}
                 </option>
               )}
-            </select>
+            </NativeSelect>
           ) : (
             <Select
               value={String(audioTrack)}
@@ -263,7 +259,6 @@ function PlaybackSettingsDialogForm({
             >
               <SelectTrigger
                 id="audio-track"
-                className={PLAYBACK_SETTINGS_SELECT_TRIGGER_CLASS}
                 aria-describedby={audioTrackNoteId}
               >
                 <SelectValue />
@@ -311,9 +306,8 @@ function PlaybackSettingsDialogForm({
             Subtitles
           </Label>
           {prefersCoarsePointer ? (
-            <select
+            <NativeSelect
               id="subtitles"
-              className={PLAYBACK_SETTINGS_NATIVE_SELECT_CLASS}
               value={
                 subtitleTrack === null
                   ? SUBTITLE_OFF_VALUE
@@ -343,7 +337,7 @@ function PlaybackSettingsDialogForm({
                   </option>
                 );
               })}
-            </select>
+            </NativeSelect>
           ) : (
             <Select
               value={
@@ -360,7 +354,6 @@ function PlaybackSettingsDialogForm({
             >
               <SelectTrigger
                 id="subtitles"
-                className={PLAYBACK_SETTINGS_SELECT_TRIGGER_CLASS}
               >
                 <SelectValue />
               </SelectTrigger>

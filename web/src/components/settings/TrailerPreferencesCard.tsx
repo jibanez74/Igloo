@@ -22,7 +22,6 @@ import {
   SETTINGS_CARD_SURFACE_CLASS,
   SETTINGS_SELECT_CONTENT_CLASS,
   SETTINGS_SELECT_ITEM_CLASS,
-  SETTINGS_SELECT_TRIGGER_CLASS,
   TRAILER_COUNT_OPTIONS,
   TRAILER_SOURCE_OPTIONS,
 } from "@/lib/constants";
@@ -181,7 +180,7 @@ export default function TrailerPreferencesCard() {
             >
               <SelectTrigger
                 id={countId}
-                className={SETTINGS_SELECT_TRIGGER_CLASS}
+                variant="inset" size="lg"
               >
                 <SelectValue />
               </SelectTrigger>
@@ -215,7 +214,7 @@ export default function TrailerPreferencesCard() {
             >
               <SelectTrigger
                 id={sourceId}
-                className={SETTINGS_SELECT_TRIGGER_CLASS}
+                variant="inset" size="lg"
                 aria-describedby={tmdbUnavailable ? sourceHintId : undefined}
               >
                 <SelectValue />

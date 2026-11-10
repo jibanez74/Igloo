@@ -60,7 +60,6 @@ import {
   showError,
   showActionFailed,
 } from "@/lib/toast-helpers";
-import { lightInputClassName } from "@/lib/input-styles";
 import { cn, codePointLength, describedBy, getInitials } from "@/lib/utils";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import QuickConnectApproveCard from "@/components/settings/QuickConnectApproveCard";
@@ -577,7 +576,7 @@ function AccountSettings() {
                   clearError("email");
                 }}
                 placeholder="Enter your email"
-                className={lightInputClassName}
+                variant="glass"
                 aria-label="Your email address"
                 required
                 maxLength={USER_EMAIL_MAX_LENGTH}
@@ -606,7 +605,7 @@ function AccountSettings() {
                   clearError("name");
                 }}
                 placeholder="Enter your name"
-                className={lightInputClassName}
+                variant="glass"
                 aria-label="Your display name"
                 aria-invalid={!!errors.name || undefined}
                 aria-describedby={describedBy(
@@ -744,7 +743,8 @@ function AccountSettings() {
                   clearError("avatarUrl");
                 }}
                 placeholder="https://example.com/avatar.jpg"
-                className={`sm:flex-1 ${lightInputClassName}`}
+                variant="glass"
+                className="sm:flex-1"
                 aria-label="Avatar image URL"
                 aria-invalid={!!errors.avatarUrl || undefined}
                 aria-describedby={describedBy(
@@ -815,7 +815,7 @@ function AccountSettings() {
                 clearError("currentPassword");
               }}
               placeholder="Enter current password"
-              className={lightInputClassName}
+              variant="glass"
               aria-label="Current password"
               autoComplete="current-password"
               required
@@ -849,7 +849,7 @@ function AccountSettings() {
                 clearError("newPassword");
               }}
               placeholder="Enter new password"
-              className={lightInputClassName}
+              variant="glass"
               aria-label="New password"
               autoComplete="new-password"
               minLength={USER_PASSWORD_MIN_LENGTH}
@@ -886,7 +886,7 @@ function AccountSettings() {
                 clearError("confirmPassword");
               }}
               placeholder="Confirm new password"
-              className={lightInputClassName}
+              variant="glass"
               aria-label="Confirm new password"
               autoComplete="new-password"
               aria-invalid={!!errors.confirmPassword || undefined}
@@ -999,7 +999,8 @@ function AccountSettings() {
                   setDeleteConfirmText(e.target.value);
                   clearError("deleteConfirm");
                 }}
-                className={`font-mono ${lightInputClassName}`}
+                variant="glass"
+                className="font-mono"
                 aria-label="Type DELETE to confirm account deletion"
                 aria-describedby={describedBy(
                   deleteConfirmHelperId,

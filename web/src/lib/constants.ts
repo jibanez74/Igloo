@@ -436,10 +436,6 @@ export const PEER_FOCUS_VISIBLE_RING_CLASS =
  * Used to avoid closing a dialog when interacting with a portaled select.
  */
 export const SELECT_CONTENT_SLOT_SELECTOR = "[data-slot='select-content']";
-export const PLAYBACK_SETTINGS_NATIVE_SELECT_CLASS =
-  `w-full rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground outline-hidden disabled:opacity-50 ${FOCUS_VISIBLE_RING_CLASS}`;
-export const PLAYBACK_SETTINGS_SELECT_TRIGGER_CLASS =
-  "w-full min-w-0 border-border bg-muted text-foreground";
 export const PLAYBACK_SETTINGS_SELECT_CONTENT_CLASS = "border-border bg-muted";
 
 /**
@@ -451,10 +447,6 @@ export const PLAYBACK_SETTINGS_SELECT_CONTENT_CLASS = "border-border bg-muted";
  * save-bar's secondary action.
  */
 export const SETTINGS_CARD_SURFACE_CLASS = "border-border/50 bg-muted/30";
-export const SETTINGS_INPUT_CLASS =
-  "h-10 border-border bg-background/60 text-foreground placeholder:text-muted-foreground";
-export const SETTINGS_SELECT_TRIGGER_CLASS =
-  "h-10 w-full border-border bg-background/60 text-foreground shadow-none";
 export const SETTINGS_SELECT_CONTENT_CLASS =
   "border-border bg-card text-foreground";
 export const SETTINGS_SELECT_ITEM_CLASS = "focus:bg-muted focus:text-foreground";

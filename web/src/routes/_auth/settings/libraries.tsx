@@ -38,7 +38,6 @@ import {
   MUSIC_SCAN_STATUS_KEY,
   SHOW_SCAN_STATUS_KEY,
   SETTINGS_CARD_SURFACE_CLASS,
-  SETTINGS_INPUT_CLASS,
 } from "@/lib/constants";
 import { trimmedOrNull } from "@/lib/nullable";
 import { cn } from "@/lib/utils";
@@ -540,7 +539,8 @@ function LibraryPathSection({
             aria-invalid={invalid || undefined}
             aria-describedby={`${descriptionId} ${pathStatusId} ${formStatusId}`}
             autoComplete="off"
-            className={SETTINGS_INPUT_CLASS}
+            variant="inset"
+            size="lg"
           />
           <p id={descriptionId} className="text-sm text-muted-foreground">
             Enter a directory path readable by the Igloo server. Leave blank to
