@@ -100,6 +100,20 @@ export default defineConfig([
         { ignore: externalClassAllowlist },
       ],
       "no-restricted-syntax": rawTailwindPaletteRule,
+      // Variants are plain records (docs/design-system.md §1.6); the package
+      // was removed and must not come back through a copied snippet.
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "class-variance-authority",
+              message:
+                "Write variants as a typed record plus cn(); see docs/design-system.md section 1.6.",
+            },
+          ],
+        },
+      ],
     },
   },
 

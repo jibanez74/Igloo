@@ -49,9 +49,10 @@ The system is implemented with:
 
 - **Tailwind CSS v4** — configuration lives in CSS (`@theme inline` in
   `web/src/assets/styles.css`); there is no `tailwind.config.js`.
-- **shadcn/ui** ("new-york" style) primitives in `web/src/components/ui`,
-  built on the consolidated `radix-ui` package and styled with `cn()`
-  (`clsx` + `tailwind-merge`, from `web/src/lib/utils.ts`).
+- **Igloo's own primitives** in `web/src/components/ui`, built on the
+  consolidated `radix-ui` package and styled with `cn()` (`clsx` +
+  `tailwind-merge`, from `web/src/lib/utils.ts`). They began as shadcn/ui
+  "new-york" components and are maintained here (§2.2).
 - **Semantic CSS custom properties** in OKLCH, defined once per theme
   (`:root` = light, `.dark` = dark) and consumed through utilities like
   `bg-card`, `text-muted-foreground`, `ring-ring`. The token rules are
@@ -182,7 +183,7 @@ Rules:
   rejected: the values are already consistent in practice, and a token layer
   over a scale that every developer already knows buys indirection, not
   safety. Radius is the lone non-color token because it is the one value
-  shadcn's primitives read. This rule is enforced by review, not a test.
+  the primitives read. This rule is enforced by review, not a test.
   Rhythm in practice: `gap-4` in poster grids, `gap-6` between card blocks,
   page sections `mt-6 md:mt-8`, shell content padding
   `px-4 py-6 sm:px-6 lg:px-8`.
@@ -259,12 +260,12 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
   action beside the real one. Outline, ghost and destructive keep the base
   half-opacity. Guarded by `test/ui/button.test.tsx`.
 
-- **`accent-pill` stays a pill at every size.** cva emits
-  base → variant → size → `className`, and `cn` is `twMerge`, so the last
-  conflicting class wins: `sm` and `lg` re-declare `rounded-md`. A
-  `compoundVariants` entry re-applies `rounded-full` to `accent-pill` at
-  those sizes, so call sites never re-assert it (guarded by
-  `test/ui/button.test.tsx`). Other variants still square off at `sm`/`lg`:
+- **`accent-pill` stays a pill at every size.** `buttonVariants` merges
+  base → variant → size → `className` with `cn` (`twMerge`), so the last
+  conflicting class wins. The base sets `rounded-md`, no size sets a radius,
+  and `accent-pill` alone overrides it with `rounded-full`, so call sites
+  never re-assert it (guarded by `test/ui/button.test.tsx`). Other variants
+  stay square at every size:
   an `outline` button meant to pair with a pill (the Shuffle in
   `PlayShuffleButtons`, the music index's "Play all" and "Liked tracks")
   passes `rounded-full` in `className`. Watch for
@@ -281,11 +282,16 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
   fills in, pinned together by `test/lib/route-search.test.ts`), so a URL
   spells out only what differs from the default: `/movies`,
   `/movies?tab=genres`, `/movies?tab=playlists&playlistsView=liked`.
-- **cva policy**: `button.tsx` is the only primitive that uses
-  `class-variance-authority`. Everything else composes plain `cn(...)` —
-  `badge.tsx` (a plain `default`/`outline` variant record) is the model. Don't
-  introduce cva into new components; either add a variant to an existing cva
-  component or export a class-string constant (§2.3).
+- **Variants are plain records**: a typed `const` record per axis and one
+  function that joins them with `cn(...)`. `badge.tsx` (a `default`/`outline`
+  record) is the one-axis model; `button.tsx` (`BUTTON_VARIANTS` ×
+  `BUTTON_SIZES`, joined by `buttonVariants()`) the two-axis one. The
+  variant's type is `keyof typeof` its record. There is no variant library:
+  `class-variance-authority` was removed and its import is a lint error.
+- **`buttonVariants()` returns a merged string** — one class per property —
+  so an element that is not a `Button` (a link, a Radix trigger) can take it
+  as its whole `className` with no `cn()` around it. Wrap it in `cn()` only
+  to add classes.
 - **`Badge`** (`ui/badge.tsx`) is the primitive for static pills — count
   pills, rating chips, status tags. It is non-interactive by design (a
   `span`); actionable chips are Buttons. The one rating chip is
@@ -311,8 +317,8 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
   with the shared focus ring — so a keyboard user can scroll it; a body full
   of inputs (Edit Movie) needs none.
 - **When to add a variant vs. a constant**: a new *look* for an existing
-  primitive (e.g. another Button treatment) → add a cva variant next to its
-  siblings. A *cross-component* treatment (card chrome, motion, focus) → an
+  primitive (e.g. another Button treatment) → add an entry to its variant
+  record, next to its siblings, and to the gallery (§2.5). A *cross-component* treatment (card chrome, motion, focus) → an
   exported constant in `lib/constants.ts`.
 - All primitives stamp `data-slot="..."`; tests and cross-component behavior
   rely on these (e.g. `SELECT_CONTENT_SLOT_SELECTOR` keeps dialogs open while
@@ -321,11 +327,11 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
 ### 1.7 Accessibility — non-negotiable
 
 - **One focus recipe, in three prefixes.** `--ring` is glacier in both themes,
-  and every focus indicator in the app is the shadcn
+  and every focus indicator in the app is the
   `focus-visible:ring-[3px] ring-ring/50 border-ring` style. It reaches the
   page three ways, all exported from `constants.ts`:
-  - `FOCUS_VISIBLE_RING_CLASS` — the default, for any inline (non-shadcn)
-    control. The vendored primitives ship the same string in their own base
+  - `FOCUS_VISIBLE_RING_CLASS` — the default, for any inline control outside
+    `components/ui`. The primitives ship the same string in their own base
     classes.
   - `CARD_FOCUS_WITHIN_RING_CLASS` — the whole-card variant, on a media card's
     `<article>`, so the card shows focus wherever it lands inside.
@@ -475,13 +481,22 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
   its canonical order (the lint autofixes). Line wrapping is explicitly
   disabled — Prettier owns that.
 
-### 2.2 shadcn/ui usage
+### 2.2 The primitives in `components/ui`
 
-- Style **"new-york"**, `baseColor: slate`, CSS variables on, lucide icons
-  (`web/components.json`). Components import from the consolidated
-  **`radix-ui`** package (`import { Slot } from "radix-ui"`), not
-  `@radix-ui/react-*`.
-- 20 primitives are vendored in `components/ui`: alert, alert-dialog, avatar,
+- **These files are Igloo's.** They started as shadcn/ui "new-york"
+  components and have since been trimmed, restyled and narrowed to what
+  production uses. There is no `components.json` and no shadcn CLI: nothing
+  is regenerated or pulled from upstream, and a snippet copied from the
+  shadcn docs is adapted to the rules here (variants as records §1.6,
+  `motion-reduce:` escapes §1.5, the shared focus ring §1.7, `data-slot`)
+  before it lands.
+- **Upgrades come from `radix-ui`.** Components import from the consolidated
+  package (`import { Slot } from "radix-ui"`), not `@radix-ui/react-*`, and
+  only files in `components/ui` import a Radix primitive (plus `ScrollRail`'s
+  `Slot`). A Radix upgrade is therefore a change to that package and, at
+  most, to these files, checked by the screenshot baselines (§2.5).
+- Icons are lucide (§1.1).
+- 20 primitives live in `components/ui`: alert, alert-dialog, avatar,
   badge, button, card, checkbox, dialog, dropdown-menu, input, label,
   pagination, popover, select, separator, sheet, sidebar, sonner, spinner,
   tabs — plus `sidebar-context.tsx`, which holds the sidebar's context so the
@@ -491,12 +506,12 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
   primitive. Sheet is the left mobile-navigation surface, and Sidebar exports
   only the provider, shell/inset, trigger/rail, and the header/content/footer,
   group, and menu pieces used by `AppSidebar`.
-- **Customize in place** — these files are ours. House customizations to
-  preserve when regenerating: the Button/Tabs variants (§1.6), the
-  house-written `badge.tsx` (plain variant record, no cva), `CardTitle`'s
-  `asChild` heading support (§3.7), `motion-reduce:` escapes appended to every
-  animated primitive, `spinner.tsx` consuming the shared motion constants,
-  the fixed navigation contracts, and `sonner.tsx` (§3.6).
+- **Change them in place**, and keep what the house rules depend on: the
+  Button/Tabs variants (§1.6), `CardTitle`'s `asChild` heading support
+  (§3.7), a `motion-reduce:` escape on every animated primitive,
+  `spinner.tsx` consuming the shared motion constants, the fixed navigation
+  contracts, and `sonner.tsx` (§3.6). A new variant or state is added to the
+  gallery in the same change (§2.5).
 - **No new dependencies** without explicit approval (project rule). Before
   adding a primitive, check whether an existing one + a constant covers it.
 
@@ -658,10 +673,10 @@ not part of `make check`.
 
 ### 3.1 App shell
 
-`AppShell.tsx`: skip link → shadcn `SidebarProvider` + `AppSidebar` (a fixed
+`AppShell.tsx`: skip link → `SidebarProvider` + `AppSidebar` (a fixed
 left-side, icon-collapsible contract; 16rem expanded / 3rem icon rail / 18rem
 mobile sheet that auto-closes on nav) + `SidebarInset` content column (a
-`div`, unlike upstream shadcn): the sticky app header inside it is the page's
+`div`, not a `main`): the sticky app header inside it is the page's
 banner landmark, and only the content area below it is `<main id="main">`, so
 the skip link lands past the search bar. The
 provider owns this state internally; the rail and Ctrl/Cmd+B toggle desktop
@@ -1024,7 +1039,7 @@ Explicit" and never as a bare letter.
 #### Seasons and episode rows
 
 A long control strip scrolls on the rail bleed rather than wrapping.
-`ShowSeasonsSection` is a full shadcn `Tabs` pair — a `TabsList` of fully
+`ShowSeasonsSection` is a full `Tabs` pair — a `TabsList` of fully
 named triggers ("Season 3", "Specials") on `LIBRARY_TAB_TRIGGER_CLASS` inside an
 `overflow-x-auto` rail, and one `TabsContent` panel holding
 `ShowSeasonEpisodeList` — so every tab's `aria-controls` resolves to a real
@@ -1164,7 +1179,7 @@ is unknown or empty.
     `refetch()`). The control is the shared `RetryButton`; every load-failure
     surface renders that same button, never its own.
   - A section that failed as a whole → `SectionErrorAlert`, the same
-    destructive tint as a shadcn `Alert` with an optional title ("Error" by
+    destructive tint as an `Alert` with an optional title ("Error" by
     default): a home section's query (rendered for you by
     `HomeMediaSection`), the watch-room list. Both hand the query's `refetch`
     in as `onRetry`, so the alert carries the same Try again control as
@@ -1427,7 +1442,7 @@ require the full playback test pass.
 
 ### 3.7 Forms & inputs
 
-- Settings pages are shadcn Cards on `SETTINGS_CARD_SURFACE_CLASS`
+- Settings pages are Cards on `SETTINGS_CARD_SURFACE_CLASS`
   (`border-border/50 bg-muted/30`) with a `SettingsCardHeader` (glacier lucide
   icon + title + description), labeled inputs on `SETTINGS_INPUT_CLASS`,
   helper text below (`text-muted-foreground text-xs`), and per-field or
