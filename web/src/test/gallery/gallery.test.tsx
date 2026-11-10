@@ -1,6 +1,11 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import Gallery from "@/components/gallery/Gallery";
+import {
+  MOTION_DURATIONS_MS,
+  SHADOW_SCALE,
+  Z_INDEX_SCALE,
+} from "@/lib/theme-tokens";
 
 // The gallery is what the screenshot baselines shoot (e2e/visual), and that
 // run is a CI job, not part of `make check`. These keep a gallery that no
@@ -23,7 +28,25 @@ describe("Gallery", () => {
       "fields",
       "surfaces",
       "navigation",
+      "tokens",
     ]);
+  });
+
+  it("shows a sample of every elevation, layer and duration token", () => {
+    const { container } = render(<Gallery />);
+
+    const samples = Array.from(
+      container.querySelectorAll<HTMLElement>("[data-token]"),
+      sample => sample.dataset.token,
+    );
+    expect(samples).toEqual([
+      ...Object.keys(SHADOW_SCALE).map(name => `shadow-${name}`),
+      ...Object.keys(Z_INDEX_SCALE).map(name => `z-${name}`),
+      ...Object.keys(MOTION_DURATIONS_MS).map(name => `duration-${name}`),
+    ]);
+    for (const sample of container.querySelectorAll("[data-token]")) {
+      expect(sample).toHaveClass(sample.getAttribute("data-token") ?? "");
+    }
   });
 
   it("names every icon-only button", () => {

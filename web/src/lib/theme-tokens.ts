@@ -1,5 +1,6 @@
 // The single machine-readable source of truth for the igloo theme
-// (docs/design-system.md §2.4). Every themed color lives here as OKLCH + hex;
+// (docs/design-system.md §2.4). Every themed color lives here as OKLCH + hex,
+// beside the elevation, layer and duration scales;
 // scripts/generate-theme.ts renders these into the marked blocks in
 // src/assets/styles.css, src/assets/boot.css, and index.html. After editing
 // this module, run `bun run generate:theme`. src/test/shared/theme-drift.test.ts
@@ -415,6 +416,55 @@ export const THEME_TOKENS: Record<ThemeName, Record<string, ThemeToken>> = {
     },
   },
 };
+
+/**
+ * Elevation that differs by theme, as box-shadow values on :root and .dark.
+ * A surface floating on the canvas (mini player, Now Playing art, the up-next
+ * card, media dialogs) casts a 50% black shadow in dark; on the light canvas
+ * that reads as a haze, so light gets 15%.
+ */
+export const ELEVATION_TOKENS: Record<ThemeName, Record<string, ThemeToken>> = {
+  light: {
+    "--elevation-floating": { value: "0 25px 50px -12px rgb(0 0 0 / 15%)" },
+  },
+  dark: {
+    "--elevation-floating": { value: "0 25px 50px -12px rgb(0 0 0 / 50%)" },
+  },
+};
+
+// The scales below are the same in both themes. Each becomes a Tailwind theme
+// key, and so a utility: `shadow-floating`, `z-modal`, `duration-micro`.
+
+/** `shadow-<name>`. Values may point at a per-theme elevation token. */
+export const SHADOW_SCALE = {
+  floating: "var(--elevation-floating)",
+  // The glacier glow under a primary control: Tailwind's `shadow-lg` in
+  // `primary` at 20%.
+  glow: "0 10px 15px -3px color-mix(in oklab, var(--primary) 20%, transparent), 0 4px 6px -4px color-mix(in oklab, var(--primary) 20%, transparent)",
+} as const;
+
+/**
+ * `z-<name>`: the layers that stack across the whole app. Stacking inside one
+ * component (a badge over its poster) stays a plain `z-10`.
+ */
+export const Z_INDEX_SCALE = {
+  /** App chrome pinned over the page: the header, the mini player. */
+  chrome: 40,
+  /** Dialogs, sheets and the full-window player. */
+  modal: 50,
+  /** Menus, selects and popovers, which may open from inside a modal. */
+  popover: 60,
+} as const;
+
+/** `duration-<name>`, in milliseconds (docs/design-system.md §1.5). */
+export const MOTION_DURATIONS_MS = {
+  /** Hovers and anchored popups. */
+  micro: 150,
+  /** Modal surfaces and whole-surface tints. */
+  standard: 200,
+  /** Page and section entrances. */
+  page: 300,
+} as const;
 
 /** boot.css-only colors that aren't styles.css tokens. */
 export const BOOT_COLORS = {

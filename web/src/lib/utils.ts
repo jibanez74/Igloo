@@ -1,5 +1,28 @@
 import { clsx, type ClassValue } from "clsx"
-import { twMerge } from "tailwind-merge"
+import { extendTailwindMerge } from "tailwind-merge"
+
+import {
+  MOTION_DURATIONS_MS,
+  SHADOW_SCALE,
+  Z_INDEX_SCALE,
+} from "@/lib/theme-tokens"
+
+// tailwind-merge knows Tailwind's own scales, not the ones this app adds to
+// the theme (src/lib/theme-tokens.ts). Unless told, it keeps both of
+// `shadow-md shadow-floating` and `z-50 z-popover`, and takes `shadow-glow`
+// for a shadow colour. The names come from the token module, so a new token
+// merges correctly as soon as it exists.
+const twMerge = extendTailwindMerge({
+  extend: {
+    theme: {
+      shadow: Object.keys(SHADOW_SCALE),
+    },
+    classGroups: {
+      z: [{ z: Object.keys(Z_INDEX_SCALE) }],
+      duration: [{ duration: Object.keys(MOTION_DURATIONS_MS) }],
+    },
+  },
+})
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))

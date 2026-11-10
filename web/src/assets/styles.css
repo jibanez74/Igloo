@@ -3,6 +3,7 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* BEGIN GENERATED: theme map — edit src/lib/theme-tokens.ts and run `bun run generate:theme` */
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -23,7 +24,6 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -43,12 +43,22 @@
   --color-aurora: var(--aurora);
   --color-aurora-foreground: var(--aurora-foreground);
   --color-success: var(--success);
-  --color-success-foreground: var(--success-foreground);
   --color-accent-teal: var(--accent-teal);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success-foreground: var(--success-foreground);
   --color-accent-teal-foreground: var(--accent-teal-foreground);
   --color-media-fallback: var(--media-fallback);
   --color-media-fallback-foreground: var(--media-fallback-foreground);
+  --shadow-floating: var(--elevation-floating);
+  --shadow-glow: 0 10px 15px -3px color-mix(in oklab, var(--primary) 20%, transparent), 0 4px 6px -4px color-mix(in oklab, var(--primary) 20%, transparent);
+  --z-index-chrome: 40;
+  --z-index-modal: 50;
+  --z-index-popover: 60;
+  --transition-duration-micro: 150ms;
+  --transition-duration-standard: 200ms;
+  --transition-duration-page: 300ms;
 }
+/* END GENERATED: theme map */
 
 /* BEGIN GENERATED: theme tokens — edit src/lib/theme-tokens.ts and run `bun run generate:theme` */
 :root {
@@ -98,6 +108,7 @@
   --accent-teal-foreground: oklch(0.183 0.03 251.4); /* ink #08131F — 4.99:1 on accent-teal */
   --media-fallback: oklch(0.219 0.043 261.6); /* missing-media tile #0F1A2E — fixed across themes (design-system §1.2) */
   --media-fallback-foreground: oklch(0.66 0.045 255.1); /* icon on the missing-media tile #8094AE — AA on media-fallback */
+  --elevation-floating: 0 25px 50px -12px rgb(0 0 0 / 15%);
 }
 
 .dark {
@@ -142,6 +153,7 @@
   --accent-teal-foreground: oklch(0.183 0.03 251.4); /* ink #08131F — 10.04:1 on accent-teal */
   --media-fallback: oklch(0.219 0.043 261.6); /* missing-media tile #0F1A2E — fixed across themes (design-system §1.2) */
   --media-fallback-foreground: oklch(0.66 0.045 255.1); /* icon on the missing-media tile #8094AE — AA on media-fallback */
+  --elevation-floating: 0 25px 50px -12px rgb(0 0 0 / 50%);
 }
 /* END GENERATED: theme tokens */
 
