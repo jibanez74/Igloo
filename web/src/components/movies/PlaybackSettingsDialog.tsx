@@ -78,7 +78,6 @@ type PlaybackSettingsDialogFormProps = {
   loadError: string | null;
   onRetry: () => void;
   prefersCoarsePointer: boolean;
-  selectPortalContainer: HTMLElement | undefined;
   onSave: (settings: PlaybackSettings) => void;
   onCancel: () => void;
 };
@@ -93,7 +92,6 @@ function PlaybackSettingsDialogForm({
   loadError,
   onRetry,
   prefersCoarsePointer,
-  selectPortalContainer,
   onSave,
   onCancel,
 }: PlaybackSettingsDialogFormProps) {
@@ -203,9 +201,7 @@ function PlaybackSettingsDialogForm({
               >
                 <SelectValue placeholder={modePlaceholder} />
               </SelectTrigger>
-              <SelectContent
-                container={selectPortalContainer}
-              >
+              <SelectContent>
                 {availableModes.map(m => (
                   <SelectItem
                     key={m.id}
@@ -258,9 +254,7 @@ function PlaybackSettingsDialogForm({
               >
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent
-                container={selectPortalContainer}
-              >
+              <SelectContent>
                 {audioStreams.length > 0 ? (
                   audioStreams.map((stream, index) => {
                     const label = formatPlaybackAudioLabel(stream, index);
@@ -349,9 +343,7 @@ function PlaybackSettingsDialogForm({
               >
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent
-                container={selectPortalContainer}
-              >
+              <SelectContent>
                 <SelectItem
                   value={SUBTITLE_OFF_VALUE}
                 >
@@ -417,9 +409,6 @@ export default function PlaybackSettingsDialog({
   formResetKey = 0,
 }: PlaybackSettingsDialogProps) {
   const prefersCoarsePointer = usePrefersCoarsePointer();
-  const [dialogSurfaceEl, setDialogSurfaceEl] = useState<HTMLDivElement | null>(
-    null,
-  );
 
   const { data, isPending, refetch } = useQuery(
     movieTechnicalDetailsQueryOpts(movieId),
@@ -449,16 +438,11 @@ export default function PlaybackSettingsDialog({
       })
     : [];
 
-  const selectPortalContainer = prefersCoarsePointer
-    ? undefined
-    : (dialogSurfaceEl ?? undefined);
-
   const dialogFormKey = `${movieId}-${formResetKey}-${techLoaded ? "ready" : "loading"}`;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        ref={setDialogSurfaceEl}
         elevation="floating"
         onPointerDownOutside={preventDialogDismissIfRadixSelectContent}
         onInteractOutside={preventDialogDismissIfRadixSelectContent}
@@ -479,7 +463,6 @@ export default function PlaybackSettingsDialog({
           loadError={loadError}
           onRetry={() => void refetch()}
           prefersCoarsePointer={prefersCoarsePointer}
-          selectPortalContainer={selectPortalContainer}
           onSave={draft => {
             onSave(draft);
             onOpenChange(false);

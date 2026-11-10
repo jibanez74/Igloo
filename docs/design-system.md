@@ -432,6 +432,11 @@ any variant fully. The base string carries the focus ring, disabled opacity,
 - All primitives stamp `data-slot="..."`; tests and cross-component behavior
   rely on these (e.g. `SELECT_CONTENT_SLOT_SELECTOR` keeps dialogs open while
   interacting with portaled selects). Keep them when customizing.
+- **A select's list is always portalled to the body.** `SelectContent` takes
+  no `container`: the list is positioned `fixed`, and inside an element with
+  a transform (every centred dialog) `fixed` is measured from that element,
+  so the list opens away from its field. A dialog that holds a select keeps
+  itself open through `preventDialogDismissIfRadixSelectContent` instead.
 
 ### 1.7 Accessibility — non-negotiable
 

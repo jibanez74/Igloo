@@ -272,8 +272,28 @@ async function openPlaybackSettings(page: Page) {
   return dialog;
 }
 
+// A select's list opens over its field, the picked item on top of it. The
+// lists of this dialog once opened half a screen away: they were portalled
+// into the dialog, whose centring transform moves anything `fixed` inside.
+async function expectListOverField(page: Page, trigger: Locator) {
+  const list = page.getByRole("listbox");
+  await expect(list).toBeVisible();
+
+  const field = await trigger.boundingBox();
+  const box = await list.boundingBox();
+  if (!field || !box) throw new Error("select field or list has no box");
+
+  const centerX = field.x + field.width / 2;
+  const centerY = field.y + field.height / 2;
+  expect(centerX).toBeGreaterThan(box.x);
+  expect(centerX).toBeLessThan(box.x + box.width);
+  expect(centerY).toBeGreaterThan(box.y);
+  expect(centerY).toBeLessThan(box.y + box.height);
+}
+
 async function pickOption(page: Page, trigger: Locator, option: string) {
   await trigger.click();
+  await expectListOverField(page, trigger);
   await page.getByRole("listbox").getByRole("option", { name: option, exact: true }).click();
 }
 
