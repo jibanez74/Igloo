@@ -67,8 +67,9 @@ playlist 2,121 and 331, a film's WebVTT cues 23,049 and 10,937. Segments,
 and a direct-play range request still reaches `sendfile(2)` (strace).
 
 The real-instance Playwright suite (Chromium, which asks for gzip on every
-request) against the new binary: 102 passed, 0 failed, 21 skipped, the same
-as before the change. `make check` is green.
+request): 102 passed, 0 failed, 21 skipped, the same as `dev`. It ran twice,
+before the WebVTT change and again on 2026-11-10 against the branch head
+(3ed97f64), which includes it. `make check` is green.
 
 ## Reads during a library scan (the single-connection question)
 
