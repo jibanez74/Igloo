@@ -2,7 +2,7 @@
 // `bg-slate-50/92`, so the field renders as dark glass — the foreground
 // colors need matching `dark:` variants or typed text is near-invisible.
 export const lightInputClassName =
-  "border-white/25 bg-slate-50/92 text-slate-950 placeholder:text-slate-500 shadow-sm backdrop-blur-sm " +
+  "border-white/25 bg-slate-50/92 text-slate-950 shadow-sm backdrop-blur-sm placeholder:text-slate-500 " +
   "dark:text-slate-50 dark:placeholder:text-slate-400 " +
   "focus-visible:border-ring/70 focus-visible:ring-ring/20";
 

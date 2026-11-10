@@ -586,7 +586,7 @@ export const MOTION_TRACK_ICON_BUTTON_CLASS =
   "transition-[color,opacity] duration-150 motion-reduce:transition-none";
 export const MOTION_TRACK_MENU_TRIGGER_CLASS = MOTION_MICRO_COLORS_CLASS;
 export const MOTION_PLAYER_CHROME_PANEL_CLASS =
-  "transition-[opacity,transform] duration-200 ease-out motion-reduce:transition-none motion-reduce:transform-none";
+  "transition-[opacity,transform] duration-200 ease-out motion-reduce:transform-none motion-reduce:transition-none";
 /**
  * Elevation for a floating surface on the canvas (mini player, Now Playing
  * art, the up-next card, media dialogs): a 50 % black shadow reads as a haze
@@ -597,9 +597,9 @@ export const FLOATING_SURFACE_SHADOW_CLASS =
   "shadow-2xl shadow-black/15 dark:shadow-black/50";
 export const MOTION_MEDIA_DIALOG_SURFACE_CLASS = `border-border bg-card ${FLOATING_SURFACE_SHADOW_CLASS} motion-reduce:animate-none`;
 export const MOTION_MEDIA_OVERLAY_ENTER_CLASS =
-  "animate-in fade-in zoom-in-95 slide-in-from-bottom-2 fill-mode-both duration-200 ease-out motion-reduce:animate-none motion-reduce:opacity-100 motion-reduce:scale-100 motion-reduce:translate-y-0";
+  "animate-in duration-200 ease-out fill-mode-both zoom-in-95 fade-in slide-in-from-bottom-2 motion-reduce:translate-y-0 motion-reduce:scale-100 motion-reduce:animate-none motion-reduce:opacity-100";
 export const MOTION_PLAYER_CHROME_ENTER_CLASS =
-  "animate-in fade-in slide-in-from-bottom fill-mode-both duration-200 ease-out motion-reduce:animate-none motion-reduce:opacity-100 motion-reduce:translate-y-0";
+  "animate-in duration-200 ease-out fill-mode-both fade-in slide-in-from-bottom motion-reduce:translate-y-0 motion-reduce:animate-none motion-reduce:opacity-100";
 export const MOTION_PLAYER_CHROME_BUTTON_CLASS = MOTION_MICRO_CONTROL_CLASS;
 /**
  * The windowed player's frame: the centred shell and the 16:9 box inside it,
@@ -610,11 +610,11 @@ export const PLAYER_FRAME_SHELL_CLASS =
   "relative flex min-h-0 w-full flex-1 items-center justify-center p-4";
 export const PLAYER_FRAME_CLASS = "aspect-video w-full max-w-6xl";
 export const MOTION_PAGE_ENTER_CLASS =
-  "animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-300 ease-out motion-reduce:animate-none motion-reduce:opacity-100 motion-reduce:translate-y-0";
+  "animate-in duration-300 ease-out fill-mode-both fade-in slide-in-from-bottom-2 motion-reduce:translate-y-0 motion-reduce:animate-none motion-reduce:opacity-100";
 export const MOTION_SECTION_ENTER_CLASS =
-  "animate-in fade-in-0 fill-mode-both duration-200 ease-out motion-reduce:animate-none motion-reduce:opacity-100";
+  "animate-in duration-200 ease-out fade-in-0 fill-mode-both motion-reduce:animate-none motion-reduce:opacity-100";
 export const MOTION_SECTION_ENTER_DELAYED_CLASS =
-  "animate-in fade-in-0 fill-mode-both duration-200 ease-out delay-75 motion-reduce:animate-none motion-reduce:opacity-100 motion-reduce:delay-0";
+  "animate-in delay-75 duration-200 ease-out fade-in-0 fill-mode-both motion-reduce:animate-none motion-reduce:opacity-100 motion-reduce:delay-0";
 export const MOTION_LOADING_STATE_CLASS =
   "animate-pulse motion-reduce:animate-none";
 export const MOTION_SPINNER_STATE_CLASS =
@@ -638,7 +638,7 @@ export const DETAIL_HERO_SCRIM_FADE_CLASS =
  * (design-system §3.4). Full-bleed backdrop shell + bottom-anchored content.
  */
 export const DETAIL_HERO_SHELL_CLASS =
-  "relative -mx-4 flex min-h-[26rem] flex-col justify-end overflow-hidden sm:-mx-6 sm:min-h-[30rem] lg:-mx-8 lg:min-h-[min(60svh,44rem)]";
+  "relative -mx-4 flex min-h-104 flex-col justify-end overflow-hidden sm:-mx-6 sm:min-h-120 lg:-mx-8 lg:min-h-[min(60svh,44rem)]";
 export const DETAIL_HERO_CONTENT_CLASS =
   "relative z-10 w-full px-4 pt-40 pb-6 text-center sm:px-6 sm:pb-8 lg:max-w-4xl lg:px-8 lg:pb-12 lg:text-left";
 /**
@@ -691,7 +691,7 @@ export const CARD_MEDIA_HOVER_CLASS =
 export const CARD_OVERLAY_REVEAL_CLASS =
   "transition-opacity duration-200 ease-out motion-reduce:transition-none";
 export const CARD_ACTION_REVEAL_CLASS =
-  "transition-[background-color,opacity,transform] duration-200 ease-out motion-reduce:transition-colors motion-reduce:scale-100";
+  "transition-[background-color,opacity,transform] duration-200 ease-out motion-reduce:scale-100 motion-reduce:transition-colors";
 /**
  * Whole-card focus ring for media cards (design-system §1.7) — the intentional
  * focus-within variant of the single ring recipe, shown on the `<article>` so
@@ -774,7 +774,7 @@ export const PLAYER_TRANSPORT_INERT_CLASS =
  */
 export const SCROLL_RAIL_BLEED_CLASS = "group/rail relative -mx-4 sm:-mx-6 lg:-mx-8";
 export const SCROLL_RAIL_SCROLLER_CLASS =
-  "flex scrollbar-thin scrollbar-thumb-primary/50 overflow-x-auto scroll-px-4 px-4 sm:scroll-px-6 sm:px-6 lg:scroll-px-8 lg:px-8";
+  "flex scroll-px-4 scrollbar-thin scrollbar-thumb-primary/50 overflow-x-auto px-4 sm:scroll-px-6 sm:px-6 lg:scroll-px-8 lg:px-8";
 /** One edge of a rail: the fade while that side overflows, and the arrow slot. */
 export const SCROLL_RAIL_EDGE_CLASS =
   "pointer-events-none absolute top-0 z-10 flex w-12 items-center from-background to-transparent sm:w-14";
@@ -809,7 +809,7 @@ export const MINI_PLAYER_CLEARANCE_BOTTOM_CLASS = "bottom-28 sm:bottom-24";
 export const CONTENT_FADE_TRANSITION_MS = MOTION_DURATION_STANDARD_MS;
 export const CONTENT_FADE_ENTER_CLASS = MOTION_SECTION_ENTER_CLASS;
 export const CONTENT_FADE_EXIT_CLASS =
-  "animate-out fade-out-0 fill-mode-both duration-200 ease-in motion-reduce:animate-none motion-reduce:opacity-100";
+  "animate-out duration-200 ease-in fade-out-0 fill-mode-both motion-reduce:animate-none motion-reduce:opacity-100";
 
 // Watch-room playback and synchronization behavior.
 export const WATCH_ROOM_SEEK_STEP_SEC = 10;

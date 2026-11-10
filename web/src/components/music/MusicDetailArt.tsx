@@ -6,7 +6,7 @@ type MusicDetailArtVariant = "album" | "musician" | "playlist";
 
 // Shape, size and fallback per page. The skeleton reads the same entries, so
 // its placeholder cannot drift from the art it stands in for (§3.4).
-const ART_VARIANTS = {
+const ART_BY_VARIANT = {
   album: {
     figureClassName: "lg:pt-1",
     boxClassName: "w-44 rounded-xl sm:w-52 md:w-64 lg:w-72",
@@ -57,7 +57,7 @@ export default function MusicDetailArt({
   src,
   name,
 }: MusicDetailArtProps) {
-  const art = ART_VARIANTS[variant];
+  const art = ART_BY_VARIANT[variant];
   const { showPoster: showImage, onError } = usePosterFallback(src);
   const FallbackIcon = art.icon;
 
@@ -105,7 +105,7 @@ export function MusicDetailArtSkeleton({
 }: {
   variant: MusicDetailArtVariant;
 }) {
-  const art = ART_VARIANTS[variant];
+  const art = ART_BY_VARIANT[variant];
 
   return (
     <div className={cn(FIGURE_CLASS, art.figureClassName)}>

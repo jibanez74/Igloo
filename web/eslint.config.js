@@ -6,9 +6,23 @@ import betterTailwindcss from "eslint-plugin-better-tailwindcss";
 import tseslint from "typescript-eslint";
 import { defineConfig, globalIgnores } from "eslint/config";
 
+// The plugin lints class strings in className attributes and inside cn(),
+// and in variables by name. Its default names are className(s), classes and
+// style(s); the shared recipes and variant records are named differently
+// (FOCUS_VISIBLE_RING_CLASS, BUTTON_VARIANTS, lightInputClassName), so they
+// are listed here. A pattern must match the whole name. Setting `variables`
+// replaces the defaults, hence the first three entries.
+const classStrings = [{ match: "strings" }, { match: "objectValues" }];
 const tailwindSettings = {
   "better-tailwindcss": {
     entryPoint: "src/assets/styles.css",
+    variables: [
+      ["^classNames?$", classStrings],
+      ["^classes$", classStrings],
+      ["^styles?$", classStrings],
+      ["^.*_(?:CLASS|CLASSES|VARIANTS|SIZES)$", classStrings],
+      ["^.*[a-z](?:Class|Classes|ClassName|Variants)$", classStrings],
+    ],
   },
 };
 
@@ -17,6 +31,8 @@ const externalClassAllowlist = [
   "lucide-.*",
   "animate-in",
   "animate-out",
+  // Set on <html> by lib/theme.ts and styled in styles.css; not a utility.
+  "theme-switching",
 ];
 
 const rawTailwindPaletteRule = [

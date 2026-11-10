@@ -65,7 +65,7 @@ type PosterCardProps = {
 } & PosterCardPlayProps;
 
 const POSTER_ACTIONS_CLASS =
-  "absolute top-2 right-2 z-10 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 has-[[data-state=open]]:opacity-100 pointer-coarse:opacity-100";
+  "absolute top-2 right-2 z-10 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 has-data-[state=open]:opacity-100 pointer-coarse:opacity-100";
 
 /**
  * The 2:3 media card used across the home rows and library grids: poster,

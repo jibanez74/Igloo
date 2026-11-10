@@ -53,7 +53,7 @@ import {
 import { lightInputClassName } from "@/lib/input-styles";
 import { cn } from "@/lib/utils";
 
-const BUTTON_VARIANTS = [
+const BUTTON_VARIANT_NAMES = [
   "default",
   "accent",
   "accent-pill",
@@ -67,7 +67,7 @@ const noop = () => {};
 function ButtonsSection() {
   return (
     <GallerySection id="buttons" title="Button">
-      {BUTTON_VARIANTS.map(variant => (
+      {BUTTON_VARIANT_NAMES.map(variant => (
         <GalleryRow key={variant} label={variant}>
           <Button variant={variant} size="sm">
             Small
