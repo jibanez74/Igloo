@@ -54,6 +54,7 @@ const styledByProps = [
   "Card",
   "CardTitle",
   "Badge",
+  "DropdownMenuItem",
   "SelectItem",
 ].join("|");
 const lookClass =

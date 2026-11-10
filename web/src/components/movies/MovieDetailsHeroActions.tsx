@@ -276,7 +276,7 @@ export default function MovieDetailsHeroActions({
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onSelect={() => onDeleteOpenChange(true)}
-                className="text-destructive focus:text-destructive"
+                variant="destructive"
               >
                 <Trash2 className="size-4" aria-hidden="true" />
                 Delete

@@ -444,7 +444,7 @@ function AlbumDetailsContent({
                     >
                       <DropdownMenuItem
                         onClick={() => setIsDeleteDialogOpen(true)}
-                        className="text-destructive focus:bg-destructive/10 focus:text-destructive"
+                        variant="destructive"
                       >
                         <Trash2 className="mr-2 size-4" aria-hidden="true" />
                         Delete Album
