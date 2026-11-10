@@ -109,7 +109,12 @@ export default defineConfig([
   },
 
   {
-    files: ["vite.config.ts", "playwright.config.ts", "scripts/**/*.ts"],
+    files: [
+      "vite.config.ts",
+      "playwright.config.ts",
+      "playwright.visual.config.ts",
+      "scripts/**/*.ts",
+    ],
     languageOptions: {
       globals: globals.node,
     },

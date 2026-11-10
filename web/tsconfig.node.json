@@ -36,6 +36,7 @@
   "include": [
     "vite.config.ts",
     "playwright.config.ts",
+    "playwright.visual.config.ts",
     "scripts"
   ]
 }
