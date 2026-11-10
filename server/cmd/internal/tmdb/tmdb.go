@@ -46,6 +46,7 @@ type tmdbClient struct {
 	maxRetries     int
 	retryBaseDelay time.Duration
 	movieCache     *cache.Cache
+	inTheaters     *cache.Cache
 }
 
 func New(apiKey string) (TmdbInterface, error) {
@@ -60,5 +61,6 @@ func New(apiKey string) (TmdbInterface, error) {
 		maxRetries:     tmdbHTTPMaxRetries,
 		retryBaseDelay: tmdbHTTPRetryBaseDelay,
 		movieCache:     cache.New(tmdbMovieCacheTTL, tmdbMovieCacheCleanup),
+		inTheaters:     cache.New(tmdbInTheatersCacheTTL, cache.NoExpiration),
 	}, nil
 }

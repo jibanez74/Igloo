@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -29,11 +30,21 @@ func TestGetMovieTreatsWrongTypeEntryAsMiss(t *testing.T) {
 // A scan stores a response for every title it resolves and reads almost none
 // of them again, so the cache must not grow with the library.
 func TestCacheStaysBoundedThroughAScan(t *testing.T) {
-	var calls atomic.Int32
+	var calls, listCalls atomic.Int32
 	client := newServerClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/movie/now_playing") {
+			listCalls.Add(1)
+			fmt.Fprint(w, `{"results":[{"id":1,"title":"One"}]}`)
+			return
+		}
 		calls.Add(1)
 		fmt.Fprint(w, `{"id":70,"season_number":1,"episodes":[{"id":71,"season_number":1,"episode_number":1}],"aggregate_credits":{},"videos":{"results":[]}}`)
 	}))
+
+	_, err := client.GetMoviesInTheaters(context.Background())
+	if err != nil {
+		t.Fatalf("now-playing list: %v", err)
+	}
 
 	for id := 1; id <= tmdbCacheMaxEntries*3; id++ {
 		client.setMovie(id, &TmdbMovie{TmdbID: id})
@@ -55,12 +66,21 @@ func TestCacheStaysBoundedThroughAScan(t *testing.T) {
 		client.setMovie(-len(client.movieCache.Items())-1, &TmdbMovie{})
 	}
 	for episode := 0; episode < 3; episode++ {
-		_, err := client.GetSeasonDetails(context.Background(), 7, 1)
+		_, err = client.GetSeasonDetails(context.Background(), 7, 1)
 		if err != nil {
 			t.Fatalf("season request %d: %v", episode, err)
 		}
 	}
 	if calls.Load() != 1 {
 		t.Errorf("season requests reached TMDB %d times, want 1", calls.Load())
+	}
+
+	// The home page's list lasts its hour whatever a scan stores meanwhile.
+	_, err = client.GetMoviesInTheaters(context.Background())
+	if err != nil {
+		t.Fatalf("now-playing list after the scan: %v", err)
+	}
+	if listCalls.Load() != 1 {
+		t.Errorf("now-playing requests reached TMDB %d times, want 1", listCalls.Load())
 	}
 }

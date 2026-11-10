@@ -11,7 +11,9 @@ const (
 	tmdbMovieCacheTTL     = 15 * time.Minute
 	tmdbMovieCacheCleanup = 5 * time.Minute
 	// The home page asks for the now-playing list on every load, and TMDB
-	// changes it weekly, so it is kept longer than a movie's details.
+	// changes it weekly, so it is kept longer than a movie's details. It has
+	// a cache of its own, which a scan filling the response cache never
+	// empties.
 	tmdbInTheatersCacheTTL = time.Hour
 	inTheatersCacheKey     = "movies:in-theaters"
 	// A scan asks for each title once, so an unbounded cache holds every
@@ -46,4 +48,5 @@ func (t *tmdbClient) cacheSet(key string, value any, ttl time.Duration) {
 
 func (t *tmdbClient) ClearCache() {
 	t.movieCache.Flush()
+	t.inTheaters.Flush()
 }

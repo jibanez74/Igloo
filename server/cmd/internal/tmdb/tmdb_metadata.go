@@ -213,7 +213,7 @@ func (t *tmdbClient) SearchMoviesByTitleAndYear(ctx context.Context, title strin
 }
 
 func (t *tmdbClient) GetMoviesInTheaters(ctx context.Context) ([]*TmdbMovie, error) {
-	cached, _ := t.movieCache.Get(inTheatersCacheKey)
+	cached, _ := t.inTheaters.Get(inTheatersCacheKey)
 	results, found := cached.([]TmdbMovie)
 	if !found {
 		params := url.Values{"language": {tmdbRequestLanguage}, "page": {"1"}, "region": {tmdbRequestRegion}}
@@ -227,7 +227,7 @@ func (t *tmdbClient) GetMoviesInTheaters(ctx context.Context) ([]*TmdbMovie, err
 		// An empty list is not kept, so the preroll pool's short retry for
 		// one reaches TMDB again.
 		if len(results) > 0 {
-			t.cacheSet(inTheatersCacheKey, results, tmdbInTheatersCacheTTL)
+			t.inTheaters.Set(inTheatersCacheKey, results, tmdbInTheatersCacheTTL)
 		}
 	}
 
