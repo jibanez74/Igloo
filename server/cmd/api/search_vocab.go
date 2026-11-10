@@ -3,7 +3,6 @@ package main
 import (
 	"container/heap"
 	"context"
-	"database/sql"
 	"fmt"
 	"sort"
 	"sync"
@@ -285,7 +284,7 @@ func (app *Application) searchVocabIndex(ctx context.Context, vocabTable string)
 	app.SearchVocab.buildMu.Lock()
 	defer app.SearchVocab.buildMu.Unlock()
 
-	tx, err := app.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	tx, err := app.beginReadTx(ctx)
 	if err != nil {
 		return nil, err
 	}

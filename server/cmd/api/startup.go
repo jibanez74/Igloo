@@ -93,6 +93,16 @@ func init() {
 	})
 }
 
+// beginReadTx starts a read-only transaction whose connection outlives a
+// canceled request. database/sql discards the connection of a transaction
+// whose own context is canceled, and the web client aborts every request a
+// view stops observing; each discard costs a reconnect, an empty page cache
+// and every statement prepared again. The queries inside still take the
+// request's context, so an abort stops the work and the handler rolls back.
+func (app *Application) beginReadTx(ctx context.Context) (*sql.Tx, error) {
+	return app.DB.BeginTx(context.WithoutCancel(ctx), &sql.TxOptions{ReadOnly: true})
+}
+
 func ensureDatabasePathWritable(dbPath string, databaseExists bool) error {
 	dir := filepath.Dir(dbPath)
 

@@ -337,7 +337,7 @@ func (app *Application) GetMovieDetails(w http.ResponseWriter, r *http.Request) 
 
 	ctx := r.Context()
 
-	tx, err := app.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	tx, err := app.beginReadTx(ctx)
 	if err != nil {
 		app.serverError(w, err, beginTransactionLogMessage, fetchMovieMessage)
 		return
@@ -409,7 +409,7 @@ func (app *Application) GetMovieTechnicalDetails(w http.ResponseWriter, r *http.
 
 	ctx := r.Context()
 
-	tx, err := app.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	tx, err := app.beginReadTx(ctx)
 	if err != nil {
 		app.serverError(w, err, beginTransactionLogMessage, fetchTechnicalDetailsMessage)
 		return

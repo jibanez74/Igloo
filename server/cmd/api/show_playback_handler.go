@@ -100,7 +100,7 @@ func (app *Application) GetShowEpisodeTechnicalDetails(w http.ResponseWriter, r 
 
 	ctx := r.Context()
 
-	tx, err := app.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	tx, err := app.beginReadTx(ctx)
 	if err != nil {
 		app.serverError(w, err, beginTransactionLogMessage, fetchTechnicalDetailsMessage)
 		return

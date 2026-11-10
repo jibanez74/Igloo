@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"igloo/cmd/internal/database"
 )
@@ -196,6 +198,86 @@ func TestInitDB_EveryConnectionGetsTheConnectionSettings(t *testing.T) {
 		if got != setting.want {
 			t.Errorf("new connection %s = %d, want %d", setting.pragma, got, setting.want)
 		}
+	}
+}
+
+// A temporary table lives and dies with its connection, so it tells whether
+// the pool still holds the connection a transaction ran on.
+func TestBeginReadTxKeepsTheConnectionWhenTheRequestIsCanceled(t *testing.T) {
+	tests := []struct {
+		name     string
+		begin    func(app *Application, ctx context.Context) (*sql.Tx, error)
+		wantKept bool
+	}{
+		{
+			name: "transaction on the request context",
+			begin: func(app *Application, ctx context.Context) (*sql.Tx, error) {
+				return app.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+			},
+		},
+		{
+			name: "beginReadTx",
+			begin: func(app *Application, ctx context.Context) (*sql.Tx, error) {
+				return app.beginReadTx(ctx)
+			},
+			wantKept: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := &Application{Config: RuntimeConfig{DBPath: filepath.Join(t.TempDir(), "test.db")}}
+			setupTestLogger(t, app)
+			err := app.InitDB()
+			if err != nil {
+				t.Fatalf("InitDB failed: %v", err)
+			}
+			defer app.DB.Close()
+
+			_, err = app.DB.Exec("CREATE TEMP TABLE connection_marker (id INTEGER)")
+			if err != nil {
+				t.Fatalf("mark the connection: %v", err)
+			}
+
+			ctx, cancel := context.WithCancel(context.Background())
+			tx, err := tt.begin(app, ctx)
+			if err != nil {
+				t.Fatalf("begin: %v", err)
+			}
+			var one int
+			err = tx.QueryRowContext(ctx, "SELECT 1").Scan(&one)
+			if err != nil {
+				t.Fatalf("query inside the transaction: %v", err)
+			}
+
+			cancel()
+			// A handler is inside SQLite when an abort lands, which leaves
+			// database/sql time to roll the transaction back itself. That
+			// is the rollback that discards the connection.
+			rolledBackByPool := false
+			deadline := time.Now().Add(200 * time.Millisecond)
+			for time.Now().Before(deadline) && !rolledBackByPool {
+				err = tx.QueryRowContext(context.Background(), "SELECT 1").Scan(&one)
+				rolledBackByPool = errors.Is(err, sql.ErrTxDone)
+				time.Sleep(time.Millisecond)
+			}
+			if rolledBackByPool == tt.wantKept {
+				t.Fatalf("rolled back by the pool = %t, want %t", rolledBackByPool, !tt.wantKept)
+			}
+
+			// The request's own queries stop with it either way.
+			err = tx.QueryRowContext(ctx, "SELECT 1").Scan(&one)
+			if err == nil {
+				t.Error("a query on the canceled request context succeeded")
+			}
+			_ = tx.Rollback()
+
+			var marker int
+			err = app.DB.QueryRow("SELECT COUNT(*) FROM temp.connection_marker").Scan(&marker)
+			kept := err == nil
+			if kept != tt.wantKept {
+				t.Errorf("connection kept = %t, want %t (last error: %v)", kept, tt.wantKept, err)
+			}
+		})
 	}
 }
 

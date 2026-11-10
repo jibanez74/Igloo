@@ -80,7 +80,7 @@ func (app *Application) GetAlbumDetails(w http.ResponseWriter, r *http.Request) 
 
 	ctx := r.Context()
 
-	tx, err := app.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	tx, err := app.beginReadTx(ctx)
 	if err != nil {
 		app.serverError(w, err, beginTransactionLogMessage, "failed to fetch album from server")
 		return
