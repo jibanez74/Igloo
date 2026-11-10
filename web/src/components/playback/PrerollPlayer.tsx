@@ -258,7 +258,7 @@ export default function PrerollPlayer({
             role="status"
             className="flex items-center gap-3 rounded-full bg-background/80 px-5 py-3 backdrop-blur-sm"
           >
-            <Spinner className="size-5 text-primary" aria-hidden="true" />
+            <Spinner size="md" tone="primary" aria-hidden="true" />
             <p className="text-sm font-medium text-foreground">
               Loading trailers…
             </p>
@@ -272,7 +272,7 @@ export default function PrerollPlayer({
                 role="status"
                 className="absolute inset-0 flex items-center justify-center bg-black"
               >
-                <Spinner className="size-8 text-primary" aria-hidden="true" />
+                <Spinner size="xl" tone="primary" aria-hidden="true" />
                 <span className="sr-only">Loading trailer</span>
               </div>
             ) : null}

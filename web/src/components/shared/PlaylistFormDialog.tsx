@@ -241,7 +241,6 @@ function PlaylistForm({
         <div className="space-y-2">
           <Label
             htmlFor={`${inputIdPrefix}playlist-name`}
-            className="text-foreground"
           >
             Name <span className="text-primary">*</span>
           </Label>
@@ -261,7 +260,6 @@ function PlaylistForm({
           <Label
             id={descriptionLabelId}
             htmlFor={descriptionId}
-            className="text-foreground"
           >
             Description{" "}
             <span className="text-sm text-muted-foreground">(optional)</span>
@@ -295,7 +293,7 @@ function PlaylistForm({
           >
             {mutation.isPending ? (
               <>
-                <Spinner className="mr-2 size-4" />
+                <Spinner className="mr-2" />
                 {config.pendingText}
               </>
             ) : (

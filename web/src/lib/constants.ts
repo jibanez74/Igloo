@@ -439,17 +439,13 @@ export const SELECT_CONTENT_SLOT_SELECTOR = "[data-slot='select-content']";
 export const PLAYBACK_SETTINGS_SELECT_CONTENT_CLASS = "border-border bg-muted";
 
 /**
- * Shared chrome for the Settings pages (design-system §2.3, §3.7). The card
- * surface pairs with MOTION_SETTINGS_SURFACE_CLASS; the input/select classes
- * restyle the shadcn primitives for the muted settings surface and deliberately
- * keep the primitives' own `focus-visible:ring-ring/50` recipe (the one ring,
- * §1.7) rather than overriding it. The reset-button class is the settings
- * save-bar's secondary action.
+ * What is left of the Settings pages' own chrome (design-system §2.3, §3.7):
+ * the surface of a select's popup and the save bar's Reset button. The cards
+ * are the Card primitive's default surface and the fields its `inset`
+ * variant.
  */
-export const SETTINGS_CARD_SURFACE_CLASS = "border-border/50 bg-muted/30";
 export const SETTINGS_SELECT_CONTENT_CLASS =
   "border-border bg-card text-foreground";
-export const SETTINGS_SELECT_ITEM_CLASS = "focus:bg-muted focus:text-foreground";
 export const SETTINGS_RESET_BUTTON_CLASS =
   "border-border bg-muted/90 text-foreground hover:bg-accent hover:text-foreground";
 
@@ -657,13 +653,6 @@ export const DETAIL_HERO_CONTENT_NO_ACTIONS_CLASS =
  */
 export const MEDIA_FALLBACK_SURFACE_CLASS =
   "bg-media-fallback text-media-fallback-foreground";
-/**
- * Quiet informational chips (certification, capability badges) rendered over
- * the hero backdrop — literal white/black per design-system §1.2.
- */
-export const OVER_MEDIA_SURFACE_CLASS =
-  "border-white/25 bg-black/30 text-white/90";
-export const OVER_MEDIA_BADGE_CLASS = `${OVER_MEDIA_SURFACE_CLASS} px-3 py-1 text-sm`;
 export const CARD_INTERACTIVE_SURFACE_CLASS =
   "transition-[border-color,box-shadow,transform] duration-standard ease-out motion-reduce:transition-colors motion-reduce:hover:translate-y-0";
 /**
@@ -705,8 +694,6 @@ export const LIBRARY_POSTER_GRID_CLASS =
 export const MUSIC_CARD_GRID_CLASS =
   "grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5";
 /** Items in a library page's "More options" dropdown. */
-export const LIBRARY_MENU_ITEM_CLASS =
-  "cursor-pointer text-foreground focus:bg-accent focus:text-foreground";
 export const HOME_ALBUM_GRID_CLASS =
   "grid grid-cols-[repeat(auto-fill,minmax(min(8rem,100%),1fr))] gap-3 sm:gap-4 lg:grid-cols-[repeat(auto-fill,minmax(9rem,1fr))]";
 

@@ -17,7 +17,6 @@ import {
   userPinQueryOpts,
 } from "@/lib/query-opts";
 import {
-  SETTINGS_CARD_SURFACE_CLASS,
   USER_PIN_LENGTH,
 } from "@/lib/constants";
 import {
@@ -201,7 +200,7 @@ export default function ProfilePinCard() {
   }
 
   return (
-    <Card className={SETTINGS_CARD_SURFACE_CLASS}>
+    <Card>
       <SettingsCardHeader
         icon={KeyRound}
         title="Profile PIN"
@@ -240,7 +239,7 @@ export default function ProfilePinCard() {
         <form onSubmit={handleSubmit} noValidate className="space-y-4">
           {hasPin && (
             <div className="space-y-2">
-              <Label htmlFor={currentPinId} className="text-muted-foreground">
+              <Label htmlFor={currentPinId} tone="muted">
                 Current PIN
               </Label>
               <Input
@@ -278,7 +277,7 @@ export default function ProfilePinCard() {
           )}
 
           <div className="space-y-2">
-            <Label htmlFor={newPinId} className="text-muted-foreground">
+            <Label htmlFor={newPinId} tone="muted">
               {hasPin ? "New PIN" : "PIN"}
             </Label>
             <Input

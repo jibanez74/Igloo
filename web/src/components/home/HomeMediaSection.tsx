@@ -100,7 +100,7 @@ export default function HomeMediaSection<T>({
           role="status"
           aria-label={loadingLabel}
         >
-          <Spinner className="size-8 text-primary" />
+          <Spinner size="xl" tone="primary" />
         </div>
       ) : errorMessage ? (
         <SectionErrorAlert message={errorMessage} onRetry={onRetry} />

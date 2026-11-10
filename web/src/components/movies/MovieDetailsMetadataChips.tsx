@@ -1,7 +1,6 @@
 import { Clock, Calendar } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import TmdbScoreBadge from "@/components/shared/TmdbScoreBadge";
-import { OVER_MEDIA_BADGE_CLASS } from "@/lib/constants";
 import { formatDate, formatSpokenRuntimeMinutes } from "@/lib/format";
 import type { MediaCapabilityBadge } from "@/types/movies";
 
@@ -37,8 +36,9 @@ export default function MovieDetailsMetadataChips({
       {certificationLabel && (
         <li>
           <Badge
-            variant="outline"
-            className={`${OVER_MEDIA_BADGE_CLASS} font-semibold`}
+            variant="over-media"
+            size="lg"
+            className="font-semibold"
           >
             <span className="sr-only">{`Rated ${certificationLabel}`}</span>
             <span aria-hidden="true">{certificationLabel}</span>
@@ -48,8 +48,9 @@ export default function MovieDetailsMetadataChips({
       {capabilityBadges?.map(badge => (
         <li key={badge.label}>
           <Badge
-            variant="outline"
-            className={`${OVER_MEDIA_BADGE_CLASS} font-semibold`}
+            variant="over-media"
+            size="lg"
+            className="font-semibold"
           >
             <span className="sr-only">{badge.description}</span>
             <span aria-hidden="true">{badge.label}</span>

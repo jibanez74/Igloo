@@ -894,7 +894,7 @@ export default function VideoPlaybackPage({
       )}
     >
       <div className="flex items-center gap-3 rounded-full bg-background/80 px-5 py-3 backdrop-blur-sm">
-        <Spinner className="size-5 text-primary" aria-hidden="true" />
+        <Spinner size="md" tone="primary" aria-hidden="true" />
         <p className="text-sm font-medium text-foreground">
           Waiting for server capacity…
         </p>

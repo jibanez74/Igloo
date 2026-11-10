@@ -81,7 +81,7 @@ export default function ConfirmDialog({
             onClick={onConfirm}
             disabled={pending}
           >
-            {pending ? <Spinner className="size-4" aria-hidden="true" /> : null}
+            {pending ? <Spinner aria-hidden="true" /> : null}
             {pending ? `${confirmLabel}...` : confirmLabel}
           </Button>
         </AlertDialogFooter>

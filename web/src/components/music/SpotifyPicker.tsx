@@ -147,7 +147,7 @@ export default function SpotifyPicker<T extends SpotifySearchResult>({
   return (
     <div className="space-y-4">
       <div>
-        <Label htmlFor={titleInputId} className="text-muted-foreground">
+        <Label htmlFor={titleInputId} tone="muted">
           {copy.label}
         </Label>
         <Input
@@ -166,7 +166,7 @@ export default function SpotifyPicker<T extends SpotifySearchResult>({
         className="w-full"
       >
         {searching ? (
-          <Spinner className="size-4" />
+          <Spinner />
         ) : (
           <Search className="size-4" aria-hidden="true" />
         )}
@@ -213,7 +213,7 @@ export default function SpotifyPicker<T extends SpotifySearchResult>({
         variant="accent"
         className="w-full"
       >
-        {confirming && <Spinner className="size-4" />}
+        {confirming && <Spinner />}
         {confirming ? `${confirmLabel}...` : confirmLabel}
       </Button>
     </div>

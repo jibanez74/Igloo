@@ -225,7 +225,7 @@ export default function MovieDetailsHeroActions({
         />
         {isWatched ? "Watched" : "Watch"}
         {watchedMutation.isPending && (
-          <Spinner className="size-4 text-success!" aria-hidden="true" />
+          <Spinner tone="success" aria-hidden="true" />
         )}
       </button>
       <MovieLikeButton movieId={movieId} variant="hero" />

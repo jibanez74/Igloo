@@ -1,7 +1,6 @@
 import { CalendarRange, Film, Layers } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import TmdbScoreBadge from "@/components/shared/TmdbScoreBadge";
-import { OVER_MEDIA_BADGE_CLASS } from "@/lib/constants";
 import { catalogYear, pluralize } from "@/lib/format";
 
 type ShowDetailsMetadataChipsProps = {
@@ -75,8 +74,9 @@ export default function ShowDetailsMetadataChips({
       {certificationLabel && (
         <li>
           <Badge
-            variant="outline"
-            className={`${OVER_MEDIA_BADGE_CLASS} font-semibold`}
+            variant="over-media"
+            size="lg"
+            className="font-semibold"
           >
             <span className="sr-only">{`Rated ${certificationLabel}`}</span>
             <span aria-hidden="true">{certificationLabel}</span>
@@ -85,7 +85,7 @@ export default function ShowDetailsMetadataChips({
       )}
       {status && (
         <li>
-          <Badge variant="outline" className={OVER_MEDIA_BADGE_CLASS}>
+          <Badge variant="over-media" size="lg">
             <span className="sr-only">{`Series status: ${status}`}</span>
             <span aria-hidden="true">{status}</span>
           </Badge>

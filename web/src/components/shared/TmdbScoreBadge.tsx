@@ -1,10 +1,5 @@
 import type { ComponentProps } from "react";
 import { Badge } from "@/components/ui/badge";
-import {
-  OVER_MEDIA_BADGE_CLASS,
-  OVER_MEDIA_SURFACE_CLASS,
-} from "@/lib/constants";
-import { cn } from "@/lib/utils";
 
 type TmdbScoreBadgeProps = Omit<ComponentProps<"span">, "children"> & {
   score: number;
@@ -26,13 +21,9 @@ export default function TmdbScoreBadge({
 }: TmdbScoreBadgeProps) {
   return (
     <Badge
-      variant="outline"
-      className={cn(
-        size === "sm"
-          ? `${OVER_MEDIA_SURFACE_CLASS} px-2 py-0.5 text-xs`
-          : OVER_MEDIA_BADGE_CLASS,
-        className,
-      )}
+      variant="over-media"
+      size={size === "sm" ? "sm" : "lg"}
+      className={className}
       {...props}
     >
       <span className="sr-only">

@@ -19,9 +19,7 @@ import {
 import { updateTrailerPreferences } from "@/lib/api";
 import {
   MOTION_SETTINGS_SURFACE_CLASS,
-  SETTINGS_CARD_SURFACE_CLASS,
   SETTINGS_SELECT_CONTENT_CLASS,
-  SETTINGS_SELECT_ITEM_CLASS,
   TRAILER_COUNT_OPTIONS,
   TRAILER_SOURCE_OPTIONS,
 } from "@/lib/constants";
@@ -31,7 +29,6 @@ import {
 } from "@/lib/query-opts";
 import { apiErrorMessage } from "@/lib/is-api-failure";
 import { showActionFailed } from "@/lib/toast-helpers";
-import { cn } from "@/lib/utils";
 import type {
   TrailerPreferencesData,
   TrailerSource,
@@ -140,7 +137,7 @@ export default function TrailerPreferencesCard() {
 
   return (
     <Card
-      className={cn(SETTINGS_CARD_SURFACE_CLASS, MOTION_SETTINGS_SURFACE_CLASS)}
+      className={MOTION_SETTINGS_SURFACE_CLASS}
     >
       <SettingsCardHeader
         icon={Clapperboard}
@@ -189,7 +186,6 @@ export default function TrailerPreferencesCard() {
                   <SelectItem
                     key={count}
                     value={String(count)}
-                    className={SETTINGS_SELECT_ITEM_CLASS}
                   >
                     {count === 1 ? "1 trailer" : `${count} trailers`}
                   </SelectItem>
@@ -224,7 +220,6 @@ export default function TrailerPreferencesCard() {
                   <SelectItem
                     key={option.value}
                     value={option.value}
-                    className={SETTINGS_SELECT_ITEM_CLASS}
                   >
                     {option.label}
                   </SelectItem>

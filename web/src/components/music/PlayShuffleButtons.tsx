@@ -41,7 +41,7 @@ export default function PlayShuffleButtons({
         aria-label={playAriaLabel}
       >
         {isLoading ? (
-          <Spinner className="size-4" />
+          <Spinner />
         ) : (
           <Play className="size-4 fill-current" aria-hidden="true" />
         )}
@@ -57,7 +57,7 @@ export default function PlayShuffleButtons({
         aria-label={shuffleAriaLabel}
       >
         {isLoading ? (
-          <Spinner className="size-4" />
+          <Spinner />
         ) : (
           <Shuffle className="size-4" aria-hidden="true" />
         )}

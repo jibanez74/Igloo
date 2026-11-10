@@ -141,7 +141,7 @@ export default function AlbumCard({ album, subtitle }: AlbumCardProps) {
         aria-label={`Play ${cardLabel}`}
       >
         {isLoading ? (
-          <Spinner className="size-5" />
+          <Spinner size="md" />
         ) : (
           <Play className="size-5 fill-current" aria-hidden="true" />
         )}

@@ -122,7 +122,7 @@ export default function SettingsSaveBar({
           disabled={saveDisabled ?? actionsDisabled}
         >
           {isPending ? (
-            <Spinner className="size-4" aria-hidden="true" />
+            <Spinner aria-hidden="true" />
           ) : (
             <Save className="size-4" aria-hidden="true" />
           )}

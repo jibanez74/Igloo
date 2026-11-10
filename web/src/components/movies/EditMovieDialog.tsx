@@ -512,7 +512,7 @@ function ManualTab({
         variant="accent"
         className="w-full"
       >
-        {saving && <Spinner className="size-4" />}
+        {saving && <Spinner />}
         {saving ? "Saving…" : "Save Changes"}
       </Button>
     </div>
@@ -532,7 +532,7 @@ function FieldGroup({
 }) {
   return (
     <div>
-      <Label id={labelId} htmlFor={htmlFor} className="text-muted-foreground">
+      <Label id={labelId} htmlFor={htmlFor} tone="muted">
         {label}
       </Label>
       <div className="mt-1">{children}</div>

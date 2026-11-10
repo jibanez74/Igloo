@@ -13,7 +13,7 @@ export default function RoutePending() {
       role="status"
     >
       <div className="flex items-center gap-3 text-muted-foreground">
-        <Spinner className="size-5 text-primary" aria-hidden="true" />
+        <Spinner size="md" tone="primary" aria-hidden="true" />
         <span>Loading...</span>
       </div>
     </div>

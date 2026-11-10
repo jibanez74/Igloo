@@ -87,7 +87,7 @@ export default function WatchRooms() {
           role="status"
           aria-label="Loading watch rooms..."
         >
-          <Spinner className="size-6 text-primary" />
+          <Spinner size="lg" tone="primary" />
         </div>
       ) : hasError ? (
         <SectionErrorAlert

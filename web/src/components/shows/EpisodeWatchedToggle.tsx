@@ -132,7 +132,7 @@ export default function EpisodeWatchedToggle({
       aria-pressed={watched}
     >
       {mutation.isPending ? (
-        <Spinner className="size-4" aria-hidden="true" />
+        <Spinner aria-hidden="true" />
       ) : (
         <Check className="size-4" aria-hidden="true" />
       )}

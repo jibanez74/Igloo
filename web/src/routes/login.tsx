@@ -196,7 +196,7 @@ function LoginPage() {
           <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-full bg-muted">
             <BrandMark className="size-6 text-primary" />
           </div>
-          <CardTitle asChild className="text-2xl font-semibold tracking-tight text-foreground">
+          <CardTitle asChild className="text-2xl font-semibold tracking-tight">
             <h1>Welcome to Igloo</h1>
           </CardTitle>
           <CardDescription className="text-muted-foreground">

@@ -371,8 +371,29 @@ any variant fully. The base string carries the focus ring, disabled opacity,
   there, or a class constant, is a lint error — the look is the props'. This
   is the rule every primitive family is moving to; the lint list in
   `web/eslint.config.js` (`styledByProps`) names the ones under it: the
-  fields and the dialog parts so far. The `DIALOG_SCROLL_*` constants are
-  the one exception, since they only lay a dialog out (below).
+  fields, the dialog parts, and `Spinner`, `Label`, `Card`, `CardTitle`,
+  `Badge` and `SelectItem` so far. Class constants that set
+  no look are the exception: `DIALOG_SCROLL_*` (below), the motion constants
+  (§1.5) and the shared focus rings (§1.7).
+- **The small primitives take props for what call sites used to pass as
+  classes**:
+
+  | Primitive | Prop | Values |
+  |---|---|---|
+  | `Spinner` | `size` | `sm` 16px (default), `md` 20, `lg` 24, `xl` 32, `2xl` 40 |
+  | `Spinner` | `tone` | `current` (default: the text color around it), `primary`, `success` |
+  | `Label` | `tone` | `default`, `muted` (a field label under a section title of its own) |
+  | `Card` | `surface` | `muted` (default: the Settings panel), `raised` (the opaque card), `error`, `danger` |
+  | `CardTitle` | `tone` | `default`, `destructive` |
+  | `Badge` | `variant` | `default`, `outline`, `over-media` (a chip on a backdrop or poster, §1.2), `muted` and `tinted` (the fact and genre chips of a music hero) |
+  | `Badge` | `size` | `sm`, `default`, `lg` |
+
+  A spinner's tone is `!important` on purpose: inside an outline button,
+  whose icons are forced to the button's color, it is what keeps the spinner
+  in its own. `Card`'s `error` and `danger` surfaces differ only in border
+  strength (20 % and 50 %), as the error card and the Danger Zone are drawn
+  today. A menu item is a pointer target by default, and a disabled select
+  item is muted; neither needs a class.
 - **`Badge`** (`ui/badge.tsx`) is the primitive for static pills — count
   pills, rating chips, status tags. It is non-interactive by design (a
   `span`); actionable chips are Buttons. The one rating chip is
@@ -629,9 +650,9 @@ The styling families:
   styles). Plus `CARD_MEDIA_HOVER_CLASS` (poster zoom),
   `CARD_OVERLAY_REVEAL_CLASS` / `CARD_ACTION_REVEAL_CLASS` (hover/focus-within
   overlay + scaled action reveal), `CARD_FOCUS_WITHIN_RING_CLASS` (§1.7) and
-  `OVER_MEDIA_BADGE_CLASS` (the corner chip over a poster), and
   `MEDIA_FALLBACK_SURFACE_CLASS`, the tile under a card or hero whose media
-  is missing (§1.2).
+  is missing (§1.2). The chip over a poster or backdrop is the `Badge`'s
+  `over-media` variant (§1.6).
 - **Motion** — `MOTION_*`: page/section, media-overlay and -dialog,
   player-chrome, track-row and settings-surface classes, plus the
   loading/spinner states and the three `MOTION_DURATION_*_MS` numbers (§1.5).
@@ -644,11 +665,10 @@ The styling families:
   over the backdrop band, hero row and Play/Shuffle actions row, shared with
   `MusicDetailSkeleton`, §3.2), `LIBRARY_TABS_LIST_CLASS` /
   `LIBRARY_TAB_TRIGGER_CLASS`, `LIBRARY_POSTER_GRID_CLASS` (the fixed-column
-  library grid) and `LIBRARY_MENU_ITEM_CLASS` (items in a library page's More
-  menu), `HOME_POSTER_GRID_CLASS` / `HOME_ALBUM_GRID_CLASS` (§3.2), `MINI_PLAYER_CLEARANCE_*` (the shell's
-  reserved space under the mini bar, §3.1), `SETTINGS_*` (card surface, select
-  popup and reset-button chrome for the Settings pages, §3.7; its fields are
-  the `inset` variant, §1.6),
+  library grid), `HOME_POSTER_GRID_CLASS` / `HOME_ALBUM_GRID_CLASS` (§3.2), `MINI_PLAYER_CLEARANCE_*` (the shell's
+  reserved space under the mini bar, §3.1), `SETTINGS_*` (select popup and
+  reset-button chrome for the Settings pages, §3.7; its cards are the
+  `Card`'s default surface and its fields the `inset` variant, §1.6),
   `PLAYER_FRAME_SHELL_CLASS` / `PLAYER_FRAME_CLASS` (the windowed player's
   frame, §3.5). Elevation for floating surfaces is the `shadow-floating`
   utility, not a constant (§1.4).
@@ -1566,8 +1586,8 @@ require the full playback test pass.
 
 ### 3.7 Forms & inputs
 
-- Settings pages are Cards on `SETTINGS_CARD_SURFACE_CLASS`
-  (`border-border/50 bg-muted/30`) with a `SettingsCardHeader` (glacier lucide
+- Settings pages are Cards on their default `muted` surface
+  (`border-border/50 bg-muted/30`, §1.6) with a `SettingsCardHeader` (glacier lucide
   icon + title + description), labeled fields in the `inset` variant at
   `size="lg"` (§1.6),
   helper text below (`text-muted-foreground text-xs`), and per-field or

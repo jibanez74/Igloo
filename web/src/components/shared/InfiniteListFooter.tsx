@@ -21,7 +21,7 @@ export default function InfiniteListFooter({
   if (isFetchingNextPage) {
     return (
       <div className="flex justify-center py-4">
-        <Spinner className="size-6 text-primary" />
+        <Spinner size="lg" tone="primary" />
       </div>
     );
   }

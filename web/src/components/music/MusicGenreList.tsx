@@ -11,10 +11,7 @@ export default function MusicGenreList({ genres }: { genres: string[] }) {
     >
       {genres.map(genre => (
         <li key={genre}>
-          <Badge
-            variant="outline"
-            className="border-primary/30 bg-muted/80 px-3 py-1 text-sm font-normal text-primary backdrop-blur-sm"
-          >
+          <Badge variant="tinted" size="lg" className="font-normal">
             {genre}
           </Badge>
         </li>

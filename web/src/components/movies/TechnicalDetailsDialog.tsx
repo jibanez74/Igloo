@@ -290,7 +290,7 @@ export default function TechnicalDetailsDialog({
 
         {isPending && (
           <div className="flex justify-center py-8" role="status" aria-live="polite">
-            <Spinner className="size-6 text-primary" aria-hidden="true" />
+            <Spinner size="lg" tone="primary" aria-hidden="true" />
             <span className="sr-only">Loading technical details</span>
           </div>
         )}
