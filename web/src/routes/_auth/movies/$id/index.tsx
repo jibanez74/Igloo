@@ -24,6 +24,7 @@ import {
   prepareYouTubeExtrasForDisplay,
 } from "@/lib/format";
 import { parseRouteId } from "@/lib/route-id";
+import { crewSectionLabels, movieHasKeyCrew } from "@/lib/crew";
 import { movieHead, type MediaHeadData } from "@/lib/route-head";
 import {
   trimmedOrNull,
@@ -256,7 +257,10 @@ function LibraryMovieDetailsContent({
         titleLabel="Skip to movie info"
         sections={[
           { href: "#overview-heading", label: "Skip to overview" },
-          crew.length > 0 && { href: "#crew-heading", label: "Skip to key crew" },
+          crew.length > 0 && {
+            href: "#crew-heading",
+            label: crewSectionLabels(movieHasKeyCrew(crew)).skipLabel,
+          },
           castForSection.length > 0 && {
             href: "#cast-heading",
             label: "Skip to cast",

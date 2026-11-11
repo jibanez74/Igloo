@@ -3,6 +3,7 @@ import {
   ALBUMS_PER_PAGE,
   MUSICIANS_PER_PAGE,
   TRACKS_INFINITE_PAGE_SIZE,
+  VIRTUAL_LIST_TRACK_HEIGHT,
 } from "../src/lib/constants";
 import {
   assertMockSuiteClean,
@@ -279,5 +280,25 @@ test("tracks tab keeps fetching pages while the virtualized list grows", async (
 
   await expect(page.getByRole("button", { name: "More actions for Track 0001" })).toBeVisible();
   await expectNoOverflowingElements(page);
+
+  // Every row starts with its 40 px cover tile and still measures the fixed
+  // height the virtual list places rows by; a taller row would overlap the
+  // one below it.
+  const covers = page
+    .getByRole("list", { name: "Tracks" })
+    .locator('[data-slot="track-cover"]');
+  await expect(covers.first()).toBeVisible();
+  const rowSizes = await covers.evaluateAll(tiles =>
+    tiles.map(tile => {
+      const cover = tile.getBoundingClientRect();
+      const row = tile.parentElement!.getBoundingClientRect();
+      return { cover: [cover.width, cover.height], row: row.height };
+    }),
+  );
+  expect(rowSizes.length).toBeGreaterThan(5);
+  for (const size of rowSizes) {
+    expect(size).toEqual({ cover: [40, 40], row: VIRTUAL_LIST_TRACK_HEIGHT });
+  }
+
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });

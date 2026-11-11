@@ -71,6 +71,36 @@ export async function expectNoOverflowingElements(page: Page) {
   expect(offenders).toEqual([]);
 }
 
+/**
+ * `hero` starts exactly where the app header ends and is as wide as the page
+ * area: a detail page's hero cancels the shell's padding at the top and at
+ * both sides, so no strip of page background shows around it.
+ */
+export async function expectFlushUnderAppHeader(page: Page, hero: Locator) {
+  // Retried: the page's entrance animation slides the hero into place, and a
+  // viewport change relays the page out over a frame or two.
+  await expect(async () => {
+    const [header, main, box] = await Promise.all([
+      page.getByRole("banner").boundingBox(),
+      page.getByRole("main").boundingBox(),
+      hero.boundingBox(),
+    ]);
+    if (!header || !main || !box) {
+      throw new Error("the app header, main and the hero must all be rendered");
+    }
+
+    expect(box.y, "hero top meets the header's bottom edge").toBeCloseTo(
+      header.y + header.height,
+      0,
+    );
+    expect(box.x, "hero starts at the page area's left edge").toBeCloseTo(
+      main.x,
+      0,
+    );
+    expect(box.width, "hero spans the page area").toBeCloseTo(main.width, 0);
+  }).toPass({ timeout: 5000 });
+}
+
 /** Presses Tab until `target` has focus, failing after `maxPresses`. */
 export async function tabTo(page: Page, target: Locator, maxPresses = 40) {
   for (let presses = 0; presses < maxPresses; presses++) {

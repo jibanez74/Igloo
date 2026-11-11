@@ -253,9 +253,14 @@ const NO_WATCH_PROGRESS: WatchProgressType = {
   updated_at: null,
 };
 
-function mockMovieDetailsFetch(
-  { watchProgress = NO_WATCH_PROGRESS }: { watchProgress?: WatchProgressType } = {},
-) {
+function mockMovieDetailsFetch({
+  watchProgress = NO_WATCH_PROGRESS,
+  signalFireCrew,
+}: {
+  watchProgress?: WatchProgressType;
+  /** Replaces Signal Fire's crew (a director and a writer by default). */
+  signalFireCrew?: LibraryMovieDetailsResponse["crew"];
+} = {}) {
   const detailsById = new Map<number, LibraryMovieDetailsResponse>([
     [
       57,
@@ -277,7 +282,10 @@ function mockMovieDetailsFetch(
         "fr",
       ),
     ],
-    [SIGNAL_FIRE_ID, signalFireDetails()],
+    [
+      SIGNAL_FIRE_ID,
+      { ...signalFireDetails(), ...(signalFireCrew && { crew: signalFireCrew }) },
+    ],
   ]);
   const technicalById = new Map<number, MovieTechnicalDetailsResponse>([
     [57, technicalDetailsResponse(57)],
@@ -582,6 +590,35 @@ describe("movie details route content", () => {
     expect(aboutSection.getByText("$95,000,000")).toBeInTheDocument();
     expect(aboutSection.getByText("$215,000,000")).toBeInTheDocument();
     expect(aboutSection.getByText("Northwind Pictures")).toBeInTheDocument();
+  });
+
+  // "Key Crew" promises a billed director or writers. A crew with neither is
+  // only the full list behind its button, so the heading and the skip link
+  // that jumps to it both say "Crew".
+  it("names the crew section Crew when the movie bills no director or writer", async () => {
+    mockMovieDetailsFetch({
+      signalFireCrew: [
+        { tmdb_id: 9002, id: 12, job: "Editor", department: "Editing", artist_name: "Sam Ortiz" },
+      ],
+    });
+    await renderRoute(`/movies/${SIGNAL_FIRE_ID}/`);
+
+    const heading = await screen.findByRole("heading", { name: "Crew" });
+    expect(heading).toHaveAttribute("id", "crew-heading");
+    expect(
+      screen.queryByRole("heading", { name: "Key Crew" }),
+    ).not.toBeInTheDocument();
+
+    const skipLinks = screen.getByRole("navigation", { name: "Skip to section" });
+    expect(
+      within(skipLinks).getByRole("link", { name: "Skip to crew" }),
+    ).toHaveAttribute("href", "#crew-heading");
+    expect(
+      within(skipLinks).queryByRole("link", { name: "Skip to key crew" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Show all crew" }),
+    ).toBeInTheDocument();
   });
 
   it("shows the resume strip for an eligible watch position", async () => {

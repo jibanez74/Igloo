@@ -1,3 +1,4 @@
+import { getMediaImageUrl } from "@/lib/media-image-url";
 import { unwrapInt, unwrapString } from "@/lib/nullable";
 import type { PlayableTrackData } from "@/types";
 
@@ -15,5 +16,8 @@ export function trackRowProps(track: PlayableTrackData) {
     subtitle: unwrapString(track.musician_name) ?? "Unknown Artist",
     albumId: unwrapInt(track.album_id),
     musicianId: unwrapInt(track.musician_id),
+    // null (no cover) still draws the row's placeholder tile, so every row in
+    // a list starts its title at the same place.
+    coverUrl: getMediaImageUrl(unwrapString(track.album_cover)),
   };
 }

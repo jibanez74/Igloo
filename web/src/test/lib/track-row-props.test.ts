@@ -11,7 +11,7 @@ function track(overrides: Partial<PlayableTrackData> = {}): PlayableTrackData {
     bit_rate: 960_000,
     album_id: { Int64: 8, Valid: true },
     musician_id: { Int64: 20, Valid: true },
-    album_cover: { String: "cover.jpg", Valid: true },
+    album_cover: { String: "/api/static/albums/8.jpg", Valid: true },
     musician_name: { String: "The Band", Valid: true },
     ...overrides,
   };
@@ -26,7 +26,21 @@ describe("trackRowProps", () => {
       subtitle: "The Band",
       albumId: 8,
       musicianId: 20,
+      coverUrl: "/api/static/albums/8.jpg",
     });
+  });
+
+  // null, not undefined: TrackItem draws its placeholder tile for null and
+  // no tile at all for a missing prop.
+  it("gives a track without a usable cover a null cover", () => {
+    expect(
+      trackRowProps(track({ album_cover: { String: "", Valid: false } }))
+        .coverUrl,
+    ).toBeNull();
+    expect(
+      trackRowProps(track({ album_cover: { String: "cover.jpg", Valid: true } }))
+        .coverUrl,
+    ).toBeNull();
   });
 
   it("falls back to Unknown Artist when the name is absent", () => {
@@ -51,9 +65,10 @@ describe("trackRowProps", () => {
 
   // The track list carries only the fields TrackItem needs; the queue reads
   // the row itself, so nothing else should ride along.
-  it("passes on only the six props every list shares", () => {
+  it("passes on only the seven props every list shares", () => {
     expect(Object.keys(trackRowProps(track())).sort()).toEqual([
       "albumId",
+      "coverUrl",
       "duration",
       "id",
       "musicianId",

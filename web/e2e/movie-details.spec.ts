@@ -18,7 +18,11 @@ import {
   nullableString,
   pagedList,
 } from "./e2e-api";
-import { VIEWPORTS } from "./e2e-layout";
+import {
+  BREAKPOINTS,
+  VIEWPORTS,
+  expectFlushUnderAppHeader,
+} from "./e2e-layout";
 import { mockApi } from "./e2e-mock-api";
 import { expectHref, playButton } from "./media-e2e-helpers";
 import { mockYouTubePlayer } from "./mock-youtube-player";
@@ -345,6 +349,32 @@ test("opens a movie from the index by keyboard and defaults its play links to di
     ...directPlay,
     start: String(chapterStartSeconds),
   });
+
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
+});
+
+// The hero used to sit one page-padding below the app header, leaving a strip
+// of page background between the two.
+test("the hero runs from the app header down, edge to edge, at every breakpoint", async ({
+  page,
+}) => {
+  const browserIssues = trackBrowserIssues(page);
+  const { unexpectedApiRequests } = await mockMovieDetailsApi(page);
+
+  await page.goto(moviePath);
+  await expect(
+    page.getByRole("heading", { name: /Signal Fire/i, level: 1 }),
+  ).toBeVisible();
+
+  for (const { label, size } of BREAKPOINTS) {
+    await test.step(label, async () => {
+      await page.setViewportSize(size);
+      await expectFlushUnderAppHeader(
+        page,
+        page.locator('[data-slot="detail-hero"]'),
+      );
+    });
+  }
 
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });

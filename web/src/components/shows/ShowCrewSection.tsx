@@ -1,6 +1,7 @@
 import PersonLink from "@/components/shared/PersonLink";
 import CrewDisclosure from "@/components/shared/CrewDisclosure";
 import { DETAIL_SECTION_HEADING_CLASS } from "@/lib/constants";
+import { crewSectionLabels } from "@/lib/crew";
 import type { ShowCrewCreditType, ShowPersonType } from "@/types";
 
 type ShowCrewSectionProps = {
@@ -9,7 +10,8 @@ type ShowCrewSectionProps = {
 };
 
 /** Creators are billed first, then the aggregate crew behind a disclosure —
- *  the show analogue of the movie key-crew section. */
+ *  the show analogue of the movie key-crew section. A show with crew but no
+ *  creators has no billed summary, so its heading is "Crew". */
 export default function ShowCrewSection({
   creators,
   crew,
@@ -23,7 +25,7 @@ export default function ShowCrewSection({
         tabIndex={-1}
         className={DETAIL_SECTION_HEADING_CLASS}
       >
-        Key Crew
+        {crewSectionLabels(creators.length > 0).heading}
       </h2>
 
       {creators.length > 0 && (

@@ -1,6 +1,7 @@
 import PersonLink from "@/components/shared/PersonLink";
 import CrewDisclosure from "@/components/shared/CrewDisclosure";
 import { DETAIL_SECTION_HEADING_CLASS } from "@/lib/constants";
+import { crewSectionLabels, movieKeyCrew } from "@/lib/crew";
 import { sortLibraryCrewForDisplay } from "@/lib/format";
 import type { LibraryMovieCrewType } from "@/types/movies";
 
@@ -8,13 +9,8 @@ type MovieKeyCrewSectionProps = {
   crew: LibraryMovieCrewType[];
 };
 
-const KEY_CREW_WRITERS_CAP = 3;
-
 export default function MovieKeyCrewSection({ crew }: MovieKeyCrewSectionProps) {
-  const director = crew.find(c => c.job === "Director");
-  const writers = crew
-    .filter(c => c.department === "Writing")
-    .slice(0, KEY_CREW_WRITERS_CAP);
+  const { director, writers } = movieKeyCrew(crew);
 
   const keyCrewRowIds = new Set<number>();
   if (director) keyCrewRowIds.add(director.id);
@@ -35,7 +31,7 @@ export default function MovieKeyCrewSection({ crew }: MovieKeyCrewSectionProps) 
         tabIndex={-1}
         className={DETAIL_SECTION_HEADING_CLASS}
       >
-        Key Crew
+        {crewSectionLabels(showKeyCrewSummary).heading}
       </h2>
       {showKeyCrewSummary && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 md:grid-cols-3">

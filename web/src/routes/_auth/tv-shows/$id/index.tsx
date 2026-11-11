@@ -12,6 +12,7 @@ import {
 } from "@/lib/constants";
 import { showDetailsSearchSchema } from "@/lib/route-search";
 import { parseRouteId } from "@/lib/route-id";
+import { crewSectionLabels } from "@/lib/crew";
 import { showHead, type MediaHeadData } from "@/lib/route-head";
 import { loadOnEntry } from "@/lib/route-loads";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
@@ -222,7 +223,7 @@ function ShowDetailsContent({
           },
           (creators.length > 0 || crew.length > 0) && {
             href: "#crew-heading",
-            label: "Skip to key crew",
+            label: crewSectionLabels(creators.length > 0).skipLabel,
           },
           castForSection.length > 0 && {
             href: "#cast-heading",

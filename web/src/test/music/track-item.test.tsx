@@ -10,6 +10,7 @@ import {
   MOTION_TRACK_PLAY_BUTTON_CLASS,
   MOTION_TRACK_ROW_CLASS,
 } from "@/lib/constants";
+import { expectNoClass } from "@/test/helpers/dom";
 import { renderWithQueryClient } from "@/test/helpers/render";
 
 vi.mock("@/lib/api", async importOriginal => ({
@@ -287,5 +288,129 @@ describe("TrackItem duration", () => {
     expect(screen.getAllByText("1:01")).toHaveLength(2);
     expect(inline.closest("p")).toHaveClass("sm:hidden");
     expect(screen.queryByText("·")).not.toBeInTheDocument();
+  });
+});
+
+describe("TrackItem cover", () => {
+  const cover = (container: HTMLElement) =>
+    container.querySelector('[data-slot="track-cover"]');
+
+  function renderRow(
+    props: Partial<React.ComponentProps<typeof TrackItem>> = {},
+  ) {
+    return renderWithQueryClient(
+      <TrackItem
+        id={7}
+        title="Signal Fire"
+        subtitle="The Band"
+        duration={211_000}
+        variant="library"
+        onPlay={vi.fn()}
+        showActionsMenu={false}
+        {...props}
+      />,
+    );
+  }
+
+  it("draws the album cover at the start of the row, hidden from assistive tech", () => {
+    const { container } = renderRow({ coverUrl: "/api/static/albums/9.jpg" });
+
+    const tile = cover(container);
+    expect(tile).toHaveAttribute("aria-hidden", "true");
+    const image = tile?.querySelector("img");
+    expect(image).toHaveAttribute("src", "/api/static/albums/9.jpg");
+    expect(image).toHaveAttribute("alt", "");
+    expect(image).toHaveAttribute("loading", "lazy");
+    expect(image).toHaveAttribute("width", "40");
+    expect(image).toHaveAttribute("height", "40");
+    // It is the row's first child, before the title.
+    expect(tile?.nextElementSibling).toContainElement(
+      screen.getByText("Signal Fire"),
+    );
+  });
+
+  // 40 px fits inside the row's two text lines, so the virtual lists' fixed
+  // row height holds; below sm the title needs the room instead.
+  it("is 40 px and gives way to the title below sm", () => {
+    const { container } = renderRow({ coverUrl: "/api/static/albums/9.jpg" });
+
+    expect(cover(container)).toHaveClass("size-10", "hidden", "sm:flex");
+  });
+
+  it("draws a placeholder tile when the track has no cover or the image fails", () => {
+    const { container, unmount } = renderRow({ coverUrl: null });
+    expect(cover(container)?.querySelector("img")).toBeNull();
+    expect(cover(container)?.querySelector("svg")).not.toBeNull();
+    unmount();
+
+    const failed = renderRow({ coverUrl: "/api/static/albums/9.jpg" });
+    fireEvent.error(cover(failed.container)!.querySelector("img")!);
+    expect(cover(failed.container)?.querySelector("img")).toBeNull();
+    expect(cover(failed.container)?.querySelector("svg")).not.toBeNull();
+  });
+
+  // The album page leaves coverUrl out: every row would repeat the cover
+  // shown above the list.
+  it("draws nothing when no cover is asked for", () => {
+    const { container } = renderRow({ variant: "album", trackIndex: 1 });
+
+    expect(cover(container)).toBeNull();
+  });
+});
+
+describe("TrackItem play button", () => {
+  const FILLED = ["bg-primary", "text-primary-foreground"] as const;
+
+  function renderRow(
+    props: Partial<React.ComponentProps<typeof TrackItem>> = {},
+  ) {
+    renderWithQueryClient(
+      <TrackItem
+        id={7}
+        title="Signal Fire"
+        duration={211_000}
+        variant="library"
+        onPlay={vi.fn()}
+        showActionsMenu={false}
+        {...props}
+      />,
+    );
+    return screen.getByRole("button", { name: /^(Play|Pause) Signal Fire$/ });
+  }
+
+  // A list of filled buttons shouts. The button is always there, but it only
+  // fills on row hover, on its own focus, and where nothing hovers.
+  it.each(["library", "playlist", "musician", "album"] as const)(
+    "is quiet on a %s row until hover, focus or a coarse pointer",
+    variant => {
+      const button = renderRow({ variant });
+
+      expect(button).toHaveClass("text-muted-foreground");
+      expectNoClass(button, ...FILLED);
+      expect(button).toHaveClass(
+        "group-hover:bg-primary",
+        "group-hover:text-primary-foreground",
+        "focus-visible:bg-primary",
+        "focus-visible:text-primary-foreground",
+        "pointer-coarse:bg-primary",
+        "pointer-coarse:text-primary-foreground",
+      );
+      // Never hidden: no action sits behind hover alone.
+      expectNoClass(button, "opacity-0", "sm:opacity-0", "hidden");
+    },
+  );
+
+  it("stays filled on the current track, playing or paused", () => {
+    const paused = renderRow({ isCurrentTrack: true });
+    expect(paused).toHaveClass(...FILLED);
+    expectNoClass(paused, "text-muted-foreground");
+    expect(paused).toHaveAccessibleName("Play Signal Fire");
+  });
+
+  it("names the action for the playing track", () => {
+    const playing = renderRow({ isCurrentTrack: true, isPlaying: true });
+
+    expect(playing).toHaveClass(...FILLED);
+    expect(playing).toHaveAccessibleName("Pause Signal Fire");
   });
 });
