@@ -20,6 +20,8 @@ const PLAY_EPISODE_FALLBACK_HEAD = routeHead("Playing Episode");
 export const Route = createFileRoute(
   "/_auth/tv-shows/$id/episodes/$episodeId/play",
 )({
+  // The player fills the window: no sidebar, header or page padding.
+  staticData: { immersive: true },
   validateSearch: playSearchSchema,
   loaderDeps: ({ search }) => ({
     mode: search.mode,

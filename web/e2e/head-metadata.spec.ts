@@ -65,6 +65,11 @@ test("applies each route's head over the root defaults", async ({ page }) => {
       title: "Playing Signal Fire - Igloo",
     });
 
+  // The player has the window to itself, so the way on is its Back button.
+  await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Back to previous page" }).click();
+  await expect(page).toHaveURL(/\/movies(\?|$)/);
+
   // A settings subpage names itself and inherits the layout's description.
   await page.getByRole("link", { name: "Settings" }).click();
 

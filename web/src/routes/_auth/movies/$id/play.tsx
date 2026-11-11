@@ -15,6 +15,8 @@ import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 const PLAY_MOVIE_FALLBACK_HEAD = routeHead("Playing Movie");
 
 export const Route = createFileRoute("/_auth/movies/$id/play")({
+  // The player fills the window: no sidebar, header or page padding.
+  staticData: { immersive: true },
   validateSearch: playSearchSchema,
   loaderDeps: ({ search }) => ({
     mode: search.mode,

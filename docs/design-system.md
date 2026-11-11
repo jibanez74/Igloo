@@ -901,6 +901,15 @@ collapse, while the mobile trigger controls the sheet.
   `ThemeToggle`. The search input is the `glass` field variant (§1.6), the
   light "frosted" treatment from `lib/input-styles.ts` (an allowlisted
   raw-color exception, §1.2).
+- **Immersive routes** take the whole window. A route that sets
+  `staticData: { immersive: true }` is rendered by the shell as the `main`
+  landmark alone: no sidebar, no header, no page padding, at least as tall
+  as the window. They are the two video players, the trailer and the watch
+  room (`immersive-routes.test.ts` pins the list); each brings its own title
+  and way back. A player fills the window exactly; the watch room is a page
+  of cards, so its route adds the page padding back and it scrolls when it
+  is taller than the window. Nothing moves in the route tree and no URL
+  changes.
 - Content: `px-4 py-6 sm:px-6 lg:px-8`; when the mini audio player is visible
   the shell adds `MINI_PLAYER_CLEARANCE_PADDING_CLASS` (`pb-28 sm:pb-24`) so
   content never hides behind it. The desktop sidebar column takes the same

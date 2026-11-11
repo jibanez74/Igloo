@@ -54,6 +54,8 @@ import { showInfo } from "@/lib/toast-helpers";
 const TRAILER_FALLBACK_HEAD = routeHead("Trailer");
 
 export const Route = createFileRoute("/_auth/trailer")({
+  // The player fills the window: no sidebar, header or page padding.
+  staticData: { immersive: true },
   validateSearch: trailerSearchSchema,
   loaderDeps: ({ search }) => ({
     mediaType: search.mediaType,

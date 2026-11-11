@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { watchRoomQueryOpts } from "@/lib/query-opts";
 import { parseRouteId } from "@/lib/route-id";
@@ -11,6 +12,10 @@ import {
 const WATCH_ROOM_FALLBACK_HEAD = routeHead("Watch Room");
 
 export const Route = createFileRoute("/_auth/watch-rooms/$id")({
+  // The room has the window to itself: no sidebar and no header. It is a
+  // page of cards, though, not one player surface, so RoomFrame below gives
+  // it back the padding the shell would have.
+  staticData: { immersive: true },
   params: {
     parse: params => ({
       id: parseRouteId(params.id),
@@ -40,9 +45,21 @@ export const Route = createFileRoute("/_auth/watch-rooms/$id")({
         )
       : WATCH_ROOM_FALLBACK_HEAD;
   },
-  pendingComponent: WatchRoomLoading,
+  pendingComponent: () => (
+    <RoomFrame>
+      <WatchRoomLoading />
+    </RoomFrame>
+  ),
   component: WatchRoomRoute,
 });
+
+function RoomFrame({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex min-w-0 flex-1 flex-col px-4 py-6 sm:px-6 lg:px-8">
+      {children}
+    </div>
+  );
+}
 
 function WatchRoomRoute() {
   const { id } = Route.useParams();
@@ -50,12 +67,18 @@ function WatchRoomRoute() {
 
   if (id === null) {
     return (
-      <WatchRoomUnavailable
-        message="This watch room link is invalid."
-        onBackHome={() => navigate({ to: "/" })}
-      />
+      <RoomFrame>
+        <WatchRoomUnavailable
+          message="This watch room link is invalid."
+          onBackHome={() => navigate({ to: "/" })}
+        />
+      </RoomFrame>
     );
   }
 
-  return <WatchRoomPage roomId={id} />;
+  return (
+    <RoomFrame>
+      <WatchRoomPage roomId={id} />
+    </RoomFrame>
+  );
 }
