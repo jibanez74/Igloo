@@ -76,8 +76,24 @@ function DropdownMenuSeparator({
   )
 }
 
+// A heading inside a menu: who the menu belongs to, or what a group of items
+// is. Not an item, so the arrow keys pass over it.
+function DropdownMenuLabel({
+  className,
+  ...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Label>) {
+  return (
+    <DropdownMenuPrimitive.Label
+      data-slot="dropdown-menu-label"
+      className={cn("px-2 py-1.5 text-sm font-medium", className)}
+      {...props}
+    />
+  )
+}
+
 export {
   DropdownMenu,
+  DropdownMenuLabel,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
