@@ -59,8 +59,9 @@ The system is implemented with:
   (`:root` = light, `.dark` = dark) and consumed through utilities like
   `bg-card`, `text-muted-foreground`, `ring-ring`. The token rules are
   **generated** from `src/lib/theme-tokens.ts` (§2.4).
-- **`tw-animate-css`** for enter/exit animations, with a strict
-  `motion-reduce:` discipline (§1.5).
+- **Igloo's own enter/exit animation utilities**
+  (`src/assets/animations.css`), with a strict `motion-reduce:` discipline
+  (§1.5).
 - **lucide-react** for all icons, with two exceptions. The first is the
   **brand mark**: `components/app/BrandMark.tsx` draws the igloo from
   `lib/brand-mark.ts`, the same glyph the app icons are generated from
@@ -251,15 +252,32 @@ constant exists — and when you create a new recurring one, add it there so
 - **Transitions enumerate properties** — e.g.
   `transition-[background-color,border-color,color,box-shadow,opacity]` —
   never `transition-all`.
-- **Enter/exit animations** come from `tw-animate-css`. A page entrance both
+- **Enter/exit animations** are the app's own utilities, in
+  `src/assets/animations.css`: `animate-in` / `animate-out` run one keyframe
+  each (`enter`, `exit`) between the resting state and the offsets set by
+  `fade-in-0`, `zoom-in-95`, `slide-in-from-<side>-2` and their `-out` twins;
+  `fill-mode-*` and `delay-*` complete the set. Rules for that file:
+  - It holds only what the app uses (it began as the used part of the
+    `tw-animate-css` package, which is removed). A utility that is not there
+    (`blur-in`, `spin-in`, `slide-in-from-start`) compiles to nothing, so
+    add it to the file with the first use.
+  - **`delay-*` is redefined there** to set `animation-delay` as well.
+    Tailwind's own only delays transitions, and without it every staggered
+    entrance (`delay-75`, `delay-150`) starts at once.
+  - Screenshots cannot see any of this, since the visual suite freezes
+    animations. `e2e/motion.spec.ts` reads the computed animation name,
+    duration, delay, fill mode and enter offsets of a section, a delayed
+    section, a select list, a dialog and the sign-in card instead.
+
+  A page entrance both
   fades and lifts (`MOTION_PAGE_ENTER_CLASS`:
   `animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-page`); a
   section entrance only fades (`MOTION_SECTION_ENTER_CLASS` and its `delay-75`
   staggered twin `MOTION_SECTION_ENTER_DELAYED_CLASS`:
   `animate-in fade-in-0 fill-mode-both duration-standard`) — the split is
   deliberate, since a page full of independently sliding sections reads as
-  jitter. Exits use `animate-out` + `fade-out-0`. There are no custom
-  `@keyframes` in `styles.css`.
+  jitter. Exits use `animate-out` + `fade-out-0`. The two keyframes
+  live in `animations.css`; `styles.css` has none of its own.
 - **The motion-reduce contract (hard rule)**: every animation/transition ships
   a `motion-reduce:` escape — `motion-reduce:transition-none`,
   `motion-reduce:animate-none`, plus end-state resets
@@ -585,7 +603,7 @@ any variant fully. The base string carries the focus ring, disabled opacity,
 ### 2.1 Tailwind v4 conventions
 
 - Configuration is CSS-first: `styles.css` starts with `@import "tailwindcss"`
-  + `@import "tw-animate-css"`, declares `@custom-variant dark (&:is(.dark *))`
+  + `@import "./animations.css"` (§1.5), declares `@custom-variant dark (&:is(.dark *))`
   (class-based dark mode), and maps every token into Tailwind via a
   generated `@theme inline` block (`--color-X: var(--X)`, §2.4). There is no
   `tailwind.config.js`.
@@ -874,13 +892,29 @@ the skip link lands past the search bar. The
 provider owns this state internally; the rail and Ctrl/Cmd+B toggle desktop
 collapse, while the mobile trigger controls the sheet.
 
-- Sidebar: `BrandMark` on a `bg-primary` tile + "Igloo" wordmark linking
-  home; Home / Movies / TV Shows
-  / Music / Settings with lucide icons (active =
-  `bg-sidebar-accent` + `text-primary` icon); footer Logout. `SidebarRail`
-  gives a click-to-collapse handle.
+- Sidebar (`app/app-sidebar.tsx`), top to bottom:
+  - **Header**: `BrandMark` on a `bg-primary` tile + "Igloo" wordmark linking
+    home. It is `h-14`, the app header's height, so the two bottom borders
+    meet in one line.
+  - **Navigation** (one `navigation` landmark): Home; then Movies, TV Shows
+    and Music under a "Library" heading that names their list; then
+    Settings, pushed to the foot of the column (`mt-auto`). Active =
+    `bg-sidebar-accent` + `text-primary` icon.
+  - **Account block** (footer): the signed-in user's avatar (uploaded
+    picture, else initials), name and role ("Administrator" / "Member"),
+    opening a menu upward with their email, Account settings, the theme
+    switch and Logout. Logout lives nowhere else.
+  - **Collapsing**: the column collapses to its icons (3rem). The control is
+    the `SidebarTrigger` at the left of the app header, named "Collapse
+    sidebar" / "Expand sidebar" with `aria-expanded`; Ctrl/Cmd+B and the
+    `SidebarRail` edge do the same. The state is kept in `localStorage`
+    (`igloo-sidebar`), so it survives a reload. Collapsed, the heading and
+    labels go, each icon names itself in a `Tooltip` to its right (§2.2),
+    the account block is the avatar alone, and its menu opens to the right.
+  - **Phone**: the same content in a sheet. The trigger is a 40px menu icon
+    named "Open navigation".
 - Header: sticky `h-14 bg-background/95 backdrop-blur-sm`, border-b.
-  Mobile-only `SidebarTrigger`, then `app/Header.tsx` — a `role="search"` form
+  The `SidebarTrigger` at every width (above), then `app/Header.tsx` — a `role="search"` form
   (submits to `/search?q=…&tab=all&page=1`), `NotificationBell`,
   `ThemeToggle`. The search input is the `glass` field variant (§1.6), the
   light "frosted" treatment from `lib/input-styles.ts` (an allowlisted
@@ -888,7 +922,7 @@ collapse, while the mobile trigger controls the sheet.
 - Content: `px-4 py-6 sm:px-6 lg:px-8`; when the mini audio player is visible
   the shell adds `MINI_PLAYER_CLEARANCE_PADDING_CLASS` (`pb-28 sm:pb-24`) so
   content never hides behind it. The desktop sidebar column takes the same
-  class, so its footer (Logout) sits above the full-width bar instead of under
+  class, so its footer (the account block) sits above the full-width bar instead of under
   it; the mobile sheet opens above the bar and needs none. **Scrolling happens on the window** — virtual
   lists must use `useWindowVirtualizer` (§3.4), never a nested scroll
   container. For the same reason the content column clips with
