@@ -383,16 +383,23 @@ test("music tabs avoid horizontal overflow on a phone", async ({ page }) => {
   await expect(page.getByRole("link", { name: "First Mock Album by Aurora Pines" })).toBeVisible();
   await expectNoOverflowingElements(page);
 
-  // Three figures do not fit beside the kebab at 390px: the stats wrap onto a
-  // second line while "More options" stays at the right end of the first.
+  // Three figures do not fit beside the title at 390px: "More options" stays
+  // on the title's line, at its end, and the counts take the line under it.
+  const titleBox = await page
+    .getByRole("heading", { level: 1, name: "Music Library" })
+    .boundingBox();
   const statsBox = await page
     .getByRole("region", { name: /^Library statistics: / })
     .boundingBox();
   const moreBox = await page.getByRole("button", { name: "More options" }).boundingBox();
+  expect(titleBox).not.toBeNull();
   expect(statsBox).not.toBeNull();
   expect(moreBox).not.toBeNull();
-  expect(moreBox!.y).toBeLessThan(statsBox!.y + statsBox!.height / 2);
-  expect(moreBox!.x).toBeGreaterThanOrEqual(statsBox!.x + statsBox!.width);
+  const moreMiddle = moreBox!.y + moreBox!.height / 2;
+  expect(moreMiddle).toBeGreaterThan(titleBox!.y);
+  expect(moreMiddle).toBeLessThan(titleBox!.y + titleBox!.height);
+  expect(moreBox!.x).toBeGreaterThanOrEqual(titleBox!.x + titleBox!.width);
+  expect(statsBox!.y).toBeGreaterThanOrEqual(titleBox!.y + titleBox!.height);
 
   await page.getByRole("tab", { name: "Musicians" }).click();
   await expect(page.getByRole("link", { name: "Aurora Pines, 2 albums, 18 tracks" })).toBeVisible();

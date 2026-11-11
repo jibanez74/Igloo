@@ -307,9 +307,14 @@ describe("movies route section motion", () => {
     expect(heading.closest("header")?.className).toContain(
       MOTION_SECTION_ENTER_CLASS,
     );
-    expect(stats.parentElement?.className).toContain(
-      MOTION_SECTION_ENTER_DELAYED_CLASS,
-    );
+    // The counts and the More menu sit in the header's own row, so they
+    // arrive with the title and not as a row of their own after it.
+    expect(stats.closest("header")).toBe(heading.closest("header"));
+    expect(
+      within(heading.closest("header")!).getByRole("button", {
+        name: "More options",
+      }),
+    ).toBeInTheDocument();
     expect(tabsRoot?.className).toContain(MOTION_SECTION_ENTER_DELAYED_CLASS);
     expect(
       screen.getByRole("tabpanel", { name: "All Movies" }).firstElementChild
