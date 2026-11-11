@@ -1,6 +1,7 @@
-import { act, screen, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { jsonResponse, requestURL } from "../helpers/api";
 import { homeShellResponse } from "../helpers/home";
 import { renderRoute } from "../helpers/render-route";
 
@@ -171,18 +172,38 @@ describe("app sidebar account block", () => {
     expect(localStorage.getItem("igloo-theme")).toBe("light");
   });
 
-  it("signs out from the menu", async () => {
+  it("signs out from the menu and leaves for the sign-in page", async () => {
+    // The home shell's mock knows nothing of logout, so answer it as the
+    // server does; anything else still goes to the shell.
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      requestURL(input) === "/api/auth/logout" && init?.method === "DELETE"
+        ? jsonResponse({ error: false, message: "Logged out" })
+        : homeShellResponse(input),
+    );
+    vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
-    await renderSidebar();
-    const fetchMock = vi.mocked(fetch);
+    const { router } = await renderRoute("/");
 
-    await user.click(screen.getByRole("button", { name: "Account: Test User" }));
+    await user.click(
+      await screen.findByRole("button", { name: "Account: Test User" }),
+    );
     await user.click(await screen.findByRole("menuitem", { name: "Logout" }));
 
-    const logoutCall = fetchMock.mock.calls.find(([input, init]) => {
-      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-      return url.includes("/api/auth/logout") && init?.method === "DELETE";
-    });
-    expect(logoutCall).toBeDefined();
+    expect(
+      fetchMock.mock.calls.filter(
+        ([input, init]) =>
+          requestURL(input) === "/api/auth/logout" && init?.method === "DELETE",
+      ),
+    ).toHaveLength(1);
+    // The session ended: the reader is on the sign-in page, the shell is gone.
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe("/login"),
+    );
+    expect(
+      await screen.findByRole("button", { name: "Sign in" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("navigation", { name: "Main navigation" }),
+    ).not.toBeInTheDocument();
   });
 });
