@@ -18,6 +18,8 @@ function episodeItem(
     id: 70103,
     title: "Frost Harbor",
     poster_path: nullableString("/frost-harbor.jpg"),
+    backdrop_path: nullableString(),
+    overview: nullableString(),
     year: nullableInt64(2025),
     progress_sec: 600,
     duration_sec: 2400,

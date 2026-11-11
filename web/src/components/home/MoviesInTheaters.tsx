@@ -3,7 +3,7 @@ import { inTheatersQueryOpts } from "@/lib/query-opts";
 import { Film } from "lucide-react";
 import HomeMediaSection from "@/components/home/HomeMediaSection";
 import InTheatersCard from "@/components/home/InTheatersCard";
-import { HOME_POSTER_GRID_CLASS } from "@/lib/constants";
+import { HOME_RAIL_POSTER_ITEM_CLASS } from "@/lib/constants";
 import { parseCatalogDate } from "@/lib/format";
 import type { TheaterMovieType } from "@/types";
 import { apiErrorMessage } from "@/lib/is-api-failure";
@@ -37,7 +37,7 @@ export default function MoviesInTheaters() {
       emptyDescription="No movies are listed as playing in theaters right now. Check back later."
       emptyIcon={Film}
       countNoun="movie"
-      gridClassName={HOME_POSTER_GRID_CLASS}
+      itemClassName={HOME_RAIL_POSTER_ITEM_CLASS}
       getKey={(movie: TheaterMovieType) => String(movie.id)}
       renderItem={(movie: TheaterMovieType) => <InTheatersCard movie={movie} />}
     />

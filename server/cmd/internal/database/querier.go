@@ -214,6 +214,9 @@ type Querier interface {
 	// WATCH_PROGRESS_MIN_SECONDS resume-eligibility floor. The caller passes the
 	// limit so the movie half, the episode half and the merged row all cap at the
 	// handler's continueWatchingLimit.
+	//
+	// backdrop_path and overview are for the home billboard, which features the
+	// first item of the merged row.
 	GetContinueWatchingMovies(ctx context.Context, arg GetContinueWatchingMoviesParams) ([]GetContinueWatchingMoviesRow, error)
 	// Series creators, billed ahead of the aggregate crew on the details page.
 	GetCreatorsByShowID(ctx context.Context, showID int64) ([]GetCreatorsByShowIDRow, error)
@@ -232,8 +235,10 @@ type Querier interface {
 	// Genres linked to a show (for details view).
 	GetGenresByShowID(ctx context.Context, showID int64) ([]GetGenresByShowIDRow, error)
 	GetLatestAlbums(ctx context.Context) ([]GetLatestAlbumsRow, error)
-	// The home section renders title, poster and year only; certification is
-	// deliberately absent so the row matches the documented LatestMovie exactly.
+	// The home rail renders title, poster and year; backdrop_path and overview
+	// are for the billboard, which features the newest movie when nothing is in
+	// progress. Certification is deliberately absent so the row matches the
+	// documented LatestMovie exactly.
 	// CURRENT_TIMESTAMP only has second resolution, so id breaks the ties a bulk
 	// scan creates, as GetLatestShows does.
 	GetLatestMovies(ctx context.Context) ([]GetLatestMoviesRow, error)

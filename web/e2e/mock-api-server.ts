@@ -1091,7 +1091,13 @@ function handleMoviesRoutes(
   }
 
   if (url.pathname === "/api/movies/latest") {
-    sendSuccess(response, { movies: libraryMovies });
+    sendSuccess(response, {
+      movies: libraryMovies.map(movie => ({
+        ...movie,
+        backdrop_path: nullableString(),
+        overview: nullableString(),
+      })),
+    });
     return true;
   }
 
@@ -1151,6 +1157,8 @@ function handleHomeRoutes(
             id: MOCK_EPISODE_ID,
             title: latestShows[0].name,
             poster_path: latestShows[0].poster_path,
+            backdrop_path: nullableString(),
+            overview: nullableString("The harbor thaws, and what the ice held comes with it."),
             year: latestShows[0].premiere_year,
             progress_sec: 600,
             duration_sec: 2400,
@@ -1162,6 +1170,8 @@ function handleHomeRoutes(
           ...libraryMovies.slice(0, 2).map((movie, index) => ({
             kind: "movie" as const,
             ...movie,
+            backdrop_path: nullableString(),
+            overview: nullableString(),
             progress_sec: 900 * (index + 1),
             duration_sec: 5400,
           })),

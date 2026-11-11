@@ -10090,6 +10090,8 @@
           "id",
           "title",
           "poster_path",
+          "backdrop_path",
+          "overview",
           "year"
         ],
         "properties": {
@@ -10104,6 +10106,14 @@
             "$ref": "#/components/schemas/SqlNullString",
             "description": "TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description."
           },
+          "backdrop_path": {
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. The movie's backdrop, for the home billboard."
+          },
+          "overview": {
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "The movie's overview, for the home billboard."
+          },
           "year": {
             "$ref": "#/components/schemas/SqlNullInt64"
           }
@@ -10117,6 +10127,8 @@
           "id",
           "title",
           "poster_path",
+          "backdrop_path",
+          "overview",
           "year",
           "progress_sec",
           "duration_sec"
@@ -10138,6 +10150,14 @@
           "poster_path": {
             "$ref": "#/components/schemas/SqlNullString",
             "description": "TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description."
+          },
+          "backdrop_path": {
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. The movie's backdrop, for the home billboard."
+          },
+          "overview": {
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "The movie's overview, for the home billboard."
           },
           "year": {
             "$ref": "#/components/schemas/SqlNullInt64"
@@ -10161,6 +10181,8 @@
           "id",
           "title",
           "poster_path",
+          "backdrop_path",
+          "overview",
           "year",
           "progress_sec",
           "duration_sec",
@@ -10186,6 +10208,14 @@
           "poster_path": {
             "$ref": "#/components/schemas/SqlNullString",
             "description": "TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description."
+          },
+          "backdrop_path": {
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. The show's backdrop, for the home billboard."
+          },
+          "overview": {
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "The episode's overview, or the show's when the episode has none."
           },
           "year": {
             "$ref": "#/components/schemas/SqlNullInt64"
