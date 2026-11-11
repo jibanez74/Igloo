@@ -15,11 +15,12 @@ test.describe("Reduced motion", () => {
     await page.setViewportSize({ width: 1280, height: 900 });
 
     await page.goto("/");
-    await expect(page.getByRole("heading", { name: "Welcome to Igloo" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(["Home"]);
     await expectPageHasNoHorizontalScroll(page);
 
     for (const name of [
-      "Welcome to Igloo",
+      // The billboard: the mock's first Continue Watching item.
+      "Frost Harbor",
       "Recently Added Movies",
       "Recently Added Shows",
       "Recently Added Albums",
@@ -52,6 +53,10 @@ test.describe("Enter animations", () => {
   };
 
   const readMotion = (element: Element): Motion => {
+    // A custom property comes back as it was written: the production build
+    // minifies 0.95 to .95 and the dev server does not. Compare the number.
+    const number = (value: string) =>
+      value.trim() === "" ? "" : String(Number(value));
     const style = getComputedStyle(element);
     return {
       name: style.animationName,
@@ -59,8 +64,8 @@ test.describe("Enter animations", () => {
       delay: style.animationDelay,
       fillMode: style.animationFillMode,
       timing: style.animationTimingFunction,
-      enterOpacity: style.getPropertyValue("--tw-enter-opacity").trim(),
-      enterScale: style.getPropertyValue("--tw-enter-scale").trim(),
+      enterOpacity: number(style.getPropertyValue("--tw-enter-opacity")),
+      enterScale: number(style.getPropertyValue("--tw-enter-scale")),
     };
   };
 
@@ -115,17 +120,19 @@ test.describe("Enter animations", () => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto("/");
 
-    const welcome = page.getByRole("region", { name: "Welcome to Igloo", exact: true });
-    await expect(welcome).toBeVisible();
+    // The billboard is the first section on Home. Its name is whatever it
+    // features, so it is found by the heading that labels it.
+    const billboard = page.locator('section[aria-labelledby="home-billboard-title"]');
+    await expect(billboard).toBeVisible();
     // The browser made an animation of it: a name with no keyframes behind
     // it would leave this list empty. (`fill-mode-both` keeps a finished
     // animation in it.)
     expect(
-      await welcome.evaluate((element) =>
+      await billboard.evaluate((element) =>
         element.getAnimations().map((animation) => (animation as CSSAnimation).animationName),
       ),
     ).toContain("enter");
-    expect(await welcome.evaluate(readMotion)).toMatchObject({
+    expect(await billboard.evaluate(readMotion)).toMatchObject({
       name: "enter",
       duration: "0.2s",
       delay: "0s",
@@ -165,7 +172,7 @@ test.describe("Enter animations", () => {
       duration: "0.15s",
       delay: "0s",
       enterOpacity: "0",
-      enterScale: ".95",
+      enterScale: "0.95",
     });
     await page.keyboard.press("Escape");
     await expect(list).toBeHidden();
@@ -180,7 +187,7 @@ test.describe("Enter animations", () => {
       duration: "0.2s",
       delay: "0s",
       enterOpacity: "0",
-      enterScale: ".95",
+      enterScale: "0.95",
     });
 
     browserIssues.assertClean();

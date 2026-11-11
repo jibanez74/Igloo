@@ -505,8 +505,8 @@ any variant fully. The base string carries the focus ring, disabled opacity,
   announces its empty state. A *loaded* summary is not announced — it is an
   `sr-only` paragraph tied to the section through `aria-describedby`, so it
   is there on demand rather than interrupting a reader four times as a page's
-  rows resolve, and it stays out of sight because the count pill, the error
-  alert and the empty state already carry the same words where the eye lands.
+  rows resolve, and it stays out of sight because the cards, the error
+  alert and the empty state already say the same where the eye lands.
   Errors announce themselves through `role="alert"` (§3.4).
 - **Skip links**: a global "Skip to page content" in `AppShell` targeting
   `#main`, plus per-page section skip navs on long pages. Every detail page —
@@ -731,7 +731,7 @@ The styling families:
   over the backdrop band, hero row and Play/Shuffle actions row, shared with
   `MusicDetailSkeleton`, §3.2), `LIBRARY_TABS_LIST_CLASS` /
   `LIBRARY_TAB_TRIGGER_CLASS`, `LIBRARY_POSTER_GRID_CLASS` (the fixed-column
-  library grid), `HOME_POSTER_GRID_CLASS` / `HOME_ALBUM_GRID_CLASS` (§3.2), `MINI_PLAYER_CLEARANCE_*` (the shell's
+  library grid), `HOME_RAIL_POSTER_ITEM_CLASS` / `HOME_RAIL_ALBUM_ITEM_CLASS` (§3.2), `MINI_PLAYER_CLEARANCE_*` (the shell's
   reserved space under the mini bar, §3.1), `SETTINGS_RESET_BUTTON_CLASS` (the
   save bar's Reset, §3.7; Settings cards are the `Card`'s default surface,
   its fields the `inset` variant and its select lists the one popup surface,
@@ -935,17 +935,39 @@ collapse, while the mobile trigger controls the sheet.
 titled through `head` like every page, so a mistyped address keeps
 the sidebar, the header and a way back instead of the router's bare text.
 
-**The home page** is the shell's canonical composition: a hero heading, then
+**The home page** is the shell's canonical composition: a billboard, then
 six sections in order — `WatchRooms`, `ContinueWatching`, `LatestMovies`,
-`LatestShows`, `LatestAlbums`, `MoviesInTheaters`. All but `WatchRooms` render
-through the shared `HomeMediaSection` (heading + count pill + `sr-only`
-described-by summary + pending/error/empty/grid states), and the route loader `ensureQueryData`s
-every one of their queries, so the page arrives complete rather than popping in
-section by section. Each row's cards sit in a `<ul role="list">` named by the
+`LatestShows`, `LatestAlbums`, `MoviesInTheaters`.
+
+- **The billboard** (`components/home/HomeBillboard.tsx`) leads with one
+  title: the first Continue Watching item, or the newest movie when nothing
+  is in progress, or nothing at all for an empty library. It shows the
+  title's backdrop (its poster, blurred, when it has none; the fallback
+  tile when it has neither or the image fails), an eyebrow saying why it
+  is there ("Continue watching" / "New in your library"), the title as an
+  `h2`, the year or the episode, the time left with a progress strip, the
+  overview (two lines on a phone, three above), and two pill links: Resume
+  or Play, and Details. The words are white over literal black scrims on
+  the fixed tile, so they read the same in both themes (§1.2). On a phone
+  the card is taller and its lower half nearly opaque, so the words sit
+  under the picture rather than on it.
+- The page's one `h1` is "Home", `sr-only`: the billboard leads with a
+  title's name, which is not the page's.
+- All sections but `WatchRooms` render through the shared `HomeMediaSection`:
+  a heading, a "See all" link to the row's library where it has one, an
+  `sr-only` described-by summary, and pending / error / empty states. Its
+  cards sit in **one row that scrolls sideways** (a `ScrollRail`, §3.2),
+  each card at a fixed width (`HOME_RAIL_POSTER_ITEM_CLASS` /
+  `HOME_RAIL_ALBUM_ITEM_CLASS`), so the page is as tall on a phone as on a
+  desktop.
+- The route loader `ensureQueryData`s every one of these queries, so the
+  page arrives complete rather than popping in section by section.
+
+Each row's cards sit in a `<ul role="list">` named by the
 row's heading (`aria-labelledby`), one `<li>` per card, so a screen reader names
 the row when focus tabs into its first card — Orca + Firefox does not announce
 the labelled region alone. A new home row is a `HomeMediaSection` with one of the
-`HOME_*_GRID_CLASS` grids (§3.2) and its query added to the loader.
+`HOME_RAIL_*_ITEM_CLASS` widths (§3.2) and its query added to the loader.
 
 ### 3.2 Media cards and library pages
 
@@ -1044,14 +1066,12 @@ The contract:
 
 The canonical library poster grid is `LIBRARY_POSTER_GRID_CLASS`
 (`grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6`). Home
-sections instead use the shared auto-fill grids (`HOME_POSTER_GRID_CLASS` /
-`HOME_ALBUM_GRID_CLASS`, both
-`grid-cols-[repeat(auto-fill,minmax(min(7.5rem,100%),1fr))]`) —
-**auto-fill, not auto-fit**, so a sparse section keeps its cards near the
-track's minimum width instead of stretching one poster across the whole content
-column; pinned by `constants-contracts.test.ts`.
+sections are rails instead (below): their cards take a fixed width per
+breakpoint (`HOME_RAIL_POSTER_ITEM_CLASS`, `HOME_RAIL_ALBUM_ITEM_CLASS`), so
+a sparse row cannot stretch one poster across the content column; pinned by
+`constants-contracts.test.ts`.
 
-True horizontal rails (cast, chapters, extras, the seasons tab strip) are
+True horizontal rails (the home rows, cast, chapters, extras, the seasons tab strip) are
 the shared `ScrollRail` (`components/shared/ScrollRail.tsx`): a wrapper on
 `SCROLL_RAIL_BLEED_CLASS` that bleeds to the viewport edge at each
 breakpoint, around a scroller on `SCROLL_RAIL_SCROLLER_CLASS` (thin glacier

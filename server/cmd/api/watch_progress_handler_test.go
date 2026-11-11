@@ -721,6 +721,22 @@ func TestGetContinueWatching_ConformsToOpenAPIWithRows(t *testing.T) {
 	seedWatchProgress(t, app, otherUser.ID, movieID)
 	seedEpisodeWatchProgress(t, app, otherUser.ID, fixture.Episode2, 900.0, 1)
 
+	// What the home billboard shows of the first item: a backdrop and an
+	// overview. The episode here has no overview of its own, so the show's
+	// stands in.
+	for _, statement := range []struct {
+		query string
+		args  []any
+	}{
+		{`UPDATE movies SET backdrop_path_source = '/contract-backdrop.jpg', overview = 'A contract is signed.' WHERE id = ?`, []any{movieID}},
+		{`UPDATE shows SET overview = 'A show about playback.' WHERE id = ?`, []any{fixture.ShowID}},
+		{`UPDATE show_episodes SET overview = '  ' WHERE id = ?`, []any{fixture.Episode1}},
+	} {
+		if _, execErr := app.DB.Exec(statement.query, statement.args...); execErr != nil {
+			t.Fatalf("seed billboard fields: %v", execErr)
+		}
+	}
+
 	request := httptest.NewRequest(http.MethodGet, "/api/continue-watching", nil)
 	response := serveOpenAPIExchange(t, authenticatedRouter(t, app, user.ID), "getContinueWatching", request, http.StatusOK)
 	assertResponseListNotEmpty(t, "getContinueWatching", response.Body.Bytes(), "items")
@@ -728,15 +744,17 @@ func TestGetContinueWatching_ConformsToOpenAPIWithRows(t *testing.T) {
 	var payload struct {
 		Data struct {
 			Items []struct {
-				Kind          string  `json:"kind"`
-				ID            int64   `json:"id"`
-				Title         string  `json:"title"`
-				ProgressSec   float64 `json:"progress_sec"`
-				DurationSec   float64 `json:"duration_sec"`
-				ShowID        int64   `json:"show_id"`
-				SeasonNumber  int64   `json:"season_number"`
-				EpisodeNumber int64   `json:"episode_number"`
-				EpisodeName   string  `json:"episode_name"`
+				Kind          string         `json:"kind"`
+				ID            int64          `json:"id"`
+				Title         string         `json:"title"`
+				BackdropPath  sql.NullString `json:"backdrop_path"`
+				Overview      sql.NullString `json:"overview"`
+				ProgressSec   float64        `json:"progress_sec"`
+				DurationSec   float64        `json:"duration_sec"`
+				ShowID        int64          `json:"show_id"`
+				SeasonNumber  int64          `json:"season_number"`
+				EpisodeNumber int64          `json:"episode_number"`
+				EpisodeName   string         `json:"episode_name"`
 			} `json:"items"`
 		} `json:"data"`
 	}
@@ -771,6 +789,12 @@ func TestGetContinueWatching_ConformsToOpenAPIWithRows(t *testing.T) {
 	if episode.ProgressSec != 900.0 || episode.DurationSec != 7200.0 {
 		t.Errorf("episode progress = %f/%f, want 900/7200", episode.ProgressSec, episode.DurationSec)
 	}
+	if want := (sql.NullString{String: "/playback-backdrop.jpg", Valid: true}); episode.BackdropPath != want {
+		t.Errorf("episode backdrop = %+v, want the show's %+v", episode.BackdropPath, want)
+	}
+	if want := (sql.NullString{String: "A show about playback.", Valid: true}); episode.Overview != want {
+		t.Errorf("episode overview = %+v, want the show's %+v for an episode with none", episode.Overview, want)
+	}
 
 	movie := items[1]
 	if movie.Kind != "movie" || movie.ID != movieID {
@@ -778,6 +802,37 @@ func TestGetContinueWatching_ConformsToOpenAPIWithRows(t *testing.T) {
 	}
 	if movie.ShowID != 0 || movie.EpisodeName != "" {
 		t.Errorf("movie item must omit the episode fields, got %+v", movie)
+	}
+	if want := (sql.NullString{String: "/contract-backdrop.jpg", Valid: true}); movie.BackdropPath != want {
+		t.Errorf("movie backdrop = %+v, want %+v", movie.BackdropPath, want)
+	}
+	if want := (sql.NullString{String: "A contract is signed.", Valid: true}); movie.Overview != want {
+		t.Errorf("movie overview = %+v, want %+v", movie.Overview, want)
+	}
+}
+
+func TestEpisodeOrShowOverview(t *testing.T) {
+	show := sql.NullString{String: "A show about playback.", Valid: true}
+	episode := sql.NullString{String: "The pilot.", Valid: true}
+
+	tests := []struct {
+		name    string
+		episode sql.NullString
+		show    sql.NullString
+		want    sql.NullString
+	}{
+		{"the episode's own overview wins", episode, show, episode},
+		{"a null episode overview falls back to the show's", sql.NullString{}, show, show},
+		{"an empty episode overview falls back to the show's", sql.NullString{String: "", Valid: true}, show, show},
+		{"a blank episode overview falls back to the show's", sql.NullString{String: " \n ", Valid: true}, show, show},
+		{"neither has one", sql.NullString{}, sql.NullString{}, sql.NullString{}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := episodeOrShowOverview(test.episode, test.show); got != test.want {
+				t.Errorf("episodeOrShowOverview = %+v, want %+v", got, test.want)
+			}
+		})
 	}
 }
 

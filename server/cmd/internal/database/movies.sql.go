@@ -474,6 +474,8 @@ SELECT
   id,
   title,
   poster_path,
+  backdrop_path,
+  overview,
   year
 FROM movies
 ORDER BY created_at DESC, id DESC
@@ -481,14 +483,18 @@ LIMIT 12
 `
 
 type GetLatestMoviesRow struct {
-	ID         int64          `json:"id"`
-	Title      string         `json:"title"`
-	PosterPath sql.NullString `json:"poster_path"`
-	Year       sql.NullInt64  `json:"year"`
+	ID           int64          `json:"id"`
+	Title        string         `json:"title"`
+	PosterPath   sql.NullString `json:"poster_path"`
+	BackdropPath sql.NullString `json:"backdrop_path"`
+	Overview     sql.NullString `json:"overview"`
+	Year         sql.NullInt64  `json:"year"`
 }
 
-// The home section renders title, poster and year only; certification is
-// deliberately absent so the row matches the documented LatestMovie exactly.
+// The home rail renders title, poster and year; backdrop_path and overview
+// are for the billboard, which features the newest movie when nothing is in
+// progress. Certification is deliberately absent so the row matches the
+// documented LatestMovie exactly.
 // CURRENT_TIMESTAMP only has second resolution, so id breaks the ties a bulk
 // scan creates, as GetLatestShows does.
 func (q *Queries) GetLatestMovies(ctx context.Context) ([]GetLatestMoviesRow, error) {
@@ -504,6 +510,8 @@ func (q *Queries) GetLatestMovies(ctx context.Context) ([]GetLatestMoviesRow, er
 			&i.ID,
 			&i.Title,
 			&i.PosterPath,
+			&i.BackdropPath,
+			&i.Overview,
 			&i.Year,
 		); err != nil {
 			return nil, err

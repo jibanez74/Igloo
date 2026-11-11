@@ -3,7 +3,10 @@ import { latestShowsQueryOpts } from "@/lib/query-opts";
 import { Tv } from "lucide-react";
 import HomeMediaSection from "@/components/home/HomeMediaSection";
 import ShowCard from "@/components/shows/ShowCard";
-import { HOME_POSTER_GRID_CLASS } from "@/lib/constants";
+import {
+  HOME_RAIL_POSTER_ITEM_CLASS,
+  SHOWS_INDEX_DEFAULT_SEARCH,
+} from "@/lib/constants";
 import { apiErrorMessage } from "@/lib/is-api-failure";
 
 export default function LatestShows() {
@@ -27,7 +30,8 @@ export default function LatestShows() {
       emptyDescription="Your TV show library is empty. Add a shows folder in settings and run a scan to get started."
       emptyIcon={Tv}
       countNoun="show"
-      gridClassName={HOME_POSTER_GRID_CLASS}
+      itemClassName={HOME_RAIL_POSTER_ITEM_CLASS}
+      seeAllLink={{ to: "/tv-shows", search: SHOWS_INDEX_DEFAULT_SEARCH }}
       getKey={show => String(show.id)}
       renderItem={show => <ShowCard show={show} />}
     />

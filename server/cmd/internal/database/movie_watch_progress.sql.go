@@ -31,6 +31,8 @@ SELECT
   m.id,
   m.title,
   m.poster_path,
+  m.backdrop_path,
+  m.overview,
   m.year,
   mwp.progress_sec,
   mwp.duration_sec,
@@ -52,19 +54,24 @@ type GetContinueWatchingMoviesParams struct {
 }
 
 type GetContinueWatchingMoviesRow struct {
-	ID          int64          `json:"id"`
-	Title       string         `json:"title"`
-	PosterPath  sql.NullString `json:"poster_path"`
-	Year        sql.NullInt64  `json:"year"`
-	ProgressSec float64        `json:"progress_sec"`
-	DurationSec float64        `json:"duration_sec"`
-	UpdatedAt   string         `json:"updated_at"`
+	ID           int64          `json:"id"`
+	Title        string         `json:"title"`
+	PosterPath   sql.NullString `json:"poster_path"`
+	BackdropPath sql.NullString `json:"backdrop_path"`
+	Overview     sql.NullString `json:"overview"`
+	Year         sql.NullInt64  `json:"year"`
+	ProgressSec  float64        `json:"progress_sec"`
+	DurationSec  float64        `json:"duration_sec"`
+	UpdatedAt    string         `json:"updated_at"`
 }
 
 // The 30-second floor must match the web client's
 // WATCH_PROGRESS_MIN_SECONDS resume-eligibility floor. The caller passes the
 // limit so the movie half, the episode half and the merged row all cap at the
 // handler's continueWatchingLimit.
+//
+// backdrop_path and overview are for the home billboard, which features the
+// first item of the merged row.
 func (q *Queries) GetContinueWatchingMovies(ctx context.Context, arg GetContinueWatchingMoviesParams) ([]GetContinueWatchingMoviesRow, error) {
 	rows, err := q.query(ctx, q.getContinueWatchingMoviesStmt, getContinueWatchingMovies, arg.UserID, arg.Limit)
 	if err != nil {
@@ -78,6 +85,8 @@ func (q *Queries) GetContinueWatchingMovies(ctx context.Context, arg GetContinue
 			&i.ID,
 			&i.Title,
 			&i.PosterPath,
+			&i.BackdropPath,
+			&i.Overview,
 			&i.Year,
 			&i.ProgressSec,
 			&i.DurationSec,
