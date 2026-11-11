@@ -451,6 +451,9 @@ test.describe("Login screen", () => {
     await expect
       .poll(() => new URL(page.url()).searchParams.get("redirect"))
       .toBe("/settings/account");
+    // The address changes a moment before the page does: until the sign-in
+    // form is up, the account page's own email fields still answer to "Email".
+    await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
 
     await submitLogin(page, env.email, env.password);
     await expect(page).toHaveURL(appPath("/settings/account"));
