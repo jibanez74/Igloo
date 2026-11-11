@@ -82,10 +82,15 @@ WHERE movie_watch_progress.save_session_id <> excluded.save_session_id
 -- WATCH_PROGRESS_MIN_SECONDS resume-eligibility floor. The caller passes the
 -- limit so the movie half, the episode half and the merged row all cap at the
 -- handler's continueWatchingLimit.
+--
+-- backdrop_path and overview are for the home billboard, which features the
+-- first item of the merged row.
 SELECT
   m.id,
   m.title,
   m.poster_path,
+  m.backdrop_path,
+  m.overview,
   m.year,
   mwp.progress_sec,
   mwp.duration_sec,

@@ -36,6 +36,10 @@ const continueWatchingItems: ContinueWatchingItemType[] = [
     id: 104,
     title: "Ember Line",
     poster_path: nullableString("/ember-line.jpg"),
+    backdrop_path: nullableString("/ember-line-backdrop.jpg"),
+    overview: nullableString(
+      "A signal crew races a wildfire along the last working rail line in the valley.",
+    ),
     year: nullableInt64(2026),
     progress_sec: 1830,
     duration_sec: 5400,
@@ -45,6 +49,8 @@ const continueWatchingItems: ContinueWatchingItemType[] = [
     id: 70103,
     title: "Frost Harbor",
     poster_path: nullableString("/frost-harbor.jpg"),
+    backdrop_path: nullableString("/frost-harbor-backdrop.jpg"),
+    overview: nullableString("The harbor freezes over a week early."),
     year: nullableInt64(2025),
     progress_sec: 600,
     duration_sec: 2400,
@@ -58,6 +64,8 @@ const continueWatchingItems: ContinueWatchingItemType[] = [
     id: 105,
     title: "Quiet Orbit",
     poster_path: nullableString(),
+    backdrop_path: nullableString(),
+    overview: nullableString(),
     year: nullableInt64(2023),
     progress_sec: 300,
     duration_sec: 6000,
@@ -136,18 +144,26 @@ async function mockHomeApi(page: Page) {
               id: 101,
               title: "Signal Fire",
               poster_path: nullableString("/signal-fire.jpg"),
+              backdrop_path: nullableString("/signal-fire-backdrop.jpg"),
+              overview: nullableString(
+                "A lighthouse keeper finds a message that was never meant to arrive.",
+              ),
               year: nullableInt64(2026),
             },
             {
               id: 102,
               title: "Cinder Vale",
               poster_path: nullableString("/cinder-vale.jpg"),
+              backdrop_path: nullableString(),
+              overview: nullableString(),
               year: nullableInt64(2025),
             },
             {
               id: 103,
               title: "Mercury Harbor",
               poster_path: nullableString(),
+              backdrop_path: nullableString(),
+              overview: nullableString(),
               year: nullableInt64(2024),
             },
           ] satisfies LatestMovieType[],
@@ -236,9 +252,15 @@ test("home page is clean, responsive, and keyboard reachable", async ({ page }) 
   await page.goto("/");
 
   await expect(page).toHaveTitle("Home - Igloo");
+  // The page's own name is its one h1, out of sight; the billboard leads
+  // with what was last watched.
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(["Home"]);
+  const billboard = page.getByRole("region", { name: "Ember Line", exact: true });
+  await expect(billboard).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Welcome to Igloo" }),
-  ).toBeVisible();
+    billboard.getByRole("link", { name: "Resume Ember Line" }),
+  ).toHaveAttribute("href", /\/movies\/104\/play$/);
+  await expect(billboard.getByText("1 hr left")).toBeVisible();
   await expect(page.getByRole("main")).toBeVisible();
   await expect(
     page.getByRole("search", { name: "Search library" }),
@@ -275,22 +297,33 @@ test("home page is clean, responsive, and keyboard reachable", async ({ page }) 
   for (const { label, size } of BREAKPOINTS) {
     await page.setViewportSize(size);
 
-    await expect(
-      page.getByRole("heading", { name: "Welcome to Igloo" }),
-    ).toBeVisible();
+    await expect(billboard).toBeVisible();
     await expectPageHasNoHorizontalScroll(page);
     await expectNoHorizontalOverflow(main, `main content at ${label} width`);
-    // Sparse sections must not stretch posters across the content column:
-    // the auto-fill grid keeps cards near the track's minimum width.
+    // The billboard's words and both buttons stay inside it at every width.
+    const billboardBox = await billboard.boundingBox();
+    for (const name of ["Resume Ember Line", "Details for Ember Line"]) {
+      const box = await billboard.getByRole("link", { name }).boundingBox();
+      expect(
+        billboardBox &&
+          box &&
+          box.x >= billboardBox.x &&
+          box.x + box.width <= billboardBox.x + billboardBox.width &&
+          box.y + box.height <= billboardBox.y + billboardBox.height,
+        `${name} inside the billboard at ${label} width`,
+      ).toBe(true);
+    }
+    // A rail's cards keep one width however few there are: a sparse row
+    // must not stretch a poster across the content column.
     await expect
       .poll(async () => (await emberCard.boundingBox())?.width, {
         message: `continue watching card width at ${label} width`,
       })
-      .toBeLessThan(300);
+      .toBeLessThan(200);
   }
 
   await page.setViewportSize(VIEWPORTS.phone);
-  const sidebarToggle = page.getByRole("button", { name: "Toggle Sidebar" });
+  const sidebarToggle = page.getByRole("button", { name: "Open navigation" });
   await expect(sidebarToggle).toBeVisible();
   await sidebarToggle.click();
 

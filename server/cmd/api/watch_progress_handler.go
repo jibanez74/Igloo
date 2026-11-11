@@ -221,6 +221,8 @@ type continueWatchingItem struct {
 	ID            int64          `json:"id"`
 	Title         string         `json:"title"`
 	PosterPath    sql.NullString `json:"poster_path"`
+	BackdropPath  sql.NullString `json:"backdrop_path"`
+	Overview      sql.NullString `json:"overview"`
 	Year          sql.NullInt64  `json:"year"`
 	ProgressSec   float64        `json:"progress_sec"`
 	DurationSec   float64        `json:"duration_sec"`
@@ -231,6 +233,16 @@ type continueWatchingItem struct {
 
 	// updatedAt orders the merge and is never serialized.
 	updatedAt string
+}
+
+// episodeOrShowOverview is what the billboard says about an episode in
+// progress: the episode's own overview, or the show's when the episode has
+// none (TMDB often has no text for a single episode).
+func episodeOrShowOverview(episode, show sql.NullString) sql.NullString {
+	if episode.Valid && strings.TrimSpace(episode.String) != "" {
+		return episode
+	}
+	return show
 }
 
 // GetContinueWatching lists what the current user has started and not finished,
@@ -261,14 +273,16 @@ func (app *Application) GetContinueWatching(w http.ResponseWriter, r *http.Reque
 
 	for _, movie := range movies {
 		items = append(items, continueWatchingItem{
-			Kind:        string(mediaKindMovie),
-			ID:          movie.ID,
-			Title:       movie.Title,
-			PosterPath:  movie.PosterPath,
-			Year:        movie.Year,
-			ProgressSec: movie.ProgressSec,
-			DurationSec: movie.DurationSec,
-			updatedAt:   movie.UpdatedAt,
+			Kind:         string(mediaKindMovie),
+			ID:           movie.ID,
+			Title:        movie.Title,
+			PosterPath:   movie.PosterPath,
+			BackdropPath: movie.BackdropPath,
+			Overview:     movie.Overview,
+			Year:         movie.Year,
+			ProgressSec:  movie.ProgressSec,
+			DurationSec:  movie.DurationSec,
+			updatedAt:    movie.UpdatedAt,
 		})
 	}
 
@@ -278,6 +292,8 @@ func (app *Application) GetContinueWatching(w http.ResponseWriter, r *http.Reque
 			ID:            episode.ID,
 			Title:         episode.ShowName,
 			PosterPath:    episode.ShowPosterPath,
+			BackdropPath:  episode.ShowBackdropPath,
+			Overview:      episodeOrShowOverview(episode.EpisodeOverview, episode.ShowOverview),
 			Year:          episode.ShowPremiereYear,
 			ProgressSec:   episode.ProgressSec,
 			DurationSec:   episode.DurationSec,

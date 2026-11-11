@@ -1,5 +1,7 @@
-import { screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { jsonResponse, requestURL } from "../helpers/api";
 import { homeShellResponse } from "../helpers/home";
 import { renderRoute } from "../helpers/render-route";
 
@@ -15,7 +17,7 @@ function mockShellFetch() {
 
 async function renderSidebar() {
   await renderRoute("/");
-  await screen.findByRole("heading", { name: "Welcome to Igloo" });
+  await screen.findByRole("heading", { level: 1, name: "Home" });
   const navigation = screen.getByRole("navigation", { name: "Main navigation" });
   expect(within(navigation).getAllByRole("link").map(link => link.textContent)).toEqual([
     "Home", "Movies", "TV Shows", "Music", "Settings",
@@ -47,5 +49,161 @@ describe("app sidebar beside the mini player", () => {
 
     expect(sidebar).not.toBeNull();
     expect(sidebar).not.toHaveClass("pb-28");
+  });
+});
+
+describe("app sidebar navigation", () => {
+  beforeEach(() => {
+    miniPlayer.visible = false;
+    localStorage.clear();
+    mockShellFetch();
+  });
+
+  it("puts the libraries under a Library heading that names their list", async () => {
+    await renderSidebar();
+
+    const navigation = screen.getByRole("navigation", { name: "Main navigation" });
+    const library = within(navigation).getByRole("list", { name: "Library" });
+    expect(within(library).getAllByRole("link").map(link => link.textContent)).toEqual([
+      "Movies", "TV Shows", "Music",
+    ]);
+    // Home leads and Settings closes the column, each outside that group.
+    expect(within(library).queryByRole("link", { name: "Home" })).toBeNull();
+    expect(within(library).queryByRole("link", { name: "Settings" })).toBeNull();
+  });
+
+  it("collapses to icons from the header, says so, and remembers it", async () => {
+    const user = userEvent.setup();
+    const sidebar = await renderSidebar();
+    const column = sidebar?.closest('[data-slot="sidebar"]');
+    expect(column).toHaveAttribute("data-state", "expanded");
+
+    const toggle = screen.getByRole("button", { name: "Collapse sidebar" });
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await user.click(toggle);
+
+    expect(column).toHaveAttribute("data-state", "collapsed");
+    expect(
+      screen.getByRole("button", { name: "Expand sidebar" }),
+    ).toHaveAttribute("aria-expanded", "false");
+    expect(localStorage.getItem("igloo-sidebar")).toBe("collapsed");
+    // The heading is gone when collapsed; the list keeps its name.
+    expect(screen.getByRole("list", { name: "Library" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Expand sidebar" }));
+    expect(column).toHaveAttribute("data-state", "expanded");
+    expect(localStorage.getItem("igloo-sidebar")).toBe("expanded");
+  });
+
+  it("opens collapsed for a reader who left it collapsed", async () => {
+    localStorage.setItem("igloo-sidebar", "collapsed");
+
+    const sidebar = await renderSidebar();
+
+    expect(sidebar?.closest('[data-slot="sidebar"]')).toHaveAttribute(
+      "data-state",
+      "collapsed",
+    );
+  });
+
+  it("names a collapsed icon in a tooltip on keyboard focus, and not when expanded", async () => {
+    const user = userEvent.setup();
+    await renderSidebar();
+    const navigation = screen.getByRole("navigation", { name: "Main navigation" });
+
+    within(navigation).getByRole("link", { name: "Movies" }).focus();
+    expect(screen.queryByRole("tooltip")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Collapse sidebar" }));
+    // Collapsing wraps the link in its tooltip, so it is looked up again.
+    const movies = within(navigation).getByRole("link", { name: "Movies" });
+    act(() => movies.focus());
+
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("Movies");
+    // It repeats the link's name, so it must not be announced again.
+    expect(movies).not.toHaveAttribute("aria-describedby");
+  });
+});
+
+describe("app sidebar account block", () => {
+  beforeEach(() => {
+    miniPlayer.visible = false;
+    localStorage.clear();
+    document.documentElement.className = "dark";
+    mockShellFetch();
+  });
+
+  it("shows who is signed in and their role", async () => {
+    await renderSidebar();
+
+    const account = screen.getByRole("button", { name: "Account: Test User" });
+    expect(within(account).getByText("Test User")).toBeInTheDocument();
+    expect(within(account).getByText("Member")).toBeInTheDocument();
+    // No uploaded picture: the initials stand in.
+    expect(within(account).getByText("TU")).toBeInTheDocument();
+  });
+
+  it("opens a menu with the account's email, its settings, the theme and Logout", async () => {
+    const user = userEvent.setup();
+    await renderSidebar();
+
+    await user.click(screen.getByRole("button", { name: "Account: Test User" }));
+
+    const menu = await screen.findByRole("menu");
+    expect(within(menu).getByText("test@example.com")).toBeInTheDocument();
+    expect(
+      within(menu).getAllByRole("menuitem").map(item => item.textContent),
+    ).toEqual(["Account settings", "Switch to light theme", "Logout"]);
+    expect(
+      within(menu).getByRole("menuitem", { name: "Account settings" }),
+    ).toHaveAttribute("href", "/settings/account");
+  });
+
+  it("switches the theme from the menu", async () => {
+    const user = userEvent.setup();
+    await renderSidebar();
+
+    await user.click(screen.getByRole("button", { name: "Account: Test User" }));
+    await user.click(
+      await screen.findByRole("menuitem", { name: "Switch to light theme" }),
+    );
+
+    expect(document.documentElement).not.toHaveClass("dark");
+    expect(localStorage.getItem("igloo-theme")).toBe("light");
+  });
+
+  it("signs out from the menu and leaves for the sign-in page", async () => {
+    // The home shell's mock knows nothing of logout, so answer it as the
+    // server does; anything else still goes to the shell.
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      requestURL(input) === "/api/auth/logout" && init?.method === "DELETE"
+        ? jsonResponse({ error: false, message: "Logged out" })
+        : homeShellResponse(input),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    const { router } = await renderRoute("/");
+
+    await user.click(
+      await screen.findByRole("button", { name: "Account: Test User" }),
+    );
+    await user.click(await screen.findByRole("menuitem", { name: "Logout" }));
+
+    expect(
+      fetchMock.mock.calls.filter(
+        ([input, init]) =>
+          requestURL(input) === "/api/auth/logout" && init?.method === "DELETE",
+      ),
+    ).toHaveLength(1);
+    // The session ended: the reader is on the sign-in page, the shell is gone.
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe("/login"),
+    );
+    expect(
+      await screen.findByRole("button", { name: "Sign in" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("navigation", { name: "Main navigation" }),
+    ).not.toBeInTheDocument();
   });
 });

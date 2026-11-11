@@ -62,7 +62,7 @@ describe("a session that ends while the shell is open", () => {
     const server = mockServer("user");
     const { stop, view } = renderShell();
     const { router, queryClient } = await view;
-    await screen.findByRole("button", { name: "Logout" });
+    await screen.findByRole("button", { name: /^Account: / });
 
     // The server ends the session; the next refetch (a window focus, say)
     // is the first request to hear about it.
@@ -88,7 +88,7 @@ describe("a session that ends while the shell is open", () => {
     const server = mockServer("user");
     const { stop, view } = renderShell();
     const { router } = await view;
-    await screen.findByRole("button", { name: "Logout" });
+    await screen.findByRole("button", { name: /^Account: / });
 
     server.auth = "unauthorized";
     await act(async () => {
@@ -124,7 +124,7 @@ describe("the shell's auth check", () => {
       server.auth = "user";
       await user.click(screen.getByRole("button", { name: "Try again" }));
 
-      expect(await screen.findByRole("button", { name: "Logout" })).toBeInTheDocument();
+      expect(await screen.findByRole("button", { name: /^Account: / })).toBeInTheDocument();
       expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     },
   );

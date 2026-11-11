@@ -60,14 +60,18 @@ SELECT COUNT(*) FROM movies c
 WHERE c.tmdb_id IS NULL OR EXISTS (SELECT 1 FROM movie_tmdb_retries r WHERE r.movie_id = c.id);
 
 -- name: GetLatestMovies :many
--- The home section renders title, poster and year only; certification is
--- deliberately absent so the row matches the documented LatestMovie exactly.
+-- The home rail renders title, poster and year; backdrop_path and overview
+-- are for the billboard, which features the newest movie when nothing is in
+-- progress. Certification is deliberately absent so the row matches the
+-- documented LatestMovie exactly.
 -- CURRENT_TIMESTAMP only has second resolution, so id breaks the ties a bulk
 -- scan creates, as GetLatestShows does.
 SELECT
   id,
   title,
   poster_path,
+  backdrop_path,
+  overview,
   year
 FROM movies
 ORDER BY created_at DESC, id DESC

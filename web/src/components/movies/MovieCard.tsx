@@ -10,7 +10,11 @@ import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import type { LatestMovieType } from "@/types";
 
 type MovieCardProps = {
-  movie: LatestMovieType;
+  /**
+   * Any movie row: the library list, a playlist, a search result or the home
+   * rail. The card draws these four fields and nothing else.
+   */
+  movie: Pick<LatestMovieType, "id" | "title" | "poster_path" | "year">;
   watchProgress?: { progressSec: number; durationSec: number };
   /** The card's own menu, where a list offers actions on its movies. */
   actions?: ReactNode;

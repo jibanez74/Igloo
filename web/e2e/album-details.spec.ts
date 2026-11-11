@@ -125,8 +125,9 @@ test("audio player like button toggles the current track's liked state", async (
 });
 
 // The mini bar spans the full width over the fixed sidebar, whose footer
-// holds Logout; a pointer must still reach it while music plays.
-test("the sidebar's Logout stays clickable above the mini bar", async ({ page }) => {
+// holds the account block (and Logout inside it); a pointer must still reach
+// it while music plays.
+test("the sidebar's account block stays clickable above the mini bar", async ({ page }) => {
   const browserIssues = trackBrowserIssues(page);
   const unexpectedApiRequests = await mockAlbumDetailsApi(page);
 
@@ -139,12 +140,20 @@ test("the sidebar's Logout stays clickable above the mini bar", async ({ page })
   const miniBar = page.getByRole("region", { name: "Audio player" });
   await expect(miniBar).toBeVisible();
 
-  const logout = page.getByRole("button", { name: "Logout" });
-  // A trial click runs Playwright's hit-target check without logging out.
+  const account = page.getByRole("button", { name: /^Account: / });
+  // A trial click runs Playwright's hit-target check without opening it.
+  await account.click({ trial: true, timeout: 5_000 });
+  const accountBox = await account.boundingBox();
+  const barBox = await miniBar.boundingBox();
+  expect(accountBox && barBox && accountBox.y + accountBox.height <= barBox.y).toBe(true);
+
+  // Its menu opens upward, clear of the bar, and Logout in it can be reached.
+  await account.click();
+  const logout = page.getByRole("menuitem", { name: "Logout" });
   await logout.click({ trial: true, timeout: 5_000 });
   const logoutBox = await logout.boundingBox();
-  const barBox = await miniBar.boundingBox();
   expect(logoutBox && barBox && logoutBox.y + logoutBox.height <= barBox.y).toBe(true);
+  await page.keyboard.press("Escape");
 
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
@@ -240,7 +249,7 @@ test("an unreachable server on navigation shows the shell's load error, and Try 
   await page.unroute("**/*");
   await page.getByRole("button", { name: "Try again" }).click();
 
-  await expect(page.getByRole("button", { name: "Logout" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Account: / })).toBeVisible();
   await expect(page.getByText("Couldn’t load Igloo.")).toHaveCount(0);
 });
 
