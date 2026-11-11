@@ -16,6 +16,21 @@ vi.mock("@/lib/api", async importOriginal => ({
   }),
 }));
 
+// The shell asks the router one thing: whether a matched route wants the
+// window to itself. Each test answers through this.
+const matchedRoutes = vi.hoisted(() => ({
+  current: [{ staticData: {} }] as { staticData: { immersive?: boolean } }[],
+}));
+
+vi.mock("@tanstack/react-router", async importOriginal => ({
+  ...(await importOriginal<typeof import("@tanstack/react-router")>()),
+  useMatches: ({
+    select,
+  }: {
+    select: (matches: typeof matchedRoutes.current) => unknown;
+  }) => select(matchedRoutes.current),
+}));
+
 vi.mock("@/components/app/app-sidebar", () => ({
   default: () => (
     <nav aria-label="Main navigation">
@@ -80,6 +95,40 @@ function PlayerHarness() {
 }
 
 describe("AppShell", () => {
+  beforeEach(() => {
+    matchedRoutes.current = [{ staticData: {} }];
+  });
+
+  it("steps aside for a route that asks for the whole window", () => {
+    // The parent route asks for nothing; the matched player route does.
+    matchedRoutes.current = [{ staticData: {} }, { staticData: { immersive: true } }];
+
+    render(
+      <AppShell>
+        <h1>Casino Royale</h1>
+      </AppShell>,
+    );
+
+    expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
+    expect(screen.queryByRole("search")).not.toBeInTheDocument();
+    expect(screen.queryByRole("banner")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Skip to page content" }),
+    ).not.toBeInTheDocument();
+
+    // The page keeps the one main landmark, at least as tall as the window
+    // and with no padding of the shell's.
+    const mainLandmarks = screen.getAllByRole("main");
+    expect(mainLandmarks).toHaveLength(1);
+    const [main] = mainLandmarks;
+    expect(main).toHaveAttribute("id", "main");
+    expect(main).toHaveClass("min-h-svh");
+    expect(main.className).not.toMatch(/(^| )p[xytrbl]?-\d/);
+    expect(
+      within(main).getByRole("heading", { name: "Casino Royale" }),
+    ).toBeInTheDocument();
+  });
+
   it("renders one protected app shell around route content", () => {
     render(
       <AppShell>

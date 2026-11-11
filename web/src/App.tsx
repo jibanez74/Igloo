@@ -19,6 +19,15 @@ declare module "@tanstack/react-router" {
   interface Register {
     router: typeof router;
   }
+
+  interface StaticDataRouteOption {
+    /**
+     * The route fills the window by itself: the shell draws no sidebar, no
+     * header and no page padding around it. For the players, which bring
+     * their own title and way back.
+     */
+    immersive?: boolean;
+  }
 }
 
 type AppProps = {

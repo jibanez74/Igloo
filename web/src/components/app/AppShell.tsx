@@ -1,4 +1,5 @@
 import type { PropsWithChildren } from "react";
+import { useMatches } from "@tanstack/react-router";
 import Header from "@/components/app/Header";
 import AppSidebar from "@/components/app/app-sidebar";
 import {
@@ -20,6 +21,27 @@ export default function AppShell({ children }: PropsWithChildren) {
   // The minimized audio player is a fixed bottom bar; reserve space for it so
   // the last rows of any page stay reachable while music plays.
   const isMiniPlayerVisible = useIsMiniPlayerVisible();
+  // A player route asks for the whole window (`staticData.immersive`): the
+  // sidebar, the header and the page padding step aside, and the page keeps
+  // the one main landmark.
+  const immersive = useMatches({
+    select: matches => matches.some(match => match.staticData.immersive === true),
+  });
+
+  if (immersive) {
+    return (
+      <main
+        id="main"
+        tabIndex={-1}
+        data-immersive="true"
+        // At least the window, and taller when the page is: a player fills
+        // it exactly, and a longer page (a watch room on a phone) scrolls.
+        className="flex min-h-svh min-w-0 flex-col bg-background focus:outline-hidden"
+      >
+        {children}
+      </main>
+    );
+  }
 
   return (
     <SidebarProvider>
