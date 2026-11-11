@@ -3,7 +3,10 @@ import { latestMoviesQueryOpts } from "@/lib/query-opts";
 import { Film } from "lucide-react";
 import HomeMediaSection from "@/components/home/HomeMediaSection";
 import MovieCard from "@/components/movies/MovieCard";
-import { HOME_POSTER_GRID_CLASS } from "@/lib/constants";
+import {
+  HOME_RAIL_POSTER_ITEM_CLASS,
+  MOVIES_INDEX_DEFAULT_SEARCH,
+} from "@/lib/constants";
 import { apiErrorMessage } from "@/lib/is-api-failure";
 
 export default function LatestMovies() {
@@ -27,7 +30,8 @@ export default function LatestMovies() {
       emptyDescription="Your movie library is empty. Add a movies folder in settings and run a scan to get started."
       emptyIcon={Film}
       countNoun="movie"
-      gridClassName={HOME_POSTER_GRID_CLASS}
+      itemClassName={HOME_RAIL_POSTER_ITEM_CLASS}
+      seeAllLink={{ to: "/movies", search: MOVIES_INDEX_DEFAULT_SEARCH }}
       getKey={movie => String(movie.id)}
       renderItem={movie => <MovieCard movie={movie} />}
     />

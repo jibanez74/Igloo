@@ -7,15 +7,13 @@ import {
   inTheatersQueryOpts,
   watchRoomsQueryOpts,
 } from "@/lib/query-opts";
-import { Home } from "lucide-react";
 import ContinueWatching from "@/components/home/ContinueWatching";
+import HomeBillboard from "@/components/home/HomeBillboard";
 import LatestAlbums from "@/components/home/LatestAlbums";
 import LatestMovies from "@/components/home/LatestMovies";
 import LatestShows from "@/components/home/LatestShows";
 import MoviesInTheaters from "@/components/home/MoviesInTheaters";
 import WatchRooms from "@/components/watch-room/WatchRooms";
-import { MOTION_SECTION_ENTER_CLASS } from "@/lib/constants";
-import { cn } from "@/lib/utils";
 import { routeHead } from "@/lib/route-head";
 
 const HOME_HEAD = routeHead(
@@ -43,31 +41,11 @@ export const Route = createFileRoute("/_auth/")({
 function HomePage() {
   return (
     <div className="min-w-0">
-      <section
-        aria-labelledby="home-heading"
-        className={cn(
-          "rounded-3xl border border-border bg-linear-to-br from-card via-card to-background p-5 shadow-[0_24px_80px_-56px] shadow-primary/45 sm:p-6",
-          MOTION_SECTION_ENTER_CLASS,
-        )}
-      >
-        <p className="flex items-center gap-2 text-xs font-semibold tracking-[0.2em] text-primary uppercase">
-          <Home
-            className="size-3.5"
-            aria-hidden="true"
-          />
-          Dashboard
-        </p>
-        <h1
-          id="home-heading"
-          className="mt-3 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl"
-        >
-          Welcome to Igloo
-        </h1>
-        <p className="mt-3 max-w-3xl text-sm text-muted-foreground sm:text-base">
-          Explore your personal media library with recently added movies,
-          albums, and what is playing in theaters.
-        </p>
-      </section>
+      {/* The page's one h1. The billboard below leads with a title's own
+          name, which is not the page's. */}
+      <h1 className="sr-only">Home</h1>
+
+      <HomeBillboard />
 
       <WatchRooms />
       <ContinueWatching />

@@ -3,7 +3,7 @@ import { Music } from "lucide-react";
 import { latestAlbumsQueryOpts } from "@/lib/query-opts";
 import AlbumCard from "@/components/music/AlbumCard";
 import HomeMediaSection from "@/components/home/HomeMediaSection";
-import { HOME_ALBUM_GRID_CLASS } from "@/lib/constants";
+import { HOME_RAIL_ALBUM_ITEM_CLASS } from "@/lib/constants";
 import { apiErrorMessage } from "@/lib/is-api-failure";
 
 export default function LatestAlbums() {
@@ -27,7 +27,8 @@ export default function LatestAlbums() {
       emptyDescription="Your music library is empty. Add some albums to get started with your personal music collection."
       emptyIcon={Music}
       countNoun="album"
-      gridClassName={HOME_ALBUM_GRID_CLASS}
+      itemClassName={HOME_RAIL_ALBUM_ITEM_CLASS}
+      seeAllLink={{ to: "/music" }}
       getKey={album => String(album.id)}
       renderItem={album => <AlbumCard album={album} />}
     />

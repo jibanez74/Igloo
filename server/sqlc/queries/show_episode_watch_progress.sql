@@ -123,6 +123,9 @@ SELECT
   sh.id AS show_id,
   sh.name AS show_name,
   sh.poster_path AS show_poster_path,
+  sh.backdrop_path AS show_backdrop_path,
+  sh.overview AS show_overview,
+  e.overview AS episode_overview,
   sh.premiere_year AS show_premiere_year,
   wp.progress_sec,
   wp.duration_sec

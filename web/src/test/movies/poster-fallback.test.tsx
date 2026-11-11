@@ -39,6 +39,8 @@ const libraryMovie: LatestMovieType = {
   id: 1,
   title: "Fargo",
   poster_path: { Valid: true, String: "/fargo.jpg" },
+  backdrop_path: { Valid: false, String: "" },
+  overview: { Valid: false, String: "" },
   year: { Valid: true, Int64: 1996 },
 };
 

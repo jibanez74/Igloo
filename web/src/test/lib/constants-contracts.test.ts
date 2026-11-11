@@ -7,8 +7,8 @@ import {
   DIALOG_SCROLL_CONTENT_CLASS,
   DIALOG_SCROLL_HEADER_CLASS,
   FOCUS_VISIBLE_RING_CLASS,
-  HOME_ALBUM_GRID_CLASS,
-  HOME_POSTER_GRID_CLASS,
+  HOME_RAIL_ALBUM_ITEM_CLASS,
+  HOME_RAIL_POSTER_ITEM_CLASS,
   LIKED_TRACKS_KEY,
   LIKED_TRACKS_PER_PAGE,
   MEDIA_FALLBACK_SURFACE_CLASS,
@@ -134,15 +134,13 @@ describe("constants contracts", () => {
     ]);
   });
 
-  it("keeps home grids on auto-fill so sparse sections don't stretch (design-system §3.2)", () => {
-    expect(HOME_POSTER_GRID_CLASS).toContain(
-      "repeat(auto-fill,minmax(min(7.5rem,100%),1fr))",
-    );
-    expect(HOME_ALBUM_GRID_CLASS).toContain(
-      "repeat(auto-fill,minmax(min(8rem,100%),1fr))",
-    );
-    expect(HOME_POSTER_GRID_CLASS).not.toContain("auto-fit");
-    expect(HOME_ALBUM_GRID_CLASS).not.toContain("auto-fit");
+  it("gives home rail cards a fixed width at every breakpoint, so a sparse row cannot stretch one (design-system §3.2)", () => {
+    for (const itemClass of [HOME_RAIL_POSTER_ITEM_CLASS, HOME_RAIL_ALBUM_ITEM_CLASS]) {
+      expect(itemClass).toMatch(/(^| )w-\d+/);
+      expect(itemClass).toMatch(/sm:w-\d+/);
+      expect(itemClass).toMatch(/lg:w-\d+/);
+      expect(itemClass).not.toMatch(/w-full|flex-1|grow/);
+    }
   });
 
   it("derives stream mode ids from stream modes", () => {
