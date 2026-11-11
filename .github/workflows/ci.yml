@@ -100,8 +100,24 @@ jobs:
             exit 1
           fi
 
+      # --with-deps installs system packages with apt, and the runner's
+      # package mirror sometimes fails to resolve for minutes at a time. Try
+      # again before failing the job: five attempts over about seven minutes.
       - name: Install Playwright Chromium
-        run: cd web && bun x playwright install --with-deps chromium
+        run: |
+          cd web
+          for attempt in 1 2 3 4 5; do
+            if bun x playwright install --with-deps chromium; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 5 ]; then
+              wait_seconds=$((attempt * 45))
+              echo "::warning::Browser install failed (attempt $attempt of 5); retrying in ${wait_seconds}s."
+              sleep "$wait_seconds"
+            fi
+          done
+          echo "::error::Browser install failed five times."
+          exit 1
 
       # The whole mocked suite, boot.spec included, against the bundle built
       # above. Specs that need real media skip without E2E_BASE_URL.
@@ -134,8 +150,24 @@ jobs:
       - name: Install dependencies
         run: cd web && bun install --frozen-lockfile
 
+      # --with-deps installs system packages with apt, and the runner's
+      # package mirror sometimes fails to resolve for minutes at a time. Try
+      # again before failing the job: five attempts over about seven minutes.
       - name: Install Playwright Chromium
-        run: cd web && bun x playwright install --with-deps chromium
+        run: |
+          cd web
+          for attempt in 1 2 3 4 5; do
+            if bun x playwright install --with-deps chromium; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 5 ]; then
+              wait_seconds=$((attempt * 45))
+              echo "::warning::Browser install failed (attempt $attempt of 5); retrying in ${wait_seconds}s."
+              sleep "$wait_seconds"
+            fi
+          done
+          echo "::error::Browser install failed five times."
+          exit 1
 
       - name: Compare screenshots with the committed baselines
         id: compare
