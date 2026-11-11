@@ -1,6 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup, configure } from "@testing-library/react";
-import { afterEach, vi } from "vitest";
+import { afterAll, afterEach, vi } from "vitest";
+import { trackTimers } from "./helpers/leftover-timers";
 
 // Route and dialog tests await React.lazy chunks whose first import pays a cold
 // Vite transform, which on CI runners routinely outlasts testing-library's 1s
@@ -11,6 +12,13 @@ configure({ asyncUtilTimeout: 10000 });
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+});
+
+// A timer still pending when a file ends must not fire after vitest has
+// taken `window` and `document` away (helpers/leftover-timers.ts).
+const timers = trackTimers();
+afterAll(() => {
+  timers.clearLeftovers();
 });
 
 // jsdom implements none of the following, so each is a stub rather than a
