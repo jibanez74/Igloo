@@ -21,6 +21,13 @@ The web app ships `web/public/fonts/InterVariable.woff2`.
 - Copyright (c) 2016 The Inter Project Authors (<https://github.com/rsms/inter>)
 - **License:** SIL Open Font License, Version 1.1. The full text is in [web/public/fonts/LICENSE.txt](web/public/fonts/LICENSE.txt).
 
+## Enter and exit animations
+
+`web/src/assets/animations.css` is adapted from [tw-animate-css](https://github.com/Wombosvideo/tw-animate-css) 1.4.0: the utilities and keyframes the web app uses, copied from that package.
+
+- Copyright (c) 2025 Wombosvideo
+- **License:** MIT. The full text is in [web/src/assets/animations.LICENSE.txt](web/src/assets/animations.LICENSE.txt).
+
 ## Go server dependencies
 
 Compiled into the Igloo server binary. Module versions are pinned in [server/go.mod](server/go.mod).
@@ -48,7 +55,6 @@ Bundled into the web app that the server embeds and serves. Versions are pinned 
 | @dnd-kit/core, @dnd-kit/modifiers, @dnd-kit/sortable, @dnd-kit/utilities | MIT |
 | radix-ui | MIT |
 | hls.js | Apache-2.0 |
-| class-variance-authority | Apache-2.0 |
 | lucide-react | ISC |
 | clsx, sonner, tailwind-merge, zod | MIT |
 
