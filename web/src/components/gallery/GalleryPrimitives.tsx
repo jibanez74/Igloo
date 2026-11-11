@@ -48,7 +48,6 @@ import {
   LIBRARY_TAB_TRIGGER_CLASS,
   LIBRARY_TABS_LIST_CLASS,
   MEDIA_FALLBACK_SURFACE_CLASS,
-  SETTINGS_RESET_BUTTON_CLASS,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
@@ -117,8 +116,8 @@ function ButtonsSection() {
         </a>
       </GalleryRow>
 
-      {/* The overrides production call sites pass today. Each becomes a
-          variant; this row must not move a pixel when it does. */}
+      {/* Looks call sites once assembled from classes, now variants. The
+          quiet second action (Cancel, Reset) is plain `outline`. */}
       <GalleryRow label="call-site recipes">
         <Button
           variant="ghost-muted"
@@ -128,20 +127,12 @@ function ButtonsSection() {
         >
           <Bell aria-hidden="true" />
         </Button>
-        <Button variant="secondary">
-          Dialog secondary
-        </Button>
-        <Button
-          variant="outline"
-          className="border-border bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground"
-        >
-          Dialog cancel
-        </Button>
+        <Button variant="outline">Dialog cancel</Button>
         <Button variant="outline-destructive" size="sm">
           <Trash2 aria-hidden="true" />
           Outline destructive
         </Button>
-        <Button variant="outline" className={SETTINGS_RESET_BUTTON_CLASS}>
+        <Button variant="outline">
           <RotateCcw aria-hidden="true" />
           Reset
         </Button>

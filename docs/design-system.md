@@ -302,8 +302,7 @@ assemble a look from classes.
 |---|---|---|
 | `default` | primary fill | the main action of a form or dialog |
 | `accent` | primary fill + `shadow-md` | the main action on a page or toolbar |
-| `outline` | bordered, canvas fill | a second action of equal weight |
-| `secondary` | bordered, muted fill and text | the quiet second action: Cancel in a confirmation, Start from beginning |
+| `outline` | bordered, canvas fill | the second action beside a main one: Cancel, Reset, Start from beginning, Skip |
 | `ghost` | no chrome until hover | an inline action |
 | `ghost-muted` | ghost resting in the muted text color | toolbar and row icons: theme toggle, notifications, edit a user |
 | `ghost-destructive` | ghost-muted whose hover turns destructive | a row's remove or delete icon |
@@ -315,6 +314,17 @@ any variant fully. The base string carries the focus ring, disabled opacity,
 `aria-invalid` styling, a property-scoped 150ms transition with
 `motion-reduce:transition-none`, and stamps `data-variant`, `data-size` and
 `data-shape`.
+
+- **The quiet second action is `outline`, everywhere.** Cancel in a dialog
+  or a confirmation (`AlertDialogCancel`), the save bar's Reset, "Start from
+  beginning", the pre-roll's Skip: all plain `outline`, with no classes on
+  top. A `secondary` variant with a muted fill and muted text was tried for
+  them and removed, because in the light theme it read as a disabled primary
+  button (next rule) sitting beside the real one. `Button` is in the lint
+  list of primitives styled by props, so a fill, text, border or shadow
+  color in its `className` fails the build; a color that is the control's
+  state rather than its look (the watched toggle's `text-success`) carries an
+  inline exemption that says so.
 
 - **A disabled primary button is grey, not dim glacier.** The primary-fill
   variants (`default`, `accent`) swap to `bg-muted text-muted-foreground` at
@@ -394,8 +404,8 @@ any variant fully. The base string carries the focus ring, disabled opacity,
   `resize-none`, a font (`font-mono`), a text size. A color or height class
   there, or a class constant, is a lint error — the look is the props'. This
   is the rule every primitive family is moving to; the lint list in
-  `web/eslint.config.js` (`styledByProps`) names the ones under it: the
-  fields, the dialog parts, `Spinner`, `Label`, `Card`, `CardTitle`,
+  `web/eslint.config.js` (`styledByProps`) names the ones under it:
+  `Button`, the fields, the dialog parts, `Spinner`, `Label`, `Card`, `CardTitle`,
   `Badge`, the menu and select items, and the three popups
   (`DropdownMenuContent`, `SelectContent`, `PopoverContent`) so far. Class constants that set
   no look are the exception: `DIALOG_SCROLL_*` (below), the motion constants
@@ -732,10 +742,10 @@ The styling families:
   `MusicDetailSkeleton`, §3.2), `LIBRARY_TABS_LIST_CLASS` /
   `LIBRARY_TAB_TRIGGER_CLASS`, `LIBRARY_POSTER_GRID_CLASS` (the fixed-column
   library grid), `HOME_RAIL_POSTER_ITEM_CLASS` / `HOME_RAIL_ALBUM_ITEM_CLASS` (§3.2), `MINI_PLAYER_CLEARANCE_*` (the shell's
-  reserved space under the mini bar, §3.1), `SETTINGS_RESET_BUTTON_CLASS` (the
-  save bar's Reset, §3.7; Settings cards are the `Card`'s default surface,
-  its fields the `inset` variant and its select lists the one popup surface,
-  §1.6),
+  reserved space under the mini bar, §3.1); Settings has no chrome constants
+  of its own (its cards are the `Card`'s default surface, its fields the
+  `inset` variant, its select lists the one popup surface and the save bar's
+  Reset a plain `outline` button, §1.6),
   `PLAYER_FRAME_SHELL_CLASS` / `PLAYER_FRAME_CLASS` (the windowed player's
   frame, §3.5). Elevation for floating surfaces is the `shadow-floating`
   utility, not a constant (§1.4).

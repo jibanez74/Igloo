@@ -366,7 +366,6 @@ export default function PrerollPlayer({
                     size="sm"
                     onClick={handleUnmute}
                     aria-label={withShortcut("Unmute trailer", "M")}
-                    className="border-border bg-muted text-foreground hover:bg-accent"
                   >
                     <VolumeX className="size-4" aria-hidden="true" />
                     Unmute
@@ -379,7 +378,6 @@ export default function PrerollPlayer({
                   size="sm"
                   onClick={queue.skip}
                   aria-label={withShortcut("Skip trailer", "N")}
-                  className="border-border bg-muted text-foreground hover:bg-accent"
                 >
                   Skip trailer
                 </Button>

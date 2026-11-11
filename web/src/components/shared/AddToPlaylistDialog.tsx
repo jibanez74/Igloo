@@ -266,7 +266,6 @@ export default function AddToPlaylistDialog({
             variant="outline"
             onClick={handleClose}
             disabled={mutation.isPending}
-            className="border-border bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground"
           >
             Cancel
           </Button>

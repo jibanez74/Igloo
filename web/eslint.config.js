@@ -39,6 +39,7 @@ const externalClassAllowlist = [
 // elevation), and the classes that would restate it: a colour on the fill,
 // text, border or shadow, or a height.
 const styledByProps = [
+  "Button",
   "Input",
   "Textarea",
   "NativeSelect",

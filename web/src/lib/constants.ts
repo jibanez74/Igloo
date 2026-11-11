@@ -438,15 +438,6 @@ export const PEER_FOCUS_VISIBLE_RING_CLASS =
 export const SELECT_CONTENT_SLOT_SELECTOR = "[data-slot='select-content']";
 
 /**
- * What is left of the Settings pages' own chrome (design-system §2.3, §3.7):
- * the save bar's Reset button. The cards are the Card primitive's default
- * surface, the fields its `inset` variant, and a select's popup the one
- * popup surface.
- */
-export const SETTINGS_RESET_BUTTON_CLASS =
-  "border-border bg-muted/90 text-foreground hover:bg-accent hover:text-foreground";
-
-/**
  * Spotify brand accent (the recognizable Spotify green). This is a deliberate
  * *brand* color, not a semantic design token — it identifies Spotify-sourced data
  * (the popularity meter/glyph) and intentionally sits outside the OKLCH token system.

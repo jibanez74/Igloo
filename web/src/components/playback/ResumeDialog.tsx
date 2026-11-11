@@ -89,7 +89,7 @@ export default function ResumeDialog({
         <DialogFooter>
           <Button
             type="button"
-            variant="secondary"
+            variant="outline"
             onClick={() => {
               if (playFrom) {
                 playFrom.select();
