@@ -920,7 +920,12 @@ the labelled region alone. A new home row is a `HomeMediaSection` with one of th
   `title` as the page's one `h1`, an optional one-line `description`, and the
   section entrance (§1.5). The Movies, TV Shows and Music libraries and both
   states of Search use it; a `title` may be markup ("Search results for
-  ‘…’"). The Settings header is still its own block: it has no entrance and
+  ‘…’"). A library puts its counts (`meta`: the `LibraryStats` region) and
+  its More menu (`actions`) on the title's own row. On a phone the counts
+  take a line of their own under the title and the menu stays at the end of
+  the title's line. Libraries carry no description
+  line: the tabs follow the header directly, so the first row of posters
+  sits about 90px higher than when the counts had a row of their own. The Settings header is still its own block: it has no entrance and
   its description sits 2px further below the title. It moves over with the
   Settings pass.
 
