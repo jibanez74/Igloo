@@ -42,6 +42,33 @@ for (const theme of THEMES) {
         tracker.assertClean();
       });
 
+      test("movie genres, with one selected", async ({ page }) => {
+        const tracker = trackBrowserIssues(page);
+        await openPage(page, "/movies?tab=genres");
+        await expect(page.getByRole("list", { name: "Movie genres" })).toBeVisible();
+
+        // Pressed, a tile's band turns primary and the genre's movies load
+        // beneath. The pointer leaves the tile so the shot has no hover state.
+        const drama = page.getByRole("button", { name: "Drama 3 movies" });
+        await drama.click();
+        await expect(drama).toHaveAttribute("aria-pressed", "true");
+        await expect(
+          page.getByRole("button", { name: "Clear genre filter" }),
+        ).toBeVisible();
+        await page.mouse.move(0, 0);
+        await settle(page);
+        await expectScreenshot(page, `movies-genres-${theme}.png`);
+        tracker.assertClean();
+      });
+
+      test("movie playlists", async ({ page }) => {
+        const tracker = trackBrowserIssues(page);
+        await openPage(page, "/movies?tab=playlists");
+        await expect(page.getByText("3 playlists")).toBeVisible();
+        await expectScreenshot(page, `movies-playlists-${theme}.png`);
+        tracker.assertClean();
+      });
+
       test("movie library on a phone, with the navigation sheet", async ({
         page,
       }) => {
