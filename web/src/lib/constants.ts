@@ -607,8 +607,11 @@ export const DETAIL_PAGE_CONTENT_ENTER_CLASS = MOTION_PAGE_ENTER_CLASS;
  */
 export const DETAIL_HERO_SCRIM_SIDE_CLASS =
   "absolute inset-0 hidden bg-linear-to-r from-black/70 via-black/35 to-transparent lg:block";
+// Below `lg` the poster, title, chips and actions stack over the whole
+// picture, so the scrim covers all of it there and is darker; from `lg` the
+// words keep to the lower left and the side scrim carries them.
 export const DETAIL_HERO_SCRIM_BOTTOM_CLASS =
-  "absolute inset-x-0 bottom-0 h-3/5 bg-linear-to-t from-black/90 via-black/50 to-transparent";
+  "absolute inset-x-0 bottom-0 h-full bg-linear-to-t from-black/95 via-black/70 via-45% to-black/30 lg:h-3/5 lg:from-black/90 lg:via-black/50 lg:via-50% lg:to-transparent";
 export const DETAIL_HERO_SCRIM_FADE_CLASS =
   "absolute inset-x-0 bottom-0 h-24 bg-linear-to-t from-background to-transparent";
 /**
@@ -617,7 +620,7 @@ export const DETAIL_HERO_SCRIM_FADE_CLASS =
  * (design-system §3.4). Full-bleed backdrop shell + bottom-anchored content.
  */
 export const DETAIL_HERO_SHELL_CLASS =
-  "relative -mx-4 flex min-h-104 flex-col justify-end overflow-hidden sm:-mx-6 sm:min-h-120 lg:-mx-8 lg:min-h-[min(60svh,44rem)]";
+  "relative -mx-4 -mt-6 flex min-h-104 flex-col justify-end overflow-hidden sm:-mx-6 sm:min-h-120 lg:-mx-8 lg:min-h-[min(60svh,44rem)]";
 export const DETAIL_HERO_CONTENT_CLASS =
   "relative z-10 w-full px-4 pt-40 pb-6 text-center sm:px-6 sm:pb-8 lg:max-w-4xl lg:px-8 lg:pb-12 lg:text-left";
 /**

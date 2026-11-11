@@ -6,6 +6,7 @@ import {
 import {
   BREAKPOINTS,
   VIEWPORTS,
+  expectFlushUnderAppHeader,
   expectNoOverflowingElements,
   tabTo,
 } from "./e2e-layout";
@@ -112,6 +113,11 @@ test("musician details holds its layout at every breakpoint", async ({ page }) =
         page.getByRole("button", { name: "Shuffle play all 2 tracks by Aurora Pines", exact: true }),
       ).toBeVisible();
       await expectNoOverflowingElements(page);
+      // The artwork band runs from the app header down, edge to edge.
+      await expectFlushUnderAppHeader(
+        page,
+        page.locator('[data-slot="music-detail-band"]'),
+      );
     });
   }
 

@@ -53,7 +53,7 @@ export default function DetailHero({
   const { showPoster, onError } = usePosterFallback(posterUrl ?? "");
 
   return (
-    <header className={DETAIL_HERO_SHELL_CLASS}>
+    <header data-slot="detail-hero" className={DETAIL_HERO_SHELL_CLASS}>
       <div className={cn(DETAIL_PAGE_CONTENT_ENTER_CLASS, "absolute inset-0")}>
         <DetailBackdrop backdropUrl={backdropUrl} posterUrl={posterUrl} />
       </div>

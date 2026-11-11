@@ -341,7 +341,7 @@ function AlbumDetailsContent({
       />
 
       <div className={cn(DETAIL_PAGE_CONTENT_ENTER_CLASS)}>
-        <MusicDetailBackdrop imageUrl={coverUrl ?? ""} fallbackIcon={Disc3} />
+        <MusicDetailBackdrop imageUrl={coverUrl ?? ""} />
       </div>
 
       <div className={MUSIC_DETAIL_SHELL_CLASS}>

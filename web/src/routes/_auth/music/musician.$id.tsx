@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
-  User,
   Disc3,
   Music,
   ListOrdered,
@@ -241,7 +240,7 @@ function MusicianDetailsContent({
       />
 
       <div className={cn(DETAIL_PAGE_CONTENT_ENTER_CLASS)}>
-        <MusicDetailBackdrop imageUrl={thumbUrl} fallbackIcon={User} />
+        <MusicDetailBackdrop imageUrl={thumbUrl} />
       </div>
 
       <div className={MUSIC_DETAIL_SHELL_CLASS}>

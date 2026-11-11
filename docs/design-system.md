@@ -1146,6 +1146,16 @@ media type supplying only its own metadata chips, key-crew summary, and about
 rows.
 Adding a media type means supplying those three, not building a fourth page.
 
+The hero is full-bleed on three sides: `DETAIL_HERO_SHELL_CLASS` cancels the
+shell's page padding at both sides and at the top (`-mt-6` against the
+shell's `py-6`), so the backdrop starts at the app header's bottom edge with
+no strip of page background between them. `DetailSkeleton` uses the same
+shell, so the loading page does not jump. Below `lg` the poster, title, chips
+and actions stack over the whole backdrop, so `DETAIL_HERO_SCRIM_BOTTOM_CLASS`
+covers the full height there and is darker (`from-black/95 via-black/70
+to-black/30`); from `lg` the words keep to the lower left, the bottom scrim
+goes back to the lower three-fifths and the side scrim carries them.
+
 Person profiles (`/people/$id`, using the TMDB person ID) have a portrait-led
 header: a rounded 2:3 portrait beside the name and biography at desktop widths,
 stacked on mobile. The main portrait uses the same-origin `original` image
@@ -1196,7 +1206,10 @@ a round thumb beside the title, over a decorative 21:9 band, rather than
 `DetailHero`'s poster — and share the music-specific parts in
 `components/music/`: `MusicDetailBackdrop` (the aria-hidden band, on
 `usePosterFallback`; its image, its fallback and the exported
-`MusicDetailBackdropSkeleton` share one band height), `MusicDetailArt`
+`MusicDetailBackdropSkeleton` share one band height and, like the detail
+hero, reach the app header with `-mt-6`; with no artwork the band is a plain
+`bg-muted` box with no icon, because the cover or photo beside the title
+already shows the labelled placeholder), `MusicDetailArt`
 (`variant="album" | "musician" | "playlist"`: the square cover or round photo
 beside the title on all three pages, with a labelled placeholder when there is
 no artwork, and the `MusicDetailArtSkeleton` that reads the same sizes),

@@ -3,7 +3,12 @@ import {
   assertMockSuiteClean,
   trackBrowserIssues,
 } from "./e2e-browser-issues";
-import { BREAKPOINTS, VIEWPORTS, expectNoOverflowingElements } from "./e2e-layout";
+import {
+  BREAKPOINTS,
+  VIEWPORTS,
+  expectFlushUnderAppHeader,
+  expectNoOverflowingElements,
+} from "./e2e-layout";
 import { apiResponse, fulfillJSON, gateRoute } from "./e2e-api";
 import { mockApi } from "./e2e-mock-api";
 import {
@@ -255,6 +260,11 @@ test("album details holds its layout at every breakpoint", async ({ page }) => {
       await expect(page.getByRole("button", { name: "Play Album", exact: true })).toBeVisible();
       await expect(page.getByRole("button", { name: "Shuffle play album" })).toBeVisible();
       await expectNoOverflowingElements(page);
+      // The artwork band runs from the app header down, edge to edge.
+      await expectFlushUnderAppHeader(
+        page,
+        page.locator('[data-slot="music-detail-band"]'),
+      );
     });
   }
 
