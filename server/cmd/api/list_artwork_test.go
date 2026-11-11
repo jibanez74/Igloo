@@ -298,6 +298,75 @@ func TestGetPlaylists_CarriesDistinctCoversInPlaylistOrder(t *testing.T) {
 	}
 }
 
+// The collage reads the playlist's first 24 items and no further: a long
+// playlist whose opening items have no artwork must not be walked to its end.
+func TestPlaylistArtwork_LooksOnlyAtTheFirst24Items(t *testing.T) {
+	app := setupSessionTestApp(t)
+	user := createTestUser(t, app, "Listener", "playlist-window@example.com", false)
+	musicianID := createTestMusician(t, app, "Window Band")
+	bareAlbum := createTestAlbum(t, app, "Bare", "Window Band")
+	coverAlbum := createTestAlbum(t, app, "Covered", "Window Band")
+	_, err := app.DB.Exec(`UPDATE albums SET cover_source = 'https://covers.example/late.jpg' WHERE id = ?`, coverAlbum)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tracks, err := app.Queries.CreatePlaylist(t.Context(), database.CreatePlaylistParams{UserID: user.ID, Name: "Late Cover"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	movies, err := app.Queries.CreateMoviePlaylist(t.Context(), database.CreateMoviePlaylistParams{UserID: user.ID, Name: "Late Poster"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Items 1 to 24 have no artwork; item 25 does.
+	for index := range 25 {
+		albumID := bareAlbum
+		isLast := index == 24
+		if isLast {
+			albumID = coverAlbum
+		}
+		trackID := createTestTrack(t, app, fmt.Sprintf("Window %d", index), fmt.Sprintf("/music/window-%d.flac", index), albumID, musicianID)
+		_, err = app.Queries.AddTrackToPlaylist(t.Context(), database.AddTrackToPlaylistParams{
+			PlaylistID: tracks.ID,
+			TrackID:    trackID,
+			AddedBy:    sql.NullInt64{Int64: user.ID, Valid: true},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		movieID := createTestMovie(t, app, fmt.Sprintf("Window %d", index), fmt.Sprintf("/movies/window-%d.mkv", index))
+		if isLast {
+			_, err = app.DB.Exec(`UPDATE movies SET poster_path_source = '/late.jpg' WHERE id = ?`, movieID)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		_, err = app.Queries.AddMovieToPlaylist(t.Context(), database.AddMovieToPlaylistParams{
+			PlaylistID: movies.ID,
+			MovieID:    movieID,
+			AddedBy:    sql.NullInt64{Int64: user.ID, Valid: true},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for _, target := range []string{"/api/music/playlists", "/api/movies/playlists"} {
+		w := serveAs(t, app, user.ID, http.MethodGet, target, "")
+		if w.Code != http.StatusOK {
+			t.Fatalf("%s status = %d: %s", target, w.Code, w.Body.String())
+		}
+		for id, got := range playlistArtworkByID(t, w.Body.Bytes()) {
+			if len(got) != 0 {
+				t.Errorf("%s playlist %d artwork = %q, want none from beyond the first 24 items", target, id, got)
+			}
+		}
+	}
+}
+
 func TestGetMoviePlaylists_CarriesTheFirstFourPostersInAddedOrder(t *testing.T) {
 	app := setupSessionTestApp(t)
 	user := createTestUser(t, app, "Viewer", "playlist-posters@example.com", false)

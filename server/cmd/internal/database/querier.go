@@ -267,8 +267,8 @@ type Querier interface {
 	// without a sort.
 	GetMovieGenresWithCounts(ctx context.Context) ([]GetMovieGenresWithCountsRow, error)
 	// The movie twin of GetPlaylistsWithCollaboratorAccess; see the notes there.
-	// artwork holds the posters of the first four movies in the order they were
-	// added.
+	// artwork holds the posters of the first 24 movies in the order they were
+	// added; the handler keeps the first four distinct ones.
 	GetMoviePlaylistsWithCollaboratorAccess(ctx context.Context, requestingUserID int64) ([]GetMoviePlaylistsWithCollaboratorAccessRow, error)
 	GetMovieScanIndex(ctx context.Context) ([]GetMovieScanIndexRow, error)
 	// GetMovieScanIndex for one path a run of watcher-detected changes covers:
@@ -349,7 +349,8 @@ type Querier interface {
 	//
 	// artwork is a JSON array of the album covers of the playlist's first 24
 	// tracks, in playlist order, for the card's collage. The handler keeps the
-	// first four distinct ones; the bound keeps a long playlist to a short walk of
+	// first four distinct ones. The 24 are taken before the covers are looked at,
+	// so a long playlist without covers is still a short walk of
 	// idx_playlist_tracks_position.
 	GetPlaylistsWithCollaboratorAccess(ctx context.Context, requestingUserID int64) ([]GetPlaylistsWithCollaboratorAccessRow, error)
 	// Production companies linked to a movie (for details view).

@@ -93,9 +93,10 @@ export default function PlaylistCard({ playlist }: PlaylistCardProps) {
                 CARD_MEDIA_HOVER_CLASS,
               )}
             >
-              {artUrls.map(url => (
+              {artUrls.map((url, slot) => (
                 <img
-                  key={url}
+                  // Four fixed cells: two movies can share a poster path.
+                  key={slot}
                   src={url}
                   alt=""
                   width={320}

@@ -133,15 +133,24 @@ SELECT
     SELECT json_group_array(first_movie.poster_path)
     FROM (
       SELECT m.poster_path
-      FROM playlist_movies AS pm
+      FROM (
+        SELECT
+          pm.movie_id,
+          pm.position,
+          pm.id
+        FROM playlist_movies AS pm
+        WHERE pm.playlist_id = accessible.id
+        ORDER BY
+          pm.position ASC,
+          pm.id ASC
+        LIMIT 24
+      ) AS head
       INNER JOIN movies AS m
-        ON m.id = pm.movie_id
-      WHERE pm.playlist_id = accessible.id
-        AND m.poster_path <> ''
+        ON m.id = head.movie_id
+      WHERE m.poster_path <> ''
       ORDER BY
-        pm.position ASC,
-        pm.id ASC
-      LIMIT 4
+        head.position ASC,
+        head.id ASC
     ) AS first_movie
   ) AS TEXT) AS artwork
 FROM (
@@ -185,8 +194,8 @@ type GetMoviePlaylistsWithCollaboratorAccessRow struct {
 }
 
 // The movie twin of GetPlaylistsWithCollaboratorAccess; see the notes there.
-// artwork holds the posters of the first four movies in the order they were
-// added.
+// artwork holds the posters of the first 24 movies in the order they were
+// added; the handler keeps the first four distinct ones.
 func (q *Queries) GetMoviePlaylistsWithCollaboratorAccess(ctx context.Context, requestingUserID int64) ([]GetMoviePlaylistsWithCollaboratorAccessRow, error) {
 	rows, err := q.query(ctx, q.getMoviePlaylistsWithCollaboratorAccessStmt, getMoviePlaylistsWithCollaboratorAccess, requestingUserID)
 	if err != nil {
@@ -298,17 +307,26 @@ SELECT
     SELECT json_group_array(first_track.cover)
     FROM (
       SELECT a.cover
-      FROM playlist_tracks AS pt
+      FROM (
+        SELECT
+          pt.track_id,
+          pt.position,
+          pt.id
+        FROM playlist_tracks AS pt
+        WHERE pt.playlist_id = accessible.id
+        ORDER BY
+          pt.position ASC,
+          pt.id ASC
+        LIMIT 24
+      ) AS head
       INNER JOIN tracks AS t
-        ON t.id = pt.track_id
+        ON t.id = head.track_id
       INNER JOIN albums AS a
         ON a.id = t.album_id
-      WHERE pt.playlist_id = accessible.id
-        AND a.cover <> ''
+      WHERE a.cover <> ''
       ORDER BY
-        pt.position ASC,
-        pt.id ASC
-      LIMIT 24
+        head.position ASC,
+        head.id ASC
     ) AS first_track
   ) AS TEXT) AS artwork
 FROM (
@@ -368,7 +386,8 @@ type GetPlaylistsWithCollaboratorAccessRow struct {
 //
 // artwork is a JSON array of the album covers of the playlist's first 24
 // tracks, in playlist order, for the card's collage. The handler keeps the
-// first four distinct ones; the bound keeps a long playlist to a short walk of
+// first four distinct ones. The 24 are taken before the covers are looked at,
+// so a long playlist without covers is still a short walk of
 // idx_playlist_tracks_position.
 func (q *Queries) GetPlaylistsWithCollaboratorAccess(ctx context.Context, requestingUserID int64) ([]GetPlaylistsWithCollaboratorAccessRow, error) {
 	rows, err := q.query(ctx, q.getPlaylistsWithCollaboratorAccessStmt, getPlaylistsWithCollaboratorAccess, requestingUserID)

@@ -35,7 +35,7 @@ func (app *Application) GetMoviePlaylists(w http.ResponseWriter, r *http.Request
 
 		summaries[i] = moviePlaylistSummary{
 			GetMoviePlaylistsWithCollaboratorAccessRow: playlist,
-			Artwork: posters,
+			Artwork: distinctImages(posters, maxPlaylistArtwork),
 		}
 	}
 

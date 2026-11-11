@@ -3640,7 +3640,7 @@ export interface components {
             can_edit: boolean;
             /** Format: int64 */
             movie_count: number;
-            /** @description Posters of the playlist's first four movies that have one, in the order they were added, for the card's collage. Empty when none has a poster. */
+            /** @description Up to four different posters from the playlist's first 24 movies, in the order they were added, for the card's collage. Empty when none of those movies has a poster. */
             artwork: string[];
         };
         CreateMoviePlaylistRequest: {
