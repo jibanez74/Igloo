@@ -168,8 +168,11 @@ describe("useVideoFullscreen", () => {
     expect(screen.getByTestId("is-immersive")).toHaveTextContent("true");
     expect(screen.getByTestId("chrome-mode")).toHaveTextContent("true");
     expect(document.body.style.overflow).toBe("hidden");
-    expect(toast.info).toHaveBeenCalledWith(
+    // Through showInfo, which passes no options for a toast without a
+    // description.
+    expect(toast.info).toHaveBeenCalledExactlyOnceWith(
       "Full screen isn't available in this browser. Using expanded view instead.",
+      undefined,
     );
 
     await act(async () => {

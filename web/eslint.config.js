@@ -69,6 +69,14 @@ const lookClass =
 const layoutClassConstants =
   "DIALOG_SCROLL_[A-Z]+_CLASS|MOTION_[A-Z_]+_CLASS|(?:PEER_|CARD_)?FOCUS_[A-Z_]+_CLASS";
 
+// Variants are plain records (docs/design-system.md §1.6); the package was
+// removed and must not come back through a copied snippet.
+const cvaImportBan = {
+  name: "class-variance-authority",
+  message:
+    "Write variants as a typed record plus cn(); see docs/design-system.md section 1.6.",
+};
+
 const restrictedClassRule = [
   "error",
   {
@@ -201,20 +209,33 @@ export default defineConfig([
         { ignore: externalClassAllowlist },
       ],
       "no-restricted-syntax": restrictedClassRule,
-      // Variants are plain records (docs/design-system.md §1.6); the package
-      // was removed and must not come back through a copied snippet.
       "no-restricted-imports": [
         "error",
         {
           paths: [
+            cvaImportBan,
+            // Toasts go through lib/toast-helpers.ts, which fixes their
+            // wording and options in one place (docs/design-system.md §3.6).
             {
-              name: "class-variance-authority",
+              name: "sonner",
               message:
-                "Write variants as a typed record plus cn(); see docs/design-system.md section 1.6.",
+                "Fire toasts through @/lib/toast-helpers (showSuccess, showActionFailed, showInfo, ...); see docs/design-system.md section 3.6.",
             },
           ],
         },
       ],
+    },
+  },
+
+  // The two files that wrap the toast library, and the tests that mock it.
+  {
+    files: [
+      "src/lib/toast-helpers.ts",
+      "src/components/ui/sonner.tsx",
+      "src/test/**/*.{ts,tsx}",
+    ],
+    rules: {
+      "no-restricted-imports": ["error", { paths: [cvaImportBan] }],
     },
   },
 

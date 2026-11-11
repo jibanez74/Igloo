@@ -1626,14 +1626,15 @@ require the full playback test pass.
   `closeButton`, top-right; toast surfaces tokenized with `!` overrides
   (`!bg-card`/`!bg-muted`, `!border-success/50`, `!border-destructive/50`).
   Fire success/failure through `lib/toast-helpers.ts`
-  (`showActionFailed(...)` etc.), not ad-hoc `toast()` calls. Hand
+  (`showActionFailed(...)` etc.), not ad-hoc `toast()` calls: importing
+  `sonner` anywhere but that file and `ui/sonner.tsx` is a lint error. Hand
   `showActionFailed` the failed envelope, not its `message`: it words the
   description through `apiErrorMessage`, so only a server-worded 4xx reaches
   the reader and a 5xx constant or the client's canned 404/network string
   never does. Inline error text and load-error cards make the same choice
   with `apiErrorMessage(res, fallback)`. `showInfo` carries neutral news
-  that no action of the reader's caused; the session-expiry sign-out (§3.4)
-  is its app-wide use.
+  that no action of the reader's caused: the session-expiry sign-out (§3.4)
+  app-wide, and the player saying full screen is not available.
 - **NotificationBell** (header): ghost icon button with a glacier unread
   badge pill ("99+" cap; count also in the `aria-label`), opening a `w-80`
   popover — header row with "Mark all read", `max-h-96` scroll body
