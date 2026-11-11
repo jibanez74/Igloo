@@ -61,11 +61,20 @@ test.describe("Side navigation", () => {
       /^Switch to (light|dark) theme$/,
       "Logout",
     ]);
-    // It opens upward, inside the window.
-    const menuBox = await menu.boundingBox();
-    expect(menuBox && accountBox && menuBox.y >= 0 && menuBox.y + menuBox.height <= accountBox.y).toBe(
-      true,
-    );
+    // It opens upward, inside the window. Polled: the menu's opening animation
+    // scales and slides it for a moment, and a box measured mid-animation can
+    // still overlap the account block.
+    await expect
+      .poll(async () => {
+        const menuBox = await menu.boundingBox();
+        return Boolean(
+          menuBox &&
+            accountBox &&
+            menuBox.y >= 0 &&
+            menuBox.y + menuBox.height <= accountBox.y,
+        );
+      })
+      .toBe(true);
 
     await menu.getByRole("menuitem", { name: "Account settings" }).click();
     await expect(page).toHaveURL(/\/settings\/account$/);
