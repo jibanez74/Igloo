@@ -34,6 +34,11 @@ func TestPickGenreBackdrops(t *testing.T) {
 			want:       []string{"/only.jpg", "/only.jpg"},
 		},
 		{
+			name:       "a genre whose candidates are all taken takes the least used",
+			candidates: [][]string{{"/a.jpg"}, {"/a.jpg"}, {"/b.jpg"}, {"/a.jpg", "/b.jpg"}},
+			want:       []string{"/a.jpg", "/a.jpg", "/b.jpg", "/b.jpg"},
+		},
+		{
 			name:       "a genre without candidates gets none and takes nothing",
 			candidates: [][]string{{}, {"/a.jpg"}},
 			want:       []string{"", "/a.jpg"},

@@ -22,15 +22,15 @@ func decodeImageList(raw string) ([]string, error) {
 	return images, nil
 }
 
-// pickGenreBackdrops gives each genre its first candidate that no other genre
-// took, so the tiles show different titles. Genres with the fewest candidates
-// choose first: a genre with one movie has nothing else to show, while a large
-// genre can step past a taken image. A genre whose candidates are all taken
-// repeats its first one; a genre with none gets no backdrop. The result is in
-// the order of candidates.
+// pickGenreBackdrops gives each genre the candidate the fewest other genres
+// took, the earliest on a tie, so the tiles show different titles where the
+// library has enough of them and share them evenly where it does not. Genres
+// with the fewest candidates choose first: a genre with one movie has nothing
+// else to show, while a large genre can step past a taken image. A genre with
+// no candidates gets no backdrop. The result is in the order of candidates.
 func pickGenreBackdrops(candidates [][]string) []sql.NullString {
 	picked := make([]sql.NullString, len(candidates))
-	taken := make(map[string]struct{}, len(candidates))
+	timesTaken := make(map[string]int, len(candidates))
 
 	scarcestFirst := make([]int, len(candidates))
 	for i := range candidates {
@@ -48,14 +48,13 @@ func pickGenreBackdrops(candidates [][]string) []sql.NullString {
 
 		choice := images[0]
 		for _, image := range images {
-			_, isTaken := taken[image]
-			if !isTaken {
+			isLessUsed := timesTaken[image] < timesTaken[choice]
+			if isLessUsed {
 				choice = image
-				break
 			}
 		}
 
-		taken[choice] = struct{}{}
+		timesTaken[choice]++
 		picked[i] = sql.NullString{String: choice, Valid: true}
 	}
 
