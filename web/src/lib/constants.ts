@@ -569,7 +569,7 @@ export const MOTION_SETTINGS_SURFACE_CLASS =
 export const MOTION_TRACK_ROW_CLASS =
   "transition-[background-color,opacity,box-shadow] duration-micro motion-reduce:transition-none";
 export const MOTION_TRACK_PLAY_BUTTON_CLASS =
-  "transition-[background-color,opacity] duration-micro motion-reduce:transition-none";
+  "transition-[background-color,color,opacity] duration-micro motion-reduce:transition-none";
 export const MOTION_TRACK_ICON_BUTTON_CLASS =
   "transition-[color,opacity] duration-micro motion-reduce:transition-none";
 export const MOTION_TRACK_MENU_TRIGGER_CLASS = MOTION_MICRO_COLORS_CLASS;

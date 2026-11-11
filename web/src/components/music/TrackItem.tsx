@@ -1,5 +1,6 @@
-import { Volume2, Heart, Pause, Play, GripVertical } from "lucide-react";
+import { Disc3, Volume2, Heart, Pause, Play, GripVertical } from "lucide-react";
 import { formatTrackDuration } from "@/lib/format";
+import { usePosterFallback } from "@/hooks/usePosterFallback";
 import { useLikeButtonState } from "@/hooks/useTrackLikeToggle";
 import {
   FOCUS_VISIBLE_RING_CLASS,
@@ -26,6 +27,10 @@ export type TrackItemProps = {
   explicit?: boolean;
   subtitle?: string;
   genres?: string[];
+  // The album cover for the row's thumbnail. Leave it out for no thumbnail
+  // (the album page, where every row would repeat the cover above the list);
+  // null draws the placeholder tile, so a list's titles stay aligned.
+  coverUrl?: string | null;
 
   // Navigation data (for actions menu)
   albumId?: number | null;
@@ -50,6 +55,38 @@ export type TrackItemProps = {
   dragHandleProps?: React.HTMLAttributes<HTMLButtonElement>;
 };
 
+// A 40 px cover at the start of a row. It repeats what the row's text already
+// says, so it is hidden from assistive tech. 40 px sits inside the two text
+// lines' height, so the row keeps VIRTUAL_LIST_TRACK_HEIGHT. Below `sm` the
+// row gives it up: the title needs that room beside the row's controls.
+function TrackCover({ coverUrl }: { coverUrl: string | null }) {
+  const { showPoster, onError } = usePosterFallback(coverUrl ?? "");
+
+  return (
+    <span
+      data-slot="track-cover"
+      aria-hidden="true"
+      className="hidden size-10 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted sm:flex"
+    >
+      {showPoster ? (
+        <img
+          src={coverUrl ?? ""}
+          alt=""
+          width={40}
+          height={40}
+          loading="lazy"
+          decoding="async"
+          fetchPriority="low"
+          className="size-full object-cover"
+          onError={onError}
+        />
+      ) : (
+        <Disc3 className="size-4 text-muted-foreground" />
+      )}
+    </span>
+  );
+}
+
 // The flag count is arity, not complexity: each one drives a single independent
 // thing (a class, an icon, one rendered block) and none is read together with
 // another, so the nominal combinations never arise. Every call site passes a
@@ -63,6 +100,7 @@ export default function TrackItem({
   explicit = false,
   subtitle,
   genres,
+  coverUrl,
   albumId,
   musicianId,
   variant,
@@ -95,27 +133,18 @@ export default function TrackItem({
     likeButton.toggle();
   };
 
-  // Play button visibility classes based on variant
-  const getPlayButtonClasses = () => {
-    const baseClasses = cn(
-      "flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90",
-      FOCUS_VISIBLE_RING_CLASS,
-      MOTION_TRACK_PLAY_BUTTON_CLASS,
-    );
-
-    if (variant === "library" || variant === "playlist") {
-      // Library and Playlist: always visible
-      return baseClasses;
-    }
-
-    // Album / Musician: hover on desktop; always visible on touch / small screens
-    return cn(
-      baseClasses,
-      isCurrentTrack
-        ? "opacity-100"
-        : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100",
-    );
-  };
+  // The play button is always there, but a list of filled buttons shouts, so
+  // it is quiet (an unfilled, muted icon) until the row is hovered or the
+  // button focused. The current track keeps the filled button, and so does
+  // every row where nothing hovers (`pointer-coarse:`).
+  const playButtonClassName = cn(
+    "flex size-9 shrink-0 items-center justify-center rounded-full hover:bg-primary/90",
+    FOCUS_VISIBLE_RING_CLASS,
+    MOTION_TRACK_PLAY_BUTTON_CLASS,
+    isCurrentTrack
+      ? "bg-primary text-primary-foreground"
+      : "text-muted-foreground group-hover:bg-primary group-hover:text-primary-foreground focus-visible:bg-primary focus-visible:text-primary-foreground pointer-coarse:bg-primary pointer-coarse:text-primary-foreground",
+  );
 
   return (
     <div
@@ -160,6 +189,8 @@ export default function TrackItem({
           )}
         </span>
       )}
+
+      {coverUrl !== undefined && <TrackCover coverUrl={coverUrl} />}
 
       {/* Track info */}
       <div className="min-w-0 flex-1">
@@ -250,7 +281,7 @@ export default function TrackItem({
       <button
         type="button"
         onClick={onPlay}
-        className={getPlayButtonClasses()}
+        className={playButtonClassName}
         aria-label={isPlaying ? `Pause ${title}` : `Play ${title}`}
       >
         {isPlaying ? (

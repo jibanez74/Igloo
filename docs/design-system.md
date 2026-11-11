@@ -1622,7 +1622,18 @@ require the full playback test pass.
   sm:inline` and the inline one `sm:hidden`: exactly one is in the
   accessibility tree at any width, never an `sr-only` copy, and the virtual
   row height (`VIRTUAL_LIST_TRACK_HEIGHT`) is unchanged because the second
-  line already existed. The bar
+  line already existed. A row outside the album page starts with its album
+  cover: a 40 px `aria-hidden` tile (`coverUrl`, filled by `trackRowProps`
+  from `album_cover`; the standard lazy `<img>` recipe on `usePosterFallback`,
+  a muted disc when there is no cover so the titles stay aligned). 40 px sits
+  inside the two text lines, so the row height holds; below `sm` the tile is
+  hidden, because the title needs that room. The album page passes no
+  `coverUrl`: every row would repeat the cover above the list, and it keeps
+  its track numbers. A row's play button is always present but quiet — an
+  unfilled, muted icon — and takes the filled primary look on row hover
+  (`group-hover:`), on its own `focus-visible`, on the current track, and on
+  every row where nothing hovers (`pointer-coarse:`). It is never hidden, so
+  no action sits behind hover alone (§1.7). The bar
   persists across navigation; the current track's row in lists is
   highlighted (`text-primary` title + tinted row + pause state), and
   clicking that row **toggles play/pause in place** — it never rebuilds the
