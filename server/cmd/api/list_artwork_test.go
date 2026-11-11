@@ -354,15 +354,19 @@ func TestPlaylistArtwork_LooksOnlyAtTheFirst24Items(t *testing.T) {
 		}
 	}
 
-	for _, target := range []string{"/api/music/playlists", "/api/movies/playlists"} {
+	lists := map[string]int64{"/api/music/playlists": tracks.ID, "/api/movies/playlists": movies.ID}
+	for target, playlistID := range lists {
 		w := serveAs(t, app, user.ID, http.MethodGet, target, "")
 		if w.Code != http.StatusOK {
 			t.Fatalf("%s status = %d: %s", target, w.Code, w.Body.String())
 		}
-		for id, got := range playlistArtworkByID(t, w.Body.Bytes()) {
-			if len(got) != 0 {
-				t.Errorf("%s playlist %d artwork = %q, want none from beyond the first 24 items", target, id, got)
-			}
+
+		got, isListed := playlistArtworkByID(t, w.Body.Bytes())[playlistID]
+		if !isListed {
+			t.Fatalf("%s does not list playlist %d: %s", target, playlistID, w.Body.String())
+		}
+		if got == nil || len(got) != 0 {
+			t.Errorf("%s artwork = %#v, want an empty array: nothing from beyond the first 24 items", target, got)
 		}
 	}
 }
