@@ -206,42 +206,35 @@ function MusicPage() {
       <PageHeader
         icon={Music}
         title="Music Library"
-        description="Browse your collection of musicians, albums, and tracks"
+        meta={
+          <LibraryStats
+            queryOpts={musicStatsQueryOpts()}
+            figures={[
+              {
+                icon: Disc3,
+                label: "Albums",
+                noun: LIBRARY_NOUNS.album,
+                getValue: data => data.total_albums,
+              },
+              {
+                icon: Music,
+                label: "Tracks",
+                noun: LIBRARY_NOUNS.track,
+                getValue: data => data.total_tracks,
+              },
+              {
+                icon: User,
+                label: "Musicians",
+                noun: LIBRARY_NOUNS.musician,
+                getValue: data => data.total_musicians,
+              },
+            ]}
+          />
+        }
+        actions={
+          <MoreMenu />
+        }
       />
-
-      {/* Stats + More dropdown */}
-      <div
-        className={cn(
-          "mb-5 flex items-start justify-between gap-3",
-          MOTION_SECTION_ENTER_DELAYED_CLASS,
-        )}
-      >
-        <LibraryStats
-          className="min-w-0 flex-1"
-          queryOpts={musicStatsQueryOpts()}
-          figures={[
-            {
-              icon: Disc3,
-              label: "Albums",
-              noun: LIBRARY_NOUNS.album,
-              getValue: data => data.total_albums,
-            },
-            {
-              icon: Music,
-              label: "Tracks",
-              noun: LIBRARY_NOUNS.track,
-              getValue: data => data.total_tracks,
-            },
-            {
-              icon: User,
-              label: "Musicians",
-              noun: LIBRARY_NOUNS.musician,
-              getValue: data => data.total_musicians,
-            },
-          ]}
-        />
-        <MoreMenu />
-      </div>
 
       {/* Tabs - controlled by URL search param */}
       <Tabs

@@ -233,33 +233,26 @@ function MoviesPage() {
       <PageHeader
         icon={Film}
         title="Movie Library"
-        description="Browse, organize, and enjoy your film collection"
+        meta={
+          <LibraryStats
+            queryOpts={moviesStatsQueryOpts()}
+            figures={[
+              {
+                icon: Film,
+                label: "Movies",
+                noun: LIBRARY_NOUNS.movie,
+                getValue: data => data.total_movies,
+              },
+            ]}
+          />
+        }
+        actions={
+          <MoreMenu
+            onOpenLikedMovies={handleOpenLikedMovies}
+            onOpenMoviePlaylists={handleOpenMoviePlaylists}
+          />
+        }
       />
-
-      {/* Stats + More dropdown */}
-      <div
-        className={cn(
-          "mb-5 flex items-start justify-between gap-3",
-          MOTION_SECTION_ENTER_DELAYED_CLASS,
-        )}
-      >
-        <LibraryStats
-          className="min-w-0 flex-1"
-          queryOpts={moviesStatsQueryOpts()}
-          figures={[
-            {
-              icon: Film,
-              label: "Movies",
-              noun: LIBRARY_NOUNS.movie,
-              getValue: data => data.total_movies,
-            },
-          ]}
-        />
-        <MoreMenu
-          onOpenLikedMovies={handleOpenLikedMovies}
-          onOpenMoviePlaylists={handleOpenMoviePlaylists}
-        />
-      </div>
 
       {/* Tabs — controlled by URL search param */}
       <Tabs

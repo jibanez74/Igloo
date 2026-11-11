@@ -30,6 +30,29 @@ describe("PageHeader", () => {
     expect(container.querySelector("header p")).toBeNull();
   });
 
+  it("puts a library's counts and controls on the title's row, outside the heading", () => {
+    render(
+      <PageHeader
+        icon={Film}
+        title="Movie Library"
+        meta={<p>63 Movies</p>}
+        actions={<button type="button">More options</button>}
+      />,
+    );
+
+    const heading = screen.getByRole("heading", { level: 1, name: "Movie Library" });
+    const row = heading.parentElement;
+    expect(row).toHaveClass("flex", "flex-wrap", "items-center");
+    expect(row).toContainElement(screen.getByText("63 Movies"));
+    // The controls keep to the end of the row, also when it wraps.
+    const actions = screen.getByRole("button", { name: "More options" });
+    expect(row).toContainElement(actions);
+    expect(actions.parentElement).toHaveClass("ml-auto");
+    // Neither is part of the page's name.
+    expect(heading).not.toContainElement(screen.getByText("63 Movies"));
+    expect(heading).not.toContainElement(actions);
+  });
+
   it("takes markup as its title", () => {
     render(
       <PageHeader

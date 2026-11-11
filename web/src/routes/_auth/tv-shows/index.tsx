@@ -132,30 +132,23 @@ function TvShowsPage() {
       <PageHeader
         icon={Tv}
         title="TV Show Library"
-        description="Browse and follow your series collection"
+        meta={
+          <LibraryStats
+            queryOpts={showsStatsQueryOpts()}
+            figures={[
+              {
+                icon: Tv,
+                label: "Shows",
+                noun: LIBRARY_NOUNS.show,
+                getValue: data => data.total_shows,
+              },
+            ]}
+          />
+        }
+        actions={
+          <MoreMenu />
+        }
       />
-
-      {/* Stats + More dropdown */}
-      <div
-        className={cn(
-          "mb-5 flex items-start justify-between gap-3",
-          MOTION_SECTION_ENTER_DELAYED_CLASS,
-        )}
-      >
-        <LibraryStats
-          className="min-w-0 flex-1"
-          queryOpts={showsStatsQueryOpts()}
-          figures={[
-            {
-              icon: Tv,
-              label: "Shows",
-              noun: LIBRARY_NOUNS.show,
-              getValue: data => data.total_shows,
-            },
-          ]}
-        />
-        <MoreMenu />
-      </div>
 
       {/* Tabs — controlled by URL search param */}
       <Tabs
