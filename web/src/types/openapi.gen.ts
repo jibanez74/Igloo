@@ -2999,6 +2999,10 @@ export interface components {
             title: string;
             /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             poster_path: components["schemas"]["SqlNullString"];
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. The movie's backdrop, for the home billboard. */
+            backdrop_path: components["schemas"]["SqlNullString"];
+            /** @description The movie's overview, for the home billboard. */
+            overview: components["schemas"]["SqlNullString"];
             year: components["schemas"]["SqlNullInt64"];
         };
         ContinueWatchingMovieItem: {
@@ -3012,6 +3016,10 @@ export interface components {
             title: string;
             /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             poster_path: components["schemas"]["SqlNullString"];
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. The movie's backdrop, for the home billboard. */
+            backdrop_path: components["schemas"]["SqlNullString"];
+            /** @description The movie's overview, for the home billboard. */
+            overview: components["schemas"]["SqlNullString"];
             year: components["schemas"]["SqlNullInt64"];
             /** Format: double */
             progress_sec: number;
@@ -3030,6 +3038,10 @@ export interface components {
             title: string;
             /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             poster_path: components["schemas"]["SqlNullString"];
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. The show's backdrop, for the home billboard. */
+            backdrop_path: components["schemas"]["SqlNullString"];
+            /** @description The episode's overview, or the show's when the episode has none. */
+            overview: components["schemas"]["SqlNullString"];
             year: components["schemas"]["SqlNullInt64"];
             /** Format: double */
             progress_sec: number;

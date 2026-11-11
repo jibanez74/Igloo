@@ -2,14 +2,15 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
+	"igloo/cmd/internal/database"
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
 	"testing"
-
-	"igloo/cmd/internal/database"
 )
 
 // listedMovieTitles returns the titles a movie list route serves, in order.
@@ -94,6 +95,59 @@ func TestMovieLists_SortDescendingReversesTheAscendingOrder(t *testing.T) {
 
 // A bulk scan adds many movies within one second of created_at; the latest
 // row breaks those ties by id so the newest insert still comes first.
+// The home billboard features the newest movie when nothing is in progress,
+// so the latest row carries each movie's backdrop and overview.
+func TestGetLatestMovies_CarriesBackdropAndOverview(t *testing.T) {
+	app := setupSessionTestApp(t)
+	user := createTestUser(t, app, "Viewer", "latest-billboard@example.com", false)
+	withArt := createTestMovie(t, app, "With Art", "/movies/latest-with-art.mkv")
+	bare := createTestMovie(t, app, "Bare", "/movies/latest-bare.mkv")
+	_, err := app.DB.Exec(
+		`UPDATE movies SET backdrop_path_source = '/latest-backdrop.jpg', overview = 'Newly added.' WHERE id = ?`,
+		withArt,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	w := serveAs(t, app, user.ID, http.MethodGet, "/api/movies/latest", "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Data struct {
+			Movies []struct {
+				ID           int64          `json:"id"`
+				BackdropPath sql.NullString `json:"backdrop_path"`
+				Overview     sql.NullString `json:"overview"`
+			} `json:"movies"`
+		} `json:"data"`
+	}
+	err = json.Unmarshal(w.Body.Bytes(), &resp)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	byID := map[int64]int{}
+	for index, movie := range resp.Data.Movies {
+		byID[movie.ID] = index
+	}
+	got := resp.Data.Movies[byID[withArt]]
+	if want := (sql.NullString{String: "/latest-backdrop.jpg", Valid: true}); got.BackdropPath != want {
+		t.Errorf("backdrop = %+v, want %+v", got.BackdropPath, want)
+	}
+	if want := (sql.NullString{String: "Newly added.", Valid: true}); got.Overview != want {
+		t.Errorf("overview = %+v, want %+v", got.Overview, want)
+	}
+	// A movie with neither still sends both keys, as nulls.
+	if !strings.Contains(w.Body.String(), `"backdrop_path":{"String":"","Valid":false}`) {
+		t.Errorf("a movie without a backdrop must send a null backdrop_path: %s", w.Body.String())
+	}
+	if none := resp.Data.Movies[byID[bare]]; none.BackdropPath.Valid {
+		t.Errorf("bare movie backdrop = %+v, want null", none.BackdropPath)
+	}
+}
+
 func TestGetLatestMovies_BreaksSameSecondTiesByNewestID(t *testing.T) {
 	app := setupSessionTestApp(t)
 	user := createTestUser(t, app, "Viewer", "latest-viewer@example.com", false)

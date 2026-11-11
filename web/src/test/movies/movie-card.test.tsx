@@ -13,6 +13,8 @@ const movie: LatestMovieType = {
   id: 104,
   title: "Ember Line",
   poster_path: nullableString("/ember-line.jpg"),
+  backdrop_path: nullableString(),
+  overview: nullableString(),
   year: nullableInt64(2026),
 };
 
