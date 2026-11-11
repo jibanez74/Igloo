@@ -9,6 +9,13 @@ import (
 	"igloo/cmd/internal/helpers"
 )
 
+// playlistSummary is a listed music playlist. Its Artwork replaces the row's
+// JSON text of the same name with the decoded list of covers for the card.
+type playlistSummary struct {
+	database.GetPlaylistsWithCollaboratorAccessRow
+	Artwork []string `json:"artwork"`
+}
+
 func (app *Application) GetPlaylists(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 
@@ -18,7 +25,21 @@ func (app *Application) GetPlaylists(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"playlists": playlists}})
+	summaries := make([]playlistSummary, len(playlists))
+	for i, playlist := range playlists {
+		covers, err := decodeImageList(playlist.Artwork)
+		if err != nil {
+			app.serverError(w, err, "failed to decode playlist artwork", "failed to fetch playlists")
+			return
+		}
+
+		summaries[i] = playlistSummary{
+			GetPlaylistsWithCollaboratorAccessRow: playlist,
+			Artwork:                               distinctImages(covers, maxPlaylistArtwork),
+		}
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"playlists": summaries}})
 }
 
 func (app *Application) GetPlaylist(w http.ResponseWriter, r *http.Request) {

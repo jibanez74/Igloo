@@ -259,8 +259,16 @@ type Querier interface {
 	GetMovieFileFingerprint(ctx context.Context, movieID int64) (GetMovieFileFingerprintRow, error)
 	GetMovieForDirectStream(ctx context.Context, id int64) (GetMovieForDirectStreamRow, error)
 	// Movie genres with counts per tag (genre_type movie only).
+	//
+	// backdrop_candidates is a JSON array of up to eight backdrops, newest movie
+	// first, for the genre tile. The handler picks one per genre: a single pick
+	// here would repeat, because the newest movie is the newest in each of its
+	// genres. Walking idx_movie_genres_genre backwards reads the newest first
+	// without a sort.
 	GetMovieGenresWithCounts(ctx context.Context) ([]GetMovieGenresWithCountsRow, error)
 	// The movie twin of GetPlaylistsWithCollaboratorAccess; see the notes there.
+	// artwork holds the posters of the first four movies in the order they were
+	// added.
 	GetMoviePlaylistsWithCollaboratorAccess(ctx context.Context, requestingUserID int64) ([]GetMoviePlaylistsWithCollaboratorAccessRow, error)
 	GetMovieScanIndex(ctx context.Context) ([]GetMovieScanIndexRow, error)
 	// GetMovieScanIndex for one path a run of watcher-detected changes covers:
@@ -338,6 +346,11 @@ type Querier interface {
 	// row these are index probes on idx_playlist_tracks_position (and the
 	// (playlist_id, track_id) primary key), which is bounded by the page the
 	// handler actually returns.
+	//
+	// artwork is a JSON array of the album covers of the playlist's first 24
+	// tracks, in playlist order, for the card's collage. The handler keeps the
+	// first four distinct ones; the bound keeps a long playlist to a short walk of
+	// idx_playlist_tracks_position.
 	GetPlaylistsWithCollaboratorAccess(ctx context.Context, requestingUserID int64) ([]GetPlaylistsWithCollaboratorAccessRow, error)
 	// Production companies linked to a movie (for details view).
 	GetProductionCompaniesByMovieID(ctx context.Context, movieID int64) ([]GetProductionCompaniesByMovieIDRow, error)
@@ -404,7 +417,9 @@ type Querier interface {
 	// l.file_id (equal to f.id through the join) lets the (episode_id, file_id)
 	// primary key supply the order.
 	GetShowFileForEpisode(ctx context.Context, episodeID int64) (GetShowFileForEpisodeRow, error)
-	// Show genres with counts per tag (genre_type show only).
+	// Show genres with counts per tag (genre_type show only). backdrop_candidates
+	// is the show twin of the column in GetMovieGenresWithCounts; see the notes
+	// there.
 	GetShowGenresWithCounts(ctx context.Context) ([]GetShowGenresWithCountsRow, error)
 	// The episode the player advances to when one ends: the first episode of the
 	// same show that sorts after the current one in the order the season listing

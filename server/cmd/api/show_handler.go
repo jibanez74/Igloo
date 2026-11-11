@@ -272,6 +272,14 @@ func (app *Application) GetShowsStats(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// showGenreWithCount is the show twin of movieGenreWithCount.
+type showGenreWithCount struct {
+	GenreID      int64          `json:"genre_id"`
+	GenreTag     string         `json:"genre_tag"`
+	ShowCount    int64          `json:"show_count"`
+	BackdropPath sql.NullString `json:"backdrop_path"`
+}
+
 func (app *Application) GetShowGenresList(w http.ResponseWriter, r *http.Request) {
 	rows, err := app.Queries.GetShowGenresWithCounts(r.Context())
 	if err != nil {
@@ -279,7 +287,28 @@ func (app *Application) GetShowGenresList(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"genres": rows}})
+	candidates := make([][]string, len(rows))
+	for i, row := range rows {
+		candidates[i], err = decodeImageList(row.BackdropCandidates)
+		if err != nil {
+			app.serverError(w, err, "failed to decode show genre backdrops", "failed to fetch genres")
+			return
+		}
+	}
+
+	backdrops := pickGenreBackdrops(candidates)
+
+	genres := make([]showGenreWithCount, len(rows))
+	for i, row := range rows {
+		genres[i] = showGenreWithCount{
+			GenreID:      row.GenreID,
+			GenreTag:     row.GenreTag,
+			ShowCount:    row.ShowCount,
+			BackdropPath: backdrops[i],
+		}
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"genres": genres}})
 }
 
 func (app *Application) GetShowsByGenreLibrary(w http.ResponseWriter, r *http.Request) {

@@ -28,11 +28,11 @@ export type MoviesStatsDataType = {
 };
 
 /** Row from GET /api/movies/genres (genres that have at least one movie). */
-export type MovieGenreWithCountType = {
-  genre_id: number;
-  genre_tag: string;
-  movie_count: number;
-};
+export type MovieGenreWithCountType =
+  components["schemas"]["MovieGenreWithCount"];
+
+/** GET /api/movies/genres */
+export type MovieGenresDataType = components["schemas"]["MovieGenresData"];
 
 /** Full playlist row for content_type = movie (API `playlist` object). */
 export type MoviePlaylistRowType = components["schemas"]["MoviePlaylist"];

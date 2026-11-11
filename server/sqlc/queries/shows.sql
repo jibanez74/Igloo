@@ -35,8 +35,24 @@ ORDER BY LOWER(name) DESC, id DESC
 LIMIT ? OFFSET ?;
 
 -- name: GetShowGenresWithCounts :many
--- Show genres with counts per tag (genre_type show only).
-SELECT g.id AS genre_id, g.tag AS genre_tag, COUNT(sg.show_id) AS show_count
+-- Show genres with counts per tag (genre_type show only). backdrop_candidates
+-- is the show twin of the column in GetMovieGenresWithCounts; see the notes
+-- there.
+SELECT
+  g.id AS genre_id,
+  g.tag AS genre_tag,
+  COUNT(sg.show_id) AS show_count,
+  CAST((
+    SELECT json_group_array(candidate.backdrop_path)
+    FROM (
+      SELECT s.backdrop_path
+      FROM show_genres AS sg2
+      INNER JOIN shows AS s ON s.id = sg2.show_id
+      WHERE sg2.genre_id = g.id AND s.backdrop_path <> ''
+      ORDER BY sg2.show_id DESC
+      LIMIT 8
+    ) AS candidate
+  ) AS TEXT) AS backdrop_candidates
 FROM genres AS g
 INNER JOIN show_genres AS sg ON sg.genre_id = g.id
 WHERE g.genre_type = 'show'

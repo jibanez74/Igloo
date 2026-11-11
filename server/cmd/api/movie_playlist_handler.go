@@ -10,6 +10,12 @@ import (
 	"igloo/cmd/internal/helpers"
 )
 
+// moviePlaylistSummary is the movie twin of playlistSummary.
+type moviePlaylistSummary struct {
+	database.GetMoviePlaylistsWithCollaboratorAccessRow
+	Artwork []string `json:"artwork"`
+}
+
 func (app *Application) GetMoviePlaylists(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 
@@ -19,7 +25,21 @@ func (app *Application) GetMoviePlaylists(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"playlists": playlists}})
+	summaries := make([]moviePlaylistSummary, len(playlists))
+	for i, playlist := range playlists {
+		posters, err := decodeImageList(playlist.Artwork)
+		if err != nil {
+			app.serverError(w, err, "failed to decode movie playlist artwork", "failed to fetch playlists")
+			return
+		}
+
+		summaries[i] = moviePlaylistSummary{
+			GetMoviePlaylistsWithCollaboratorAccessRow: playlist,
+			Artwork: posters,
+		}
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"playlists": summaries}})
 }
 
 type CreateMoviePlaylistRequest struct {

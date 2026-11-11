@@ -59,7 +59,13 @@ const initialPlaylists = [
     "Movies queued for the end of the week",
     "/api/static/playlists/friday-feature.jpg",
   ),
-  moviePlaylist(502, "Guest Picks", 3, false, "Shared picks from another account"),
+  // No cover of its own: its first four posters make the card's collage.
+  moviePlaylist(502, "Guest Picks", 4, false, "Shared picks from another account", "", [
+    "/guest-pick-1.jpg",
+    "/guest-pick-2.jpg",
+    "/guest-pick-3.jpg",
+    "/guest-pick-4.jpg",
+  ]),
 ];
 
 /** The playlist row the detail and mutation envelopes carry: the summary without its counts. */
@@ -244,12 +250,15 @@ test("playlists tab lists playlists and creates a playlist from the toolbar dial
   await expect(page.getByText("2 playlists")).toBeVisible();
 
   const ownedPlaylist = "Friday Feature, 7 movies";
-  const sharedPlaylist = "Guest Picks, 3 movies";
+  const sharedPlaylist = "Guest Picks, 4 movies";
   await expect(page.getByRole("link", { name: ownedPlaylist })).toBeVisible();
   await expect(page.getByRole("link", { name: sharedPlaylist })).toBeVisible();
   await expect(cardFor(page, ownedPlaylist).getByText("Owner")).toBeVisible();
   await expect(cardFor(page, sharedPlaylist).getByText("Owner")).toHaveCount(0);
   await expect(page.getByText("Owner")).toHaveCount(1);
+  // One playlist shows its own cover, the other a collage of four posters.
+  await expect(cardFor(page, ownedPlaylist).locator("img")).toHaveCount(1);
+  await expect(cardFor(page, sharedPlaylist).locator("img")).toHaveCount(4);
   await expect(page.getByRole("button", { name: "Liked movies" })).toBeVisible();
 
   await createPlaylistButton.click();
@@ -327,7 +336,7 @@ test("deleting a movie playlist from its page returns to the playlists tab", asy
   await expect(page).toHaveURL(/\/movies\?.*tab=playlists/);
   await expect(page.getByRole("tab", { name: "Playlists" })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByText("Playlist deleted")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Guest Picks, 3 movies" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Guest Picks, 4 movies" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Friday Feature, 7 movies" })).toHaveCount(0);
   await expect(page.getByText("1 playlist", { exact: true })).toBeVisible();
 

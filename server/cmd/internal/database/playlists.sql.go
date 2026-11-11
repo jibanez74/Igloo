@@ -128,7 +128,22 @@ SELECT
     SELECT COUNT(*)
     FROM playlist_movies AS pm
     WHERE pm.playlist_id = accessible.id
-  ) AS movie_count
+  ) AS movie_count,
+  CAST((
+    SELECT json_group_array(first_movie.poster_path)
+    FROM (
+      SELECT m.poster_path
+      FROM playlist_movies AS pm
+      INNER JOIN movies AS m
+        ON m.id = pm.movie_id
+      WHERE pm.playlist_id = accessible.id
+        AND m.poster_path <> ''
+      ORDER BY
+        pm.position ASC,
+        pm.id ASC
+      LIMIT 4
+    ) AS first_movie
+  ) AS TEXT) AS artwork
 FROM (
   SELECT
     p.id, p.user_id, p.name, p.description, p.cover_image, p.is_public, p.movie_id, p.content_type, p.created_at, p.updated_at,
@@ -166,9 +181,12 @@ type GetMoviePlaylistsWithCollaboratorAccessRow struct {
 	IsOwner     bool           `json:"is_owner"`
 	CanEdit     bool           `json:"can_edit"`
 	MovieCount  int64          `json:"movie_count"`
+	Artwork     string         `json:"artwork"`
 }
 
 // The movie twin of GetPlaylistsWithCollaboratorAccess; see the notes there.
+// artwork holds the posters of the first four movies in the order they were
+// added.
 func (q *Queries) GetMoviePlaylistsWithCollaboratorAccess(ctx context.Context, requestingUserID int64) ([]GetMoviePlaylistsWithCollaboratorAccessRow, error) {
 	rows, err := q.query(ctx, q.getMoviePlaylistsWithCollaboratorAccessStmt, getMoviePlaylistsWithCollaboratorAccess, requestingUserID)
 	if err != nil {
@@ -192,6 +210,7 @@ func (q *Queries) GetMoviePlaylistsWithCollaboratorAccess(ctx context.Context, r
 			&i.IsOwner,
 			&i.CanEdit,
 			&i.MovieCount,
+			&i.Artwork,
 		); err != nil {
 			return nil, err
 		}
@@ -274,7 +293,24 @@ SELECT
     INNER JOIN tracks AS t
       ON t.id = pt.track_id
     WHERE pt.playlist_id = accessible.id
-  ) AS total_duration
+  ) AS total_duration,
+  CAST((
+    SELECT json_group_array(first_track.cover)
+    FROM (
+      SELECT a.cover
+      FROM playlist_tracks AS pt
+      INNER JOIN tracks AS t
+        ON t.id = pt.track_id
+      INNER JOIN albums AS a
+        ON a.id = t.album_id
+      WHERE pt.playlist_id = accessible.id
+        AND a.cover <> ''
+      ORDER BY
+        pt.position ASC,
+        pt.id ASC
+      LIMIT 24
+    ) AS first_track
+  ) AS TEXT) AS artwork
 FROM (
   SELECT
     p.id, p.user_id, p.name, p.description, p.cover_image, p.is_public, p.movie_id, p.content_type, p.created_at, p.updated_at,
@@ -313,6 +349,7 @@ type GetPlaylistsWithCollaboratorAccessRow struct {
 	CanEdit       bool           `json:"can_edit"`
 	TrackCount    int64          `json:"track_count"`
 	TotalDuration interface{}    `json:"total_duration"`
+	Artwork       string         `json:"artwork"`
 }
 
 // Playlists the user owns or collaborates on, newest-updated first. The two
@@ -328,6 +365,11 @@ type GetPlaylistsWithCollaboratorAccessRow struct {
 // row these are index probes on idx_playlist_tracks_position (and the
 // (playlist_id, track_id) primary key), which is bounded by the page the
 // handler actually returns.
+//
+// artwork is a JSON array of the album covers of the playlist's first 24
+// tracks, in playlist order, for the card's collage. The handler keeps the
+// first four distinct ones; the bound keeps a long playlist to a short walk of
+// idx_playlist_tracks_position.
 func (q *Queries) GetPlaylistsWithCollaboratorAccess(ctx context.Context, requestingUserID int64) ([]GetPlaylistsWithCollaboratorAccessRow, error) {
 	rows, err := q.query(ctx, q.getPlaylistsWithCollaboratorAccessStmt, getPlaylistsWithCollaboratorAccess, requestingUserID)
 	if err != nil {
@@ -352,6 +394,7 @@ func (q *Queries) GetPlaylistsWithCollaboratorAccess(ctx context.Context, reques
 			&i.CanEdit,
 			&i.TrackCount,
 			&i.TotalDuration,
+			&i.Artwork,
 		); err != nil {
 			return nil, err
 		}

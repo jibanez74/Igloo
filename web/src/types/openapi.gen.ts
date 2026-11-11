@@ -3143,6 +3143,8 @@ export interface components {
             genre_tag: string;
             /** Format: int64 */
             show_count: number;
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. The backdrop of one of the genre's newest shows, for the genre's tile, chosen so that the genres in the list show different shows where the library allows. Null when no show in the genre has a backdrop. */
+            backdrop_path: components["schemas"]["SqlNullString"];
         };
         ShowGenresData: {
             genres: components["schemas"]["ShowGenreWithCount"][];
@@ -3335,11 +3337,14 @@ export interface components {
             genre_tag: string;
             /** Format: int64 */
             movie_count: number;
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. The backdrop of one of the genre's newest movies, for the genre's tile, chosen so that the genres in the list show different movies where the library allows. Null when no movie in the genre has a backdrop. */
+            backdrop_path: components["schemas"]["SqlNullString"];
+        };
+        MovieGenresData: {
+            genres: components["schemas"]["MovieGenreWithCount"][];
         };
         MovieGenresEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                genres: components["schemas"]["MovieGenreWithCount"][];
-            };
+            data: components["schemas"]["MovieGenresData"];
         };
         Movie: {
             /** Format: int64 */
@@ -3635,6 +3640,8 @@ export interface components {
             can_edit: boolean;
             /** Format: int64 */
             movie_count: number;
+            /** @description Posters of the playlist's first four movies that have one, in the order they were added, for the card's collage. Empty when none has a poster. */
+            artwork: string[];
         };
         CreateMoviePlaylistRequest: {
             name: string;
@@ -4374,6 +4381,8 @@ export interface components {
             total_duration: number;
             is_owner: boolean;
             can_edit: boolean;
+            /** @description Up to four different album covers from the playlist's first 24 tracks, in playlist order, for the card's collage. Empty when none of those tracks has a cover. */
+            artwork: string[];
         };
         PlaylistTrack: {
             /** Format: int64 */

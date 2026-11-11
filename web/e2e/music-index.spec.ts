@@ -3,7 +3,7 @@ import {
   assertMockSuiteClean,
   trackBrowserIssues,
 } from "./e2e-browser-issues";
-import { VIEWPORTS, expectNoOverflowingElements } from "./e2e-layout";
+import { VIEWPORTS, cardFor, expectNoOverflowingElements } from "./e2e-layout";
 import {
   ALBUMS_PER_PAGE,
   LIKED_TRACKS_PER_PAGE,
@@ -102,15 +102,17 @@ const mockPlaylists = [
     track_count: 3,
     total_duration: 540000,
   }),
+  // The first playlist has no artwork; this one has four album covers.
   playlistSummary({
     id: 31,
     user_id: 2,
     name: "Shared Discoveries",
     description: nullableString("Tracks shared by another listener"),
-    track_count: 2,
+    track_count: 4,
     total_duration: 420000,
     is_owner: false,
     can_edit: false,
+    artwork: [1, 2, 3, 4].map(n => `/api/static/music/albums/${n}/cover.jpg`),
   }),
 ];
 
@@ -452,7 +454,12 @@ test("playlists tab creates a playlist from the toolbar dialog", async ({ page }
   await page.goto("/music?tab=playlists");
 
   await expect(page.getByRole("tab", { name: "Playlists" })).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByRole("link", { name: "Morning Rotation, 3 tracks, 9m 0s" })).toBeVisible();
+  const plainPlaylist = "Morning Rotation, 3 tracks, 9m 0s";
+  const collagePlaylist = "Shared Discoveries, 4 tracks, 7m 0s";
+  await expect(page.getByRole("link", { name: plainPlaylist })).toBeVisible();
+  // Four album covers make a collage; a playlist without artwork keeps its icon.
+  await expect(cardFor(page, collagePlaylist).locator("img")).toHaveCount(4);
+  await expect(cardFor(page, plainPlaylist).locator("img")).toHaveCount(0);
 
   const createPlaylistButton = page.getByRole("button", { name: "Create new playlist" });
   await createPlaylistButton.click();

@@ -36,6 +36,7 @@ export function moviePlaylistSummary(
     movie_count: 0,
     is_owner: true,
     can_edit: true,
+    artwork: [],
     ...fields,
   };
 }

@@ -130,6 +130,15 @@ func (app *Application) GetMoviesLibrary(w http.ResponseWriter, r *http.Request)
 	writeMoviesLibrary(w, movies, total, page, perPage, sortParam)
 }
 
+// movieGenreWithCount is one tile of the Genres tab: the genre, how many movies
+// carry it, and the backdrop of one of them.
+type movieGenreWithCount struct {
+	GenreID      int64          `json:"genre_id"`
+	GenreTag     string         `json:"genre_tag"`
+	MovieCount   int64          `json:"movie_count"`
+	BackdropPath sql.NullString `json:"backdrop_path"`
+}
+
 func (app *Application) GetMovieGenresList(w http.ResponseWriter, r *http.Request) {
 	rows, err := app.Queries.GetMovieGenresWithCounts(r.Context())
 	if err != nil {
@@ -137,7 +146,28 @@ func (app *Application) GetMovieGenresList(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"genres": rows}})
+	candidates := make([][]string, len(rows))
+	for i, row := range rows {
+		candidates[i], err = decodeImageList(row.BackdropCandidates)
+		if err != nil {
+			app.serverError(w, err, "failed to decode movie genre backdrops", "failed to fetch genres")
+			return
+		}
+	}
+
+	backdrops := pickGenreBackdrops(candidates)
+
+	genres := make([]movieGenreWithCount, len(rows))
+	for i, row := range rows {
+		genres[i] = movieGenreWithCount{
+			GenreID:      row.GenreID,
+			GenreTag:     row.GenreTag,
+			MovieCount:   row.MovieCount,
+			BackdropPath: backdrops[i],
+		}
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"genres": genres}})
 }
 
 func (app *Application) GetMoviesByGenreLibrary(w http.ResponseWriter, r *http.Request) {

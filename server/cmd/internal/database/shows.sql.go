@@ -1533,7 +1533,21 @@ func (q *Queries) GetShowFileForEpisode(ctx context.Context, episodeID int64) (G
 }
 
 const getShowGenresWithCounts = `-- name: GetShowGenresWithCounts :many
-SELECT g.id AS genre_id, g.tag AS genre_tag, COUNT(sg.show_id) AS show_count
+SELECT
+  g.id AS genre_id,
+  g.tag AS genre_tag,
+  COUNT(sg.show_id) AS show_count,
+  CAST((
+    SELECT json_group_array(candidate.backdrop_path)
+    FROM (
+      SELECT s.backdrop_path
+      FROM show_genres AS sg2
+      INNER JOIN shows AS s ON s.id = sg2.show_id
+      WHERE sg2.genre_id = g.id AND s.backdrop_path <> ''
+      ORDER BY sg2.show_id DESC
+      LIMIT 8
+    ) AS candidate
+  ) AS TEXT) AS backdrop_candidates
 FROM genres AS g
 INNER JOIN show_genres AS sg ON sg.genre_id = g.id
 WHERE g.genre_type = 'show'
@@ -1542,12 +1556,15 @@ ORDER BY LOWER(g.tag) ASC
 `
 
 type GetShowGenresWithCountsRow struct {
-	GenreID   int64  `json:"genre_id"`
-	GenreTag  string `json:"genre_tag"`
-	ShowCount int64  `json:"show_count"`
+	GenreID            int64  `json:"genre_id"`
+	GenreTag           string `json:"genre_tag"`
+	ShowCount          int64  `json:"show_count"`
+	BackdropCandidates string `json:"backdrop_candidates"`
 }
 
-// Show genres with counts per tag (genre_type show only).
+// Show genres with counts per tag (genre_type show only). backdrop_candidates
+// is the show twin of the column in GetMovieGenresWithCounts; see the notes
+// there.
 func (q *Queries) GetShowGenresWithCounts(ctx context.Context) ([]GetShowGenresWithCountsRow, error) {
 	rows, err := q.query(ctx, q.getShowGenresWithCountsStmt, getShowGenresWithCounts)
 	if err != nil {
@@ -1557,7 +1574,12 @@ func (q *Queries) GetShowGenresWithCounts(ctx context.Context) ([]GetShowGenresW
 	items := []GetShowGenresWithCountsRow{}
 	for rows.Next() {
 		var i GetShowGenresWithCountsRow
-		if err := rows.Scan(&i.GenreID, &i.GenreTag, &i.ShowCount); err != nil {
+		if err := rows.Scan(
+			&i.GenreID,
+			&i.GenreTag,
+			&i.ShowCount,
+			&i.BackdropCandidates,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

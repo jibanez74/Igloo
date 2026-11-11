@@ -40,7 +40,7 @@ import type {
   ShowEpisodePlaybackDataType,
   ShowEpisodeTechnicalDetailsDataType,
   WatchProgressType,
-  MovieGenreWithCountType,
+  MovieGenresDataType,
   MoviesLibraryPaginatedDataType,
   MoviesStatsDataType,
   TmdbSearchResultType,
@@ -579,7 +579,7 @@ export const getMoviesLibrary = (
   );
 
 export const getMovieGenresWithCounts = (signal?: AbortSignal) =>
-  apiRequest<{ genres: MovieGenreWithCountType[] }>(
+  apiRequest<MovieGenresDataType>(
     "/api/movies/genres",
     { signal },
   );

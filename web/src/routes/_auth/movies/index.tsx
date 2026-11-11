@@ -53,6 +53,7 @@ import {
 import LoadErrorAlert from "@/components/shared/LoadErrorAlert";
 import { nounForCount } from "@/lib/format";
 import { apiErrorMessage, isApiFailure } from "@/lib/is-api-failure";
+import { unwrapString } from "@/lib/nullable";
 import { cn } from "@/lib/utils";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import RequestMovieDialog from "@/components/movies/RequestMovieDialog";
@@ -443,6 +444,7 @@ function GenresTabContent({
           genre_id: g.genre_id,
           genre_tag: g.genre_tag,
           count: g.movie_count,
+          backdrop_path: unwrapString(g.backdrop_path),
         }))
       }
       genresListLabel="Movie genres"
