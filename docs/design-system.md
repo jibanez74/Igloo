@@ -59,8 +59,9 @@ The system is implemented with:
   (`:root` = light, `.dark` = dark) and consumed through utilities like
   `bg-card`, `text-muted-foreground`, `ring-ring`. The token rules are
   **generated** from `src/lib/theme-tokens.ts` (§2.4).
-- **`tw-animate-css`** for enter/exit animations, with a strict
-  `motion-reduce:` discipline (§1.5).
+- **Igloo's own enter/exit animation utilities**
+  (`src/assets/animations.css`), with a strict `motion-reduce:` discipline
+  (§1.5).
 - **lucide-react** for all icons, with two exceptions. The first is the
   **brand mark**: `components/app/BrandMark.tsx` draws the igloo from
   `lib/brand-mark.ts`, the same glyph the app icons are generated from
@@ -251,15 +252,32 @@ constant exists — and when you create a new recurring one, add it there so
 - **Transitions enumerate properties** — e.g.
   `transition-[background-color,border-color,color,box-shadow,opacity]` —
   never `transition-all`.
-- **Enter/exit animations** come from `tw-animate-css`. A page entrance both
+- **Enter/exit animations** are the app's own utilities, in
+  `src/assets/animations.css`: `animate-in` / `animate-out` run one keyframe
+  each (`enter`, `exit`) between the resting state and the offsets set by
+  `fade-in-0`, `zoom-in-95`, `slide-in-from-<side>-2` and their `-out` twins;
+  `fill-mode-*` and `delay-*` complete the set. Rules for that file:
+  - It holds only what the app uses (it began as the used part of the
+    `tw-animate-css` package, which is removed). A utility that is not there
+    (`blur-in`, `spin-in`, `slide-in-from-start`) compiles to nothing, so
+    add it to the file with the first use.
+  - **`delay-*` is redefined there** to set `animation-delay` as well.
+    Tailwind's own only delays transitions, and without it every staggered
+    entrance (`delay-75`, `delay-150`) starts at once.
+  - Screenshots cannot see any of this, since the visual suite freezes
+    animations. `e2e/motion.spec.ts` reads the computed animation name,
+    duration, delay, fill mode and enter offsets of a section, a delayed
+    section, a select list, a dialog and the sign-in card instead.
+
+  A page entrance both
   fades and lifts (`MOTION_PAGE_ENTER_CLASS`:
   `animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-page`); a
   section entrance only fades (`MOTION_SECTION_ENTER_CLASS` and its `delay-75`
   staggered twin `MOTION_SECTION_ENTER_DELAYED_CLASS`:
   `animate-in fade-in-0 fill-mode-both duration-standard`) — the split is
   deliberate, since a page full of independently sliding sections reads as
-  jitter. Exits use `animate-out` + `fade-out-0`. There are no custom
-  `@keyframes` in `styles.css`.
+  jitter. Exits use `animate-out` + `fade-out-0`. The two keyframes
+  live in `animations.css`; `styles.css` has none of its own.
 - **The motion-reduce contract (hard rule)**: every animation/transition ships
   a `motion-reduce:` escape — `motion-reduce:transition-none`,
   `motion-reduce:animate-none`, plus end-state resets
@@ -585,7 +603,7 @@ any variant fully. The base string carries the focus ring, disabled opacity,
 ### 2.1 Tailwind v4 conventions
 
 - Configuration is CSS-first: `styles.css` starts with `@import "tailwindcss"`
-  + `@import "tw-animate-css"`, declares `@custom-variant dark (&:is(.dark *))`
+  + `@import "./animations.css"` (§1.5), declares `@custom-variant dark (&:is(.dark *))`
   (class-based dark mode), and maps every token into Tailwind via a
   generated `@theme inline` block (`--color-X: var(--X)`, §2.4). There is no
   `tailwind.config.js`.
