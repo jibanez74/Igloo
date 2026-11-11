@@ -4,7 +4,7 @@ import { Play } from "lucide-react";
 import HomeMediaSection from "@/components/home/HomeMediaSection";
 import MovieCard from "@/components/movies/MovieCard";
 import ContinueWatchingEpisodeCard from "@/components/shows/ContinueWatchingEpisodeCard";
-import { HOME_POSTER_GRID_CLASS } from "@/lib/constants";
+import { HOME_RAIL_POSTER_ITEM_CLASS } from "@/lib/constants";
 import type { ContinueWatchingItemType } from "@/types";
 import { apiErrorMessage } from "@/lib/is-api-failure";
 
@@ -48,7 +48,7 @@ export default function ContinueWatching() {
       emptyDescription="Movies and episodes you start watching will appear here."
       emptyIcon={Play}
       countNoun="title"
-      gridClassName={HOME_POSTER_GRID_CLASS}
+      itemClassName={HOME_RAIL_POSTER_ITEM_CLASS}
       // A movie and an episode can share an id, so the kind is part of the key.
       getKey={item => `${item.kind}-${item.id}`}
       renderItem={renderCard}

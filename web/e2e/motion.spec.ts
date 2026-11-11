@@ -15,11 +15,12 @@ test.describe("Reduced motion", () => {
     await page.setViewportSize({ width: 1280, height: 900 });
 
     await page.goto("/");
-    await expect(page.getByRole("heading", { name: "Welcome to Igloo" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(["Home"]);
     await expectPageHasNoHorizontalScroll(page);
 
     for (const name of [
-      "Welcome to Igloo",
+      // The billboard: the mock's first Continue Watching item.
+      "Frost Harbor",
       "Recently Added Movies",
       "Recently Added Shows",
       "Recently Added Albums",

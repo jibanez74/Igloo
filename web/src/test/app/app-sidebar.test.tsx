@@ -15,7 +15,7 @@ function mockShellFetch() {
 
 async function renderSidebar() {
   await renderRoute("/");
-  await screen.findByRole("heading", { name: "Welcome to Igloo" });
+  await screen.findByRole("heading", { level: 1, name: "Home" });
   const navigation = screen.getByRole("navigation", { name: "Main navigation" });
   expect(within(navigation).getAllByRole("link").map(link => link.textContent)).toEqual([
     "Home", "Movies", "TV Shows", "Music", "Settings",

@@ -672,12 +672,13 @@ export const CARD_ACTION_REVEAL_CLASS =
 export const CARD_FOCUS_WITHIN_RING_CLASS =
   "focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background";
 /**
- * Home-section media grids (design-system §3.2). auto-fill (not auto-fit) so
- * sparse sections (1–2 items, e.g. Continue Watching) keep cards near the
- * track min width instead of stretching one poster across the content column.
+ * The width of one card in a home rail (design-system §3.2). A rail scrolls
+ * sideways, so its cards keep one width however many there are; these step up
+ * with the viewport. Posters are 2:3 and albums square, so an album is a
+ * little wider to stand as tall as its neighbours' titles need.
  */
-export const HOME_POSTER_GRID_CLASS =
-  "grid grid-cols-[repeat(auto-fill,minmax(min(7.5rem,100%),1fr))] gap-3 sm:gap-4";
+export const HOME_RAIL_POSTER_ITEM_CLASS = "w-32 sm:w-36 lg:w-40";
+export const HOME_RAIL_ALBUM_ITEM_CLASS = "w-36 sm:w-40 lg:w-44";
 /**
  * The canonical library poster grid (design-system §3.2): fixed columns per
  * breakpoint so a full page of cards lines up, unlike the auto-fill Home rows.
@@ -690,10 +691,6 @@ export const LIBRARY_POSTER_GRID_CLASS =
  */
 export const MUSIC_CARD_GRID_CLASS =
   "grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5";
-/** Items in a library page's "More options" dropdown. */
-export const HOME_ALBUM_GRID_CLASS =
-  "grid grid-cols-[repeat(auto-fill,minmax(min(8rem,100%),1fr))] gap-3 sm:gap-4 lg:grid-cols-[repeat(auto-fill,minmax(9rem,1fr))]";
-
 /**
  * Detail-page section headings (design-system §1.4, §1.7). They are skip-link
  * targets (`tabIndex={-1}`), so they carry the shared focus ring rather than a
