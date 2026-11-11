@@ -10,6 +10,7 @@ import {
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { pickTmdbCertification } from "@/lib/tmdb-certification";
 import { parseRouteId } from "@/lib/route-id";
+import { crewSectionLabels, movieHasKeyCrew } from "@/lib/crew";
 import {
   catalogYear,
   formatRuntimeMinutes,
@@ -191,7 +192,7 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
           { href: "#overview-heading", label: "Skip to overview" },
           crewForSection.length > 0 && {
             href: "#crew-heading",
-            label: "Skip to key crew",
+            label: crewSectionLabels(movieHasKeyCrew(crewForSection)).skipLabel,
           },
           castList.length > 0 && { href: "#cast-heading", label: "Skip to cast" },
           youtubeExtraVideos.length > 0 && {

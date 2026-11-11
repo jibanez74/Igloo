@@ -1156,6 +1156,13 @@ covers the full height there and is darker (`from-black/95 via-black/70
 to-black/30`); from `lg` the words keep to the lower left, the bottom scrim
 goes back to the lower three-fifths and the side scrim carries them.
 
+The crew section is headed "Key Crew" only when it bills someone above the
+full list: a movie's director or writers, a show's creators. When it holds
+only the "Show all crew" disclosure it is headed "Crew" and its skip link
+reads "Skip to crew". Both words come from `crewSectionLabels`
+(`lib/crew.ts`) so the link and the heading it jumps to never disagree; the
+heading keeps `id="crew-heading"` either way.
+
 Person profiles (`/people/$id`, using the TMDB person ID) have a portrait-led
 header: a rounded 2:3 portrait beside the name and biography at desktop widths,
 stacked on mobile. The main portrait uses the same-origin `original` image
