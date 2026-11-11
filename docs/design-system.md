@@ -1016,6 +1016,14 @@ its link and placeholder icon from the playlist's `content_type`), circular
 thumbs (`MusicianCard`), or the horizontal `WatchRoomCard`. All of them wear
 `CARD_SURFACE_CLASS`.
 
+A `PlaylistCard`'s square shows, in this order: the playlist's own
+`cover_image`; a 2×2 collage when the list response's `artwork` has four
+entries (album covers for music, posters for movies); the first entry alone
+when it has one to three, since two or three would leave holes in the grid;
+the placeholder icon. The images are decorative (`alt=""`), and one that fails
+to load swaps the whole square for the placeholder: a collage with a hole
+reads as broken.
+
 ```
 <article class={cn(CARD_SURFACE_CLASS, CARD_FOCUS_WITHIN_RING_CLASS)}>
   <Link aria-label="Uncut Gems 2019" …>       ← whole-card link, full label
@@ -1132,7 +1140,7 @@ status answers and states the reason in its accessible name, its tooltip and
 an `sr-only` tail, since a disabled menu item otherwise announces only its
 label; the page owns the status query, because one mounted inside the dropdown
 would not fetch until the menu opened), `LibraryAllTab` (the paginated grid and its skeleton),
-`LibraryGenresTab` (the genre-chip facet with focus restoration after Clear,
+`LibraryGenresTab` (the genre-tile facet with focus restoration after Clear,
 and its skeleton), `LibrarySortToggle` (the single A–Z / Z–A button) and
 `LibraryEmptyState` (the minimal empty variant, §3.4). A page supplies what
 differs: the card renderer, the lowercase nouns for copy and announcements, its
@@ -1214,6 +1222,24 @@ search page's category tabs reuse `LIBRARY_POSTER_GRID_CLASS`,
 `LoadErrorAlert` and `PosterCardSkeleton` but stay page-local: their result
 count line, "No albums match 'q'" copy and non-grid tracks list are not a
 library tab.
+
+**Genre tiles.** `LibraryGenresTab`'s facet is a grid of media tiles, one
+geometry whether or not a genre is selected: a backdrop from the genre
+(`backdrop_path` on the genre list, which the server picks so that tiles show
+different titles) fills the tile, and the name and count sit in a band along
+the bottom. The band is opaque behind the text (`bg-black/70`, white name,
+`text-white/80` count: §1.2's over-media exception) and fades out above it, so
+the text keeps its contrast on any image and wraps to two lines without
+leaving the band. A genre without a backdrop, or whose image fails, shows
+`MEDIA_FALLBACK_SURFACE_CLASS` under the same band, so tiles look alike in
+both themes. Pressed (`aria-pressed`), the band turns `bg-primary` with
+`text-primary-foreground` and the image stays above it; a see-through primary
+tint over the whole image computes below AA in light on a bright
+backdrop. Tiles are `h-24` (`h-20` on phones, where three columns keep a
+selected genre's results within reach), three to seven per row by the room
+left beside the sidebar. The tile is a raw `<button>` with its own classes:
+its whole surface is the control, as a card's is its link, and it takes no
+`Button` look. Its "Clear" control is a `Button` (`outline`, `sm`, pill).
 
 #### Detail pages
 
@@ -1378,8 +1404,8 @@ is unknown or empty.
 - **Movie/TMDB images are same-origin proxied**: build URLs with
   `buildTmdbImageUrl(path, size)` (`lib/tmdb-image-url.ts`) →
   `/api/tmdb/images/{size}{path}`. Sizes are the `TMDB_*_SIZE` constants in
-  `lib/constants.ts` — `w500` posters and episode stills, `w1280` backdrops,
-  `w185` profiles, `w92` network logos; the proxy accepts only those plus
+  `lib/constants.ts` — `w500` posters, episode stills and genre-tile backdrops, `w1280`
+  backdrops, `w185` profiles, `w92` network logos; the proxy accepts only those plus
   `original`. A value that is already a server URL (`/api/static/...`, a copy
   the server downloaded while "Download images" is on) comes back unchanged:
   the copy exists at one size. Music images go through `getMediaImageUrl()`

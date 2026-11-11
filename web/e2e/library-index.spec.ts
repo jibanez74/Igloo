@@ -10,6 +10,7 @@ import {
   apiResponse,
   expectApiRequest,
   fulfillJSON,
+  nullableString,
   pagedList,
 } from "./e2e-api";
 import {
@@ -124,8 +125,18 @@ function moviesKind(): LibraryKind {
       "/api/movies/stats": { total_movies: TOTAL },
       "/api/movies/genres": {
         genres: [
-          { genre_id: GENRE_ID, genre_tag: "Action", movie_count: TOTAL },
-          { genre_id: 20, genre_tag: "Drama", movie_count: 1 },
+          {
+            genre_id: GENRE_ID,
+            genre_tag: "Action",
+            movie_count: TOTAL,
+            backdrop_path: nullableString("/action-backdrop.jpg"),
+          },
+          {
+            genre_id: 20,
+            genre_tag: "Drama",
+            movie_count: 1,
+            backdrop_path: nullableString(),
+          },
         ] satisfies MovieGenreWithCountType[],
       },
       "/api/movies/playlists": { playlists: [] },
@@ -194,8 +205,18 @@ function showsKind(): LibraryKind {
       "/api/shows/stats": { total_shows: TOTAL, total_seasons: TOTAL * 2, total_episodes: TOTAL * 12 },
       "/api/shows/genres": {
         genres: [
-          { genre_id: GENRE_ID, genre_tag: "Drama", show_count: TOTAL },
-          { genre_id: 20, genre_tag: "Comedy", show_count: 1 },
+          {
+            genre_id: GENRE_ID,
+            genre_tag: "Drama",
+            show_count: TOTAL,
+            backdrop_path: nullableString("/drama-backdrop.jpg"),
+          },
+          {
+            genre_id: 20,
+            genre_tag: "Comedy",
+            show_count: 1,
+            backdrop_path: nullableString(),
+          },
         ] satisfies ShowGenreWithCountType[],
       },
     },
@@ -366,6 +387,13 @@ for (const kind of [moviesKind(), showsKind()]) {
       await expect(genresList).toBeVisible();
       await expect(genreChip).toBeVisible();
       await expect(page.getByRole("button", { name: singleChipName })).toBeVisible();
+      // The first genre carries a backdrop and the second none: one tile shows
+      // an image through the proxy, the other its bare fallback surface.
+      await expect(genreChip.locator("img")).toHaveAttribute(
+        "src",
+        /^\/api\/tmdb\/images\/w500\/.+-backdrop\.jpg$/,
+      );
+      await expect(page.getByRole("button", { name: singleChipName }).locator("img")).toHaveCount(0);
 
       await genreChip.click();
 

@@ -10578,7 +10578,8 @@
         "required": [
           "genre_id",
           "genre_tag",
-          "show_count"
+          "show_count",
+          "backdrop_path"
         ],
         "properties": {
           "genre_id": {
@@ -10591,6 +10592,10 @@
           "show_count": {
             "type": "integer",
             "format": "int64"
+          },
+          "backdrop_path": {
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. The backdrop of one of the genre's newest shows, for the genre's tile, chosen so that the genres in the list show different shows where the library allows. Null when no show in the genre has a backdrop."
           }
         },
         "additionalProperties": false
@@ -11299,7 +11304,8 @@
         "required": [
           "genre_id",
           "genre_tag",
-          "movie_count"
+          "movie_count",
+          "backdrop_path"
         ],
         "properties": {
           "genre_id": {
@@ -11312,6 +11318,25 @@
           "movie_count": {
             "type": "integer",
             "format": "int64"
+          },
+          "backdrop_path": {
+            "$ref": "#/components/schemas/SqlNullString",
+            "description": "TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. The backdrop of one of the genre's newest movies, for the genre's tile, chosen so that the genres in the list show different movies where the library allows. Null when no movie in the genre has a backdrop."
+          }
+        },
+        "additionalProperties": false
+      },
+      "MovieGenresData": {
+        "type": "object",
+        "required": [
+          "genres"
+        ],
+        "properties": {
+          "genres": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MovieGenreWithCount"
+            }
           }
         },
         "additionalProperties": false
@@ -11328,19 +11353,7 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "genres"
-                ],
-                "properties": {
-                  "genres": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/MovieGenreWithCount"
-                    }
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/MovieGenresData"
               }
             }
           }
@@ -12344,7 +12357,8 @@
           "updated_at",
           "is_owner",
           "can_edit",
-          "movie_count"
+          "movie_count",
+          "artwork"
         ],
         "properties": {
           "id": {
@@ -12389,6 +12403,15 @@
           "movie_count": {
             "type": "integer",
             "format": "int64"
+          },
+          "artwork": {
+            "type": "array",
+            "maxItems": 4,
+            "items": {
+              "type": "string",
+              "description": "TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description."
+            },
+            "description": "Up to four different posters from the playlist's first 24 movies, in the order they were added, for the card's collage. Empty when none of those movies has a poster."
           }
         },
         "additionalProperties": false
@@ -15163,7 +15186,8 @@
           "track_count",
           "total_duration",
           "is_owner",
-          "can_edit"
+          "can_edit",
+          "artwork"
         ],
         "properties": {
           "id": {
@@ -15213,6 +15237,15 @@
           },
           "can_edit": {
             "type": "boolean"
+          },
+          "artwork": {
+            "type": "array",
+            "maxItems": 4,
+            "items": {
+              "type": "string",
+              "description": "Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description."
+            },
+            "description": "Up to four different album covers from the playlist's first 24 tracks, in playlist order, for the card's collage. Empty when none of those tracks has a cover."
           }
         },
         "additionalProperties": false

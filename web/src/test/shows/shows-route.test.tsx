@@ -105,11 +105,13 @@ function mockShowsFetch(options?: { statsRefreshFailure?: boolean }) {
               genre_id: 10,
               genre_tag: "Drama",
               show_count: 2,
+              backdrop_path: nullableString("/drama-backdrop.jpg"),
             },
             {
               genre_id: 20,
               genre_tag: "Comedy",
               show_count: 1,
+              backdrop_path: nullableString(),
             },
           ],
         },
@@ -358,5 +360,20 @@ describe("tv shows route genres", () => {
     expect(
       screen.queryByRole("link", { name: "Northern Lights 2019" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("fills a genre's tile with its backdrop and leaves a genre without one bare", async () => {
+    await renderShowsRoute("/tv-shows/?tab=genres");
+
+    const drama = await screen.findByRole("button", { name: /Drama/ });
+    expect(drama.querySelector("img")).toHaveAttribute(
+      "src",
+      "/api/tmdb/images/w500/drama-backdrop.jpg",
+    );
+    expect(drama).toHaveTextContent("Drama2 shows");
+
+    const comedy = screen.getByRole("button", { name: /Comedy/ });
+    expect(comedy.querySelector("img")).toBeNull();
+    expect(comedy).toHaveTextContent("Comedy1 show");
   });
 });

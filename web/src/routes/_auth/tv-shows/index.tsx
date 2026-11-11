@@ -28,6 +28,7 @@ import {
   showsLibraryQueryOpts,
   showsStatsQueryOpts,
 } from "@/lib/query-opts";
+import { unwrapString } from "@/lib/nullable";
 import { cn } from "@/lib/utils";
 import {
   showsSearchSchema,
@@ -278,6 +279,7 @@ function GenresTabContent({
           genre_id: g.genre_id,
           genre_tag: g.genre_tag,
           count: g.show_count,
+          backdrop_path: unwrapString(g.backdrop_path),
         }))
       }
       genresListLabel="TV show genres"

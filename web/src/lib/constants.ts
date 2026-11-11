@@ -203,6 +203,8 @@ export const TMDB_PROFILE_SIZE = "w185";
 // profile size; network logos are small and take the narrowest size the proxy
 // accepts. The proxy allows only original, w1280, w500, w185, and w92.
 export const TMDB_STILL_SIZE = "w500";
+// A genre tile shows its backdrop at well under 300 px wide.
+export const TMDB_TILE_BACKDROP_SIZE = "w500";
 export const TMDB_LOGO_SIZE = "w92";
 
 // Virtual-list measurements in pixels. These keep virtualized rows stable and

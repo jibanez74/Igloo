@@ -36,6 +36,7 @@ export function moviePlaylist(
   isOwner: boolean,
   description: string,
   coverImage = "",
+  artwork: string[] = [],
 ): MoviePlaylistSummaryType {
   return {
     id,
@@ -51,6 +52,7 @@ export function moviePlaylist(
     movie_count: movieCount,
     is_owner: isOwner,
     can_edit: isOwner,
+    artwork,
   };
 }
 

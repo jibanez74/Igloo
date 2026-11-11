@@ -751,7 +751,20 @@ const getMovieGenresWithCounts = `-- name: GetMovieGenresWithCounts :many
 SELECT
   g.id AS genre_id,
   g.tag AS genre_tag,
-  COUNT(mg.movie_id) AS movie_count
+  COUNT(mg.movie_id) AS movie_count,
+  CAST((
+    SELECT json_group_array(candidate.backdrop_path)
+    FROM (
+      SELECT m.backdrop_path
+      FROM movie_genres AS mg2
+      INNER JOIN movies AS m
+        ON m.id = mg2.movie_id
+      WHERE mg2.genre_id = g.id
+        AND m.backdrop_path <> ''
+      ORDER BY mg2.movie_id DESC
+      LIMIT 8
+    ) AS candidate
+  ) AS TEXT) AS backdrop_candidates
 FROM genres AS g
 INNER JOIN movie_genres AS mg
   ON mg.genre_id = g.id
@@ -763,12 +776,19 @@ ORDER BY LOWER(g.tag) ASC
 `
 
 type GetMovieGenresWithCountsRow struct {
-	GenreID    int64  `json:"genre_id"`
-	GenreTag   string `json:"genre_tag"`
-	MovieCount int64  `json:"movie_count"`
+	GenreID            int64  `json:"genre_id"`
+	GenreTag           string `json:"genre_tag"`
+	MovieCount         int64  `json:"movie_count"`
+	BackdropCandidates string `json:"backdrop_candidates"`
 }
 
 // Movie genres with counts per tag (genre_type movie only).
+//
+// backdrop_candidates is a JSON array of up to eight backdrops, newest movie
+// first, for the genre tile. The handler picks one per genre: a single pick
+// here would repeat, because the newest movie is the newest in each of its
+// genres. Walking idx_movie_genres_genre backwards reads the newest first
+// without a sort.
 func (q *Queries) GetMovieGenresWithCounts(ctx context.Context) ([]GetMovieGenresWithCountsRow, error) {
 	rows, err := q.query(ctx, q.getMovieGenresWithCountsStmt, getMovieGenresWithCounts)
 	if err != nil {
@@ -778,7 +798,12 @@ func (q *Queries) GetMovieGenresWithCounts(ctx context.Context) ([]GetMovieGenre
 	items := []GetMovieGenresWithCountsRow{}
 	for rows.Next() {
 		var i GetMovieGenresWithCountsRow
-		if err := rows.Scan(&i.GenreID, &i.GenreTag, &i.MovieCount); err != nil {
+		if err := rows.Scan(
+			&i.GenreID,
+			&i.GenreTag,
+			&i.MovieCount,
+			&i.BackdropCandidates,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

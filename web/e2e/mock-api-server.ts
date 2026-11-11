@@ -3,6 +3,8 @@ import type {
   DeviceType,
   GeneralSettingsType,
   LatestShowType,
+  MovieGenresDataType,
+  MoviePlaylistsListResponseType,
   MovieTechnicalDetailsResponse,
   MusicStatsType,
   PlaybackSettingsType,
@@ -24,6 +26,7 @@ import {
   libraryMovie,
   libraryMovieDetails,
   MOCK_MOVIE_ID,
+  moviePlaylist,
   prerollTrailers,
 } from "./fixtures/movies";
 import {
@@ -188,6 +191,34 @@ const libraryMovies = [
   libraryMovie(102, "Northern Relay", 2023, "/northern-relay.jpg"),
   libraryMovie(103, "Harbor Lights", 2022, "/harbor-lights.jpg"),
 ];
+
+// The Genres and Playlists tabs of the movie library, for the page baselines:
+// tiles with and without a backdrop, a name that wraps on a narrow tile, and a
+// playlist card in each of its three states.
+const MOVIE_GENRES: MovieGenresDataType = {
+  genres: [
+    { genre_id: 1, genre_tag: "Action", movie_count: 2, backdrop_path: nullableString("/action-backdrop.jpg") },
+    { genre_id: 2, genre_tag: "Documentary", movie_count: 1, backdrop_path: nullableString() },
+    { genre_id: 3, genre_tag: "Drama", movie_count: 3, backdrop_path: nullableString("/drama-backdrop.jpg") },
+    { genre_id: 4, genre_tag: "Science Fiction", movie_count: 1, backdrop_path: nullableString("/science-fiction-backdrop.jpg") },
+  ],
+};
+
+const MOVIE_PLAYLISTS: MoviePlaylistsListResponseType = {
+  playlists: [
+    moviePlaylist(601, "Marathon", 6, true, "Four posters make a collage", "", [
+      "/marathon-1.jpg",
+      "/marathon-2.jpg",
+      "/marathon-3.jpg",
+      "/marathon-4.jpg",
+    ]),
+    moviePlaylist(602, "Double Bill", 2, false, "The first poster stands alone", "", [
+      "/double-bill-1.jpg",
+      "/double-bill-2.jpg",
+    ]),
+    moviePlaylist(603, "Watch Later", 0, true, "Nothing to show yet"),
+  ],
+};
 
 const latestShows = [
   {
@@ -1108,6 +1139,22 @@ function handleMoviesRoutes(
 
   if (url.pathname === "/api/movies/library") {
     sendSuccess(response, libraryList(url, "movies", libraryMovies, movie => movie.title));
+    return true;
+  }
+
+  if (url.pathname === "/api/movies/genres") {
+    sendSuccess(response, MOVIE_GENRES);
+    return true;
+  }
+
+  // Every genre lists the whole small library.
+  if (/^\/api\/movies\/genres\/\d+\/movies$/.test(url.pathname)) {
+    sendSuccess(response, libraryList(url, "movies", libraryMovies, movie => movie.title));
+    return true;
+  }
+
+  if (url.pathname === "/api/movies/playlists" && request.method === "GET") {
+    sendSuccess(response, MOVIE_PLAYLISTS);
     return true;
   }
 

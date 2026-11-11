@@ -20,6 +20,7 @@ const playlistRow = {
   updated_at: "2026-01-01T00:00:00Z",
   is_owner: true,
   can_edit: true,
+  artwork: [] as string[],
 };
 
 function musicPlaylist(
@@ -104,6 +105,83 @@ describe("PlaylistCard", () => {
     const img = container.querySelector("img");
     expect(img).not.toBeNull();
     fireEvent.error(img!);
+
+    expect(container.querySelector("img")).toBeNull();
+    expect(container.querySelector("svg")).not.toBeNull();
+  });
+
+  const covers = [1, 2, 3, 4].map(n => `https://covers.example/${n}.jpg`);
+  const sources = (container: HTMLElement) =>
+    [...container.querySelectorAll("img")].map(img => img.getAttribute("src"));
+
+  it("lays four album covers out as a collage", () => {
+    const { container } = renderWithQueryClient(
+      <PlaylistCard playlist={musicPlaylist({ artwork: covers })} />,
+    );
+
+    expect(sources(container)).toEqual(covers);
+    for (const img of container.querySelectorAll("img")) {
+      expect(img).toHaveAttribute("alt", "");
+    }
+    // The images add nothing to the link's name.
+    expect(
+      screen.getByRole("link", { name: "Late Shift, 1 track, 3m 34s" }),
+    ).toBeInTheDocument();
+  });
+
+  it("builds a movie collage from poster paths, through the image proxy", () => {
+    const { container } = renderWithQueryClient(
+      <PlaylistCard
+        playlist={moviePlaylist({
+          artwork: ["/a.jpg", "/b.jpg", "/api/static/movies/3/poster.jpg", "/d.jpg"],
+        })}
+      />,
+    );
+
+    expect(sources(container)).toEqual([
+      "/api/tmdb/images/w500/a.jpg",
+      "/api/tmdb/images/w500/b.jpg",
+      "/api/static/movies/3/poster.jpg",
+      "/api/tmdb/images/w500/d.jpg",
+    ]);
+  });
+
+  it("shows the first image alone when fewer than four items have artwork", () => {
+    const { container } = renderWithQueryClient(
+      <PlaylistCard playlist={musicPlaylist({ artwork: covers.slice(0, 3) })} />,
+    );
+
+    expect(sources(container)).toEqual([covers[0]]);
+  });
+
+  it("prefers the playlist's own cover to a collage", () => {
+    const { container } = renderWithQueryClient(
+      <PlaylistCard
+        playlist={musicPlaylist({
+          cover_image: nullableString("/api/static/playlists/7.jpg"),
+          artwork: covers,
+        })}
+      />,
+    );
+
+    expect(sources(container)).toEqual(["/api/static/playlists/7.jpg"]);
+  });
+
+  it("swaps the whole collage for the placeholder when one image fails", () => {
+    const { container } = renderWithQueryClient(
+      <PlaylistCard playlist={musicPlaylist({ artwork: covers })} />,
+    );
+
+    fireEvent.error(container.querySelectorAll("img")[2]);
+
+    expect(container.querySelector("img")).toBeNull();
+    expect(container.querySelector("svg")).not.toBeNull();
+  });
+
+  it("keeps the placeholder for a playlist without artwork", () => {
+    const { container } = renderWithQueryClient(
+      <PlaylistCard playlist={musicPlaylist()} />,
+    );
 
     expect(container.querySelector("img")).toBeNull();
     expect(container.querySelector("svg")).not.toBeNull();

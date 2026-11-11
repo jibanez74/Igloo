@@ -81,6 +81,7 @@ export type {
   MoviesLibraryPaginatedDataType,
   MoviesStatsDataType,
   MovieGenreWithCountType,
+  MovieGenresDataType,
   MoviePlaylistRowType,
   MoviePlaylistSummaryType,
   MoviePlaylistsListResponseType,

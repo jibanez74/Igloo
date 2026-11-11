@@ -77,6 +77,7 @@ export function playlistSummary(
     total_duration: 0,
     is_owner: true,
     can_edit: true,
+    artwork: [],
     ...fields,
   };
 }

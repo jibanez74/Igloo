@@ -1,4 +1,4 @@
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -65,6 +65,7 @@ function playlist(
     movie_count: movieCount,
     is_owner: true,
     can_edit: true,
+    artwork: [],
   };
 }
 
@@ -132,11 +133,13 @@ function mockMoviesFetch(options?: {
               genre_id: 10,
               genre_tag: "Action",
               movie_count: 2,
+              backdrop_path: nullableString("/action-backdrop.jpg"),
             },
             {
               genre_id: 20,
               genre_tag: "Drama",
               movie_count: 1,
+              backdrop_path: nullableString(),
             },
           ],
         },
@@ -407,7 +410,33 @@ describe("movies route genres", () => {
     ).toBeInTheDocument();
   });
 
-  it("keeps the selected chip's count readable on the primary fill (AA in both themes)", async () => {
+  it("fills a genre's tile with its backdrop and leaves a genre without one bare", async () => {
+    await renderMoviesRoute("/movies/?tab=genres");
+
+    const action = await screen.findByRole("button", { name: /Action/ });
+    const backdrop = action.querySelector("img");
+    expect(backdrop).toHaveAttribute("src", "/api/tmdb/images/w500/action-backdrop.jpg");
+    // Decorative: the tile's name is its genre and count.
+    expect(backdrop).toHaveAttribute("alt", "");
+    expect(action).toHaveTextContent("Action2 movies");
+    expect(action).toHaveAttribute("aria-pressed", "false");
+
+    const drama = screen.getByRole("button", { name: /Drama/ });
+    expect(drama.querySelector("img")).toBeNull();
+    expect(drama).toHaveTextContent("Drama1 movie");
+  });
+
+  it("drops a backdrop that fails to load and keeps the tile", async () => {
+    await renderMoviesRoute("/movies/?tab=genres");
+
+    const action = await screen.findByRole("button", { name: /Action/ });
+    fireEvent.error(action.querySelector("img")!);
+
+    expect(action.querySelector("img")).toBeNull();
+    expect(action).toHaveTextContent("Action2 movies");
+  });
+
+  it("keeps the selected tile's count readable on the primary band (AA in both themes)", async () => {
     await renderMoviesRoute("/movies/?tab=genres&genreId=10");
 
     await screen.findByRole("button", { name: "Clear genre filter" });

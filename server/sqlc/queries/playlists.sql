@@ -40,6 +40,12 @@ WHERE p.id = sqlc.arg(playlist_id);
 -- row these are index probes on idx_playlist_tracks_position (and the
 -- (playlist_id, track_id) primary key), which is bounded by the page the
 -- handler actually returns.
+--
+-- artwork is a JSON array of the album covers of the playlist's first 24
+-- tracks, in playlist order, for the card's collage. The handler keeps the
+-- first four distinct ones. The 24 are taken before the covers are looked at,
+-- so a long playlist without covers is still a short walk of
+-- idx_playlist_tracks_position.
 SELECT
   accessible.*,
   (
@@ -53,7 +59,33 @@ SELECT
     INNER JOIN tracks AS t
       ON t.id = pt.track_id
     WHERE pt.playlist_id = accessible.id
-  ) AS total_duration
+  ) AS total_duration,
+  CAST((
+    SELECT json_group_array(first_track.cover)
+    FROM (
+      SELECT a.cover
+      FROM (
+        SELECT
+          pt.track_id,
+          pt.position,
+          pt.id
+        FROM playlist_tracks AS pt
+        WHERE pt.playlist_id = accessible.id
+        ORDER BY
+          pt.position ASC,
+          pt.id ASC
+        LIMIT 24
+      ) AS head
+      INNER JOIN tracks AS t
+        ON t.id = head.track_id
+      INNER JOIN albums AS a
+        ON a.id = t.album_id
+      WHERE a.cover <> ''
+      ORDER BY
+        head.position ASC,
+        head.id ASC
+    ) AS first_track
+  ) AS TEXT) AS artwork
 FROM (
   SELECT
     p.*,
@@ -127,13 +159,39 @@ RETURNING *;
 
 -- name: GetMoviePlaylistsWithCollaboratorAccess :many
 -- The movie twin of GetPlaylistsWithCollaboratorAccess; see the notes there.
+-- artwork holds the posters of the first 24 movies in the order they were
+-- added; the handler keeps the first four distinct ones.
 SELECT
   accessible.*,
   (
     SELECT COUNT(*)
     FROM playlist_movies AS pm
     WHERE pm.playlist_id = accessible.id
-  ) AS movie_count
+  ) AS movie_count,
+  CAST((
+    SELECT json_group_array(first_movie.poster_path)
+    FROM (
+      SELECT m.poster_path
+      FROM (
+        SELECT
+          pm.movie_id,
+          pm.position,
+          pm.id
+        FROM playlist_movies AS pm
+        WHERE pm.playlist_id = accessible.id
+        ORDER BY
+          pm.position ASC,
+          pm.id ASC
+        LIMIT 24
+      ) AS head
+      INNER JOIN movies AS m
+        ON m.id = head.movie_id
+      WHERE m.poster_path <> ''
+      ORDER BY
+        head.position ASC,
+        head.id ASC
+    ) AS first_movie
+  ) AS TEXT) AS artwork
 FROM (
   SELECT
     p.*,
