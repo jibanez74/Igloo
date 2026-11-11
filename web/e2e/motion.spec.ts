@@ -64,6 +64,50 @@ test.describe("Enter animations", () => {
     };
   };
 
+  // `animation-name` computes to "enter" whether or not a keyframe rule of
+  // that name exists; without the rule the browser runs nothing. This reads
+  // the compiled rules themselves.
+  const readKeyframes = () => {
+    const found: Record<string, string> = {};
+    const walk = (rules: CSSRuleList) => {
+      for (const rule of rules) {
+        if (rule instanceof CSSKeyframesRule) {
+          found[rule.name] = Array.from(
+            rule.cssRules,
+            (frame) => `${(frame as CSSKeyframeRule).keyText} { ${(frame as CSSKeyframeRule).style.cssText} }`,
+          ).join(" ");
+        } else if ("cssRules" in rule) {
+          walk((rule as CSSGroupingRule).cssRules);
+        }
+      }
+    };
+    for (const sheet of document.styleSheets) walk(sheet.cssRules);
+    return found;
+  };
+
+  test("the enter and exit keyframes are compiled, with every offset they animate", async ({
+    page,
+  }) => {
+    await page.goto("/login");
+    await expect(page.locator("[data-slot='card']").first()).toBeVisible();
+
+    const keyframes = await page.evaluate(readKeyframes);
+
+    // `enter` starts from the offsets and ends at rest; `exit` is its mirror.
+    expect(keyframes.enter).toMatch(/^0% \{/);
+    expect(keyframes.exit).toMatch(/^100% \{/);
+    for (const [name, side] of [
+      ["enter", "enter"],
+      ["exit", "exit"],
+    ] as const) {
+      for (const offset of ["opacity", "scale", "translate-x", "translate-y"]) {
+        expect(keyframes[name], `${name} reads --tw-${side}-${offset}`).toContain(
+          `--tw-${side}-${offset}`,
+        );
+      }
+    }
+  });
+
   test("a section fades in, and a delayed one starts after it", async ({ page }) => {
     const browserIssues = trackBrowserIssues(page);
 
@@ -73,6 +117,14 @@ test.describe("Enter animations", () => {
 
     const welcome = page.getByRole("region", { name: "Welcome to Igloo", exact: true });
     await expect(welcome).toBeVisible();
+    // The browser made an animation of it: a name with no keyframes behind
+    // it would leave this list empty. (`fill-mode-both` keeps a finished
+    // animation in it.)
+    expect(
+      await welcome.evaluate((element) =>
+        element.getAnimations().map((animation) => (animation as CSSAnimation).animationName),
+      ),
+    ).toContain("enter");
     expect(await welcome.evaluate(readMotion)).toMatchObject({
       name: "enter",
       duration: "0.2s",
@@ -145,10 +197,12 @@ test.describe("Enter animations", () => {
       fillMode: "both",
       enterOpacity: "0",
     });
-    expect(
-      await card.evaluate((element) =>
-        getComputedStyle(element).getPropertyValue("--tw-enter-translate-y").trim(),
-      ),
-    ).not.toBe("0");
+    // An unset offset reads as "" once nothing registers the property, and as
+    // "0" while something does; neither is a card that rises.
+    const offset = await card.evaluate((element) =>
+      getComputedStyle(element).getPropertyValue("--tw-enter-translate-y").trim(),
+    );
+    expect(offset).not.toBe("");
+    expect(offset).not.toBe("0");
   });
 });
