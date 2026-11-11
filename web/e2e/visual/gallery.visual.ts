@@ -131,7 +131,7 @@ for (const theme of THEMES) {
       await expectScreenshot(buttons, `buttons-focus-${theme}.png`);
 
       await buttons
-        .getByRole("button", { name: "Dialog secondary" })
+        .getByRole("button", { name: "Dialog cancel" })
         .hover();
       await expectScreenshot(buttons, `buttons-hover-${theme}.png`);
     });
