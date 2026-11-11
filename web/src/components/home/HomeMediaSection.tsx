@@ -1,11 +1,16 @@
 import type { ReactNode } from "react";
-import type { LucideIcon } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Link, type LinkProps } from "@tanstack/react-router";
+import { ChevronRight, type LucideIcon } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import EmptyState from "@/components/shared/EmptyState";
 import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
+import ScrollRail from "@/components/shared/ScrollRail";
 import SectionErrorAlert from "@/components/shared/SectionErrorAlert";
-import { MOTION_SECTION_ENTER_DELAYED_CLASS } from "@/lib/constants";
+import {
+  FOCUS_VISIBLE_RING_CLASS,
+  MOTION_MICRO_COLORS_CLASS,
+  MOTION_SECTION_ENTER_DELAYED_CLASS,
+} from "@/lib/constants";
 import { pluralize } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -23,7 +28,10 @@ type HomeMediaSectionProps<T> = {
   emptyIcon: LucideIcon;
   /** Singular noun for the item count ("movie", "album") — pluralized here. */
   countNoun: string;
-  gridClassName: string;
+  /** The width of one card in the rail. */
+  itemClassName: string;
+  /** Where the whole of this row's library lives; drawn as "See all". */
+  seeAllLink?: LinkProps;
   getKey: (item: T, index: number) => string;
   renderItem: (item: T, index: number) => ReactNode;
 };
@@ -40,7 +48,8 @@ export default function HomeMediaSection<T>({
   emptyDescription,
   emptyIcon: EmptyIcon,
   countNoun,
-  gridClassName,
+  itemClassName,
+  seeAllLink,
   getKey,
   renderItem,
 }: HomeMediaSectionProps<T>) {
@@ -87,10 +96,19 @@ export default function HomeMediaSection<T>({
           </p>
         </div>
 
-        {!isPending && !errorMessage && items.length > 0 && (
-          <Badge variant="outline" className="px-3 py-1">
-            {countLabel}
-          </Badge>
+        {seeAllLink && !isPending && !errorMessage && items.length > 0 && (
+          <Link
+            {...seeAllLink}
+            aria-label={`See all ${title.toLowerCase()}`}
+            className={cn(
+              "inline-flex shrink-0 items-center gap-0.5 rounded-sm text-sm font-medium text-muted-foreground hover:text-foreground",
+              MOTION_MICRO_COLORS_CLASS,
+              FOCUS_VISIBLE_RING_CLASS,
+            )}
+          >
+            See all
+            <ChevronRight className="size-4" aria-hidden="true" />
+          </Link>
         )}
       </div>
 
@@ -105,15 +123,30 @@ export default function HomeMediaSection<T>({
       ) : errorMessage ? (
         <SectionErrorAlert message={errorMessage} onRetry={onRetry} />
       ) : items.length > 0 ? (
-        // A list named by the heading: Orca names the row when focus tabs
-        // into its first card, which it does not do for the region alone.
-        <ul role="list" aria-labelledby={headingId} className={gridClassName}>
-          {items.map((item, index) => (
-            <li key={getKey(item, index)} className="min-w-0">
-              {renderItem(item, index)}
-            </li>
-          ))}
-        </ul>
+        // One row that scrolls sideways, however many cards it holds. It is
+        // still a list named by the heading: Orca names the row when focus
+        // tabs into its first card, which it does not do for the region
+        // alone. Focusable so the keyboard can scroll it.
+        <ScrollRail label={title.toLowerCase()} asChild>
+          <ul
+            role="list"
+            aria-labelledby={headingId}
+            tabIndex={0}
+            className={cn(
+              "list-none gap-3 pb-3 sm:gap-4",
+              FOCUS_VISIBLE_RING_CLASS,
+            )}
+          >
+            {items.map((item, index) => (
+              <li
+                key={getKey(item, index)}
+                className={cn("min-w-0 shrink-0", itemClassName)}
+              >
+                {renderItem(item, index)}
+              </li>
+            ))}
+          </ul>
+        </ScrollRail>
       ) : (
         <EmptyState
           icon={EmptyIcon}

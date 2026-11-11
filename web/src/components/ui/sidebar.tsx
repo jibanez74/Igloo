@@ -1,5 +1,5 @@
 import * as React from "react"
-import { PanelLeftIcon } from "lucide-react"
+import { MenuIcon, PanelLeftIcon } from "lucide-react"
 import { Slot } from "radix-ui"
 
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -11,6 +11,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
+import { Tooltip } from "@/components/ui/tooltip"
 import {
   SidebarContext,
   useSidebar,
@@ -21,6 +22,29 @@ const SIDEBAR_WIDTH = "16rem"
 const SIDEBAR_WIDTH_MOBILE = "18rem"
 const SIDEBAR_WIDTH_ICON = "3rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
+const SIDEBAR_STORAGE_KEY = "igloo-sidebar"
+
+// The desktop column's state outlives the page, so a reader who collapsed it
+// finds it collapsed after a reload. Storage can be unavailable (private
+// mode, a blocked site): the column is then simply expanded each time.
+function readStoredOpen() {
+  try {
+    return window.localStorage.getItem(SIDEBAR_STORAGE_KEY) !== "collapsed"
+  } catch {
+    return true
+  }
+}
+
+function storeOpen(open: boolean) {
+  try {
+    window.localStorage.setItem(
+      SIDEBAR_STORAGE_KEY,
+      open ? "expanded" : "collapsed"
+    )
+  } catch {
+    // Nothing to do: the state still holds for this page.
+  }
+}
 
 function SidebarProvider({
   className,
@@ -29,8 +53,12 @@ function SidebarProvider({
   ...props
 }: React.ComponentProps<"div">) {
   const isMobile = useIsMobile()
-  const [open, setOpen] = React.useState(true)
+  const [open, setOpen] = React.useState(readStoredOpen)
   const [openMobile, setOpenMobile] = React.useState(false)
+
+  React.useEffect(() => {
+    storeOpen(open)
+  }, [open])
 
   const toggleSidebar = () => {
     if (isMobile) {
@@ -152,30 +180,46 @@ function Sidebar({
   )
 }
 
+// One control for both shapes of the navigation: on a phone it opens the
+// sheet (a menu icon, a 40px target); on a desktop it collapses the column to
+// its icons and back, and says which in its name and tooltip.
 function SidebarTrigger({
   className,
   onClick,
   ...props
 }: React.ComponentProps<typeof Button>) {
-  const { toggleSidebar } = useSidebar()
+  const { isMobile, openMobile, state, toggleSidebar } = useSidebar()
+  const expanded = isMobile ? openMobile : state === "expanded"
+  const label = isMobile
+    ? "Open navigation"
+    : expanded
+      ? "Collapse sidebar"
+      : "Expand sidebar"
 
-  return (
+  const button = (
     <Button
       data-sidebar="trigger"
       data-slot="sidebar-trigger"
-      variant="ghost"
+      variant="ghost-muted"
       size="icon"
-      className={cn("size-7", className)}
+      aria-label={label}
+      aria-expanded={expanded}
+      className={cn(isMobile ? "size-10" : "size-8", className)}
       onClick={(event) => {
         onClick?.(event)
         toggleSidebar()
       }}
       {...props}
     >
-      <PanelLeftIcon />
-      <span className="sr-only">Toggle Sidebar</span>
+      {isMobile ? (
+        <MenuIcon aria-hidden="true" />
+      ) : (
+        <PanelLeftIcon aria-hidden="true" />
+      )}
     </Button>
   )
+
+  return isMobile ? button : <Tooltip label={label} side="bottom">{button}</Tooltip>
 }
 
 function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
@@ -189,7 +233,6 @@ function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
       aria-label="Toggle Sidebar"
       tabIndex={-1}
       onClick={toggleSidebar}
-      title="Toggle Sidebar"
       className={cn(
         "absolute inset-y-0 -right-4 z-20 hidden w-4 -translate-x-1/2 cursor-w-resize transition-[background-color,transform] duration-micro ease-linear after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] hover:after:bg-sidebar-border in-data-[state=collapsed]:cursor-e-resize motion-reduce:transition-none sm:flex",
         className
@@ -262,6 +305,25 @@ function SidebarGroup({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
+// The small heading over a group of links. It goes when the column is
+// collapsed to icons, where there is no room for it.
+function SidebarGroupLabel({
+  className,
+  ...props
+}: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="sidebar-group-label"
+      data-sidebar="group-label"
+      className={cn(
+        "flex h-8 shrink-0 items-center px-2 text-xs font-medium tracking-wide text-sidebar-foreground/60 uppercase group-data-[collapsible=icon]:hidden",
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
 function SidebarGroupContent({
   className,
   ...props
@@ -298,28 +360,53 @@ function SidebarMenuItem({ className, ...props }: React.ComponentProps<"li">) {
   )
 }
 
+const SIDEBAR_MENU_BUTTON_SIZES = {
+  default: "h-8 p-2 group-data-[collapsible=icon]:p-2!",
+  // A row with an avatar and two lines of text: the account block.
+  lg: "h-12 p-2 group-data-[collapsible=icon]:p-0!",
+} as const
+
 function SidebarMenuButton({
   asChild = false,
   isActive = false,
+  size = "default",
+  tooltip,
   className,
   ...props
 }: React.ComponentProps<"button"> & {
   asChild?: boolean
   isActive?: boolean
+  size?: keyof typeof SIDEBAR_MENU_BUTTON_SIZES
+  /**
+   * The row's name, shown beside it while the column is collapsed to icons.
+   * It repeats the accessible name, so it is not announced again.
+   */
+  tooltip?: string
 }) {
+  const { isMobile, state } = useSidebar()
   const Comp = asChild ? Slot.Root : "button"
 
-  return (
+  const button = (
     <Comp
       data-slot="sidebar-menu-button"
       data-sidebar="menu-button"
+      data-size={size}
       data-active={isActive}
       className={cn(
-        "flex h-8 w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm ring-sidebar-ring outline-hidden transition-[width,height,padding] duration-standard group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground motion-reduce:transition-none [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0",
+        "flex w-full items-center gap-2 overflow-hidden rounded-md text-left text-sm ring-sidebar-ring outline-hidden transition-[width,height,padding] duration-standard group-data-[collapsible=icon]:size-8! hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground motion-reduce:transition-none [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0",
+        SIDEBAR_MENU_BUTTON_SIZES[size],
         className
       )}
       {...props}
     />
+  )
+
+  if (!tooltip || isMobile || state !== "collapsed") return button
+
+  return (
+    <Tooltip label={tooltip} side="right">
+      {button}
+    </Tooltip>
   )
 }
 
@@ -328,6 +415,7 @@ export {
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
+  SidebarGroupLabel,
   SidebarGroupContent,
   SidebarHeader,
   SidebarInset,

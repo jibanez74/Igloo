@@ -36,6 +36,9 @@ SELECT
   sh.id AS show_id,
   sh.name AS show_name,
   sh.poster_path AS show_poster_path,
+  sh.backdrop_path AS show_backdrop_path,
+  sh.overview AS show_overview,
+  e.overview AS episode_overview,
   sh.premiere_year AS show_premiere_year,
   wp.progress_sec,
   wp.duration_sec
@@ -72,6 +75,9 @@ type GetContinueWatchingEpisodesRow struct {
 	ShowID           int64          `json:"show_id"`
 	ShowName         string         `json:"show_name"`
 	ShowPosterPath   sql.NullString `json:"show_poster_path"`
+	ShowBackdropPath sql.NullString `json:"show_backdrop_path"`
+	ShowOverview     sql.NullString `json:"show_overview"`
+	EpisodeOverview  sql.NullString `json:"episode_overview"`
 	ShowPremiereYear sql.NullInt64  `json:"show_premiere_year"`
 	ProgressSec      float64        `json:"progress_sec"`
 	DurationSec      float64        `json:"duration_sec"`
@@ -105,6 +111,9 @@ func (q *Queries) GetContinueWatchingEpisodes(ctx context.Context, arg GetContin
 			&i.ShowID,
 			&i.ShowName,
 			&i.ShowPosterPath,
+			&i.ShowBackdropPath,
+			&i.ShowOverview,
+			&i.EpisodeOverview,
 			&i.ShowPremiereYear,
 			&i.ProgressSec,
 			&i.DurationSec,

@@ -36,6 +36,11 @@ const defaultContinueWatchingItems = [
     id: 104,
     title: "Ember Line",
     poster_path: { String: "", Valid: false },
+    backdrop_path: { String: "/ember-line-backdrop.jpg", Valid: true },
+    overview: {
+      String: "A signal crew races a wildfire along the last working rail line.",
+      Valid: true,
+    },
     year: { Int64: 2026, Valid: true },
     progress_sec: 1830,
     duration_sec: 5400,
@@ -45,6 +50,8 @@ const defaultContinueWatchingItems = [
     id: 70103,
     title: "Frost Harbor",
     poster_path: { String: "", Valid: false },
+    backdrop_path: { String: "", Valid: false },
+    overview: { String: "The harbor freezes over a week early.", Valid: true },
     year: { Int64: 2025, Valid: true },
     progress_sec: 600,
     duration_sec: 2400,
@@ -120,7 +127,12 @@ function mockHomeFetch(options: MockHomeFetchOptions = {}) {
             {
               id: 101,
               title: "Signal Fire",
-              poster_path: { String: "", Valid: false },
+              poster_path: { String: "/signal-fire.jpg", Valid: true },
+              backdrop_path: { String: "", Valid: false },
+              overview: {
+                String: "A lighthouse keeper finds a message never meant to arrive.",
+                Valid: true,
+              },
               year: { Int64: 2026, Valid: true },
             },
           ],
@@ -178,12 +190,13 @@ describe("home route motion", () => {
   it("renders the home route with section-level motion contracts", async () => {
     await renderHomeRoute();
 
-    const dashboardHeading = await screen.findByRole("heading", {
-      name: "Welcome to Igloo",
-    });
-    expect(dashboardHeading).toBeInTheDocument();
+    // The page's one h1 is its name, out of sight; the billboard leads.
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Home" }),
+    ).toHaveClass("sr-only");
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
 
-    expect(dashboardHeading.closest("section")?.className).toContain(
+    expect(screen.getByRole("region", { name: "Ember Line" }).className).toContain(
       MOTION_SECTION_ENTER_CLASS,
     );
 
@@ -209,21 +222,101 @@ describe("home route motion", () => {
 });
 
 describe("home section summaries", () => {
-  it("pluralizes item counts in the summary and count badge", async () => {
+  it("pluralizes item counts in the row's spoken summary", async () => {
     await renderHomeRoute();
 
     expect(
       await screen.findByText("1 movie available in recently added movies."),
     ).toBeInTheDocument();
-    // Count badges for the single-item sections render the singular noun.
-    expect(screen.getAllByText("1 movie").length).toBeGreaterThan(0);
     expect(screen.queryByText(/1 movies/)).not.toBeInTheDocument();
 
     expect(
       screen.getByText("1 show available in recently added shows."),
     ).toBeInTheDocument();
-    expect(screen.getAllByText("1 show").length).toBeGreaterThan(0);
     expect(screen.queryByText(/1 shows/)).not.toBeInTheDocument();
+  });
+
+  it("links each library row to its library, and not the row with no library", async () => {
+    await renderHomeRoute();
+
+    expect(
+      await screen.findByRole("link", { name: "See all recently added movies" }),
+    ).toHaveAttribute("href", "/movies");
+    expect(
+      screen.getByRole("link", { name: "See all recently added shows" }),
+    ).toHaveAttribute("href", "/tv-shows");
+    expect(
+      screen.queryByRole("link", { name: "See all continue watching" }),
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe("home billboard", () => {
+  it("leads with what was last watched: its name, time left, overview and a way back in", async () => {
+    await renderHomeRoute();
+
+    const billboard = await screen.findByRole("region", { name: "Ember Line" });
+    expect(within(billboard).getByText("Continue watching")).toBeInTheDocument();
+    expect(
+      within(billboard).getByRole("heading", { level: 2, name: "Ember Line" }),
+    ).toBeInTheDocument();
+    expect(within(billboard).getByText("2026")).toBeInTheDocument();
+    // 1830 of 5400 seconds: an hour, less thirty seconds, rounded up.
+    expect(within(billboard).getByText("1 hour left")).toHaveClass("sr-only");
+    expect(
+      within(billboard).getByText(
+        "A signal crew races a wildfire along the last working rail line.",
+      ),
+    ).toBeInTheDocument();
+
+    expect(
+      within(billboard).getByRole("link", { name: "Resume Ember Line" }),
+    ).toHaveAttribute("href", "/movies/104/play");
+    expect(
+      within(billboard).getByRole("link", { name: "Details for Ember Line" }),
+    ).toHaveAttribute("href", "/movies/104");
+    // Decoration only: the picture carries no name of its own.
+    expect(billboard.querySelector("img")).toHaveAttribute("alt", "");
+    expect(billboard.querySelector("img")).toHaveAttribute(
+      "src",
+      expect.stringContaining("/ember-line-backdrop.jpg"),
+    );
+  });
+
+  it("features an episode by its show, with the episode named under it", async () => {
+    await renderHomeRoute({
+      continueWatching: [defaultContinueWatchingItems[1]],
+    });
+
+    const billboard = await screen.findByRole("region", { name: "Frost Harbor" });
+    expect(within(billboard).getByText("S1 E4")).toBeInTheDocument();
+    expect(within(billboard).getByText("Thin Ice")).toBeInTheDocument();
+    expect(
+      within(billboard).getByText("The harbor freezes over a week early."),
+    ).toBeInTheDocument();
+    expect(
+      within(billboard).getByRole("link", { name: "Resume Frost Harbor" }),
+    ).toHaveAttribute("href", "/tv-shows/301/episodes/70103/play");
+    expect(
+      within(billboard).getByRole("link", { name: "Details for Frost Harbor" }),
+    ).toHaveAttribute("href", "/tv-shows/301");
+    // No backdrop and no poster: the plain tile, with no broken image.
+    expect(billboard.querySelector("img")).toBeNull();
+  });
+
+  it("features the newest movie when nothing is in progress, to play from the start", async () => {
+    await renderHomeRoute({ continueWatching: [] });
+
+    const billboard = await screen.findByRole("region", { name: "Signal Fire" });
+    expect(within(billboard).getByText("New in your library")).toBeInTheDocument();
+    expect(
+      within(billboard).getByRole("link", { name: "Play Signal Fire" }),
+    ).toHaveAttribute("href", "/movies/101/play");
+    expect(within(billboard).queryByText(/left$/)).not.toBeInTheDocument();
+    // No backdrop: the poster stands in, blurred.
+    const picture = billboard.querySelector("img");
+    expect(picture).toHaveAttribute("src", expect.stringContaining("/signal-fire.jpg"));
+    expect(picture).toHaveClass("blur-2xl");
   });
 });
 

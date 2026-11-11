@@ -16,7 +16,7 @@ function renderSection(
       emptyDescription="Scan a library to see movies here."
       emptyIcon={Film}
       countNoun="movie"
-      gridClassName="grid"
+      itemClassName="w-32"
       getKey={item => item}
       renderItem={item => <article>{item}</article>}
       {...props}
@@ -30,6 +30,26 @@ describe("HomeMediaSection", () => {
 
     const list = screen.getByRole("list", { name: "Recently Added Movies" });
     expect(within(list).getAllByRole("listitem")).toHaveLength(2);
+  });
+
+  it("is one row that scrolls: each card keeps its width, and the keyboard can reach the row", () => {
+    renderSection({ items: ["Arrival", "Dune"] });
+
+    const list = screen.getByRole("list", { name: "Recently Added Movies" });
+    expect(list).toHaveClass("overflow-x-auto");
+    expect(list).toHaveAttribute("tabindex", "0");
+    for (const item of within(list).getAllByRole("listitem")) {
+      expect(item).toHaveClass("w-32", "shrink-0");
+    }
+  });
+
+  it("offers See all only when the row has a library and something in it", () => {
+    const { unmount } = renderSection({ items: ["Arrival"] });
+    expect(screen.queryByRole("link", { name: /^See all/ })).not.toBeInTheDocument();
+    unmount();
+
+    renderSection({ seeAllLink: { to: "/movies" } });
+    expect(screen.queryByRole("link", { name: /^See all/ })).not.toBeInTheDocument();
   });
 
   it.each([

@@ -49,7 +49,7 @@ for (const theme of THEMES) {
         await openPage(page, "/movies");
         await expectScreenshot(page, `movies-phone-${theme}.png`);
 
-        await page.getByRole("button", { name: "Toggle Sidebar" }).click();
+        await page.getByRole("button", { name: "Open navigation" }).click();
         await expect(
           page.getByRole("navigation", { name: "Main navigation" }),
         ).toBeVisible();

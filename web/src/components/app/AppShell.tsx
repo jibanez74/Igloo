@@ -35,7 +35,7 @@ export default function AppShell({ children }: PropsWithChildren) {
 
       <SidebarInset className="bg-background">
         <header className="sticky top-0 z-chrome flex h-14 shrink-0 items-center gap-4 border-b border-border bg-background/95 px-4 backdrop-blur-sm md:px-6">
-          <SidebarTrigger className="-ml-1 text-muted-foreground hover:bg-accent hover:text-foreground md:hidden" />
+          <SidebarTrigger className="-ml-2" />
           <Header />
         </header>
 
