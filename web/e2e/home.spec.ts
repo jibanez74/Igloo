@@ -290,7 +290,7 @@ test("home page is clean, responsive, and keyboard reachable", async ({ page }) 
   }
 
   await page.setViewportSize(VIEWPORTS.phone);
-  const sidebarToggle = page.getByRole("button", { name: "Toggle Sidebar" });
+  const sidebarToggle = page.getByRole("button", { name: "Open navigation" });
   await expect(sidebarToggle).toBeVisible();
   await sidebarToggle.click();
 

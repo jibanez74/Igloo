@@ -874,13 +874,29 @@ the skip link lands past the search bar. The
 provider owns this state internally; the rail and Ctrl/Cmd+B toggle desktop
 collapse, while the mobile trigger controls the sheet.
 
-- Sidebar: `BrandMark` on a `bg-primary` tile + "Igloo" wordmark linking
-  home; Home / Movies / TV Shows
-  / Music / Settings with lucide icons (active =
-  `bg-sidebar-accent` + `text-primary` icon); footer Logout. `SidebarRail`
-  gives a click-to-collapse handle.
+- Sidebar (`app/app-sidebar.tsx`), top to bottom:
+  - **Header**: `BrandMark` on a `bg-primary` tile + "Igloo" wordmark linking
+    home. It is `h-14`, the app header's height, so the two bottom borders
+    meet in one line.
+  - **Navigation** (one `navigation` landmark): Home; then Movies, TV Shows
+    and Music under a "Library" heading that names their list; then
+    Settings, pushed to the foot of the column (`mt-auto`). Active =
+    `bg-sidebar-accent` + `text-primary` icon.
+  - **Account block** (footer): the signed-in user's avatar (uploaded
+    picture, else initials), name and role ("Administrator" / "Member"),
+    opening a menu upward with their email, Account settings, the theme
+    switch and Logout. Logout lives nowhere else.
+  - **Collapsing**: the column collapses to its icons (3rem). The control is
+    the `SidebarTrigger` at the left of the app header, named "Collapse
+    sidebar" / "Expand sidebar" with `aria-expanded`; Ctrl/Cmd+B and the
+    `SidebarRail` edge do the same. The state is kept in `localStorage`
+    (`igloo-sidebar`), so it survives a reload. Collapsed, the heading and
+    labels go, each icon names itself in a `Tooltip` to its right (§2.2),
+    the account block is the avatar alone, and its menu opens to the right.
+  - **Phone**: the same content in a sheet. The trigger is a 40px menu icon
+    named "Open navigation".
 - Header: sticky `h-14 bg-background/95 backdrop-blur-sm`, border-b.
-  Mobile-only `SidebarTrigger`, then `app/Header.tsx` — a `role="search"` form
+  The `SidebarTrigger` at every width (above), then `app/Header.tsx` — a `role="search"` form
   (submits to `/search?q=…&tab=all&page=1`), `NotificationBell`,
   `ThemeToggle`. The search input is the `glass` field variant (§1.6), the
   light "frosted" treatment from `lib/input-styles.ts` (an allowlisted
@@ -888,7 +904,7 @@ collapse, while the mobile trigger controls the sheet.
 - Content: `px-4 py-6 sm:px-6 lg:px-8`; when the mini audio player is visible
   the shell adds `MINI_PLAYER_CLEARANCE_PADDING_CLASS` (`pb-28 sm:pb-24`) so
   content never hides behind it. The desktop sidebar column takes the same
-  class, so its footer (Logout) sits above the full-width bar instead of under
+  class, so its footer (the account block) sits above the full-width bar instead of under
   it; the mobile sheet opens above the bar and needs none. **Scrolling happens on the window** — virtual
   lists must use `useWindowVirtualizer` (§3.4), never a nested scroll
   container. For the same reason the content column clips with

@@ -381,7 +381,9 @@ test.describe("Login screen", () => {
         response.request().method() === "DELETE",
     );
 
-    await page.getByRole("button", { name: "Logout" }).click();
+    // Logout lives in the account menu at the foot of the sidebar.
+    await page.getByRole("button", { name: /^Account: / }).click();
+    await page.getByRole("menuitem", { name: "Logout" }).click();
 
     const logoutResponse = await logoutResponsePromise;
     expect(logoutResponse.status()).toBe(200);
