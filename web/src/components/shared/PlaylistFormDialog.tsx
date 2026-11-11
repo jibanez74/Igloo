@@ -282,7 +282,6 @@ function PlaylistForm({
             variant="outline"
             onClick={() => onOpenChange(false)}
             disabled={mutation.isPending}
-            className="border-border bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground"
           >
             Cancel
           </Button>

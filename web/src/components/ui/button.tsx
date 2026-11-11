@@ -16,10 +16,6 @@ const BUTTON_VARIANTS = {
     "bg-destructive text-destructive-foreground hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40",
   outline:
     "border bg-background text-foreground shadow-xs hover:bg-accent hover:text-accent-foreground dark:border-border dark:bg-muted/90 dark:text-foreground dark:shadow-none dark:hover:bg-accent dark:hover:text-foreground [&_svg]:text-current",
-  // Outline with a muted fill and text: the quiet second action beside a
-  // primary one (Cancel, Start over).
-  secondary:
-    "border border-border bg-muted text-muted-foreground shadow-xs hover:bg-accent hover:text-foreground dark:border-border dark:bg-muted/90 dark:text-foreground dark:shadow-none dark:hover:bg-accent dark:hover:text-foreground [&_svg]:text-current",
   // Outline in the destructive colour, for a removal that is not the main
   // action of its surface. Destructive in both themes: it does not take
   // outline's dark fill and text.

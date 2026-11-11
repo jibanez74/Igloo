@@ -63,7 +63,7 @@ describe("Button pill shape", () => {
     expect(button).not.toHaveClass("rounded-md");
   });
 
-  it.each(["accent", "outline", "secondary", "ghost"] as const)(
+  it.each(["accent", "outline", "ghost"] as const)(
     "applies to the %s variant without changing its colours",
     variant => {
       render(
@@ -91,18 +91,24 @@ describe("Button pill shape", () => {
 // The looks call sites used to assemble from an outline or ghost button and a
 // handful of classes (design-system §1.6).
 describe("Button quiet variants", () => {
-  it("fills the secondary action with the muted surface and text", () => {
-    render(<Button variant="secondary">Cancel</Button>);
-
-    const button = screen.getByRole("button", { name: "Cancel" });
-    expect(button).toHaveClass(
-      "border-border",
-      "bg-muted",
-      "text-muted-foreground",
-      "hover:bg-accent",
-      "hover:text-foreground",
+  // The quiet second action (Cancel, Reset, Start over) is plain outline.
+  // A muted fill with muted text was tried for it and dropped: in the light
+  // theme it read as a disabled primary button.
+  it("gives the quiet second action the outline look, unlike a disabled primary", () => {
+    render(
+      <>
+        <Button variant="outline">Cancel</Button>
+        <Button disabled>Add</Button>
+      </>,
     );
-    expectNoClass(button, "bg-background", "text-foreground");
+
+    const cancel = screen.getByRole("button", { name: "Cancel" });
+    expect(cancel).toHaveClass("border", "bg-background", "text-foreground");
+    expectNoClass(cancel, "bg-muted", "text-muted-foreground");
+    expect(screen.getByRole("button", { name: "Add" })).toHaveClass(
+      "disabled:bg-muted",
+      "disabled:text-muted-foreground",
+    );
   });
 
   it("rests a ghost-muted button in the muted text colour", () => {
@@ -216,7 +222,6 @@ describe("buttonVariants", () => {
       "outline",
       "ghost",
       "accent",
-      "secondary",
       "outline-destructive",
       "ghost-muted",
       "ghost-destructive",

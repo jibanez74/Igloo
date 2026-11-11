@@ -117,12 +117,15 @@ export default function EpisodeWatchedToggle({
   return (
     <Button
       type="button"
-      variant="ghost"
+      variant="ghost-muted"
       size="icon"
       onClick={() => mutation.mutate(!watched)}
       disabled={mutation.isPending}
       className={cn(
-        "min-h-10 min-w-10 touch-manipulation text-muted-foreground",
+        "min-h-10 min-w-10 touch-manipulation",
+        // The colour is the toggle's state (watched), not a look a variant
+        // could carry.
+        // eslint-disable-next-line no-restricted-syntax
         watched && "text-success",
       )}
       aria-label={

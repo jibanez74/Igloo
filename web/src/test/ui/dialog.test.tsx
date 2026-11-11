@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import {
   AlertDialog,
+  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogTitle,
@@ -134,6 +135,7 @@ describe("AlertDialog", () => {
           <AlertDialogDescription>
             This action cannot be undone.
           </AlertDialogDescription>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
         </AlertDialogContent>
       </AlertDialog>,
     );
@@ -162,5 +164,16 @@ describe("AlertDialog", () => {
     expect(
       screen.getByRole("heading", { name: "Delete playlist" }),
     ).not.toHaveClass("text-destructive");
+  });
+
+  // The quiet second action is outline everywhere. A muted fill with muted
+  // text read as a disabled button in the light theme.
+  it("gives Cancel the outline look", () => {
+    renderAlert();
+
+    const cancel = screen.getByRole("button", { name: "Cancel" });
+    expect(cancel).toHaveAttribute("data-slot", "alert-dialog-cancel");
+    expect(cancel).toHaveClass("border", "bg-background", "text-foreground");
+    expectNoClass(cancel, "bg-muted", "text-muted-foreground");
   });
 });

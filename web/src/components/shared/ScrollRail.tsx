@@ -160,6 +160,9 @@ export default function ScrollRail({
             type="button"
             variant="outline"
             size="icon-sm"
+            // The arrow's reveal over the artwork (opacity on hover and
+            // focus) and its round shadowed shape; restyled with the rails.
+            // eslint-disable-next-line no-restricted-syntax
             className={SCROLL_RAIL_ARROW_CLASS}
             aria-label={`Scroll ${label} ${direction}`}
             aria-disabled={!canScroll || undefined}

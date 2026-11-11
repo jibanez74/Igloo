@@ -4,7 +4,6 @@ import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import {
   MOTION_MICRO_COLORS_CLASS,
-  SETTINGS_RESET_BUTTON_CLASS,
 } from "@/lib/constants";
 
 type SaveBarTone = "neutral" | "error" | "success";
@@ -111,7 +110,7 @@ export default function SettingsSaveBar({
           variant="outline"
           onClick={onReset}
           disabled={resetDisabled ?? actionsDisabled}
-          className={cn(SETTINGS_RESET_BUTTON_CLASS, "px-3 sm:px-4")}
+          className="px-3 sm:px-4"
         >
           <RotateCcw className="size-4" aria-hidden="true" />
           <span className="sr-only sm:not-sr-only">{resetLabel}</span>

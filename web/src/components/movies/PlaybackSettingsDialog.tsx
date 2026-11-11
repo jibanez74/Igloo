@@ -382,7 +382,6 @@ function PlaybackSettingsDialogForm({
           type="button"
           variant="outline"
           onClick={onCancel}
-          className="border-border bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground"
         >
           Cancel
         </Button>
