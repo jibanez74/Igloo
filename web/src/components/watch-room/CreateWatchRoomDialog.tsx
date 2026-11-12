@@ -341,13 +341,15 @@ export default function CreateWatchRoomDialog({
                   {selectedUsers.map(user => (
                     <Button
                       key={user.id}
+                      type="button"
                       variant="outline"
                       size="sm"
                       shape="pill"
+                      className="max-w-full"
                       onClick={() => handleToggleUser(user.id, false)}
                       aria-label={`Remove ${user.name} from invited users`}
                     >
-                      {user.name}
+                      <span className="truncate">{user.name}</span>
                       <X className="size-3.5" aria-hidden="true" />
                     </Button>
                   ))}

@@ -215,6 +215,21 @@ describe("CreateWatchRoomDialog", () => {
     expect(screen.getByText("Dana Scully")).toBeInTheDocument();
   });
 
+  // A chip sits inside the form before its submit button; as a default
+  // submit button, Enter in the search field would remove that invitee.
+  it("keeps the invitees when Enter is pressed in the search field", async () => {
+    const user = userEvent.setup();
+    renderDialog();
+
+    await user.click(screen.getByRole("checkbox", { name: /invite fox mulder/i }));
+    await user.type(screen.getByLabelText("Search users"), "dana{Enter}");
+
+    expect(
+      screen.getByRole("button", { name: /remove fox mulder from invited users/i }),
+    ).toHaveAttribute("type", "button");
+    expect(screen.getByText("1 selected")).toBeInTheDocument();
+  });
+
   it("requires at least one invited user before creating a room", async () => {
     const user = userEvent.setup();
     renderDialog();
