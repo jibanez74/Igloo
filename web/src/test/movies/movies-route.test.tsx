@@ -519,7 +519,7 @@ describe("movies route focus restoration", () => {
     });
 
     expect(await screen.findByText("Moonlight")).toBeInTheDocument();
-    expect(screen.getByText("1 liked movie", { exact: true })).toBeInTheDocument();
+    expect(screen.getByText("1 movie", { exact: true })).toBeInTheDocument();
   });
 
   it("spells out only what differs from the default search", async () => {
@@ -574,7 +574,7 @@ describe("movies route focus restoration", () => {
     // The page's own focus move waits for the liked list and then a frame, so
     // let both pass before checking that focus stayed on the menu trigger.
     expect(
-      await screen.findByText("1 liked movie", { exact: true }),
+      await screen.findByText("1 movie", { exact: true }),
     ).toBeInTheDocument();
     await act(async () => {
       await new Promise(resolve => window.setTimeout(resolve, 50));

@@ -8,11 +8,13 @@ import {
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
+  ArrowLeft,
   Film,
   Grid3X3,
   Heart,
   ListVideo,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import PlaylistFormDialog from "@/components/shared/PlaylistFormDialog";
@@ -32,7 +34,6 @@ import {
   CONTENT_FADE_ENTER_CLASS,
   CONTENT_FADE_EXIT_CLASS,
   CONTENT_FADE_TRANSITION_MS,
-  FOCUS_VISIBLE_RING_CLASS,
   LIBRARY_TAB_TRIGGER_CLASS,
   LIBRARY_TABS_LIST_CLASS,
   MOTION_SECTION_ENTER_DELAYED_CLASS,
@@ -727,20 +728,25 @@ function LikedMoviesInPlaylistsTab({
       onSortToggle={handleSortToggle}
       toolbarStartSlot={
         <>
-          <button
+          {/* The breadcrumb the music library's liked view has. */}
+          <Button
             ref={backToPlaylistsButtonRef}
-            type="button"
+            variant="link-muted"
+            size="inline"
             onClick={onExitLiked}
-            className={cn(
-              "rounded-sm text-sm font-medium text-primary hover:underline",
-              FOCUS_VISIBLE_RING_CLASS,
-            )}
+            aria-label="Back to playlists"
           >
-            Back to playlists
-          </button>
+            <ArrowLeft className="size-4" aria-hidden="true" />
+            Playlists
+          </Button>
+          <span className="text-muted-foreground" aria-hidden="true">/</span>
+          <h2 className="flex items-center gap-2 font-semibold text-foreground">
+            <Heart className="size-4 fill-current text-destructive" aria-hidden="true" />
+            Liked Movies
+          </h2>
           {data?.error === false && (
             <span className="text-sm text-muted-foreground">
-              {total.toLocaleString()} {nounForCount(total, LIKED_MOVIE_NOUN)}
+              {total.toLocaleString()} {nounForCount(total, LIBRARY_NOUNS.movie)}
             </span>
           )}
         </>

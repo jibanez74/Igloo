@@ -200,14 +200,15 @@ export default function NotificationBell() {
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <h2 className="text-sm font-semibold text-foreground">Notifications</h2>
           {unreadCount > 0 && (
-            <button
-              type="button"
+            <Button
+              variant="link"
+              size="inline"
               onClick={() => markAllMutation.mutate()}
               disabled={markAllMutation.isPending}
-              className="text-xs font-medium text-primary hover:text-primary disabled:opacity-50"
+              className="text-xs"
             >
               Mark all read
-            </button>
+            </Button>
           )}
         </div>
 

@@ -12,6 +12,7 @@ import {
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import TrackActionsMenu from "@/components/music/TrackActionsMenu";
 import type { TrackItemVariant } from "@/types";
 
@@ -158,18 +159,18 @@ export default function TrackItem({
     >
       {/* Drag handle - only for draggable items */}
       {isDraggable && (
-        <button
-          type="button"
+        <Button
+          variant="ghost-muted"
+          size="icon-sm"
           {...dragHandleProps}
           className={cn(
-            "flex size-8 shrink-0 cursor-grab items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-muted-foreground active:cursor-grabbing",
-            FOCUS_VISIBLE_RING_CLASS,
+            "cursor-grab active:cursor-grabbing",
             MOTION_TRACK_MENU_TRIGGER_CLASS,
           )}
           aria-label="Drag to reorder"
         >
           <GripVertical className="size-4" aria-hidden="true" />
-        </button>
+        </Button>
       )}
 
       {/* Track index - only for album variant */}
@@ -242,17 +243,18 @@ export default function TrackItem({
       </span>
 
       {/* Like button */}
-      <button
-        type="button"
+      <Button
+        variant="ghost-destructive"
+        size="icon-sm"
+        shape="pill"
         onClick={handleLikeClick}
         aria-disabled={likeButton.isDisabled || undefined}
         className={cn(
-          "flex size-8 shrink-0 items-center justify-center rounded-full",
-          FOCUS_VISIBLE_RING_CLASS,
           MOTION_TRACK_ICON_BUTTON_CLASS,
-          likeButton.isLiked
-            ? "text-destructive"
-            : "text-muted-foreground hover:text-destructive",
+          // The colour is the toggle's state (liked), not a look a variant
+          // could carry.
+          // eslint-disable-next-line no-restricted-syntax
+          likeButton.isLiked && "text-destructive",
           likeButton.isDisabled && "cursor-not-allowed opacity-50",
         )}
         aria-label={likeButton.ariaLabel}
@@ -263,7 +265,7 @@ export default function TrackItem({
           className={`size-4 ${likeButton.isLiked ? "fill-current" : ""}`}
           aria-hidden="true"
         />
-      </button>
+      </Button>
 
       {/* Actions menu */}
       {shouldShowActions && (

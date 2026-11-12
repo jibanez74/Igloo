@@ -97,7 +97,11 @@ describe("LibraryAllTab", () => {
     // Nothing to order while the load has failed.
     expect(sortToggle()).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Try again" }));
+    // The shared retry is a text button, underlined in the alert's text.
+    const retry = screen.getByRole("button", { name: "Try again" });
+    expect(retry).toHaveAttribute("data-variant", "link");
+    expect(retry).toHaveClass("underline");
+    await user.click(retry);
 
     await waitFor(() => {
       expect(screen.getByText("Frost Harbor")).toBeInTheDocument();
@@ -140,6 +144,9 @@ describe("LibraryAllTab", () => {
 
     expect(await screen.findByText("Quiet Channel")).toBeInTheDocument();
     expect(sortToggle()).toBeInTheDocument();
+    // The outline pill of the toolbar, like the genre tab's Clear.
+    expect(sortToggle()).toHaveAttribute("data-variant", "outline");
+    expect(sortToggle()).toHaveAttribute("data-shape", "pill");
   });
 
   it("keeps the toolbar row for an empty list that has a start slot", async () => {

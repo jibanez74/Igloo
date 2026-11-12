@@ -133,8 +133,14 @@ describe("movie playlist route", () => {
     const backLink = screen.getByRole("link", { name: "Movie playlists" });
     expect(backLink.getAttribute("href")).toContain("tab=playlists");
 
-    expect(screen.getByRole("button", { name: "Edit playlist" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Delete playlist" })).toBeInTheDocument();
+    // 32 px ghost buttons: the bare text links they replace were 16 px tall
+    // on a phone, under the 24 px target minimum.
+    const edit = screen.getByRole("button", { name: "Edit playlist" });
+    expect(edit).toHaveAttribute("data-variant", "ghost-muted");
+    expect(edit).toHaveAttribute("data-size", "sm");
+    const remove = screen.getByRole("button", { name: "Delete playlist" });
+    expect(remove).toHaveAttribute("data-variant", "ghost-destructive");
+    expect(remove).toHaveAttribute("data-size", "sm");
 
     expect(screen.getByText("Playlist movies")).toBeInTheDocument();
     expect(

@@ -4,11 +4,8 @@ import { useNavigate } from "@tanstack/react-router";
 import { Pencil, Trash2 } from "lucide-react";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
 import PlaylistFormDialog from "@/components/shared/PlaylistFormDialog";
+import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import {
-  FOCUS_VISIBLE_RING_CLASS,
-  MOTION_MICRO_COLORS_CLASS,
-} from "@/lib/constants";
 import { PLAYLIST_KINDS, type PlaylistKind } from "@/lib/playlist-kinds";
 import { showActionFailed, showDeleted } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
@@ -42,11 +39,9 @@ const withoutPlaylist = (list: PlaylistsListData | undefined, id: number) =>
       }
     : list;
 
-const ACTION_BUTTON_CLASS =
-  "inline-flex items-center gap-1.5 rounded-sm text-xs text-muted-foreground sm:gap-2 sm:text-sm";
-
 // The owner-only Edit and Delete row of a playlist page, with the dialogs
-// behind them. Edit reuses the create dialog; Delete confirms, then returns
+// behind them. They are ghost buttons, so a caller that aligns the row with
+// the text above pulls it back by the buttons' padding (-ml-2.5). Edit reuses the create dialog; Delete confirms, then returns
 // to that library's Playlists tab. Callers render it only for the owner.
 export default function PlaylistOwnerActions({
   kind,
@@ -88,35 +83,25 @@ export default function PlaylistOwnerActions({
 
   return (
     <>
-      <div className={cn("flex flex-wrap gap-3 sm:gap-4", className)}>
-        <button
-          type="button"
+      <div className={cn("flex flex-wrap gap-2", className)}>
+        <Button
           ref={editButtonRef}
+          variant="ghost-muted"
+          size="sm"
           onClick={() => setShowEditDialog(true)}
-          className={cn(
-            MOTION_MICRO_COLORS_CLASS,
-            FOCUS_VISIBLE_RING_CLASS,
-            ACTION_BUTTON_CLASS,
-            "hover:text-primary focus-visible:text-primary",
-          )}
           aria-label="Edit playlist"
         >
           <Pencil className="size-4" aria-hidden="true" />
           <span>
             Edit<span className="hidden sm:inline"> Details</span>
           </span>
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
           ref={deleteButtonRef}
+          variant="ghost-destructive"
+          size="sm"
           onClick={() => setShowDeleteDialog(true)}
           disabled={deleteMutation.isPending}
-          className={cn(
-            MOTION_MICRO_COLORS_CLASS,
-            FOCUS_VISIBLE_RING_CLASS,
-            ACTION_BUTTON_CLASS,
-            "hover:text-destructive focus-visible:text-destructive disabled:opacity-50",
-          )}
           aria-label="Delete playlist"
         >
           {deleteMutation.isPending ? (
@@ -127,7 +112,7 @@ export default function PlaylistOwnerActions({
           <span>
             Delete<span className="hidden sm:inline"> Playlist</span>
           </span>
-        </button>
+        </Button>
       </div>
 
       <PlaylistFormDialog
