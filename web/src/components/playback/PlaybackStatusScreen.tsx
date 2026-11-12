@@ -1,10 +1,8 @@
 import type { ReactNode, Ref } from "react";
 import { AlertCircle, ArrowLeft, RotateCcw } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import {
-  FOCUS_VISIBLE_RING_CLASS,
-  MOTION_MICRO_COLORS_CLASS,
-} from "@/lib/constants";
+import { cn } from "@/lib/utils";
 
 type StatusAction = {
   id: string;
@@ -25,9 +23,6 @@ type PlaybackStatusScreenProps = {
 };
 
 const EMPTY_STATUS_ACTIONS: StatusAction[] = [];
-
-const primaryActionClass = `inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-glow hover:bg-primary/90 ${FOCUS_VISIBLE_RING_CLASS} ${MOTION_MICRO_COLORS_CLASS}`;
-const secondaryActionClass = `inline-flex items-center gap-2 rounded-full border border-border px-6 py-3 font-semibold text-muted-foreground hover:bg-accent hover:text-foreground ${FOCUS_VISIBLE_RING_CLASS} ${MOTION_MICRO_COLORS_CLASS}`;
 
 function StatusActionIcon({ icon }: { icon: StatusAction["icon"] }) {
   if (icon === "retry") {
@@ -87,21 +82,24 @@ export default function PlaybackStatusScreen({
         {actions.length > 0 ? (
           <div className="flex items-center justify-center gap-3">
             {actions.map((action) => (
-              <button
+              // The status screen's pair: a primary call to action with the
+              // glow, and the quiet second action in outline.
+              <Button
                 key={action.id}
-                type="button"
                 ref={action.buttonRef}
+                variant={action.variant === "secondary" ? "outline" : "default"}
+                size="xl"
+                shape="pill"
                 onClick={action.onClick}
-                className={
-                  action.variant === "secondary"
-                    ? secondaryActionClass
-                    : primaryActionClass
-                }
+                className={cn(
+                  "font-semibold",
+                  action.variant !== "secondary" && "shadow-glow",
+                )}
                 aria-label={action.ariaLabel}
               >
                 <StatusActionIcon icon={action.icon} />
                 {action.label}
-              </button>
+              </Button>
             ))}
           </div>
         ) : null}

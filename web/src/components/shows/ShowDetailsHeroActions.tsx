@@ -58,8 +58,8 @@ export default function ShowDetailsHeroActions({
         params={{ id: String(showId), episodeId: String(target.episode.id) }}
         search={{ start: 0, audio_track: 0 }}
         className={cn(
-          buttonVariants({ variant: "accent", size: "lg" }),
-          "min-h-11 flex-1 touch-manipulation sm:flex-none",
+          buttonVariants({ variant: "accent", size: "xl" }),
+          "flex-1 touch-manipulation sm:flex-none",
         )}
         aria-label={`${verb} ${code} ${target.episode.name}`}
       >

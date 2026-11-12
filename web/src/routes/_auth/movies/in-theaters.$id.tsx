@@ -240,8 +240,8 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
                   params: { id: String(movie.id) },
                 }}
                 className={cn(
-                  buttonVariants({ variant: "accent", size: "lg" }),
-                  "min-h-11 min-w-34 touch-manipulation sm:min-w-0",
+                  buttonVariants({ variant: "accent", size: "xl" }),
+                  "min-w-34 touch-manipulation sm:min-w-0",
                 )}
               >
                 <Play className="size-4 fill-current" aria-hidden="true" />

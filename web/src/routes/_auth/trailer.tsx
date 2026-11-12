@@ -18,6 +18,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import ProgressBar from "@/components/playback/ProgressBar";
+import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Dialog,
@@ -35,9 +36,7 @@ import { formatTimecode } from "@/lib/format";
 import {
   MOVIE_SEEK_STEP_SEC,
   MOTION_MEDIA_OVERLAY_ENTER_CLASS,
-  MOTION_PLAYER_CHROME_BUTTON_CLASS,
   MOTION_PLAYER_CHROME_PANEL_CLASS,
-  FOCUS_VISIBLE_RING_CLASS,
   PLAYER_ICON_BUTTON_CLASS,
   PLAYER_PRIMARY_BUTTON_CLASS,
 } from "@/lib/constants";
@@ -384,31 +383,26 @@ function TrailerPage() {
                 {error}
               </DialogDescription>
               <div className="flex flex-wrap items-center justify-center gap-3">
-                <button
-                  type="button"
+                <Button
                   ref={closeButtonRef}
                   onClick={retry}
-                  className={cn(
-                    MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                    FOCUS_VISIBLE_RING_CLASS,
-                    "inline-flex items-center rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-glow hover:bg-primary/90",
-                  )}
+                  size="xl"
+                  shape="pill"
+                  className="font-semibold shadow-glow"
                 >
-                  <RotateCcw className="mr-2 size-4" aria-hidden="true" />
+                  <RotateCcw className="size-4" aria-hidden="true" />
                   Try Again
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
                   onClick={handleClose}
-                  className={cn(
-                    MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                    FOCUS_VISIBLE_RING_CLASS,
-                    "inline-flex items-center rounded-full border border-border px-6 py-3 font-semibold text-foreground hover:bg-muted",
-                  )}
+                  variant="outline"
+                  size="xl"
+                  shape="pill"
+                  className="font-semibold"
                 >
-                  <ArrowLeft className="mr-2 size-4" aria-hidden="true" />
+                  <ArrowLeft className="size-4" aria-hidden="true" />
                   Go Back
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -491,31 +485,26 @@ function TrailerPage() {
                 {loadErrorMessage}
               </DialogDescription>
               <div className="flex flex-wrap items-center justify-center gap-3">
-                <button
-                  type="button"
+                <Button
                   ref={closeButtonRef}
                   onClick={() => void refetchMovie()}
-                  className={cn(
-                    MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                    FOCUS_VISIBLE_RING_CLASS,
-                    "inline-flex items-center rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-glow hover:bg-primary/90",
-                  )}
+                  size="xl"
+                  shape="pill"
+                  className="font-semibold shadow-glow"
                 >
-                  <RotateCcw className="mr-2 size-4" aria-hidden="true" />
+                  <RotateCcw className="size-4" aria-hidden="true" />
                   Try Again
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
                   onClick={handleClose}
-                  className={cn(
-                    MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                    FOCUS_VISIBLE_RING_CLASS,
-                    "inline-flex items-center rounded-full border border-border px-6 py-3 font-semibold text-foreground hover:bg-muted",
-                  )}
+                  variant="outline"
+                  size="xl"
+                  shape="pill"
+                  className="font-semibold"
                 >
-                  <ArrowLeft className="mr-2 size-4" aria-hidden="true" />
+                  <ArrowLeft className="size-4" aria-hidden="true" />
                   Go Back
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -553,19 +542,16 @@ function TrailerPage() {
               <DialogDescription className="mb-6">
                 This movie doesn't have a trailer yet.
               </DialogDescription>
-              <button
-                type="button"
+              <Button
                 ref={closeButtonRef}
                 onClick={handleClose}
-                className={cn(
-                  MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  FOCUS_VISIBLE_RING_CLASS,
-                  "inline-flex items-center rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-glow hover:bg-primary/90",
-                )}
+                size="xl"
+                shape="pill"
+                className="font-semibold shadow-glow"
               >
-                <ArrowLeft className="mr-2 size-4" aria-hidden="true" />
+                <ArrowLeft className="size-4" aria-hidden="true" />
                 Go Back
-              </button>
+              </Button>
             </div>
           </div>
         </DialogFullscreenContent>

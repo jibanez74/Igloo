@@ -194,8 +194,8 @@ export default function MovieDetailsHeroActions({
         params={{ id: String(movieId) }}
         search={playbackSettingsToPlaySearch(playbackSettings)}
         className={cn(
-          buttonVariants({ variant: "accent", size: "lg" }),
-          "min-h-11 touch-manipulation",
+          buttonVariants({ variant: "accent", size: "xl" }),
+          "touch-manipulation",
         )}
       >
         <Play className="size-4 fill-current" aria-hidden="true" />
@@ -204,14 +204,14 @@ export default function MovieDetailsHeroActions({
       <Button
         type="button"
         variant="outline"
-        size="lg"
+        size="xl"
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
           watchedMutation.mutate(!isWatched);
         }}
         disabled={watchedMutation.isPending || watchProgressLoading}
-        className="min-h-11 touch-manipulation px-3 font-semibold sm:px-6"
+        className="touch-manipulation px-3 font-semibold sm:px-6"
         aria-label={isWatched ? "Mark movie as unwatched" : "Mark movie as watched"}
         aria-pressed={isWatched}
       >
@@ -232,8 +232,8 @@ export default function MovieDetailsHeroActions({
         <DropdownMenuTrigger
           ref={moreOptionsButtonRef}
           className={cn(
-            buttonVariants({ variant: "outline", size: "lg" }),
-            "min-h-11 touch-manipulation",
+            buttonVariants({ variant: "outline", size: "xl" }),
+            "touch-manipulation",
           )}
           aria-label="More options"
           onFocus={preloadMoreOptionsDialogs}
