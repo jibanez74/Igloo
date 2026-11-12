@@ -145,7 +145,7 @@ test.describe("Library scan progress", () => {
 
       await page.goto("/settings/libraries");
       const start = page.getByRole("button", { name: `Scan ${kind.name} library`, exact: true });
-      const busy = page.getByRole("button", { name: `Scanning ${kind.name} library, please wait` });
+      const busy = page.getByRole("button", { name: `Scanning ${kind.name} library...` });
       await expect(start).toBeEnabled();
       await start.focus();
       await page.keyboard.press("Enter");
@@ -153,7 +153,7 @@ test.describe("Library scan progress", () => {
       await expect(page.getByRole("status").filter({ hasText: kind.runningText })).toBeVisible();
 
       await page.getByRole("tab", { name: "Account", exact: true }).click();
-      await expect(page.getByText("Profile Information")).toBeVisible();
+      await expect(page.getByText("Profile information")).toBeVisible();
       await page.getByRole("tab", { name: "Libraries", exact: true }).click();
       await expect(busy).toBeDisabled();
 

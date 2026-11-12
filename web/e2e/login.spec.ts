@@ -355,12 +355,12 @@ test.describe("Login screen", () => {
     expect(loginBody.error, loginBody.message).toBe(false);
 
     await expect(page).toHaveURL(appPath("/settings/account"));
-    await expect(page.getByText("Profile Information")).toBeVisible();
+    await expect(page.getByText("Profile information")).toBeVisible();
     await expectAuthenticated(context);
 
     await page.goto("/login?redirect=/settings/account");
     await expect(page).toHaveURL(appPath("/settings/account"));
-    await expect(page.getByText("Profile Information")).toBeVisible();
+    await expect(page.getByText("Profile information")).toBeVisible();
 
     tracker.assertClean();
   });
@@ -373,7 +373,7 @@ test.describe("Login screen", () => {
 
     await loginPageViaApi(page);
     await page.goto("/settings/account");
-    await expect(page.getByText("Profile Information")).toBeVisible();
+    await expect(page.getByText("Profile information")).toBeVisible();
 
     const logoutResponsePromise = page.waitForResponse(
       response =>
@@ -414,7 +414,7 @@ test.describe("Login screen", () => {
 
     await loginPageViaApi(page);
     await page.goto("/settings/account");
-    await expect(page.getByText("Profile Information")).toBeVisible();
+    await expect(page.getByText("Profile information")).toBeVisible();
 
     await context.clearCookies();
     await page.getByRole("link", { name: "Movies" }).click();
@@ -441,7 +441,7 @@ test.describe("Login screen", () => {
 
     await loginPageViaApi(page);
     await page.goto("/settings/account");
-    await expect(page.getByText("Profile Information")).toBeVisible();
+    await expect(page.getByText("Profile information")).toBeVisible();
 
     await context.clearCookies();
     // Opening the bell fetches the notification list, with no navigation.
@@ -457,7 +457,7 @@ test.describe("Login screen", () => {
 
     await submitLogin(page, env.email, env.password);
     await expect(page).toHaveURL(appPath("/settings/account"));
-    await expect(page.getByText("Profile Information")).toBeVisible();
+    await expect(page.getByText("Profile information")).toBeVisible();
 
     tracker.assertClean();
   });

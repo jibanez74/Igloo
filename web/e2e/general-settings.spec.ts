@@ -75,7 +75,7 @@ async function expectServiceControls(page: Page) {
   }
   // Both wait, disabled, until something changes.
   await expect(page.getByRole("button", { name: "Reset" })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Save Settings" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Save settings" })).toBeDisabled();
 }
 
 async function expectScreenReaderSupport(page: Page, staticDir: string) {
@@ -93,7 +93,7 @@ async function expectScreenReaderSupport(page: Page, staticDir: string) {
     name: "Static directory",
   });
   await staticDirectory.fill("");
-  await page.getByRole("button", { name: "Save Settings" }).click();
+  await page.getByRole("button", { name: "Save settings" }).click();
   await expect(
     page
       .getByRole("tabpanel", { name: "General" })
@@ -210,7 +210,7 @@ test.describe("General settings", () => {
         await route.continue();
       });
 
-      await page.getByRole("button", { name: "Save Settings" }).click();
+      await page.getByRole("button", { name: "Save settings" }).click();
       await expect
         .poll(() => delayed.route !== null, { timeout: 5_000 })
         .toBe(true);
@@ -294,7 +294,7 @@ test.describe("General settings", () => {
       await downloads.click();
       await expect(downloads).toHaveAttribute("aria-checked", "false");
 
-      await page.getByRole("button", { name: "Save Settings" }).click();
+      await page.getByRole("button", { name: "Save settings" }).click();
       const dialog = page.getByRole("alertdialog", {
         name: "Delete downloaded images?",
       });
@@ -303,7 +303,7 @@ test.describe("General settings", () => {
       await expect(dialog).toBeHidden();
       expect(puts).toHaveLength(0);
 
-      await page.getByRole("button", { name: "Save Settings" }).click();
+      await page.getByRole("button", { name: "Save settings" }).click();
       await dialog.getByRole("button", { name: "Delete images" }).click();
       await expect(dialog).toBeHidden();
       await expect(page.getByText("Settings saved")).toBeVisible();

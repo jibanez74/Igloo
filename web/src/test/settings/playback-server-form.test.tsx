@@ -99,12 +99,31 @@ describe("server playback form effective device notice", () => {
   it("hosts the save bar inside the Server card", async () => {
     await renderPlaybackSettings(nvidiaSettings());
 
-    const saveButton = await screen.findByRole("button", { name: "Save Settings" });
+    const saveButton = await screen.findByRole("button", { name: "Save settings" });
     const card = saveButton.closest('[data-slot="card"]');
     expect(card).not.toBeNull();
     expect(card).toHaveTextContent("Server");
     expect(saveButton.closest('[data-slot="card-footer"]')).not.toBeNull();
     expect(saveButton).toBeDisabled();
+  });
+
+  it("names each Server field once and ties its help to it", async () => {
+    await renderPlaybackSettings(nvidiaSettings());
+
+    const upload = await screen.findByRole("spinbutton", {
+      name: "Server upload bandwidth (Mbps)",
+    });
+    expect(upload).toHaveAccessibleDescription(
+      "The home server's outbound limit, used to cap stream quality recommendations. Leave blank if the server should be uncapped.",
+    );
+    expect(
+      screen.getByRole("combobox", { name: "Hardware acceleration" }),
+    ).toHaveAccessibleDescription(
+      "Choose the hardware acceleration mode used for new transcodes.",
+    );
+    for (const title of ["Server upload bandwidth", "Transcoding"]) {
+      expect(screen.queryByRole("heading", { name: title })).toBeNull();
+    }
   });
 
   it("keeps an out-of-range upload cap inline and focuses the field on save", async () => {
@@ -114,7 +133,7 @@ describe("server playback form effective device notice", () => {
     const input = await screen.findByLabelText("Server upload bandwidth (Mbps)");
     await user.clear(input);
     await user.type(input, "0");
-    await user.click(screen.getByRole("button", { name: "Save Settings" }));
+    await user.click(screen.getByRole("button", { name: "Save settings" }));
 
     expect(input).toHaveAttribute("aria-invalid", "true");
     expect(input).toHaveFocus();

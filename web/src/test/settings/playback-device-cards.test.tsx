@@ -66,6 +66,63 @@ describe("device playback cards", () => {
     );
   }
 
+  // Each field used to sit under a section title that repeated its label
+  // ("Preferred profile" over "Profile"). One label names it now, and what
+  // the title's description said is the field's help.
+  it("gives each field one label, with its help tied to the control", () => {
+    renderCards();
+
+    for (const title of [
+      "Your network speed",
+      "Preferred profile",
+      "Preferred audio language",
+      "Preferred subtitles",
+    ]) {
+      expect(screen.queryByRole("heading", { name: title })).toBeNull();
+    }
+
+    expect(downloadInput()).toHaveAccessibleDescription(
+      "Used to recommend a stream profile for this device. Leave blank if unsure.",
+    );
+    expect(
+      screen.getByRole("combobox", { name: "Profile" }),
+    ).toHaveAccessibleDescription("The default profile when you start a stream.");
+    expect(
+      screen.getByRole("combobox", { name: "Audio language" }),
+    ).toHaveAccessibleDescription(
+      "Igloo picks the matching audio track when a movie has one.",
+    );
+    expect(
+      screen.getByRole("combobox", { name: "Subtitle language" }),
+    ).toHaveAccessibleDescription(
+      "Pick a default subtitle language, or always start with subtitles off.",
+    );
+  });
+
+  it("puts the help between the label and the control", () => {
+    renderCards();
+
+    const input = downloadInput();
+    const hint = screen.getByText(/Used to recommend a stream profile/);
+    expect(hint).toHaveAttribute("data-slot", "field-hint");
+    // The hint comes before the input in reading order.
+    expect(
+      hint.compareDocumentPosition(input) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  // The two read-only rows have no control, so they keep a heading.
+  it("keeps a heading over the read-only rows", () => {
+    renderCards();
+
+    expect(
+      screen.getByRole("heading", { name: "Server upload cap" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Recommended profile" }),
+    ).toBeInTheDocument();
+  });
+
   it("confirms a durable save when localStorage accepts the write", async () => {
     renderCards();
     await setDownloadSpeed("25");

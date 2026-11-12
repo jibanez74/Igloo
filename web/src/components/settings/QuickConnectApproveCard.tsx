@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { FieldError, FieldHint } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
@@ -269,7 +270,7 @@ export default function QuickConnectApproveCard() {
       <SettingsCardHeader
         icon={MonitorSmartphone}
         title="Quick Connect"
-        description="Sign in a TV or mobile app by entering the code it shows you"
+        description="Sign in a TV or mobile app by entering the code it shows you."
       />
       <CardContent className="max-w-2xl">
         {step === "enter" && (
@@ -277,6 +278,10 @@ export default function QuickConnectApproveCard() {
             <Label htmlFor={codeId} tone="muted">
               Quick Connect code
             </Label>
+            <FieldHint id={codeDescriptionId}>
+              {CODE_LENGTH} characters, never containing I, L, O, 0 or 1.
+              You&apos;ll see which device is asking before it gets signed in.
+            </FieldHint>
             <div className="flex flex-col gap-2 sm:flex-row">
               <Input
                 ref={codeInputRef}
@@ -304,19 +309,7 @@ export default function QuickConnectApproveCard() {
                 {lookupMutation.isPending ? "Checking..." : "Continue"}
               </Button>
             </div>
-            <p id={codeDescriptionId} className="text-xs text-muted-foreground">
-              {CODE_LENGTH} characters, never containing I, L, O, 0 or 1.
-              You&apos;ll see which device is asking before it gets signed in.
-            </p>
-            {error && (
-              <p
-                id={codeErrorId}
-                className="text-xs text-destructive"
-                role="alert"
-              >
-                {error}
-              </p>
-            )}
+            {error && <FieldError id={codeErrorId}>{error}</FieldError>}
           </form>
         )}
 
@@ -351,15 +344,11 @@ export default function QuickConnectApproveCard() {
                 </div>
               )}
             </dl>
-            <p className="text-xs text-muted-foreground">
+            <FieldHint>
               The device gets signed in to your account and appears under
               Devices below.
-            </p>
-            {error && (
-              <p className="text-xs text-destructive" role="alert">
-                {error}
-              </p>
-            )}
+            </FieldHint>
+            {error && <FieldError>{error}</FieldError>}
             <div className="flex flex-col gap-2 sm:flex-row">
               <Button
                 type="button"
@@ -393,10 +382,10 @@ export default function QuickConnectApproveCard() {
               Waiting for {pendingDevice?.device_name ?? "the device"} to
               finish signing in...
             </h3>
-            <p className="text-xs text-muted-foreground">
+            <FieldHint>
               Approved. The device picks up its sign-in the next time it
               checks, usually within a few seconds.
-            </p>
+            </FieldHint>
           </div>
         )}
 
@@ -411,11 +400,11 @@ export default function QuickConnectApproveCard() {
                 ? `${connectedName} is connected`
                 : "Device approved"}
             </h3>
-            <p className="text-xs text-muted-foreground">
+            <FieldHint>
               {connectedName
                 ? "It now appears under Devices below."
                 : "The device should appear under Devices shortly."}
-            </p>
+            </FieldHint>
             <Button
               type="button"
               variant="outline"

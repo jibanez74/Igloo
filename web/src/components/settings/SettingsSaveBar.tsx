@@ -62,7 +62,7 @@ export default function SettingsSaveBar({
   onReset,
   resetLabel = "Reset",
   resetDisabled,
-  saveLabel = "Save Settings",
+  saveLabel = "Save settings",
   savingLabel = "Saving...",
   saveDisabled,
   isPending,

@@ -41,24 +41,24 @@ test.describe("Users settings", () => {
     try {
       await page.goto("/settings/users");
       await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
-      await expect(page.getByRole("button", { name: "Add User" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Add user" })).toBeVisible();
 
-      await page.getByRole("button", { name: "Add User" }).focus();
+      await page.getByRole("button", { name: "Add user" }).focus();
       await page.keyboard.press("Enter");
-      await expect(page.getByRole("dialog", { name: "Add User" })).toBeVisible();
+      await expect(page.getByRole("dialog", { name: "Add user" })).toBeVisible();
 
-      await page.getByRole("textbox", { name: "User name" }).fill(name);
-      await page.getByRole("textbox", { name: "User email" }).fill(email);
-      await page.getByRole("textbox", { name: "User password" }).fill(password);
-      await page.getByRole("button", { name: "Create User" }).click();
+      await page.getByRole("textbox", { name: "Name", exact: true }).fill(name);
+      await page.getByRole("textbox", { name: "Email", exact: true }).fill(email);
+      await page.getByRole("textbox", { name: "Password", exact: true }).fill(password);
+      await page.getByRole("button", { name: "Create user" }).click();
       await expect(userList.getByText(name)).toBeVisible();
       expect(createPostCount).toBe(1);
 
       await page.getByRole("button", { name: `Edit ${name}` }).click();
-      await page.getByRole("textbox", { name: "User name" }).fill(editedName);
-      await page.getByRole("textbox", { name: "User email" }).fill(editedEmail);
+      await page.getByRole("textbox", { name: "Name", exact: true }).fill(editedName);
+      await page.getByRole("textbox", { name: "Email", exact: true }).fill(editedEmail);
       await page.getByRole("checkbox", { name: "Admin privileges" }).check();
-      await page.getByRole("button", { name: "Save Changes" }).click();
+      await page.getByRole("button", { name: "Save changes" }).click();
       const editedRow = userList
         .getByRole("listitem")
         .filter({ hasText: editedName });
@@ -66,7 +66,7 @@ test.describe("Users settings", () => {
 
       await page.getByRole("button", { name: `Edit ${editedName}` }).click();
       await page.getByRole("checkbox", { name: "Admin privileges" }).uncheck();
-      await page.getByRole("button", { name: "Save Changes" }).click();
+      await page.getByRole("button", { name: "Save changes" }).click();
       await expect(editedRow).not.toContainText("Admin");
       await expect(editedRow.getByText("User", { exact: true })).toBeVisible();
       const editedUser = (await fetchAdminUsers(page.context().request)).find(
@@ -83,8 +83,8 @@ test.describe("Users settings", () => {
       await page
         .getByRole("textbox", { name: "Confirm new password" })
         .fill(resetPassword);
-      await page.getByRole("button", { name: "Reset Password", exact: true }).click();
-      await expect(page.getByRole("dialog", { name: "Reset Password" })).toBeHidden();
+      await page.getByRole("button", { name: "Reset password", exact: true }).click();
+      await expect(page.getByRole("dialog", { name: "Reset password" })).toBeHidden();
       expect(resetPasswordPutCount).toBe(1);
 
       await logoutViaApi(page.context().request);
@@ -118,14 +118,14 @@ test.describe("Users settings", () => {
 
       await page.getByRole("button", { name: `Delete ${editedName}` }).click();
       await page
-        .getByRole("textbox", { name: "Type DELETE to confirm user deletion" })
+        .getByRole("textbox", { name: "Type DELETE to confirm" })
         .fill("delete");
       await expect(
-        page.getByRole("textbox", { name: "Type DELETE to confirm user deletion" }),
+        page.getByRole("textbox", { name: "Type DELETE to confirm" }),
       ).toHaveAttribute("aria-invalid", "true");
-      await expect(page.getByRole("button", { name: "Delete User" })).toBeDisabled();
+      await expect(page.getByRole("button", { name: "Delete user" })).toBeDisabled();
       await page
-        .getByRole("textbox", { name: "Type DELETE to confirm user deletion" })
+        .getByRole("textbox", { name: "Type DELETE to confirm" })
         .fill("DELETE");
       await Promise.all([
         page.waitForResponse(response => {
@@ -136,9 +136,9 @@ test.describe("Users settings", () => {
             response.status() === 200
           );
         }),
-        page.getByRole("button", { name: "Delete User" }).click(),
+        page.getByRole("button", { name: "Delete user" }).click(),
       ]);
-      await expect(page.getByRole("dialog", { name: "Delete User" })).toBeHidden();
+      await expect(page.getByRole("dialog", { name: "Delete user" })).toBeHidden();
       await expect(editedRow).toHaveCount(0);
 
       const deletedLogin = await page.context().request.post("/api/auth/login", {

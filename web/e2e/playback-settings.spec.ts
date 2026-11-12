@@ -125,7 +125,7 @@ test.describe("Playback settings", () => {
         page.getByRole("heading", { name: "Stream defaults" }),
       ).toBeVisible();
       await expect(
-        page.getByRole("heading", { name: "Transcoding" }),
+        page.getByRole("combobox", { name: "Hardware acceleration" }),
       ).toBeVisible();
       await expect(page.getByRole("tab", { name: "Playback" })).toBeVisible();
 
@@ -177,7 +177,7 @@ test.describe("Playback settings", () => {
       // Nothing to save or reset yet, so both are disabled and Tab skips them.
       await expect(page.getByRole("button", { name: "Reset" })).toBeDisabled();
       await expect(
-        page.getByRole("button", { name: "Save Settings" }),
+        page.getByRole("button", { name: "Save settings" }),
       ).toBeDisabled();
 
       await downloadInput.fill("100");
@@ -186,7 +186,7 @@ test.describe("Playback settings", () => {
       await expectTabMovesFocus(page, page.getByRole("button", { name: "Reset" }));
       await expectTabMovesFocus(
         page,
-        page.getByRole("button", { name: "Save Settings" }),
+        page.getByRole("button", { name: "Save settings" }),
       );
       // The recommendation tracks the download speed immediately; the server
       // cap only counts once it is actually saved, below.
@@ -200,7 +200,7 @@ test.describe("Playback settings", () => {
       await page.setViewportSize({ width: 360, height: 800 });
       await expect(page.getByRole("button", { name: "Reset" })).toBeVisible();
       await expect(
-        page.getByRole("button", { name: "Save Settings" }),
+        page.getByRole("button", { name: "Save settings" }),
       ).toBeVisible();
       await expectPageHasNoHorizontalScroll(page);
       await page.setViewportSize(VIEWPORTS.desktop);
@@ -212,7 +212,7 @@ test.describe("Playback settings", () => {
           response.request().method() === "PUT"
         );
       });
-      await page.getByRole("button", { name: "Save Settings" }).click();
+      await page.getByRole("button", { name: "Save settings" }).click();
 
       const putResponse = await putResponsePromise;
       expect(putResponse.status()).toBe(200);
@@ -462,9 +462,6 @@ test.describe("Playback settings", () => {
         }),
       ).toHaveCount(0);
       await expect(
-        page.getByRole("heading", { name: "Transcoding" }),
-      ).toHaveCount(0);
-      await expect(
         page.getByRole("combobox", { name: "Hardware acceleration" }),
       ).toHaveCount(0);
       await expect(
@@ -475,7 +472,7 @@ test.describe("Playback settings", () => {
 
       // Nothing on this tab writes to the server for a regular user.
       await expect(
-        page.getByRole("button", { name: "Save Settings" }),
+        page.getByRole("button", { name: "Save settings" }),
       ).toHaveCount(0);
       await expect(page.getByRole("button", { name: "Reset" })).toHaveCount(0);
 

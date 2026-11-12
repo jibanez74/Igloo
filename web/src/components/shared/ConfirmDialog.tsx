@@ -19,6 +19,8 @@ type ConfirmDialogProps = {
   description?: ReactNode;
   children?: ReactNode;
   confirmLabel: string;
+  /** The confirm button's text while pending; `confirmLabel` + "..." if unset. */
+  pendingLabel?: string;
   pending?: boolean;
   restoreFocusRef?: RefObject<HTMLElement | null>;
   /** Takes focus when the restore target is gone or disabled by then. */
@@ -33,6 +35,7 @@ export default function ConfirmDialog({
   description,
   children,
   confirmLabel,
+  pendingLabel = `${confirmLabel}...`,
   pending = false,
   restoreFocusRef,
   fallbackFocusRef,
@@ -82,7 +85,7 @@ export default function ConfirmDialog({
             disabled={pending}
           >
             {pending ? <Spinner aria-hidden="true" /> : null}
-            {pending ? `${confirmLabel}...` : confirmLabel}
+            {pending ? pendingLabel : confirmLabel}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>

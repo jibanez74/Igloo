@@ -154,7 +154,7 @@ describe("settings route tab transitions", () => {
 
     await renderSettingsRoute("/settings");
 
-    expect(await screen.findByText("Application Behavior")).toBeInTheDocument();
+    expect(await screen.findByText("Application behavior")).toBeInTheDocument();
 
     // Warm the route module so navigation renders without a cold dynamic
     // import racing the waitFor timeout on slow CI runners.
@@ -162,14 +162,14 @@ describe("settings route tab transitions", () => {
 
     await user.click(screen.getByRole("tab", { name: "Account" }));
 
-    expect(screen.getByText("Application Behavior")).toBeInTheDocument();
-    expect(screen.queryByText("Profile Information")).not.toBeInTheDocument();
+    expect(screen.getByText("Application behavior")).toBeInTheDocument();
+    expect(screen.queryByText("Profile information")).not.toBeInTheDocument();
     expect(startViewTransition).not.toHaveBeenCalled();
 
     await runContentFadeTransitionTimeout(setTimeoutSpy);
 
     await waitFor(() => {
-      expect(screen.getByText("Profile Information")).toBeInTheDocument();
+      expect(screen.getByText("Profile information")).toBeInTheDocument();
     });
     expect(startViewTransition).not.toHaveBeenCalled();
   });
@@ -177,7 +177,7 @@ describe("settings route tab transitions", () => {
   it("uses shared motion contracts for settings surfaces and switches", async () => {
     await renderSettingsRoute("/settings");
 
-    const title = await screen.findByText("Application Behavior");
+    const title = await screen.findByText("Application behavior");
     expect(title.closest('[data-slot="card"]')).toHaveClass(
       ...MOTION_SETTINGS_SURFACE_CLASS.split(" "),
     );
@@ -191,7 +191,7 @@ describe("settings route tab transitions", () => {
     expectNoClass(savePanel, "sticky", "backdrop-blur-md");
     expect(savePanel).toHaveTextContent("No unsaved changes");
     expect(screen.getByRole("button", { name: "Reset" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Save Settings" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Save settings" })).toBeDisabled();
 
     const user = userEvent.setup();
     await user.type(screen.getByLabelText("Static directory"), "x");
@@ -200,7 +200,7 @@ describe("settings route tab transitions", () => {
       "Saved settings are used by the backend on future requests.",
     );
     expect(screen.getByRole("button", { name: "Reset" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Save Settings" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Save settings" })).toBeEnabled();
 
     const switchControl = screen.getByRole("switch", { name: "Library watcher" });
     expect(switchControl).toHaveClass(
@@ -299,7 +299,7 @@ describe("settings form query updates", () => {
     const message = "Static directory is required.";
 
     await user.clear(staticDirectory);
-    await user.click(screen.getByRole("button", { name: "Save Settings" }));
+    await user.click(screen.getByRole("button", { name: "Save settings" }));
     expect(staticDirectory).toHaveAttribute("aria-invalid", "true");
     expect(screen.getAllByText(message).length).toBeGreaterThan(0);
 

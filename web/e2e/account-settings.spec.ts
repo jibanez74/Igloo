@@ -27,14 +27,14 @@ import {
 // "Save profile" is deliberately absent: it is disabled (untabbable) until a
 // profile field changes, and the save flow itself is asserted separately.
 const requiredAccountControlNames = [
-  "Your email address",
-  "Your display name",
-  "Upload avatar image",
-  "Avatar image URL",
+  "Email",
+  "Name",
+  "Upload image",
+  "Image URL",
   "Current password",
   "New password",
   "Confirm new password",
-  "Update Password",
+  "Update password",
   "PIN",
   "Set PIN",
   "Quick Connect code",
@@ -254,7 +254,7 @@ async function auditMobileTabOrder(page: Page) {
 }
 
 /**
- * Signs `page` in as a fresh non-admin account (admins have no Danger Zone),
+ * Signs `page` in as a fresh non-admin account (admins have no Danger zone),
  * runs `run`, and deletes every account under the run's email prefix after.
  */
 async function withDisposableUser(
@@ -297,7 +297,7 @@ test.describe("Account settings", () => {
 
     await withDisposableUser(page, request, "account-audit", async () => {
       await page.goto("/settings/account");
-      await expect(page.getByText("Profile Information")).toBeVisible();
+      await expect(page.getByText("Profile information")).toBeVisible();
 
       await auditResponsiveAccountPage(page);
       await auditMobileTabOrder(page);
@@ -337,15 +337,15 @@ test.describe("Account settings", () => {
       // from the mocked Vite server and from a real instance alike.
       const avatarURL = new URL("/icon-192.png", env.baseURL).href;
       const content = page.getByRole("main");
-      const emailInput = page.getByRole("textbox", { name: "Your email address" });
+      const emailInput = page.getByRole("textbox", { name: "Email", exact: true });
 
       await page.goto("/settings/account");
       await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
-      await expect(page.getByText("Profile Information")).toBeVisible();
+      await expect(page.getByText("Profile information")).toBeVisible();
 
       // Another account's email is refused while the name change still lands.
       await emailInput.fill(env.email);
-      await page.getByRole("textbox", { name: "Your display name" }).fill(
+      await page.getByRole("textbox", { name: "Name", exact: true }).fill(
         partiallyEditedName,
       );
       await Promise.all([
@@ -372,7 +372,7 @@ test.describe("Account settings", () => {
       expect(partialProfile.name).toBe(partiallyEditedName);
 
       await emailInput.fill(editedEmail);
-      await page.getByRole("textbox", { name: "Your display name" }).fill(
+      await page.getByRole("textbox", { name: "Name", exact: true }).fill(
         editedName,
       );
       await Promise.all([
@@ -395,7 +395,7 @@ test.describe("Account settings", () => {
       expect(profile.email).toBe(editedEmail);
       expect(profile.name).toBe(editedName);
 
-      await page.getByRole("textbox", { name: "Avatar image URL" }).fill(
+      await page.getByRole("textbox", { name: "Image URL" }).fill(
         avatarURL,
       );
       await Promise.all([
@@ -408,7 +408,7 @@ test.describe("Account settings", () => {
       ]);
       await expect(page.getByRole("img", { name: editedName })).toBeVisible();
       await expect(
-        page.getByRole("textbox", { name: "Avatar image URL" }),
+        page.getByRole("textbox", { name: "Image URL" }),
       ).toHaveValue("");
       expect((await fetchCurrentUser(page.context().request)).avatar).toBe(
         avatarURL,
@@ -423,7 +423,7 @@ test.describe("Account settings", () => {
             response.url().endsWith("/api/user/password") &&
             response.status() === 200,
         ),
-        page.getByRole("button", { name: "Update Password" }).click(),
+        page.getByRole("button", { name: "Update password" }).click(),
       ]);
       await expect(page.getByLabel("Current password", { exact: true })).toHaveValue("");
       await expect(page.getByLabel("New password", { exact: true })).toHaveValue("");
@@ -432,9 +432,9 @@ test.describe("Account settings", () => {
       await loginViaApi(request, { email: editedEmail, password: newPassword });
 
       await page.getByRole("button", { name: "Delete account" }).click();
-      const dialog = page.getByRole("dialog", { name: "Delete Account" });
+      const dialog = page.getByRole("dialog", { name: "Delete account" });
       const deleteConfirmInput = dialog.getByLabel(
-        "Type DELETE to confirm account deletion",
+        "Type DELETE to confirm",
       );
       await expect(deleteConfirmInput).toBeFocused();
 
@@ -446,7 +446,7 @@ test.describe("Account settings", () => {
             response.request().method() === "DELETE" &&
             response.status() === 200,
         ),
-        dialog.getByRole("button", { name: "Delete Account" }).click(),
+        dialog.getByRole("button", { name: "Delete account" }).click(),
       ]);
       await expect(page).toHaveURL(/\/login(?:\?|$)/);
 

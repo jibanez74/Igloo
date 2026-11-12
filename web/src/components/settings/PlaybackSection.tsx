@@ -7,7 +7,11 @@ type PlaybackSectionProps = {
   children: ReactNode;
 };
 
-/** One labelled row inside a playback settings card. */
+/**
+ * One read-only row inside a playback settings card: a heading, what the
+ * value means, then the value. A row with a control is a `PlaybackField`,
+ * whose label is its only title.
+ */
 export default function PlaybackSection({
   title,
   titleId,

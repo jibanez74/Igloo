@@ -27,6 +27,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { FieldError, FieldHint } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioCard } from "@/components/ui/radio-card";
@@ -195,7 +196,7 @@ function FieldsSection() {
   return (
     <GallerySection
       id="fields"
-      title="Input, Textarea, Select, Label, Checkbox, Switch"
+      title="Input, Textarea, Select, Label, field help, Checkbox, Switch"
     >
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
@@ -364,6 +365,24 @@ function FieldsSection() {
           size="lg"
           className="w-40"
         />
+      </GalleryRow>
+
+      <GalleryRow label="field help above the control, error below">
+        <div className="w-72 space-y-2">
+          <Label htmlFor="gallery-field-hint">New password</Label>
+          <FieldHint id="gallery-field-hint-help">
+            At least 9 characters.
+          </FieldHint>
+          <Input
+            id="gallery-field-hint"
+            defaultValue="short"
+            aria-invalid
+            aria-describedby="gallery-field-hint-help gallery-field-hint-error"
+          />
+          <FieldError id="gallery-field-hint-error">
+            New password must be at least 9 characters.
+          </FieldError>
+        </div>
       </GalleryRow>
 
       <GalleryRow label="checkbox">

@@ -13,9 +13,17 @@ export function isValidEmail(email: string) {
 }
 
 /**
+ * The help shown with every new-password field. It names only the rule people
+ * meet; the upper limit is explained by `passwordRuleError` when it is hit.
+ */
+export const PASSWORD_HINT = `At least ${USER_PASSWORD_MIN_LENGTH} characters.`;
+
+/**
  * The first length rule a new password breaks, worded around `label`
  * ("Password", "New password"), or null when it passes. Mirrors the server: a
- * minimum in code points and a maximum in UTF-8 bytes.
+ * minimum in code points and a maximum in UTF-8 bytes. The maximum is worded
+ * in characters, since a plain letter is one byte; accents and emoji take
+ * more, which the message says without naming the encoding.
  */
 export function passwordRuleError(
   password: string,
@@ -25,7 +33,7 @@ export function passwordRuleError(
     return `${label} must be at least ${USER_PASSWORD_MIN_LENGTH} characters.`;
   }
   if (new TextEncoder().encode(password).length > USER_PASSWORD_MAX_BYTES) {
-    return `${label} must be at most ${USER_PASSWORD_MAX_BYTES} UTF-8 bytes.`;
+    return `${label} is too long. The limit is ${USER_PASSWORD_MAX_BYTES} characters, fewer with accents or emoji.`;
   }
   return null;
 }
