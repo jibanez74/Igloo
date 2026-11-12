@@ -446,6 +446,9 @@ describe("movies route genres", () => {
     expect(selected).toBeDefined();
     expect(selected?.querySelector(".text-primary-foreground\\/85")).not.toBeNull();
     expect(selected?.querySelector(".text-primary-foreground\\/70")).toBeNull();
+    // A pressed tile is a primary control: its glow is the token.
+    expect(selected).toHaveClass("shadow-glow");
+    expect(selected).not.toHaveClass("shadow-lg");
   });
 });
 

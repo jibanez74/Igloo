@@ -41,6 +41,8 @@ export default function PlaylistMovieMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
+        {/* eslint-disable-next-line no-restricted-syntax -- a control over a
+            poster keeps the literal black-and-white over-media look (§1.2). */}
         <button
           type="button"
           ref={triggerRef}

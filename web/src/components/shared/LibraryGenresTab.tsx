@@ -323,6 +323,8 @@ function GenreTile({ genre, noun, selected, onSelect, buttonRef }: GenreTileProp
   const { showPoster: showBackdrop, onError } = usePosterFallback(backdropUrl);
 
   return (
+    // The whole tile is the control and takes no Button look (§3.2).
+    // eslint-disable-next-line no-restricted-syntax
     <button
       type="button"
       ref={buttonRef}
@@ -334,7 +336,7 @@ function GenreTile({ genre, noun, selected, onSelect, buttonRef }: GenreTileProp
         MOTION_MICRO_CONTROL_CLASS,
         FOCUS_VISIBLE_RING_CLASS,
         selected
-          ? "border-primary shadow-lg shadow-primary/15"
+          ? "border-primary shadow-glow"
           : "border-border hover:border-primary/40",
       )}
       aria-pressed={selected}

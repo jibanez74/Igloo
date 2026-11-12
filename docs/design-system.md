@@ -214,11 +214,11 @@ Rules:
     theme (`--elevation-floating`): 50 % black in dark, 15 % in light, where
     50 % reads as a haze.
   - `shadow-glow` for the glacier glow under a primary control (the brand
-    mark, the player's play button, the pill call-to-actions, the active
-    tab): the geometry of `shadow-lg` in `primary` at 12 %, a hint of light
-    under the control rather than a halo around it. Write the token, never
-    a literal `shadow-lg shadow-primary/NN`: the strength is set once, in
-    `SHADOW_SCALE`.
+    mark, the player play buttons, the pill call-to-actions, the active
+    tab, a pressed genre tile): the geometry of `shadow-lg` in `primary` at
+    12 %, a hint of light under the control rather than a halo around it.
+    Write the token, never a literal `shadow-lg shadow-primary/NN`: the
+    strength is set once, in `SHADOW_SCALE`.
 
   Both are ordinary shadow sizes to Tailwind and to `cn()`: they replace and
   are replaced by `shadow-md` and the like, and the focus ring, which is a
@@ -227,9 +227,11 @@ Rules:
   is the glow at 5 %). `shadow-floating` takes its color from the theme
   through `--elevation-floating`, which Tailwind cannot recolor, so a color
   class changes nothing there; a different strength is a new token. Other
-  glows stay literal where their strength is part of the surface:
-  interactive media cards on hover (`hover:shadow-xl
-  hover:shadow-primary/20`), the EmptyState orb (`shadow-primary/5`). Shadows
+  glows stay literal where their strength is part of the surface, not of a
+  control: interactive media cards on hover (`hover:shadow-xl
+  hover:shadow-primary/20`, carried by `CARD_SURFACE_CLASS`), the EmptyState
+  orb (`shadow-primary/5`), the music detail art (`shadow-2xl
+  shadow-primary/10`) and the watch-rooms section's halo. Shadows
   over posters and video stay literal too (§1.2).
 - **Layers** (`Z_INDEX_SCALE`): `z-chrome` (40, the header and the mini
   player), `z-modal` (50, dialogs, sheets and the full-window player) and
@@ -391,7 +393,13 @@ of its own, as tall as its text: the size for the two link variants).
   primitive with its own `data-slot` (`PaginationLink`). A raw `<button>`
   that calls it is a lint error: it is a `Button` with the wrapper left off,
   missing the `data-slot`/`data-variant` hooks and anything the primitive
-  gains later.
+  gains later. Any raw `<button>` is a lint error outside `components/ui`
+  (the primitives), `components/playback` and the trailer route (the
+  `PLAYER_*` transport recipes, §3.5) and the login page. The few left
+  elsewhere carry an inline exemption that says why: a whole row or tile
+  that is the control (a notification, an Add to Playlist row, a genre
+  tile), a control over media (a playlist card's menu trigger, an album
+  card's play reveal, §1.2), and the track row's play button (§3.5).
 - **Fields share one set of looks** (`ui/field-variants.ts`), chosen with
   `variant` on `Input`, `Textarea`, `NativeSelect` and `SelectTrigger`, so a
   form that mixes them reads as one:
