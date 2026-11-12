@@ -484,6 +484,42 @@ describe("Account settings", () => {
     );
   });
 
+  // The page says what this person's tabs hold: a non-admin has no server
+  // settings and no users to manage.
+  it("describes Settings by what a non-admin can change", async () => {
+    await renderAccountRoute();
+
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Settings" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Manage your account and playback."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/and users/)).toBeNull();
+  });
+
+  it("sits in the shared Settings column", async () => {
+    await renderAccountRoute();
+
+    const card = screen
+      .getByRole("heading", { name: "Profile information" })
+      .closest('[data-slot="card"]');
+    expect(card?.parentElement).toHaveClass("max-w-5xl", "space-y-6");
+  });
+
+  // Removals in a danger area are outlined, not filled (design-system §3.7):
+  // the filled red button is the one inside the confirmation.
+  it("offers account deletion as an outlined destructive action", async () => {
+    await renderAccountRoute();
+
+    expect(
+      screen.getByRole("heading", { level: 2, name: "Danger zone" }),
+    ).toHaveClass("text-destructive");
+    expect(
+      screen.getByRole("button", { name: "Delete account" }),
+    ).toHaveAttribute("data-variant", "outline-destructive");
+  });
+
   it("hides the danger zone from admin accounts", async () => {
     await renderAccountRoute(testUser({ is_admin: true }));
 

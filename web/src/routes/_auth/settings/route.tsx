@@ -19,6 +19,7 @@ import {
   LIBRARY_TAB_TRIGGER_CLASS,
   LIBRARY_TABS_LIST_CLASS,
 } from "@/lib/constants";
+import PageHeader from "@/components/shared/PageHeader";
 import { useContentFadeTransition } from "@/hooks/useContentFadeTransition";
 import { authUserQueryOpts } from "@/lib/query-opts";
 import { computeSettingsLayoutState } from "@/lib/settings-layout";
@@ -121,16 +122,16 @@ function SettingsLayout() {
 
   return (
     <div className="@container min-w-0">
-      {/* Page header */}
-      <header className="mb-6 sm:mb-7">
-        <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
-          <Settings className="size-6 text-primary" aria-hidden="true" />
-          <span>Settings</span>
-        </h1>
-        <p className="mt-2 max-w-2xl text-sm text-muted-foreground md:text-base">
-          Manage application settings, your account, and users
-        </p>
-      </header>
+      {/* The description names only what this person's tabs hold. */}
+      <PageHeader
+        icon={Settings}
+        title="Settings"
+        description={
+          isAdmin
+            ? "Manage the server, your account and users."
+            : "Manage your account and playback."
+        }
+      />
 
       {/* Tabs */}
       <Tabs value={currentTab} onValueChange={handleTabChange}>

@@ -2,18 +2,17 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Alert } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { FieldError, FieldHint } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Spinner } from "@/components/ui/spinner";
+import SettingsCardHeader from "@/components/settings/SettingsCardHeader";
+import SettingsPage from "@/components/settings/SettingsPage";
 import {
   Dialog,
   DialogContent,
@@ -31,6 +30,7 @@ import {
 } from "@/lib/query-opts";
 import {
   USER_EMAIL_MAX_LENGTH,
+  MOTION_SETTINGS_SURFACE_CLASS,
   USER_NAME_MAX_LENGTH,
 } from "@/lib/constants";
 import {
@@ -238,48 +238,50 @@ function UsersSettings() {
   });
 
   return (
-    <div className="space-y-8">
-      <Card>
-        <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <CardTitle asChild className="flex items-center gap-2">
-              <h2>
-                <Users className="size-5 text-primary" aria-hidden="true" />
-                User management
-              </h2>
-            </CardTitle>
-            <CardDescription className="text-muted-foreground">
-              Create, edit, and remove user accounts.
-            </CardDescription>
-          </div>
-          <Button
-            ref={addUserButtonRef}
-            variant="accent"
-            onClick={event => openDialog({ type: "create" }, event.currentTarget)}
-            className="w-full shrink-0 sm:w-auto"
-          >
-            <UserPlus className="size-4" aria-hidden="true" />
-            Add user
-          </Button>
-        </CardHeader>
+    <SettingsPage>
+      <Card className={MOTION_SETTINGS_SURFACE_CLASS}>
+        <SettingsCardHeader
+          icon={Users}
+          title="User management"
+          description="Create, edit, and remove user accounts."
+          action={
+            <Button
+              ref={addUserButtonRef}
+              variant="accent"
+              onClick={event =>
+                openDialog({ type: "create" }, event.currentTarget)
+              }
+              className="w-full shrink-0 sm:w-auto"
+            >
+              <UserPlus className="size-4" aria-hidden="true" />
+              Add user
+            </Button>
+          }
+        />
 
         <CardContent>
           {isLoading && (
-            <p className="text-muted-foreground">Loading users...</p>
-          )}
-
-          {!isLoading && usersData?.error && (
-            <p className="text-destructive" role="alert">
-              {apiErrorMessage(usersData, "Couldn’t load users. Please try again.")}
+            <p
+              role="status"
+              className="flex items-center gap-3 text-sm text-muted-foreground"
+            >
+              <Spinner tone="primary" aria-hidden="true" />
+              Loading users...
             </p>
           )}
 
+          {!isLoading && usersData?.error && (
+            <Alert>
+              {apiErrorMessage(usersData, "Couldn’t load users. Please try again.")}
+            </Alert>
+          )}
+
           {!isLoading && !usersData?.error && users.length === 0 && (
-            <p className="text-muted-foreground">No users found.</p>
+            <p className="text-sm text-muted-foreground">No users found.</p>
           )}
 
           {!isLoading && users.length > 0 && (
-            <ul className="divide-y divide-border" role="list" aria-label="User list">
+            <ul className="divide-y divide-border/50" role="list" aria-label="User list">
               {users.map(user => (
                 <li key={user.id} className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:gap-4">
                   <div className="flex min-w-0 items-center gap-3 sm:flex-1">
@@ -306,19 +308,15 @@ function UsersSettings() {
                   <div className="flex flex-wrap items-center justify-between gap-3 sm:shrink-0 sm:justify-end">
                     <div className="shrink-0">
                       {user.is_admin ? (
-                        <span
-                          className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary"
-                        >
+                        <Badge variant="tinted" size="sm">
                           <ShieldCheck className="size-3" aria-hidden="true" />
                           Admin
-                        </span>
+                        </Badge>
                       ) : (
-                        <span
-                          className="inline-flex items-center gap-1 rounded-full bg-accent/50 px-2 py-0.5 text-xs font-medium text-muted-foreground"
-                        >
+                        <Badge variant="outline" size="sm">
                           <ShieldOff className="size-3" aria-hidden="true" />
                           User
-                        </span>
+                        </Badge>
                       )}
                     </div>
 
@@ -430,7 +428,7 @@ function UsersSettings() {
           onCloseAutoFocus={handleDialogCloseAutoFocus}
         />
       )}
-    </div>
+    </SettingsPage>
   );
 }
 
@@ -612,6 +610,7 @@ function CreateUserDialog({
               Cancel
             </Button>
             <Button type="submit" variant="accent" disabled={isPending}>
+              {isPending ? <Spinner aria-hidden="true" /> : null}
               {isPending ? "Creating..." : "Create user"}
             </Button>
           </DialogFooter>
@@ -758,6 +757,7 @@ function EditUserDialog({
               Cancel
             </Button>
             <Button type="submit" variant="accent" disabled={isPending}>
+              {isPending ? <Spinner aria-hidden="true" /> : null}
               {isPending ? "Saving..." : "Save changes"}
             </Button>
           </DialogFooter>
@@ -846,6 +846,7 @@ function DeleteUserDialog({
             }}
             disabled={isPending || confirmText !== "DELETE"}
           >
+            {isPending ? <Spinner aria-hidden="true" /> : null}
             {isPending ? "Deleting..." : "Delete user"}
           </Button>
         </DialogFooter>
@@ -1007,6 +1008,7 @@ function ResetPasswordDialog({
               variant="accent"
               disabled={resetDisabled}
             >
+              {isPending ? <Spinner aria-hidden="true" /> : null}
               {isPending ? "Resetting..." : "Reset password"}
             </Button>
           </DialogFooter>

@@ -132,6 +132,23 @@ afterEach(() => {
   }
 });
 
+describe("settings page header", () => {
+  it("is the shared page header, describing what an admin can change", async () => {
+    await renderSettingsRoute("/settings");
+
+    const title = await screen.findByRole("heading", {
+      level: 1,
+      name: "Settings",
+    });
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(
+      screen.getByText("Manage the server, your account and users."),
+    ).toBeInTheDocument();
+    // The libraries' header: it enters with the page.
+    expect(title.closest("header")?.className).toContain("animate-in");
+  });
+});
+
 describe("settings route tab transitions", () => {
   it("delays tab route changes without using native view transitions", async () => {
     const user = userEvent.setup();

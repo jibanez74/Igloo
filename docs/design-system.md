@@ -1001,9 +1001,10 @@ the labelled region alone. A new home row is a `HomeMediaSection` with one of th
   take a line of their own under the title and the menu stays at the end of
   the title's line. Libraries carry no description
   line: the tabs follow the header directly, so the first row of posters
-  sits about 90px higher than when the counts had a row of their own. The Settings header is still its own block: it has no entrance and
-  its description sits 2px further below the title. It moves over with the
-  Settings pass.
+  sits about 90px higher than when the counts had a row of their own.
+  Settings uses it too, with a description that names what the reader's own
+  tabs hold: "Manage the server, your account and users." for an
+  administrator, "Manage your account and playback." otherwise.
 
 #### Poster cards
 
@@ -1791,6 +1792,26 @@ require the full playback test pass.
   (`border-destructive/*` + destructive text + outline destructive actions).
   A card's own loading and error states are `SettingsLoadingCard` and
   `SettingsErrorCard` (§3.4), so the card keeps its place in the page.
+- **Every Settings tab is one `SettingsPage`** (`settings/SettingsPage.tsx`):
+  a `max-w-5xl` column with `space-y-6` between cards, and the scroll margin
+  that keeps a focused control clear of a sticky Save bar. A tab that is one
+  form saved by a Save bar is `<SettingsPage as="form">` (General,
+  Libraries). No tab sets its own width or gap; a card may cap its content
+  (`CardContent className="max-w-2xl"` on Account, where the fields are
+  short). `SettingsLoadingCard` and `SettingsErrorCard` are the same width.
+- **`SettingsCardHeader` is the header of every Settings card.** `action`
+  puts the card's own button at the end of the header's row (Users: "Add
+  user"), stacked under the title on a phone. `tone="destructive"` draws the
+  Danger zone's title, icon and description in red. No card builds a header
+  from `CardHeader` by hand.
+- **A removal outside a confirmation is `outline-destructive`**: "Delete
+  account" in the Danger zone, "Remove PIN", "Revoke". The filled
+  `destructive` button is the confirming one, inside the dialog.
+- **A submit button shows a `Spinner` before its pending label** ("Saving...",
+  "Creating..."), in a card, a dialog or the Save bar alike.
+- **A role or status chip is a `Badge`** (Users: `tinted` for an
+  administrator, `outline` for a user), and a list that is still loading
+  says so in a `role="status"` line with a spinner.
 - **A field has one label, and its help sits above the control.** The order
   is label, help, control, then whatever depends on the value:
 

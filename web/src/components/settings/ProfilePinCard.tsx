@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { FieldError, FieldHint } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Spinner } from "@/components/ui/spinner";
 import { KeyRound } from "lucide-react";
 import SettingsCardHeader from "@/components/settings/SettingsCardHeader";
 import { sessionEndedSince, sessionStamp } from "@/hooks/useEndSession";
@@ -18,6 +19,7 @@ import {
   userPinQueryOpts,
 } from "@/lib/query-opts";
 import {
+  MOTION_SETTINGS_SURFACE_CLASS,
   USER_PIN_LENGTH,
 } from "@/lib/constants";
 import {
@@ -201,7 +203,7 @@ export default function ProfilePinCard() {
   }
 
   return (
-    <Card>
+    <Card className={MOTION_SETTINGS_SURFACE_CLASS}>
       <SettingsCardHeader
         icon={KeyRound}
         title="Profile PIN"
@@ -311,6 +313,7 @@ export default function ProfilePinCard() {
               variant="accent"
               className="w-full sm:w-auto"
             >
+              {pinMutation.isPending ? <Spinner aria-hidden="true" /> : null}
               {pinMutation.isPending
                 ? "Saving..."
                 : hasPin
@@ -320,7 +323,7 @@ export default function ProfilePinCard() {
             {hasPin && (
               <Button
                 type="button"
-                variant="outline"
+                variant="outline-destructive"
                 onClick={handleRemove}
                 disabled={pinMutation.isPending}
                 className="w-full sm:w-auto"

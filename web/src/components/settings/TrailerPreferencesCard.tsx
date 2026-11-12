@@ -163,7 +163,7 @@ export default function TrailerPreferencesCard() {
           }
         />
 
-        <div className="grid gap-5 sm:grid-cols-2">
+        <div className="grid gap-5 @2xl:grid-cols-2">
           <div className="grid gap-2">
             <Label htmlFor={countId}>Number of trailers</Label>
             <Select

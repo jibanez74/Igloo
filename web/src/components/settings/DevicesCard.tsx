@@ -5,11 +5,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Spinner } from "@/components/ui/spinner";
 import { Pencil, Smartphone, Tv } from "lucide-react";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
 import SettingsCardHeader from "@/components/settings/SettingsCardHeader";
 import { renameDevice, revokeDevice } from "@/lib/api";
-import { DEVICES_KEY } from "@/lib/constants";
+import { DEVICES_KEY, MOTION_SETTINGS_SURFACE_CLASS } from "@/lib/constants";
 import { parseServerTimestamp } from "@/lib/format";
 import { devicesQueryOpts } from "@/lib/query-opts";
 import { showSuccess, showActionFailed } from "@/lib/toast-helpers";
@@ -90,7 +91,7 @@ export default function DevicesCard() {
     data?.error === false && data.data?.devices ? data.data.devices : [];
 
   return (
-    <Card>
+    <Card className={MOTION_SETTINGS_SURFACE_CLASS}>
       <SettingsCardHeader
         icon={Smartphone}
         title="Devices"
@@ -98,7 +99,13 @@ export default function DevicesCard() {
       />
       <CardContent className="max-w-2xl">
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading devices...</p>
+          <p
+            role="status"
+            className="flex items-center gap-3 text-sm text-muted-foreground"
+          >
+            <Spinner tone="primary" aria-hidden="true" />
+            Loading devices...
+          </p>
         ) : data?.error ? (
           <p className="text-sm text-destructive" role="alert">
             {apiErrorMessage(data, "Couldn’t load your devices. Please try again.")}
@@ -154,6 +161,9 @@ export default function DevicesCard() {
                               variant="accent"
                               disabled={renameMutation.isPending}
                             >
+                              {renameMutation.isPending ? (
+                                <Spinner aria-hidden="true" />
+                              ) : null}
                               {renameMutation.isPending ? "Saving..." : "Save"}
                             </Button>
                             <Button

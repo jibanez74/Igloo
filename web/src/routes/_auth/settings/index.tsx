@@ -23,6 +23,7 @@ import SettingsCardHeader from "@/components/settings/SettingsCardHeader";
 import SwitchField from "@/components/settings/SwitchField";
 import SettingsErrorCard from "@/components/settings/SettingsErrorCard";
 import SettingsLoadingCard from "@/components/settings/SettingsLoadingCard";
+import SettingsPage from "@/components/settings/SettingsPage";
 import SettingsSaveBar from "@/components/settings/SettingsSaveBar";
 import { useIsMiniPlayerVisible } from "@/hooks/useIsMiniPlayerVisible";
 import {
@@ -340,15 +341,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
     // API-key fields (type="password" in SecretInput) trip Chrome's
     // password-manager "multiple forms" heuristic (a benign verbose advisory,
     // not an error); splitting the form would break the single-save UX.
-    <form
-      onSubmit={handleSubmit}
-      noValidate
-      // scroll-mb on every focusable control: the sticky save bar overlays the
-      // bottom of the viewport, so keyboard-focus auto-scroll must clear it
-      // (bar height + its bottom offset, largest when stacked on mobile with
-      // the mini player visible).
-      className="@container max-w-5xl space-y-6 [&_:is(button,input,select)]:scroll-mb-72 sm:[&_:is(button,input,select)]:scroll-mb-44"
-    >
+    <SettingsPage as="form" onSubmit={handleSubmit} noValidate>
       <Card
         className={MOTION_SETTINGS_SURFACE_CLASS}
       >
@@ -508,7 +501,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
         fallbackFocusRef={downloadImagesSwitchRef}
         onConfirm={saveForm}
       />
-    </form>
+    </SettingsPage>
   );
 }
 
