@@ -136,31 +136,27 @@ export function RequestMediaMenuItem({
     ? `${provider} search status is still loading.`
     : `${provider} search is unavailable on this server.`;
 
-  const item = (
-    <DropdownMenuItem
-      aria-disabled={disabled || undefined}
-      aria-label={disabled ? `${label} unavailable. ${reason}` : label}
-      onSelect={event => {
-        if (disabled) {
-          event.preventDefault();
-          return;
-        }
-        onSelect();
-      }}
-    >
-      <Plus className="mr-2 size-4" aria-hidden="true" />
-      {label}
-      {disabled && <span className="sr-only"> {reason}</span>}
-    </DropdownMenuItem>
-  );
-
   // The reason is already in the name, so the tooltip only shows it. It sits
-  // beside the menu: above, it would cover the items over this one.
-  return disabled ? (
-    <Tooltip label={reason} side="left">
-      {item}
+  // beside the menu: above, it would cover the items over this one. It stays
+  // mounted, switched off once the item is available, so a status that answers
+  // while the item has focus does not remount the item and drop that focus.
+  return (
+    <Tooltip label={reason} side="left" disabled={!disabled}>
+      <DropdownMenuItem
+        aria-disabled={disabled || undefined}
+        aria-label={disabled ? `${label} unavailable. ${reason}` : label}
+        onSelect={event => {
+          if (disabled) {
+            event.preventDefault();
+            return;
+          }
+          onSelect();
+        }}
+      >
+        <Plus className="mr-2 size-4" aria-hidden="true" />
+        {label}
+        {disabled && <span className="sr-only"> {reason}</span>}
+      </DropdownMenuItem>
     </Tooltip>
-  ) : (
-    item
   );
 }

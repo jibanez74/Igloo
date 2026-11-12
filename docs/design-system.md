@@ -741,7 +741,9 @@ any variant fully. The base string carries the focus ring, disabled opacity,
     the tooltip could never open. `DropdownMenuItem` dims an
     `aria-disabled` item like a disabled one (`RequestMediaMenuItem`, §3.2);
     its tooltip opens to the side (`side="left"`) so it does not cover the
-    items above.
+    items above. Once the reason stops holding, the tooltip is switched off
+    with `disabled`, not unmounted: swapping the wrapper away remounts the
+    control and drops the focus resting on it.
   - It is drawn inverted (`bg-foreground text-background`) so it never
     reads as a menu, on the `z-popover` layer, at the micro duration.
   - `AppBoot` mounts one `TooltipProvider`, which lets the next tooltip show

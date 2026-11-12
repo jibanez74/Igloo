@@ -77,6 +77,41 @@ describe("RequestMediaMenuItem", () => {
     );
   });
 
+  // Swapping the tooltip out once the status answered remounted the item,
+  // so a keyboard user resting on it lost focus.
+  it("keeps focus on the item when the status answers that search works", async () => {
+    const user = userEvent.setup();
+    const props = {
+      label: "Request Album",
+      provider: "Spotify" as const,
+      onSelect: () => {},
+    };
+    const { rerender } = renderWithQueryClient(
+      <LibraryMoreMenu open onOpenChange={() => {}}>
+        <RequestMediaMenuItem {...props} available={false} statusLoading />
+      </LibraryMoreMenu>,
+    );
+
+    const item = await screen.findByRole("menuitem", {
+      name: /^Request Album unavailable/,
+    });
+    await user.keyboard("{ArrowDown}");
+    expect(item).toHaveFocus();
+    expect(await screen.findByRole("tooltip")).toBeInTheDocument();
+
+    rerender(
+      <LibraryMoreMenu open onOpenChange={() => {}}>
+        <RequestMediaMenuItem {...props} available statusLoading={false} />
+      </LibraryMoreMenu>,
+    );
+
+    const ready = screen.getByRole("menuitem", { name: "Request Album" });
+    expect(ready).toBe(item);
+    expect(ready).toHaveFocus();
+    expect(ready).not.toHaveAttribute("aria-disabled");
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+  });
+
   it("does not fire while it is disabled, and the menu stays open", async () => {
     const onSelect = vi.fn();
     const user = userEvent.setup();
