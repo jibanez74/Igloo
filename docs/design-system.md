@@ -321,8 +321,8 @@ assemble a look from classes.
 | `destructive` | destructive fill | the confirming action of a deletion |
 | `outline-destructive` | outline in the destructive color, in both themes | a removal that is not its surface's main action: revoke a device |
 
-Sizes are `default`, `sm`, `lg`, `icon` and `icon-sm`. `shape="pill"` rounds
-any variant fully. The base string carries the focus ring, disabled opacity,
+Sizes are `default`, `sm`, `lg`, `xl`, `icon` and `icon-sm`. `shape="pill"`
+rounds any variant fully. The base string carries the focus ring, disabled opacity,
 `aria-invalid` styling, a property-scoped 150ms transition with
 `motion-reduce:transition-none`, and stamps `data-variant`, `data-size` and
 `data-shape`.
@@ -345,6 +345,13 @@ any variant fully. The base string carries the focus ring, disabled opacity,
   one. The other variants keep the base half-opacity. Guarded by
   `test/ui/button.test.tsx`.
 
+- **A call to action is `xl`, 44 px, the touch-target minimum.** The hero
+  actions of a detail page (`MovieDetailsHeroActions`, `ShowDetailsHeroActions`,
+  the in-theaters Play Trailer), the home billboard's two pills, and the
+  buttons of a full-screen status (`PlaybackStatusScreen`, the trailer's no
+  trailer and error views) take `size="xl"`, never `lg` plus a `min-h-11`
+  override. A status screen's pair is the primary pill with `shadow-glow`
+  beside an `outline` pill.
 - **A pill stays a pill at every size.** `buttonVariants` merges
   base → variant → size → shape → `className` with `cn` (`twMerge`), so the
   last conflicting class wins. The base sets `rounded-md`, no size sets a

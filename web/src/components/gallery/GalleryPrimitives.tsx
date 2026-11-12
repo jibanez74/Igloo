@@ -105,6 +105,23 @@ function ButtonsSection() {
         </GalleryRow>
       ))}
 
+      <GalleryRow label="xl: hero and status calls to action">
+        <Button size="xl" shape="pill" className="font-semibold shadow-glow">
+          <Play aria-hidden="true" />
+          Play
+        </Button>
+        <Button variant="outline" size="xl" shape="pill" className="font-semibold">
+          Details
+        </Button>
+        <Button variant="accent" size="xl">
+          <Play aria-hidden="true" />
+          Resume
+        </Button>
+        <Button variant="outline" size="xl">
+          More
+        </Button>
+      </GalleryRow>
+
       <GalleryRow label="invalid, and buttonVariants on a link">
         <Button variant="outline" aria-invalid="true">
           Invalid

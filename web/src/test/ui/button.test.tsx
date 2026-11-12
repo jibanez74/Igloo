@@ -215,6 +215,16 @@ describe("buttonVariants", () => {
     expect(classes).not.toContain("bg-background");
   });
 
+  // Hero actions and full-screen status calls to action are 44 px, the touch
+  // target minimum, from the size itself rather than a min-height override.
+  it("makes xl the 44 px call-to-action size", () => {
+    const classes = classesOf(buttonVariants({ size: "xl", shape: "pill" }));
+
+    expect(classes).toContain("h-11");
+    expect(classes).toContain("rounded-full");
+    expect(classes).not.toContain("h-10");
+  });
+
   it("never repeats a class", () => {
     for (const variant of [
       "default",
@@ -226,7 +236,7 @@ describe("buttonVariants", () => {
       "ghost-muted",
       "ghost-destructive",
     ] as const) {
-      for (const size of ["default", "sm", "lg", "icon", "icon-sm"] as const) {
+      for (const size of ["default", "sm", "lg", "xl", "icon", "icon-sm"] as const) {
         const classes = classesOf(buttonVariants({ variant, size }));
 
         expect(new Set(classes).size).toBe(classes.length);

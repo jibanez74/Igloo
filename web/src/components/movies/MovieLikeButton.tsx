@@ -81,7 +81,7 @@ export default function MovieLikeButton({
     <Button
       type="button"
       variant="outline"
-      size="lg"
+      size="xl"
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -89,7 +89,7 @@ export default function MovieLikeButton({
       }}
       disabled={mutation.isPending || isLoading}
       className={cn(
-        "min-h-11 touch-manipulation px-3 font-semibold sm:px-6",
+        "touch-manipulation px-3 font-semibold sm:px-6",
         className,
       )}
       aria-label={label}

@@ -219,8 +219,8 @@ function Billboard({ featured }: { featured: Featured }) {
             {...playLink}
             aria-label={`${playVerb} ${title}`}
             className={cn(
-              buttonVariants({ size: "lg", shape: "pill" }),
-              "min-h-11 px-6 font-semibold shadow-glow",
+              buttonVariants({ size: "xl", shape: "pill" }),
+              "px-6 font-semibold shadow-glow",
               FOCUS_VISIBLE_RING_CLASS,
             )}
           >
@@ -231,8 +231,8 @@ function Billboard({ featured }: { featured: Featured }) {
             {...detailsLink}
             aria-label={`Details for ${title}`}
             className={cn(
-              buttonVariants({ variant: "outline", size: "lg", shape: "pill" }),
-              "min-h-11 px-6 font-semibold",
+              buttonVariants({ variant: "outline", size: "xl", shape: "pill" }),
+              "px-6 font-semibold",
               FOCUS_VISIBLE_RING_CLASS,
             )}
           >
