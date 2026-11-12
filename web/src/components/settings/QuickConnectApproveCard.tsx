@@ -14,6 +14,7 @@ import { MOTION_SETTINGS_SURFACE_CLASS } from "@/lib/constants";
 import { devicesQueryOpts } from "@/lib/query-opts";
 import { showSuccess, showActionFailed } from "@/lib/toast-helpers";
 import { describedBy } from "@/lib/utils";
+import { useFocusHandoff } from "@/hooks/useFocusHandoff";
 import type {
   ApiResponseType,
   DeviceType,
@@ -96,6 +97,14 @@ export default function QuickConnectApproveCard() {
   const codeInputRef = useRef<HTMLInputElement | null>(null);
   const stepHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const prevStepRef = useRef<Step>("enter");
+  // Continue and "Approve device" disable themselves while the server
+  // answers. The code takes focus from Continue, since a refused code is
+  // what has to change; the step's heading takes it from Approve and gives
+  // it back when the approval is refused and can be tried again.
+  const enterFormRef = useRef<HTMLFormElement | null>(null);
+  const confirmRef = useRef<HTMLDivElement | null>(null);
+  useFocusHandoff(enterFormRef, codeInputRef);
+  useFocusHandoff(confirmRef, stepHeadingRef, { returns: true });
 
   // Keep keyboard and screen-reader users oriented as the card swaps its
   // content between steps.
@@ -280,7 +289,12 @@ export default function QuickConnectApproveCard() {
       />
       <CardContent className="max-w-2xl">
         {step === "enter" && (
-          <form onSubmit={handleSubmit} className="space-y-2" noValidate>
+          <form
+            ref={enterFormRef}
+            onSubmit={handleSubmit}
+            className="space-y-2"
+            noValidate
+          >
             <Label htmlFor={codeId} tone="muted">
               Quick Connect code
             </Label>
@@ -326,7 +340,7 @@ export default function QuickConnectApproveCard() {
         )}
 
         {step === "confirm" && pendingDevice && (
-          <div className="space-y-3">
+          <div ref={confirmRef} className="space-y-3">
             <h3
               ref={stepHeadingRef}
               tabIndex={-1}

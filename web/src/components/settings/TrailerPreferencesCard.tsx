@@ -170,8 +170,8 @@ export default function TrailerPreferencesCard() {
             <Select
               name="trailer_count"
               value={String(prefs.count)}
-              disabled={saving}
               onValueChange={(value) => {
+                if (saving) return;
                 const count = Number(value);
                 save({ ...prefs, count }, `Trailer count set to ${count}.`);
               }}
@@ -179,6 +179,10 @@ export default function TrailerPreferencesCard() {
               <SelectTrigger
                 id={countId}
                 variant="inset" size="lg"
+                // Not `disabled`, for the reason the switch above is not:
+                // the list hands focus back to a trigger that could not
+                // take it while the save was still in flight.
+                aria-disabled={saving || undefined}
               >
                 <SelectValue />
               </SelectTrigger>
@@ -200,9 +204,8 @@ export default function TrailerPreferencesCard() {
             <Select
               name="trailer_source"
               value={prefs.source}
-              disabled={saving}
               onValueChange={(value) => {
-                if (!isTrailerSource(value)) return;
+                if (saving || !isTrailerSource(value)) return;
                 save(
                   { ...prefs, source: value },
                   `Trailer source set to ${sourceLabel(value)}.`,
@@ -212,6 +215,7 @@ export default function TrailerPreferencesCard() {
               <SelectTrigger
                 id={sourceId}
                 variant="inset" size="lg"
+                aria-disabled={saving || undefined}
                 aria-describedby={tmdbUnavailable ? sourceHintId : undefined}
               >
                 <SelectValue />

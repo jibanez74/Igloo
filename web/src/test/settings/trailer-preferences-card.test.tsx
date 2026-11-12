@@ -126,6 +126,49 @@ describe("TrailerPreferencesCard", () => {
     expect(toggle()).toHaveAttribute("aria-checked", "true");
   });
 
+  // A select hands focus back to its trigger when its list closes. Disabled
+  // for the length of the save, the trigger could not take it (Firefox, on
+  // any save slower than the list's closing).
+  it("keeps both selects focusable while a save is in flight", async () => {
+    let finish: (value: ReturnType<typeof success>) => void = () => {};
+    updateTrailerPreferencesMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const user = userEvent.setup();
+    renderWithQueryClient(<TrailerPreferencesCard />);
+    await screen.findByRole("switch");
+    const selects = () => [
+      screen.getByRole("combobox", { name: "Number of trailers" }),
+      screen.getByRole("combobox", { name: "Trailer source" }),
+    ];
+
+    await user.click(toggle());
+    await waitFor(() =>
+      expect(updateTrailerPreferencesMock).toHaveBeenCalledTimes(1),
+    );
+    for (const select of selects()) {
+      expect(select).toBeEnabled();
+      expect(select).toHaveAttribute("aria-disabled", "true");
+    }
+
+    // A pick made meanwhile starts no second save.
+    selects()[0].focus();
+    await user.keyboard("{Enter}");
+    await screen.findByRole("listbox");
+    await user.click(screen.getByRole("option", { name: "3 trailers" }));
+    await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
+    expect(updateTrailerPreferencesMock).toHaveBeenCalledTimes(1);
+
+    finish(success({ ...defaults, enabled: true }));
+    await waitFor(() =>
+      expect(selects()[0]).not.toHaveAttribute("aria-disabled"),
+    );
+    expect(selects()[1]).not.toHaveAttribute("aria-disabled");
+  });
+
   it("rolls the control back and toasts when the save fails", async () => {
     const user = userEvent.setup();
     updateTrailerPreferencesMock.mockResolvedValue({

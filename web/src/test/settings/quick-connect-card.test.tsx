@@ -1,4 +1,4 @@
-import { act, fireEvent, screen } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import QuickConnectApproveCard from "@/components/settings/QuickConnectApproveCard";
@@ -412,5 +412,67 @@ describe("QuickConnectApproveCard", () => {
       screen.getByRole("textbox", { name: "Quick Connect code" }),
     ).toBeInTheDocument();
     expect(showActionFailedMock).toHaveBeenCalled();
+  });
+
+  // Continue and "Approve device" disable themselves while the server
+  // answers, which dropped focus on the page body in a real browser.
+  it("moves focus from Continue to the code the server refused", async () => {
+    let finish: (value: unknown) => void = () => {};
+    lookupQuickConnectMock.mockReturnValue(
+      new Promise(resolve => {
+        finish = resolve;
+      }),
+    );
+    const user = userEvent.setup();
+    renderCard();
+
+    const code = screen.getByRole("textbox", { name: "Quick Connect code" });
+    await user.type(code, "ZZZZZZ");
+    screen.getByRole("button", { name: "Continue" }).focus();
+    await user.keyboard("{Enter}");
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Checking..." })).toBeDisabled(),
+    );
+    expect(code).toHaveFocus();
+
+    finish({
+      error: true,
+      message: "404 - The resource you requested was not found.",
+      status: 404,
+    });
+    await screen.findByRole("alert");
+    expect(code).toHaveFocus();
+  });
+
+  it("holds focus on the step heading while approving, and returns it to Approve when refused", async () => {
+    let finish: (value: unknown) => void = () => {};
+    approveQuickConnectMock.mockReturnValue(
+      new Promise(resolve => {
+        finish = resolve;
+      }),
+    );
+    const user = userEvent.setup();
+    renderCard();
+
+    await user.type(
+      screen.getByRole("textbox", { name: "Quick Connect code" }),
+      "XK4T7P{Enter}",
+    );
+    const heading = await screen.findByRole("heading", {
+      name: "Approve this device?",
+    });
+    screen.getByRole("button", { name: "Approve device" }).focus();
+    await user.keyboard("{Enter}");
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Approving..." })).toBeDisabled(),
+    );
+    expect(heading).toHaveFocus();
+
+    finish({ error: true, message: "internal_error", status: 500 });
+    const approve = await screen.findByRole("button", { name: "Approve device" });
+    await waitFor(() => expect(approve).toHaveFocus());
+    expect(screen.getByRole("alert")).toBeInTheDocument();
   });
 });

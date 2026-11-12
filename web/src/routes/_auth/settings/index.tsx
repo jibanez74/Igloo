@@ -557,7 +557,10 @@ function SecretInput({
           type={visible ? "text" : "password"}
           value={value}
           onChange={event => onChange(event.target.value)}
-          disabled={disabled}
+          // Read-only rather than disabled while the form saves: Enter in
+          // this field is what submitted it, and a disabled field would
+          // drop the focus it holds.
+          readOnly={disabled}
           aria-describedby={descriptionId}
           autoComplete="off"
           variant="inset"
@@ -630,7 +633,8 @@ function PathInput({
           type="text"
           value={value}
           onChange={event => onChange(event.target.value)}
-          disabled={disabled}
+          // Read-only while the form saves, as in SecretInput.
+          readOnly={disabled}
           required={required}
           aria-required={required || undefined}
           aria-invalid={invalid || undefined}

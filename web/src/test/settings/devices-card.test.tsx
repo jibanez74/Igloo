@@ -320,6 +320,68 @@ describe("DevicesCard", () => {
         ).toHaveFocus(),
       );
     });
+
+    // The save used to pull focus back to Rename whenever it finished.
+    it("leaves focus where the reader moved it while the rename saved", async () => {
+      let finishRename: (value: unknown) => void = () => {};
+      renameDeviceMock.mockReturnValue(
+        new Promise(resolve => {
+          finishRename = resolve;
+        }),
+      );
+      const user = userEvent.setup();
+      renderCard();
+
+      await user.click(
+        await screen.findByRole("button", { name: "Rename Living Room TV" }),
+      );
+      const input = screen.getByRole("textbox", {
+        name: "New name for Living Room TV",
+      });
+      await user.clear(input);
+      await user.type(input, "Den TV{Enter}");
+      const elsewhere = screen.getByRole("button", { name: "Revoke Bedroom TV" });
+      elsewhere.focus();
+      finishRename({ error: false, message: "Device renamed" });
+
+      await waitFor(() => expect(screen.queryByRole("textbox")).toBeNull());
+      expect(elsewhere).toHaveFocus();
+    });
+
+    // Save disables itself while it saves; a real browser then drops focus
+    // on the page body, and a failed save left it there.
+    it("moves from Save to the name while it saves, and stays if that fails", async () => {
+      let finishRename: (value: unknown) => void = () => {};
+      renameDeviceMock.mockReturnValue(
+        new Promise(resolve => {
+          finishRename = resolve;
+        }),
+      );
+      const user = userEvent.setup();
+      renderCard();
+
+      await user.click(
+        await screen.findByRole("button", { name: "Rename Living Room TV" }),
+      );
+      const input = screen.getByRole("textbox", {
+        name: "New name for Living Room TV",
+      });
+      await user.clear(input);
+      await user.type(input, "Den TV");
+      screen.getByRole("button", { name: "Save" }).focus();
+      await user.keyboard("{Enter}");
+
+      await waitFor(() =>
+        expect(screen.getByRole("button", { name: "Saving..." })).toBeDisabled(),
+      );
+      expect(input).toHaveFocus();
+
+      finishRename({ error: true, message: "boom", status: 500 });
+      await waitFor(() =>
+        expect(screen.getByRole("button", { name: "Save" })).toBeEnabled(),
+      );
+      expect(input).toHaveFocus();
+    });
   });
 
   it("words list errors itself instead of echoing the client's canned text", async () => {

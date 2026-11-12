@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AudioPlayerNowPlayingContext } from "@/context/AudioPlayerContext";
@@ -25,13 +25,19 @@ function nvidiaSettings(
   });
 }
 
-async function renderPlaybackSettings(settings: PlaybackSettingsType) {
+async function renderPlaybackSettings(
+  settings: PlaybackSettingsType,
+  saveResponse?: Promise<Response>,
+) {
   vi.stubGlobal(
     "fetch",
-    vi.fn((input: RequestInfo | URL) => {
+    vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestURL(input);
       if (url === "/api/auth/user") {
         return jsonResponse(authUser({ is_admin: true }));
+      }
+      if (url === "/api/settings/playback" && init?.method === "PUT" && saveResponse) {
+        return saveResponse;
       }
       if (url === "/api/settings/playback") {
         return jsonResponse({ error: false, data: { settings } });
@@ -154,5 +160,21 @@ describe("server playback form effective device notice", () => {
     expect(
       vi.mocked(fetch).mock.calls.filter(([, init]) => init?.method === "PUT"),
     ).toHaveLength(0);
+  });
+
+  // Enter in the field submits the form. Disabled for the length of the
+  // save, the field dropped the focus it held.
+  it("keeps focus in the upload cap while its Enter saves the form", async () => {
+    const user = userEvent.setup();
+    // The save never answers: the test is about the time it takes.
+    await renderPlaybackSettings(nvidiaSettings(), new Promise(() => {}));
+
+    const input = await screen.findByLabelText("Server upload bandwidth (Mbps)");
+    await user.clear(input);
+    await user.type(input, "40{Enter}");
+
+    await waitFor(() => expect(input).toHaveAttribute("readonly"));
+    expect(input).toBeEnabled();
+    expect(input).toHaveFocus();
   });
 });

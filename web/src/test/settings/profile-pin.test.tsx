@@ -220,6 +220,40 @@ describe("ProfilePinCard", () => {
     ).toBeInTheDocument();
   });
 
+  // Both buttons disable themselves while they save, and Remove leaves
+  // with the PIN; either way focus used to end on the page body.
+  it("keeps focus on the PIN field after Set PIN", async () => {
+    const user = userEvent.setup();
+    renderCard();
+
+    const pin = await screen.findByLabelText("PIN");
+    await user.type(pin, "1234");
+    screen.getByRole("button", { name: "Set PIN" }).focus();
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => expect(showSuccessMock).toHaveBeenCalledWith("PIN saved"));
+    expect(pin).toHaveFocus();
+  });
+
+  it("moves focus to the PIN field once Remove PIN is gone", async () => {
+    getAuthUserMock.mockResolvedValue(authUser(testUser({ has_pin: true })));
+    updateUserPinMock.mockResolvedValue({
+      error: false,
+      message: "PIN removed successfully",
+      data: { user: testUser({ has_pin: false }) },
+    });
+    const user = userEvent.setup();
+    renderCard();
+
+    await user.type(await screen.findByLabelText("Current PIN"), "1234");
+    screen.getByRole("button", { name: "Remove PIN" }).focus();
+    await user.keyboard("{Enter}");
+
+    await screen.findByText("You have not set a profile PIN.");
+    expect(screen.queryByRole("button", { name: "Remove PIN" })).toBeNull();
+    expect(screen.getByLabelText("PIN")).toHaveFocus();
+  });
+
   it("surfaces server rejections on the current PIN field", async () => {
     getAuthUserMock.mockResolvedValue(
       authUser(testUser({ has_pin: true })),

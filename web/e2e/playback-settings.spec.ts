@@ -300,17 +300,22 @@ test.describe("Playback settings", () => {
       // Chromium on every toggle.
       await expect(toggle).toBeFocused();
 
-      await page.getByRole("combobox", { name: "Number of trailers" }).click();
+      // Nor are the selects: each list hands focus back to its trigger.
+      const count = page.getByRole("combobox", { name: "Number of trailers" });
+      await count.click();
       await page.getByRole("option", { name: "3 trailers" }).click();
       await expect(
         page.getByText("Trailer count set to 3. Saved to your account."),
       ).toBeVisible();
+      await expect(count).toBeFocused();
 
-      await page.getByRole("combobox", { name: "Trailer source" }).click();
+      const source = page.getByRole("combobox", { name: "Trailer source" });
+      await source.click();
       await page.getByRole("option", { name: "In theaters" }).click();
       await expect(
         page.getByText("Trailer source set to In theaters. Saved to your account."),
       ).toBeVisible();
+      await expect(source).toBeFocused();
 
       await expect.poll(() => fetchTrailerPreferences(page)).toEqual({
         enabled: true,

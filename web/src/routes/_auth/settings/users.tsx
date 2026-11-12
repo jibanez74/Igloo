@@ -198,13 +198,26 @@ function UsersSettings() {
 
   const deleteMutation = useMutation({
     mutationFn: adminDeleteUser,
-    onSuccess: res => {
+    onSuccess: (res, id) => {
       if (res.error) {
         setDialogError(apiErrorMessage(res, USER_ACTION_FALLBACK_MESSAGE));
         showActionFailed("delete user", res);
         return;
       }
       showSuccess("User deleted successfully");
+      // Out of the list now, not at the next refetch: the dialog is about to
+      // close, and focus must not return to a row that is going away.
+      queryClient.setQueryData(adminUsersQueryOpts().queryKey, current =>
+        current?.error === false
+          ? {
+              ...current,
+              data: {
+                ...current.data,
+                users: current.data.users.filter(user => user.id !== id),
+              },
+            }
+          : current,
+      );
       refreshUserLists();
       closeDialog();
     },

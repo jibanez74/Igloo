@@ -549,13 +549,36 @@ any variant fully. The base string carries the focus ring, disabled opacity,
     (`hooks/useFocusHandoff.ts`). The Settings Save bar hands focus to its
     status line and takes it back if Save comes back to life (a failed
     save); Account's "Save profile" hands it to the name field.
+  - So does a button that is disabled only while its request runs: the
+    field it saves takes focus and keeps it ("Update password", "Set URL",
+    "Set PIN" and "Remove PIN", a device rename's Save, Quick Connect's
+    Continue). Where there is no field, a heading takes it and gives it
+    back once the button can be pressed again: the step's heading for Quick
+    Connect's "Approve device", the library's heading for "Scan … library",
+    which stays disabled for as long as its scan runs.
   - A control that saves on every change stays focusable while its save is
-    in flight: `SwitchField busy` sets `aria-disabled` and ignores a press,
-    where `disabled` dropped focus on each toggle.
-  - A dialog returns focus to what opened it, and when that is gone (a
-    revoked device's row) to the card's heading (`SettingsCardHeader
-    titleRef`, `ConfirmDialog fallbackFocusRef`). An inline form (renaming a
-    device) returns focus to its trigger on Save, Cancel and Escape.
+    in flight: `aria-disabled`, and a change is ignored until the save is
+    back (`SwitchField busy`, the trailer selects, the avatar file input
+    while it uploads). `disabled` dropped focus on each toggle, and a
+    select's list or the file dialog could not hand focus back.
+  - A text field is `readOnly`, not `disabled`, while the form it sits in
+    saves (General, Libraries, Playback): Enter in the field is what
+    submitted the form, so the field is what holds focus.
+  - A dialog returns focus to what opened it, and when that is gone to the
+    card's heading or its own action: a revoked device's row to "Devices"
+    (`SettingsCardHeader titleRef`, `ConfirmDialog fallbackFocusRef`), a
+    deleted user's row to "Add user". The row leaves the cached list with
+    the request, not at the next refetch, so the fallback is what the dialog
+    finds. An inline form (renaming a device) returns focus to its trigger
+    on Save, Cancel and Escape, unless focus has already moved elsewhere.
+  - A button that removes itself focuses what it acted on first ("Clear
+    movies library path" focuses the path field).
+  - Not covered: a dialog's submit button while its request runs. Focus
+    leaves it for that time, and the dialog's focus scope takes it back as
+    soon as the button's content changes (the next Tab is the dialog's first
+    field).
+  - jsdom keeps `document.activeElement` on a disabled control, so a loss
+    shows only in a real browser: check a new self-disabling control there.
 - **Labels everywhere**: icon-only buttons get `aria-label`; decorative
   icons/images get `aria-hidden="true"`/`alt=""`; cards carry a full
   `aria-label` ("Play Uncut Gems 2019"); toggles use `aria-pressed`; nav uses
@@ -1872,7 +1895,8 @@ require the full playback test pass.
   (`statusId`), and the hardware acceleration select is described by its
   help, by what the chosen mode does and by what the server has in force. A
   server refusal goes to the field it is about (a refused new password to
-  New password, not to Current password).
+  New password, a 401 to Current password), and a failure that is about no
+  field marks none: the toast alone reports it.
 - **Settings copy is sentence case**: card titles, sub-headings, labels,
   buttons and dialog titles ("Application behavior", "Current password",
   "Save settings", "Add user"). Names keep their capitals (Quick Connect,

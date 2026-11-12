@@ -1,7 +1,7 @@
 import ScanProgress from "@/components/settings/ScanProgress";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Fragment, useId, useState } from "react";
+import { Fragment, useId, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import {
   AlertCircle,
@@ -33,6 +33,7 @@ import SettingsSaveBar from "@/components/settings/SettingsSaveBar";
 import { musicStatsQueryOpts, moviesStatsQueryOpts, movieScanStatusQueryOpts, musicScanStatusQueryOpts, showScanStatusQueryOpts, showsStatsQueryOpts, settingsQueryOpts } from "@/lib/query-opts";
 import { showActionFailed, showSuccess } from "@/lib/toast-helpers";
 import { triggerMusicScan, triggerMovieScan, triggerShowScan, updateLibrarySettings } from "@/lib/api";
+import { useFocusHandoff } from "@/hooks/useFocusHandoff";
 import { useIsMiniPlayerVisible } from "@/hooks/useIsMiniPlayerVisible";
 import {
   MINI_PLAYER_CLEARANCE_BOTTOM_CLASS,
@@ -477,6 +478,13 @@ function LibraryPathSection({
   const pathInputId = useId();
   const descriptionId = `${pathInputId}-description`;
   const pathStatusId = `${pathInputId}-status`;
+  const pathInputRef = useRef<HTMLInputElement | null>(null);
+  // Scan disables itself for as long as its scan runs. The section's
+  // heading takes focus meanwhile and gives it back when Scan can be
+  // pressed again.
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const headingRef = useRef<HTMLHeadingElement | null>(null);
+  useFocusHandoff(sectionRef, headingRef, { returns: true });
   const Icon = config.Icon;
   const trimmedPath = pathValue.trim();
   const savedValue = savedPath ?? "";
@@ -485,7 +493,7 @@ function LibraryPathSection({
   const pathChanged = pathValue !== savedValue;
 
   return (
-    <section aria-labelledby={headingId} className="space-y-4">
+    <section ref={sectionRef} aria-labelledby={headingId} className="space-y-4">
       <div className="flex items-center gap-3">
         <div
           className={cn(
@@ -497,7 +505,13 @@ function LibraryPathSection({
           <Icon className={cn("size-5", config.iconClassName)} aria-hidden="true" />
         </div>
         <div className="min-w-0">
-          <h3 id={headingId} className="text-lg font-semibold text-foreground">
+          {/* Un-ringed, as any heading focused from script is (§1.7). */}
+          <h3
+            ref={headingRef}
+            id={headingId}
+            tabIndex={-1}
+            className="text-lg font-semibold text-foreground outline-hidden"
+          >
             {config.title}
           </h3>
           <p className="text-sm text-muted-foreground">{config.description}</p>
@@ -528,12 +542,16 @@ function LibraryPathSection({
             </FieldHint>
           </div>
           <Input
+            ref={pathInputRef}
             id={pathInputId}
             type="text"
             value={pathValue}
             onChange={event => onPathChange(event.target.value)}
             placeholder={config.placeholder}
-            disabled={disabled}
+            // Read-only rather than disabled while the form saves: Enter in
+            // this field is what submitted it, and a disabled field would
+            // drop the focus it holds.
+            readOnly={disabled}
             aria-invalid={invalid || undefined}
             aria-describedby={`${descriptionId} ${pathStatusId} ${formStatusId}`}
             autoComplete="off"
@@ -546,7 +564,12 @@ function LibraryPathSection({
             type="button"
             variant="ghost-destructive"
             size="sm"
-            onClick={onClearPath}
+            onClick={() => {
+              // The button leaves with the path; the field it emptied takes
+              // focus before it goes.
+              pathInputRef.current?.focus();
+              onClearPath();
+            }}
             disabled={disabled}
             className="w-full sm:w-fit"
           >

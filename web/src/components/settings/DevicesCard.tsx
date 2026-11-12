@@ -9,6 +9,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Pencil, Smartphone, Tv } from "lucide-react";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
 import SettingsCardHeader from "@/components/settings/SettingsCardHeader";
+import { useFocusHandoff } from "@/hooks/useFocusHandoff";
 import { renameDevice, revokeDevice } from "@/lib/api";
 import { DEVICES_KEY, MOTION_SETTINGS_SURFACE_CLASS } from "@/lib/constants";
 import { parseServerTimestamp } from "@/lib/format";
@@ -43,6 +44,11 @@ export default function DevicesCard() {
   const revokeButtonRef = useRef<HTMLButtonElement | null>(null);
   const titleRef = useRef<HTMLHeadingElement | null>(null);
   const listRef = useRef<HTMLUListElement | null>(null);
+  const renameFormRef = useRef<HTMLFormElement | null>(null);
+  const renameInputRef = useRef<HTMLInputElement | null>(null);
+  // The rename form's Save disables itself while it saves; the name it is
+  // saving takes focus, and keeps it if the save fails.
+  useFocusHandoff(renameFormRef, renameInputRef);
   // The device whose Rename button takes focus once its form has closed.
   const refocusRenameRef = useRef<number | null>(null);
 
@@ -56,7 +62,14 @@ export default function DevicesCard() {
   });
 
   const closeRename = () => {
-    if (deviceToRename) refocusRenameRef.current = deviceToRename.id;
+    // Only while focus is still in the form: a reader who moved on while the
+    // save ran keeps their place.
+    if (
+      deviceToRename &&
+      renameFormRef.current?.contains(document.activeElement)
+    ) {
+      refocusRenameRef.current = deviceToRename.id;
+    }
     setDeviceToRename(null);
   };
 
@@ -177,6 +190,7 @@ export default function DevicesCard() {
                     <div className="min-w-0">
                       {isRenaming ? (
                         <form
+                          ref={renameFormRef}
                           onSubmit={handleRenameSubmit}
                           onKeyDown={event => {
                             if (event.key !== "Escape") return;
@@ -189,6 +203,7 @@ export default function DevicesCard() {
                             New name for {device.name}
                           </Label>
                           <Input
+                            ref={renameInputRef}
                             id={renameInputId}
                             value={renameValue}
                             onChange={e => setRenameValue(e.target.value)}

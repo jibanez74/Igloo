@@ -118,6 +118,14 @@ function AccountSettings() {
   const profileFormRef = useRef<HTMLFormElement | null>(null);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
   useFocusHandoff(profileFormRef, nameInputRef);
+  // "Set URL" and "Update password" disable themselves only while they
+  // save; the field each one saves takes focus for that time and keeps it.
+  const avatarUrlRowRef = useRef<HTMLDivElement | null>(null);
+  const avatarUrlInputRef = useRef<HTMLInputElement | null>(null);
+  useFocusHandoff(avatarUrlRowRef, avatarUrlInputRef);
+  const passwordFormRef = useRef<HTMLFormElement | null>(null);
+  const currentPasswordInputRef = useRef<HTMLInputElement | null>(null);
+  useFocusHandoff(passwordFormRef, currentPasswordInputRef);
 
   const emailId = useId();
   const nameId = useId();
@@ -238,12 +246,13 @@ function AccountSettings() {
     }) => updateUserPassword(currentPassword, newPassword),
     onSuccess: res => {
       if (res.error) {
-        // The server words a refusal around the field it is about ("new
-        // password must be…"); anything else is about the current one.
+        // A 401 is the current password refused, and the server words a
+        // refusal of the new one around it ("new password must be…"). Any
+        // other failure is about neither field, so the toast alone says it.
         const message = apiErrorMessage(res, "Failed to update password.");
         if (/^new password/i.test(message)) {
           showFieldError("newPassword", message, newPasswordId);
-        } else {
+        } else if (res.status === 401) {
           showFieldError("currentPassword", message, currentPasswordId);
         }
         showActionFailed("update password", res);
@@ -478,6 +487,11 @@ function AccountSettings() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (uploadAvatarMutation.isPending) {
+      e.target.value = "";
+      return;
+    }
+
     if (!ALLOWED_AVATAR_TYPES.includes(file.type)) {
       const message =
         "That file type is not supported. Use JPEG, PNG, GIF or WebP.";
@@ -615,7 +629,6 @@ function AccountSettings() {
                 type="text"
                 required
                 aria-required="true"
-                maxLength={USER_NAME_MAX_LENGTH}
                 value={nameValue}
                 onChange={e => {
                   setName(e.target.value);
@@ -705,8 +718,19 @@ function AccountSettings() {
                   type="file"
                   accept={ALLOWED_AVATAR_TYPES.join(",")}
                   onChange={handleUploadAvatar}
-                  disabled={uploadAvatarMutation.isPending}
-                  className="peer absolute inset-0 z-10 h-9 w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
+                  // Not `disabled` while it uploads: the file dialog hands
+                  // focus back to this input, which could not keep it. A
+                  // press is ignored instead, and so is a dropped file.
+                  aria-disabled={uploadAvatarMutation.isPending || undefined}
+                  onClick={event => {
+                    if (uploadAvatarMutation.isPending) event.preventDefault();
+                  }}
+                  className={cn(
+                    "peer absolute inset-0 z-10 h-9 w-full opacity-0",
+                    uploadAvatarMutation.isPending
+                      ? "cursor-not-allowed"
+                      : "cursor-pointer",
+                  )}
                   aria-invalid={!!errors.avatarUpload || undefined}
                   aria-describedby={describedBy(
                     avatarUploadDescriptionId,
@@ -748,8 +772,9 @@ function AccountSettings() {
             <FieldHint id={avatarUrlDescriptionId}>
               Use an image from the web instead of uploading one.
             </FieldHint>
-            <div className="flex flex-col gap-2 sm:flex-row">
+            <div ref={avatarUrlRowRef} className="flex flex-col gap-2 sm:flex-row">
               <Input
+                ref={avatarUrlInputRef}
                 id={avatarUrlId}
                 type="url"
                 value={avatarUrl}
@@ -801,6 +826,7 @@ function AccountSettings() {
             heuristic — not actionable.
           */}
           <form
+            ref={passwordFormRef}
             onSubmit={handleUpdatePassword}
             noValidate
             className="space-y-4"
@@ -819,6 +845,7 @@ function AccountSettings() {
                 Current password
               </Label>
             <Input
+              ref={currentPasswordInputRef}
               id={currentPasswordId}
               type="password"
               value={currentPassword}
