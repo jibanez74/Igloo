@@ -69,6 +69,8 @@ type AccountFetchOptions = {
   rejectNewPassword?: boolean;
   /** Answers a password change with a server error about neither field. */
   failPassword?: boolean;
+  /** Answers a password change in place of the reply the flags pick. */
+  passwordResponse?: Promise<Response>;
   /** Answers the avatar upload in place of the stored-copy reply. */
   uploadResponse?: Promise<Response>;
 };
@@ -81,6 +83,7 @@ function setupAccountFetch(
     rejectPassword = false,
     rejectNewPassword = false,
     failPassword = false,
+    passwordResponse,
     uploadResponse,
   }: AccountFetchOptions = {},
 ) {
@@ -113,6 +116,7 @@ function setupAccountFetch(
     }
 
     if (url === "/api/user/password" && method === "PUT") {
+      if (passwordResponse) return passwordResponse;
       if (failPassword) {
         return jsonResponse(
           { error: true, message: "internal server error" },
@@ -402,6 +406,37 @@ describe("Account settings", () => {
     expect(screen.getByLabelText("Current password")).not.toHaveAttribute(
       "aria-invalid",
     );
+  });
+
+  // A refusal that arrives after the reader moved on used to pull focus
+  // back to the password field.
+  it("leaves focus where the reader moved while a password change ran", async () => {
+    const user = userEvent.setup();
+    const passwordRequest = deferredResponse();
+    await renderAccountRoute(testUser(), {
+      passwordResponse: passwordRequest.promise,
+    });
+
+    await user.type(screen.getByLabelText("Current password"), "WrongPass123");
+    await user.type(screen.getByLabelText("New password"), "NewPass12345");
+    await user.type(screen.getByLabelText("Confirm new password"), "NewPass12345");
+    await user.click(screen.getByRole("button", { name: "Update password" }));
+    await screen.findByRole("button", { name: /updating/i });
+
+    const name = screen.getByRole("textbox", { name: "Name" });
+    name.focus();
+    passwordRequest.resolve(
+      jsonResponse(
+        { error: true, message: "current password is incorrect" },
+        401,
+      ),
+    );
+
+    const current = screen.getByLabelText("Current password");
+    await waitFor(() =>
+      expect(current).toHaveAttribute("aria-invalid", "true"),
+    );
+    expect(name).toHaveFocus();
   });
 
   // The button disables itself while it saves and once the profile is

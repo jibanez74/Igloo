@@ -170,9 +170,10 @@ function AccountSettings() {
     field: AccountErrorField,
     message: string,
     fieldId: string,
+    { focus = true }: { focus?: boolean } = {},
   ) => {
     setErrors(current => ({ ...current, [field]: message }));
-    document.getElementById(fieldId)?.focus();
+    if (focus) document.getElementById(fieldId)?.focus();
   };
 
   const clearError = (field: AccountErrorField) => {
@@ -250,10 +251,16 @@ function AccountSettings() {
         // refusal of the new one around it ("new password must be…"). Any
         // other failure is about neither field, so the toast alone says it.
         const message = apiErrorMessage(res, "Failed to update password.");
+        // Focus moves only while it is still in the form: a reader who moved
+        // on while the change ran keeps their place.
+        const focus =
+          passwordFormRef.current?.contains(document.activeElement) ?? false;
         if (/^new password/i.test(message)) {
-          showFieldError("newPassword", message, newPasswordId);
+          showFieldError("newPassword", message, newPasswordId, { focus });
         } else if (res.status === 401) {
-          showFieldError("currentPassword", message, currentPasswordId);
+          showFieldError("currentPassword", message, currentPasswordId, {
+            focus,
+          });
         }
         showActionFailed("update password", res);
       } else {

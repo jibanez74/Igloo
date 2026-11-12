@@ -573,6 +573,9 @@ any variant fully. The base string carries the focus ring, disabled opacity,
     on Save, Cancel and Escape, unless focus has already moved elsewhere.
   - A button that removes itself focuses what it acted on first ("Clear
     movies library path" focuses the path field).
+  - A server answer that marks a field (a refused password change) focuses
+    it only while focus is still in the form that sent the request: a
+    reader who moved on keeps their place.
   - Not covered: a dialog's submit button while its request runs. Focus
     leaves it for that time, and the dialog's focus scope takes it back as
     soon as the button's content changes (the next Tab is the dialog's first
