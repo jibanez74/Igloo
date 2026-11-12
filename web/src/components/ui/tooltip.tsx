@@ -77,7 +77,9 @@ function Tooltip({
   const insideProvider = use(InsideTooltipProvider)
 
   const tooltip = (
-    <TooltipPrimitive.Root open={open}>
+    // Closed while disabled, so it does not tell the provider a tooltip opened
+    // (which would skip the next real one's delay).
+    <TooltipPrimitive.Root open={disabled ? false : open}>
       <TooltipPrimitive.Trigger asChild data-slot="tooltip-trigger">
         {describes ? children : <Undescribed>{children}</Undescribed>}
       </TooltipPrimitive.Trigger>

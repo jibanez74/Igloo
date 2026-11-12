@@ -374,14 +374,16 @@ test("an unavailable Request Movie is reachable and says why on focus and on hov
     return top !== null && element.contains(top);
   })).toBe(true);
 
-  // Choosing it does nothing: the menu stays open on it.
+  // Escape dismisses the open tooltip first (WCAG 1.4.13), not the menu.
+  await page.keyboard.press("Escape");
+  await expect(tooltip).toHaveCount(0);
+  await expect(item).toBeFocused();
+
+  // Choosing it does nothing: the menu stays open on it. Enter clicks the
+  // item, which also closes a tooltip, so this runs after the Escape check.
   await page.keyboard.press("Enter");
   await expect(item).toBeFocused();
 
-  // Escape dismisses the tooltip first (WCAG 1.4.13), then the menu.
-  await page.keyboard.press("Escape");
-  await expect(tooltip).toHaveCount(0);
-  await expect(item).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(item).toHaveCount(0);
 
