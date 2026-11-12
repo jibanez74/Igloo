@@ -96,7 +96,7 @@ themes by `contrast.test.ts`.
 | `primary-foreground` | `#08131F` | `#FFFFFF` | Text on primary |
 | `secondary` / `muted` / `accent` | `#0F1A2E` | `#E3EDF7` | Subtle surfaces |
 | `muted-foreground` | `#8094AE` | `#475569` | Secondary text |
-| `border` | `#2A3C57` | `#CBD9E8` | Borders |
+| `border` | `#24354E` | `#CBD9E8` | Borders |
 | `input` | white @ 8% | `#CBD9E8` | Input borders |
 | `ring` | `#38BDF8` | `#0EA5E9` | **The one focus color** |
 | `destructive` / `-foreground` | `#F87171` / `#08131F` | `#B91C1C` / `#FFFFFF` | Danger / delete |
@@ -148,6 +148,15 @@ Rules:
   ban with inline `eslint-disable` comments). The Apple Music mark takes no
   brand colour: it is drawn in `text-foreground`, like Apple's monochrome
   badges, so no second brand colour enters the palette.
+- **A border is a quiet line.** It separates two surfaces and never outranks
+  what they hold: against the canvas and against a card it sits between
+  1.2:1 and 1.55:1 in both themes, and `contrast.test.ts` pins both ends, so
+  a token edit can neither erase it nor bring a hard outline back. Dark is
+  `#24354E` (1.5:1 on the canvas, 1.27:1 on a card). Light stays `#CBD9E8`
+  and is not to be lightened without first giving controls an edge of their
+  own: an outline button and a Settings field are white on a white or
+  near-white card there, and the border is the only edge they have (a
+  disabled Reset button's edge is all but gone at `#DAE4EF`).
 - `text-success` is AA-safe on `background` and `card` in both themes
   (light `--success` is a deep glacier green, `#167050`); the pairs are pinned
   by `contrast.test.ts`.
@@ -205,8 +214,11 @@ Rules:
     theme (`--elevation-floating`): 50 % black in dark, 15 % in light, where
     50 % reads as a haze.
   - `shadow-glow` for the glacier glow under a primary control (the brand
-    mark, the player's play button, the pill call-to-actions): `shadow-lg`
-    in `primary` at 20 %. Write it, not `shadow-lg shadow-primary/20`.
+    mark, the player's play button, the pill call-to-actions, the active
+    tab): the geometry of `shadow-lg` in `primary` at 12 %, a hint of light
+    under the control rather than a halo around it. Write the token, never
+    a literal `shadow-lg shadow-primary/NN`: the strength is set once, in
+    `SHADOW_SCALE`.
 
   Both are ordinary shadow sizes to Tailwind and to `cn()`: they replace and
   are replaced by `shadow-md` and the like, and the focus ring, which is a

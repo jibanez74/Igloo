@@ -108,10 +108,10 @@ for (const theme of THEMES) {
         FLOATING_SHADOW[theme],
       );
 
-      // Tailwind's shadow-lg geometry, in the theme's primary at 20%.
+      // Tailwind's shadow-lg geometry, in the theme's primary at 12%.
       const glow = await computed("shadow-glow", "box-shadow");
-      expect(glow).toMatch(/\/ 0\.2\) 0px 10px 15px -3px/);
-      expect(glow).toMatch(/\/ 0\.2\) 0px 4px 6px -4px$/);
+      expect(glow).toMatch(/\/ 0\.12\) 0px 10px 15px -3px/);
+      expect(glow).toMatch(/\/ 0\.12\) 0px 4px 6px -4px$/);
 
       for (const [token, property, value] of TOKEN_STYLES) {
         const cssName = property.replace(/[A-Z]/g, c => `-${c.toLowerCase()}`);

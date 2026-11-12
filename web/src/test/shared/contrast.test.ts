@@ -51,3 +51,22 @@ describe.each(Object.entries(themes))("contrast — %s", (_name, tokens) => {
     expect(ratio).toBeGreaterThanOrEqual(min);
   });
 });
+
+// A border is a quiet line: seen on the canvas and on a card, never the
+// loudest thing on either (design-system §1.2). Both ends are pinned, so a
+// token edit cannot make it vanish or bring the hard outline back.
+const BORDER_MIN = 1.2;
+const BORDER_MAX = 1.55;
+
+describe.each(Object.entries(themes))("border — %s", (_name, tokens) => {
+  it.each(["--background", "--card"])(
+    "--border on %s stays between the two limits",
+    surface => {
+      const border = tokens["--border"];
+      expect(border, "missing token --border").toBeDefined();
+      const ratio = contrastRatio(border, tokens[surface]);
+      expect(ratio).toBeGreaterThanOrEqual(BORDER_MIN);
+      expect(ratio).toBeLessThanOrEqual(BORDER_MAX);
+    },
+  );
+});
