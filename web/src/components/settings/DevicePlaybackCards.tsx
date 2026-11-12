@@ -2,7 +2,6 @@ import { useId, useState } from "react";
 import { Gauge, Sliders } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -11,6 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
+import PlaybackField from "@/components/settings/PlaybackField";
 import PlaybackSection from "@/components/settings/PlaybackSection";
 import SettingsCardHeader from "@/components/settings/SettingsCardHeader";
 import {
@@ -68,6 +68,7 @@ type PreferenceSelectProps = {
   /** Kept for native form identification; see the Radix note below. */
   name: string;
   label: string;
+  hint: string;
   /** null renders as the "no selection" option. */
   value: string | null;
   noSelectionLabel: string;
@@ -82,16 +83,17 @@ type PreferenceSelectProps = {
 function PreferenceSelect({
   name,
   label,
+  hint,
   value,
   noSelectionLabel,
   options,
   onChange,
 }: PreferenceSelectProps) {
   const selectId = useId();
+  const hintId = `${selectId}-description`;
 
   return (
-    <div className="grid max-w-md gap-2">
-      <Label htmlFor={selectId}>{label}</Label>
+    <PlaybackField htmlFor={selectId} label={label} hintId={hintId} hint={hint}>
       {/*
         Radix renders a visually-hidden aria-hidden <select name> for each of
         these for native form integration; they're never submitted (this form is
@@ -106,7 +108,12 @@ function PreferenceSelect({
           onChange(next === NO_SELECTION_VALUE ? null : next)
         }
       >
-        <SelectTrigger id={selectId} variant="inset" size="lg">
+        <SelectTrigger
+          id={selectId}
+          aria-describedby={hintId}
+          variant="inset"
+          size="lg"
+        >
           <SelectValue placeholder={noSelectionLabel} />
         </SelectTrigger>
         <SelectContent>
@@ -125,7 +132,7 @@ function PreferenceSelect({
           ))}
         </SelectContent>
       </Select>
-    </div>
+    </PlaybackField>
   );
 }
 
@@ -264,46 +271,40 @@ export default function DevicePlaybackCards({
         />
         {persistenceNotice}
         <CardContent className="divide-y divide-border/50">
-          <PlaybackSection
-            title="Your network speed"
-            description="Used to recommend a stream profile for this device."
+          <PlaybackField
+            htmlFor={downloadMbpsId}
+            label="Download speed (Mbps)"
+            hintId={`${downloadMbpsId}-description`}
+            hint="Used to recommend a stream profile for this device. Leave blank if unsure."
           >
-            <div className="grid max-w-md gap-2">
-              <Label htmlFor={downloadMbpsId}>Download speed (Mbps)</Label>
-              <Input
-                id={downloadMbpsId}
-                name="download_mbps"
-                type="number"
-                inputMode="decimal"
-                min={0.1}
-                step={0.1}
-                value={downloadText ?? prefs.downloadMbps ?? ""}
-                onChange={event => handleDownloadMbpsChange(event.target.value)}
-                onBlur={handleDownloadMbpsCommit}
-                aria-invalid={downloadInvalid ? "true" : undefined}
-                aria-describedby={
-                  downloadInvalid
-                    ? `${downloadMbpsId}-description ${deviceStatusId}`
-                    : `${downloadMbpsId}-description`
-                }
-                variant="inset"
-                size="lg"
-              />
-              <p
-                id={`${downloadMbpsId}-description`}
-                className="text-sm text-muted-foreground"
-              >
-                Leave blank if unsure.
-              </p>
-              <p
-                id={deviceStatusId}
-                aria-live="polite"
-                className="text-sm text-destructive empty:hidden"
-              >
-                {downloadInvalid ? DOWNLOAD_SPEED_VALIDATION_MESSAGE : ""}
-              </p>
-            </div>
-          </PlaybackSection>
+            <Input
+              id={downloadMbpsId}
+              name="download_mbps"
+              type="number"
+              inputMode="decimal"
+              min={0.1}
+              step={0.1}
+              value={downloadText ?? prefs.downloadMbps ?? ""}
+              onChange={event => handleDownloadMbpsChange(event.target.value)}
+              onBlur={handleDownloadMbpsCommit}
+              aria-invalid={downloadInvalid ? "true" : undefined}
+              aria-describedby={
+                downloadInvalid
+                  ? `${downloadMbpsId}-description ${deviceStatusId}`
+                  : `${downloadMbpsId}-description`
+              }
+              variant="inset"
+              size="lg"
+            />
+            {/* Always mounted, so the message is announced when it appears. */}
+            <p
+              id={deviceStatusId}
+              aria-live="polite"
+              className="text-sm text-destructive empty:hidden"
+            >
+              {downloadInvalid ? DOWNLOAD_SPEED_VALIDATION_MESSAGE : ""}
+            </p>
+          </PlaybackField>
           <PlaybackSection
             title="Server upload cap"
             description="The home server's outbound bandwidth limit, applied when you stream from outside the home network."
@@ -349,48 +350,36 @@ export default function DevicePlaybackCards({
         />
         {persistenceNotice}
         <CardContent className="divide-y divide-border/50">
-          <PlaybackSection
-            title="Preferred profile"
-            description="The default profile when you start a stream."
-          >
-            <PreferenceSelect
-              name="preferred_profile"
-              label="Profile"
-              value={prefs.preferredProfile}
-              noSelectionLabel="Use recommended"
-              options={settings.profiles.map(profile => ({
-                value: profile.id,
-                label: profile.label,
-              }))}
-              onChange={handleProfileChange}
-            />
-          </PlaybackSection>
-          <PlaybackSection
-            title="Preferred audio language"
-            description="Igloo will pick the matching audio track when a movie has one."
-          >
-            <PreferenceSelect
-              name="preferred_audio_language"
-              label="Audio language"
-              value={prefs.preferredAudioLanguage}
-              noSelectionLabel="No preference"
-              options={LANGUAGE_OPTIONS}
-              onChange={handleAudioLanguageChange}
-            />
-          </PlaybackSection>
-          <PlaybackSection
-            title="Preferred subtitles"
-            description="Pick a default subtitle language, or always start with subtitles off."
-          >
-            <PreferenceSelect
-              name="preferred_subtitle_language"
-              label="Subtitle language"
-              value={prefs.preferredSubtitleLanguage}
-              noSelectionLabel="No preference"
-              options={SUBTITLE_OPTIONS}
-              onChange={handleSubtitleLanguageChange}
-            />
-          </PlaybackSection>
+          <PreferenceSelect
+            name="preferred_profile"
+            label="Profile"
+            hint="The default profile when you start a stream."
+            value={prefs.preferredProfile}
+            noSelectionLabel="Use recommended"
+            options={settings.profiles.map(profile => ({
+              value: profile.id,
+              label: profile.label,
+            }))}
+            onChange={handleProfileChange}
+          />
+          <PreferenceSelect
+            name="preferred_audio_language"
+            label="Audio language"
+            hint="Igloo picks the matching audio track when a movie has one."
+            value={prefs.preferredAudioLanguage}
+            noSelectionLabel="No preference"
+            options={LANGUAGE_OPTIONS}
+            onChange={handleAudioLanguageChange}
+          />
+          <PreferenceSelect
+            name="preferred_subtitle_language"
+            label="Subtitle language"
+            hint="Pick a default subtitle language, or always start with subtitles off."
+            value={prefs.preferredSubtitleLanguage}
+            noSelectionLabel="No preference"
+            options={SUBTITLE_OPTIONS}
+            onChange={handleSubtitleLanguageChange}
+          />
         </CardContent>
       </Card>
     </>

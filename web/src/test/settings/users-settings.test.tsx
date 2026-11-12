@@ -1,5 +1,5 @@
 import type React from "react";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { jsonResponse, requestURL } from "../helpers/api";
@@ -145,7 +145,7 @@ async function renderUsersRoute(users = defaultUsers()) {
   const { requests } = setupUsersFetch(users);
   const { queryClient } = await renderRoute("/settings/users");
 
-  await screen.findByRole("button", { name: "Add User" });
+  await screen.findByRole("button", { name: "Add user" });
   await screen.findByText("Dana Scully");
   return { requests, queryClient };
 }
@@ -164,19 +164,19 @@ describe("Users settings", () => {
       const { requests } = await renderUsersRoute();
       const creating = form === "create";
       await user.click(screen.getByRole("button", {
-        name: creating ? "Add User" : "Reset password for Dana Scully",
+        name: creating ? "Add user" : "Reset password for Dana Scully",
       }));
       if (creating) {
-        fireEvent.change(screen.getByLabelText("User name"), { target: { value: "New User" } });
-        fireEvent.change(screen.getByLabelText("User email"), { target: { value: "new@example.com" } });
+        fireEvent.change(screen.getByLabelText("Name"), { target: { value: "New User" } });
+        fireEvent.change(screen.getByLabelText("Email"), { target: { value: "new@example.com" } });
       } else {
         fireEvent.change(screen.getByLabelText("Confirm new password"), { target: { value: password } });
       }
-      const input = screen.getByLabelText(creating ? "User password" : "New password");
+      const input = screen.getByLabelText(creating ? "Password" : "New password");
       expect(input).not.toHaveAttribute("maxlength");
-      expect(input).toHaveAccessibleDescription("Must be at least 9 characters and at most 72 UTF-8 bytes");
+      expect(input).toHaveAccessibleDescription("At least 9 characters.");
       fireEvent.change(input, { target: { value: password } });
-      const button = screen.getByRole("button", { name: creating ? "Create User" : "Reset Password" });
+      const button = screen.getByRole("button", { name: creating ? "Create user" : "Reset password" });
       const method = creating ? "POST" : "PUT";
 
       if (error) {
@@ -217,11 +217,11 @@ describe("Users settings", () => {
     const inviteListKey = watchRoomInviteUsersQueryOpts().queryKey;
     queryClient.setQueryData(inviteListKey, { error: false, data: { users: [] } });
 
-    await user.click(screen.getByRole("button", { name: "Add User" }));
-    await user.type(screen.getByLabelText("User name"), "Walter Skinner");
-    await user.type(screen.getByLabelText("User email"), "skinner@example.com");
-    await user.type(screen.getByLabelText("User password"), "LongEnough123");
-    await user.click(screen.getByRole("button", { name: "Create User" }));
+    await user.click(screen.getByRole("button", { name: "Add user" }));
+    await user.type(screen.getByLabelText("Name"), "Walter Skinner");
+    await user.type(screen.getByLabelText("Email"), "skinner@example.com");
+    await user.type(screen.getByLabelText("Password"), "LongEnough123");
+    await user.click(screen.getByRole("button", { name: "Create user" }));
 
     await waitFor(() => {
       expect(mutationRequests(requests, "POST")).toHaveLength(1);
@@ -231,26 +231,69 @@ describe("Users settings", () => {
     });
   });
 
+  it("offers admin rights as a real checkbox named by its visible label", async () => {
+    const user = userEvent.setup();
+    const { requests } = await renderUsersRoute();
+
+    await user.click(screen.getByRole("button", { name: "Add user" }));
+    const admin = screen.getByRole("checkbox", {
+      name: "Grant admin privileges",
+    });
+    expect(admin).not.toBeChecked();
+    // The label alone names it: an aria-label would hide a later rewording.
+    expect(admin).not.toHaveAttribute("aria-label");
+
+    await user.click(screen.getByText("Grant admin privileges"));
+    expect(admin).toBeChecked();
+
+    await user.type(screen.getByLabelText("Name"), "Walter Skinner");
+    await user.type(screen.getByLabelText("Email"), "skinner@example.com");
+    await user.type(screen.getByLabelText("Password"), "LongEnough123");
+    await user.click(screen.getByRole("button", { name: "Create user" }));
+
+    await waitFor(() => {
+      expect(mutationRequests(requests, "POST")).toHaveLength(1);
+    });
+    expect(mutationRequests(requests, "POST")[0].body).toMatchObject({
+      is_admin: true,
+    });
+  });
+
+  it("names every dialog field by the label shown beside it", async () => {
+    const user = userEvent.setup();
+    await renderUsersRoute();
+
+    await user.click(screen.getByRole("button", { name: "Add user" }));
+    const dialog = screen.getByRole("dialog", { name: "Add user" });
+    for (const name of ["Name", "Email"]) {
+      const field = within(dialog).getByRole("textbox", { name });
+      expect(field).not.toHaveAttribute("aria-label");
+    }
+    expect(within(dialog).getByLabelText("Password")).not.toHaveAttribute(
+      "aria-label",
+    );
+  });
+
   it("blocks short create passwords before calling the API", async () => {
     const user = userEvent.setup();
     const { requests } = await renderUsersRoute();
 
-    await user.click(screen.getByRole("button", { name: "Add User" }));
-    await user.type(screen.getByLabelText("User name"), "Short Password User");
-    await user.type(screen.getByLabelText("User email"), "short@example.com");
-    await user.type(screen.getByLabelText("User password"), "short");
-    await user.click(screen.getByRole("button", { name: "Create User" }));
+    await user.click(screen.getByRole("button", { name: "Add user" }));
+    await user.type(screen.getByLabelText("Name"), "Short Password User");
+    await user.type(screen.getByLabelText("Email"), "short@example.com");
+    await user.type(screen.getByLabelText("Password"), "short");
+    await user.click(screen.getByRole("button", { name: "Create user" }));
 
     expect(screen.getByRole("alert")).toHaveTextContent(
       "Password must be at least 9 characters.",
     );
-    expect(screen.getByLabelText("User password")).toHaveAttribute(
+    expect(screen.getByLabelText("Password")).toHaveAttribute(
       "aria-invalid",
       "true",
     );
     // Field errors stay inline (design-system §3.7); no toast repeats them.
     expect(showValidationErrorMock).not.toHaveBeenCalled();
-    expect(screen.getByLabelText("User password")).toHaveFocus();
+    expect(screen.getByLabelText("Password")).toHaveFocus();
     expect(mutationRequests(requests, "POST")).toHaveLength(0);
   });
 
@@ -258,16 +301,16 @@ describe("Users settings", () => {
     const user = userEvent.setup();
     const { requests } = await renderUsersRoute();
 
-    await user.click(screen.getByRole("button", { name: "Add User" }));
-    await user.type(screen.getByLabelText("User name"), "Duplicate User");
-    await user.type(screen.getByLabelText("User email"), "dana@example.com");
-    await user.type(screen.getByLabelText("User password"), "ValidPass123");
-    await user.click(screen.getByRole("button", { name: "Create User" }));
+    await user.click(screen.getByRole("button", { name: "Add user" }));
+    await user.type(screen.getByLabelText("Name"), "Duplicate User");
+    await user.type(screen.getByLabelText("Email"), "dana@example.com");
+    await user.type(screen.getByLabelText("Password"), "ValidPass123");
+    await user.click(screen.getByRole("button", { name: "Create user" }));
 
     expect(screen.getByRole("alert")).toHaveTextContent(
       "A user with that email already exists.",
     );
-    expect(screen.getByLabelText("User email")).toHaveAttribute(
+    expect(screen.getByLabelText("Email")).toHaveAttribute(
       "aria-invalid",
       "true",
     );
@@ -281,18 +324,18 @@ describe("Users settings", () => {
     await user.click(
       screen.getByRole("button", { name: "Edit Dana Scully" }),
     );
-    await user.clear(screen.getByLabelText("User email"));
-    await user.type(screen.getByLabelText("User email"), "fox@example.com");
-    await user.click(screen.getByRole("button", { name: "Save Changes" }));
+    await user.clear(screen.getByLabelText("Email"));
+    await user.type(screen.getByLabelText("Email"), "fox@example.com");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
 
     expect(screen.getByRole("alert")).toHaveTextContent(
       "A user with that email already exists.",
     );
     expect(mutationRequests(requests, "PATCH")).toHaveLength(0);
 
-    await user.clear(screen.getByLabelText("User email"));
-    await user.type(screen.getByLabelText("User email"), "dana@example.com");
-    await user.click(screen.getByRole("button", { name: "Save Changes" }));
+    await user.clear(screen.getByLabelText("Email"));
+    await user.type(screen.getByLabelText("Email"), "dana@example.com");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
 
     await waitFor(() => {
       expect(mutationRequests(requests, "PATCH")).toHaveLength(1);
@@ -313,7 +356,7 @@ describe("Users settings", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(
       "Password must be at least 9 characters.",
     );
-    expect(screen.getByRole("button", { name: "Reset Password" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Reset password" })).toBeDisabled();
 
     await user.clear(screen.getByLabelText("New password"));
     await user.type(screen.getByLabelText("New password"), "ValidPass123");
@@ -325,7 +368,7 @@ describe("Users settings", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(
       "Passwords do not match.",
     );
-    expect(screen.getByRole("button", { name: "Reset Password" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Reset password" })).toBeDisabled();
     expect(mutationRequests(requests, "PUT")).toHaveLength(0);
   });
 
@@ -333,10 +376,10 @@ describe("Users settings", () => {
     const user = userEvent.setup();
     await renderUsersRoute();
 
-    const addUserButton = screen.getByRole("button", { name: "Add User" });
+    const addUserButton = screen.getByRole("button", { name: "Add user" });
     addUserButton.focus();
     await user.keyboard("{Enter}");
-    await screen.findByRole("dialog", { name: "Add User" });
+    await screen.findByRole("dialog", { name: "Add user" });
     await user.keyboard("{Escape}");
 
     await waitFor(() => {
@@ -344,7 +387,7 @@ describe("Users settings", () => {
     });
 
     await user.click(addUserButton);
-    await screen.findByRole("dialog", { name: "Add User" });
+    await screen.findByRole("dialog", { name: "Add user" });
     await user.click(screen.getByRole("button", { name: "Cancel" }));
 
     await waitFor(() => {

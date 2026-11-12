@@ -10,6 +10,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { FieldError, FieldHint } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -30,8 +32,6 @@ import {
 import {
   USER_EMAIL_MAX_LENGTH,
   USER_NAME_MAX_LENGTH,
-  USER_PASSWORD_MAX_BYTES,
-  USER_PASSWORD_MIN_LENGTH,
 } from "@/lib/constants";
 import {
   adminCreateUser,
@@ -39,7 +39,11 @@ import {
   adminDeleteUser,
   adminResetUserPassword,
 } from "@/lib/api";
-import { isValidEmail, passwordRuleError } from "@/lib/form-validation";
+import {
+  isValidEmail,
+  PASSWORD_HINT,
+  passwordRuleError,
+} from "@/lib/form-validation";
 import { cn, codePointLength, describedBy, getInitials } from "@/lib/utils";
 import { showSuccess, showActionFailed } from "@/lib/toast-helpers";
 import type { AdminUserType } from "@/types";
@@ -65,9 +69,6 @@ type DialogState =
 type UserFormErrorField = "name" | "email" | "password" | "confirmPassword" | "form";
 type UserFormErrors = Partial<Record<UserFormErrorField, string>>;
 type DialogCloseAutoFocusHandler = (event: Event) => void;
-
-// Shared checkbox chrome for the "grant admin" toggle in the create/edit dialogs.
-const ADMIN_CHECKBOX_CLASS = "size-4 rounded-sm border-border bg-muted accent-primary";
 
 function hasDuplicateEmail(
   users: AdminUserType[],
@@ -244,11 +245,11 @@ function UsersSettings() {
             <CardTitle asChild className="flex items-center gap-2">
               <h2>
                 <Users className="size-5 text-primary" aria-hidden="true" />
-                User Management
+                User management
               </h2>
             </CardTitle>
             <CardDescription className="text-muted-foreground">
-              Create, edit, and remove user accounts
+              Create, edit, and remove user accounts.
             </CardDescription>
           </div>
           <Button
@@ -258,7 +259,7 @@ function UsersSettings() {
             className="w-full shrink-0 sm:w-auto"
           >
             <UserPlus className="size-4" aria-hidden="true" />
-            Add User
+            Add user
           </Button>
         </CardHeader>
 
@@ -506,7 +507,7 @@ function CreateUserDialog({
         onCloseAutoFocus={onCloseAutoFocus}
       >
         <DialogHeader>
-          <DialogTitle>Add User</DialogTitle>
+          <DialogTitle>Add user</DialogTitle>
           <DialogDescription>
             Create a new user account.
           </DialogDescription>
@@ -524,18 +525,14 @@ function CreateUserDialog({
                 setErrors(current => ({ ...current, name: undefined }));
                 onClearServerError();
               }}
-              placeholder="Full name"
               required
               aria-required="true"
               aria-invalid={!!errors.name || undefined}
               aria-describedby={describedBy(errors.name && nameErrorId)}
               variant="glass"
-              aria-label="User name"
             />
             {errors.name && (
-              <p id={nameErrorId} className="text-xs text-destructive" role="alert">
-                {errors.name}
-              </p>
+              <FieldError id={nameErrorId}>{errors.name}</FieldError>
             )}
           </div>
 
@@ -558,17 +555,15 @@ function CreateUserDialog({
               aria-invalid={!!errors.email || undefined}
               aria-describedby={describedBy(errors.email && emailErrorId)}
               variant="glass"
-              aria-label="User email"
             />
             {errors.email && (
-              <p id={emailErrorId} className="text-xs text-destructive" role="alert">
-                {errors.email}
-              </p>
+              <FieldError id={emailErrorId}>{errors.email}</FieldError>
             )}
           </div>
 
           <div className="space-y-2">
             <Label htmlFor={passwordId} tone="muted">Password</Label>
+            <FieldHint id={passwordDescriptionId}>{PASSWORD_HINT}</FieldHint>
             <Input
               id={passwordId}
               name="password"
@@ -579,7 +574,6 @@ function CreateUserDialog({
                 setErrors(current => ({ ...current, password: undefined }));
                 onClearServerError();
               }}
-              placeholder={`At least ${USER_PASSWORD_MIN_LENGTH} characters`}
               required
               aria-required="true"
               aria-invalid={!!errors.password || undefined}
@@ -588,36 +582,29 @@ function CreateUserDialog({
                 errors.password && passwordErrorId,
               )}
               variant="glass"
-              aria-label="User password"
             />
-            <p id={passwordDescriptionId} className="text-xs text-muted-foreground">
-              Must be at least {USER_PASSWORD_MIN_LENGTH} characters and at most {USER_PASSWORD_MAX_BYTES} UTF-8 bytes
-            </p>
             {errors.password && (
-              <p id={passwordErrorId} className="text-xs text-destructive" role="alert">
-                {errors.password}
-              </p>
+              <FieldError id={passwordErrorId}>{errors.password}</FieldError>
             )}
           </div>
 
           <div className="flex items-center gap-3">
-            <input
+            <Checkbox
               id={isAdminId}
-              type="checkbox"
               checked={isAdmin}
-              onChange={e => setIsAdmin(e.target.checked)}
-              className={ADMIN_CHECKBOX_CLASS}
-              aria-label="Grant admin privileges"
+              onCheckedChange={checked => setIsAdmin(checked === true)}
             />
-            <Label htmlFor={isAdminId} tone="muted" className="cursor-pointer">
+            <Label
+              htmlFor={isAdminId}
+              tone="muted"
+              className="mb-0 cursor-pointer"
+            >
               Grant admin privileges
             </Label>
           </div>
 
           {serverError && (
-            <p id={formErrorId} className="text-sm text-destructive" role="alert">
-              {serverError}
-            </p>
+            <FieldError id={formErrorId}>{serverError}</FieldError>
           )}
 
           <DialogFooter className="pt-2">
@@ -625,7 +612,7 @@ function CreateUserDialog({
               Cancel
             </Button>
             <Button type="submit" variant="accent" disabled={isPending}>
-              {isPending ? "Creating..." : "Create User"}
+              {isPending ? "Creating..." : "Create user"}
             </Button>
           </DialogFooter>
         </form>
@@ -693,7 +680,7 @@ function EditUserDialog({
         onCloseAutoFocus={onCloseAutoFocus}
       >
         <DialogHeader>
-          <DialogTitle>Edit User</DialogTitle>
+          <DialogTitle>Edit user</DialogTitle>
           <DialogDescription>
             Update account information for {user.name}.
           </DialogDescription>
@@ -711,18 +698,14 @@ function EditUserDialog({
                 setErrors(current => ({ ...current, name: undefined }));
                 onClearServerError();
               }}
-              placeholder="Full name"
               required
               aria-required="true"
               aria-invalid={!!errors.name || undefined}
               aria-describedby={describedBy(errors.name && nameErrorId)}
               variant="glass"
-              aria-label="User name"
             />
             {errors.name && (
-              <p id={nameErrorId} className="text-xs text-destructive" role="alert">
-                {errors.name}
-              </p>
+              <FieldError id={nameErrorId}>{errors.name}</FieldError>
             )}
           </div>
 
@@ -745,33 +728,29 @@ function EditUserDialog({
               aria-invalid={!!errors.email || undefined}
               aria-describedby={describedBy(errors.email && emailErrorId)}
               variant="glass"
-              aria-label="User email"
             />
             {errors.email && (
-              <p id={emailErrorId} className="text-xs text-destructive" role="alert">
-                {errors.email}
-              </p>
+              <FieldError id={emailErrorId}>{errors.email}</FieldError>
             )}
           </div>
 
           <div className="flex items-center gap-3">
-            <input
+            <Checkbox
               id={isAdminId}
-              type="checkbox"
               checked={isAdmin}
-              onChange={e => setIsAdmin(e.target.checked)}
-              className={ADMIN_CHECKBOX_CLASS}
-              aria-label="Admin privileges"
+              onCheckedChange={checked => setIsAdmin(checked === true)}
             />
-            <Label htmlFor={isAdminId} tone="muted" className="cursor-pointer">
+            <Label
+              htmlFor={isAdminId}
+              tone="muted"
+              className="mb-0 cursor-pointer"
+            >
               Admin privileges
             </Label>
           </div>
 
           {serverError && (
-            <p id={formErrorId} className="text-sm text-destructive" role="alert">
-              {serverError}
-            </p>
+            <FieldError id={formErrorId}>{serverError}</FieldError>
           )}
 
           <DialogFooter className="pt-2">
@@ -779,7 +758,7 @@ function EditUserDialog({
               Cancel
             </Button>
             <Button type="submit" variant="accent" disabled={isPending}>
-              {isPending ? "Saving..." : "Save Changes"}
+              {isPending ? "Saving..." : "Save changes"}
             </Button>
           </DialogFooter>
         </form>
@@ -819,7 +798,7 @@ function DeleteUserDialog({
         onCloseAutoFocus={onCloseAutoFocus}
       >
         <DialogHeader>
-          <DialogTitle tone="destructive">Delete User</DialogTitle>
+          <DialogTitle tone="destructive">Delete user</DialogTitle>
           <DialogDescription>
             This will permanently delete <strong className="text-foreground">{user.name}</strong> ({user.email}).
             This action cannot be undone.
@@ -829,7 +808,7 @@ function DeleteUserDialog({
         <div className="space-y-4 py-2">
           <div className="space-y-2">
             <Label htmlFor={confirmId} tone="muted">
-              Type <span className="font-mono font-bold">DELETE</span> to confirm:
+              Type <span className="font-mono font-bold">DELETE</span> to confirm
             </Label>
             <Input
               id={confirmId}
@@ -840,22 +819,19 @@ function DeleteUserDialog({
               }}
               variant="glass"
               className="font-mono"
-              aria-label="Type DELETE to confirm user deletion"
               aria-invalid={invalid}
               aria-describedby={describedBy(invalid && confirmErrorId)}
             />
             {invalid && (
-              <p id={confirmErrorId} className="text-xs text-destructive" role="alert">
-                Type DELETE exactly to enable deletion.
-              </p>
+              <FieldError id={confirmErrorId}>
+                Type DELETE exactly, in capital letters.
+              </FieldError>
             )}
           </div>
         </div>
 
         {serverError && (
-          <p id={formErrorId} className="text-sm text-destructive" role="alert">
-            {serverError}
-          </p>
+          <FieldError id={formErrorId}>{serverError}</FieldError>
         )}
 
         <DialogFooter>
@@ -870,7 +846,7 @@ function DeleteUserDialog({
             }}
             disabled={isPending || confirmText !== "DELETE"}
           >
-            {isPending ? "Deleting..." : "Delete User"}
+            {isPending ? "Deleting..." : "Delete user"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -952,7 +928,7 @@ function ResetPasswordDialog({
         onCloseAutoFocus={onCloseAutoFocus}
       >
         <DialogHeader>
-          <DialogTitle>Reset Password</DialogTitle>
+          <DialogTitle>Reset password</DialogTitle>
           <DialogDescription>
             Set a new password for <strong className="text-foreground">{user.name}</strong>.
           </DialogDescription>
@@ -960,7 +936,8 @@ function ResetPasswordDialog({
 
         <form onSubmit={handleSubmit} noValidate className="space-y-4 py-2">
           <div className="space-y-2">
-            <Label htmlFor={passwordId} tone="muted">New Password</Label>
+            <Label htmlFor={passwordId} tone="muted">New password</Label>
+            <FieldHint id={passwordDescriptionId}>{PASSWORD_HINT}</FieldHint>
             <Input
               id={passwordId}
               name="password"
@@ -971,7 +948,6 @@ function ResetPasswordDialog({
                 setErrors(current => ({ ...current, password: undefined }));
                 onClearServerError();
               }}
-              placeholder={`At least ${USER_PASSWORD_MIN_LENGTH} characters`}
               required
               aria-required="true"
               aria-invalid={!!passwordError || undefined}
@@ -980,20 +956,16 @@ function ResetPasswordDialog({
                 passwordError && passwordErrorId,
               )}
               variant="glass"
-              aria-label="New password"
             />
-            <p id={passwordDescriptionId} className="text-xs text-muted-foreground">
-              Must be at least {USER_PASSWORD_MIN_LENGTH} characters and at most {USER_PASSWORD_MAX_BYTES} UTF-8 bytes
-            </p>
             {passwordError && (
-              <p id={passwordErrorId} className="text-xs text-destructive" role="alert">
-                {passwordError}
-              </p>
+              <FieldError id={passwordErrorId}>{passwordError}</FieldError>
             )}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor={confirmPasswordId} tone="muted">Confirm Password</Label>
+            <Label htmlFor={confirmPasswordId} tone="muted">
+              Confirm new password
+            </Label>
             <Input
               id={confirmPasswordId}
               name="confirmPassword"
@@ -1007,31 +979,23 @@ function ResetPasswordDialog({
                 }));
                 onClearServerError();
               }}
-              placeholder="Repeat new password"
               required
               aria-required="true"
               variant="glass"
-              aria-label="Confirm new password"
               aria-invalid={!!confirmPasswordError || undefined}
               aria-describedby={describedBy(
                 confirmPasswordError && confirmPasswordErrorId,
               )}
             />
             {confirmPasswordError && (
-              <p
-                id={confirmPasswordErrorId}
-                className="text-xs text-destructive"
-                role="alert"
-              >
+              <FieldError id={confirmPasswordErrorId}>
                 {confirmPasswordError}
-              </p>
+              </FieldError>
             )}
           </div>
 
           {serverError && (
-            <p id={formErrorId} className="text-sm text-destructive" role="alert">
-              {serverError}
-            </p>
+            <FieldError id={formErrorId}>{serverError}</FieldError>
           )}
 
           <DialogFooter className="pt-2">
@@ -1043,7 +1007,7 @@ function ResetPasswordDialog({
               variant="accent"
               disabled={resetDisabled}
             >
-              {isPending ? "Resetting..." : "Reset Password"}
+              {isPending ? "Resetting..." : "Reset password"}
             </Button>
           </DialogFooter>
         </form>

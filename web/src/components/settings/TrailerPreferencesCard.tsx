@@ -8,6 +8,7 @@ import SettingsLoadingCard from "@/components/settings/SettingsLoadingCard";
 import SwitchField from "@/components/settings/SwitchField";
 import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
 import { Card, CardContent } from "@/components/ui/card";
+import { FieldHint } from "@/components/ui/field";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -226,9 +227,7 @@ export default function TrailerPreferencesCard() {
               </SelectContent>
             </Select>
             {tmdbUnavailable && (
-              <p id={sourceHintId} className="text-xs text-muted-foreground">
-                {TMDB_UNAVAILABLE_HINT}
-              </p>
+              <FieldHint id={sourceHintId}>{TMDB_UNAVAILABLE_HINT}</FieldHint>
             )}
           </div>
         </div>

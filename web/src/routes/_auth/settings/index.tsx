@@ -16,6 +16,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
 import { Button } from "@/components/ui/button";
+import { FieldHint } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import SettingsCardHeader from "@/components/settings/SettingsCardHeader";
@@ -353,7 +354,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
       >
         <SettingsCardHeader
           icon={Gauge}
-          title="Application Behavior"
+          title="Application behavior"
           description="Control background services and metadata handling."
         />
         <CardContent className="grid gap-4 @2xl:grid-cols-2">
@@ -395,7 +396,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
       >
         <SettingsCardHeader
           icon={HardDrive}
-          title="Local Storage"
+          title="Local storage"
           description="Configure application-owned storage outside media libraries."
         />
         <CardContent className="grid gap-5 @2xl:grid-cols-2">
@@ -429,7 +430,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
       >
         <SettingsCardHeader
           icon={KeyRound}
-          title="External Services"
+          title="External services"
           description="Manage the services and credentials used for metadata."
         />
         <CardContent className="divide-y divide-border/50">
@@ -501,6 +502,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
         title="Delete downloaded images?"
         description="Turning off image downloads deletes the artwork saved in the static directory. Images load from their online sources again."
         confirmLabel="Delete images"
+        pendingLabel="Deleting images..."
         pending={updateMutation.isPending}
         restoreFocusRef={imageRemovalReturnRef}
         fallbackFocusRef={downloadImagesSwitchRef}
@@ -546,7 +548,10 @@ function SecretInput({
 
   return (
     <div className="grid gap-2">
-      <Label htmlFor={id}>{label}</Label>
+      <div>
+        <Label htmlFor={id}>{label}</Label>
+        <FieldHint id={descriptionId}>Leave blank to clear this value.</FieldHint>
+      </div>
       <div className="relative">
         <Input
           id={id}
@@ -577,9 +582,6 @@ function SecretInput({
           )}
         </Button>
       </div>
-      <p id={descriptionId} className="text-sm text-muted-foreground">
-        Leave blank to clear this value.
-      </p>
     </div>
   );
 }
@@ -611,7 +613,12 @@ function PathInput({
 
   return (
     <div className="grid gap-2">
-      <Label htmlFor={id}>{label}</Label>
+      <div>
+        <Label htmlFor={id}>{label}</Label>
+        <FieldHint id={descriptionId}>
+          The server must be able to write to this directory.
+        </FieldHint>
+      </div>
       <div className="relative">
         <span className="absolute top-1/2 left-3 z-10 -translate-y-1/2 text-muted-foreground">
           {icon}
@@ -632,9 +639,6 @@ function PathInput({
           className="pl-10"
         />
       </div>
-      <p id={descriptionId} className="text-sm text-muted-foreground">
-        The server must be able to write to this directory.
-      </p>
     </div>
   );
 }

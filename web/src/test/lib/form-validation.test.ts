@@ -7,6 +7,7 @@ import {
 } from "@/lib/constants";
 import {
   isValidEmail,
+  PASSWORD_HINT,
   passwordRuleError,
   playlistFieldsError,
 } from "@/lib/form-validation";
@@ -23,11 +24,17 @@ describe("passwordRuleError", () => {
     );
   });
 
-  it("caps the password in UTF-8 bytes", () => {
+  it("caps the password in UTF-8 bytes, and says so in plain words", () => {
     // Each emoji is 4 bytes, so this clears the minimum but not the maximum.
     const long = "😀".repeat(USER_PASSWORD_MAX_BYTES / 4 + 1);
     expect(passwordRuleError(long)).toBe(
-      `Password must be at most ${USER_PASSWORD_MAX_BYTES} UTF-8 bytes.`,
+      `Password is too long. The limit is ${USER_PASSWORD_MAX_BYTES} characters, fewer with accents or emoji.`,
+    );
+  });
+
+  it("gives every new-password field the same short hint", () => {
+    expect(PASSWORD_HINT).toBe(
+      `At least ${USER_PASSWORD_MIN_LENGTH} characters.`,
     );
   });
 

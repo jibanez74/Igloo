@@ -5,7 +5,6 @@ import type { FormEvent, ReactNode } from "react";
 import { Apple, CircuitBoard, Cpu, MonitorCog, Server } from "lucide-react";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -14,7 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import DevicePlaybackCards from "@/components/settings/DevicePlaybackCards";
-import PlaybackSection from "@/components/settings/PlaybackSection";
+import PlaybackField from "@/components/settings/PlaybackField";
 import SettingsCardHeader from "@/components/settings/SettingsCardHeader";
 import TrailerPreferencesCard from "@/components/settings/TrailerPreferencesCard";
 import SettingsErrorCard from "@/components/settings/SettingsErrorCard";
@@ -319,81 +318,73 @@ function ServerPlaybackForm({ settings }: ServerPlaybackFormProps) {
           description="Applies to the whole server and every person using it."
         />
         <CardContent className="divide-y divide-border/50">
-          <PlaybackSection
-            title="Server upload bandwidth"
-            description="The home server's outbound limit, used to cap stream quality recommendations."
+          <PlaybackField
+            htmlFor={serverUploadMbpsId}
+            label="Server upload bandwidth (Mbps)"
+            hintId={`${serverUploadMbpsId}-description`}
+            hint="The home server's outbound limit, used to cap stream quality recommendations. Leave blank if the server should be uncapped."
           >
-            <div className="grid max-w-md gap-2">
-              <Label htmlFor={serverUploadMbpsId}>
-                Server upload bandwidth (Mbps)
-              </Label>
-              <Input
-                id={serverUploadMbpsId}
-                name="server_upload_mbps"
-                type="number"
-                inputMode="decimal"
-                min={0.1}
-                step={0.1}
-                value={form.server_upload_mbps ?? ""}
-                onChange={event =>
-                  handleServerUploadMbpsChange(event.target.value)
-                }
-                disabled={updateMutation.isPending}
-                aria-invalid={serverUploadMbpsInvalid ? "true" : undefined}
-                aria-describedby={
-                  serverUploadMbpsInvalid
-                    ? `${serverUploadMbpsId}-description ${statusId}`
-                    : `${serverUploadMbpsId}-description`
-                }
+            <Input
+              id={serverUploadMbpsId}
+              name="server_upload_mbps"
+              type="number"
+              inputMode="decimal"
+              min={0.1}
+              step={0.1}
+              value={form.server_upload_mbps ?? ""}
+              onChange={event =>
+                handleServerUploadMbpsChange(event.target.value)
+              }
+              disabled={updateMutation.isPending}
+              aria-invalid={serverUploadMbpsInvalid ? "true" : undefined}
+              aria-describedby={
+                serverUploadMbpsInvalid
+                  ? `${serverUploadMbpsId}-description ${statusId}`
+                  : `${serverUploadMbpsId}-description`
+              }
+              variant="inset"
+              size="lg"
+            />
+          </PlaybackField>
+          <PlaybackField
+            htmlFor={hardwareDeviceId}
+            label="Hardware acceleration"
+            hintId={`${hardwareDeviceId}-description`}
+            hint="Choose the hardware acceleration mode used for new transcodes."
+          >
+            <Select
+              name="hardware_acceleration_device"
+              value={form.hardware_acceleration_device}
+              onValueChange={handleHardwareChange}
+              disabled={updateMutation.isPending}
+            >
+              <SelectTrigger
+                id={hardwareDeviceId}
+                aria-describedby={`${hardwareDeviceId}-description`}
                 variant="inset"
                 size="lg"
-              />
-              <p
-                id={`${serverUploadMbpsId}-description`}
-                className="text-sm text-muted-foreground"
               >
-                Leave blank if the server should be uncapped.
-              </p>
-            </div>
-          </PlaybackSection>
-          <PlaybackSection
-            title="Transcoding"
-            description="Choose the hardware acceleration mode used for new transcodes."
-          >
-            <div className="grid max-w-md gap-2">
-              <Label htmlFor={hardwareDeviceId}>Hardware acceleration</Label>
-              <Select
-                name="hardware_acceleration_device"
-                value={form.hardware_acceleration_device}
-                onValueChange={handleHardwareChange}
-                disabled={updateMutation.isPending}
-              >
-                <SelectTrigger
-                  id={hardwareDeviceId}
-                  variant="inset" size="lg"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {HARDWARE_OPTIONS.map(option => (
-                    <SelectItem
-                      key={option.value}
-                      value={option.value}
-                    >
-                      <span className="flex items-center gap-2">
-                        {option.icon}
-                        {option.label}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-sm text-muted-foreground">
-                {hardwareOption(form.hardware_acceleration_device)?.description}
-              </p>
-              <EffectiveDeviceNotice settings={syncedSettings} />
-            </div>
-          </PlaybackSection>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {HARDWARE_OPTIONS.map(option => (
+                  <SelectItem
+                    key={option.value}
+                    value={option.value}
+                  >
+                    <span className="flex items-center gap-2">
+                      {option.icon}
+                      {option.label}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-sm text-muted-foreground">
+              {hardwareOption(form.hardware_acceleration_device)?.description}
+            </p>
+            <EffectiveDeviceNotice settings={syncedSettings} />
+          </PlaybackField>
         </CardContent>
         {/* Inside the card, so the one Save bar on this page is visibly the
             Server card's: the device and account cards above save as they

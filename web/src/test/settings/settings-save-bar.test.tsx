@@ -28,7 +28,7 @@ describe("SettingsSaveBar", () => {
     expectNoClass(bar, "sticky", "bottom-4");
     expect(bar).toHaveTextContent("No unsaved changes");
     expect(screen.getByRole("button", { name: "Reset" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Save Settings" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Save settings" })).toBeDisabled();
   });
 
   it("sticks at the given offset with live actions while dirty", () => {
@@ -37,7 +37,7 @@ describe("SettingsSaveBar", () => {
     expect(bar).toHaveClass("sticky", "z-10", "bottom-4");
     expect(bar).toHaveTextContent("Saved settings are used on future requests.");
     expect(screen.getByRole("button", { name: "Reset" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Save Settings" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Save settings" })).toBeEnabled();
   });
 
   // Libraries confirms a save through the bar's own status line; a clean bar

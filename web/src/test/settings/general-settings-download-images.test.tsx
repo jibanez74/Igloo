@@ -86,7 +86,7 @@ describe("general settings: download images", () => {
     });
     expect(downloads).toHaveAccessibleDescription(/deletes the saved images/);
     await user.click(downloads);
-    await user.click(screen.getByRole("button", { name: "Save Settings" }));
+    await user.click(screen.getByRole("button", { name: "Save settings" }));
 
     const dialog = await screen.findByRole("alertdialog", {
       name: "Delete downloaded images?",
@@ -101,11 +101,11 @@ describe("general settings: download images", () => {
     // Focus goes back to what opened the dialog.
     await waitFor(() => {
       expect(
-        screen.getByRole("button", { name: "Save Settings" }),
+        screen.getByRole("button", { name: "Save settings" }),
       ).toHaveFocus();
     });
 
-    await user.click(screen.getByRole("button", { name: "Save Settings" }));
+    await user.click(screen.getByRole("button", { name: "Save settings" }));
     await user.click(
       within(
         await screen.findByRole("alertdialog", {
@@ -124,7 +124,7 @@ describe("general settings: download images", () => {
     // The cached pages still hold URLs of copies the server stopped serving.
     expect(invalidatedArtworkQueries(queryClient)).toEqual(artworkQueryKeys);
     // The saved form disables Save, so focus lands on the switch instead.
-    expect(screen.getByRole("button", { name: "Save Settings" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Save settings" })).toBeDisabled();
     await waitFor(() => {
       expect(downloads).toHaveFocus();
     });
@@ -139,7 +139,7 @@ describe("general settings: download images", () => {
     await user.click(
       await screen.findByRole("switch", { name: "Library watcher" }),
     );
-    await user.click(screen.getByRole("button", { name: "Save Settings" }));
+    await user.click(screen.getByRole("button", { name: "Save settings" }));
 
     await waitFor(() => {
       expect(saves).toHaveLength(1);
@@ -158,7 +158,7 @@ describe("general settings: download images", () => {
     const staticDir = await screen.findByLabelText("Static directory");
     await user.clear(staticDir);
     await user.type(staticDir, "/srv/igloo/static");
-    await user.click(screen.getByRole("button", { name: "Save Settings" }));
+    await user.click(screen.getByRole("button", { name: "Save settings" }));
 
     await waitFor(() => {
       expect(saves).toHaveLength(1);

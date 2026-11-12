@@ -20,6 +20,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { FieldHint } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -125,8 +126,8 @@ const LIBRARY_SECTIONS: LibrarySectionConfig[] = [
   {
     field: "movies_dir",
     scan: "movies",
-    title: "Movies Library",
-    description: "Manage your movie collection",
+    title: "Movies library",
+    description: "Manage your movie collection.",
     pathLabel: "Movies library path",
     placeholder: "/srv/media/movies",
     Icon: Film,
@@ -137,8 +138,8 @@ const LIBRARY_SECTIONS: LibrarySectionConfig[] = [
   {
     field: "shows_dir",
     scan: "shows",
-    title: "TV Shows Library",
-    description: "Manage your TV show collection",
+    title: "TV shows library",
+    description: "Manage your TV show collection.",
     pathLabel: "TV shows library path",
     placeholder: "/srv/media/shows",
     Icon: Tv,
@@ -149,8 +150,8 @@ const LIBRARY_SECTIONS: LibrarySectionConfig[] = [
   {
     field: "music_dir",
     scan: "music",
-    title: "Music Library",
-    description: "Manage your music collection",
+    title: "Music library",
+    description: "Manage your music collection.",
     pathLabel: "Music library path",
     placeholder: "/srv/media/music",
     Icon: Music,
@@ -375,7 +376,7 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
       <Card>
         <SettingsCardHeader
           icon={Library}
-          title="Library Management"
+          title="Library management"
           description="Manage your media library paths and scanning."
         />
         <CardContent className="space-y-6">
@@ -527,7 +528,13 @@ function LibraryPathSection({
           <p>{libraryPathStatusText(hasSavedPath, hasPathValue, pathChanged)}</p>
         </div>
         <div className="grid gap-2">
-          <Label htmlFor={pathInputId}>{config.pathLabel}</Label>
+          <div>
+            <Label htmlFor={pathInputId}>{config.pathLabel}</Label>
+            <FieldHint id={descriptionId}>
+              Enter a directory path readable by the Igloo server. Leave blank
+              to clear this library path.
+            </FieldHint>
+          </div>
           <Input
             id={pathInputId}
             type="text"
@@ -541,10 +548,6 @@ function LibraryPathSection({
             variant="inset"
             size="lg"
           />
-          <p id={descriptionId} className="text-sm text-muted-foreground">
-            Enter a directory path readable by the Igloo server. Leave blank to
-            clear this library path.
-          </p>
         </div>
         {hasPathValue && (
           <Button
@@ -553,11 +556,10 @@ function LibraryPathSection({
             size="sm"
             onClick={onClearPath}
             disabled={disabled}
-            aria-label={config.clearLabel}
             className="w-full sm:w-fit"
           >
             <Trash2 className="size-4" aria-hidden="true" />
-            Clear path
+            {config.clearLabel}
           </Button>
         )}
       </div>
@@ -571,22 +573,19 @@ function LibraryPathSection({
           onClick={onScan}
           disabled={scanDisabled}
           aria-busy={scanPending}
-          aria-label={
-            scanPending
-              ? `Scanning ${SCAN_LIBRARIES[config.scan].label} library, please wait`
-              : `Scan ${SCAN_LIBRARIES[config.scan].label} library`
-          }
           className="w-full disabled:opacity-50"
         >
+          {/* The button shows its whole name, so what is seen is what a
+              screen reader and voice control hear (WCAG 2.5.3). */}
           {scanPending ? (
             <>
               <Spinner aria-hidden="true" />
-              <span>Scanning...</span>
+              <span>Scanning {SCAN_LIBRARIES[config.scan].label} library...</span>
             </>
           ) : (
             <>
               <Scan className="size-4" aria-hidden="true" />
-              Scan Library
+              Scan {SCAN_LIBRARIES[config.scan].label} library
             </>
           )}
         </Button>

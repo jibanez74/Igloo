@@ -10,6 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { FieldError, FieldHint } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -41,7 +42,6 @@ import {
 import {
   USER_EMAIL_MAX_LENGTH,
   USER_NAME_MAX_LENGTH,
-  USER_PASSWORD_MAX_BYTES,
   USER_PASSWORD_MIN_LENGTH,
   MOTION_MICRO_COLORS_CLASS,
 } from "@/lib/constants";
@@ -53,7 +53,7 @@ import {
   uploadUserAvatar,
   deleteUserAccount,
 } from "@/lib/api";
-import { passwordRuleError } from "@/lib/form-validation";
+import { PASSWORD_HINT, passwordRuleError } from "@/lib/form-validation";
 import {
   showSuccess,
   showError,
@@ -94,6 +94,9 @@ type AccountErrors = Partial<Record<AccountErrorField, string>>;
 /** The avatar an optimistic URL change wrote, and the one it replaced. */
 type AvatarRollback = { optimistic: string; previous: string | null };
 
+/** Shown when the confirmation field holds anything but the word itself. */
+const DELETE_CONFIRM_ERROR = "Type DELETE exactly, in capital letters.";
+
 const MAX_AVATAR_SIZE = 20 * 1024 * 1024;
 const ALLOWED_AVATAR_TYPES = [
   "image/jpeg",
@@ -121,11 +124,11 @@ function AccountSettings() {
   const newPasswordId = useId();
   const confirmPasswordId = useId();
   const deleteConfirmId = useId();
-  const deleteConfirmHelperId = useId();
   const emailErrorId = `${emailId}-error`;
   const nameDescriptionId = `${nameId}-description`;
   const nameErrorId = `${nameId}-error`;
   const avatarUploadDescriptionId = `${avatarUploadId}-description`;
+  const avatarUrlDescriptionId = `${avatarUrlId}-description`;
   const avatarUploadErrorId = `${avatarUploadId}-error`;
   const avatarUrlErrorId = `${avatarUrlId}-error`;
   const currentPasswordErrorId = `${currentPasswordId}-error`;
@@ -149,7 +152,7 @@ function AccountSettings() {
   const emailValue = email ?? user?.email ?? "";
   const deleteConfirmError =
     deleteConfirmText.length > 0 && deleteConfirmText !== "DELETE"
-      ? "Type DELETE exactly to confirm account deletion."
+      ? DELETE_CONFIRM_ERROR
       : errors.deleteConfirm;
 
   const showFieldError = (
@@ -419,7 +422,7 @@ function AccountSettings() {
     if (!confirmPassword) {
       nextErrors.confirmPassword = "Confirm your new password.";
     } else if (newPassword && newPassword !== confirmPassword) {
-      nextErrors.confirmPassword = "New passwords do not match.";
+      nextErrors.confirmPassword = "Passwords do not match.";
     }
 
     if (nextErrors.currentPassword) {
@@ -470,7 +473,7 @@ function AccountSettings() {
 
     if (!ALLOWED_AVATAR_TYPES.includes(file.type)) {
       const message =
-        "Invalid file type. Allowed: JPEG, PNG, GIF, WebP.";
+        "That file type is not supported. Use JPEG, PNG, GIF or WebP.";
       setErrors(current => ({ ...current, avatarUpload: message }));
       document.getElementById(avatarUploadId)?.focus();
       e.target.value = "";
@@ -478,7 +481,7 @@ function AccountSettings() {
     }
 
     if (file.size > MAX_AVATAR_SIZE) {
-      const message = "File too large. Maximum size is 20MB.";
+      const message = "That file is too large. The limit is 20 MB.";
       setErrors(current => ({ ...current, avatarUpload: message }));
       document.getElementById(avatarUploadId)?.focus();
       e.target.value = "";
@@ -494,7 +497,7 @@ function AccountSettings() {
     if (deleteConfirmText !== "DELETE") {
       showFieldError(
         "deleteConfirm",
-        "Type DELETE exactly to confirm account deletion.",
+        DELETE_CONFIRM_ERROR,
         deleteConfirmId,
       );
       return;
@@ -543,8 +546,8 @@ function AccountSettings() {
         title="Account unavailable"
         message={
           userData?.error
-            ? apiErrorMessage(userData, "Failed to load user information")
-            : "User information not available"
+            ? apiErrorMessage(userData, "Failed to load user information.")
+            : "User information not available."
         }
       />
     );
@@ -556,8 +559,8 @@ function AccountSettings() {
       <Card>
         <SettingsCardHeader
           icon={User}
-          title="Profile Information"
-          description="Manage your account information and preferences"
+          title="Profile information"
+          description="Your name and the email you sign in with."
         />
         <CardContent className="max-w-2xl">
           <form onSubmit={handleSaveProfile} noValidate className="space-y-6">
@@ -574,9 +577,7 @@ function AccountSettings() {
                   setEmail(e.target.value);
                   clearError("email");
                 }}
-                placeholder="Enter your email"
                 variant="glass"
-                aria-label="Your email address"
                 required
                 maxLength={USER_EMAIL_MAX_LENGTH}
                 aria-required="true"
@@ -584,9 +585,7 @@ function AccountSettings() {
                 aria-describedby={describedBy(errors.email && emailErrorId)}
               />
               {errors.email && (
-                <p id={emailErrorId} className="text-xs text-destructive" role="alert">
-                  {errors.email}
-                </p>
+                <FieldError id={emailErrorId}>{errors.email}</FieldError>
               )}
             </div>
 
@@ -595,6 +594,9 @@ function AccountSettings() {
               <Label htmlFor={nameId} tone="muted">
                 Name
               </Label>
+              <FieldHint id={nameDescriptionId}>
+                Your display name, up to {USER_NAME_MAX_LENGTH} characters.
+              </FieldHint>
               <Input
                 id={nameId}
                 type="text"
@@ -603,22 +605,15 @@ function AccountSettings() {
                   setName(e.target.value);
                   clearError("name");
                 }}
-                placeholder="Enter your name"
                 variant="glass"
-                aria-label="Your display name"
                 aria-invalid={!!errors.name || undefined}
                 aria-describedby={describedBy(
                   nameDescriptionId,
                   errors.name && nameErrorId,
                 )}
               />
-              <p id={nameDescriptionId} className="text-xs text-muted-foreground">
-                Your display name (max {USER_NAME_MAX_LENGTH} characters)
-              </p>
               {errors.name && (
-                <p id={nameErrorId} className="text-xs text-destructive" role="alert">
-                  {errors.name}
-                </p>
+                <FieldError id={nameErrorId}>{errors.name}</FieldError>
               )}
             </div>
 
@@ -646,7 +641,7 @@ function AccountSettings() {
         <SettingsCardHeader
           icon={ImageIcon}
           title="Avatar"
-          description="Update your profile picture"
+          description="Update your profile picture."
         />
         <CardContent className="max-w-2xl space-y-6">
           {/* Current Avatar */}
@@ -676,7 +671,14 @@ function AccountSettings() {
 
           {/* Upload Avatar */}
           <div className="space-y-2">
-            <Label tone="muted">Upload Image</Label>
+            {/* Two labels name the file input: this one and the button-like
+                one over it, so its name is "Upload image Choose file". */}
+            <Label htmlFor={avatarUploadId} tone="muted">
+              Upload image
+            </Label>
+            <FieldHint id={avatarUploadDescriptionId}>
+              JPEG, PNG, GIF or WebP, up to 20 MB.
+            </FieldHint>
             <div className="flex gap-2">
               <div className="relative flex flex-1">
                 <input
@@ -686,7 +688,6 @@ function AccountSettings() {
                   onChange={handleUploadAvatar}
                   disabled={uploadAvatarMutation.isPending}
                   className="peer absolute inset-0 z-10 h-9 w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
-                  aria-label="Upload avatar image"
                   aria-invalid={!!errors.avatarUpload || undefined}
                   aria-describedby={describedBy(
                     avatarUploadDescriptionId,
@@ -709,29 +710,25 @@ function AccountSettings() {
                   <Upload className="size-4" aria-hidden="true" />
                   {uploadAvatarMutation.isPending
                     ? "Uploading..."
-                    : "Choose File"}
+                    : "Choose file"}
                 </label>
               </div>
             </div>
-            <p id={avatarUploadDescriptionId} className="text-xs text-muted-foreground">
-              JPEG, PNG, GIF, or WebP (max 20MB)
-            </p>
             {errors.avatarUpload && (
-              <p
-                id={avatarUploadErrorId}
-                className="text-xs text-destructive"
-                role="alert"
-              >
+              <FieldError id={avatarUploadErrorId}>
                 {errors.avatarUpload}
-              </p>
+              </FieldError>
             )}
           </div>
 
           {/* Set Avatar URL */}
           <div className="space-y-2">
             <Label htmlFor={avatarUrlId} tone="muted">
-              Or enter image URL
+              Image URL
             </Label>
+            <FieldHint id={avatarUrlDescriptionId}>
+              Use an image from the web instead of uploading one.
+            </FieldHint>
             <div className="flex flex-col gap-2 sm:flex-row">
               <Input
                 id={avatarUrlId}
@@ -744,9 +741,9 @@ function AccountSettings() {
                 placeholder="https://example.com/avatar.jpg"
                 variant="glass"
                 className="sm:flex-1"
-                aria-label="Avatar image URL"
                 aria-invalid={!!errors.avatarUrl || undefined}
                 aria-describedby={describedBy(
+                  avatarUrlDescriptionId,
                   errors.avatarUrl && avatarUrlErrorId,
                 )}
               />
@@ -761,13 +758,7 @@ function AccountSettings() {
               </Button>
             </div>
             {errors.avatarUrl && (
-              <p
-                id={avatarUrlErrorId}
-                className="text-xs text-destructive"
-                role="alert"
-              >
-                {errors.avatarUrl}
-              </p>
+              <FieldError id={avatarUrlErrorId}>{errors.avatarUrl}</FieldError>
             )}
           </div>
         </CardContent>
@@ -777,8 +768,8 @@ function AccountSettings() {
       <Card>
         <SettingsCardHeader
           icon={Lock}
-          title="Change Password"
-          description="Update your account password"
+          title="Change password"
+          description="Update the password you sign in with."
         />
         <CardContent className="max-w-2xl">
           {/*
@@ -803,7 +794,7 @@ function AccountSettings() {
             />
             <div className="space-y-2">
               <Label htmlFor={currentPasswordId} tone="muted">
-                Current Password
+                Current password
               </Label>
             <Input
               id={currentPasswordId}
@@ -813,9 +804,7 @@ function AccountSettings() {
                 setCurrentPassword(e.target.value);
                 clearError("currentPassword");
               }}
-              placeholder="Enter current password"
               variant="glass"
-              aria-label="Current password"
               autoComplete="current-password"
               required
               aria-required="true"
@@ -825,20 +814,17 @@ function AccountSettings() {
               )}
             />
             {errors.currentPassword && (
-              <p
-                id={currentPasswordErrorId}
-                className="text-xs text-destructive"
-                role="alert"
-              >
+              <FieldError id={currentPasswordErrorId}>
                 {errors.currentPassword}
-              </p>
+              </FieldError>
             )}
           </div>
 
           <div className="space-y-2">
             <Label htmlFor={newPasswordId} tone="muted">
-              New Password
+              New password
             </Label>
+            <FieldHint id={newPasswordDescriptionId}>{PASSWORD_HINT}</FieldHint>
             <Input
               id={newPasswordId}
               type="password"
@@ -847,9 +833,7 @@ function AccountSettings() {
                 setNewPassword(e.target.value);
                 clearError("newPassword");
               }}
-              placeholder="Enter new password"
               variant="glass"
-              aria-label="New password"
               autoComplete="new-password"
               minLength={USER_PASSWORD_MIN_LENGTH}
               aria-invalid={!!errors.newPassword || undefined}
@@ -858,23 +842,16 @@ function AccountSettings() {
                 errors.newPassword && newPasswordErrorId,
               )}
             />
-            <p id={newPasswordDescriptionId} className="text-xs text-muted-foreground">
-              Must be at least {USER_PASSWORD_MIN_LENGTH} characters and at most {USER_PASSWORD_MAX_BYTES} UTF-8 bytes
-            </p>
             {errors.newPassword && (
-              <p
-                id={newPasswordErrorId}
-                className="text-xs text-destructive"
-                role="alert"
-              >
+              <FieldError id={newPasswordErrorId}>
                 {errors.newPassword}
-              </p>
+              </FieldError>
             )}
           </div>
 
           <div className="space-y-2">
             <Label htmlFor={confirmPasswordId} tone="muted">
-              Confirm New Password
+              Confirm new password
             </Label>
             <Input
               id={confirmPasswordId}
@@ -884,9 +861,7 @@ function AccountSettings() {
                 setConfirmPassword(e.target.value);
                 clearError("confirmPassword");
               }}
-              placeholder="Confirm new password"
               variant="glass"
-              aria-label="Confirm new password"
               autoComplete="new-password"
               aria-invalid={!!errors.confirmPassword || undefined}
               aria-describedby={describedBy(
@@ -894,13 +869,9 @@ function AccountSettings() {
               )}
             />
             {errors.confirmPassword && (
-              <p
-                id={confirmPasswordErrorId}
-                className="text-xs text-destructive"
-                role="alert"
-              >
+              <FieldError id={confirmPasswordErrorId}>
                 {errors.confirmPassword}
-              </p>
+              </FieldError>
             )}
           </div>
 
@@ -912,7 +883,7 @@ function AccountSettings() {
           >
             {updatePasswordMutation.isPending
               ? "Updating..."
-              : "Update Password"}
+              : "Update password"}
           </Button>
           </form>
         </CardContent>
@@ -936,16 +907,16 @@ function AccountSettings() {
           <CardTitle asChild tone="destructive" className="flex items-center gap-2">
             <h2>
               <AlertTriangle className="size-5" aria-hidden="true" />
-              Danger Zone
+              Danger zone
             </h2>
           </CardTitle>
           <CardDescription className="text-destructive">
-            Irreversible and destructive actions
+            Actions here cannot be undone.
           </CardDescription>
         </CardHeader>
         <CardContent className="max-w-2xl space-y-4">
           <div className="space-y-2">
-            <p className="text-sm font-medium text-destructive">Delete Account</p>
+            <p className="text-sm font-medium text-destructive">Delete account</p>
             <p className="text-sm text-destructive">
               Once you delete your account, there is no going back. Please be
               certain.
@@ -956,10 +927,9 @@ function AccountSettings() {
             onClick={() => handleDeleteDialogOpenChange(true)}
             variant="destructive"
             className="w-full sm:w-auto"
-            aria-label="Delete account"
           >
             <Trash2 className="size-4" aria-hidden="true" />
-            Delete Account
+            Delete account
           </Button>
         </CardContent>
       </Card>
@@ -973,7 +943,7 @@ function AccountSettings() {
           }}
         >
           <DialogHeader>
-            <DialogTitle tone="destructive">Delete Account</DialogTitle>
+            <DialogTitle tone="destructive">Delete account</DialogTitle>
             <DialogDescription>
               This action cannot be undone. This will permanently delete your
               account and remove all associated data.
@@ -981,12 +951,9 @@ function AccountSettings() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label
-                htmlFor={deleteConfirmId}
-                id={deleteConfirmHelperId} tone="muted"
-              >
+              <Label htmlFor={deleteConfirmId} tone="muted">
                 Type <span className="font-mono font-bold">DELETE</span> to
-                confirm:
+                confirm
               </Label>
               <Input
                 id={deleteConfirmId}
@@ -998,21 +965,15 @@ function AccountSettings() {
                 }}
                 variant="glass"
                 className="font-mono"
-                aria-label="Type DELETE to confirm account deletion"
                 aria-describedby={describedBy(
-                  deleteConfirmHelperId,
                   deleteConfirmError && deleteConfirmErrorId,
                 )}
                 aria-invalid={!!deleteConfirmError || undefined}
               />
               {deleteConfirmError && (
-                <p
-                  id={deleteConfirmErrorId}
-                  className="text-xs text-destructive"
-                  role="alert"
-                >
+                <FieldError id={deleteConfirmErrorId}>
                   {deleteConfirmError}
-                </p>
+                </FieldError>
               )}
             </div>
           </div>
@@ -1029,7 +990,7 @@ function AccountSettings() {
               onClick={handleDeleteAccount}
               disabled={isDeleting || deleteConfirmText !== "DELETE"}
             >
-              {isDeleting ? "Deleting..." : "Delete Account"}
+              {isDeleting ? "Deleting..." : "Delete account"}
             </Button>
           </DialogFooter>
         </DialogContent>

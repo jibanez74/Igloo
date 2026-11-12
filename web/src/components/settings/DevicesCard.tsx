@@ -94,7 +94,7 @@ export default function DevicesCard() {
       <SettingsCardHeader
         icon={Smartphone}
         title="Devices"
-        description="TV and mobile apps signed in to your account"
+        description="TV and mobile apps signed in to your account."
       />
       <CardContent className="max-w-2xl">
         {isLoading ? (
@@ -224,6 +224,7 @@ export default function DevicesCard() {
         title={`Revoke ${deviceToRevoke?.name ?? "device"}?`}
         description="The device is signed out immediately and must pair again to reconnect."
         confirmLabel="Revoke"
+        pendingLabel="Revoking..."
         pending={revokeMutation.isPending}
         restoreFocusRef={revokeButtonRef}
         onConfirm={() => {

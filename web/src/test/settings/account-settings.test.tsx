@@ -165,7 +165,7 @@ async function renderAccountRoute(
   const { requests } = setupAccountFetch(user, options);
   const { router, queryClient } = await renderRoute("/settings/account");
 
-  await screen.findByText("Profile Information");
+  await screen.findByText("Profile information");
   return { requests, router, queryClient };
 }
 
@@ -201,7 +201,7 @@ describe("Account settings", () => {
     expect(requestsFor(requests, "GET", "/api/auth/user")).toHaveLength(
       userRequestsBefore,
     );
-    expect(screen.getByText("Profile Information")).toBeInTheDocument();
+    expect(screen.getByText("Profile information")).toBeInTheDocument();
   });
 
   it("caches the avatar the server stored rather than the URL typed in", async () => {
@@ -209,7 +209,7 @@ describe("Account settings", () => {
     const { queryClient } = await renderAccountRoute();
 
     await user.type(
-      screen.getByLabelText("Avatar image URL"),
+      screen.getByLabelText("Image URL"),
       "https://example.com/me.jpg",
     );
     await user.click(screen.getByRole("button", { name: "Set URL" }));
@@ -231,7 +231,7 @@ describe("Account settings", () => {
     });
 
     await user.type(
-      screen.getByLabelText("Avatar image URL"),
+      screen.getByLabelText("Image URL"),
       "https://example.com/me.jpg",
     );
     await user.click(screen.getByRole("button", { name: "Set URL" }));
@@ -272,7 +272,7 @@ describe("Account settings", () => {
       authUserFrom(queryClient.getQueryData(authUserQueryOpts().queryKey));
 
     await user.type(
-      screen.getByLabelText("Avatar image URL"),
+      screen.getByLabelText("Image URL"),
       "https://example.com/me.jpg",
     );
     await user.click(screen.getByRole("button", { name: "Set URL" }));
@@ -306,11 +306,11 @@ describe("Account settings", () => {
     const { requests } = await renderAccountRoute();
     const input = screen.getByLabelText("New password");
     expect(input).not.toHaveAttribute("maxlength");
-    expect(input).toHaveAccessibleDescription("Must be at least 9 characters and at most 72 UTF-8 bytes");
+    expect(input).toHaveAccessibleDescription("At least 9 characters.");
     fireEvent.change(screen.getByLabelText("Current password"), { target: { value: "CurrentPass123" } });
     fireEvent.change(input, { target: { value: password } });
     fireEvent.change(screen.getByLabelText("Confirm new password"), { target: { value: password } });
-    await user.click(screen.getByRole("button", { name: "Update Password" }));
+    await user.click(screen.getByRole("button", { name: "Update password" }));
 
     if (error) {
       const alert = screen.getByRole("alert");
@@ -338,7 +338,7 @@ describe("Account settings", () => {
     await user.type(screen.getByLabelText("Current password"), "WrongPass123");
     await user.type(screen.getByLabelText("New password"), "NewPass12345");
     await user.type(screen.getByLabelText("Confirm new password"), "NewPass12345");
-    await user.click(screen.getByRole("button", { name: "Update Password" }));
+    await user.click(screen.getByRole("button", { name: "Update password" }));
 
     await waitFor(() => {
       expect(screen.getByLabelText("Current password")).toHaveAttribute(
@@ -373,7 +373,7 @@ describe("Account settings", () => {
     await user.type(screen.getByLabelText("Current password"), "CurrentPass123");
     await user.type(screen.getByLabelText("New password"), "short");
     await user.type(screen.getByLabelText("Confirm new password"), "short");
-    await user.click(screen.getByRole("button", { name: "Update Password" }));
+    await user.click(screen.getByRole("button", { name: "Update password" }));
 
     const alert = screen.getByRole("alert");
     expect(alert).toHaveTextContent(
@@ -403,10 +403,10 @@ describe("Account settings", () => {
       screen.getByLabelText("Confirm new password"),
       "DifferentPassword123",
     );
-    await user.click(screen.getByRole("button", { name: "Update Password" }));
+    await user.click(screen.getByRole("button", { name: "Update password" }));
 
     const alert = screen.getByRole("alert");
-    expect(alert).toHaveTextContent("New passwords do not match.");
+    expect(alert).toHaveTextContent("Passwords do not match.");
     expect(screen.getByLabelText("Confirm new password")).toHaveAttribute(
       "aria-invalid",
       "true",
@@ -421,9 +421,46 @@ describe("Account settings", () => {
     expect(requestsFor(requests, "PUT", "/api/user/password")).toHaveLength(0);
   });
 
+  // An aria-label used to rename most of these ("Your display name" over a
+  // visible "Name"), so what was seen was not what was announced or spoken
+  // to voice control (WCAG 2.5.3).
+  it("names every field by the label shown beside it", async () => {
+    await renderAccountRoute();
+
+    for (const name of ["Email", "Name", "Image URL"]) {
+      const field = screen.getByRole("textbox", { name });
+      expect(field).not.toHaveAttribute("aria-label");
+    }
+    for (const name of [
+      "Current password",
+      "New password",
+      "Confirm new password",
+    ]) {
+      expect(screen.getByLabelText(name)).not.toHaveAttribute("aria-label");
+    }
+    // Two labels name the file input: the field label and the button over it.
+    const upload = screen.getByLabelText("Upload image");
+    expect(upload).toHaveAccessibleName("Upload image Choose file");
+    expect(upload).toHaveAccessibleDescription(
+      "JPEG, PNG, GIF or WebP, up to 20 MB.",
+    );
+  });
+
+  it("gives the new password the short hint, above the input", async () => {
+    await renderAccountRoute();
+
+    const input = screen.getByLabelText("New password");
+    expect(input).toHaveAccessibleDescription("At least 9 characters.");
+    const hint = screen.getByText("At least 9 characters.");
+    expect(
+      hint.compareDocumentPosition(input) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(screen.queryByText(/UTF-8/)).toBeNull();
+  });
+
   it("exposes invalid avatar upload validation to assistive technology", async () => {
     const { requests } = await renderAccountRoute();
-    const upload = screen.getByLabelText("Upload avatar image");
+    const upload = screen.getByLabelText("Upload image");
     const file = new File(["not an image"], "avatar.txt", {
       type: "text/plain",
     });
@@ -432,7 +469,7 @@ describe("Account settings", () => {
 
     const alert = screen.getByRole("alert");
     expect(alert).toHaveTextContent(
-      "Invalid file type. Allowed: JPEG, PNG, GIF, WebP.",
+      "That file type is not supported. Use JPEG, PNG, GIF or WebP.",
     );
     expect(upload).toHaveAttribute("aria-invalid", "true");
     expect(upload).toHaveAttribute(
@@ -451,7 +488,7 @@ describe("Account settings", () => {
     await renderAccountRoute(testUser({ is_admin: true }));
 
     expect(
-      screen.queryByRole("heading", { name: "Danger Zone" }),
+      screen.queryByRole("heading", { name: "Danger zone" }),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Delete account" }),
@@ -463,21 +500,21 @@ describe("Account settings", () => {
     const { requests, router, queryClient } = await renderAccountRoute();
 
     await user.click(screen.getByRole("button", { name: "Delete account" }));
-    const dialog = screen.getByRole("dialog", { name: "Delete Account" });
+    const dialog = screen.getByRole("dialog", { name: "Delete account" });
     const confirmation = within(dialog).getByLabelText(
-      "Type DELETE to confirm account deletion",
+      "Type DELETE to confirm",
     );
     await user.type(confirmation, "delete");
 
     expect(confirmation).toHaveAttribute("aria-invalid", "true");
     expect(
-      within(dialog).getByRole("button", { name: "Delete Account" }),
+      within(dialog).getByRole("button", { name: "Delete account" }),
     ).toBeDisabled();
 
     await user.clear(confirmation);
     await user.type(confirmation, "DELETE");
     await user.click(
-      within(dialog).getByRole("button", { name: "Delete Account" }),
+      within(dialog).getByRole("button", { name: "Delete account" }),
     );
 
     await waitFor(() =>

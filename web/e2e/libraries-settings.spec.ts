@@ -197,7 +197,7 @@ test.describe("Libraries settings", () => {
       await page.goto("/settings/libraries");
       await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
       await expect(
-        page.getByRole("heading", { name: "Library Management" }),
+        page.getByRole("heading", { name: "Library management" }),
       ).toBeVisible();
 
       const moviesInput = page.getByRole("textbox", {

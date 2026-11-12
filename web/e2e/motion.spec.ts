@@ -179,8 +179,8 @@ test.describe("Enter animations", () => {
 
     // A modal surface: the standard duration.
     await page.goto("/settings/users");
-    await page.getByRole("button", { name: "Add User" }).click();
-    const dialog = page.getByRole("dialog", { name: "Add User" });
+    await page.getByRole("button", { name: "Add user" }).click();
+    const dialog = page.getByRole("dialog", { name: "Add user" });
     await expect(dialog).toBeVisible();
     expect(await dialog.evaluate(readMotion)).toMatchObject({
       name: "enter",

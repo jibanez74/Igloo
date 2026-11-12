@@ -425,6 +425,7 @@ any variant fully. The base string carries the focus ring, disabled opacity,
   | `Spinner` | `size` | `sm` 16px (default), `md` 20, `lg` 24, `xl` 32, `2xl` 40 |
   | `Spinner` | `tone` | `current` (default: the text color around it), `primary`, `success` |
   | `Label` | `tone` | `default`, `muted` (a field label under a section title of its own) |
+  | `FieldHint`, `FieldError` | none | a field's help and its error, one size and colour each (§3.7) |
   | `Card` | `surface` | `muted` (default: the Settings panel), `raised` (the opaque card), `error`, `danger` |
   | `CardTitle` | `tone` | `default`, `destructive` |
   | `Badge` | `variant` | `default`, `outline`, `over-media` (a chip on a backdrop or poster, §1.2), `muted` and `tinted` (the fact and genre chips of a music hero) |
@@ -433,7 +434,7 @@ any variant fully. The base string carries the focus ring, disabled opacity,
   A spinner's tone is `!important` on purpose: inside an outline button,
   whose icons are forced to the button's color, it is what keeps the spinner
   in its own. `Card`'s `error` and `danger` surfaces differ only in border
-  strength (20 % and 50 %), as the error card and the Danger Zone are drawn
+  strength (20 % and 50 %), as the error card and the Danger zone are drawn
   today. A menu item is a pointer target by default, and a disabled select
   item is muted; neither needs a class.
 - **`Badge`** (`ui/badge.tsx`) is the primitive for static pills — count
@@ -1785,12 +1786,51 @@ require the full playback test pass.
 - Settings pages are Cards on their default `muted` surface
   (`border-border/50 bg-muted/30`, §1.6) with a `SettingsCardHeader` (glacier lucide
   icon + title + description), labeled fields in the `inset` variant at
-  `size="lg"` (§1.6),
-  helper text below (`text-muted-foreground text-xs`), and per-field or
-  per-card Save buttons; destructive areas get the tinted "Danger Zone" card
+  `size="lg"` (§1.6), and per-field or
+  per-card Save buttons; destructive areas get the tinted "Danger zone" card
   (`border-destructive/*` + destructive text + outline destructive actions).
   A card's own loading and error states are `SettingsLoadingCard` and
   `SettingsErrorCard` (§3.4), so the card keeps its place in the page.
+- **A field has one label, and its help sits above the control.** The order
+  is label, help, control, then whatever depends on the value:
+
+  ```tsx
+  <Label htmlFor={id}>Download speed (Mbps)</Label>
+  <FieldHint id={hintId}>Used to recommend a stream profile…</FieldHint>
+  <Input id={id} aria-describedby={describedBy(hintId, error && errorId)} />
+  {error && <FieldError id={errorId}>{error}</FieldError>}
+  ```
+
+  - `FieldHint` and `FieldError` (`ui/field.tsx`) are the only help and error
+    text of a field: both `text-sm`, muted and destructive. `FieldError` is a
+    `role="alert"`. No hand-set `<p className="text-xs …">` beside a control.
+  - Static help goes between the label and the control, so it is read before
+    the control is used and is not covered by a select's list or a phone
+    keyboard. What depends on the value goes below: the error, the selected
+    option's description, the notice of what is in force.
+  - No section title above a field that repeats its label. Settings →
+    Playback used to stack "Preferred profile", a description, then the label
+    "Profile"; the title is gone and its description is the hint
+    (`settings/PlaybackField.tsx`). A heading stays where it groups several
+    fields (a provider in External services, a library in Libraries) or
+    names a read-only value (`PlaybackSection`).
+  - **The visible label is the accessible name.** A control with a
+    `<Label htmlFor>` takes no `aria-label`: one that differs ("Your display
+    name" over a visible "Name") breaks voice control and WCAG 2.5.3, and one
+    that matches is noise that drifts. A button whose name needs its context
+    shows it ("Scan movies library", not "Scan Library" with a hidden longer
+    name). The exception is an icon-only button, and a row action that
+    starts with its visible word ("Rename Living Room TV").
+  - A placeholder shows an example of the format (`user@example.com`,
+    `/srv/media/movies`), never the label again and never the rule: the
+    password rule is the hint "At least 9 characters." (`PASSWORD_HINT`,
+    `lib/form-validation.ts`), and the upper limit is explained only by the
+    error raised when it is hit.
+- **Settings copy is sentence case**: card titles, sub-headings, labels,
+  buttons and dialog titles ("Application behavior", "Current password",
+  "Save settings", "Add user"). Names keep their capitals (Quick Connect,
+  Apple Music, TMDB, Spotify, PIN). A description is a sentence and ends with
+  a period.
 - **The Save bar (`SettingsSaveBar`) is opaque, always there, and sticky only
   while dirty.** It renders at the end of every server-saved form on a solid
   `bg-card` (floating surfaces are opaque, like the mini player and dialogs —

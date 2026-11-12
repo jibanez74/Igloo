@@ -52,6 +52,8 @@ const styledByProps = [
   "AlertDialogDescription",
   "Spinner",
   "Label",
+  "FieldHint",
+  "FieldError",
   "Card",
   "CardTitle",
   "Badge",

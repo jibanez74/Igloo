@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { FieldError, FieldHint } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { KeyRound } from "lucide-react";
@@ -204,7 +205,7 @@ export default function ProfilePinCard() {
       <SettingsCardHeader
         icon={KeyRound}
         title="Profile PIN"
-        description={`An optional ${USER_PIN_LENGTH}-digit PIN that protects your profile on shared TV devices`}
+        description={`An optional ${USER_PIN_LENGTH}-digit PIN that protects your profile on shared TV devices.`}
       />
       <CardContent className="max-w-2xl space-y-4">
         {hasPin ? (
@@ -231,9 +232,9 @@ export default function ProfilePinCard() {
           </p>
         )}
         {revealed && pinData?.error && (
-          <p className="text-xs text-destructive" role="alert">
+          <FieldError>
             {apiErrorMessage(pinData, "Failed to load your PIN.")}
-          </p>
+          </FieldError>
         )}
 
         <form onSubmit={handleSubmit} noValidate className="space-y-4">
@@ -251,10 +252,8 @@ export default function ProfilePinCard() {
                   setCurrentPin(e.target.value);
                   clearError("currentPin");
                 }}
-                placeholder="Enter current PIN"
                 variant="glass"
                 className="font-mono"
-                aria-label="Current PIN"
                 autoComplete="off"
                 maxLength={USER_PIN_LENGTH}
                 required
@@ -265,13 +264,9 @@ export default function ProfilePinCard() {
                 )}
               />
               {errors.currentPin && (
-                <p
-                  id={currentPinErrorId}
-                  className="text-xs text-destructive"
-                  role="alert"
-                >
+                <FieldError id={currentPinErrorId}>
                   {errors.currentPin}
-                </p>
+                </FieldError>
               )}
             </div>
           )}
@@ -280,6 +275,9 @@ export default function ProfilePinCard() {
             <Label htmlFor={newPinId} tone="muted">
               {hasPin ? "New PIN" : "PIN"}
             </Label>
+            <FieldHint id={newPinDescriptionId}>
+              Exactly {USER_PIN_LENGTH} digits.
+            </FieldHint>
             <Input
               id={newPinId}
               type="text"
@@ -289,10 +287,8 @@ export default function ProfilePinCard() {
                 setNewPin(e.target.value);
                 clearError("newPin");
               }}
-              placeholder={hasPin ? "Enter new PIN" : "Enter a PIN"}
               variant="glass"
               className="font-mono"
-              aria-label={hasPin ? "New PIN" : "PIN"}
               autoComplete="off"
               maxLength={USER_PIN_LENGTH}
               required
@@ -303,20 +299,8 @@ export default function ProfilePinCard() {
                 errors.newPin && newPinErrorId,
               )}
             />
-            <p
-              id={newPinDescriptionId}
-              className="text-xs text-muted-foreground"
-            >
-              Exactly {USER_PIN_LENGTH} digits
-            </p>
             {errors.newPin && (
-              <p
-                id={newPinErrorId}
-                className="text-xs text-destructive"
-                role="alert"
-              >
-                {errors.newPin}
-              </p>
+              <FieldError id={newPinErrorId}>{errors.newPin}</FieldError>
             )}
           </div>
 
