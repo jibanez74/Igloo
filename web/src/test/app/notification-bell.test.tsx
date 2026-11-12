@@ -2,6 +2,7 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import NotificationBell from "@/components/app/NotificationBell";
+import { FOCUS_VISIBLE_RING_CLASS } from "@/lib/constants";
 import type {
   ApiResponseType,
   NotificationListItemType,
@@ -139,6 +140,29 @@ describe("NotificationBell", () => {
     await waitFor(() => {
       expect(apiMocks.markNotificationRead).toHaveBeenCalledWith(1);
     });
+  });
+
+  // Both controls of a row once showed the browser's own outline instead of
+  // the app's ring.
+  it("rings a row and its dismiss button the way every control is ringed", async () => {
+    const user = userEvent.setup();
+    renderBell();
+
+    await user.click(
+      await screen.findByRole("button", { name: "Notifications, 1 unread" }),
+    );
+
+    const row = await screen.findByRole("button", {
+      name: /^Unread notification, Movie request/,
+    });
+    expect(row).toHaveClass(...FOCUS_VISIBLE_RING_CLASS.split(" "));
+
+    const dismiss = screen.getByRole("button", {
+      name: /^Dismiss unread notification, Movie request/,
+    });
+    expect(dismiss).toHaveAttribute("data-slot", "button");
+    expect(dismiss).toHaveAttribute("data-variant", "ghost-muted");
+    expect(dismiss).toHaveAttribute("data-size", "icon-sm");
   });
 
   it("exposes read state and notification context to assistive tech", async () => {

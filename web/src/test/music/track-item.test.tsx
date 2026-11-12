@@ -68,9 +68,14 @@ describe("TrackItem motion", () => {
       <TrackActionsMenu trackId={7} trackTitle="Signal Fire" />,
     );
 
-    expect(
-      screen.getByRole("button", { name: "More actions for Signal Fire" }),
-    ).toHaveClass(...MOTION_TRACK_MENU_TRIGGER_CLASS.split(" "));
+    const trigger = screen.getByRole("button", {
+      name: "More actions for Signal Fire",
+    });
+    expect(trigger).toHaveClass(...MOTION_TRACK_MENU_TRIGGER_CLASS.split(" "));
+    // A Button (the menu trigger's slot wins over the Button's), so it carries
+    // the shared focus ring the raw button lacked.
+    expect(trigger).toHaveAttribute("data-variant", "ghost-muted");
+    expect(trigger).toHaveClass("focus-visible:ring-[3px]");
   });
 });
 

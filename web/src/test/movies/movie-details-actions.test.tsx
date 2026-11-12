@@ -158,7 +158,7 @@ function progress(
 
 function renderLikeButton(isLiked = false) {
   return renderWithClient(
-    <MovieLikeButton movieId={22} variant="hero" />,
+    <MovieLikeButton movieId={22} />,
     queryClient => {
       queryClient.setQueryData(
         [MOVIE_LIKE_STATUS_KEY, 22],

@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import AddToPlaylistDialog from "@/components/shared/AddToPlaylistDialog";
 import {
+  FOCUS_VISIBLE_RING_CLASS,
   MOVIE_PLAYLIST_DETAILS_KEY,
   MOVIE_PLAYLIST_MOVIES_KEY,
   MOVIE_PLAYLISTS_KEY,
@@ -207,6 +208,10 @@ describe("AddToPlaylistDialog", () => {
       screen.getByRole("button", { name: "Solo Picks 1 movie" }),
     ).toBeInTheDocument();
     expect(screen.queryByText("Guest Picks")).not.toBeInTheDocument();
+    // A row is a toggle button and is ringed like every other control.
+    expect(
+      screen.getByRole("button", { name: "Friday Feature 7 movies" }),
+    ).toHaveClass(...FOCUS_VISIBLE_RING_CLASS.split(" "));
     // Three playlists is under the search threshold.
     expect(screen.queryByLabelText("Search playlists")).not.toBeInTheDocument();
   });
