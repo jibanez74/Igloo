@@ -512,6 +512,12 @@ any variant fully. The base string carries the focus ring, disabled opacity,
   `outline-hidden`, never `outline-none`: rings are box-shadows, which
   forced-colors mode strips, and `outline-hidden` keeps a transparent outline
   the OS makes visible there.
+
+  A raw `<button>` that takes no recipe shows the browser's own outline,
+  which reads as a different app; every one composes the shared ring. A
+  scroll box clips a ring drawn outside its rows, so a list of focusable rows
+  inside one gets `-m-1 p-1` on the scroll box (the Add to Playlist list):
+  room for the ring, no change to the layout.
 - **Hover/focus parity.** Every `group-hover` reveal pairs with
   `group-focus-within` (cards) or `focus-visible` (rows) so keyboard users get
   the same affordances. Never gate an action behind hover alone.
@@ -729,6 +735,13 @@ any variant fully. The base string carries the focus ring, disabled opacity,
   - By default it repeats the control's name and is **not** announced as its
     description (Radix would read the name twice). `describes` is for a
     tooltip that adds something (why a control is disabled, a shortcut).
+  - A control that explains why it is disabled must stay reachable:
+    `aria-disabled` plus a guard in its handler, never `disabled`, which
+    takes pointer events and (in a Radix menu) the arrow-key stop away, so
+    the tooltip could never open. `DropdownMenuItem` dims an
+    `aria-disabled` item like a disabled one (`RequestMediaMenuItem`, §3.2);
+    its tooltip opens to the side (`side="left"`) so it does not cover the
+    items above.
   - It is drawn inverted (`bg-foreground text-background`) so it never
     reads as a menu, on the `z-popover` layer, at the micro duration.
   - `AppBoot` mounts one `TooltipProvider`, which lets the next tooltip show
@@ -1190,10 +1203,11 @@ wrap, while "More options" stays at the right end of the title's line; the
 `RequestMediaMenuItem` (the "More options" dropdown; every library has at
 least Refresh Library, which refetches the page's cached queries and toasts —
 Movies adds Request Movie and Music adds Request Album / Request Track beside
-it, each a `RequestMediaMenuItem` that stays disabled until its provider's
-status answers and states the reason in its accessible name, its tooltip and
-an `sr-only` tail, since a disabled menu item otherwise announces only its
-label; the page owns the status query, because one mounted inside the dropdown
+it, each a `RequestMediaMenuItem` that stays disabled (`aria-disabled`, still
+in the arrow-key order) until its provider's status answers and states the
+reason in its accessible name, its tooltip (beside the menu, on focus and
+hover) and an `sr-only` tail, since a disabled menu item otherwise announces
+only its label; the page owns the status query, because one mounted inside the dropdown
 would not fetch until the menu opened), `LibraryAllTab` (the paginated grid and its skeleton),
 `LibraryGenresTab` (the genre-tile facet with focus restoration after Clear,
 and its skeleton), `LibrarySortToggle` (the single A–Z / Z–A button) and
@@ -1832,7 +1846,9 @@ require the full playback test pass.
   with spinner / a compact `LibraryEmptyState` ("You're all caught up." under
   a faded `BellOff`) / `divide-y` list states. Unread
   rows tint `bg-muted/40` with a glacier dot; rows show type label, message,
-  relative time, per-row dismiss. Unread count polls every 30s; the list
+  relative time, per-row dismiss. A row is one raw `<button>` (its whole
+  surface opens the notification) with the shared focus ring; dismiss is a
+  `Button` (`ghost-muted`, `icon-sm`). Unread count polls every 30s; the list
   query is `enabled` only while open.
 
 ### 3.7 Forms & inputs
