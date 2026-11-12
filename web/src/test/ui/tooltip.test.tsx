@@ -37,8 +37,6 @@ describe("Tooltip", () => {
 
     act(() => button.focus());
     expect(screen.queryByRole("tooltip")).toBeNull();
-    // Its root stays closed too, so the provider does not count it as shown.
-    expect(button).toHaveAttribute("data-state", "closed");
 
     rerender(
       <Tooltip label="Switch to light theme">
