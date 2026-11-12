@@ -275,6 +275,8 @@ export default function NotificationBell() {
                         : "bg-muted/40",
                     )}
                   >
+                    {/* eslint-disable-next-line no-restricted-syntax -- the
+                        whole row opens the notification. */}
                     <button
                       type="button"
                       onClick={() => handleItemClick(notification)}

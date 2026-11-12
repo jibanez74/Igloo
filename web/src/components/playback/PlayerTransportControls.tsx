@@ -40,7 +40,7 @@ const variantStyles: Record<
     group: "flex items-center gap-6",
     skipButton: "size-14 hover:bg-accent/50",
     skipIcon: "size-6",
-    playButton: "size-20 shadow-xl shadow-primary/30",
+    playButton: "size-20 shadow-glow",
     playIcon: "size-8",
   },
   minimized: {

@@ -279,7 +279,10 @@ export default function TrackItem({
         />
       )}
 
-      {/* Play button - always on right */}
+      {/* Play button - always on right. */}
+      {/* eslint-disable-next-line no-restricted-syntax -- quiet at rest,
+          filled on row hover, focus, touch or the current track: the
+          row-play behaviour of docs/design-system.md §3.5, no Button variant. */}
       <button
         type="button"
         onClick={onPlay}

@@ -230,6 +230,8 @@ export default function AddToPlaylistDialog({
               <ul className="space-y-1">
                 {filteredPlaylists.map((playlist) => (
                   <li key={playlist.id}>
+                    {/* eslint-disable-next-line no-restricted-syntax -- the
+                        whole row is the toggle: checkbox, name and count. */}
                     <button
                       type="button"
                       onClick={() => togglePlaylist(playlist.id, playlist.name)}

@@ -147,6 +147,16 @@ const restrictedClassRule = [
   },
 ];
 
+// A button is a Button (docs/design-system.md section 1.6). The primitives
+// and the playback surfaces draw their own (the PLAYER_* transport recipes,
+// section 3.5); anywhere else a raw <button> says why inline: a whole row or
+// tile that is the control, or a control over media.
+const rawButtonRule = {
+  selector: "JSXOpeningElement[name.name='button']",
+  message:
+    "Use <Button variant=... size=...> instead of a raw <button>; see docs/design-system.md section 1.6. A whole-row or whole-tile target, or a control over media, may stay raw with an inline exemption that says why.",
+};
+
 export default defineConfig([
   globalIgnores([
     "dist",
@@ -211,7 +221,7 @@ export default defineConfig([
         "warn",
         { ignore: externalClassAllowlist },
       ],
-      "no-restricted-syntax": restrictedClassRule,
+      "no-restricted-syntax": [...restrictedClassRule, rawButtonRule],
       "no-restricted-imports": [
         "error",
         {
@@ -240,6 +250,17 @@ export default defineConfig([
     rules: {
       "no-restricted-imports": ["error", { paths: [cvaImportBan] }],
     },
+  },
+
+  // The primitives and the playback surfaces draw their own buttons.
+  {
+    files: [
+      "src/components/ui/**/*.tsx",
+      "src/components/playback/**/*.tsx",
+      "src/routes/_auth/trailer.tsx",
+    ],
+    ignores: ["src/test/**/*.{ts,tsx}"],
+    rules: { "no-restricted-syntax": restrictedClassRule },
   },
 
   {

@@ -129,7 +129,9 @@ export default function AlbumCard({ album, subtitle }: AlbumCardProps) {
         </div>
       </Link>
 
-      {/* Play button - positioned over the cover image */}
+      {/* Play button - positioned over the cover image. */}
+      {/* eslint-disable-next-line no-restricted-syntax -- an over-media reveal
+          on the cover, like the poster card's play link (§1.2, §3.2). */}
       <button
         type="button"
         onClick={handlePlayAlbum}
