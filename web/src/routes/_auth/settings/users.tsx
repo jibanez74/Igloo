@@ -464,7 +464,6 @@ function CreateUserDialog({
   const emailErrorId = `${emailId}-error`;
   const passwordDescriptionId = `${passwordId}-description`;
   const passwordErrorId = `${passwordId}-error`;
-  const formErrorId = `${passwordId}-form-error`;
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -602,7 +601,7 @@ function CreateUserDialog({
           </div>
 
           {serverError && (
-            <FieldError id={formErrorId}>{serverError}</FieldError>
+            <FieldError>{serverError}</FieldError>
           )}
 
           <DialogFooter className="pt-2">
@@ -650,7 +649,6 @@ function EditUserDialog({
   const isAdminId = useId();
   const nameErrorId = `${nameId}-error`;
   const emailErrorId = `${emailId}-error`;
-  const formErrorId = `${emailId}-form-error`;
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -749,7 +747,7 @@ function EditUserDialog({
           </div>
 
           {serverError && (
-            <FieldError id={formErrorId}>{serverError}</FieldError>
+            <FieldError>{serverError}</FieldError>
           )}
 
           <DialogFooter className="pt-2">
@@ -789,7 +787,6 @@ function DeleteUserDialog({
   const [confirmText, setConfirmText] = useState("");
   const confirmId = useId();
   const confirmErrorId = `${confirmId}-error`;
-  const formErrorId = `${confirmId}-form-error`;
   const invalid = confirmText.length > 0 && confirmText !== "DELETE";
 
   return (
@@ -805,7 +802,18 @@ function DeleteUserDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
+        {/* A form, so Enter in its one field confirms once DELETE is typed;
+            the submit button is disabled until then. */}
+        <form
+          noValidate
+          className="space-y-4 py-2"
+          onSubmit={event => {
+            event.preventDefault();
+            if (confirmText !== "DELETE") return;
+            onClearServerError();
+            onConfirm();
+          }}
+        >
           <div className="space-y-2">
             <Label htmlFor={confirmId} tone="muted">
               Type <span className="font-mono font-bold">DELETE</span> to confirm
@@ -819,7 +827,7 @@ function DeleteUserDialog({
               }}
               variant="glass"
               className="font-mono"
-              aria-invalid={invalid}
+              aria-invalid={invalid || undefined}
               aria-describedby={describedBy(invalid && confirmErrorId)}
             />
             {invalid && (
@@ -828,28 +836,28 @@ function DeleteUserDialog({
               </FieldError>
             )}
           </div>
-        </div>
 
-        {serverError && (
-          <FieldError id={formErrorId}>{serverError}</FieldError>
-        )}
+        {serverError && <FieldError>{serverError}</FieldError>}
 
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={isPending}>
+        <DialogFooter className="pt-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClose}
+            disabled={isPending}
+          >
             Cancel
           </Button>
           <Button
+            type="submit"
             variant="destructive"
-            onClick={() => {
-              onClearServerError();
-              onConfirm();
-            }}
             disabled={isPending || confirmText !== "DELETE"}
           >
             {isPending ? <Spinner aria-hidden="true" /> : null}
             {isPending ? "Deleting..." : "Delete user"}
           </Button>
         </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );
@@ -882,7 +890,6 @@ function ResetPasswordDialog({
   const passwordDescriptionId = `${passwordId}-description`;
   const passwordErrorId = `${passwordId}-error`;
   const confirmPasswordErrorId = `${confirmPasswordId}-error`;
-  const formErrorId = `${confirmPasswordId}-form-error`;
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -996,7 +1003,7 @@ function ResetPasswordDialog({
           </div>
 
           {serverError && (
-            <FieldError id={formErrorId}>{serverError}</FieldError>
+            <FieldError>{serverError}</FieldError>
           )}
 
           <DialogFooter className="pt-2">

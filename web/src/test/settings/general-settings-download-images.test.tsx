@@ -168,4 +168,28 @@ describe("general settings: download images", () => {
       expect(invalidatedArtworkQueries(queryClient)).toEqual(artworkQueryKeys);
     });
   });
+
+  // The message is in the Save bar's status line; the field it is about has
+  // to point at it, or focus lands on an invalid field that says nothing.
+  it("ties a missing directory's message to its field", async () => {
+    mockGeneralSettings();
+    const user = userEvent.setup();
+    await renderRoute("/settings");
+
+    const field = await screen.findByLabelText("Static directory");
+    await user.clear(field);
+    await user.click(screen.getByRole("button", { name: "Save settings" }));
+
+    expect(field).toHaveFocus();
+    expect(field).toHaveAttribute("aria-invalid", "true");
+    expect(field).toHaveAccessibleDescription(
+      "The server must be able to write to this directory. Static directory is required.",
+    );
+    // The other field is not described by a message that is not about it.
+    expect(
+      screen.getByLabelText("Transcode directory"),
+    ).toHaveAccessibleDescription(
+      "The server must be able to write to this directory.",
+    );
+  });
 });

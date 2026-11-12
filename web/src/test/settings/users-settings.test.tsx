@@ -339,6 +339,27 @@ describe("Users settings", () => {
     expect(mutationRequests(requests, "POST")).toHaveLength(0);
   });
 
+  it("confirms a user's deletion with Enter once DELETE is typed", async () => {
+    const user = userEvent.setup();
+    const { requests } = await renderUsersRoute();
+
+    await user.click(screen.getByRole("button", { name: "Delete Dana Scully" }));
+    const dialog = screen.getByRole("dialog", { name: "Delete user" });
+    const confirmation = within(dialog).getByLabelText("Type DELETE to confirm");
+    // Nothing is wrong with an empty field, so nothing says it is valid either.
+    expect(confirmation).not.toHaveAttribute("aria-invalid");
+
+    await user.type(confirmation, "delete{Enter}");
+    expect(mutationRequests(requests, "DELETE")).toHaveLength(0);
+    expect(confirmation).toHaveAttribute("aria-invalid", "true");
+
+    await user.clear(confirmation);
+    await user.type(confirmation, "DELETE{Enter}");
+    await waitFor(() =>
+      expect(mutationRequests(requests, "DELETE")).toHaveLength(1),
+    );
+  });
+
   it("blocks duplicate edit emails but allows the unchanged current email", async () => {
     const user = userEvent.setup();
     const { requests } = await renderUsersRoute();

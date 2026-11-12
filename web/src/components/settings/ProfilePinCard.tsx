@@ -159,16 +159,17 @@ export default function ProfilePinCard() {
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
+    // In the order the fields are in, so the first invalid one takes focus.
+    if (hasPin && !validateCurrentPin()) {
+      return;
+    }
+
     if (!PIN_PATTERN.test(newPin)) {
       showFieldError(
         "newPin",
         `PIN must be exactly ${USER_PIN_LENGTH} digits.`,
         newPinId,
       );
-      return;
-    }
-
-    if (hasPin && !validateCurrentPin()) {
       return;
     }
 

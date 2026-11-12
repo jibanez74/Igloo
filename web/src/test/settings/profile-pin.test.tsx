@@ -127,6 +127,23 @@ describe("ProfilePinCard", () => {
     });
   });
 
+  // The first invalid field takes focus (design-system §3.7). The new PIN
+  // was checked first, so an empty form sent focus past the current PIN.
+  it("starts at the current PIN when both fields are wrong", async () => {
+    getAuthUserMock.mockResolvedValue(authUser(testUser({ has_pin: true })));
+    const user = userEvent.setup();
+    renderCard();
+
+    await screen.findByLabelText("New PIN");
+    await user.click(screen.getByRole("button", { name: "Update PIN" }));
+
+    expect(screen.getByLabelText("Current PIN")).toHaveFocus();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Current PIN is required.",
+    );
+    expect(updateUserPinMock).not.toHaveBeenCalled();
+  });
+
   it("reveals and hides the current PIN on demand", async () => {
     getAuthUserMock.mockResolvedValue(
       authUser(testUser({ has_pin: true })),

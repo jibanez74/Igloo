@@ -204,6 +204,124 @@ describe("DevicesCard", () => {
     });
   });
 
+  // Closing these used to drop focus on the page body: the Revoke button's
+  // ref was detached before the dialog looked for it, and the inline form
+  // unmounted with nothing to take focus.
+  describe("where focus goes afterwards", () => {
+    beforeEach(() => {
+      getDevicesMock.mockResolvedValue({
+        error: false,
+        data: { devices: [device(), device({ id: 2, name: "Bedroom TV" })] },
+      });
+    });
+
+    it("returns to Revoke when the confirmation is cancelled", async () => {
+      const user = userEvent.setup();
+      renderCard();
+
+      const revoke = await screen.findByRole("button", {
+        name: "Revoke Living Room TV",
+      });
+      await user.click(revoke);
+      await screen.findByRole("alertdialog");
+      await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+      await waitFor(() => expect(revoke).toHaveFocus());
+    });
+
+    it("moves to the Devices heading once the device is gone", async () => {
+      revokeDeviceMock.mockResolvedValue({ error: false, message: "Device revoked" });
+      const user = userEvent.setup();
+      renderCard();
+
+      await user.click(
+        await screen.findByRole("button", { name: "Revoke Living Room TV" }),
+      );
+      await screen.findByRole("alertdialog");
+      // From here the server no longer lists the device.
+      getDevicesMock.mockResolvedValue({
+        error: false,
+        data: { devices: [device({ id: 2, name: "Bedroom TV" })] },
+      });
+      await user.click(screen.getByRole("button", { name: "Revoke" }));
+
+      await waitFor(() =>
+        expect(screen.getByRole("heading", { name: "Devices" })).toHaveFocus(),
+      );
+      // The row left with the save, not with the list's next refetch.
+      expect(
+        screen.queryByRole("button", { name: "Revoke Living Room TV" }),
+      ).toBeNull();
+    });
+
+    it("returns to Rename when the inline form is cancelled", async () => {
+      const user = userEvent.setup();
+      renderCard();
+
+      await user.click(
+        await screen.findByRole("button", { name: "Rename Living Room TV" }),
+      );
+      await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+      await waitFor(() =>
+        expect(
+          screen.getByRole("button", { name: "Rename Living Room TV" }),
+        ).toHaveFocus(),
+      );
+    });
+
+    it("cancels the rename on Escape and returns to Rename", async () => {
+      const user = userEvent.setup();
+      renderCard();
+
+      await user.click(
+        await screen.findByRole("button", { name: "Rename Living Room TV" }),
+      );
+      await user.type(
+        screen.getByRole("textbox", { name: "New name for Living Room TV" }),
+        " 2{Escape}",
+      );
+
+      expect(screen.queryByRole("textbox")).toBeNull();
+      expect(renameDeviceMock).not.toHaveBeenCalled();
+      await waitFor(() =>
+        expect(
+          screen.getByRole("button", { name: "Rename Living Room TV" }),
+        ).toHaveFocus(),
+      );
+    });
+
+    it("returns to Rename, under its new name, after a save", async () => {
+      renameDeviceMock.mockResolvedValue({ error: false, message: "Device renamed" });
+      const user = userEvent.setup();
+      renderCard();
+
+      await user.click(
+        await screen.findByRole("button", { name: "Rename Living Room TV" }),
+      );
+      const input = screen.getByRole("textbox", {
+        name: "New name for Living Room TV",
+      });
+      await user.clear(input);
+      getDevicesMock.mockResolvedValue({
+        error: false,
+        data: {
+          devices: [
+            device({ name: "Den TV" }),
+            device({ id: 2, name: "Bedroom TV" }),
+          ],
+        },
+      });
+      await user.type(input, "Den TV{Enter}");
+
+      await waitFor(() =>
+        expect(
+          screen.getByRole("button", { name: "Rename Den TV" }),
+        ).toHaveFocus(),
+      );
+    });
+  });
+
   it("words list errors itself instead of echoing the client's canned text", async () => {
     getDevicesMock.mockResolvedValue({
       error: true,

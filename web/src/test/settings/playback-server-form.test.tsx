@@ -119,11 +119,23 @@ describe("server playback form effective device notice", () => {
     expect(
       screen.getByRole("combobox", { name: "Hardware acceleration" }),
     ).toHaveAccessibleDescription(
-      "Choose the hardware acceleration mode used for new transcodes.",
+      /^Choose the hardware acceleration mode used for new transcodes\./,
     );
     for (const title of ["Server upload bandwidth", "Transcoding"]) {
       expect(screen.queryByRole("heading", { name: title })).toBeNull();
     }
+  });
+
+  // What the chosen mode does and what the server really runs sat under the
+  // select as plain text, so a screen reader on the select never heard them.
+  it("describes the hardware select with its mode and what is in force", async () => {
+    await renderPlaybackSettings(nvidiaSettings());
+
+    expect(
+      await screen.findByRole("combobox", { name: "Hardware acceleration" }),
+    ).toHaveAccessibleDescription(
+      "Choose the hardware acceleration mode used for new transcodes. Use NVIDIA GPU acceleration when available. In use for new transcodes: NVIDIA NVENC.",
+    );
   });
 
   it("keeps an out-of-range upload cap inline and focuses the field on save", async () => {

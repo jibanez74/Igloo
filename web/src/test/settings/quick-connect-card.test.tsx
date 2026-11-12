@@ -278,7 +278,16 @@ describe("QuickConnectApproveCard", () => {
     const error = await screen.findByRole("alert");
     expect(error).toHaveTextContent("Enter the 6-character code");
     expect(input).toHaveAttribute("aria-invalid", "true");
-    expect(input).toHaveAttribute("aria-describedby", error.id);
+    // The error is added to the help, not swapped for it, and the field that
+    // has to change takes focus.
+    expect(input).toHaveAttribute(
+      "aria-describedby",
+      expect.stringContaining(error.id),
+    );
+    expect(input).toHaveAccessibleDescription(
+      /^6 characters, never containing I, L, O, 0 or 1\./,
+    );
+    expect(input).toHaveFocus();
   });
 
   it("accepts a pasted code that carries whitespace or dashes", async () => {
@@ -343,7 +352,16 @@ describe("QuickConnectApproveCard", () => {
     const error = await screen.findByRole("alert");
     expect(error).toHaveTextContent("Codes never contain I, L, O, 0 or 1");
     expect(input).toHaveAttribute("aria-invalid", "true");
-    expect(input).toHaveAttribute("aria-describedby", error.id);
+    // The error is added to the help, not swapped for it, and the field that
+    // has to change takes focus.
+    expect(input).toHaveAttribute(
+      "aria-describedby",
+      expect.stringContaining(error.id),
+    );
+    expect(input).toHaveAccessibleDescription(
+      /^6 characters, never containing I, L, O, 0 or 1\./,
+    );
+    expect(input).toHaveFocus();
   });
 
   it("shows an actionable message when the looked-up code is invalid or expired", async () => {

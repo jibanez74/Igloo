@@ -92,6 +92,40 @@ describe("TrailerPreferencesCard", () => {
     expect(showActionFailedMock).not.toHaveBeenCalled();
   });
 
+  // The switch used to be disabled for the length of every save, which
+  // dropped keyboard focus in Chromium each time it was toggled.
+  it("keeps focus on the switch while its save is in flight", async () => {
+    let finish: (value: ReturnType<typeof success>) => void = () => {};
+    updateTrailerPreferencesMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const user = userEvent.setup();
+    renderWithQueryClient(<TrailerPreferencesCard />);
+    await screen.findByRole("switch");
+
+    toggle().focus();
+    await user.keyboard(" ");
+
+    await waitFor(() =>
+      expect(updateTrailerPreferencesMock).toHaveBeenCalledTimes(1),
+    );
+    expect(toggle()).toBeEnabled();
+    expect(toggle()).toHaveAttribute("aria-disabled", "true");
+    expect(toggle()).toHaveFocus();
+
+    // A second press while the first is saving does not start another save.
+    await user.keyboard(" ");
+    expect(updateTrailerPreferencesMock).toHaveBeenCalledTimes(1);
+
+    finish(success({ ...defaults, enabled: true }));
+    await waitFor(() => expect(toggle()).not.toHaveAttribute("aria-disabled"));
+    expect(toggle()).toHaveFocus();
+    expect(toggle()).toHaveAttribute("aria-checked", "true");
+  });
+
   it("rolls the control back and toasts when the save fails", async () => {
     const user = userEvent.setup();
     updateTrailerPreferencesMock.mockResolvedValue({

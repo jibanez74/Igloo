@@ -34,6 +34,7 @@ import { updateGeneralSettings } from "@/lib/api";
 import { invalidateArtworkQueries } from "@/lib/library-cache";
 import { trimmedOrNull } from "@/lib/nullable";
 import { generalSettingsQueryOpts } from "@/lib/query-opts";
+import { describedBy } from "@/lib/utils";
 import {
   showActionFailed,
   showSuccess,
@@ -132,6 +133,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   const transcodeDirId = useId();
   const enableWatcherId = useId();
   const downloadImagesId = useId();
+  const statusId = useId();
 
   const [form, setForm] = useState<UpdateGeneralSettingsRequest>(() =>
     formFromSettings(settings),
@@ -403,6 +405,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
             icon={<FolderCog className="size-4" aria-hidden="true" />}
             required
             invalid={validationField === "static_dir"}
+            statusId={statusId}
           />
           <PathInput
             id={transcodeDirId}
@@ -414,6 +417,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
             icon={<HardDrive className="size-4" aria-hidden="true" />}
             required
             invalid={validationField === "transcode_dir"}
+            statusId={statusId}
           />
         </CardContent>
       </Card>
@@ -476,6 +480,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
       <SettingsSaveBar
         title="General settings"
         isDirty={isDirty}
+        statusId={statusId}
         statusMessage={
           validationMessage ||
           "Saved settings are used by the backend on future requests."
@@ -589,6 +594,8 @@ type PathInputProps = {
   icon: ReactNode;
   required?: boolean;
   invalid?: boolean;
+  /** The Save bar's status line, which holds this field's error message. */
+  statusId: string;
 };
 
 function PathInput({
@@ -601,6 +608,7 @@ function PathInput({
   icon,
   required = false,
   invalid = false,
+  statusId,
 }: PathInputProps) {
   const descriptionId = `${id}-description`;
 
@@ -626,7 +634,7 @@ function PathInput({
           required={required}
           aria-required={required || undefined}
           aria-invalid={invalid || undefined}
-          aria-describedby={descriptionId}
+          aria-describedby={describedBy(descriptionId, invalid && statusId)}
           variant="inset"
           size="lg"
           className="pl-10"

@@ -58,6 +58,7 @@ import {
 } from "@/lib/toast-helpers";
 import { cn, codePointLength, describedBy, getInitials } from "@/lib/utils";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
+import { useFocusHandoff } from "@/hooks/useFocusHandoff";
 import QuickConnectApproveCard from "@/components/settings/QuickConnectApproveCard";
 import DevicesCard from "@/components/settings/DevicesCard";
 import ProfilePinCard from "@/components/settings/ProfilePinCard";
@@ -112,6 +113,11 @@ function AccountSettings() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const deleteAccountButtonRef = useRef<HTMLButtonElement | null>(null);
+  // "Save profile" disables itself while it saves and once nothing is left
+  // to save; focus then goes to the name it has just saved.
+  const profileFormRef = useRef<HTMLFormElement | null>(null);
+  const nameInputRef = useRef<HTMLInputElement | null>(null);
+  useFocusHandoff(profileFormRef, nameInputRef);
 
   const emailId = useId();
   const nameId = useId();
@@ -232,10 +238,14 @@ function AccountSettings() {
     }) => updateUserPassword(currentPassword, newPassword),
     onSuccess: res => {
       if (res.error) {
-        setErrors(current => ({
-          ...current,
-          currentPassword: apiErrorMessage(res, "Failed to update password."),
-        }));
+        // The server words a refusal around the field it is about ("new
+        // password must be…"); anything else is about the current one.
+        const message = apiErrorMessage(res, "Failed to update password.");
+        if (/^new password/i.test(message)) {
+          showFieldError("newPassword", message, newPasswordId);
+        } else {
+          showFieldError("currentPassword", message, currentPasswordId);
+        }
         showActionFailed("update password", res);
       } else {
         setErrors(current => ({
@@ -560,7 +570,12 @@ function AccountSettings() {
           description="Your name and the email you sign in with."
         />
         <CardContent className="max-w-2xl">
-          <form onSubmit={handleSaveProfile} noValidate className="space-y-6">
+          <form
+            ref={profileFormRef}
+            onSubmit={handleSaveProfile}
+            noValidate
+            className="space-y-6"
+          >
             {/* Email */}
             <div className="space-y-2">
               <Label htmlFor={emailId} tone="muted">
@@ -595,8 +610,12 @@ function AccountSettings() {
                 Your display name, up to {USER_NAME_MAX_LENGTH} characters.
               </FieldHint>
               <Input
+                ref={nameInputRef}
                 id={nameId}
                 type="text"
+                required
+                aria-required="true"
+                maxLength={USER_NAME_MAX_LENGTH}
                 value={nameValue}
                 onChange={e => {
                   setName(e.target.value);
@@ -950,7 +969,16 @@ function AccountSettings() {
               account and remove all associated data.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          {/* A form, so Enter in its one field confirms once DELETE is
+              typed; the submit button is disabled until then. */}
+          <form
+            noValidate
+            className="space-y-4 py-2"
+            onSubmit={event => {
+              event.preventDefault();
+              handleDeleteAccount();
+            }}
+          >
             <div className="space-y-2">
               <Label htmlFor={deleteConfirmId} tone="muted">
                 Type <span className="font-mono font-bold">DELETE</span> to
@@ -977,9 +1005,9 @@ function AccountSettings() {
                 </FieldError>
               )}
             </div>
-          </div>
-          <DialogFooter>
+          <DialogFooter className="pt-2">
             <Button
+              type="button"
               variant="outline"
               onClick={() => handleDeleteDialogOpenChange(false)}
               disabled={isDeleting}
@@ -987,14 +1015,15 @@ function AccountSettings() {
               Cancel
             </Button>
             <Button
+              type="submit"
               variant="destructive"
-              onClick={handleDeleteAccount}
               disabled={isDeleting || deleteConfirmText !== "DELETE"}
             >
               {isDeleting ? <Spinner aria-hidden="true" /> : null}
               {isDeleting ? "Deleting..." : "Delete account"}
             </Button>
           </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
       </>

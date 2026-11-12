@@ -541,6 +541,21 @@ any variant fully. The base string carries the focus ring, disabled opacity,
   `QuickConnectApproveCard`'s wizard-step headings, `AppShell`'s `#main` — is
   correctly left un-ringed: a ring on a non-interactive element the user never
   focused is visual noise. Don't "fix" those.
+- **Focus never ends on the page body.** A control that disables or removes
+  itself while it holds focus hands focus on first, because a disabled or
+  detached element cannot keep it and the next Tab would start from the top:
+  - A button that disables itself (Save while it is pending and once the
+    form is clean, Reset once it has reset) uses `useFocusHandoff`
+    (`hooks/useFocusHandoff.ts`). The Settings Save bar hands focus to its
+    status line and takes it back if Save comes back to life (a failed
+    save); Account's "Save profile" hands it to the name field.
+  - A control that saves on every change stays focusable while its save is
+    in flight: `SwitchField busy` sets `aria-disabled` and ignores a press,
+    where `disabled` dropped focus on each toggle.
+  - A dialog returns focus to what opened it, and when that is gone (a
+    revoked device's row) to the card's heading (`SettingsCardHeader
+    titleRef`, `ConfirmDialog fallbackFocusRef`). An inline form (renaming a
+    device) returns focus to its trigger on Save, Cancel and Escape.
 - **Labels everywhere**: icon-only buttons get `aria-label`; decorative
   icons/images get `aria-hidden="true"`/`alt=""`; cards carry a full
   `aria-label` ("Play Uncut Gems 2019"); toggles use `aria-pressed`; nav uses
@@ -1847,6 +1862,17 @@ require the full playback test pass.
     password rule is the hint "At least 9 characters." (`PASSWORD_HINT`,
     `lib/form-validation.ts`), and the upper limit is explained only by the
     error raised when it is hit.
+- **A confirmation with a field is a form.** The "Type DELETE to confirm"
+  dialogs submit on Enter once the word is typed (the submit button is
+  disabled until then, which also blocks Enter), and their Cancel is
+  `type="button"`.
+- **What is said about a control is tied to it.** A message that lives away
+  from its field is still in that field's `aria-describedby`: General's
+  "Static directory is required." sits in the Save bar's status line
+  (`statusId`), and the hardware acceleration select is described by its
+  help, by what the chosen mode does and by what the server has in force. A
+  server refusal goes to the field it is about (a refused new password to
+  New password, not to Current password).
 - **Settings copy is sentence case**: card titles, sub-headings, labels,
   buttons and dialog titles ("Application behavior", "Current password",
   "Save settings", "Add user"). Names keep their capitals (Quick Connect,

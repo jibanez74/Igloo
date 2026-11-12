@@ -151,7 +151,8 @@ export default function TrailerPreferencesCard() {
           label="Play trailers before movies"
           description="Only when a movie starts from the beginning; resuming skips straight to the movie."
           checked={prefs.enabled}
-          disabled={saving}
+          // Not `disabled`: that dropped keyboard focus on every toggle.
+          busy={saving}
           onCheckedChange={(checked) =>
             save(
               { ...prefs, enabled: checked },

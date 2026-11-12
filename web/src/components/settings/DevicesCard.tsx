@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from "react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -37,16 +37,52 @@ export default function DevicesCard() {
   const [deviceToRevoke, setDeviceToRevoke] = useState<DeviceType | null>(null);
   const [deviceToRename, setDeviceToRename] = useState<DeviceType | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  // The Revoke button that opened the dialog. Held from the click, not by a
+  // ref on the row: that ref was detached as soon as the dialog's state was
+  // cleared, before the dialog looked for where to return focus.
   const revokeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const titleRef = useRef<HTMLHeadingElement | null>(null);
+  const listRef = useRef<HTMLUListElement | null>(null);
+  // The device whose Rename button takes focus once its form has closed.
+  const refocusRenameRef = useRef<number | null>(null);
+
+  useLayoutEffect(() => {
+    const id = refocusRenameRef.current;
+    if (id === null || deviceToRename) return;
+    refocusRenameRef.current = null;
+    listRef.current
+      ?.querySelector<HTMLElement>(`[data-rename-device="${id}"]`)
+      ?.focus();
+  });
+
+  const closeRename = () => {
+    if (deviceToRename) refocusRenameRef.current = deviceToRename.id;
+    setDeviceToRename(null);
+  };
 
   const revokeMutation = useMutation({
     mutationFn: (id: number) => revokeDevice(id),
-    onSuccess: res => {
+    onSuccess: (res, id) => {
       if (res.error) {
         showActionFailed("revoke device", res);
         return;
       }
       showSuccess("Device revoked");
+      // Out of the list now, not at the next refetch: the dialog is about
+      // to close, and focus must not return to a row that is going away.
+      queryClient.setQueryData(devicesQueryOpts().queryKey, current =>
+        current?.error === false
+          ? {
+              ...current,
+              data: {
+                ...current.data,
+                devices: current.data.devices.filter(
+                  device => device.id !== id,
+                ),
+              },
+            }
+          : current,
+      );
       queryClient.invalidateQueries({ queryKey: [DEVICES_KEY] });
     },
     onError: () => {
@@ -66,7 +102,7 @@ export default function DevicesCard() {
         return;
       }
       showSuccess("Device renamed");
-      setDeviceToRename(null);
+      closeRename();
       queryClient.invalidateQueries({ queryKey: [DEVICES_KEY] });
     },
     onError: () => {
@@ -80,7 +116,7 @@ export default function DevicesCard() {
 
     const name = renameValue.trim();
     if (!name || name === deviceToRename.name) {
-      setDeviceToRename(null);
+      closeRename();
       return;
     }
 
@@ -96,6 +132,7 @@ export default function DevicesCard() {
         icon={Smartphone}
         title="Devices"
         description="TV and mobile apps signed in to your account."
+        titleRef={titleRef}
       />
       <CardContent className="max-w-2xl">
         {isLoading ? (
@@ -117,6 +154,7 @@ export default function DevicesCard() {
           </p>
         ) : (
           <ul
+            ref={listRef}
             className="divide-y divide-border/50"
             role="list"
             aria-label="Connected devices"
@@ -140,6 +178,11 @@ export default function DevicesCard() {
                       {isRenaming ? (
                         <form
                           onSubmit={handleRenameSubmit}
+                          onKeyDown={event => {
+                            if (event.key !== "Escape") return;
+                            event.preventDefault();
+                            closeRename();
+                          }}
                           className="flex flex-col gap-2 sm:flex-row sm:items-center"
                         >
                           <Label htmlFor={renameInputId} className="sr-only">
@@ -170,7 +213,7 @@ export default function DevicesCard() {
                               type="button"
                               size="sm"
                               variant="ghost"
-                              onClick={() => setDeviceToRename(null)}
+                              onClick={closeRename}
                             >
                               Cancel
                             </Button>
@@ -199,20 +242,19 @@ export default function DevicesCard() {
                           setDeviceToRename(device);
                           setRenameValue(device.name);
                         }}
+                        data-rename-device={device.id}
                         aria-label={`Rename ${device.name}`}
                       >
                         <Pencil className="size-4" aria-hidden="true" />
                         Rename
                       </Button>
                       <Button
-                        ref={
-                          deviceToRevoke?.id === device.id
-                            ? revokeButtonRef
-                            : undefined
-                        }
                         variant="outline-destructive"
                         size="sm"
-                        onClick={() => setDeviceToRevoke(device)}
+                        onClick={event => {
+                          revokeButtonRef.current = event.currentTarget;
+                          setDeviceToRevoke(device);
+                        }}
                         aria-label={`Revoke ${device.name}`}
                       >
                         Revoke
@@ -237,6 +279,7 @@ export default function DevicesCard() {
         pendingLabel="Revoking..."
         pending={revokeMutation.isPending}
         restoreFocusRef={revokeButtonRef}
+        fallbackFocusRef={titleRef}
         onConfirm={() => {
           if (deviceToRevoke) {
             revokeMutation.mutate(deviceToRevoke.id);

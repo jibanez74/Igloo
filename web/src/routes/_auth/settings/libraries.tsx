@@ -310,13 +310,6 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!hasChanges) {
-      setFeedback({
-        message: "No library path changes to save.",
-        tone: "neutral",
-      });
-      return;
-    }
 
     setFeedback({ message: "Saving library paths...", tone: "neutral" });
     updateMutation.mutate(payloadFromForm(form));
@@ -619,7 +612,11 @@ function MoviesLibraryStats({ hasLibrary }: StatsProps) {
   if (!hasLibrary) return null;
 
   return (
-    <div className="grid gap-4" aria-label="Movies library statistics">
+    <div
+      role="group"
+      className="grid gap-4"
+      aria-label="Movies library statistics"
+    >
       <StatItem
         label="Movies"
         value={stats ? stats.total_movies : null}
@@ -643,6 +640,7 @@ function MusicLibraryStats({ hasLibrary }: StatsProps) {
 
   return (
     <div
+      role="group"
       className={LIBRARY_STATS_GRID_CLASS}
       aria-label="Music library statistics"
     >
@@ -685,6 +683,7 @@ function ShowsLibraryStats({ hasLibrary }: StatsProps) {
 
   return (
     <div
+      role="group"
       className={LIBRARY_STATS_GRID_CLASS}
       aria-label="TV shows library statistics"
     >

@@ -65,11 +65,18 @@ type AccountFetchOptions = {
   acceptName?: boolean;
   /** Answers a password change as the server does a wrong current password. */
   rejectPassword?: boolean;
+  /** Answers a password change as the server does a new password it refuses. */
+  rejectNewPassword?: boolean;
 };
 
 function setupAccountFetch(
   user: AuthUser = testUser(),
-  { avatarResponse, acceptName = false, rejectPassword = false }: AccountFetchOptions = {},
+  {
+    avatarResponse,
+    acceptName = false,
+    rejectPassword = false,
+    rejectNewPassword = false,
+  }: AccountFetchOptions = {},
 ) {
   const requests: CapturedRequest[] = [];
   let currentUser: AuthUser | null = user;
@@ -100,6 +107,15 @@ function setupAccountFetch(
     }
 
     if (url === "/api/user/password" && method === "PUT") {
+      if (rejectNewPassword) {
+        return jsonResponse(
+          {
+            error: true,
+            message: "new password must be at least 9 characters",
+          },
+          400,
+        );
+      }
       if (rejectPassword) {
         return jsonResponse(
           { error: true, message: "current password is incorrect" },
@@ -349,6 +365,76 @@ describe("Account settings", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("current password is incorrect");
     expect(router.state.location.pathname).toBe("/settings/account");
     expect(showInfoMock).not.toHaveBeenCalled();
+  });
+
+  // Every refusal used to be shown under Current password, whatever it was
+  // about.
+  it("puts a refusal of the new password on the new password field", async () => {
+    const user = userEvent.setup();
+    await renderAccountRoute(testUser(), { rejectNewPassword: true });
+
+    await user.type(screen.getByLabelText("Current password"), "RightPass123");
+    await user.type(screen.getByLabelText("New password"), "NewPass12345");
+    await user.type(screen.getByLabelText("Confirm new password"), "NewPass12345");
+    await user.click(screen.getByRole("button", { name: "Update password" }));
+
+    const newPassword = screen.getByLabelText("New password");
+    await waitFor(() =>
+      expect(newPassword).toHaveAttribute("aria-invalid", "true"),
+    );
+    expect(newPassword).toHaveAccessibleDescription(
+      /new password must be at least 9 characters/,
+    );
+    expect(newPassword).toHaveFocus();
+    expect(screen.getByLabelText("Current password")).not.toHaveAttribute(
+      "aria-invalid",
+    );
+  });
+
+  // The button disables itself while it saves and once the profile is
+  // clean, which used to drop focus on the page body.
+  it("keeps focus in the profile form after Save profile", async () => {
+    const user = userEvent.setup();
+    await renderAccountRoute(testUser(), { acceptName: true });
+
+    const name = screen.getByRole("textbox", { name: "Name" });
+    await user.clear(name);
+    await user.type(name, "Riley Renamed");
+    const save = screen.getByRole("button", { name: "Save profile" });
+    save.focus();
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => expect(save).toBeDisabled());
+    expect(name).toHaveFocus();
+    await waitFor(() => expect(name).toHaveValue("Riley Renamed"));
+    expect(name).toHaveFocus();
+  });
+
+  it("marks the name as required and limits its length, as it does the email", async () => {
+    await renderAccountRoute();
+
+    const name = screen.getByRole("textbox", { name: "Name" });
+    expect(name).toBeRequired();
+    expect(name).toHaveAttribute("maxlength", "100");
+  });
+
+  // The dialog was not a form, so Enter in its one field did nothing.
+  it("confirms account deletion with Enter once DELETE is typed", async () => {
+    const user = userEvent.setup();
+    const { requests } = await renderAccountRoute();
+
+    await user.click(screen.getByRole("button", { name: "Delete account" }));
+    const dialog = screen.getByRole("dialog", { name: "Delete account" });
+    const confirmation = within(dialog).getByLabelText("Type DELETE to confirm");
+
+    await user.type(confirmation, "delete{Enter}");
+    expect(requestsFor(requests, "DELETE", "/api/user")).toHaveLength(0);
+
+    await user.clear(confirmation);
+    await user.type(confirmation, "DELETE{Enter}");
+    await waitFor(() =>
+      expect(requestsFor(requests, "DELETE", "/api/user")).toHaveLength(1),
+    );
   });
 
   it("keeps the hidden username autocomplete helper labeled for password managers", async () => {

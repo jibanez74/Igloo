@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   CardDescription,
@@ -13,6 +13,11 @@ type SettingsCardHeaderProps = {
   description?: string;
   /** Optional id for the heading, e.g. to label an aria-live region. */
   titleId?: string;
+  /**
+   * Makes the heading a target for focus from script: where focus goes when
+   * what held it has left the card (a revoked device's row).
+   */
+  titleRef?: Ref<HTMLHeadingElement>;
   /** `destructive` for the Danger zone: title, icon and description in red. */
   tone?: "default" | "destructive";
   /** The card's own action (Add user), at the end of the header's row. */
@@ -30,6 +35,7 @@ export default function SettingsCardHeader({
   title,
   description,
   titleId,
+  titleRef,
   tone = "default",
   action,
 }: SettingsCardHeaderProps) {
@@ -43,7 +49,12 @@ export default function SettingsCardHeader({
         tone={tone}
         className="flex items-center gap-2"
       >
-        <h2>
+        {/* Un-ringed, as any heading focused from script is (§1.7). */}
+        <h2
+          ref={titleRef}
+          tabIndex={titleRef ? -1 : undefined}
+          className={titleRef ? "outline-hidden" : undefined}
+        >
           <Icon
             className={cn("size-5", !destructive && "text-primary")}
             aria-hidden="true"

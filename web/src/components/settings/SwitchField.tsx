@@ -12,6 +12,12 @@ type SwitchFieldProps = {
   onCheckedChange: (checked: boolean) => void;
   icon: ReactNode;
   disabled?: boolean;
+  /**
+   * A save of this switch is in flight. Unlike `disabled` it keeps the
+   * switch focusable (a disabled control drops keyboard focus), says so with
+   * `aria-disabled`, and ignores a press until the save is back.
+   */
+  busy?: boolean;
   ref?: Ref<HTMLButtonElement>;
 };
 
@@ -28,6 +34,7 @@ export default function SwitchField({
   onCheckedChange,
   icon,
   disabled,
+  busy = false,
   ref,
 }: SwitchFieldProps) {
   const labelId = `${id}-label`;
@@ -56,9 +63,12 @@ export default function SwitchField({
         <Switch
           ref={ref}
           checked={checked}
-          onCheckedChange={onCheckedChange}
+          onCheckedChange={next => {
+            if (!busy) onCheckedChange(next);
+          }}
           aria-labelledby={labelId}
           aria-describedby={descriptionId}
+          aria-disabled={busy || undefined}
           disabled={disabled}
           className="mt-1"
         />

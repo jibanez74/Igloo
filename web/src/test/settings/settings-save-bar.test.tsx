@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import SettingsSaveBar from "@/components/settings/SettingsSaveBar";
 import { expectNoClass } from "../helpers/dom";
@@ -68,5 +70,92 @@ describe("SettingsSaveBar", () => {
 
     expect(screen.getByRole("button", { name: "Reset" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  });
+
+  // Save and Reset disable themselves once there is nothing to do. A disabled
+  // button cannot hold focus, so the browser dropped it on the page body and
+  // the next Tab started from the top (seen in Chromium and Firefox).
+  describe("focus when its buttons disable themselves", () => {
+    function Form({ fails = false }: { fails?: boolean }) {
+      const [dirty, setDirty] = useState(true);
+      const [pending, setPending] = useState(false);
+      return (
+        <form
+          onSubmit={event => {
+            event.preventDefault();
+            setPending(true);
+          }}
+        >
+          <SettingsSaveBar
+            title="General settings"
+            isDirty={dirty}
+            statusMessage="Saved settings are used on future requests."
+            onReset={() => setDirty(false)}
+            isPending={pending}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              setPending(false);
+              if (!fails) setDirty(false);
+            }}
+          >
+            finish the save
+          </button>
+        </form>
+      );
+    }
+
+    const statusLine = () =>
+      screen.getByText(
+        /No unsaved changes|Saved settings are used on future requests\./,
+      );
+
+    it("moves to the status line when a save lands", async () => {
+      const user = userEvent.setup();
+      render(<Form />);
+
+      const save = screen.getByRole("button", { name: "Save settings" });
+      save.focus();
+      await user.keyboard("{Enter}");
+      expect(statusLine()).toHaveFocus();
+
+      // Finish the save without moving focus, as a response would.
+      screen.getByRole("button", { name: "finish the save" }).click();
+      expect(await screen.findByText("No unsaved changes")).toHaveFocus();
+      expect(screen.getByRole("button", { name: "Save settings" })).toBeDisabled();
+    });
+
+    it("gives focus back to Save when the save fails", async () => {
+      const user = userEvent.setup();
+      render(<Form fails />);
+
+      const save = screen.getByRole("button", { name: "Save settings" });
+      save.focus();
+      await user.keyboard("{Enter}");
+      expect(statusLine()).toHaveFocus();
+
+      screen.getByRole("button", { name: "finish the save" }).click();
+      await screen.findByRole("button", { name: "Save settings" });
+      await vi.waitFor(() => expect(save).toHaveFocus());
+      expect(save).toBeEnabled();
+    });
+
+    it("moves to the status line after Reset", async () => {
+      const user = userEvent.setup();
+      render(<Form />);
+
+      await user.click(screen.getByRole("button", { name: "Reset" }));
+      expect(screen.getByText("No unsaved changes")).toHaveFocus();
+    });
+
+    it("leaves focus alone when it is somewhere else", async () => {
+      const user = userEvent.setup();
+      render(<Form />);
+
+      const other = screen.getByRole("button", { name: "finish the save" });
+      await user.click(other);
+      expect(other).toHaveFocus();
+    });
   });
 });

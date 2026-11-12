@@ -13,6 +13,7 @@ import { approveQuickConnect, lookupQuickConnect } from "@/lib/api";
 import { MOTION_SETTINGS_SURFACE_CLASS } from "@/lib/constants";
 import { devicesQueryOpts } from "@/lib/query-opts";
 import { showSuccess, showActionFailed } from "@/lib/toast-helpers";
+import { describedBy } from "@/lib/utils";
 import type {
   ApiResponseType,
   DeviceType,
@@ -236,8 +237,11 @@ export default function QuickConnectApproveCard() {
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
+    // The field that has to change takes focus, also when Continue was
+    // clicked rather than Enter pressed in the field.
     if (code.length !== CODE_LENGTH) {
       setError(`Enter the ${CODE_LENGTH}-character code shown on your device.`);
+      codeInputRef.current?.focus();
       return;
     }
 
@@ -245,6 +249,7 @@ export default function QuickConnectApproveCard() {
       setError(
         "Codes never contain I, L, O, 0 or 1. Check the code on your device.",
       );
+      codeInputRef.current?.focus();
       return;
     }
 
@@ -299,7 +304,10 @@ export default function QuickConnectApproveCard() {
                 variant="outline"
                 className="font-mono tracking-widest uppercase placeholder:tracking-normal placeholder:normal-case sm:max-w-48"
                 aria-invalid={!!error || undefined}
-                aria-describedby={error ? codeErrorId : codeDescriptionId}
+                aria-describedby={describedBy(
+                  codeDescriptionId,
+                  error && codeErrorId,
+                )}
               />
               <Button
                 type="submit"
