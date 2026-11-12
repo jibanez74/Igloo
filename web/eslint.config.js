@@ -259,7 +259,6 @@ export default defineConfig([
       "src/components/playback/**/*.tsx",
       "src/routes/_auth/trailer.tsx",
     ],
-    ignores: ["src/test/**/*.{ts,tsx}"],
     rules: { "no-restricted-syntax": restrictedClassRule },
   },
 

@@ -214,11 +214,11 @@ Rules:
     theme (`--elevation-floating`): 50 % black in dark, 15 % in light, where
     50 % reads as a haze.
   - `shadow-glow` for the glacier glow under a primary control (the brand
-    mark, the play buttons of the video player and the Now Playing dialog,
-    the pill call-to-actions, the active tab, a pressed genre tile): the geometry of `shadow-lg` in `primary` at 12 %, a hint of light
-    under the control rather than a halo around it. Write the token, never
-    a literal `shadow-lg shadow-primary/NN`: the strength is set once, in
-    `SHADOW_SCALE`.
+    mark, the player play buttons, the pill call-to-actions, the active
+    tab, a pressed genre tile): the geometry of `shadow-lg` in `primary` at
+    12 %, a hint of light under the control rather than a halo around it.
+    Write the token, never a literal `shadow-lg shadow-primary/NN`: the
+    strength is set once, in `SHADOW_SCALE`.
 
   Both are ordinary shadow sizes to Tailwind and to `cn()`: they replace and
   are replaced by `shadow-md` and the like, and the focus ring, which is a
