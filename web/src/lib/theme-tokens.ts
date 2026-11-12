@@ -296,9 +296,9 @@ export const THEME_TOKENS: Record<ThemeName, Record<string, ThemeToken>> = {
       comment: "danger #F87171",
     },
     "--border": {
-      value: "oklch(0.354 0.053 258.3)",
-      hex: "#2A3C57",
-      comment: "borderStrong #2A3C57",
+      value: "oklch(0.326 0.05 257.9)",
+      hex: "#24354E",
+      comment: "#24354E — a quiet line: 1.5:1 on the canvas, 1.27:1 on a card",
     },
     "--input": {
       value: "oklch(1 0 0 / 8%)",
@@ -438,9 +438,10 @@ export const ELEVATION_TOKENS: Record<ThemeName, Record<string, ThemeToken>> = {
 /** `shadow-<name>`. Values may point at a per-theme elevation token. */
 export const SHADOW_SCALE = {
   floating: "var(--elevation-floating)",
-  // The glacier glow under a primary control: Tailwind's `shadow-lg` in
-  // `primary` at 20%.
-  glow: "0 10px 15px -3px color-mix(in oklab, var(--primary) 20%, transparent), 0 4px 6px -4px color-mix(in oklab, var(--primary) 20%, transparent)",
+  // The glacier glow under a primary control: the geometry of Tailwind's
+  // `shadow-lg`, in `primary` at 12%. A hint of light under the control,
+  // not a halo around it.
+  glow: "0 10px 15px -3px color-mix(in oklab, var(--primary) 12%, transparent), 0 4px 6px -4px color-mix(in oklab, var(--primary) 12%, transparent)",
 } as const;
 
 /**

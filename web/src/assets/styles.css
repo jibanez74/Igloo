@@ -50,7 +50,7 @@
   --color-media-fallback: var(--media-fallback);
   --color-media-fallback-foreground: var(--media-fallback-foreground);
   --shadow-floating: var(--elevation-floating);
-  --shadow-glow: 0 10px 15px -3px color-mix(in oklab, var(--primary) 20%, transparent), 0 4px 6px -4px color-mix(in oklab, var(--primary) 20%, transparent);
+  --shadow-glow: 0 10px 15px -3px color-mix(in oklab, var(--primary) 12%, transparent), 0 4px 6px -4px color-mix(in oklab, var(--primary) 12%, transparent);
   --z-index-chrome: 40;
   --z-index-modal: 50;
   --z-index-popover: 60;
@@ -128,7 +128,7 @@
   --accent: oklch(0.219 0.043 261.6); /* surface #0F1A2E */
   --accent-foreground: oklch(0.984 0.003 247.9);
   --destructive: oklch(0.711 0.166 22.2); /* danger #F87171 */
-  --border: oklch(0.354 0.053 258.3); /* borderStrong #2A3C57 */
+  --border: oklch(0.326 0.05 257.9); /* #24354E — a quiet line: 1.5:1 on the canvas, 1.27:1 on a card */
   --input: oklch(1 0 0 / 8%); /* borderSubtle */
   --ring: oklch(0.754 0.139 232.7); /* glacier — one focus color */
   --chart-1: oklch(0.754 0.139 232.7); /* glacier */
