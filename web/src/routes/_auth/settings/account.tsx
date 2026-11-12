@@ -2,17 +2,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useId, useRef, useState, useTransition } from "react";
 import type { FormEvent } from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { FieldError, FieldHint } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Spinner } from "@/components/ui/spinner";
 import {
   Dialog,
   DialogContent,
@@ -34,6 +29,7 @@ import {
 import SettingsCardHeader from "@/components/settings/SettingsCardHeader";
 import SettingsErrorCard from "@/components/settings/SettingsErrorCard";
 import SettingsLoadingCard from "@/components/settings/SettingsLoadingCard";
+import SettingsPage from "@/components/settings/SettingsPage";
 import {
   authUserFrom,
   authUserQueryOpts,
@@ -44,6 +40,7 @@ import {
   USER_NAME_MAX_LENGTH,
   USER_PASSWORD_MIN_LENGTH,
   MOTION_MICRO_COLORS_CLASS,
+  MOTION_SETTINGS_SURFACE_CLASS,
 } from "@/lib/constants";
 import {
   updateUserName,
@@ -554,9 +551,9 @@ function AccountSettings() {
   }
 
   return (
-    <div className="space-y-8">
-      {/* Profile Information */}
-      <Card>
+    <SettingsPage>
+      {/* Profile information */}
+      <Card className={MOTION_SETTINGS_SURFACE_CLASS}>
         <SettingsCardHeader
           icon={User}
           title="Profile information"
@@ -628,6 +625,9 @@ function AccountSettings() {
               variant="accent"
               className="w-full sm:w-auto"
             >
+              {updateEmailMutation.isPending || updateNameMutation.isPending ? (
+                <Spinner aria-hidden="true" />
+              ) : null}
               {updateEmailMutation.isPending || updateNameMutation.isPending
                 ? "Saving..."
                 : "Save profile"}
@@ -637,7 +637,7 @@ function AccountSettings() {
       </Card>
 
       {/* Avatar */}
-      <Card>
+      <Card className={MOTION_SETTINGS_SURFACE_CLASS}>
         <SettingsCardHeader
           icon={ImageIcon}
           title="Avatar"
@@ -754,6 +754,9 @@ function AccountSettings() {
                 variant="accent"
                 className="w-full sm:w-auto"
               >
+                {updateAvatarUrlMutation.isPending ? (
+                  <Spinner aria-hidden="true" />
+                ) : null}
                 {updateAvatarUrlMutation.isPending ? "Saving..." : "Set URL"}
               </Button>
             </div>
@@ -764,8 +767,8 @@ function AccountSettings() {
         </CardContent>
       </Card>
 
-      {/* Change Password */}
-      <Card>
+      {/* Change password */}
+      <Card className={MOTION_SETTINGS_SURFACE_CLASS}>
         <SettingsCardHeader
           icon={Lock}
           title="Change password"
@@ -881,6 +884,9 @@ function AccountSettings() {
             variant="accent"
             className="w-full sm:w-auto"
           >
+            {updatePasswordMutation.isPending ? (
+              <Spinner aria-hidden="true" />
+            ) : null}
             {updatePasswordMutation.isPending
               ? "Updating..."
               : "Update password"}
@@ -902,18 +908,13 @@ function AccountSettings() {
           self-deletion, so there is no action to offer. */}
       {!user.is_admin && (
       <>
-      <Card surface="danger">
-        <CardHeader>
-          <CardTitle asChild tone="destructive" className="flex items-center gap-2">
-            <h2>
-              <AlertTriangle className="size-5" aria-hidden="true" />
-              Danger zone
-            </h2>
-          </CardTitle>
-          <CardDescription className="text-destructive">
-            Actions here cannot be undone.
-          </CardDescription>
-        </CardHeader>
+      <Card surface="danger" className={MOTION_SETTINGS_SURFACE_CLASS}>
+        <SettingsCardHeader
+          icon={AlertTriangle}
+          title="Danger zone"
+          description="Actions here cannot be undone."
+          tone="destructive"
+        />
         <CardContent className="max-w-2xl space-y-4">
           <div className="space-y-2">
             <p className="text-sm font-medium text-destructive">Delete account</p>
@@ -925,7 +926,7 @@ function AccountSettings() {
           <Button
             ref={deleteAccountButtonRef}
             onClick={() => handleDeleteDialogOpenChange(true)}
-            variant="destructive"
+            variant="outline-destructive"
             className="w-full sm:w-auto"
           >
             <Trash2 className="size-4" aria-hidden="true" />
@@ -990,6 +991,7 @@ function AccountSettings() {
               onClick={handleDeleteAccount}
               disabled={isDeleting || deleteConfirmText !== "DELETE"}
             >
+              {isDeleting ? <Spinner aria-hidden="true" /> : null}
               {isDeleting ? "Deleting..." : "Delete account"}
             </Button>
           </DialogFooter>
@@ -997,6 +999,6 @@ function AccountSettings() {
       </Dialog>
       </>
       )}
-    </div>
+    </SettingsPage>
   );
 }

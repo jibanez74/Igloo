@@ -231,6 +231,28 @@ describe("Users settings", () => {
     });
   });
 
+  it("lists people in the shared Settings column, with their role as a badge", async () => {
+    await renderUsersRoute();
+
+    const heading = screen.getByRole("heading", {
+      level: 2,
+      name: "User management",
+    });
+    const card = heading.closest('[data-slot="card"]');
+    expect(card?.parentElement).toHaveClass("max-w-5xl", "space-y-6");
+    // The card's action shares the header with its title.
+    expect(heading.closest('[data-slot="card-header"]')).toContainElement(
+      screen.getByRole("button", { name: "Add user" }),
+    );
+
+    const list = screen.getByRole("list", { name: "User list" });
+    const badges = list.querySelectorAll('[data-slot="badge"]');
+    expect(badges.length).toBeGreaterThan(0);
+    for (const badge of badges) {
+      expect(badge.textContent).toMatch(/^(Admin|User)$/);
+    }
+  });
+
   it("offers admin rights as a real checkbox named by its visible label", async () => {
     const user = userEvent.setup();
     const { requests } = await renderUsersRoute();

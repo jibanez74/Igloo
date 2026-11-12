@@ -28,6 +28,7 @@ import { Spinner } from "@/components/ui/spinner";
 import SettingsCardHeader from "@/components/settings/SettingsCardHeader";
 import SettingsErrorCard from "@/components/settings/SettingsErrorCard";
 import SettingsLoadingCard from "@/components/settings/SettingsLoadingCard";
+import SettingsPage from "@/components/settings/SettingsPage";
 import SettingsSaveBar from "@/components/settings/SettingsSaveBar";
 import { musicStatsQueryOpts, moviesStatsQueryOpts, movieScanStatusQueryOpts, musicScanStatusQueryOpts, showScanStatusQueryOpts, showsStatsQueryOpts, settingsQueryOpts } from "@/lib/query-opts";
 import { showActionFailed, showSuccess } from "@/lib/toast-helpers";
@@ -35,6 +36,7 @@ import { triggerMusicScan, triggerMovieScan, triggerShowScan, updateLibrarySetti
 import { useIsMiniPlayerVisible } from "@/hooks/useIsMiniPlayerVisible";
 import {
   MINI_PLAYER_CLEARANCE_BOTTOM_CLASS,
+  MOTION_SETTINGS_SURFACE_CLASS,
   MOVIE_SCAN_STATUS_KEY,
   MUSIC_SCAN_STATUS_KEY,
   SHOW_SCAN_STATUS_KEY,
@@ -368,12 +370,8 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
   };
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      noValidate
-      className="max-w-5xl space-y-6"
-    >
-      <Card>
+    <SettingsPage as="form" onSubmit={handleSubmit} noValidate>
+      <Card className={MOTION_SETTINGS_SURFACE_CLASS}>
         <SettingsCardHeader
           icon={Library}
           title="Library management"
@@ -447,8 +445,9 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
         stickyClassName={
           isMiniPlayerVisible ? MINI_PLAYER_CLEARANCE_BOTTOM_CLASS : "bottom-4"
         }
+        className={MOTION_SETTINGS_SURFACE_CLASS}
       />
-    </form>
+    </SettingsPage>
   );
 }
 

@@ -10,6 +10,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { MonitorSmartphone } from "lucide-react";
 import SettingsCardHeader from "@/components/settings/SettingsCardHeader";
 import { approveQuickConnect, lookupQuickConnect } from "@/lib/api";
+import { MOTION_SETTINGS_SURFACE_CLASS } from "@/lib/constants";
 import { devicesQueryOpts } from "@/lib/query-opts";
 import { showSuccess, showActionFailed } from "@/lib/toast-helpers";
 import type {
@@ -266,7 +267,7 @@ export default function QuickConnectApproveCard() {
   };
 
   return (
-    <Card>
+    <Card className={MOTION_SETTINGS_SURFACE_CLASS}>
       <SettingsCardHeader
         icon={MonitorSmartphone}
         title="Quick Connect"
@@ -306,6 +307,9 @@ export default function QuickConnectApproveCard() {
                 variant="accent"
                 className="w-full sm:w-auto"
               >
+                {lookupMutation.isPending ? (
+                  <Spinner aria-hidden="true" />
+                ) : null}
                 {lookupMutation.isPending ? "Checking..." : "Continue"}
               </Button>
             </div>
@@ -357,6 +361,9 @@ export default function QuickConnectApproveCard() {
                 onClick={() => approveMutation.mutate(code)}
                 className="w-full sm:w-auto"
               >
+                {approveMutation.isPending ? (
+                  <Spinner aria-hidden="true" />
+                ) : null}
                 {approveMutation.isPending ? "Approving..." : "Approve device"}
               </Button>
               <Button

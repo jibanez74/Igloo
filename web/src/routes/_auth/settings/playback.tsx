@@ -18,6 +18,7 @@ import SettingsCardHeader from "@/components/settings/SettingsCardHeader";
 import TrailerPreferencesCard from "@/components/settings/TrailerPreferencesCard";
 import SettingsErrorCard from "@/components/settings/SettingsErrorCard";
 import SettingsLoadingCard from "@/components/settings/SettingsLoadingCard";
+import SettingsPage from "@/components/settings/SettingsPage";
 import SettingsSaveBar from "@/components/settings/SettingsSaveBar";
 import {
   MOTION_SETTINGS_SURFACE_CLASS,
@@ -141,7 +142,7 @@ function PlaybackSettings() {
   }
 
   return (
-    <div className="max-w-5xl space-y-6">
+    <SettingsPage>
       <DevicePlaybackCards
         settings={settings}
         userId={user.id}
@@ -149,7 +150,7 @@ function PlaybackSettings() {
       />
       <TrailerPreferencesCard />
       {user.is_admin && <ServerPlaybackForm settings={settings} />}
-    </div>
+    </SettingsPage>
   );
 }
 
