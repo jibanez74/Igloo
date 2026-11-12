@@ -14,7 +14,7 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
 } from "@/lib/api";
-import { NOTIFICATION_TITLES } from "@/lib/constants";
+import { FOCUS_VISIBLE_RING_CLASS, NOTIFICATION_TITLES } from "@/lib/constants";
 import { parseServerTimestamp } from "@/lib/format";
 import {
   invalidateNotifications,
@@ -278,7 +278,10 @@ export default function NotificationBell() {
                       type="button"
                       onClick={() => handleItemClick(notification)}
                       aria-label={itemLabelParts.join(", ")}
-                      className="min-w-0 flex-1 text-left"
+                      className={cn(
+                        "min-w-0 flex-1 rounded-sm text-left",
+                        FOCUS_VISIBLE_RING_CLASS,
+                      )}
                     >
                       <div className="flex items-center gap-2">
                         {!notification.is_read && (
@@ -304,15 +307,15 @@ export default function NotificationBell() {
                       )}
                     </button>
 
-                    <button
-                      type="button"
+                    <Button
+                      variant="ghost-muted"
+                      size="icon-sm"
                       onClick={() => deleteMutation.mutate(notification.id)}
                       disabled={deleteMutation.isPending}
                       aria-label={dismissLabelParts.join(", ")}
-                      className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
                     >
                       <X aria-hidden="true" className="size-4" />
-                    </button>
+                    </Button>
                   </li>
                 );
               })}

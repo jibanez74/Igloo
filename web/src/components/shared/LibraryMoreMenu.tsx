@@ -8,6 +8,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Spinner } from "@/components/ui/spinner";
+import { Tooltip } from "@/components/ui/tooltip";
 import {
   FOCUS_VISIBLE_RING_CLASS,
   MOTION_MICRO_CONTROL_CLASS,
@@ -115,6 +116,11 @@ type RequestMediaMenuItemProps = {
  * look — the accessible name, the tooltip, and an sr-only tail — because a
  * disabled menu item otherwise announces nothing but its label.
  *
+ * Disabled means `aria-disabled` and a guarded `onSelect`, not Radix's
+ * `disabled`: that one takes the item out of the arrow-key order and gives it
+ * `pointer-events: none`, so neither focus nor hover could ever show the
+ * tooltip.
+ *
  * The page owns the status query rather than this item: mounted inside the
  * dropdown, the fetch would not start until the menu opened.
  */
@@ -130,22 +136,27 @@ export function RequestMediaMenuItem({
     ? `${provider} search status is still loading.`
     : `${provider} search is unavailable on this server.`;
 
+  // The reason is already in the name, so the tooltip only shows it. It sits
+  // beside the menu: above, it would cover the items over this one. It stays
+  // mounted, switched off once the item is available, so a status that answers
+  // while the item has focus does not remount the item and drop that focus.
   return (
-    <DropdownMenuItem
-      disabled={disabled}
-      aria-label={disabled ? `${label} unavailable. ${reason}` : label}
-      title={disabled ? reason : undefined}
-      onSelect={event => {
-        if (disabled) {
-          event.preventDefault();
-          return;
-        }
-        onSelect();
-      }}
-    >
-      <Plus className="mr-2 size-4" aria-hidden="true" />
-      {label}
-      {disabled && <span className="sr-only"> {reason}</span>}
-    </DropdownMenuItem>
+    <Tooltip label={reason} side="left" disabled={!disabled}>
+      <DropdownMenuItem
+        aria-disabled={disabled || undefined}
+        aria-label={disabled ? `${label} unavailable. ${reason}` : label}
+        onSelect={event => {
+          if (disabled) {
+            event.preventDefault();
+            return;
+          }
+          onSelect();
+        }}
+      >
+        <Plus className="mr-2 size-4" aria-hidden="true" />
+        {label}
+        {disabled && <span className="sr-only"> {reason}</span>}
+      </DropdownMenuItem>
+    </Tooltip>
   );
 }

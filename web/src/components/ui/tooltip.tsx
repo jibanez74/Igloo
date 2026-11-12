@@ -49,6 +49,12 @@ type TooltipProps = {
   container?: ComponentProps<typeof TooltipPrimitive.Portal>["container"]
   /** Forces it open or closed; for the gallery and tests. */
   open?: boolean
+  /**
+   * Shows nothing while set. The control keeps its place in the tree, so a
+   * tooltip that stops applying (a reason that no longer holds) does not
+   * remount the control and drop its focus.
+   */
+  disabled?: boolean
   className?: string
 }
 
@@ -65,6 +71,7 @@ function Tooltip({
   align = "center",
   container,
   open,
+  disabled = false,
   className,
 }: TooltipProps) {
   const insideProvider = use(InsideTooltipProvider)
@@ -74,21 +81,23 @@ function Tooltip({
       <TooltipPrimitive.Trigger asChild data-slot="tooltip-trigger">
         {describes ? children : <Undescribed>{children}</Undescribed>}
       </TooltipPrimitive.Trigger>
-      <TooltipPrimitive.Portal container={container}>
-        <TooltipPrimitive.Content
-          data-slot="tooltip-content"
-          side={side}
-          align={align}
-          sideOffset={6}
-          collisionPadding={8}
-          className={cn(
-            "z-popover w-fit max-w-64 origin-(--radix-tooltip-content-transform-origin) animate-in rounded-md bg-foreground px-2.5 py-1.5 text-xs font-medium text-balance text-background shadow-md duration-micro fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 motion-reduce:animate-none",
-            className
-          )}
-        >
-          {label}
-        </TooltipPrimitive.Content>
-      </TooltipPrimitive.Portal>
+      {!disabled && (
+        <TooltipPrimitive.Portal container={container}>
+          <TooltipPrimitive.Content
+            data-slot="tooltip-content"
+            side={side}
+            align={align}
+            sideOffset={6}
+            collisionPadding={8}
+            className={cn(
+              "z-popover w-fit max-w-64 origin-(--radix-tooltip-content-transform-origin) animate-in rounded-md bg-foreground px-2.5 py-1.5 text-xs font-medium text-balance text-background shadow-md duration-micro fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 motion-reduce:animate-none",
+              className
+            )}
+          >
+            {label}
+          </TooltipPrimitive.Content>
+        </TooltipPrimitive.Portal>
+      )}
     </TooltipPrimitive.Root>
   )
 

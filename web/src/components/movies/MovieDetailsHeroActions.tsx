@@ -227,7 +227,7 @@ export default function MovieDetailsHeroActions({
           <Spinner tone="success" aria-hidden="true" />
         )}
       </Button>
-      <MovieLikeButton movieId={movieId} variant="hero" />
+      <MovieLikeButton movieId={movieId} />
       <DropdownMenu>
         <DropdownMenuTrigger
           ref={moreOptionsButtonRef}

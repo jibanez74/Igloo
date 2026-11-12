@@ -16,7 +16,10 @@ import { Spinner } from "@/components/ui/spinner";
 import { playlistPickerQueryOpts } from "@/lib/query-opts";
 import { PLAYLIST_KINDS, type PlaylistKind } from "@/lib/playlist-kinds";
 import { capitalize, pluralize } from "@/lib/format";
-import { MOTION_MICRO_COLORS_CLASS } from "@/lib/constants";
+import {
+  FOCUS_VISIBLE_RING_CLASS,
+  MOTION_MICRO_COLORS_CLASS,
+} from "@/lib/constants";
 import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
 import LoadErrorAlert from "@/components/shared/LoadErrorAlert";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
@@ -205,7 +208,9 @@ export default function AddToPlaylistDialog({
           />
         )}
         {!loadFailed && (
-          <div className="max-h-64 overflow-y-auto">
+          // -m-1 p-1: room inside the scroll box for a row's focus ring,
+          // which the overflow would otherwise clip.
+          <div className="-m-1 max-h-64 overflow-y-auto p-1">
             {isLoading ? (
               <div className="flex justify-center py-8">
                 <Spinner size="lg" tone="primary" />
@@ -229,7 +234,7 @@ export default function AddToPlaylistDialog({
                       type="button"
                       onClick={() => togglePlaylist(playlist.id, playlist.name)}
                       aria-pressed={selectedPlaylists.has(playlist.id)}
-                      className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left ${MOTION_MICRO_COLORS_CLASS} ${
+                      className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left ${MOTION_MICRO_COLORS_CLASS} ${FOCUS_VISIBLE_RING_CLASS} ${
                         selectedPlaylists.has(playlist.id)
                           ? "bg-primary/20 text-foreground"
                           : "text-muted-foreground hover:bg-muted"

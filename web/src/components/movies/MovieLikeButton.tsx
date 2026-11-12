@@ -4,11 +4,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { showActionFailed } from "@/lib/toast-helpers";
 import { toggleLikeMovie } from "@/lib/api";
-import {
-  FOCUS_VISIBLE_RING_CLASS,
-  MOTION_MICRO_COLORS_CLASS,
-  MOVIES_LIKED_KEY,
-} from "@/lib/constants";
+import { MOVIES_LIKED_KEY } from "@/lib/constants";
 import { movieLikeStatusQueryOpts } from "@/lib/query-opts";
 import { cn } from "@/lib/utils";
 import type { ApiResponseType } from "@/types";
@@ -24,17 +20,11 @@ const likeStatusResponse = (
 
 type MovieLikeButtonProps = {
   movieId: number;
-  /**
-   * `card` — compact circle for poster grids.
-   * `hero` — outline button with label (movie details action row).
-   */
-  variant?: "card" | "hero";
   className?: string;
 };
 
 export default function MovieLikeButton({
   movieId,
-  variant = "card",
   className = "",
 }: MovieLikeButtonProps) {
   const queryClient = useQueryClient();
@@ -87,43 +77,11 @@ export default function MovieLikeButton({
 
   const label = isLiked ? "Unlike this movie" : "Like this movie";
 
-  if (variant === "hero") {
-    return (
-      <Button
-        type="button"
-        variant="outline"
-        size="lg"
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          mutation.mutate();
-        }}
-        disabled={mutation.isPending || isLoading}
-        className={cn(
-          "min-h-11 touch-manipulation px-3 font-semibold sm:px-6",
-          className,
-        )}
-        aria-label={label}
-        aria-pressed={isLiked}
-      >
-        <Heart
-          className={cn(
-            "size-4",
-            isLiked && "fill-primary text-primary!",
-          )}
-          aria-hidden="true"
-        />
-        {isLiked ? "Liked" : "Like"}
-        {mutation.isPending && (
-          <Spinner tone="primary" aria-hidden="true" />
-        )}
-      </Button>
-    );
-  }
-
   return (
-    <button
+    <Button
       type="button"
+      variant="outline"
+      size="lg"
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -131,22 +89,23 @@ export default function MovieLikeButton({
       }}
       disabled={mutation.isPending || isLoading}
       className={cn(
-        MOTION_MICRO_COLORS_CLASS,
-        FOCUS_VISIBLE_RING_CLASS,
-        "flex size-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm hover:bg-black/70 disabled:opacity-60",
+        "min-h-11 touch-manipulation px-3 font-semibold sm:px-6",
         className,
       )}
       aria-label={label}
       aria-pressed={isLiked}
     >
-      {mutation.isPending ? (
-        <Spinner tone="primary" />
-      ) : (
-        <Heart
-          className={`size-5 ${isLiked ? "fill-primary text-primary" : "text-white"}`}
-          aria-hidden="true"
-        />
+      <Heart
+        className={cn(
+          "size-4",
+          isLiked && "fill-primary text-primary!",
+        )}
+        aria-hidden="true"
+      />
+      {isLiked ? "Liked" : "Like"}
+      {mutation.isPending && (
+        <Spinner tone="primary" aria-hidden="true" />
       )}
-    </button>
+    </Button>
   );
 }

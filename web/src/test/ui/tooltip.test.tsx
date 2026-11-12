@@ -31,6 +31,26 @@ describe("Tooltip", () => {
     expect(screen.queryByRole("tooltip")).toBeNull();
   });
 
+  it("shows nothing while disabled, without remounting the control", () => {
+    const { rerender } = renderTooltip({ disabled: true });
+    const button = screen.getByRole("button");
+
+    act(() => button.focus());
+    expect(screen.queryByRole("tooltip")).toBeNull();
+
+    rerender(
+      <Tooltip label="Switch to light theme">
+        <button type="button" aria-label="Switch to light theme">
+          icon
+        </button>
+      </Tooltip>,
+    );
+    expect(screen.getByRole("button")).toBe(button);
+    act(() => button.blur());
+    act(() => button.focus());
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Switch to light theme");
+  });
+
   it("closes on Escape", () => {
     renderTooltip();
     const button = screen.getByRole("button");

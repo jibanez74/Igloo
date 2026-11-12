@@ -593,10 +593,6 @@ describe("movies route focus restoration", () => {
       name: /Request Movie unavailable/i,
     });
 
-    expect(requestMovieItem).toHaveAttribute("data-disabled");
-    expect(requestMovieItem).toHaveAttribute(
-      "title",
-      "TMDB search is unavailable on this server.",
-    );
+    expect(requestMovieItem).toHaveAttribute("aria-disabled", "true");
   });
 });

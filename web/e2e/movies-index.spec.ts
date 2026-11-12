@@ -88,7 +88,7 @@ function playlistNotFound(playlistId: number) {
   return { error: true, message: `Movie playlist ${playlistId} not found` };
 }
 
-async function mockMoviesApi(page: Page) {
+async function mockMoviesApi(page: Page, { tmdbAvailable = true } = {}) {
   const playlists = [...initialPlaylists];
   // The owned playlist's first page; its count stays the summary's own number.
   const playlistMovies = new Map<number, MoviesLibraryListItemType[]>([
@@ -169,7 +169,7 @@ async function mockMoviesApi(page: Page) {
       }
 
       if (url.pathname === "/api/tmdb/status") {
-        await fulfillJSON(route, apiResponse({ available: true }));
+        await fulfillJSON(route, apiResponse({ available: tmdbAvailable }));
         return true;
       }
 
@@ -339,6 +339,57 @@ test("deleting a movie playlist from its page returns to the playlists tab", asy
   await expect(page.getByRole("link", { name: "Guest Picks, 4 movies" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Friday Feature, 7 movies" })).toHaveCount(0);
   await expect(page.getByText("1 playlist", { exact: true })).toBeVisible();
+
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
+});
+
+// Radix's own `disabled` took the item off the pointer and out of the arrow-key
+// order, so its reason (then a native `title`) never showed.
+test("an unavailable Request Movie is reachable and says why on focus and on hover", async ({ page }) => {
+  const browserIssues = trackBrowserIssues(page);
+  const { unexpectedApiRequests } = await mockMoviesApi(page, { tmdbAvailable: false });
+  const reason = "TMDB search is unavailable on this server.";
+
+  await page.goto("/movies");
+  await page.getByRole("button", { name: "More options" }).click();
+
+  const item = page.getByRole("menuitem", { name: /^Request Movie unavailable/ });
+  await expect(item).toHaveAttribute("aria-disabled", "true");
+
+  // Radix moves focus into the menu just after it opens; an arrow key sent
+  // before that is lost.
+  await expect(page.getByRole("menu")).toBeFocused();
+  for (let step = 0; step < 6; step++) {
+    if (await item.evaluate(element => element === document.activeElement)) break;
+    await page.keyboard.press("ArrowDown");
+  }
+  await expect(item).toBeFocused();
+
+  const tooltip = page.locator('[data-slot="tooltip-content"]');
+  await expect(tooltip).toHaveText(reason);
+  // It draws above the menu it explains.
+  expect(await tooltip.evaluate(element => {
+    const box = element.getBoundingClientRect();
+    const top = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+    return top !== null && element.contains(top);
+  })).toBe(true);
+
+  // Escape dismisses the open tooltip first (WCAG 1.4.13), not the menu.
+  await page.keyboard.press("Escape");
+  await expect(tooltip).toHaveCount(0);
+  await expect(item).toBeFocused();
+
+  // Choosing it does nothing: the menu stays open on it. Enter clicks the
+  // item, which also closes a tooltip, so this runs after the Escape check.
+  await page.keyboard.press("Enter");
+  await expect(item).toBeFocused();
+
+  await page.keyboard.press("Escape");
+  await expect(item).toHaveCount(0);
+
+  await page.getByRole("button", { name: "More options" }).click();
+  await item.hover();
+  await expect(tooltip).toHaveText(reason);
 
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });

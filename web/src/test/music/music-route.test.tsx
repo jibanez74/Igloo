@@ -402,11 +402,7 @@ describe("music route more menu", () => {
       name: /Request Album unavailable/i,
     });
 
-    expect(requestAlbumItem).toHaveAttribute("data-disabled");
-    expect(requestAlbumItem).toHaveAttribute(
-      "title",
-      "Spotify search is unavailable on this server.",
-    );
+    expect(requestAlbumItem).toHaveAttribute("aria-disabled", "true");
   });
 });
 
