@@ -350,13 +350,15 @@ of its own, as tall as its text: the size for the two link variants).
   one. The other variants keep the base half-opacity. Guarded by
   `test/ui/button.test.tsx`.
 
-- **A call to action is `xl`, 44 px, the touch-target minimum.** The hero
-  actions of a detail page (`MovieDetailsHeroActions`, `ShowDetailsHeroActions`,
-  the in-theaters Play Trailer), the home billboard's two pills, and the
-  buttons of a full-screen status (`PlaybackStatusScreen`, the trailer's no
-  trailer and error views) take `size="xl"`, never `lg` plus a `min-h-11`
-  override. A status screen's pair is the primary pill with `shadow-glow`
-  beside an `outline` pill.
+- **A movie or show hero action, and a full-screen status action, is `xl`,
+  44 px, the touch-target minimum.** The hero actions of a movie or show
+  detail page (`MovieDetailsHeroActions`, `ShowDetailsHeroActions`, the
+  in-theaters Play Trailer), the home billboard's two pills, and the buttons
+  of a full-screen status (`PlaybackStatusScreen`, the trailer's no trailer
+  and error views) take `size="xl"`, never `lg` plus a `min-h-11` override.
+  A status screen's pair is the primary pill with `shadow-glow` beside an
+  `outline` pill. The music detail hero's Play and Shuffle
+  (`PlayShuffleButtons`) stay `lg`.
 - **A pill stays a pill at every size.** `buttonVariants` merges
   base → variant → size → shape → `className` with `cn` (`twMerge`), so the
   last conflicting class wins. The base sets `rounded-md`, no size sets a
