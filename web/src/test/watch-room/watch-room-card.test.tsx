@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import WatchRoomCard from "@/components/watch-room/WatchRoomCard";
 import {
-  CARD_INTERACTIVE_SURFACE_CLASS,
+  CARD_SURFACE_CLASS,
   CARD_MEDIA_HOVER_CLASS,
   WATCH_ROOM_KEY,
   WATCH_ROOMS_KEY,
@@ -125,7 +125,11 @@ describe("WatchRoomCard", () => {
     const poster = container.querySelector("img");
 
     expect(card).toBeTruthy();
-    expect(card?.className).toContain(CARD_INTERACTIVE_SURFACE_CLASS);
+    // The media-card surface every card wears (design-system §3.2).
+    expect(card).toHaveClass(...CARD_SURFACE_CLASS.split(" "));
+    expect(
+      screen.getByRole("link", { name: /^Join watch room for/ }),
+    ).toHaveAttribute("href", expect.stringContaining("/watch-rooms/"));
     expect(poster).toBeTruthy();
     expect(poster?.className).toContain(CARD_MEDIA_HOVER_CLASS);
     // The 2:3 box must not stretch to the card height, which cropped it.

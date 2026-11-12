@@ -1690,6 +1690,14 @@ require the full playback test pass.
   (header bar: media icon + title + Back; controls footer below the video —
   progress group, time readouts in `tabular-nums`, rewind / play-pause /
   fast-forward cluster, quality chip, chapter menu, volume, fullscreen).
+  The transport buttons are `PlayerIconButton` (40 px, muted, filled on
+  hover: seek and fullscreen) and `PlayerPlayButton` (the 56 px primary
+  circle with `shadow-glow`) from `components/playback/PlayerButtons.tsx`;
+  the watch room's transport row uses the same two, so a room reads as the
+  same player. They stay plain buttons on the `PLAYER_*` recipes, not
+  `Button` variants (§2.3). The room's header pair (Close room, Leave room)
+  is two `sm` pills; its "Back home" on an unavailable room is the status
+  screens' `xl` call to action.
   **One time readout per width**: from `sm` up it sits in the transport row
   and the progress bar's own labels are hidden; below `sm` the row cannot hold
   it beside seven controls, so the bar shows the labels and the row hides its

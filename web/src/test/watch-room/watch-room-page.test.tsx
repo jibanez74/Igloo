@@ -9,6 +9,8 @@ import {
   HLS_SESSION_LOST_MAX_ATTEMPTS,
   HLS_SESSION_LOST_MIN_INTERVAL_MS,
   MOTION_PLAYER_CHROME_BUTTON_CLASS,
+  PLAYER_ICON_BUTTON_CLASS,
+  PLAYER_PRIMARY_BUTTON_CLASS,
   WATCH_ROOMS_KEY,
   WATCH_ROOM_KEY,
   WATCH_ROOM_SEEK_STEP_SEC,
@@ -409,6 +411,11 @@ describe("WatchRoomPageContent", () => {
     expect(
       screen.getByText("This watch room link is invalid."),
     ).toBeInTheDocument();
+    // The full-screen status call to action every status screen shares.
+    const backHome = screen.getByRole("button", { name: "Back home" });
+    expect(backHome).toHaveAttribute("data-size", "xl");
+    expect(backHome).toHaveAttribute("data-shape", "pill");
+    expect(backHome).toHaveClass("shadow-glow");
     expect(useQueryMock).not.toHaveBeenCalled();
   });
 
@@ -589,6 +596,34 @@ describe("WatchRoomPageContent", () => {
       expect(screen.getByText("Invited Guest left the room")).toBeInTheDocument();
     });
     expect(within(guestRow).getByText("Away")).toBeInTheDocument();
+  });
+
+  // The room is a player: its transport is the player chrome's own buttons,
+  // and its header pair is two small pills.
+  it("draws the player's transport and a pill pair in the header", () => {
+    renderRoomPage(buildRoom({ is_owner: true }));
+
+    for (const name of [
+      `Rewind ${WATCH_ROOM_SEEK_STEP_SEC} seconds`,
+      `Fast-forward ${WATCH_ROOM_SEEK_STEP_SEC} seconds`,
+      "Fullscreen",
+    ]) {
+      const button = screen.getByRole("button", { name });
+      expect(button).toHaveClass(...PLAYER_ICON_BUTTON_CLASS.split(" "), "size-10");
+      expect(button).not.toHaveClass("border");
+    }
+    expect(screen.getByRole("button", { name: "Play playback" })).toHaveClass(
+      ...PLAYER_PRIMARY_BUTTON_CLASS.split(" "),
+      "size-14",
+      "shadow-glow",
+    );
+
+    const leave = screen.getByRole("button", { name: "Leave room" });
+    expect(leave).toHaveAttribute("data-variant", "outline");
+    expect(leave).toHaveAttribute("data-shape", "pill");
+    expect(
+      screen.getByRole("button", { name: /^Close watch room for/ }),
+    ).toHaveAttribute("data-shape", "pill");
   });
 
   it("sends playback events for local play, pause, and seek controls", async () => {

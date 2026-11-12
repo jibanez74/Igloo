@@ -1,7 +1,7 @@
 import { useDeferredValue, useId, useState, type RefObject } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { Users } from "lucide-react";
+import { Users, X } from "lucide-react";
 import { createWatchRoom } from "@/lib/api";
 import {
   AUDIO_TRACK_DEFAULT_LABEL,
@@ -339,19 +339,19 @@ export default function CreateWatchRoomDialog({
               {selectedUsers.length > 0 && (
                 <div className="flex flex-wrap gap-2" aria-label="Selected users">
                   {selectedUsers.map(user => (
-                    <button
+                    <Button
                       key={user.id}
                       type="button"
+                      variant="outline"
+                      size="sm"
+                      shape="pill"
+                      className="max-w-full"
                       onClick={() => handleToggleUser(user.id, false)}
-                      className={cn(
-                        MOTION_MICRO_COLORS_CLASS,
-                        "inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs text-primary hover:bg-primary/20",
-                      )}
                       aria-label={`Remove ${user.name} from invited users`}
                     >
-                      <span>{user.name}</span>
-                      <span aria-hidden="true">x</span>
-                    </button>
+                      <span className="truncate">{user.name}</span>
+                      <X className="size-3.5" aria-hidden="true" />
+                    </Button>
                   ))}
                 </div>
               )}
