@@ -343,7 +343,7 @@ any variant fully. The base string carries the focus ring, disabled opacity,
   both take `shape="pill"`.
 - **Tabs share one look** (`web/src/components/ui/tabs.tsx`): a bordered
   `bg-muted/50` list; the active trigger is a glacier primary-fill pill
-  (`data-[state=active]:bg-primary … shadow-primary/20`). Library pages layer
+  (`data-[state=active]:bg-primary … shadow-glow`). Library pages layer
   responsive grid sizing on top via `LIBRARY_TABS_LIST_CLASS` /
   `LIBRARY_TAB_TRIGGER_CLASS` from `constants.ts`. Tab state lives in URL
   search params (validated in `lib/route-search.ts`), never local state. Each
