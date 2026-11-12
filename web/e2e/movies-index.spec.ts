@@ -356,7 +356,10 @@ test("an unavailable Request Movie is reachable and says why on focus and on hov
   const item = page.getByRole("menuitem", { name: /^Request Movie unavailable/ });
   await expect(item).toHaveAttribute("aria-disabled", "true");
 
-  for (let step = 0; step < 4; step++) {
+  // Radix moves focus into the menu just after it opens; an arrow key sent
+  // before that is lost.
+  await expect(page.getByRole("menu")).toBeFocused();
+  for (let step = 0; step < 6; step++) {
     if (await item.evaluate(element => element === document.activeElement)) break;
     await page.keyboard.press("ArrowDown");
   }
