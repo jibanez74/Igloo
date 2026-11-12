@@ -105,13 +105,37 @@ for (const theme of THEMES) {
         tracker.assertClean();
       });
 
-      test("users settings, with the Add User dialog", async ({ page }) => {
+      test("account settings", async ({ page }) => {
+        const tracker = trackBrowserIssues(page);
+        await openPage(page, "/settings/account");
+        await expect(
+          page.getByRole("heading", { name: "Profile information" }),
+        ).toBeVisible();
+        await expectScreenshot(page, `settings-account-${theme}.png`, {
+          fullPage: true,
+        });
+        tracker.assertClean();
+      });
+
+      test("library settings", async ({ page }) => {
+        const tracker = trackBrowserIssues(page);
+        await openPage(page, "/settings/libraries");
+        await expect(
+          page.getByRole("heading", { name: "Library management" }),
+        ).toBeVisible();
+        await expectScreenshot(page, `settings-libraries-${theme}.png`, {
+          fullPage: true,
+        });
+        tracker.assertClean();
+      });
+
+      test("users settings, with the Add user dialog", async ({ page }) => {
         const tracker = trackBrowserIssues(page);
         await openPage(page, "/settings/users");
         await expectScreenshot(page, `settings-users-${theme}.png`);
 
-        await page.getByRole("button", { name: "Add User" }).click();
-        await expect(page.getByRole("dialog", { name: "Add User" })).toBeVisible();
+        await page.getByRole("button", { name: "Add user" }).click();
+        await expect(page.getByRole("dialog", { name: "Add user" })).toBeVisible();
         await expectScreenshot(page, `settings-users-dialog-${theme}.png`);
         tracker.assertClean();
       });
