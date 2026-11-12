@@ -175,7 +175,14 @@ function hardwareOptionLabel(device: HardwareAccelerationDevice) {
  * A cap below the catalog is named because it changes which modes a 4K file
  * offers; the server decides which devices are capped.
  */
-function EffectiveDeviceNotice({ settings }: { settings: PlaybackSettingsType }) {
+function EffectiveDeviceNotice({
+  id,
+  settings,
+}: {
+  /** So the select it sits under can name it in `aria-describedby`. */
+  id: string;
+  settings: PlaybackSettingsType;
+}) {
   const effective = settings.effective_hardware_acceleration_device;
   const refused = effective !== settings.hardware_acceleration_device;
   const capped = settings.profiles.some(
@@ -187,7 +194,7 @@ function EffectiveDeviceNotice({ settings }: { settings: PlaybackSettingsType })
 
   if (refused) {
     return (
-      <p className="text-sm text-destructive">
+      <p id={id} className="text-sm text-destructive">
         {hardwareOptionLabel(settings.hardware_acceleration_device)} is not
         available on this server ({settings.hardware_fallback_reason}), so
         transcodes run on the {hardwareOptionLabel(effective)}.
@@ -197,7 +204,7 @@ function EffectiveDeviceNotice({ settings }: { settings: PlaybackSettingsType })
   }
 
   return (
-    <p className="text-sm text-muted-foreground">
+    <p id={id} className="text-sm text-muted-foreground">
       In use for new transcodes: {hardwareOptionLabel(effective)}.
       {cappedNote}
     </p>
@@ -336,7 +343,10 @@ function ServerPlaybackForm({ settings }: ServerPlaybackFormProps) {
               onChange={event =>
                 handleServerUploadMbpsChange(event.target.value)
               }
-              disabled={updateMutation.isPending}
+              // Read-only rather than disabled while the form saves: Enter
+              // in this field is what submitted it, and a disabled field
+              // would drop the focus it holds.
+              readOnly={updateMutation.isPending}
               aria-invalid={serverUploadMbpsInvalid ? "true" : undefined}
               aria-describedby={
                 serverUploadMbpsInvalid
@@ -361,7 +371,9 @@ function ServerPlaybackForm({ settings }: ServerPlaybackFormProps) {
             >
               <SelectTrigger
                 id={hardwareDeviceId}
-                aria-describedby={`${hardwareDeviceId}-description`}
+                // The help, then what the chosen mode does, then what the
+                // server really runs: all three sit around the select.
+                aria-describedby={`${hardwareDeviceId}-description ${hardwareDeviceId}-mode ${hardwareDeviceId}-in-force`}
                 variant="inset"
                 size="lg"
               >
@@ -381,10 +393,16 @@ function ServerPlaybackForm({ settings }: ServerPlaybackFormProps) {
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-sm text-muted-foreground">
+            <p
+              id={`${hardwareDeviceId}-mode`}
+              className="text-sm text-muted-foreground"
+            >
               {hardwareOption(form.hardware_acceleration_device)?.description}
             </p>
-            <EffectiveDeviceNotice settings={syncedSettings} />
+            <EffectiveDeviceNotice
+              id={`${hardwareDeviceId}-in-force`}
+              settings={syncedSettings}
+            />
           </PlaybackField>
         </CardContent>
         {/* Inside the card, so the one Save bar on this page is visibly the

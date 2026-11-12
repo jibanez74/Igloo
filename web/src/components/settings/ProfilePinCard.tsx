@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,6 +10,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { KeyRound } from "lucide-react";
 import SettingsCardHeader from "@/components/settings/SettingsCardHeader";
 import { sessionEndedSince, sessionStamp } from "@/hooks/useEndSession";
+import { useFocusHandoff } from "@/hooks/useFocusHandoff";
 import { updateUserPin } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/is-api-failure";
 import {
@@ -48,6 +49,11 @@ export default function ProfilePinCard() {
   const [currentPin, setCurrentPin] = useState("");
   const [newPin, setNewPin] = useState("");
   const [errors, setErrors] = useState<PinErrors>({});
+  // "Set PIN" and "Remove PIN" disable themselves while they save, and
+  // Remove is gone once the PIN is; the PIN field takes focus first.
+  const formRef = useRef<HTMLFormElement | null>(null);
+  const newPinInputRef = useRef<HTMLInputElement | null>(null);
+  useFocusHandoff(formRef, newPinInputRef);
 
   const currentPinId = useId();
   const newPinId = useId();
@@ -159,16 +165,17 @@ export default function ProfilePinCard() {
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
+    // In the order the fields are in, so the first invalid one takes focus.
+    if (hasPin && !validateCurrentPin()) {
+      return;
+    }
+
     if (!PIN_PATTERN.test(newPin)) {
       showFieldError(
         "newPin",
         `PIN must be exactly ${USER_PIN_LENGTH} digits.`,
         newPinId,
       );
-      return;
-    }
-
-    if (hasPin && !validateCurrentPin()) {
       return;
     }
 
@@ -239,7 +246,12 @@ export default function ProfilePinCard() {
           </FieldError>
         )}
 
-        <form onSubmit={handleSubmit} noValidate className="space-y-4">
+        <form
+          ref={formRef}
+          onSubmit={handleSubmit}
+          noValidate
+          className="space-y-4"
+        >
           {hasPin && (
             <div className="space-y-2">
               <Label htmlFor={currentPinId} tone="muted">
@@ -281,6 +293,7 @@ export default function ProfilePinCard() {
               Exactly {USER_PIN_LENGTH} digits.
             </FieldHint>
             <Input
+              ref={newPinInputRef}
               id={newPinId}
               type="text"
               inputMode="numeric"

@@ -1,6 +1,8 @@
+import { useRef } from "react";
 import { RotateCcw, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { useFocusHandoff } from "@/hooks/useFocusHandoff";
 import { cn } from "@/lib/utils";
 import {
   MOTION_MICRO_COLORS_CLASS,
@@ -52,6 +54,11 @@ const CLEAN_STATUS = "No unsaved changes";
  * there is nothing to save or reset (design-system §3.7). Below `sm` it is
  * one compact row: the status (wrapping to two lines rather than cut off),
  * an icon-only Reset, and Save.
+ *
+ * Save and Reset disable themselves while they still hold focus (Save while
+ * it is pending and once the form is clean, Reset once it has reset). Focus
+ * then moves to the status line, which says what happened, and returns to
+ * the button if it comes back to life: a save that failed.
  */
 export default function SettingsSaveBar({
   title,
@@ -75,6 +82,9 @@ export default function SettingsSaveBar({
   const resolvedStatus =
     isDirty || statusTone !== "neutral" ? statusMessage : CLEAN_STATUS;
   const actionsDisabled = !isDirty || isPending;
+  const actionsRef = useRef<HTMLDivElement | null>(null);
+  const statusRef = useRef<HTMLParagraphElement | null>(null);
+  useFocusHandoff(actionsRef, statusRef, { returns: true });
 
   return (
     <div
@@ -93,10 +103,14 @@ export default function SettingsSaveBar({
           {title}
         </p>
         <p
+          ref={statusRef}
           id={statusId}
+          // Focusable only from script, and un-ringed like any other target
+          // of programmatic focus that is not a control (§1.7).
+          tabIndex={-1}
           className={cn(
             MOTION_MICRO_COLORS_CLASS,
-            "line-clamp-2 text-xs sm:mt-1 sm:line-clamp-none sm:text-sm",
+            "line-clamp-2 text-xs outline-hidden sm:mt-1 sm:line-clamp-none sm:text-sm",
             TONE_CLASS[statusTone],
           )}
           aria-live="polite"
@@ -104,7 +118,7 @@ export default function SettingsSaveBar({
           {resolvedStatus}
         </p>
       </div>
-      <div className="flex shrink-0 items-center gap-2">
+      <div ref={actionsRef} className="flex shrink-0 items-center gap-2">
         <Button
           type="button"
           variant="outline"

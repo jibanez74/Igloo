@@ -7,7 +7,7 @@ import {
   MOVIES_LIBRARY_KEY,
   SHOW_DETAILS_KEY,
 } from "@/lib/constants";
-import { jsonResponse, requestURL } from "../helpers/api";
+import { deferredResponse, jsonResponse, requestURL } from "../helpers/api";
 import { authUserData } from "../helpers/fixtures";
 import { renderRoute } from "../helpers/render-route";
 
@@ -22,7 +22,7 @@ const savedSettings = {
   transcode_dir: "/var/lib/igloo/transcode",
 };
 
-function mockGeneralSettings() {
+function mockGeneralSettings(saveResponse?: Promise<Response>) {
   const saves: Record<string, unknown>[] = [];
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = requestURL(input);
@@ -35,6 +35,7 @@ function mockGeneralSettings() {
     if (url === "/api/settings/general" && init?.method === "PUT") {
       const body = JSON.parse(String(init.body)) as Record<string, unknown>;
       saves.push(body);
+      if (saveResponse) return saveResponse;
       return jsonResponse({
         error: false,
         message: "Settings updated",
@@ -167,5 +168,59 @@ describe("general settings: download images", () => {
     await waitFor(() => {
       expect(invalidatedArtworkQueries(queryClient)).toEqual(artworkQueryKeys);
     });
+  });
+
+  // Enter in a field submits the form. Disabled for the length of the save,
+  // the field dropped the focus it held, in every browser.
+  it("keeps focus in the field whose Enter saved the form", async () => {
+    const save = deferredResponse();
+    const saves = mockGeneralSettings(save.promise);
+    const user = userEvent.setup();
+    await renderRoute("/settings");
+
+    const field = await screen.findByLabelText("Static directory");
+    await user.type(field, "-moved{Enter}");
+
+    await waitFor(() => expect(saves).toHaveLength(1));
+    await waitFor(() => expect(field).toHaveAttribute("readonly"));
+    expect(field).toBeEnabled();
+    expect(field).toHaveFocus();
+
+    save.resolve(
+      jsonResponse({
+        error: false,
+        message: "Settings updated",
+        data: {
+          settings: { ...savedSettings, ...saves[0], tmdb_key: null },
+          restart_required: false,
+        },
+      }),
+    );
+    await waitFor(() => expect(field).not.toHaveAttribute("readonly"));
+    expect(field).toHaveFocus();
+  });
+
+  // The message is in the Save bar's status line; the field it is about has
+  // to point at it, or focus lands on an invalid field that says nothing.
+  it("ties a missing directory's message to its field", async () => {
+    mockGeneralSettings();
+    const user = userEvent.setup();
+    await renderRoute("/settings");
+
+    const field = await screen.findByLabelText("Static directory");
+    await user.clear(field);
+    await user.click(screen.getByRole("button", { name: "Save settings" }));
+
+    expect(field).toHaveFocus();
+    expect(field).toHaveAttribute("aria-invalid", "true");
+    expect(field).toHaveAccessibleDescription(
+      "The server must be able to write to this directory. Static directory is required.",
+    );
+    // The other field is not described by a message that is not about it.
+    expect(
+      screen.getByLabelText("Transcode directory"),
+    ).toHaveAccessibleDescription(
+      "The server must be able to write to this directory.",
+    );
   });
 });

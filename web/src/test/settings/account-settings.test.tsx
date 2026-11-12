@@ -65,11 +65,27 @@ type AccountFetchOptions = {
   acceptName?: boolean;
   /** Answers a password change as the server does a wrong current password. */
   rejectPassword?: boolean;
+  /** Answers a password change as the server does a new password it refuses. */
+  rejectNewPassword?: boolean;
+  /** Answers a password change with a server error about neither field. */
+  failPassword?: boolean;
+  /** Answers a password change in place of the reply the flags pick. */
+  passwordResponse?: Promise<Response>;
+  /** Answers the avatar upload in place of the stored-copy reply. */
+  uploadResponse?: Promise<Response>;
 };
 
 function setupAccountFetch(
   user: AuthUser = testUser(),
-  { avatarResponse, acceptName = false, rejectPassword = false }: AccountFetchOptions = {},
+  {
+    avatarResponse,
+    acceptName = false,
+    rejectPassword = false,
+    rejectNewPassword = false,
+    failPassword = false,
+    passwordResponse,
+    uploadResponse,
+  }: AccountFetchOptions = {},
 ) {
   const requests: CapturedRequest[] = [];
   let currentUser: AuthUser | null = user;
@@ -100,6 +116,22 @@ function setupAccountFetch(
     }
 
     if (url === "/api/user/password" && method === "PUT") {
+      if (passwordResponse) return passwordResponse;
+      if (failPassword) {
+        return jsonResponse(
+          { error: true, message: "internal server error" },
+          500,
+        );
+      }
+      if (rejectNewPassword) {
+        return jsonResponse(
+          {
+            error: true,
+            message: "new password must be at least 9 characters",
+          },
+          400,
+        );
+      }
       if (rejectPassword) {
         return jsonResponse(
           { error: true, message: "current password is incorrect" },
@@ -134,6 +166,7 @@ function setupAccountFetch(
     }
 
     if (url === "/api/user/avatar/upload" && method === "POST") {
+      if (uploadResponse) return uploadResponse;
       return jsonResponse({
         error: false,
         data: { user: currentUser },
@@ -351,6 +384,171 @@ describe("Account settings", () => {
     expect(showInfoMock).not.toHaveBeenCalled();
   });
 
+  // Every refusal used to be shown under Current password, whatever it was
+  // about.
+  it("puts a refusal of the new password on the new password field", async () => {
+    const user = userEvent.setup();
+    await renderAccountRoute(testUser(), { rejectNewPassword: true });
+
+    await user.type(screen.getByLabelText("Current password"), "RightPass123");
+    await user.type(screen.getByLabelText("New password"), "NewPass12345");
+    await user.type(screen.getByLabelText("Confirm new password"), "NewPass12345");
+    await user.click(screen.getByRole("button", { name: "Update password" }));
+
+    const newPassword = screen.getByLabelText("New password");
+    await waitFor(() =>
+      expect(newPassword).toHaveAttribute("aria-invalid", "true"),
+    );
+    expect(newPassword).toHaveAccessibleDescription(
+      /new password must be at least 9 characters/,
+    );
+    expect(newPassword).toHaveFocus();
+    expect(screen.getByLabelText("Current password")).not.toHaveAttribute(
+      "aria-invalid",
+    );
+  });
+
+  // A refusal that arrives after the reader moved on used to pull focus
+  // back to the password field.
+  it("leaves focus where the reader moved while a password change ran", async () => {
+    const user = userEvent.setup();
+    const passwordRequest = deferredResponse();
+    await renderAccountRoute(testUser(), {
+      passwordResponse: passwordRequest.promise,
+    });
+
+    await user.type(screen.getByLabelText("Current password"), "WrongPass123");
+    await user.type(screen.getByLabelText("New password"), "NewPass12345");
+    await user.type(screen.getByLabelText("Confirm new password"), "NewPass12345");
+    await user.click(screen.getByRole("button", { name: "Update password" }));
+    await screen.findByRole("button", { name: /updating/i });
+
+    const name = screen.getByRole("textbox", { name: "Name" });
+    name.focus();
+    passwordRequest.resolve(
+      jsonResponse(
+        { error: true, message: "current password is incorrect" },
+        401,
+      ),
+    );
+
+    const current = screen.getByLabelText("Current password");
+    await waitFor(() =>
+      expect(current).toHaveAttribute("aria-invalid", "true"),
+    );
+    expect(name).toHaveFocus();
+  });
+
+  // The button disables itself while it saves and once the profile is
+  // clean, which used to drop focus on the page body.
+  it("keeps focus in the profile form after Save profile", async () => {
+    const user = userEvent.setup();
+    await renderAccountRoute(testUser(), { acceptName: true });
+
+    const name = screen.getByRole("textbox", { name: "Name" });
+    await user.clear(name);
+    await user.type(name, "Riley Renamed");
+    const save = screen.getByRole("button", { name: "Save profile" });
+    save.focus();
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => expect(save).toBeDisabled());
+    expect(name).toHaveFocus();
+    await waitFor(() => expect(name).toHaveValue("Riley Renamed"));
+    expect(name).toHaveFocus();
+  });
+
+  // No `maxlength`: the browser counts UTF-16 units and the limit is in
+  // characters, so it would cut a valid name that holds an emoji short.
+  it("marks the name as required and leaves its length to validation", async () => {
+    await renderAccountRoute();
+
+    const name = screen.getByRole("textbox", { name: "Name" });
+    expect(name).toBeRequired();
+    expect(name).not.toHaveAttribute("maxlength");
+  });
+
+  // A failure that is not a refusal of either password used to be shown
+  // as a wrong current password.
+  it("leaves both password fields valid when the server fails", async () => {
+    const user = userEvent.setup();
+    await renderAccountRoute(testUser(), { failPassword: true });
+
+    await user.type(screen.getByLabelText("Current password"), "RightPass123");
+    await user.type(screen.getByLabelText("New password"), "NewPass12345");
+    await user.type(screen.getByLabelText("Confirm new password"), "NewPass12345");
+    await user.click(screen.getByRole("button", { name: "Update password" }));
+
+    await waitFor(() =>
+      expect(showActionFailedMock).toHaveBeenCalledWith(
+        "update password",
+        expect.objectContaining({ status: 500 }),
+      ),
+    );
+    expect(screen.getByLabelText("Current password")).not.toHaveAttribute(
+      "aria-invalid",
+    );
+    expect(screen.getByLabelText("New password")).not.toHaveAttribute(
+      "aria-invalid",
+    );
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  // Both buttons disable themselves while they save, which dropped focus
+  // on the page body in a real browser.
+  it("keeps focus in the password form after Update password", async () => {
+    const user = userEvent.setup();
+    await renderAccountRoute();
+
+    const current = screen.getByLabelText("Current password");
+    await user.type(current, "RightPass123");
+    await user.type(screen.getByLabelText("New password"), "NewPass12345");
+    await user.type(screen.getByLabelText("Confirm new password"), "NewPass12345");
+    screen.getByRole("button", { name: "Update password" }).focus();
+    await user.keyboard("{Enter}");
+
+    await waitFor(() =>
+      expect(showSuccessMock).toHaveBeenCalledWith(
+        "Password updated successfully",
+      ),
+    );
+    expect(current).toHaveFocus();
+  });
+
+  it("keeps focus on the image URL after Set URL", async () => {
+    const user = userEvent.setup();
+    await renderAccountRoute();
+
+    const url = screen.getByLabelText("Image URL");
+    await user.type(url, "https://example.com/me.jpg");
+    screen.getByRole("button", { name: "Set URL" }).focus();
+    await user.keyboard("{Enter}");
+
+    await waitFor(() =>
+      expect(showSuccessMock).toHaveBeenCalledWith("Avatar updated successfully"),
+    );
+    expect(url).toHaveFocus();
+  });
+
+  // The dialog was not a form, so Enter in its one field did nothing.
+  it("confirms account deletion with Enter once DELETE is typed", async () => {
+    const user = userEvent.setup();
+    const { requests } = await renderAccountRoute();
+
+    await user.click(screen.getByRole("button", { name: "Delete account" }));
+    const dialog = screen.getByRole("dialog", { name: "Delete account" });
+    const confirmation = within(dialog).getByLabelText("Type DELETE to confirm");
+
+    await user.type(confirmation, "delete{Enter}");
+    expect(requestsFor(requests, "DELETE", "/api/user")).toHaveLength(0);
+
+    await user.clear(confirmation);
+    await user.type(confirmation, "DELETE{Enter}");
+    await waitFor(() =>
+      expect(requestsFor(requests, "DELETE", "/api/user")).toHaveLength(1),
+    );
+  });
+
   it("keeps the hidden username autocomplete helper labeled for password managers", async () => {
     await renderAccountRoute();
 
@@ -456,6 +654,37 @@ describe("Account settings", () => {
       hint.compareDocumentPosition(input) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(screen.queryByText(/UTF-8/)).toBeNull();
+  });
+
+  // The file dialog hands focus back to the input. Disabled for the length
+  // of the upload, the input could not keep it.
+  it("keeps the upload input focusable while a file uploads", async () => {
+    const upload = deferredResponse();
+    const { requests } = await renderAccountRoute(testUser(), {
+      uploadResponse: upload.promise,
+    });
+    const input = screen.getByLabelText("Upload image");
+    const file = new File(["image"], "avatar.png", { type: "image/png" });
+
+    input.focus();
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => expect(input).toHaveAttribute("aria-disabled", "true"));
+    expect(input).toBeEnabled();
+    expect(input).toHaveFocus();
+    // A press meanwhile does not open the file dialog again.
+    expect(fireEvent.click(input)).toBe(false);
+    // A second file dropped on it meanwhile starts no second upload.
+    fireEvent.change(input, { target: { files: [file] } });
+    expect(requestsFor(requests, "POST", "/api/user/avatar/upload")).toHaveLength(
+      1,
+    );
+
+    upload.resolve(
+      jsonResponse({ error: false, data: { user: testUser() } }),
+    );
+    await waitFor(() => expect(input).not.toHaveAttribute("aria-disabled"));
+    expect(input).toHaveFocus();
   });
 
   it("exposes invalid avatar upload validation to assistive technology", async () => {

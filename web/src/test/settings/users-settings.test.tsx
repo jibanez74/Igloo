@@ -73,9 +73,17 @@ function defaultUsers() {
 
 function setupUsersFetch(
   users: TestAdminUser[] = defaultUsers(),
-  { failList = false }: { failList?: boolean } = {},
+  {
+    failList = false,
+    stallListAfterDelete = false,
+  }: {
+    failList?: boolean;
+    /** The list's refetch after a delete never answers. */
+    stallListAfterDelete?: boolean;
+  } = {},
 ) {
   const requests: CapturedRequest[] = [];
+  let listStalled = false;
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = requestURL(input);
     const method = init?.method ?? "GET";
@@ -94,6 +102,7 @@ function setupUsersFetch(
       if (failList) {
         return jsonResponse({ error: true, message: "internal_error" }, 500);
       }
+      if (listStalled) return new Promise<Response>(() => {});
       return jsonResponse({
         error: false,
         data: { users },
@@ -131,6 +140,13 @@ function setupUsersFetch(
       });
     }
 
+    if (url.startsWith("/api/admin/users/") && method === "DELETE") {
+      const id = Number(url.split("/").pop());
+      users = users.filter(user => user.id !== id);
+      listStalled = stallListAfterDelete;
+      return jsonResponse({ error: false, message: "User deleted" });
+    }
+
     return jsonResponse({
       error: true,
       message: `Unexpected request: ${method} ${url}`,
@@ -141,8 +157,11 @@ function setupUsersFetch(
   return { requests };
 }
 
-async function renderUsersRoute(users = defaultUsers()) {
-  const { requests } = setupUsersFetch(users);
+async function renderUsersRoute(
+  users = defaultUsers(),
+  options: Parameters<typeof setupUsersFetch>[1] = {},
+) {
+  const { requests } = setupUsersFetch(users, options);
   const { queryClient } = await renderRoute("/settings/users");
 
   await screen.findByRole("button", { name: "Add user" });
@@ -339,6 +358,27 @@ describe("Users settings", () => {
     expect(mutationRequests(requests, "POST")).toHaveLength(0);
   });
 
+  it("confirms a user's deletion with Enter once DELETE is typed", async () => {
+    const user = userEvent.setup();
+    const { requests } = await renderUsersRoute();
+
+    await user.click(screen.getByRole("button", { name: "Delete Dana Scully" }));
+    const dialog = screen.getByRole("dialog", { name: "Delete user" });
+    const confirmation = within(dialog).getByLabelText("Type DELETE to confirm");
+    // Nothing is wrong with an empty field, so nothing says it is valid either.
+    expect(confirmation).not.toHaveAttribute("aria-invalid");
+
+    await user.type(confirmation, "delete{Enter}");
+    expect(mutationRequests(requests, "DELETE")).toHaveLength(0);
+    expect(confirmation).toHaveAttribute("aria-invalid", "true");
+
+    await user.clear(confirmation);
+    await user.type(confirmation, "DELETE{Enter}");
+    await waitFor(() =>
+      expect(mutationRequests(requests, "DELETE")).toHaveLength(1),
+    );
+  });
+
   it("blocks duplicate edit emails but allows the unchanged current email", async () => {
     const user = userEvent.setup();
     const { requests } = await renderUsersRoute();
@@ -392,6 +432,28 @@ describe("Users settings", () => {
     );
     expect(screen.getByRole("button", { name: "Reset password" })).toBeDisabled();
     expect(mutationRequests(requests, "PUT")).toHaveLength(0);
+  });
+
+  // Focus used to return to the deleted user's own Delete button, and fall
+  // to the page body when the list's refetch took the row away.
+  it("moves focus to Add user once the deleted user's row is gone", async () => {
+    const user = userEvent.setup();
+    // The row has to leave with the delete, not with the list's refetch.
+    await renderUsersRoute(defaultUsers(), { stallListAfterDelete: true });
+
+    screen.getByRole("button", { name: "Delete Dana Scully" }).focus();
+    await user.keyboard("{Enter}");
+    const dialog = screen.getByRole("dialog", { name: "Delete user" });
+    await user.type(
+      within(dialog).getByLabelText("Type DELETE to confirm"),
+      "DELETE{Enter}",
+    );
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Add user" })).toHaveFocus(),
+    );
+    expect(screen.queryByText("Dana Scully")).not.toBeInTheDocument();
+    expect(screen.getByText("Fox Mulder")).toBeInTheDocument();
   });
 
   it("restores focus to Add User after closing the Add User dialog", async () => {
