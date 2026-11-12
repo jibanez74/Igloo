@@ -226,6 +226,10 @@ test.describe("Playback settings", () => {
       expect(putBody).not.toHaveProperty("download_mbps");
 
       await expect(page.getByText("Playback settings saved")).toBeVisible();
+      // Save disabled itself while it held focus. A real browser then drops
+      // focus on the page body unless the bar hands it on (jsdom keeps it on
+      // the disabled button, so only this run can see the loss).
+      await expect(page.getByText("No unsaved changes")).toBeFocused();
       const savedSettings = await fetchPlaybackSettings(page);
       expect(savedSettings.server_upload_mbps).toBe(5);
       expect(savedSettings.hardware_acceleration_device).toBe("nvidia");
@@ -292,6 +296,9 @@ test.describe("Playback settings", () => {
       await expect(
         page.getByText("Trailers before movies turned on. Saved to your account."),
       ).toBeVisible();
+      // The switch is not disabled while it saves: that dropped focus in
+      // Chromium on every toggle.
+      await expect(toggle).toBeFocused();
 
       await page.getByRole("combobox", { name: "Number of trailers" }).click();
       await page.getByRole("option", { name: "3 trailers" }).click();
