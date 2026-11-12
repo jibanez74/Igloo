@@ -206,9 +206,12 @@ describe("CreateWatchRoomDialog", () => {
 
     await user.clear(screen.getByLabelText("Search users"));
 
-    expect(
-      screen.getByRole("button", { name: /remove fox mulder from invited users/i }),
-    ).toBeInTheDocument();
+    const chip = screen.getByRole("button", {
+      name: /remove fox mulder from invited users/i,
+    });
+    // An actionable chip is a Button (design-system §1.6), so it is ringed.
+    expect(chip).toHaveAttribute("data-variant", "outline");
+    expect(chip).toHaveAttribute("data-shape", "pill");
     expect(screen.getByText("Dana Scully")).toBeInTheDocument();
   });
 

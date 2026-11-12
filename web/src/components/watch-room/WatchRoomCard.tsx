@@ -3,17 +3,15 @@ import { Link } from "@tanstack/react-router";
 import { Film, Trash2, Users } from "lucide-react";
 import {
   CARD_FOCUS_WITHIN_RING_CLASS,
-  CARD_INTERACTIVE_SURFACE_CLASS,
+  CARD_SURFACE_CLASS,
   CARD_MEDIA_HOVER_CLASS,
-  FOCUS_VISIBLE_RING_CLASS,
-  MOTION_MICRO_COLORS_CLASS,
   TMDB_POSTER_SIZE,
 } from "@/lib/constants";
 import { pluralize } from "@/lib/format";
 import { getMediaImageUrl } from "@/lib/media-image-url";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import DeleteWatchRoomDialog from "@/components/watch-room/DeleteWatchRoomDialog";
 import { cn, getInitials } from "@/lib/utils";
 import type { WatchRoomType } from "@/types";
@@ -48,9 +46,9 @@ export default function WatchRoomCard({ room }: Props) {
   return (
     <article
       className={cn(
-        CARD_INTERACTIVE_SURFACE_CLASS,
+        CARD_SURFACE_CLASS,
         CARD_FOCUS_WITHIN_RING_CLASS,
-        "group flex gap-4 rounded-2xl border border-border bg-card/95 p-4 focus-within:border-ring/40 hover:-translate-y-1 hover:border-primary/50 hover:shadow-xl hover:shadow-primary/20",
+        "flex gap-4 p-4 focus-within:border-ring/40",
       )}
       aria-label={`Watch room: ${room.movie_title}`}
     >
@@ -145,11 +143,7 @@ export default function WatchRoomCard({ room }: Props) {
           <Link
             to="/watch-rooms/$id"
             params={{ id: room.id }}
-            className={cn(
-              MOTION_MICRO_COLORS_CLASS,
-              FOCUS_VISIBLE_RING_CLASS,
-              "inline-flex h-9 items-center rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground hover:bg-primary/90",
-            )}
+            className={buttonVariants()}
             aria-label={`Join watch room for ${room.movie_title}`}
           >
             Join room

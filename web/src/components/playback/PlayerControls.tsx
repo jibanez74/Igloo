@@ -10,12 +10,14 @@ import {
 import ProgressBar from "@/components/playback/ProgressBar";
 import ChapterMenu from "@/components/playback/ChapterMenu";
 import VolumeControl from "@/components/playback/VolumeControl";
+import {
+  PlayerIconButton,
+  PlayerPlayButton,
+} from "@/components/playback/PlayerButtons";
 import { useShortcutHints } from "@/hooks/useShortcutHints";
 import {
   MOVIE_SEEK_STEP_SEC,
   MOTION_PLAYER_CHROME_PANEL_CLASS,
-  PLAYER_ICON_BUTTON_CLASS,
-  PLAYER_PRIMARY_BUTTON_CLASS,
 } from "@/lib/constants";
 import { formatTimecode } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -115,27 +117,17 @@ export default function PlayerControls({
             role="group"
             aria-label="Playback controls"
           >
-            <button
-              type="button"
+            <PlayerIconButton
               onClick={onSeekBackward}
-              className={cn(
-                PLAYER_ICON_BUTTON_CLASS,
-                "size-10 hover:bg-accent",
-              )}
               aria-label={withShortcut(
                 `Seek backward ${MOVIE_SEEK_STEP_SEC} seconds`,
                 "J or Left Arrow",
               )}
             >
               <Rewind className="size-5" aria-hidden="true" />
-            </button>
-            <button
-              type="button"
+            </PlayerIconButton>
+            <PlayerPlayButton
               onClick={onTogglePlay}
-              className={cn(
-                PLAYER_PRIMARY_BUTTON_CLASS,
-                "size-14 shadow-glow",
-              )}
               aria-label={withShortcut(playing ? "Pause" : "Play", "Space or K")}
             >
               {playing ? (
@@ -143,21 +135,16 @@ export default function PlayerControls({
               ) : (
                 <Play className="size-6 fill-current" aria-hidden="true" />
               )}
-            </button>
-            <button
-              type="button"
+            </PlayerPlayButton>
+            <PlayerIconButton
               onClick={onSeekForward}
-              className={cn(
-                PLAYER_ICON_BUTTON_CLASS,
-                "size-10 hover:bg-accent",
-              )}
               aria-label={withShortcut(
                 `Seek forward ${MOVIE_SEEK_STEP_SEC} seconds`,
                 "L or Right Arrow",
               )}
             >
               <FastForward className="size-5" aria-hidden="true" />
-            </button>
+            </PlayerIconButton>
           </div>
 
           <div className="flex min-w-25 items-center justify-end gap-2">
@@ -176,13 +163,8 @@ export default function PlayerControls({
               mediaRef={videoRef}
               variant="minimized"
             />
-            <button
-              type="button"
+            <PlayerIconButton
               onClick={onToggleFullscreen}
-              className={cn(
-                PLAYER_ICON_BUTTON_CLASS,
-                "size-10 hover:bg-accent",
-              )}
               aria-label={withShortcut(fullscreenLabel, "F")}
               aria-pressed={chromeFullscreenMode}
             >
@@ -191,7 +173,7 @@ export default function PlayerControls({
               ) : (
                 <Maximize className="size-5" aria-hidden="true" />
               )}
-            </button>
+            </PlayerIconButton>
           </div>
         </div>
       </div>

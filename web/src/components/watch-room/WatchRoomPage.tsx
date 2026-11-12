@@ -16,12 +16,9 @@ import {
   Users,
 } from "lucide-react";
 import {
-  FOCUS_VISIBLE_RING_CLASS,
-  MOTION_PLAYER_CHROME_BUTTON_CLASS,
   TMDB_POSTER_SIZE,
   WATCH_ROOM_CLIENT_EVENT_TYPES,
   WATCH_ROOM_SEEK_STEP_SEC,
-  MOTION_MICRO_COLORS_CLASS,
 } from "@/lib/constants";
 import { formatTimecode } from "@/lib/format";
 import { apiErrorMessage } from "@/lib/is-api-failure";
@@ -45,6 +42,10 @@ import { cn } from "@/lib/utils";
 import DeleteWatchRoomDialog from "@/components/watch-room/DeleteWatchRoomDialog";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import {
+  PlayerIconButton,
+  PlayerPlayButton,
+} from "@/components/playback/PlayerButtons";
 import ProgressBar from "@/components/playback/ProgressBar";
 import VolumeControl from "@/components/playback/VolumeControl";
 import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
@@ -450,18 +451,15 @@ export function WatchRoomUnavailable({
           Watch room unavailable
         </h1>
         <p className="mb-6 text-muted-foreground">{message}</p>
-        <button
-          type="button"
+        <Button
+          size="xl"
+          shape="pill"
           onClick={onBackHome}
-          className={cn(
-            MOTION_MICRO_COLORS_CLASS,
-            FOCUS_VISIBLE_RING_CLASS,
-            "inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground hover:bg-primary/90",
-          )}
+          className="font-semibold shadow-glow"
         >
           <ArrowLeft className="size-5" aria-hidden="true" />
           Back home
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -508,6 +506,7 @@ function WatchRoomHeader({
               type="button"
               variant="destructive"
               size="sm"
+              shape="pill"
               aria-label={`Close watch room for ${room.movie_title}`}
               onClick={onDelete}
             >
@@ -516,18 +515,10 @@ function WatchRoomHeader({
             </Button>
           ) : null}
 
-          <button
-            type="button"
-            onClick={onLeave}
-            className={cn(
-              MOTION_MICRO_COLORS_CLASS,
-              FOCUS_VISIBLE_RING_CLASS,
-              "inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground",
-            )}
-          >
+          <Button variant="outline" size="sm" shape="pill" onClick={onLeave}>
             <ArrowLeft className="size-4" aria-hidden="true" />
             Leave room
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -652,48 +643,30 @@ function WatchRoomPlayerPanel({
 
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <button
-                type="button"
+              <PlayerIconButton
                 onClick={onSeekBackward}
-                className={cn(
-                  MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  FOCUS_VISIBLE_RING_CLASS,
-                  "inline-flex size-11 items-center justify-center rounded-full border border-border bg-background/60 text-foreground hover:bg-muted",
-                )}
                 aria-label={`Rewind ${WATCH_ROOM_SEEK_STEP_SEC} seconds`}
               >
                 <Rewind className="size-5" aria-hidden="true" />
-              </button>
+              </PlayerIconButton>
 
-              <button
-                type="button"
+              <PlayerPlayButton
                 onClick={onTogglePlay}
-                className={cn(
-                  MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  FOCUS_VISIBLE_RING_CLASS,
-                  "inline-flex size-13 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90",
-                )}
                 aria-label={playing ? "Pause playback" : "Play playback"}
               >
                 {playing ? (
-                  <Pause className="size-6" aria-hidden="true" />
+                  <Pause className="size-6 fill-current" aria-hidden="true" />
                 ) : (
                   <Play className="size-6 fill-current" aria-hidden="true" />
                 )}
-              </button>
+              </PlayerPlayButton>
 
-              <button
-                type="button"
+              <PlayerIconButton
                 onClick={onSeekForward}
-                className={cn(
-                  MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  FOCUS_VISIBLE_RING_CLASS,
-                  "inline-flex size-11 items-center justify-center rounded-full border border-border bg-background/60 text-foreground hover:bg-muted",
-                )}
                 aria-label={`Fast-forward ${WATCH_ROOM_SEEK_STEP_SEC} seconds`}
               >
                 <FastForward className="size-5" aria-hidden="true" />
-              </button>
+              </PlayerIconButton>
             </div>
 
             <div className="flex items-center gap-4">
@@ -705,14 +678,8 @@ function WatchRoomPlayerPanel({
                 / {formatTimecode(duration)}
               </p>
               <VolumeControl mediaRef={videoRef} />
-              <button
-                type="button"
+              <PlayerIconButton
                 onClick={onToggleFullscreen}
-                className={cn(
-                  MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  FOCUS_VISIBLE_RING_CLASS,
-                  "inline-flex size-11 items-center justify-center rounded-full border border-border bg-background/60 text-foreground hover:bg-muted",
-                )}
                 aria-label={
                   playerFullscreenMode
                     ? isImmersiveViewport && !isFullscreen
@@ -727,7 +694,7 @@ function WatchRoomPlayerPanel({
                 ) : (
                   <Maximize className="size-5" aria-hidden="true" />
                 )}
-              </button>
+              </PlayerIconButton>
             </div>
           </div>
 
