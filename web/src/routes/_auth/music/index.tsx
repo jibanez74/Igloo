@@ -46,11 +46,9 @@ import {
   CONTENT_FADE_ENTER_CLASS,
   CONTENT_FADE_EXIT_CLASS,
   CONTENT_FADE_TRANSITION_MS,
-  FOCUS_VISIBLE_RING_CLASS,
   LIBRARY_TAB_TRIGGER_CLASS,
   LIBRARY_TABS_LIST_CLASS,
   LIKED_TRACKS_PER_PAGE,
-  MOTION_MICRO_CONTROL_CLASS,
   MOTION_SECTION_ENTER_DELAYED_CLASS,
   MUSIC_CARD_GRID_CLASS,
   MUSICIANS_PER_PAGE,
@@ -1018,20 +1016,16 @@ function LikedTracksInPlaylistsTab({
       skeletonCard={<TrackRowSkeleton />}
       toolbarStartSlot={
         <>
-          <button
+          <Button
             ref={backToPlaylistsButtonRef}
-            type="button"
+            variant="link-muted"
+            size="inline"
             onClick={onExit}
-            className={cn(
-              "flex items-center gap-2 rounded-sm text-sm text-muted-foreground hover:text-foreground focus-visible:text-primary",
-              MOTION_MICRO_CONTROL_CLASS,
-              FOCUS_VISIBLE_RING_CLASS,
-            )}
             aria-label="Back to playlists"
           >
             <ArrowLeft className="size-4" aria-hidden="true" />
             Playlists
-          </button>
+          </Button>
           <span className="text-muted-foreground" aria-hidden="true">/</span>
           <h2 className="flex items-center gap-2 font-semibold text-foreground">
             <Heart className="size-4 fill-current text-destructive" aria-hidden="true" />

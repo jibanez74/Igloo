@@ -225,6 +225,21 @@ describe("buttonVariants", () => {
     expect(classes).not.toContain("h-10");
   });
 
+  // A text button: no box of its own, as tall as its text. The muted link
+  // keeps the regular weight of the back links it stands beside.
+  it("makes the link variants plain text at the inline size", () => {
+    const link = classesOf(buttonVariants({ variant: "link", size: "inline" }));
+    expect(link).toEqual(expect.arrayContaining(["text-primary", "hover:underline", "p-0"]));
+    expect(link.some(name => /^h-\d/.test(name))).toBe(false);
+    expect(link).not.toContain("px-4");
+
+    const muted = classesOf(buttonVariants({ variant: "link-muted", size: "inline" }));
+    expect(muted).toEqual(
+      expect.arrayContaining(["text-muted-foreground", "hover:text-primary", "font-normal"]),
+    );
+    expect(muted).not.toContain("font-medium");
+  });
+
   it("never repeats a class", () => {
     for (const variant of [
       "default",
@@ -235,8 +250,10 @@ describe("buttonVariants", () => {
       "outline-destructive",
       "ghost-muted",
       "ghost-destructive",
+      "link",
+      "link-muted",
     ] as const) {
-      for (const size of ["default", "sm", "lg", "xl", "icon", "icon-sm"] as const) {
+      for (const size of ["default", "sm", "lg", "xl", "icon", "icon-sm", "inline"] as const) {
         const classes = classesOf(buttonVariants({ variant, size }));
 
         expect(new Set(classes).size).toBe(classes.length);

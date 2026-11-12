@@ -112,6 +112,36 @@ describe("TrackItem like button", () => {
     expect(readyButton).not.toHaveAttribute("aria-disabled");
   });
 
+  // The row's icons share one look: ghost buttons resting in the muted
+  // colour. A liked heart keeps the destructive colour as its state.
+  it("draws the like toggle as a row icon whose colour is its state", async () => {
+    vi.mocked(getLikedTrackIds).mockResolvedValue(likedIds([7]));
+
+    renderWithQueryClient(
+      <TrackItem
+        id={7}
+        title="Signal Fire"
+        duration={211}
+        variant="album"
+        onPlay={vi.fn()}
+        showActionsMenu={false}
+        isDraggable
+      />,
+    );
+
+    const like = await screen.findByRole("button", {
+      name: "Remove Signal Fire from liked",
+    });
+    expect(like).toHaveAttribute("data-variant", "ghost-destructive");
+    expect(like).toHaveAttribute("data-size", "icon-sm");
+    expect(like).toHaveClass("text-destructive");
+    expect(like).not.toHaveClass("text-muted-foreground");
+
+    const handle = screen.getByRole("button", { name: "Drag to reorder" });
+    expect(handle).toHaveAttribute("data-variant", "ghost-muted");
+    expect(handle).toHaveClass("cursor-grab");
+  });
+
   it("toggles the cached liked ids through the shared mutation", async () => {
     vi.mocked(getLikedTrackIds).mockResolvedValue(likedIds([]));
     vi.mocked(toggleLikeTrack).mockResolvedValue({

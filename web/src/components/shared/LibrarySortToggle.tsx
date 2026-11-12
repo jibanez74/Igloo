@@ -1,9 +1,5 @@
 import { ArrowDownAZ, ArrowUpAZ } from "lucide-react";
-import {
-  FOCUS_VISIBLE_RING_CLASS,
-  MOTION_MICRO_CONTROL_CLASS,
-} from "@/lib/constants";
-import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import type { SortOrder } from "@/types";
 
 type LibrarySortToggleProps = {
@@ -19,14 +15,11 @@ export default function LibrarySortToggle({
   onToggle,
 }: LibrarySortToggleProps) {
   return (
-    <button
-      type="button"
+    <Button
+      variant="outline"
+      size="sm"
+      shape="pill"
       onClick={onToggle}
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground",
-        MOTION_MICRO_CONTROL_CLASS,
-        FOCUS_VISIBLE_RING_CLASS,
-      )}
       aria-label={
         sort === "asc"
           ? "Sorted A to Z, click to sort Z to A"
@@ -44,6 +37,6 @@ export default function LibrarySortToggle({
           Z–A
         </>
       )}
-    </button>
+    </Button>
   );
 }

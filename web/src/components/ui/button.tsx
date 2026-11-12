@@ -30,6 +30,11 @@ const BUTTON_VARIANTS = {
     "text-muted-foreground hover:bg-accent hover:text-destructive dark:hover:bg-accent/50",
   accent:
     "bg-primary text-primary-foreground shadow-md hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100 disabled:shadow-none",
+  // Text that acts, in the primary colour: a retry inside an alert, "Mark
+  // all read". Pair with size="inline".
+  link: "text-primary underline-offset-4 hover:underline",
+  // Quiet text that lights up on hover: the way back in a toolbar.
+  "link-muted": "font-normal text-muted-foreground hover:text-primary",
 } as const
 
 // Sizes set no radius: the base rounds every button and the pill shape alone
@@ -43,6 +48,9 @@ const BUTTON_SIZES = {
   xl: "h-11 px-6 has-[>svg]:px-4",
   icon: "size-9",
   "icon-sm": "size-8",
+  // No box of its own: a text button that sits in a line of text or a
+  // toolbar, as tall as its text. For the link variants.
+  inline: "p-0",
 } as const
 
 // A pill is a shape any variant can take: the primary and the outline

@@ -320,9 +320,12 @@ assemble a look from classes.
 | `ghost-destructive` | ghost-muted whose hover turns destructive | a row's remove or delete icon |
 | `destructive` | destructive fill | the confirming action of a deletion |
 | `outline-destructive` | outline in the destructive color, in both themes | a removal that is not its surface's main action: revoke a device |
+| `link` | primary text, underlined on hover | text that acts: "Mark all read", the shared `RetryButton` (underlined at rest, since it sits in an alert's text) |
+| `link-muted` | muted text at the regular weight, primary on hover | the way back in a toolbar or above a page: "← Playlists" in the liked views, the movie playlist page's "Movie playlists" link |
 
-Sizes are `default`, `sm`, `lg`, `xl`, `icon` and `icon-sm`. `shape="pill"`
-rounds any variant fully. The base string carries the focus ring, disabled opacity,
+Sizes are `default`, `sm`, `lg`, `xl`, `icon`, `icon-sm` and `inline` (no box
+of its own, as tall as its text: the size for the two link variants).
+`shape="pill"` rounds any variant fully. The base string carries the focus ring, disabled opacity,
 `aria-invalid` styling, a property-scoped 150ms transition with
 `motion-reduce:transition-none`, and stamps `data-variant`, `data-size` and
 `data-shape`.
@@ -1219,7 +1222,8 @@ hover) and an `sr-only` tail, since a disabled menu item otherwise announces
 only its label; the page owns the status query, because one mounted inside the dropdown
 would not fetch until the menu opened), `LibraryAllTab` (the paginated grid and its skeleton),
 `LibraryGenresTab` (the genre-tile facet with focus restoration after Clear,
-and its skeleton), `LibrarySortToggle` (the single A–Z / Z–A button) and
+and its skeleton), `LibrarySortToggle` (the single A–Z / Z–A button, an
+`outline` `sm` pill like the genre tab's Clear) and
 `LibraryEmptyState` (the minimal empty variant, §3.4). A page supplies what
 differs: the card renderer, the lowercase nouns for copy and announcements, its
 prepared `queryOptions()`, the tab triggers, and navigation callbacks — the
@@ -1264,10 +1268,14 @@ owned children must all be list items; each track row keeps its
 and the first row of each letter opens with a visually hidden cue ("A
 section", "Other titles section" for `#`) so the start of a letter is
 announced where the sighted reader sees the mark.
-Leaving the liked view returns focus to its toolbar
-button, and entering it focuses "Back to playlists". Both playlist pages
-share their owner row too: `PlaylistOwnerActions` (Edit and Delete text
-buttons, rendered only when the detail response says `is_owner`; when it does
+Both liked views open their toolbar with the same breadcrumb: "← Playlists"
+(`link-muted`, named "Back to playlists"), a `/`, then the view's `h2` ("Liked
+Tracks" / "Liked Movies", with a filled heart) and its count. Leaving the liked
+view returns focus to its toolbar button, and entering it focuses "Back to
+playlists". Both playlist pages share their owner row too:
+`PlaylistOwnerActions` (Edit and Delete as `ghost-muted` / `ghost-destructive`
+`sm` buttons, 32 px where the text buttons they replaced were 16 px on a
+phone; a left-aligned row pulls back by their padding with `-ml-2.5`; rendered only when the detail response says `is_owner`; when it does
 not, the header names the owner instead — "By {owner.name}" as a third item in
 the music page's statistics list and a line under the movie page's count, the
 way a watch-room card says "Hosted by" — so a public or shared playlist opened

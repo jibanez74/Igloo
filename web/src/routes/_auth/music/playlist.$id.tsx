@@ -448,7 +448,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
             <PlaylistOwnerActions
               kind="music"
               playlist={playlist}
-              className="mt-4 justify-center lg:justify-start"
+              className="mt-4 justify-center lg:-ml-2.5 lg:justify-start"
             />
           )}
         </div>

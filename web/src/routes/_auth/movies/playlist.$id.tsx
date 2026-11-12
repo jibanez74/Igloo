@@ -1,3 +1,4 @@
+import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRef } from "react";
 import { createFileRoute, Link, stripSearchParams } from "@tanstack/react-router";
@@ -19,7 +20,6 @@ import {
 import {
   FOCUS_VISIBLE_RING_CLASS,
   MOTION_LOADING_STATE_CLASS,
-  MOTION_MICRO_COLORS_CLASS,
   MOVIE_PLAYLIST_DEFAULT_SEARCH,
   MOVIE_PLAYLIST_DETAILS_KEY,
   MOVIE_PLAYLIST_MOVIES_KEY,
@@ -188,7 +188,7 @@ function MoviePlaylistContent({ playlistId, data }: MoviePlaylistContentProps) {
               <PlaylistOwnerActions
                 kind="movie"
                 playlist={playlist}
-                className="mt-4"
+                className="mt-4 -ml-2.5"
               />
             )}
           </div>
@@ -252,8 +252,8 @@ function MoviePlaylistsBackLink() {
       to="/movies"
       search={MOVIES_PLAYLISTS_TAB_SEARCH}
       className={cn(
-        MOTION_MICRO_COLORS_CLASS,
-        "mb-6 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary",
+        buttonVariants({ variant: "link-muted", size: "inline" }),
+        "mb-6",
       )}
     >
       <ArrowLeft className="size-4" aria-hidden="true" />

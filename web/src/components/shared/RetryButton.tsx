@@ -1,9 +1,11 @@
-import { FOCUS_VISIBLE_RING_CLASS } from "@/lib/constants";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /**
  * The one "Try again" control every load-failure surface renders (design-system
  * §3.4): a text link that hands the query's `refetch` back to the reader.
+ * Underlined at rest: it sits in an alert's text, where colour alone would
+ * not mark it as a control.
  */
 export default function RetryButton({
   onRetry,
@@ -13,16 +15,13 @@ export default function RetryButton({
   className?: string;
 }) {
   return (
-    <button
-      type="button"
+    <Button
+      variant="link"
+      size="inline"
       onClick={onRetry}
-      className={cn(
-        "mt-2 rounded-sm text-sm font-medium text-primary underline hover:text-primary/80",
-        FOCUS_VISIBLE_RING_CLASS,
-        className,
-      )}
+      className={cn("mt-2 underline", className)}
     >
       Try again
-    </button>
+    </Button>
   );
 }
