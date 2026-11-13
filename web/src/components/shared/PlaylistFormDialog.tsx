@@ -21,24 +21,19 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
-import { PLAYLIST_KINDS, type PlaylistKind } from "@/lib/playlist-kinds";
+import {
+  PLAYLIST_KINDS,
+  type EditablePlaylist,
+  type PlaylistKind,
+} from "@/lib/playlist-kinds";
 import { unwrapString, unwrapStringOrUndefined } from "@/lib/nullable";
 import { playlistFieldsError } from "@/lib/form-validation";
-import type { NullableString } from "@/types";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import { sessionEndedSince, sessionStamp } from "@/lib/session";
 
 // ============================================================================
 // Types
 // ============================================================================
-
-type PlaylistData = {
-  id: number;
-  name: string;
-  description: NullableString;
-  cover_image: NullableString;
-  is_public: boolean;
-};
 
 type CreateModeProps = {
   mode: "create";
@@ -47,7 +42,7 @@ type CreateModeProps = {
 
 type EditModeProps = {
   mode: "edit";
-  playlist: PlaylistData;
+  playlist: EditablePlaylist;
 };
 
 type PlaylistFormDialogProps = {
@@ -111,7 +106,7 @@ export default function PlaylistFormDialog(props: PlaylistFormDialogProps) {
 type PlaylistFormProps = {
   kind: PlaylistKind;
   mode: "create" | "edit";
-  playlist?: PlaylistData;
+  playlist?: EditablePlaylist;
   onOpenChange: (open: boolean) => void;
   restoreFocusRef?: RefObject<HTMLElement | null>;
 };

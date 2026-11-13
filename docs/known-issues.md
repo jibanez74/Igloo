@@ -38,18 +38,6 @@ than 4 s after video, or a TV resume fails with an `init.mp4` that has no `dec3`
 Recorded on 2026-11-13 from the web audit of fc27fddc and the review of PRs #267–#270, which
 fixed the audit's bugs (BUG-01..07, OBS-01/02) and left these.
 
-### Some movie wire types are handwritten copies of OpenAPI schemas
-
-`web/src/types/movies.ts` declares `VideoStreamType`, `AudioStreamType`, `SubtitleType`,
-`TmdbSearchResultType`, `TmdbSearchMoviesRequest` and `UpdateMovieMetadataRequest` by hand,
-though `openapi.gen.ts` has named schemas for each (`VideoStream`, `AudioStream`, `Subtitle`,
-`TmdbSearchResult`, …), against `web/AGENTS.md`'s alias-only rule. `check:openapi` cannot catch
-drift in these copies. Differences to handle when aliasing: `TmdbSearchMoviesRequest.title` is
-optional in the schema, `UpdateMovieMetadataRequest` fields are `?: T | null` there, and
-`ExtraVideo` narrows `type`/`site` to enums. Likewise `PlaylistData` (`PlaylistFormDialog.tsx`)
-and `OwnedPlaylist` (`PlaylistOwnerActions.tsx`) repeat one editable-playlist shape that could be
-one `Pick<components["schemas"]["Playlist"], …>` in `lib/playlist-kinds.ts` (audit DRY-01/02).
-
 ## TV app (IglooTV)
 
 ### The player's buffer budget is a loading target, not a cap

@@ -20,8 +20,18 @@ import {
   PLAYLISTS_KEY,
 } from "@/lib/constants";
 import type { ApiResponseType, BulkAddResponseType } from "@/types";
+import type { components } from "@/types/openapi.gen";
 
 export type PlaylistKind = "music" | "movie";
+
+/**
+ * What the owner's Edit and Delete work from, the same for either kind: both
+ * playlist schemas carry these fields alike.
+ */
+export type EditablePlaylist = Pick<
+  components["schemas"]["Playlist"],
+  "id" | "name" | "description" | "cover_image" | "is_public"
+>;
 
 /** One row of the AddToPlaylistDialog picker, the same for either kind. */
 export type PlaylistPickerRow = {
