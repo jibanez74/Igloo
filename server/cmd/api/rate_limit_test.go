@@ -122,6 +122,12 @@ func TestClientIPMiddleware(t *testing.T) {
 			want:           "10.0.0.2",
 		},
 		{
+			name:           "fallback to an IPv4-mapped trusted peer folds to IPv4",
+			trustedProxies: "10.0.0.2",
+			remoteAddr:     "[::ffff:10.0.0.2]:40000",
+			want:           "10.0.0.2",
+		},
+		{
 			name:           "chain of only trusted hops stays the peer",
 			trustedProxies: "10.0.0.0/24",
 			remoteAddr:     "10.0.0.2:40000",

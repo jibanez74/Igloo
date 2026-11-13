@@ -115,10 +115,16 @@ func clientIP(r *http.Request) string {
 	return remoteAddrIP(r.RemoteAddr)
 }
 
+// remoteAddrIP returns the host of remoteAddr, with an IPv4-mapped address
+// folded to IPv4 as clientIPMiddleware stores it, so the fallback keys a
+// client the same way.
 func remoteAddrIP(remoteAddr string) string {
 	host, _, err := net.SplitHostPort(remoteAddr)
 	if err != nil {
-		return remoteAddr
+		host = remoteAddr
+	}
+	if addr, err := netip.ParseAddr(host); err == nil {
+		return addr.Unmap().String()
 	}
 	return host
 }
