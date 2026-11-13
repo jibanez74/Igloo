@@ -286,11 +286,20 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
   // that result, which ends the loop. A 5xx page resolves only after its
   // retries. The page-count guard stops the loop if a round ever adds no page
   // for another reason.
-  const loadRemainingTracks = async () => {
+  //
+  // isWanted is asked before every page after the first: once the queue these
+  // pages are for has been replaced, stopped or signed out of, nothing will
+  // use them, so the drain ends there instead of fetching the rest. Leaving
+  // the page does not end it: the queue still plays and still needs them.
+  const loadRemainingTracks = async (isWanted: () => boolean) => {
     let result = await fetchNextPage();
     let pageCount = result.data?.pages.length ?? 0;
 
-    while (result.hasNextPage && !result.isFetchNextPageError) {
+    while (
+      result.hasNextPage &&
+      !result.isFetchNextPageError &&
+      isWanted()
+    ) {
       result = await fetchNextPage();
 
       const nextCount = result.data?.pages.length ?? 0;
@@ -325,9 +334,15 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
 
     if (queueId === null || !hasNextPage) return;
 
+    const isLive = () => audioPlayer.isQueueLive(queueId);
+
     setIsLoadingRest(true);
-    const tracks = await loadRemainingTracks();
+    const tracks = await loadRemainingTracks(isLive);
     setIsLoadingRest(false);
+
+    // The reader moved on while the pages loaded: extendQueue would drop these
+    // anyway, and a shortfall toast would be about a queue they already left.
+    if (!isLive()) return;
 
     // reshuffleTail: the button said "Shuffle all N", so the tracks that only
     // arrived now have to be mixed through the part the user has not reached

@@ -688,6 +688,67 @@ describe("extendQueue", () => {
   });
 });
 
+// A caller still downloading tracks for a queue (a playlist's later pages)
+// asks this between requests, so it has to turn false for every way the
+// queue can end.
+describe("isQueueLive", () => {
+  beforeEach(() => {
+    stubMediaElement();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  const playlistInfo = { cover: null, title: "Road Trip", musician: null };
+  const track = (id: number) =>
+    rawTrack({ id, title: `Song ${id}`, albumTitle: null, musician: "Band", cover: null });
+
+  function renderActions() {
+    let actions: ReturnType<typeof useAudioPlayerActions> | undefined;
+    function Capture() {
+      actions = useAudioPlayerActions();
+      return null;
+    }
+    renderWithQueryClient(
+      <AudioPlayerProvider>
+        <Capture />
+      </AudioPlayerProvider>,
+    );
+    return () => actions!;
+  }
+
+  const start = (
+    actions: ReturnType<typeof useAudioPlayerActions>,
+    id: number,
+  ) => {
+    let queueId: number | null = null;
+    act(() => {
+      queueId = actions.playQueue([convertToAudioTrack(track(id))], playlistInfo);
+    });
+    return queueId!;
+  };
+
+  it("holds for the queue playing and ends when another one starts", () => {
+    const actions = renderActions();
+    const first = start(actions(), 1);
+    expect(actions().isQueueLive(first)).toBe(true);
+
+    const second = start(actions(), 2);
+    expect(actions().isQueueLive(first)).toBe(false);
+    expect(actions().isQueueLive(second)).toBe(true);
+  });
+
+  it("ends on Stop", () => {
+    const actions = renderActions();
+    const queueId = start(actions(), 1);
+
+    act(() => actions().stop());
+
+    expect(actions().isQueueLive(queueId)).toBe(false);
+  });
+});
+
 describe("artwork reset", () => {
   beforeEach(() => {
     stubMediaElement();

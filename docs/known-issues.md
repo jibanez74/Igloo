@@ -38,26 +38,6 @@ than 4 s after video, or a TV resume fails with an `init.mp4` that has no `dec3`
 Recorded on 2026-11-13 from the web audit of fc27fddc and the review of PRs #267–#270, which
 fixed the audit's bugs (BUG-01..07, OBS-01/02) and left these.
 
-### Playing an album from its card can override a newer start or bring the player back
-
-`AlbumCard`'s play button (`web/src/components/music/AlbumCard.tsx`, `handlePlay`) awaits
-`queryClient.fetchQuery(albumDetailsQueryOpts(id))` and then calls `audioPlayer.playQueue`
-unconditionally. This is the race #267 fixed for Shuffle all and Play all (BUG-01): an album
-answer that lands after a newer queue started replaces it, and one that lands after Stop (or a
-sign-out, which stops the player) before the login page clears the cache starts the player again.
-Reproduce by holding the album-details response, starting Shuffle all, then releasing it. Fix:
-give the action a start intent like `startIntentRef` in `AudioPlayerContext` (exposed as an
-action), or start the queue through a provider action that checks it after the await.
-
-### A playlist keeps loading its remaining pages after its queue is replaced
-
-`startPlaylistQueue` in `web/src/routes/_auth/music/playlist.$id.tsx` plays the loaded rows, then
-`loadRemainingTracks` drains every remaining page with no check that the queue is still the one it
-started. `extendQueue` drops the result for a replaced queue, but the requests still run, and the
-"Only N of M tracks could be loaded" failure can toast for a queue the reader already left. Fix:
-expose a stable `isQueueLive(queueId)` action (reading `liveQueueIdRef`) and stop between pages
-once it turns false, and on unmount (audit PERF-03).
-
 ### The musician page mounts a row for every track
 
 `web/src/routes/_auth/music/musician.$id.tsx` maps the whole musician-tracks response into

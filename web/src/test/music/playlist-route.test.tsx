@@ -1,10 +1,11 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { PLAYLIST_TRACKS_KEY, PLAYLIST_TRACKS_PAGE_SIZE } from "@/lib/constants";
 import { playlistDetailsQueryOpts } from "@/lib/query-opts";
 import type { components } from "@/types/openapi.gen";
 import { jsonResponse, requestURL } from "../helpers/api";
+import { audioPlayerActionsMock } from "../helpers/audio-player";
 import { layOutTrackRows, pressKey } from "../helpers/drag";
 import { authUser, nullableString, userSummary } from "../helpers/fixtures";
 import { playlist, playlistDetail, playlistTrack } from "../helpers/music";
@@ -287,6 +288,103 @@ describe("music playlist route", () => {
       );
     });
     expect(screen.getByText("Alabaster")).toBeInTheDocument();
+  });
+
+  describe("loading the rest of a playing playlist", () => {
+    const pages = [
+      [
+        playlistTrack({ id: 1, title: "Alabaster", position: 1 }),
+        playlistTrack({ id: 2, title: "Borrowed Light", position: 2 }),
+      ],
+      [playlistTrack({ id: 3, title: "Cinder", position: 3 })],
+      [playlistTrack({ id: 4, title: "Driftwood", position: 4 })],
+    ];
+    const offsets = [0, 2, 3];
+
+    afterEach(() => {
+      audioPlayerActionsMock.isQueueLive.mockImplementation(() => true);
+    });
+
+    // Three pages. Every page after the first waits for release(): in jsdom
+    // every row counts as visible, so the list's own loader would otherwise
+    // fetch the whole playlist before Play is pressed and leave the button
+    // nothing to drain.
+    function mockPagedPlaylist() {
+      let release = () => {};
+      const released = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const fetchMock = mockPlaylistFetch(roadTrip({ track_count: 4 }, pages.flat()));
+      const respond = fetchMock.getMockImplementation()!;
+      fetchMock.mockImplementation((input, init) => {
+        const index = offsets.findIndex((offset) => requestURL(input) === TRACKS_PAGE_URL(offset));
+        if (index < 0) return respond(input, init);
+        const last = index === offsets.length - 1;
+        const page = () =>
+          jsonResponse({
+            error: false,
+            data: {
+              tracks: pages[index],
+              total: 4,
+              has_more: !last,
+              next_offset: last ? 4 : offsets[index + 1],
+            },
+          });
+        return index === 0 ? page() : released.then(page);
+      });
+      return { release };
+    }
+
+    const startPlayAll = async () => {
+      const user = userEvent.setup();
+      await renderRoute("/music/playlist/21");
+      expect(await screen.findByText("Alabaster")).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Play all 4 tracks" }));
+    };
+
+    // The control for the test below: every page is queued while the queue
+    // they are for is still the one playing.
+    it("queues every page while the queue is still playing", async () => {
+      audioPlayerActionsMock.playQueue.mockReturnValueOnce(7);
+      const { release } = mockPagedPlaylist();
+
+      await startPlayAll();
+      release();
+
+      await waitFor(() => {
+        expect(audioPlayerActionsMock.extendQueue).toHaveBeenCalledTimes(1);
+      });
+      const [queued, queueId] = audioPlayerActionsMock.extendQueue.mock.calls[0];
+      expect(queued.map((track) => track.id)).toEqual([1, 2, 3, 4]);
+      expect(queueId).toBe(7);
+      expect(showActionFailedMock).not.toHaveBeenCalled();
+    });
+
+    // Replacing the queue (another start, Stop, or a sign-out, which stops the
+    // player) leaves nothing to load the rest for: the drain ends at the next
+    // page, adds nothing, and says nothing about a shortfall.
+    it("stops at the next page once the queue has been replaced", async () => {
+      let live = true;
+      audioPlayerActionsMock.playQueue.mockReturnValueOnce(7);
+      audioPlayerActionsMock.isQueueLive.mockImplementation(
+        (queueId) => live && queueId === 7,
+      );
+      const { release } = mockPagedPlaylist();
+
+      await startPlayAll();
+      const playAll = screen.getByRole("button", { name: "Play all 4 tracks" });
+      expect(within(playAll).getByRole("status")).toBeInTheDocument();
+      live = false;
+      release();
+
+      // The button stops spinning once the drain is over.
+      await waitFor(() => {
+        expect(within(playAll).queryByRole("status")).toBeNull();
+      });
+      expect(audioPlayerActionsMock.extendQueue).not.toHaveBeenCalled();
+      expect(showActionFailedMock).not.toHaveBeenCalled();
+      expect(audioPlayerActionsMock.isQueueLive).toHaveBeenCalledWith(7);
+    });
   });
 
   it("reports a refused track removal instead of confirming it", async () => {

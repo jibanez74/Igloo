@@ -122,6 +122,18 @@ export type AudioPlayerActions = {
     options?: { reshuffleTail?: boolean }
   ) => void;
 
+  // Whether queueId (from playQueue/shuffleQueue) is still the queue playing.
+  // False once the user starts another queue, presses Stop or signs out — a
+  // caller still downloading tracks for it should stop there.
+  isQueueLive: (queueId: number) => boolean;
+
+  // Claim the next queue start for a caller that must await something (an
+  // album's tracks) before it can call playQueue. Returns a check to run after
+  // the await: it turns false once a newer start, Stop or sign-out supersedes
+  // this one, and the caller should then drop its result without playing or
+  // toasting.
+  beginStart: () => () => boolean;
+
   // Start shuffle playback across entire music library
   startShufflePlayback: () => Promise<void>;
 
