@@ -333,7 +333,7 @@ func (s *Scanner) resolveMusician(ctx context.Context, scan *musicScanContext, n
 				resolved.adoptionDone = true
 				return resolved, nil
 			}
-			return s.resolveArtistAdoption(ctx, scan, resolved, target)
+			return s.resolveArtistAdoption(ctx, scan, resolved, target, false)
 		}
 
 		persisted, matchErr := s.queries.GetMusicProviderMatch(ctx, database.GetMusicProviderMatchParams{
@@ -622,6 +622,9 @@ func (s *Scanner) adoptAlbumArtist(ctx context.Context, scan *musicScanContext, 
 	}
 	key := scanner.NormalizedScanCacheKey(name)
 	resolved := &resolvedMusician{name: name}
+	// A held-back artist keeps the target, as a breaker deferral does, and
+	// resumes it by id once its wait has passed.
+	var deferRequest bool
 	attempt := scan.artistAttempts[key]
 	if attempt != nil {
 		if attempt.spotifyArtist != nil {
@@ -643,9 +646,7 @@ func (s *Scanner) adoptAlbumArtist(ctx context.Context, scan *musicScanContext, 
 			if err != nil {
 				return nil, err
 			}
-			if waiting {
-				return nil, nil
-			}
+			deferRequest = waiting
 		}
 		resolved.existing = &existing
 		resolved.existingID, resolved.hasExistingID = existing.ID, true
@@ -662,7 +663,7 @@ func (s *Scanner) adoptAlbumArtist(ctx context.Context, scan *musicScanContext, 
 	if resolved.adoptionTarget != "" {
 		target = spotifyapi.ID(resolved.adoptionTarget)
 	}
-	return s.resolveArtistAdoption(ctx, scan, resolved, target)
+	return s.resolveArtistAdoption(ctx, scan, resolved, target, deferRequest)
 }
 
 // pendingAdoption is the Spotify artist a failed or deferred adoption left
@@ -684,12 +685,14 @@ type artistIDResult struct {
 	err    error
 }
 
-// A deferred lookup retains its target but creates no provider outcome. Actual
-// ID attempts, including failures, are shared by all aliases for this scan.
-func (s *Scanner) resolveArtistAdoption(ctx context.Context, scan *musicScanContext, resolved *resolvedMusician, target spotifyapi.ID) (*resolvedMusician, error) {
+// A deferred lookup (the breaker is open, or deferRequest asks to wait out the
+// artist's failure backoff) retains its target but creates no provider
+// outcome. Actual ID attempts, including failures, are shared by all aliases
+// for this scan.
+func (s *Scanner) resolveArtistAdoption(ctx context.Context, scan *musicScanContext, resolved *resolvedMusician, target spotifyapi.ID, deferRequest bool) (*resolvedMusician, error) {
 	resolved.adoptionTarget = target.String()
 	result, attempted := scan.artistIDAttempts[target]
-	if !attempted && s.spotifyReady(scan) {
+	if !attempted && !deferRequest && s.spotifyReady(scan) {
 		result.artist, result.err = s.spotify.GetArtist(ctx, target)
 		contextErr := ctx.Err()
 		if contextErr != nil {
