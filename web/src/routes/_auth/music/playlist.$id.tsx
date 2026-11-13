@@ -1,6 +1,11 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  InfiniteQueryObserver,
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useSessionMutation } from "@/hooks/useSessionMutation";
 import { showRemoved, showActionFailed } from "@/lib/toast-helpers";
 import {
@@ -286,17 +291,41 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
   // that result, which ends the loop. A 5xx page resolves only after its
   // retries. The page-count guard stops the loop if a round ever adds no page
   // for another reason.
-  const loadRemainingTracks = async () => {
-    let result = await fetchNextPage();
+  //
+  // isWanted is asked before every page after the first: once the queue these
+  // pages are for has been replaced, stopped or signed out of, nothing will
+  // use them, so the drain ends there instead of fetching the rest.
+  //
+  // Leaving the page must not end it: the queue still plays and still needs
+  // them. The page's own observer goes away on unmount, and a query left with
+  // no observers cancels the page in flight (its queryFn reads the signal),
+  // which would end the drain short and toast a failure that never happened.
+  // So the drain subscribes its own observer for as long as it runs. It is
+  // disabled so subscribing never refetches; fetchNextPage ignores enabled.
+  const loadRemainingTracks = async (isWanted: () => boolean) => {
+    const drain = new InfiniteQueryObserver(queryClient, {
+      ...playlistTracksInfiniteQueryOpts(playlistId),
+      enabled: false,
+    });
+    const unsubscribe = drain.subscribe(() => {});
+
+    let result = await drain.fetchNextPage();
     let pageCount = result.data?.pages.length ?? 0;
 
-    while (result.hasNextPage && !result.isFetchNextPageError) {
-      result = await fetchNextPage();
+    while (
+      result.hasNextPage &&
+      !result.isFetchNextPageError &&
+      isWanted()
+    ) {
+      result = await drain.fetchNextPage();
 
       const nextCount = result.data?.pages.length ?? 0;
       if (nextCount <= pageCount) break;
       pageCount = nextCount;
     }
+
+    // Not in a finally: fetchNextPage without throwOnError never rejects.
+    unsubscribe();
 
     return result.data?.pages.flatMap((page) => page.tracks) ?? [];
   };
@@ -325,9 +354,15 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
 
     if (queueId === null || !hasNextPage) return;
 
+    const isLive = () => audioPlayer.isQueueLive(queueId);
+
     setIsLoadingRest(true);
-    const tracks = await loadRemainingTracks();
+    const tracks = await loadRemainingTracks(isLive);
     setIsLoadingRest(false);
+
+    // The reader moved on while the pages loaded: extendQueue would drop these
+    // anyway, and a shortfall toast would be about a queue they already left.
+    if (!isLive()) return;
 
     // reshuffleTail: the button said "Shuffle all N", so the tracks that only
     // arrived now have to be mixed through the part the user has not reached

@@ -46,10 +46,17 @@ export default function AlbumCard({ album, subtitle }: AlbumCardProps) {
     if (isLoading) return;
     setIsLoading(true);
 
+    // Claimed before the fetch: an album that answers after the reader pressed
+    // Stop, signed out or started something else must not take the player
+    // over, nor toast a failure for a request they have moved on from.
+    const isCurrent = audioPlayer.beginStart();
+
     try {
       const data = await queryClient.fetchQuery(albumDetailsQueryOpts(id));
 
-      if (data.error) {
+      if (!isCurrent()) {
+        // A newer start or Stop owns the player now.
+      } else if (data.error) {
         showActionFailed("play album", data);
       } else if (data.data.tracks.length > 0) {
         audioPlayer.playQueue(data.data.tracks, {
@@ -61,7 +68,12 @@ export default function AlbumCard({ album, subtitle }: AlbumCardProps) {
     } catch (error) {
       console.error("Failed to load album:", error);
 
-      showActionFailed("play album", "Something went wrong. Please try again.");
+      if (isCurrent()) {
+        showActionFailed(
+          "play album",
+          "Something went wrong. Please try again.",
+        );
+      }
     }
 
     setIsLoading(false);

@@ -18,6 +18,10 @@ export const audioPlayerActionsMock = {
   playQueue: vi.fn(),
   shuffleQueue: vi.fn(),
   extendQueue: vi.fn(),
+  // Live and current by default, so a caller that awaits before playing still
+  // plays; a test that wants a superseded start overrides these once.
+  isQueueLive: vi.fn<AudioPlayerActions["isQueueLive"]>(() => true),
+  beginStart: vi.fn<AudioPlayerActions["beginStart"]>(() => () => true),
   startShufflePlayback: vi.fn(),
   startPlayAllPlayback: vi.fn(),
   setTrack: vi.fn(),

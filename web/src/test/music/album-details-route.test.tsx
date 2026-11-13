@@ -3,10 +3,11 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { DETAIL_PAGE_CONTENT_ENTER_CLASS } from "@/lib/constants";
 import { albumDetailsQueryOpts } from "@/lib/query-opts";
-import type { AlbumDetailsResponseType, TrackType } from "@/types";
+import type { AlbumDetailsResponseType } from "@/types";
 import { countFetchRequests, jsonResponse, requestURL } from "../helpers/api";
-import { nullableFloat64, nullableInt64, nullableString } from "../helpers/fixtures";
+import { nullableInt64, nullableString } from "../helpers/fixtures";
 import { createTestQueryClient } from "../helpers/render";
+import { albumDetailsResponse, albumTrack } from "../helpers/music";
 import { readDocumentHead, renderRoute } from "../helpers/render-route";
 import {
   getDetailMotionWrappers,
@@ -26,72 +27,6 @@ vi.mock("@/lib/toast-helpers", () => ({
   showActionFailed: toastMocks.showActionFailed,
   showDeleted: toastMocks.showDeleted,
 }));
-
-function albumTrack(
-  id: number,
-  albumId: number,
-  title: string,
-  trackIndex: number,
-): TrackType {
-  return {
-    id,
-    title,
-    codec: "flac",
-    mime_type: "audio/flac",
-    track_index: trackIndex,
-    duration: 180_000,
-    disc: 1,
-    channel_layout: "stereo",
-    bit_rate: 900000,
-    explicit: false,
-    album_id: nullableInt64(albumId),
-    musician_id: nullableInt64(albumId + 100),
-  };
-}
-
-function albumDetailsResponse(
-  id: number,
-  title: string,
-  artistName: string,
-  trackTitle: string,
-): AlbumDetailsResponseType {
-  return {
-    album: {
-      id,
-      title,
-      sort_title: title,
-      musician: nullableString(artistName),
-      spotify_id: nullableString(`spotify-${id}`),
-      apple_id: nullableInt64(),
-      apple_url: null,
-      spotify_url: `https://open.spotify.com/album/spotify-${id}`,
-      spotify_popularity: nullableFloat64(76),
-      album_type: nullableString("album"),
-      release_date: nullableString("2026-01-01"),
-      year: nullableInt64(2026),
-      total_tracks: nullableInt64(1),
-      cover: nullableString(`/covers/${id}.jpg`),
-      created_at: "2026-01-01T00:00:00Z",
-      updated_at: "2026-01-01T00:00:00Z",
-    },
-    tracks: [albumTrack(id * 10, id, trackTitle, 1)],
-    artists: [
-      {
-        id: id + 100,
-        name: artistName,
-        thumb: nullableString(""),
-      },
-    ],
-    track_genres: [
-      {
-        track_id: id * 10,
-        tag: "Alternative",
-      },
-    ],
-    album_genres: ["Alternative"],
-    total_duration: 180_000,
-  };
-}
 
 type MockAlbumDetailsFetchOptions = {
   deleteAlbumResponse?: {

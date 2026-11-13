@@ -108,13 +108,14 @@ export function AudioPlayerProvider({
   // Cleared implicitly: startQueue mints a new id, which can never match.
   const exhaustedQueueIdRef = useRef<number | null>(null);
 
-  // The latest request to change what plays: every queue start, Stop, and the
-  // Shuffle all / Play all buttons the moment they are pressed. Those two await
-  // their first page before a queue exists, so they cannot be fenced by
-  // liveQueueIdRef: bumping that early would orphan the queue still playing
-  // if the request then failed. A start whose intent is no longer the latest
-  // when its page lands (the reader pressed Stop, signed out, or started
-  // something else) drops the page without a queue, a toast or an error.
+  // The latest request to change what plays: every queue start, Stop, and each
+  // beginStart claim — Shuffle all / Play all and an album card's play button
+  // the moment they are pressed. Those await their tracks before a queue
+  // exists, so they cannot be fenced by liveQueueIdRef: bumping that early
+  // would orphan the queue still playing if the request then failed. A start
+  // whose intent is no longer the latest when its answer lands (the reader
+  // pressed Stop, signed out, or started something else) drops it without a
+  // queue, a toast or an error.
   const startIntentRef = useRef(0);
 
   const populateTrackMetadata = (tracks: PlayableTrackData[]) => {
@@ -662,12 +663,22 @@ export function AudioPlayerProvider({
     });
   };
 
+  const isQueueLive: AudioPlayerActions["isQueueLive"] = queueId =>
+    liveQueueIdRef.current === queueId;
+
+  // See startIntentRef: the claim is taken now, before the caller's await, so
+  // anything that changes what plays in the meantime outranks it.
+  const beginStart: AudioPlayerActions["beginStart"] = () => {
+    const intent = ++startIntentRef.current;
+    return () => startIntentRef.current === intent;
+  };
+
   const startShufflePlayback: AudioPlayerActions["startShufflePlayback"] =
     async () => {
-      const intent = ++startIntentRef.current;
+      const isCurrent = beginStart();
       const response = await getShuffleTracks(SHUFFLE_TRACKS_LIMIT);
       // Checked before the error too, so a stale failure does not toast.
-      if (startIntentRef.current !== intent) {
+      if (!isCurrent()) {
         return;
       }
       // apiRequest resolves an error envelope rather than rejecting, so throw
@@ -687,10 +698,10 @@ export function AudioPlayerProvider({
 
   const startPlayAllPlayback: AudioPlayerActions["startPlayAllPlayback"] =
     async () => {
-      const intent = ++startIntentRef.current;
+      const isCurrent = beginStart();
       const response = await getTracksPaginated(TRACKS_INFINITE_PAGE_SIZE, 0);
       // Same stale-intent check as startShufflePlayback above.
-      if (startIntentRef.current !== intent) {
+      if (!isCurrent()) {
         return;
       }
       // Same error-envelope caveat as startShufflePlayback above.
@@ -781,6 +792,8 @@ export function AudioPlayerProvider({
     playQueue,
     shuffleQueue,
     extendQueue,
+    isQueueLive,
+    beginStart,
     startShufflePlayback,
     startPlayAllPlayback,
     setTrack,
