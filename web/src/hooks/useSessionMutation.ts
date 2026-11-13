@@ -8,7 +8,7 @@ import type {
   UseMutationOptions,
   UseMutationResult,
 } from "@tanstack/react-query";
-import { sessionEndedSince, sessionStamp } from "@/hooks/useEndSession";
+import { sessionEndedSince, sessionStamp } from "@/lib/session";
 
 /** Handed to onMutate so an optimistic write can check after its awaits. */
 export type MutationSession = {

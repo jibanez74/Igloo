@@ -12,7 +12,7 @@ import SpotifyPicker, {
   type SpotifySearchResult,
 } from "@/components/music/SpotifyPicker";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
-import { sessionEndedSince, sessionStamp } from "@/hooks/useEndSession";
+import { sessionEndedSince, sessionStamp } from "@/lib/session";
 import { createNotification } from "@/lib/api";
 import { NOTIFICATION_TITLES } from "@/lib/constants";
 import {

@@ -7,7 +7,7 @@ import {
   showSuccess,
 } from "@/lib/toast-helpers";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
-import { sessionEndedSince, sessionStamp } from "@/hooks/useEndSession";
+import { sessionEndedSince, sessionStamp } from "@/lib/session";
 
 type DeleteWatchRoomDialogProps = {
   roomId: number;

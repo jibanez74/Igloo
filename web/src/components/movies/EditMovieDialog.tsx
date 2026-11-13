@@ -34,7 +34,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
-import { sessionEndedSince, sessionStamp } from "@/hooks/useEndSession";
+import { sessionEndedSince, sessionStamp } from "@/lib/session";
 import type {
   LibraryMovieDetailsMovieType,
   UpdateMovieMetadataRequest,

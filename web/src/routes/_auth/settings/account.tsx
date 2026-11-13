@@ -63,11 +63,8 @@ import { useFocusHandoff } from "@/hooks/useFocusHandoff";
 import QuickConnectApproveCard from "@/components/settings/QuickConnectApproveCard";
 import DevicesCard from "@/components/settings/DevicesCard";
 import ProfilePinCard from "@/components/settings/ProfilePinCard";
-import {
-  sessionEndedSince,
-  sessionStamp,
-  useEndSession,
-} from "@/hooks/useEndSession";
+import { useEndSession } from "@/hooks/useEndSession";
+import { sessionEndedSince, sessionStamp } from "@/lib/session";
 import { routeHead } from "@/lib/route-head";
 import { apiErrorMessage } from "@/lib/is-api-failure";
 

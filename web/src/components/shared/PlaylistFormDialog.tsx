@@ -26,7 +26,7 @@ import { unwrapString, unwrapStringOrUndefined } from "@/lib/nullable";
 import { playlistFieldsError } from "@/lib/form-validation";
 import type { NullableString } from "@/types";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
-import { sessionEndedSince, sessionStamp } from "@/hooks/useEndSession";
+import { sessionEndedSince, sessionStamp } from "@/lib/session";
 
 // ============================================================================
 // Types

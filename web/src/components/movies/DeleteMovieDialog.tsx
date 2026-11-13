@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { deleteMovie } from "@/lib/api";
 import { invalidateLibraryQueries } from "@/lib/library-cache";
 import { libraryMovieDetailsQueryOpts } from "@/lib/query-opts";
-import { sessionEndedSince, sessionStamp } from "@/hooks/useEndSession";
+import { sessionEndedSince, sessionStamp } from "@/lib/session";
 import { showActionFailed, showDeleted } from "@/lib/toast-helpers";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";

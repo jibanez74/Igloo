@@ -47,7 +47,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
-import { sessionEndedSince, sessionStamp } from "@/hooks/useEndSession";
+import { sessionEndedSince, sessionStamp } from "@/lib/session";
 import { apiErrorMessage } from "@/lib/is-api-failure";
 import { getMediaImageUrl } from "@/lib/media-image-url";
 

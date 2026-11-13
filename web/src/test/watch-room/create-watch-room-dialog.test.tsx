@@ -29,9 +29,9 @@ const createWatchRoomMock = vi.fn();
 // its refetch, and useSessionMutation's at each callback, read it.
 const sessionEnded = vi.hoisted(() => ({ value: false }));
 
-vi.mock("@/hooks/useEndSession", async () => {
-  const actual = await vi.importActual<typeof import("@/hooks/useEndSession")>(
-    "@/hooks/useEndSession",
+vi.mock("@/lib/session", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/session")>(
+    "@/lib/session",
   );
   return {
     ...actual,
