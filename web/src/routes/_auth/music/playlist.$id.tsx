@@ -1,6 +1,11 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  InfiniteQueryObserver,
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useSessionMutation } from "@/hooks/useSessionMutation";
 import { showRemoved, showActionFailed } from "@/lib/toast-helpers";
 import {
@@ -289,10 +294,22 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
   //
   // isWanted is asked before every page after the first: once the queue these
   // pages are for has been replaced, stopped or signed out of, nothing will
-  // use them, so the drain ends there instead of fetching the rest. Leaving
-  // the page does not end it: the queue still plays and still needs them.
+  // use them, so the drain ends there instead of fetching the rest.
+  //
+  // Leaving the page must not end it: the queue still plays and still needs
+  // them. The page's own observer goes away on unmount, and a query left with
+  // no observers cancels the page in flight (its queryFn reads the signal),
+  // which would end the drain short and toast a failure that never happened.
+  // So the drain subscribes its own observer for as long as it runs. It is
+  // disabled so subscribing never refetches; fetchNextPage ignores enabled.
   const loadRemainingTracks = async (isWanted: () => boolean) => {
-    let result = await fetchNextPage();
+    const drain = new InfiniteQueryObserver(queryClient, {
+      ...playlistTracksInfiniteQueryOpts(playlistId),
+      enabled: false,
+    });
+    const unsubscribe = drain.subscribe(() => {});
+
+    let result = await drain.fetchNextPage();
     let pageCount = result.data?.pages.length ?? 0;
 
     while (
@@ -300,12 +317,15 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
       !result.isFetchNextPageError &&
       isWanted()
     ) {
-      result = await fetchNextPage();
+      result = await drain.fetchNextPage();
 
       const nextCount = result.data?.pages.length ?? 0;
       if (nextCount <= pageCount) break;
       pageCount = nextCount;
     }
+
+    // Not in a finally: fetchNextPage without throwOnError never rejects.
+    unsubscribe();
 
     return result.data?.pages.flatMap((page) => page.tracks) ?? [];
   };
