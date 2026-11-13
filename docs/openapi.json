@@ -12367,7 +12367,8 @@
           "is_owner",
           "can_edit",
           "movie_count",
-          "artwork"
+          "artwork",
+          "owner"
         ],
         "properties": {
           "id": {
@@ -12421,6 +12422,10 @@
               "description": "TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description."
             },
             "description": "Up to four different posters from the playlist's first 24 movies, in the order they were added, for the card's collage. Empty when none of those movies has a poster."
+          },
+          "owner": {
+            "$ref": "#/components/schemas/UserSummary",
+            "description": "The playlist's owner; a collaborator's card names them."
           }
         },
         "additionalProperties": false
@@ -13677,7 +13682,7 @@
       },
       "UserSummary": {
         "type": "object",
-        "description": "The public face of a user as other users see it: no email or admin flag. Carried by watch rooms (owner, members), watch-room WebSocket member events, and playlist details (owner).",
+        "description": "The public face of a user as other users see it: no email or admin flag. Carried by watch rooms (owner, members), watch-room WebSocket member events, playlist details (owner), and playlist summaries (owner).",
         "required": [
           "id",
           "name",
@@ -15199,7 +15204,8 @@
           "total_duration",
           "is_owner",
           "can_edit",
-          "artwork"
+          "artwork",
+          "owner"
         ],
         "properties": {
           "id": {
@@ -15258,6 +15264,10 @@
               "description": "Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description."
             },
             "description": "Up to four different album covers from the playlist's first 24 tracks, in playlist order, for the card's collage. Empty when none of those tracks has a cover."
+          },
+          "owner": {
+            "$ref": "#/components/schemas/UserSummary",
+            "description": "The playlist's owner; a collaborator's card names them."
           }
         },
         "additionalProperties": false

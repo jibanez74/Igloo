@@ -78,6 +78,7 @@ export function playlistSummary(
     is_owner: true,
     can_edit: true,
     artwork: [],
+    owner: userSummary(),
     ...fields,
   };
 }

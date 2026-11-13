@@ -3645,6 +3645,8 @@ export interface components {
             movie_count: number;
             /** @description Up to four different posters from the playlist's first 24 movies, in the order they were added, for the card's collage. Empty when none of those movies has a poster. */
             artwork: string[];
+            /** @description The playlist's owner; a collaborator's card names them. */
+            owner: components["schemas"]["UserSummary"];
         };
         CreateMoviePlaylistRequest: {
             name: string;
@@ -3936,7 +3938,7 @@ export interface components {
                 results: components["schemas"]["TmdbSearchResult"][];
             };
         };
-        /** @description The public face of a user as other users see it: no email or admin flag. Carried by watch rooms (owner, members), watch-room WebSocket member events, and playlist details (owner). */
+        /** @description The public face of a user as other users see it: no email or admin flag. Carried by watch rooms (owner, members), watch-room WebSocket member events, playlist details (owner), and playlist summaries (owner). */
         UserSummary: {
             /** Format: int64 */
             id: number;
@@ -4387,6 +4389,8 @@ export interface components {
             can_edit: boolean;
             /** @description Up to four different album covers from the playlist's first 24 tracks, in playlist order, for the card's collage. Empty when none of those tracks has a cover. */
             artwork: string[];
+            /** @description The playlist's owner; a collaborator's card names them. */
+            owner: components["schemas"]["UserSummary"];
         };
         PlaylistTrack: {
             /** Format: int64 */

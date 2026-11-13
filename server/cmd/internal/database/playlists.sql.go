@@ -152,7 +152,9 @@ SELECT
         head.position ASC,
         head.id ASC
     ) AS first_movie
-  ) AS TEXT) AS artwork
+  ) AS TEXT) AS artwork,
+  owner.name AS owner_name,
+  owner.avatar AS owner_avatar
 FROM (
   SELECT
     p.id, p.user_id, p.name, p.description, p.cover_image, p.is_public, p.movie_id, p.content_type, p.created_at, p.updated_at,
@@ -173,6 +175,8 @@ FROM (
     AND p.content_type = 'movie'
     AND p.user_id <> ?1
 ) AS accessible
+INNER JOIN users AS owner
+  ON owner.id = accessible.user_id
 ORDER BY accessible.updated_at DESC
 `
 
@@ -191,6 +195,8 @@ type GetMoviePlaylistsWithCollaboratorAccessRow struct {
 	CanEdit     bool           `json:"can_edit"`
 	MovieCount  int64          `json:"movie_count"`
 	Artwork     string         `json:"artwork"`
+	OwnerName   string         `json:"owner_name"`
+	OwnerAvatar sql.NullString `json:"owner_avatar"`
 }
 
 // The movie twin of GetPlaylistsWithCollaboratorAccess; see the notes there.
@@ -220,6 +226,8 @@ func (q *Queries) GetMoviePlaylistsWithCollaboratorAccess(ctx context.Context, r
 			&i.CanEdit,
 			&i.MovieCount,
 			&i.Artwork,
+			&i.OwnerName,
+			&i.OwnerAvatar,
 		); err != nil {
 			return nil, err
 		}
@@ -328,7 +336,9 @@ SELECT
         head.position ASC,
         head.id ASC
     ) AS first_track
-  ) AS TEXT) AS artwork
+  ) AS TEXT) AS artwork,
+  owner.name AS owner_name,
+  owner.avatar AS owner_avatar
 FROM (
   SELECT
     p.id, p.user_id, p.name, p.description, p.cover_image, p.is_public, p.movie_id, p.content_type, p.created_at, p.updated_at,
@@ -349,6 +359,8 @@ FROM (
     AND p.content_type = 'track'
     AND p.user_id <> ?1
 ) AS accessible
+INNER JOIN users AS owner
+  ON owner.id = accessible.user_id
 ORDER BY accessible.updated_at DESC
 `
 
@@ -368,6 +380,8 @@ type GetPlaylistsWithCollaboratorAccessRow struct {
 	TrackCount    int64          `json:"track_count"`
 	TotalDuration interface{}    `json:"total_duration"`
 	Artwork       string         `json:"artwork"`
+	OwnerName     string         `json:"owner_name"`
+	OwnerAvatar   sql.NullString `json:"owner_avatar"`
 }
 
 // Playlists the user owns or collaborates on, newest-updated first. The two
@@ -383,6 +397,9 @@ type GetPlaylistsWithCollaboratorAccessRow struct {
 // row these are index probes on idx_playlist_tracks_position (and the
 // (playlist_id, track_id) primary key), which is bounded by the page the
 // handler actually returns.
+//
+// owner_name and owner_avatar name the playlist's owner, which a collaborator's
+// card shows; the handler folds them into an owner object.
 //
 // artwork is a JSON array of the album covers of the playlist's first 24
 // tracks, in playlist order, for the card's collage. The handler keeps the
@@ -414,6 +431,8 @@ func (q *Queries) GetPlaylistsWithCollaboratorAccess(ctx context.Context, reques
 			&i.TrackCount,
 			&i.TotalDuration,
 			&i.Artwork,
+			&i.OwnerName,
+			&i.OwnerAvatar,
 		); err != nil {
 			return nil, err
 		}

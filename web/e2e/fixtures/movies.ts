@@ -53,6 +53,9 @@ export function moviePlaylist(
     is_owner: isOwner,
     can_edit: isOwner,
     artwork,
+    owner: isOwner
+      ? { id: 1, name: "Test User", avatar: null }
+      : { id: 2, name: "Riley Collaborator", avatar: null },
   };
 }
 

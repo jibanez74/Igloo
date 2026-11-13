@@ -13,7 +13,12 @@ import (
 // moviePlaylistSummary is the movie twin of playlistSummary.
 type moviePlaylistSummary struct {
 	database.GetMoviePlaylistsWithCollaboratorAccessRow
-	Artwork []string `json:"artwork"`
+	Artwork []string    `json:"artwork"`
+	Owner   userSummary `json:"owner"`
+	// The always-nil shadows keep the row's owner_name and owner_avatar out
+	// of the JSON: a shallower field of the same name hides the embedded one.
+	OwnerName   *struct{} `json:"owner_name,omitempty"`
+	OwnerAvatar *struct{} `json:"owner_avatar,omitempty"`
 }
 
 func (app *Application) GetMoviePlaylists(w http.ResponseWriter, r *http.Request) {
@@ -36,6 +41,7 @@ func (app *Application) GetMoviePlaylists(w http.ResponseWriter, r *http.Request
 		summaries[i] = moviePlaylistSummary{
 			GetMoviePlaylistsWithCollaboratorAccessRow: playlist,
 			Artwork: distinctImages(posters, maxPlaylistArtwork),
+			Owner:   newUserSummary(playlist.UserID, playlist.OwnerName, playlist.OwnerAvatar),
 		}
 	}
 

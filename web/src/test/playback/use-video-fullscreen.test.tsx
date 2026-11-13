@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import {
   afterAll,
   afterEach,
@@ -225,47 +225,44 @@ describe("useVideoFullscreen", () => {
   });
 
   // Torn down inside WebKit video-only fullscreen, the video fires its end
-  // event detached, where the document listener never hears it. The
-  // controls still offer to exit, and pressing that clears the mode.
+  // event detached, where the document listener never hears it. The mode
+  // clears once the video has left the document, with or without a new one.
   describe("after the video is torn down inside WebKit video fullscreen", () => {
-    function renderTornDown() {
+    function enterThenTearDown(nextKey: string | null) {
       const { rerender } = render(<LateVideoHarness videoKey="first" />);
       const video = screen.getByTestId("video");
       setDisplayingFullscreen(video, true);
       act(() => {
         video.dispatchEvent(new Event("webkitbeginfullscreen"));
       });
-      rerender(<LateVideoHarness videoKey={null} />);
+      expect(screen.getByTestId("is-fullscreen")).toHaveTextContent("true");
       setDisplayingFullscreen(video, false);
+      rerender(<LateVideoHarness videoKey={nextKey} />);
       act(() => {
         video.dispatchEvent(new Event("webkitendfullscreen"));
       });
-      expect(screen.getByTestId("is-fullscreen")).toHaveTextContent("true");
-      return { rerender };
     }
 
-    it("clears the mode on the fullscreen toggle", async () => {
-      renderTornDown();
+    it("clears the mode once the video leaves the document", async () => {
+      enterThenTearDown(null);
 
-      await act(async () => {
-        fireEvent.click(screen.getByRole("button", { name: "Toggle fullscreen" }));
+      await waitFor(() => {
+        expect(screen.getByTestId("is-fullscreen")).toHaveTextContent("false");
       });
-
-      expect(screen.getByTestId("is-fullscreen")).toHaveTextContent("false");
     });
 
-    it("clears the mode on Escape, even once a new video has mounted", () => {
-      const { rerender } = renderTornDown();
-      rerender(<LateVideoHarness videoKey="second" />);
-      setDisplayingFullscreen(screen.getByTestId("video"), false);
+    it("clears the mode when a new video replaces it", async () => {
+      enterThenTearDown("second");
 
+      await waitFor(() => {
+        expect(screen.getByTestId("is-fullscreen")).toHaveTextContent("false");
+      });
+      // Escape then has nothing to exit.
       const escape = screen.getByRole("button", { name: "Escape" });
       act(() => {
         fireEvent.click(escape);
       });
-
-      expect(escape.dataset.handled).toBe("true");
-      expect(screen.getByTestId("is-fullscreen")).toHaveTextContent("false");
+      expect(escape.dataset.handled).toBe("false");
     });
   });
 

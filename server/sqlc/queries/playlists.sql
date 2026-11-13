@@ -41,6 +41,9 @@ WHERE p.id = sqlc.arg(playlist_id);
 -- (playlist_id, track_id) primary key), which is bounded by the page the
 -- handler actually returns.
 --
+-- owner_name and owner_avatar name the playlist's owner, which a collaborator's
+-- card shows; the handler folds them into an owner object.
+--
 -- artwork is a JSON array of the album covers of the playlist's first 24
 -- tracks, in playlist order, for the card's collage. The handler keeps the
 -- first four distinct ones. The 24 are taken before the covers are looked at,
@@ -85,7 +88,9 @@ SELECT
         head.position ASC,
         head.id ASC
     ) AS first_track
-  ) AS TEXT) AS artwork
+  ) AS TEXT) AS artwork,
+  owner.name AS owner_name,
+  owner.avatar AS owner_avatar
 FROM (
   SELECT
     p.*,
@@ -106,6 +111,8 @@ FROM (
     AND p.content_type = 'track'
     AND p.user_id <> sqlc.arg(requesting_user_id)
 ) AS accessible
+INNER JOIN users AS owner
+  ON owner.id = accessible.user_id
 ORDER BY accessible.updated_at DESC;
 
 -- name: UpdatePlaylist :one
@@ -191,7 +198,9 @@ SELECT
         head.position ASC,
         head.id ASC
     ) AS first_movie
-  ) AS TEXT) AS artwork
+  ) AS TEXT) AS artwork,
+  owner.name AS owner_name,
+  owner.avatar AS owner_avatar
 FROM (
   SELECT
     p.*,
@@ -212,4 +221,6 @@ FROM (
     AND p.content_type = 'movie'
     AND p.user_id <> sqlc.arg(requesting_user_id)
 ) AS accessible
+INNER JOIN users AS owner
+  ON owner.id = accessible.user_id
 ORDER BY accessible.updated_at DESC;
