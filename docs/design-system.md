@@ -1133,7 +1133,10 @@ entries (album covers for music, posters for movies); the first entry alone
 when it has one to three, since two or three would leave holes in the grid;
 the placeholder icon. The images are decorative (`alt=""`), and one that fails
 to load swaps the whole square for the placeholder: a collage with a hole
-reads as broken.
+reads as broken. Below the name, a playlist shared with the reader (not
+`is_owner`) shows "By {owner}" on a truncated line of its own, above the
+counts, and the link's accessible name carries it between the name and the
+counts; the reader's own playlists wear the Owner badge instead.
 
 ```
 <article class={cn(CARD_SURFACE_CLASS, CARD_FOCUS_WITHIN_RING_CLASS)}>
