@@ -76,7 +76,8 @@ DELETE FROM musicians WHERE id=?;
 
 -- name: MusicArtistRetryCandidates :many
 SELECT e.id, e.name FROM musicians e LEFT JOIN music_provider_matches m ON m.entity_id=e.id AND m.entity_type='musician'
-WHERE e.id>sqlc.arg(after_id) AND (m.status IS NULL OR (m.status='failed' AND (m.retry_after IS NULL OR m.retry_after<=unixepoch())) OR EXISTS(SELECT 1 FROM music_spotify_adoptions p WHERE p.musician_id=e.id))
+WHERE e.id>sqlc.arg(after_id) AND (m.status IS NULL OR m.status='failed' OR EXISTS(SELECT 1 FROM music_spotify_adoptions p WHERE p.musician_id=e.id))
+AND (m.retry_after IS NULL OR m.retry_after<=unixepoch())
 AND (EXISTS(SELECT 1 FROM track_musicians t WHERE t.musician_id=e.id)
 OR EXISTS(SELECT 1 FROM music_spotify_adoptions p
     JOIN music_artist_identity ai ON ai.musician_id=p.musician_id
@@ -88,7 +89,8 @@ ORDER BY e.id LIMIT 100;
 -- MusicArtistRetryCandidates limited to the artists a run of watcher-detected
 -- changes touched; the set is small, so it is one unpaged query.
 SELECT e.id, e.name FROM musicians e LEFT JOIN music_provider_matches m ON m.entity_id=e.id AND m.entity_type='musician'
-WHERE e.id IN (sqlc.slice(ids)) AND (m.status IS NULL OR (m.status='failed' AND (m.retry_after IS NULL OR m.retry_after<=unixepoch())) OR EXISTS(SELECT 1 FROM music_spotify_adoptions p WHERE p.musician_id=e.id))
+WHERE e.id IN (sqlc.slice(ids)) AND (m.status IS NULL OR m.status='failed' OR EXISTS(SELECT 1 FROM music_spotify_adoptions p WHERE p.musician_id=e.id))
+AND (m.retry_after IS NULL OR m.retry_after<=unixepoch())
 AND (EXISTS(SELECT 1 FROM track_musicians t WHERE t.musician_id=e.id)
 OR EXISTS(SELECT 1 FROM music_spotify_adoptions p
     JOIN music_artist_identity ai ON ai.musician_id=p.musician_id
@@ -98,7 +100,8 @@ ORDER BY e.id;
 
 -- name: CountMusicArtistRetryCandidates :one
 SELECT COUNT(*) FROM musicians e LEFT JOIN music_provider_matches m ON m.entity_id=e.id AND m.entity_type='musician'
-WHERE (m.status IS NULL OR (m.status='failed' AND (m.retry_after IS NULL OR m.retry_after<=unixepoch())) OR EXISTS(SELECT 1 FROM music_spotify_adoptions p WHERE p.musician_id=e.id))
+WHERE (m.status IS NULL OR m.status='failed' OR EXISTS(SELECT 1 FROM music_spotify_adoptions p WHERE p.musician_id=e.id))
+AND (m.retry_after IS NULL OR m.retry_after<=unixepoch())
 AND (EXISTS(SELECT 1 FROM track_musicians t WHERE t.musician_id=e.id)
 OR EXISTS(SELECT 1 FROM music_spotify_adoptions p
     JOIN music_artist_identity ai ON ai.musician_id=p.musician_id

@@ -342,9 +342,11 @@ CREATE TABLE IF NOT EXISTS music_spotify_adoptions (
 -- Cached provider outcomes survive rescans, one per entity: provider names the
 -- catalog that settled it. Entity type determines the owner; maintenance
 -- triggers remove entries when that owner is deleted. A miss keeps the best
--- candidate's name and score so it can be explained. attempts counts failed
--- lookups in a row; from the second, retry_after (unix seconds) holds the
--- entity back from the scan's retry pass until then.
+-- candidate's name and score so it can be explained. attempts counts the scans
+-- in a row whose lookup failed, failed_at is the start (unix milliseconds) of
+-- the latest of them, so one scan counts once, and from the second,
+-- retry_after (unix seconds) holds the entity back from the scan's retry pass
+-- until then.
 CREATE TABLE IF NOT EXISTS music_provider_matches (
   entity_type TEXT NOT NULL CHECK (entity_type IN ('album', 'musician', 'track')),
   entity_id INTEGER NOT NULL,
@@ -354,6 +356,7 @@ CREATE TABLE IF NOT EXISTS music_provider_matches (
   candidate TEXT,
   score INTEGER,
   attempts INTEGER NOT NULL DEFAULT 0,
+  failed_at INTEGER,
   retry_after INTEGER,
   PRIMARY KEY (entity_type, entity_id)
 );
