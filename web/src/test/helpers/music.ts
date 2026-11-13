@@ -3,7 +3,7 @@
 // about and fills the rest with neutral defaults.
 
 import type { components } from "@/types/openapi.gen";
-import { nullableFloat64, nullableInt64, nullableString, userSummary } from "./fixtures";
+import { nullableInt64, nullableString, userSummary } from "./fixtures";
 
 type Schema = components["schemas"];
 
@@ -157,7 +157,6 @@ export function albumDetailsResponse(
       apple_id: nullableInt64(),
       apple_url: null,
       spotify_url: `https://open.spotify.com/album/spotify-${id}`,
-      spotify_popularity: nullableFloat64(76),
       album_type: nullableString("album"),
       release_date: nullableString("2026-01-01"),
       year: nullableInt64(2026),

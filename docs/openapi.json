@@ -14117,7 +14117,6 @@
           "title",
           "sort_title",
           "spotify_id",
-          "spotify_popularity",
           "musician",
           "release_date",
           "year",
@@ -14162,10 +14161,6 @@
               "null"
             ],
             "description": "The album's page on Spotify, built from spotify_id; null until a Spotify match."
-          },
-          "spotify_popularity": {
-            "$ref": "#/components/schemas/SqlNullFloat64",
-            "description": "No longer written: Spotify stopped reporting popularity to this app in 2026, so Valid is false."
           },
           "album_type": {
             "$ref": "#/components/schemas/SqlNullString",
@@ -14683,8 +14678,6 @@
           "sort_name",
           "summary",
           "spotify_id",
-          "spotify_popularity",
-          "spotify_followers",
           "thumb",
           "created_at",
           "updated_at",
@@ -14714,14 +14707,6 @@
               "null"
             ],
             "description": "The artist's page on Spotify, built from spotify_id; null until a Spotify match."
-          },
-          "spotify_popularity": {
-            "$ref": "#/components/schemas/SqlNullFloat64",
-            "description": "No longer written: Spotify stopped reporting popularity to this app in 2026, so Valid is false."
-          },
-          "spotify_followers": {
-            "$ref": "#/components/schemas/SqlNullInt64",
-            "description": "No longer written: Spotify stopped reporting follower counts to this app in 2026, so Valid is false."
           },
           "thumb": {
             "$ref": "#/components/schemas/SqlNullString",

@@ -32,6 +32,23 @@ Left unfixed on 2026-11-03: no library file reaches it, and the fix would delay 
 Dolby resume by the measurement (0.05–0.3 s). Reopen if a library sweep finds audio starting more
 than 4 s after video, or a TV resume fails with an `init.mp4` that has no `dec3`.
 
+## Music
+
+### Spotify matching does not use ISRCs
+
+Albums and tracks are matched on Spotify by searching names, never by ISRC. The scanner stores no
+ISRC tag (`music_track_metadata` keeps only the Apple IDs), and `spotify_types.go` does not decode
+`external_ids`, so a track whose title differs from Spotify's (a translated title, different
+qualifiers) can stay unpaired, and an album whose title search misses stays unmatched even though
+its tracks carry the codes that would identify it. Seen while triaging leftovers on 2026-11-13.
+
+Not known: whether Spotify still returns `external_ids` to Development Mode apps, which lost
+popularity, followers and genres in February 2026; check with a live request first. A search with
+the `isrc:` filter may work either way. Options: read the `ISRC`/`TSRC` tag into a new
+`music_track_metadata.isrc` column next to the Apple IDs (`scanner/music/persistence.go`), prefer an
+ISRC pairing in the link pass (`linkAlbum` in `scanner/music/retry.go`), and, for an album the title
+search misses, search one of its tracks with `isrc:` and take the hit's album.
+
 ## TV app (IglooTV)
 
 ### The player's buffer budget is a loading target, not a cap

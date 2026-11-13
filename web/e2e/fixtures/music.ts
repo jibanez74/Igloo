@@ -1,5 +1,5 @@
 import type { components } from "../../src/types/openapi.gen";
-import { nullableFloat64, nullableInt64, nullableString } from "../e2e-api";
+import { nullableInt64, nullableString } from "../e2e-api";
 
 // Contract-typed music fixtures shared by the music specs: the builders come
 // from the unit-test helpers, and the Glacier Sessions / Aurora Pines scenario
@@ -66,7 +66,6 @@ export const glacierSessions: AlbumDetails = {
     apple_id: nullableInt64(),
     apple_url: null,
     spotify_url: "https://open.spotify.com/album/spotify-glacier",
-    spotify_popularity: nullableFloat64(73),
     album_type: nullableString("album"),
     release_date: nullableString("2026-02-14"),
     year: nullableInt64(2026),
@@ -95,8 +94,6 @@ export const auroraPines: MusicianDetails = {
     name: "Aurora Pines",
     sort_name: "Aurora Pines",
     summary: nullableString("Aurora Pines makes ambient music."),
-    spotify_popularity: nullableFloat64(82),
-    spotify_followers: nullableInt64(1_234_567),
     spotify_id: nullableString("sp-aurora"),
     spotify_url: "https://open.spotify.com/artist/sp-aurora",
     thumb: nullableString(),

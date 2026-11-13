@@ -507,6 +507,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getMusicProviderMatchStmt, err = db.PrepareContext(ctx, getMusicProviderMatch); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMusicProviderMatch: %w", err)
 	}
+	if q.getMusicProviderMatchFailureStmt, err = db.PrepareContext(ctx, getMusicProviderMatchFailure); err != nil {
+		return nil, fmt.Errorf("error preparing query GetMusicProviderMatchFailure: %w", err)
+	}
 	if q.getMusicSpotifyAdoptionStmt, err = db.PrepareContext(ctx, getMusicSpotifyAdoption); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMusicSpotifyAdoption: %w", err)
 	}
@@ -2142,6 +2145,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getMusicProviderMatchStmt: %w", cerr)
 		}
 	}
+	if q.getMusicProviderMatchFailureStmt != nil {
+		if cerr := q.getMusicProviderMatchFailureStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getMusicProviderMatchFailureStmt: %w", cerr)
+		}
+	}
 	if q.getMusicSpotifyAdoptionStmt != nil {
 		if cerr := q.getMusicSpotifyAdoptionStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getMusicSpotifyAdoptionStmt: %w", cerr)
@@ -3717,6 +3725,7 @@ type Queries struct {
 	getMoviesLibraryDescStmt                    *sql.Stmt
 	getMusicLibraryCountsStmt                   *sql.Stmt
 	getMusicProviderMatchStmt                   *sql.Stmt
+	getMusicProviderMatchFailureStmt            *sql.Stmt
 	getMusicSpotifyAdoptionStmt                 *sql.Stmt
 	getMusicianByIDStmt                         *sql.Stmt
 	getMusicianBySpotifyIDStmt                  *sql.Stmt
@@ -4159,6 +4168,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getMoviesLibraryDescStmt:                    q.getMoviesLibraryDescStmt,
 		getMusicLibraryCountsStmt:                   q.getMusicLibraryCountsStmt,
 		getMusicProviderMatchStmt:                   q.getMusicProviderMatchStmt,
+		getMusicProviderMatchFailureStmt:            q.getMusicProviderMatchFailureStmt,
 		getMusicSpotifyAdoptionStmt:                 q.getMusicSpotifyAdoptionStmt,
 		getMusicianByIDStmt:                         q.getMusicianByIDStmt,
 		getMusicianBySpotifyIDStmt:                  q.getMusicianBySpotifyIDStmt,

@@ -5,7 +5,7 @@ import { DETAIL_PAGE_CONTENT_ENTER_CLASS } from "@/lib/constants";
 import { musicianDetailsQueryOpts } from "@/lib/query-opts";
 import type { MusicianDetailsResponseType, MusicianTrackType } from "@/types";
 import { countFetchRequests, jsonResponse, requestURL } from "../helpers/api";
-import { nullableFloat64, nullableInt64, nullableString } from "../helpers/fixtures";
+import { nullableInt64, nullableString } from "../helpers/fixtures";
 import { createTestQueryClient } from "../helpers/render";
 import { readDocumentHead, renderRoute } from "../helpers/render-route";
 import {
@@ -85,8 +85,6 @@ function musicianDetailsResponse({
       name,
       sort_name: sortName,
       summary: nullableString(summary),
-      spotify_popularity: nullableFloat64(74),
-      spotify_followers: nullableInt64(12000),
       spotify_id: nullableString(`spotify-${id}`),
       spotify_url: spotifyUrl,
       thumb: nullableString(""),
@@ -397,10 +395,7 @@ describe("musician details route accessibility", () => {
       });
     });
 
-    expect(
-      screen.getByRole("group", { name: "Spotify popularity 74 out of 100" }),
-    ).toBeInTheDocument();
-    expect(screen.getByText("12K")).toBeInTheDocument();
+    expect(screen.queryByText(/Spotify popularity|Followers/)).not.toBeInTheDocument();
     const spotifyLink = screen.getByRole("link", {
       name: "The Band on Spotify (opens in a new tab)",
     });

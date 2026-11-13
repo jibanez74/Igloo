@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -338,6 +339,79 @@ func TestProviderFailure(t *testing.T) {
 			fatal, transient := ProviderFailure(tc.err)
 			if fatal != tc.wantFatal || transient != tc.wantTransient {
 				t.Fatalf("ProviderFailure = (%v, %v), want (%v, %v)", fatal, transient, tc.wantFatal, tc.wantTransient)
+			}
+		})
+	}
+}
+
+// A rate limit that names a short Retry-After is waited out inside the
+// request; the quota reason, a missing header, a long wait, a wait past the
+// deadline and a third rate limit in a row are returned to the caller.
+func TestGetJSONRateLimitRetry(t *testing.T) {
+	rateLimited := func(w http.ResponseWriter, retryAfter, reason string) {
+		if retryAfter != "" {
+			w.Header().Set("Retry-After", retryAfter)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		fmt.Fprintf(w, `{"error":{"status":429,"message":"slow down","reason":%q}}`, reason)
+	}
+
+	tests := []struct {
+		name         string
+		retryAfter   string
+		reason       string
+		limitedTimes int
+		deadline     time.Duration
+		wantCalls    int
+		wantErr      bool
+	}{
+		{name: "retries a short wait and succeeds", retryAfter: "0", limitedTimes: 2, wantCalls: 3},
+		{name: "gives up after the retry budget", retryAfter: "0", limitedTimes: 5, wantCalls: spotifyRateLimitRetries + 1, wantErr: true},
+		{name: "does not retry an exhausted quota", retryAfter: "0", reason: quotaExceededReason, limitedTimes: 1, wantCalls: 1, wantErr: true},
+		{name: "does not retry without Retry-After", limitedTimes: 1, wantCalls: 1, wantErr: true},
+		{name: "does not wait out a long Retry-After", retryAfter: "60", limitedTimes: 1, wantCalls: 1, wantErr: true},
+		{name: "does not wait past the deadline", retryAfter: "2", limitedTimes: 1, deadline: time.Second, wantCalls: 1, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var calls int
+			client := newMockClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				calls++
+				if calls <= tt.limitedTimes {
+					rateLimited(w, tt.retryAfter, tt.reason)
+					return
+				}
+				writeJSON(w, map[string]string{"id": "ok"})
+			}))
+
+			ctx := context.Background()
+			if tt.deadline > 0 {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, tt.deadline)
+				defer cancel()
+			}
+
+			var result struct {
+				ID string `json:"id"`
+			}
+			start := time.Now()
+			err := client.getJSON(ctx, spotifyAPIBaseURL+"/albums/x", &result)
+			if time.Since(start) > 500*time.Millisecond {
+				t.Fatalf("getJSON waited %s, want no real wait", time.Since(start))
+			}
+			if calls != tt.wantCalls {
+				t.Fatalf("requests = %d, want %d", calls, tt.wantCalls)
+			}
+			if !tt.wantErr {
+				if err != nil || result.ID != "ok" {
+					t.Fatalf("getJSON = %v, id %q; want the retried response", err, result.ID)
+				}
+				return
+			}
+			status, ok := errors.AsType[*StatusError](err)
+			if !ok || status.StatusCode != http.StatusTooManyRequests {
+				t.Fatalf("error = %v, want the 429 StatusError", err)
 			}
 		})
 	}

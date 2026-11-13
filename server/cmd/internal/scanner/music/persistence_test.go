@@ -512,6 +512,7 @@ func TestRelationshipFailuresRollBackAndRetry(t *testing.T) {
 			}
 			// External lookup outcomes survive rollback; database IDs never do.
 			expected := newMusicScanContext(nil)
+			expected.startedAt = scan.startedAt
 			expected.artistAttempts = scan.artistAttempts
 			expected.albumAttempts = scan.albumAttempts
 			expected.enrichmentCounts = scan.enrichmentCounts

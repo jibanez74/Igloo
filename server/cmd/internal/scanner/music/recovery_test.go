@@ -280,7 +280,7 @@ func TestSpotifyRecoveryCreditSelection(t *testing.T) {
 			s.spotify = scriptedSpotify(t, steps...)
 			album := testAlbum()
 			album.Artists = tc.credits
-			adopted, err := s.adoptAlbumArtist(context.Background(), newMusicScanContext(nil), "Test Artist", album)
+			adopted, err := s.adoptAlbumArtist(context.Background(), newMusicScanContext(nil), "Test Artist", album, false)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -633,7 +633,7 @@ func TestSpotifyRecoveryBreakerDefersAdoption(t *testing.T) {
 		t.Fatal(err)
 	}
 	scan.breaker.Stopped = true
-	adopted, err := s.adoptAlbumArtist(context.Background(), scan, "Test Artist", album.spotifyAlbum)
+	adopted, err := s.adoptAlbumArtist(context.Background(), scan, "Test Artist", album.spotifyAlbum, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -879,5 +879,61 @@ func TestSpotifyRecoveryPreservesMatchedMusician(t *testing.T) {
 	s.scan(dir)
 	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musicians WHERE spotify_id='retained'") != 1 || scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_spotify_adoptions") != 0 {
 		t.Fatal("matched identity changed or obsolete adoption not cleared")
+	}
+}
+
+// The retry pass does not request an artist whose failed lookup is waiting
+// out its backoff, even when an album it retries credits that artist; it
+// keeps the credit as the pending target, so the adoption resumes by id once
+// the wait has passed. The walk requests regardless.
+func TestRetryAdoptionHonorsTheArtistBackoff(t *testing.T) {
+	s := setupMusicScanner(t)
+	dir := t.TempDir()
+	scannertest.WriteFile(t, filepath.Join(dir, "track.m4a"), "audio")
+	s.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadata()}
+	s.scan(dir)
+	markArtistsUnmatched(t, s)
+	_, err := s.tx.DB.Exec(`UPDATE music_provider_matches SET status='failed', attempts=2, failed_at=0, retry_after=unixepoch()+3600
+		WHERE entity_type='musician'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scan := newMusicScanContext(nil)
+	s.spotify = scriptedSpotify(t, spotifyStep{operation: "match", target: "Test Album", album: testAlbum()})
+	album, err := s.resolveAlbum(context.Background(), scan, albumQuery{title: "Test Album", artist: "Test Artist"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The scripted client fails the test on any request it was not given.
+	adopted, err := s.adoptAlbumArtist(context.Background(), scan, "Test Artist", album.spotifyAlbum, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if adopted == nil || adopted.spotifyMatch != nil || adopted.adoptionTarget == "" {
+		t.Fatalf("a held-back adoption must keep its target and record no outcome: %+v", adopted)
+	}
+	err = s.persistEnrichment(context.Background(), scan, func(q *database.Queries, txScan *musicScanContext) error {
+		_, err := s.persistMusician(context.Background(), q, txScan, *adopted)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_spotify_adoptions WHERE spotify_id = '"+adopted.adoptionTarget+"'") != 1 {
+		t.Fatal("the held-back adoption's target was not kept")
+	}
+	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_provider_matches WHERE entity_type='musician' AND status='failed' AND retry_after > unixepoch()") != 1 {
+		t.Fatal("the held-back artist's failure and its wait were not kept")
+	}
+
+	walkScan := newMusicScanContext(nil)
+	walkScan.breaker.Stopped = true // the walk would request; the open breaker only defers it
+	adopted, err = s.adoptAlbumArtist(context.Background(), walkScan, "Test Artist", album.spotifyAlbum, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if adopted == nil {
+		t.Fatal("the walk did not adopt the album's artist")
 	}
 }

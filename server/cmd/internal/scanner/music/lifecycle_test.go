@@ -474,6 +474,7 @@ func TestShutdownDuringTrackTransaction(t *testing.T) {
 		t.Fatalf("scanned=%d failures=%d invalidations=%d", scanned, failures, invalidations)
 	}
 	expected := newMusicScanContext(nil)
+	expected.startedAt = scan.startedAt
 	expected.breaker = scan.breaker
 	expected.appleBreaker = scan.appleBreaker
 	if !reflect.DeepEqual(scan, expected) {

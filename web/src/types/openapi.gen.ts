@@ -4070,8 +4070,6 @@ export interface components {
             apple_url: string | null;
             /** @description The album's page on Spotify, built from spotify_id; null until a Spotify match. */
             spotify_url: string | null;
-            /** @description No longer written: Spotify stopped reporting popularity to this app in 2026, so Valid is false. */
-            spotify_popularity: components["schemas"]["SqlNullFloat64"];
             /** @description The matched provider's album type: album, single or compilation. Valid is false until a match reports one. */
             album_type: components["schemas"]["SqlNullString"];
             musician: components["schemas"]["SqlNullString"];
@@ -4238,10 +4236,6 @@ export interface components {
             spotify_id: components["schemas"]["SqlNullString"];
             /** @description The artist's page on Spotify, built from spotify_id; null until a Spotify match. */
             spotify_url: string | null;
-            /** @description No longer written: Spotify stopped reporting popularity to this app in 2026, so Valid is false. */
-            spotify_popularity: components["schemas"]["SqlNullFloat64"];
-            /** @description No longer written: Spotify stopped reporting follower counts to this app in 2026, so Valid is false. */
-            spotify_followers: components["schemas"]["SqlNullInt64"];
             /** @description Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             thumb: components["schemas"]["SqlNullString"];
             created_at: string;
