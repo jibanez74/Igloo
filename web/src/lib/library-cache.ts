@@ -138,10 +138,9 @@ export function onArtworkReset(listener: () => void) {
 /**
  * Marks stale every query that shows library artwork: each library's, which
  * include the person pages, whose photos and credits come from the libraries
- * too. A
- * settings save that stops serving the downloaded copies calls it, since the
- * cached image URLs point at files the server deletes or no longer serves;
- * the onArtworkReset listeners then refresh the URLs they hold.
+ * too. A settings save that stops serving the downloaded copies calls it,
+ * since the cached image URLs point at files the server deletes or no longer
+ * serves; the onArtworkReset listeners then refresh the URLs they hold.
  */
 export function invalidateArtworkQueries(queryClient: QueryClient) {
   for (const library of Object.keys(LIBRARY_QUERY_KEYS) as Library[]) {

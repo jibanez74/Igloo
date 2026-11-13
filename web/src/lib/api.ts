@@ -244,7 +244,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * - `error: true` with a string message is the server's failure, kept as is;
  * - anything else (a proxy's HTML page, a JSON body without the envelope, a
  *   non-2xx claiming success) becomes a failure carrying the real status, or
- *   NETWORK_ERROR when a 2xx body is unreadable.
+ *   NETWORK_ERROR for a 2xx whose body is unreadable or not an envelope.
  * Every failure is stamped with the HTTP status, so a surface can word it by
  * what happened (401 on login, 403 on a room) and fall back on the message.
  */
