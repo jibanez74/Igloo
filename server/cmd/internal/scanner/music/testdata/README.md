@@ -1,5 +1,8 @@
-These six 0.1-second silent audio fixtures were generated with the repository's
-FFmpeg 7.1.4-Jellyfin Linux x64 payload. They contain no copyrighted recordings.
+These six 0.1-second silent audio fixtures were generated with the FFmpeg
+7.1.4-Jellyfin Linux x64 payload the repository pinned then. They contain no
+copyrighted recordings. Igloo's own FFmpeg build, pinned now, has no MP3
+encoder or muxer: it regenerates the FLAC and M4A pairs, and the MP3 pair takes
+an FFmpeg with libmp3lame.
 
 Generation uses `-f lavfi -i anullsrc=r=44100:cl=mono -t 0.1`, with
 `-c:a libmp3lame`, `-c:a flac`, or `-c:a aac` for the matching extension.

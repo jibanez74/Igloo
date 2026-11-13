@@ -46,7 +46,7 @@ MEDIA_BIN_DIR := $(DIST_DIR)/media-bin
 .DEFAULT_GOAL := dev
 
 .PHONY: dev dev-profile build start stop clean help check test test-server test-music-race lint-server test-tmdb-integration test-spotify-integration test-itunes-integration test-web test-visual lint-web build-web test-openapi lint-openapi generate-openapi check-openapi preview-openapi
-.PHONY: check-go-tools check-web-tools check-sqlc-tools check-media-tools check-dev-tools check-build-tools check-server-test-tools check-platform media-payloads media-bin compress-media-payloads generate prepare-webdist-placeholder prepare-openapi-embed prepare-test-webdist prepare-web
+.PHONY: check-go-tools check-web-tools check-sqlc-tools check-media-tools check-dev-tools check-build-tools check-server-test-tools check-platform media-payloads media-bin compress-media-payloads generate prepare-webdist-placeholder prepare-openapi-embed prepare-web
 
 dev: check-dev-tools generate prepare-webdist-placeholder prepare-openapi-embed
 	@echo "Starting development server..."
@@ -303,8 +303,6 @@ prepare-webdist-placeholder:
 prepare-openapi-embed:
 	@mkdir -p $(OPENAPI_EMBED_DIR)
 	@cp docs/openapi.json $(OPENAPI_EMBED_DIR)/openapi.json
-
-prepare-test-webdist: prepare-webdist-placeholder
 
 prepare-web:
 	@echo "Building web app..."
