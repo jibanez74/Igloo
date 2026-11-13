@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSessionMutation } from "@/hooks/useSessionMutation";
 import { useId, useRef, useState, useTransition } from "react";
 import type { FormEvent, ReactNode } from "react";
 import {
@@ -167,10 +168,11 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   ) => {
     if (previousData) queryClient.setQueryData(settingsKey, previousData);
   };
-  const updateMutation = useMutation({
+  const updateMutation = useSessionMutation({
     mutationFn: updateGeneralSettings,
-    onMutate: async nextSettings => {
+    onMutate: async (nextSettings, _context, session) => {
       await queryClient.cancelQueries({ queryKey: settingsKey });
+      if (session.ended()) return undefined;
 
       const previousData = queryClient.getQueryData(settingsKey);
 

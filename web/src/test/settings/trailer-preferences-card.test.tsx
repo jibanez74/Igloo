@@ -3,7 +3,9 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import TrailerPreferencesCard from "@/components/settings/TrailerPreferencesCard";
+import { LIVE_ANNOUNCE_DELAY_MS } from "@/lib/constants";
 import type { TrailerPreferencesData } from "@/types";
+import { mutationSettled, renderAcrossSessions } from "../helpers/session";
 import { renderWithQueryClient } from "../helpers/render";
 
 const getTrailerPreferencesMock = vi.fn();
@@ -170,7 +172,10 @@ describe("TrailerPreferencesCard", () => {
   });
 
   it("rolls the control back and toasts when the save fails", async () => {
-    const user = userEvent.setup();
+    // Fake timers so the announcer's delay can be run out deterministically:
+    // a "saved" message, had one been scheduled, would be spoken by then.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     updateTrailerPreferencesMock.mockResolvedValue({
       error: true,
       message: "trailer count must be between 1 and 5",
@@ -191,9 +196,10 @@ describe("TrailerPreferencesCard", () => {
     );
     expect(toggle()).toHaveAttribute("aria-checked", "false");
     await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      await vi.advanceTimersByTimeAsync(LIVE_ANNOUNCE_DELAY_MS);
     });
     expect(screen.queryByText(/Saved to your account\./)).toBeNull();
+    vi.useRealTimers();
   });
 
   it("explains that theaters trailers fall back to the library without TMDB", async () => {
@@ -238,5 +244,52 @@ describe("TrailerPreferencesCard", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "failed to load trailer preferences",
     );
+  });
+
+  // Account A's save is still in flight when A signs out and B signs in. Its
+  // answer belongs to A: it must not overwrite the preferences B just loaded,
+  // roll anything back, or toast on B's page.
+  it.each([
+    ["success", { error: false as const, data: { enabled: true, count: 2, source: "both" as const } }],
+    ["failure", { error: true as const, message: "trailer count must be between 1 and 5" }],
+  ])("drops the previous account's %s", async (_label, answer) => {
+    const user = userEvent.setup();
+    let releaseSave: (value: unknown) => void = () => {};
+    updateTrailerPreferencesMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          releaseSave = resolve;
+        }),
+    );
+    const { queryClient, endSession, signIn } = await renderAcrossSessions(
+      TrailerPreferencesCard,
+    );
+    await user.click(await screen.findByRole("switch"));
+    await waitFor(() => expect(updateTrailerPreferencesMock).toHaveBeenCalled());
+
+    await endSession();
+    getTrailerPreferencesMock.mockResolvedValue(
+      success({ enabled: false, count: 1, source: "library" }),
+    );
+    await signIn();
+    await waitFor(() =>
+      expect(
+        screen.getByRole("combobox", { name: "Number of trailers" }),
+      ).toHaveTextContent("1 trailer"),
+    );
+
+    const settled = mutationSettled(queryClient);
+    releaseSave(answer);
+    await settled;
+
+    expect(toggle()).toHaveAttribute("aria-checked", "false");
+    expect(
+      screen.getByRole("combobox", { name: "Number of trailers" }),
+    ).toHaveTextContent("1 trailer");
+    expect(queryClient.getQueryData(["trailer-preferences"])).toEqual(
+      success({ enabled: false, count: 1, source: "library" }),
+    );
+    expect(showActionFailedMock).not.toHaveBeenCalled();
+    expect(getTrailerPreferencesMock).toHaveBeenCalledTimes(2);
   });
 });

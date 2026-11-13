@@ -779,6 +779,10 @@ export const WATCH_ROOM_SEEK_STEP_SEC = 10;
 export const WATCH_ROOM_SYNC_DRIFT_THRESHOLD_SEC = 1.5;
 export const WATCH_ROOM_SYNC_ANNOUNCE_DEBOUNCE_MS = 1200;
 
+// How long LiveAnnouncer waits before speaking a message, so the region is in
+// the DOM first. Tests advance past it to prove a message was never spoken.
+export const LIVE_ANNOUNCE_DELAY_MS = 100;
+
 export const MOVIE_SCAN_STATUS_KEY = "movie-scan-status";
 export const MUSIC_SCAN_STATUS_KEY = "music-scan-status";
 export const SHOW_SCAN_STATUS_KEY = "show-scan-status";

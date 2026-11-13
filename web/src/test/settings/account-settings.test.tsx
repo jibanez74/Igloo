@@ -7,6 +7,7 @@ import type { AuthUser } from "@/types";
 import { deferredResponse, jsonResponse, requestURL } from "../helpers/api";
 import { passwordCases } from "../helpers/password-cases";
 import { renderRoute } from "../helpers/render-route";
+import { mutationSettled } from "../helpers/session";
 
 const showValidationErrorMock = vi.fn();
 const showActionFailedMock = vi.fn();
@@ -280,14 +281,16 @@ describe("Account settings", () => {
       expect(queryClient.getQueryCache().getAll()).toEqual([]);
     });
 
+    // Wait for the mutation itself to finish, callbacks included, rather than
+    // for a fixed time a slow callback could outlast.
+    const settled = mutationSettled(queryClient);
     avatarRequest.resolve(
       jsonResponse({
         error: false,
         data: { user: testUser({ avatar: "/api/static/avatars/2-stored.webp" }) },
       }),
     );
-    // Let the response reach the mutation's callbacks.
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await settled;
 
     expect(queryClient.getQueryCache().getAll()).toEqual([]);
     expect(showSuccessMock).not.toHaveBeenCalled();

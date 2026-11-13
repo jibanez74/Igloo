@@ -1,6 +1,7 @@
 import { useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSessionMutation } from "@/hooks/useSessionMutation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { FieldError, FieldHint } from "@/components/ui/field";
@@ -9,7 +10,6 @@ import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { KeyRound } from "lucide-react";
 import SettingsCardHeader from "@/components/settings/SettingsCardHeader";
-import { sessionEndedSince, sessionStamp } from "@/hooks/useEndSession";
 import { useFocusHandoff } from "@/hooks/useFocusHandoff";
 import { updateUserPin } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/is-api-failure";
@@ -104,12 +104,10 @@ export default function ProfilePinCard() {
       ?.reset();
   };
 
-  const pinMutation = useMutation({
+  const pinMutation = useSessionMutation({
     mutationFn: ({ pin, current }: { pin: string; current?: string }) =>
       updateUserPin(pin, current),
-    onMutate: sessionStamp,
-    onSuccess: (res, variables, stamp) => {
-      if (sessionEndedSince(stamp)) return;
+    onSuccess: (res, variables) => {
       const removing = variables.pin === "";
       const action = removing ? "remove PIN" : "update PIN";
 
@@ -130,8 +128,7 @@ export default function ProfilePinCard() {
       setSignedInUser(queryClient, res.data.user);
       showSuccess(removing ? "PIN removed" : "PIN saved");
     },
-    onError: (_error, variables, stamp) => {
-      if (sessionEndedSince(stamp)) return;
+    onError: (_error, variables) => {
       const removing = variables.pin === "";
       const action = removing ? "remove PIN" : "update PIN";
       showMutationError(

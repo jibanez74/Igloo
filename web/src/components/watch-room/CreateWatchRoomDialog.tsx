@@ -1,5 +1,6 @@
 import { useDeferredValue, useId, useState, type RefObject } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSessionMutation } from "@/hooks/useSessionMutation";
 import { useNavigate } from "@tanstack/react-router";
 import { Users, X } from "lucide-react";
 import { createWatchRoom } from "@/lib/api";
@@ -142,7 +143,7 @@ export default function CreateWatchRoomDialog({
           )
         : SUBTITLES_NONE_LABEL;
 
-  const mutation = useMutation({
+  const mutation = useSessionMutation({
     mutationFn: () =>
       createWatchRoom({
         movie_id: movieId,

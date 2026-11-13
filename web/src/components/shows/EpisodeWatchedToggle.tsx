@@ -1,4 +1,5 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
+import { useSessionMutation } from "@/hooks/useSessionMutation";
 import { Check } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
@@ -81,11 +82,12 @@ export default function EpisodeWatchedToggle({
     }
   };
 
-  const mutation = useMutation({
+  const mutation = useSessionMutation({
     mutationFn: (nextWatched: boolean) =>
       setMediaWatched(episodeMediaRef(episodeId), nextWatched),
-    onMutate: async (nextWatched: boolean) => {
+    onMutate: async (nextWatched: boolean, _context, session) => {
       await queryClient.cancelQueries({ queryKey: seasonKey });
+      if (session.ended()) return undefined;
       const row = episodeRow();
       setEpisodeWatched(nextWatched);
       return {

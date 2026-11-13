@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMutation } from "@tanstack/react-query";
+import { useSessionMutation } from "@/hooks/useSessionMutation";
 import { showRemoved, showActionFailed } from "@/lib/toast-helpers";
 import {
   Music,
@@ -202,7 +202,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
 
   // Remove track mutation. The header's count and duration come from the
   // details query, so it refreshes with the tracks and the playlists list.
-  const removeTrackMutation = useMutation({
+  const removeTrackMutation = useSessionMutation({
     mutationFn: (trackId: number) =>
       removeTrackFromPlaylist(playlistId, trackId),
     onSuccess: async result => {
@@ -246,7 +246,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
   // Reorder tracks mutation. Scoped so consecutive drags save in order, and
   // pending until the refetch lands, so the server's order takes over from
   // the dropped one without a flash of the old order.
-  const reorderMutation = useMutation({
+  const reorderMutation = useSessionMutation({
     mutationFn: (trackIds: number[]) =>
       reorderPlaylistTracks(playlistId, trackIds),
     scope: { id: `playlist-reorder-${playlistId}` },

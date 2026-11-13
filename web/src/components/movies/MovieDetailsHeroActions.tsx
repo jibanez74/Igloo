@@ -1,5 +1,6 @@
 import { lazy, Suspense, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSessionMutation } from "@/hooks/useSessionMutation";
 import { Link } from "@tanstack/react-router";
 import {
   Play,
@@ -131,10 +132,11 @@ export default function MovieDetailsHeroActions({
     queryClient.setQueryData(watchProgressKey, previous);
   };
 
-  const watchedMutation = useMutation({
+  const watchedMutation = useSessionMutation({
     mutationFn: (nextWatched: boolean) => setMovieWatched(movieId, nextWatched),
-    onMutate: async (nextWatched: boolean) => {
+    onMutate: async (nextWatched: boolean, _context, session) => {
       await queryClient.cancelQueries({ queryKey: watchProgressKey });
+      if (session.ended()) return undefined;
       const previous = queryClient.getQueryData(watchProgressKey);
       const currentProgress = previous?.error === false
         ? previous.data

@@ -1,4 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSessionMutation } from "@/hooks/useSessionMutation";
 import { Heart } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
@@ -44,10 +45,11 @@ export default function MovieLikeButton({
     queryClient.setQueryData(likeKey, previous);
   };
 
-  const mutation = useMutation({
+  const mutation = useSessionMutation({
     mutationFn: () => toggleLikeMovie(movieId),
-    onMutate: async () => {
+    onMutate: async (_variables, _context, session) => {
       await queryClient.cancelQueries({ queryKey: likeKey });
+      if (session.ended()) return undefined;
       const previous = queryClient.getQueryData(likeKey);
       const nextLiked = previous?.error === false
         ? !previous.data.is_liked

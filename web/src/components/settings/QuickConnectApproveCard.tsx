@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSessionMutation } from "@/hooks/useSessionMutation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { FieldError, FieldHint } from "@/components/ui/field";
@@ -122,7 +123,7 @@ export default function QuickConnectApproveCard() {
   // A pure in-memory lookup, POST only because the code travels in the body.
   // It changes no server state and no query caches it.
   // react-doctor-disable-next-line react-doctor/query-mutation-missing-invalidation
-  const lookupMutation = useMutation({
+  const lookupMutation = useSessionMutation({
     mutationFn: (deviceCode: string) => lookupQuickConnect(deviceCode),
     onSuccess: res => {
       if (res.error) {
@@ -142,7 +143,7 @@ export default function QuickConnectApproveCard() {
   // The mutationFn refreshes [DEVICES_KEY] itself via fetchQuery, and the poll
   // below keeps it current, so there is nothing left to invalidate.
   // react-doctor-disable-next-line react-doctor/query-mutation-missing-invalidation
-  const approveMutation = useMutation({
+  const approveMutation = useSessionMutation({
     mutationFn: async (deviceCode: string): Promise<ApprovalResult> => {
       let baselineDeviceIds: number[] | null = null;
 

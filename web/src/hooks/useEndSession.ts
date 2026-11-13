@@ -25,9 +25,10 @@ export function arrivedLoggedOut(state: unknown): boolean {
  * How many sessions have ended on this page. Clearing the cache does not stop
  * a mutation that is still in flight: its callbacks run when the response
  * arrives and would write the previous user back into the cache, or over the
- * next one's. A mutation that writes the signed-in user therefore stamps the
- * session it started in (sessionStamp, from onMutate) and drops its response
- * once that session has ended (sessionEndedSince).
+ * next one's. Every mutation therefore goes through useSessionMutation, which
+ * stamps the session it started in (sessionStamp) and drops its callbacks once
+ * that session has ended (sessionEndedSince). Async work outside a mutation
+ * that writes the cache or navigates after an await does the same by hand.
  */
 let endedSessions = 0;
 

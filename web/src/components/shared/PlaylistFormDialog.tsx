@@ -1,5 +1,6 @@
 import { useState, type RefObject } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
+import { useSessionMutation } from "@/hooks/useSessionMutation";
 import { useRouter } from "@tanstack/react-router";
 import {
   showCreated,
@@ -133,7 +134,7 @@ function PlaylistForm({
   );
 
   // Create mutation
-  const createMutation = useMutation({
+  const createMutation = useSessionMutation({
     mutationFn: () =>
       api.create({
         name: name.trim(),
@@ -155,7 +156,7 @@ function PlaylistForm({
   });
 
   // Update mutation
-  const updateMutation = useMutation({
+  const updateMutation = useSessionMutation({
     mutationFn: () => {
       if (!playlist) throw new Error("Playlist is required for edit mode");
       // PUT replaces every field, so the dialog resends the cover it does not

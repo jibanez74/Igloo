@@ -234,6 +234,14 @@ export default defineConfig([
               message:
                 "Fire toasts through @/lib/toast-helpers (showSuccess, showActionFailed, showInfo, ...); see docs/design-system.md section 3.6.",
             },
+            // A mutation still in flight at sign-out would otherwise run its
+            // callbacks against the next account's cache.
+            {
+              name: "@tanstack/react-query",
+              importNames: ["useMutation"],
+              message:
+                "Use useSessionMutation from @/hooks/useSessionMutation: it drops callbacks of a mutation whose session has ended.",
+            },
           ],
         },
       ],

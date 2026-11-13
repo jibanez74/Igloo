@@ -1,6 +1,7 @@
 import { useId, useLayoutEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSessionMutation } from "@/hooks/useSessionMutation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -73,7 +74,7 @@ export default function DevicesCard() {
     setDeviceToRename(null);
   };
 
-  const revokeMutation = useMutation({
+  const revokeMutation = useSessionMutation({
     mutationFn: (id: number) => revokeDevice(id),
     onSuccess: (res, id) => {
       if (res.error) {
@@ -106,7 +107,7 @@ export default function DevicesCard() {
     },
   });
 
-  const renameMutation = useMutation({
+  const renameMutation = useSessionMutation({
     mutationFn: ({ id, name }: { id: number; name: string }) =>
       renameDevice(id, name),
     onSuccess: res => {

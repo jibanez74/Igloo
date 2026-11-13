@@ -2,7 +2,8 @@ import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRef } from "react";
 import { createFileRoute, Link, stripSearchParams } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSessionMutation } from "@/hooks/useSessionMutation";
 import { ArrowLeft, ListVideo, User } from "lucide-react";
 import MovieCard from "@/components/movies/MovieCard";
 import PlaylistMovieMenu from "@/components/movies/PlaylistMovieMenu";
@@ -123,7 +124,7 @@ function MoviePlaylistContent({ playlistId, data }: MoviePlaylistContentProps) {
   // Removal is reversible (the movie page adds it back), so it asks nothing
   // and reports through a toast. The list, this header's count and the
   // Playlists tab's card all carry the count, so all three refresh.
-  const removeMutation = useMutation({
+  const removeMutation = useSessionMutation({
     mutationFn: (movieId: number) =>
       removeMovieFromMoviePlaylist(playlistId, movieId),
     onSuccess: async result => {
