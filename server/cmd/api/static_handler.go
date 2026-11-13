@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"io/fs"
 	"mime"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -53,7 +55,9 @@ func (app *Application) ServeStaticFiles(w http.ResponseWriter, r *http.Request)
 
 	info, err := os.Stat(fullPath)
 	if err != nil {
-		if os.IsNotExist(err) {
+		// ENOTDIR is a path that runs through a file (posters/a.png/b.png):
+		// as missing as ENOENT, and not worth an error in the log.
+		if errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ENOTDIR) {
 			http.Error(w, "Not Found", http.StatusNotFound)
 		} else {
 			app.Logger.Error("failed to stat static file", "error", err, "path", fullPath)
