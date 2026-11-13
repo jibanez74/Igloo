@@ -402,8 +402,8 @@ func TestCreateWatchRoom_HTTP_DirectWithFirstStreamDefaultAccepted(t *testing.T)
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
 	insertWatchRoomTestVideoStream(t, app, movieID, "High")
-	insertTestAudioStream(t, app, database.InsertAudioStreamParams{MovieID: movieID, StreamIndex: 1, IsDefault: true})
-	insertTestAudioStream(t, app, database.InsertAudioStreamParams{MovieID: movieID, StreamIndex: 2})
+	insertTestAudioStream(t, app, database.InsertAudioStreamParams{MovieID: movieID, StreamIndex: 1, Codec: "aac", IsDefault: true})
+	insertTestAudioStream(t, app, database.InsertAudioStreamParams{MovieID: movieID, StreamIndex: 2, Codec: "truehd"})
 	handler := authenticatedRouter(t, app, ownerID)
 
 	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0}`, movieID)
