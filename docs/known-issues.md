@@ -38,6 +38,20 @@ than 4 s after video, or a TV resume fails with an `init.mp4` that has no `dec3`
 Recorded on 2026-11-13 from the web audit of fc27fddc and the review of PRs #267–#270, which
 fixed the audit's bugs (BUG-01..07, OBS-01/02) and left these.
 
+### Editing a playlist while its queue loads can cut the queue short
+
+Found in council review of the music start-race fix (2026-11-13), not reproduced. Play all or
+Shuffle all on a playlist plays the loaded rows and then drains the remaining pages
+(`loadRemainingTracks` in `web/src/routes/_auth/music/playlist.$id.tsx`). If the owner removes or
+reorders a track while that drain runs, the mutation's `invalidateQueries` on
+`[PLAYLIST_TRACKS_KEY, id]` refetches the active query, and a refetch cancels the drain's page in
+flight. That round adds no page, the page-count guard ends the loop, and the queue keeps only the
+pages loaded so far, with an "Only N of M tracks could be loaded" toast for a load that did not
+fail. Only an edit inside the few seconds a drain runs does this. Reproduce by holding a later
+page, removing a track, then releasing it. Fix: when a round adds no page while the result is
+still fetching (a refetch took it over), wait for that and try the page again instead of
+stopping.
+
 ### The musician page mounts a row for every track
 
 `web/src/routes/_auth/music/musician.$id.tsx` maps the whole musician-tracks response into
