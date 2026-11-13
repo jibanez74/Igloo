@@ -6,6 +6,7 @@ import {
   logout,
   onSessionExpired,
   updateUserPassword,
+  updateTrailerPreferences,
   updateUserPin,
   uploadUserAvatar,
 } from "@/lib/api";
@@ -112,5 +113,88 @@ describe("session expiry", () => {
     await getNotifications();
 
     expect(listener).not.toHaveBeenCalled();
+  });
+});
+
+// The envelope is checked against the status: a proxy or upstream answering
+// for the server (an HTML error page, a JSON body that is not the envelope)
+// must never read as success, and its failure keeps the real status.
+describe("response envelopes", () => {
+  const htmlResponse = (status: number) =>
+    Promise.resolve(
+      new Response("<html><body>Bad gateway</body></html>", {
+        status,
+        headers: { "Content-Type": "text/html" },
+      }),
+    );
+
+  it.each([
+    ["non-2xx JSON without an error field", () => jsonResponse({ message: "Upstream failed" }, 502), 502],
+    ["non-2xx claiming success", () => jsonResponse({ error: false, data: { user: null } }, 503), 503],
+    ["an HTML error page", () => htmlResponse(504), 504],
+  ])("fails %s with the real status", async (_name, answer, status) => {
+    answerEveryRequest(answer);
+
+    const res = await updateTrailerPreferences({ enabled: true, count: 2, source: "both" });
+
+    expect(res).toEqual({
+      error: true,
+      message: `${status} - The request could not be completed.`,
+      status,
+    });
+  });
+
+  it("keeps the real status of an HTML 401", async () => {
+    answerEveryRequest(() => htmlResponse(401));
+    listenForExpiry();
+
+    const res = await getNotifications();
+
+    expect(res).toMatchObject({ error: true, status: 401 });
+  });
+
+  it("keeps the server's own failure and stamps its status", async () => {
+    answerEveryRequest(() =>
+      jsonResponse({ error: true, message: "trailer count must be between 1 and 5" }, 400),
+    );
+
+    const res = await updateTrailerPreferences({ enabled: true, count: 9, source: "both" });
+
+    expect(res).toEqual({
+      error: true,
+      message: "trailer count must be between 1 and 5",
+      status: 400,
+    });
+  });
+
+  it("reports a 2xx body that is not an envelope as a network error", async () => {
+    answerEveryRequest(() => jsonResponse({ enabled: true }, 200));
+
+    const res = await updateTrailerPreferences({ enabled: true, count: 2, source: "both" });
+
+    expect(res).toMatchObject({ error: true, status: 500 });
+  });
+
+  it.each([
+    ["with data", { error: false, data: { enabled: true, count: 2, source: "both" } }],
+    ["without data", { error: false, message: "Saved" }],
+  ])("passes a success envelope %s through", async (_name, body) => {
+    answerEveryRequest(() => jsonResponse(body, 200));
+
+    const res = await updateTrailerPreferences({ enabled: true, count: 2, source: "both" });
+
+    expect(res).toEqual(body);
+  });
+
+  it("fails an avatar upload whose non-2xx body is not an envelope", async () => {
+    answerEveryRequest(() => jsonResponse({ detail: "too large" }, 413));
+
+    const res = await uploadUserAvatar(new File(["x"], "me.png", { type: "image/png" }));
+
+    expect(res).toEqual({
+      error: true,
+      message: "413 - The avatar could not be uploaded.",
+      status: 413,
+    });
   });
 });

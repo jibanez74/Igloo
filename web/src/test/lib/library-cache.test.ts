@@ -2,6 +2,7 @@ import { InfiniteQueryObserver } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   CONTINUE_WATCHING_KEY,
+  PERSON_KEY,
   SEARCH_ALL_KEY,
   SEARCH_CATEGORY_KEYS,
   WATCH_ROOM_KEY,
@@ -32,6 +33,7 @@ const KEYS = {
   continueWatching: [CONTINUE_WATCHING_KEY],
   watchRooms: [WATCH_ROOMS_KEY],
   watchRoom: [WATCH_ROOM_KEY, 5],
+  person: [PERSON_KEY, 42],
 };
 
 function seededClient() {
@@ -49,7 +51,7 @@ function staleKeys(queryClient: ReturnType<typeof createTestQueryClient>) {
 }
 
 describe("invalidateLibraryQueries", () => {
-  it("reaches the movie search results, continue watching and the watch rooms", () => {
+  it("reaches the movie search results, continue watching, the watch rooms and person pages", () => {
     const queryClient = seededClient();
 
     invalidateLibraryQueries(queryClient, "movies");
@@ -60,10 +62,11 @@ describe("invalidateLibraryQueries", () => {
       "continueWatching",
       "watchRooms",
       "watchRoom",
+      "person",
     ]);
   });
 
-  it("reaches the show search results and continue watching", () => {
+  it("reaches the show search results, continue watching and person pages", () => {
     const queryClient = seededClient();
 
     invalidateLibraryQueries(queryClient, "shows");
@@ -72,6 +75,7 @@ describe("invalidateLibraryQueries", () => {
       "searchAll",
       "searchShows",
       "continueWatching",
+      "person",
     ]);
   });
 
@@ -91,6 +95,7 @@ describe("invalidateArtworkQueries", () => {
     invalidateArtworkQueries(queryClient);
 
     expect(staleKeys(queryClient)).toContain("watchRoom");
+    expect(staleKeys(queryClient)).toContain("person");
   });
 });
 
