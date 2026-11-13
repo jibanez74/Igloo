@@ -882,9 +882,10 @@ func TestSpotifyRecoveryPreservesMatchedMusician(t *testing.T) {
 	}
 }
 
-// The retry pass leaves an artist whose failed lookup is waiting out its
-// backoff alone even when an album it retries credits that artist; the walk
-// adopts regardless.
+// The retry pass does not request an artist whose failed lookup is waiting
+// out its backoff, even when an album it retries credits that artist; it
+// keeps the credit as the pending target, so the adoption resumes by id once
+// the wait has passed. The walk requests regardless.
 func TestRetryAdoptionHonorsTheArtistBackoff(t *testing.T) {
 	s := setupMusicScanner(t)
 	dir := t.TempDir()
@@ -904,15 +905,31 @@ func TestRetryAdoptionHonorsTheArtistBackoff(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	scan.breaker.Stopped = true // any GetArtist would be skipped; the outcome tells whether one was tried
+	// The scripted client fails the test on any request it was not given.
 	adopted, err := s.adoptAlbumArtist(context.Background(), scan, "Test Artist", album.spotifyAlbum, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if adopted != nil {
-		t.Fatalf("the retry pass adopted an artist inside its backoff: %+v", adopted)
+	if adopted == nil || adopted.spotifyMatch != nil || adopted.adoptionTarget == "" {
+		t.Fatalf("a held-back adoption must keep its target and record no outcome: %+v", adopted)
 	}
-	adopted, err = s.adoptAlbumArtist(context.Background(), scan, "Test Artist", album.spotifyAlbum, false)
+	err = s.persistEnrichment(context.Background(), scan, func(q *database.Queries, txScan *musicScanContext) error {
+		_, err := s.persistMusician(context.Background(), q, txScan, *adopted)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_spotify_adoptions WHERE spotify_id = '"+adopted.adoptionTarget+"'") != 1 {
+		t.Fatal("the held-back adoption's target was not kept")
+	}
+	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_provider_matches WHERE entity_type='musician' AND status='failed' AND retry_after > unixepoch()") != 1 {
+		t.Fatal("the held-back artist's failure and its wait were not kept")
+	}
+
+	walkScan := newMusicScanContext(nil)
+	walkScan.breaker.Stopped = true // the walk would request; the open breaker only defers it
+	adopted, err = s.adoptAlbumArtist(context.Background(), walkScan, "Test Artist", album.spotifyAlbum, false)
 	if err != nil {
 		t.Fatal(err)
 	}
