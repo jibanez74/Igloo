@@ -1,18 +1,41 @@
-import { useEffect, useEffectEvent } from "react";
+import { useEffect, useEffectEvent, useSyncExternalStore } from "react";
 import type { RefObject } from "react";
 import { AUDIO_SEEK_STEP_SECONDS } from "@/lib/constants";
 import { playMediaElement } from "@/lib/audio-utils";
+import {
+  claimMediaSession,
+  getMediaSessionOwner,
+  ownsMediaSession,
+  releaseMediaSession,
+  subscribeMediaSessionOwner,
+} from "@/lib/media-session";
 
-const MEDIA_SESSION_ACTIONS = [
-  "play",
-  "pause",
-  "stop",
-  "previoustrack",
-  "nexttrack",
-  "seekbackward",
-  "seekforward",
-  "seekto",
-] as const;
+// There is one music player, so one owner token for it.
+const MUSIC_SESSION = Symbol("music");
+
+function trackMetadata(
+  trackTitle: string | null,
+  albumTitle: string,
+  albumCover: string | null,
+  musicianName: string | null,
+) {
+  if (trackTitle === null || typeof MediaMetadata === "undefined") {
+    return null;
+  }
+
+  // MediaMetadata artwork wants absolute URLs; new URL() leaves already
+  // absolute covers untouched and resolves /api paths against the origin.
+  const artworkUrl = albumCover
+    ? new URL(albumCover, window.location.origin).toString()
+    : null;
+
+  return new MediaMetadata({
+    title: trackTitle,
+    artist: musicianName ?? albumTitle,
+    album: albumTitle,
+    artwork: artworkUrl ? [{ src: artworkUrl }] : [],
+  });
+}
 
 function positionStateSupported() {
   return (
@@ -57,43 +80,6 @@ export function useAudioMediaSession({
   onNext,
   onSeekBy,
 }: AudioMediaSessionOptions) {
-  useEffect(() => {
-    if (!("mediaSession" in navigator)) {
-      return;
-    }
-
-    // Clear stale lock-screen/OS media info once playback stops; otherwise
-    // the last track keeps showing after the player is closed.
-    if (
-      currentTrackId === null ||
-      trackTitle === null ||
-      typeof MediaMetadata === "undefined"
-    ) {
-      navigator.mediaSession.metadata = null;
-      return;
-    }
-
-    // MediaMetadata artwork wants absolute URLs; new URL() leaves already
-    // absolute covers untouched and resolves /api paths against the origin.
-    const artworkUrl = albumCover
-      ? new URL(albumCover, window.location.origin).toString()
-      : null;
-
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: trackTitle,
-      artist: musicianName ?? albumTitle,
-      album: albumTitle,
-      artwork: artworkUrl ? [{ src: artworkUrl }] : [],
-    });
-  }, [currentTrackId, trackTitle, albumCover, albumTitle, musicianName]);
-
-  useEffect(() => {
-    if (!("mediaSession" in navigator)) return;
-
-    navigator.mediaSession.playbackState =
-      currentTrackId === null ? "none" : isPlaying ? "playing" : "paused";
-  }, [isPlaying, currentTrackId]);
-
   const handlePlay = useEffectEvent(() => {
     void playMediaElement(audioRef.current);
   });
@@ -133,31 +119,67 @@ export function useAudioMediaSession({
     audio.currentTime = seekTime;
   });
 
+  // A video page pauses music and takes the session. Music leaves it alone
+  // until the reader plays music again or the video lets the session go, then
+  // claims it back with its own metadata and full action set: resuming the
+  // same track changes nothing else this effect could react to.
+  const sessionOwner = useSyncExternalStore(
+    subscribeMediaSessionOwner,
+    getMediaSessionOwner,
+    getMediaSessionOwner,
+  );
+  const mayClaim =
+    sessionOwner === null || sessionOwner === MUSIC_SESSION || isPlaying;
+
   useEffect(() => {
-    if (currentTrackId === null || !("mediaSession" in navigator)) return;
+    if (!("mediaSession" in navigator)) return;
 
-    navigator.mediaSession.setActionHandler("play", handlePlay);
-    navigator.mediaSession.setActionHandler("pause", handlePause);
-    navigator.mediaSession.setActionHandler("stop", handleStop);
-    navigator.mediaSession.setActionHandler("previoustrack", handlePrevious);
-    navigator.mediaSession.setActionHandler("nexttrack", handleNext);
-    navigator.mediaSession.setActionHandler("seekbackward", handleSeekBackward);
-    navigator.mediaSession.setActionHandler("seekforward", handleSeekForward);
-    navigator.mediaSession.setActionHandler("seekto", handleSeekTo);
+    // Clear stale lock-screen/OS media info once playback stops; otherwise
+    // the last track keeps showing after the player is closed.
+    if (currentTrackId === null) {
+      releaseMediaSession(MUSIC_SESSION);
+      return;
+    }
+    if (!mayClaim) return;
 
-    return () => {
-      for (const action of MEDIA_SESSION_ACTIONS) {
-        navigator.mediaSession.setActionHandler(action, null);
-      }
-    };
-  }, [audioRef, currentTrackId]);
+    claimMediaSession(
+      MUSIC_SESSION,
+      trackMetadata(trackTitle, albumTitle, albumCover, musicianName),
+      {
+        play: handlePlay,
+        pause: handlePause,
+        stop: handleStop,
+        previoustrack: handlePrevious,
+        nexttrack: handleNext,
+        seekbackward: handleSeekBackward,
+        seekforward: handleSeekForward,
+        seekto: handleSeekTo,
+      },
+    );
+  }, [
+    audioRef,
+    currentTrackId,
+    trackTitle,
+    albumCover,
+    albumTitle,
+    musicianName,
+    mayClaim,
+  ]);
+
+  useEffect(() => {
+    if (!ownsMediaSession(MUSIC_SESSION)) return;
+
+    navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
+  }, [isPlaying, currentTrackId, sessionOwner]);
+
+  useEffect(() => () => releaseMediaSession(MUSIC_SESSION), []);
 }
 
 // Report playback position to the OS media controls. Pure DOM work with no
 // reactive dependencies, so it lives outside the hook — the player calls it
 // from its timeupdate/durationchange handlers.
 export function syncMediaSessionPosition(audio: HTMLAudioElement) {
-  if (!positionStateSupported()) {
+  if (!positionStateSupported() || !ownsMediaSession(MUSIC_SESSION)) {
     return;
   }
 

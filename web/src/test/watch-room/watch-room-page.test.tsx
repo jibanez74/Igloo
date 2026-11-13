@@ -17,6 +17,7 @@ import {
 } from "@/lib/constants";
 import type { WatchRoomDetailType } from "@/types";
 import { renderWithQueryClient } from "@/test/helpers/render";
+import { audioPlayerActionsMock } from "../helpers/audio-player";
 
 const navigateMock = vi.fn();
 let routeParamId: number | null = 7;
@@ -202,6 +203,8 @@ vi.mock("@/lib/toast-helpers", async () => {
   };
 });
 
+vi.mock("@/hooks/useAudioPlayerActions", () => import("../helpers/audio-player"));
+
 vi.mock("@/components/playback/VideoPlayer", () => ({
   default: (props: MockVideoPlayerProps) => {
     lastVideoPlayerProps.current = props;
@@ -379,6 +382,25 @@ describe("WatchRoomPageContent", () => {
     globalThis.WebSocket = originalWebSocket;
     prefersCoarse.value = false;
     vi.useRealTimers();
+  });
+
+  // Music used to keep playing under the room: the video page and trailers
+  // paused it, the room never did.
+  it("pauses music and takes its keyboard shortcuts from the moment it mounts", () => {
+    useQueryMock.mockImplementation(() => ({
+      data: undefined,
+      isPending: true,
+      isError: false,
+    }));
+
+    const { unmount } = renderWithQueryClient(<WatchRoomPageContent roomId={7} />);
+
+    expect(audioPlayerActionsMock.pause).toHaveBeenCalledOnce();
+    expect(audioPlayerActionsMock.suspendKeyboard).toHaveBeenCalledOnce();
+    expect(audioPlayerActionsMock.resumeKeyboard).not.toHaveBeenCalled();
+
+    unmount();
+    expect(audioPlayerActionsMock.resumeKeyboard).toHaveBeenCalledOnce();
   });
 
   it("does not send a redundant join message when the websocket opens", async () => {

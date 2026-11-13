@@ -72,6 +72,21 @@ function VideoFullscreenHarness() {
   );
 }
 
+// The video mounts after the page's first render (a watch room once it has
+// loaded, the movie after its pre-roll) and can be replaced by a new element.
+function LateVideoHarness({ videoKey }: { videoKey: string | null }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const { isFullscreen } = useVideoFullscreen({ containerRef, videoRef });
+
+  return (
+    <div ref={containerRef}>
+      {videoKey ? <video key={videoKey} ref={videoRef} data-testid="video" /> : null}
+      <div data-testid="is-fullscreen">{String(isFullscreen)}</div>
+    </div>
+  );
+}
+
 beforeEach(() => {
   fullscreenElement = null;
 
@@ -143,6 +158,41 @@ describe("useVideoFullscreen", () => {
     expect(screen.getByTestId("is-fullscreen")).toHaveTextContent("false");
     expect(screen.getByTestId("is-immersive")).toHaveTextContent("false");
     expect(screen.getByTestId("chrome-mode")).toHaveTextContent("false");
+  });
+
+  it("hears WebKit video fullscreen events from a video mounted or replaced later", () => {
+    const { rerender } = render(<LateVideoHarness videoKey={null} />);
+
+    rerender(<LateVideoHarness videoKey="first" />);
+    const first = screen.getByTestId("video");
+    act(() => {
+      first.dispatchEvent(new Event("webkitbeginfullscreen"));
+    });
+    expect(screen.getByTestId("is-fullscreen")).toHaveTextContent("true");
+    act(() => {
+      first.dispatchEvent(new Event("webkitendfullscreen"));
+    });
+    expect(screen.getByTestId("is-fullscreen")).toHaveTextContent("false");
+
+    rerender(<LateVideoHarness videoKey="second" />);
+    const second = screen.getByTestId("video");
+    expect(second).not.toBe(first);
+    act(() => {
+      second.dispatchEvent(new Event("webkitbeginfullscreen"));
+    });
+    expect(screen.getByTestId("is-fullscreen")).toHaveTextContent("true");
+  });
+
+  it("ignores WebKit fullscreen events from another video on the page", () => {
+    render(<LateVideoHarness videoKey="ours" />);
+    const other = document.createElement("video");
+    document.body.append(other);
+
+    act(() => {
+      other.dispatchEvent(new Event("webkitbeginfullscreen"));
+    });
+    expect(screen.getByTestId("is-fullscreen")).toHaveTextContent("false");
+    other.remove();
   });
 
   it("uses immersive viewport fallback when browser fullscreen is unavailable", async () => {

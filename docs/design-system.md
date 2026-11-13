@@ -1858,6 +1858,16 @@ require the full playback test pass.
   and navigation keys are left to the focused control (buttons, tabs,
   radios), and the player's native sliders keep their own arrow/Home
   handling.
+- **Music and video take turns** (`useSuspendMusicPlayback`,
+  `lib/media-session.ts`): every surface that plays video (the video player,
+  a trailer, a watch room) pauses music and takes the music keyboard
+  shortcuts from the moment it mounts, loading and error states included, and
+  hands the shortcuts back when it unmounts; music stays paused. The OS media
+  controls (lock screen, headset, the browser's media hub) have one owner at
+  a time: a video claims them with its own actions only (no music
+  previous/next/stop), and when it lets go, the music player claims them back
+  with its track and every action, without waiting for a new track. Music
+  takes them from a video only if the reader plays music over it.
 
 ### 3.6 Toasts & notifications
 

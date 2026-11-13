@@ -54,6 +54,7 @@ import { useVideoMediaSession } from "@/hooks/useVideoMediaSession";
 import { useVideoFullscreen } from "@/hooks/useVideoFullscreen";
 import { useVideoPlaybackKeyboard } from "@/hooks/useVideoPlaybackKeyboard";
 import { useShortcutHints } from "@/hooks/useShortcutHints";
+import { useSuspendMusicPlayback } from "@/hooks/useSuspendMusicPlayback";
 import { useWatchRoomConnection } from "./useWatchRoomConnection";
 import type { WatchRoomDetailType, WatchRoomMemberType } from "@/types";
 
@@ -71,6 +72,9 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
   const [duration, setDuration] = useState(0);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [streamReloadKey, setStreamReloadKey] = useState(0);
+  // Joining a room is choosing to watch it: music steps aside from the
+  // start, through the room's loading and error states too.
+  useSuspendMusicPlayback();
 
   const {
     isFullscreen,
