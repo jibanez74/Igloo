@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import QuickConnectApproveCard from "@/components/settings/QuickConnectApproveCard";
 import { DEVICES_KEY } from "@/lib/constants";
+import { forgetEndedSession } from "@/lib/session";
 import type { DeviceType } from "@/types";
 import { createTestQueryClient, renderWithQueryClient } from "../helpers/render";
 
@@ -146,6 +147,37 @@ describe("QuickConnectApproveCard", () => {
     expect(input).toHaveValue("XK4T7P");
     expect(input).toHaveFocus();
     expect(approveQuickConnectMock).not.toHaveBeenCalled();
+  });
+
+  // The approval waits on a fresh device list first. A sign-out (and the next
+  // reader signing in) meanwhile must not send it: it would go out with the
+  // next reader's cookie and pair the device to their account.
+  it("does not send the approval once the session ended while the device list loaded", async () => {
+    let releaseDevices: (value: unknown) => void = () => {};
+    renderCard();
+    getDevicesMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          releaseDevices = resolve;
+        }),
+    );
+
+    fireEvent.change(
+      screen.getByRole("textbox", { name: "Quick Connect code" }),
+      { target: { value: "XK4T7P" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Approve device" }));
+    await waitFor(() => expect(getDevicesMock).toHaveBeenCalled());
+
+    forgetEndedSession();
+    await act(async () => {
+      releaseDevices(devicesResponse([]));
+    });
+    await act(async () => {});
+
+    expect(approveQuickConnectMock).not.toHaveBeenCalled();
+    expect(showActionFailedMock).not.toHaveBeenCalled();
   });
 
   it("approves after confirmation and reports the device once it connects", async () => {

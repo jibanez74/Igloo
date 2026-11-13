@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSessionMutation } from "@/hooks/useSessionMutation";
+import { sessionEndedSince, sessionStamp } from "@/lib/session";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { FieldError, FieldHint } from "@/components/ui/field";
@@ -145,6 +146,7 @@ export default function QuickConnectApproveCard() {
   // react-doctor-disable-next-line react-doctor/query-mutation-missing-invalidation
   const approveMutation = useSessionMutation({
     mutationFn: async (deviceCode: string): Promise<ApprovalResult> => {
+      const session = sessionStamp();
       let baselineDeviceIds: number[] | null = null;
 
       try {
@@ -156,6 +158,13 @@ export default function QuickConnectApproveCard() {
         );
       } catch {
         baselineDeviceIds = null;
+      }
+
+      // Signed out while the device list loaded: the approval would go out
+      // with the next reader's cookie and pair the device to their account.
+      // Rejecting here leaves the dropped callbacks to useSessionMutation.
+      if (sessionEndedSince(session)) {
+        throw new Error("The session ended before the device was approved.");
       }
 
       return {

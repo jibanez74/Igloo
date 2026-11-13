@@ -291,14 +291,17 @@ export function AudioPlayerProvider({
   // them. It used to re-sample the whole library blind, which on a library
   // smaller than the queue returned nothing but duplicates and burned a full
   // table scan per retry.
-  const fetchShuffleBatch = async () => {
+  // fetchedForQueueId is the queue the refill runs for. Everything after the
+  // await (the exhaustion latch, its toast, the metadata maps) belongs to that
+  // queue, and a replacement started meanwhile must not inherit any of it; a
+  // refill whose queue was replaced before it even started has nothing to do.
+  const fetchShuffleBatch = async (fetchedForQueueId: number) => {
+    if (liveQueueIdRef.current !== fetchedForQueueId) {
+      return [];
+    }
     // The library had nothing left for this queue last time we asked, and the
     // exclusions only grow. Checked here rather than in the `enabled` flag so
     // the ref is not read during render.
-    // The queue this batch is for, read before the await: everything after it
-    // (the exhaustion latch, its toast, the metadata maps) belongs to that
-    // queue, and a replacement started meanwhile must not inherit any of it.
-    const fetchedForQueueId = liveQueueIdRef.current;
     if (exhaustedQueueIdRef.current === fetchedForQueueId) {
       return [];
     }
@@ -339,7 +342,11 @@ export function AudioPlayerProvider({
     return rawTracks.map(convertToAudioTrack);
   };
 
-  const fetchPlayAllBatch = async () => {
+  const fetchPlayAllBatch = async (fetchedForQueueId: number) => {
+    if (liveQueueIdRef.current !== fetchedForQueueId) {
+      return [];
+    }
+
     // Play-all walks the library in order, so it stops once the last page has
     // been fetched. Checked here rather than in the `enabled` flag so the refs
     // are not read during render.
@@ -347,12 +354,10 @@ export function AudioPlayerProvider({
       return [];
     }
 
-    // Both the queue this page belongs to and the offset it starts at are read
-    // before the await. The offset must not be re-read afterwards: restarting
-    // play-all resets it, and a `+=` landing after that reset would push the
-    // cursor past a page the new queue has not fetched, silently skipping it
-    // for the rest of the session.
-    const fetchedForQueueId = liveQueueIdRef.current;
+    // The offset this page starts at is read before the await and must not be
+    // re-read afterwards: restarting play-all resets it, and a `+=` landing
+    // after that reset would push the cursor past a page the new queue has not
+    // fetched, silently skipping it for the rest of the session.
     const offset = playAllOffsetRef.current;
 
     const response = await getTracksPaginated(TRACKS_INFINITE_PAGE_SIZE, offset);

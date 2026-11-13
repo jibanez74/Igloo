@@ -16,9 +16,11 @@ type EndlessQueueRefillOptions<T> = {
   // Start fetching once fewer than this many tracks remain ahead.
   lookahead: number;
 
-  // Fetch one batch. Resolve with an empty array for "nothing to add"; a
-  // rejection is swallowed and the user keeps the queue they already have.
-  fetchBatch: () => Promise<T[]>;
+  // Fetch one batch for the queue it is handed (the one this refill runs for,
+  // which a newer queue may already have replaced). Resolve with an empty
+  // array for "nothing to add"; a rejection is swallowed and the user keeps
+  // the queue they already have.
+  fetchBatch: (queueId: number) => Promise<T[]>;
 
   onAppend: (batch: T[], queueId: number) => void;
 };
@@ -54,7 +56,7 @@ export function useEndlessQueueRefill<T>({
 
     let batch: T[] = [];
     try {
-      batch = await fetchBatch();
+      batch = await fetchBatch(activeQueueId);
     } catch {
       // Swallowed on purpose - playback continues with the current queue.
     }
