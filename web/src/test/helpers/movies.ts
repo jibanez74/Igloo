@@ -37,6 +37,7 @@ export function moviePlaylistSummary(
     is_owner: true,
     can_edit: true,
     artwork: [],
+    owner: userSummary(),
     ...fields,
   };
 }

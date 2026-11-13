@@ -16,7 +16,7 @@ import {
   restoreMatchMedia,
   setReducedMotionPreference,
 } from "../helpers/dom";
-import { authUser, nullableInt64, nullableString } from "../helpers/fixtures";
+import { authUser, nullableInt64, nullableString, userSummary } from "../helpers/fixtures";
 import { renderRoute } from "../helpers/render-route";
 
 const toastMocks = vi.hoisted(() => ({
@@ -66,6 +66,7 @@ function playlist(
     is_owner: true,
     can_edit: true,
     artwork: [],
+    owner: userSummary(),
   };
 }
 

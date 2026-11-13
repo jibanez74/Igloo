@@ -10,10 +10,16 @@ import (
 )
 
 // playlistSummary is a listed music playlist. Its Artwork replaces the row's
-// JSON text of the same name with the decoded list of covers for the card.
+// JSON text of the same name with the decoded list of covers for the card, and
+// Owner folds the row's owner columns, which it hides, into a userSummary.
 type playlistSummary struct {
 	database.GetPlaylistsWithCollaboratorAccessRow
-	Artwork []string `json:"artwork"`
+	Artwork []string    `json:"artwork"`
+	Owner   userSummary `json:"owner"`
+	// The always-nil shadows keep the row's owner_name and owner_avatar out
+	// of the JSON: a shallower field of the same name hides the embedded one.
+	OwnerName   *struct{} `json:"owner_name,omitempty"`
+	OwnerAvatar *struct{} `json:"owner_avatar,omitempty"`
 }
 
 func (app *Application) GetPlaylists(w http.ResponseWriter, r *http.Request) {
@@ -36,6 +42,7 @@ func (app *Application) GetPlaylists(w http.ResponseWriter, r *http.Request) {
 		summaries[i] = playlistSummary{
 			GetPlaylistsWithCollaboratorAccessRow: playlist,
 			Artwork:                               distinctImages(covers, maxPlaylistArtwork),
+			Owner:                                 newUserSummary(playlist.UserID, playlist.OwnerName, playlist.OwnerAvatar),
 		}
 	}
 
