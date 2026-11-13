@@ -98,7 +98,7 @@ The original-file `/stream` endpoints do not start FFmpeg, select tracks, enforc
 
 The web player waits for technical details before requesting media. Failed details show a retryable UI error. A decode error, unsupported-source error, or metadata-load timeout triggers one switch to remux per stream window, preserving position and selected tracks. Selecting non-first audio also requires HLS; see [audio selection](#audio-selection-and-encoding).
 
-Watch-room creation enforces the container, video, first-track selection, and disposition rules, but currently **does not check the first audio codec**. It cannot run members' browser probes either. A room accepted by the server therefore does not prove direct-play eligibility in the web client. This implementation gap is recorded in [known issues](known-issues.md#direct-watch-room-creation-does-not-check-the-first-audio-codec).
+Watch-room creation enforces the same static rules: container, video, first-track selection and disposition, and the first audio codec against the same allowlist (`helpers.IsBrowserDirectPlayAudio`, kept in sync with `BROWSER_COMPATIBLE_AUDIO_CODECS`). It cannot run members' browser probes, so a room accepted by the server still does not prove that every member's browser can play it directly.
 
 ## Profiles and remux fallback
 

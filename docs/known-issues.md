@@ -13,19 +13,6 @@ it belongs to and cover:
 
 ## Playback
 
-### Direct watch-room creation does not check the first audio codec
-
-`POST /api/watch-rooms` (`server/cmd/api/watch_room_handler.go`) checks the container, the
-video, the audio track ordinal, and the first-track default disposition
-(`directPlayAudioSelectionUnambiguous`, which mirrors `directPlayAudioSelectionEligible` in
-`web/src/lib/playback.ts`). It does not check the first audio stream's codec against the web
-client's `BROWSER_COMPATIBLE_AUDIO_CODECS` (`isAudioDirectPlayable`). A request for a direct
-room on a movie whose first audio track is, for example, DTS or TrueHD is therefore accepted,
-and members' browsers may play it silently or fail. The OpenAPI description of the route states
-the gap. Recorded by the 2026-11-02 playback audit. Fix: mirror the web audio allowlist
-server-side next to `directPlayAudioSelectionUnambiguous`, and reject with `400`. The handler
-still cannot run members' browser probes, so server acceptance is never proof of playback.
-
 ### A copy-video resume early in a late-audio source writes an unplayable Dolby init.mp4
 
 Explicit E-AC-3/AC-3 audio is padded with silence back to output time zero, so a source whose

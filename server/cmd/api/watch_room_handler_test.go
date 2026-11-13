@@ -370,6 +370,33 @@ func TestCreateWatchRoom_HTTP_DirectWithAmbiguousAudioRejected(t *testing.T) {
 	}
 }
 
+func TestCreateWatchRoom_HTTP_DirectWithBrowserIncompatibleAudioRejected(t *testing.T) {
+	for _, codec := range []string{"dts", "truehd", "eac3"} {
+		t.Run(codec, func(t *testing.T) {
+			app := setupSessionTestApp(t)
+
+			ownerID, movieID := createTestUserAndMovie(t, app)
+			insertWatchRoomTestVideoStream(t, app, movieID, "High")
+			insertTestAudioStream(t, app, database.InsertAudioStreamParams{MovieID: movieID, StreamIndex: 1, Codec: codec, IsDefault: true})
+			insertTestAudioStream(t, app, database.InsertAudioStreamParams{MovieID: movieID, StreamIndex: 2, Codec: "aac"})
+			handler := authenticatedRouter(t, app, ownerID)
+
+			body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"subtitle_track":null,"invited_user_ids":[]}`, movieID)
+			req := newOpenAPIJSONRequest(http.MethodPost, "/api/watch-rooms", body)
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, req)
+			assertOpenAPIExchange(t, "createWatchRoom", req, w)
+
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("expected 400 for direct mode with first audio codec %q, got %d: %s", codec, w.Code, w.Body.String())
+			}
+			if !strings.Contains(w.Body.String(), "cannot play this movie's audio directly") {
+				t.Errorf("expected the audio codec message, got %s", w.Body.String())
+			}
+		})
+	}
+}
+
 func TestCreateWatchRoom_HTTP_DirectWithFirstStreamDefaultAccepted(t *testing.T) {
 	app := setupSessionTestApp(t)
 
