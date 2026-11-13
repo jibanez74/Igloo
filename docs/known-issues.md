@@ -1,8 +1,8 @@
 # Known issues
 
 Problems found and deliberately left unfixed, each with enough detail to act on it without
-rediscovering it. The Playback and TV entries were still open on 2026-11-03; the Web client
-entries on 2026-11-13 (dev 67011cca).
+rediscovering it. The Playback and TV entries were still open on 2026-11-03, the Server entry
+on 2026-11-13.
 
 When a fix lands, delete its entry in the same change. When adding one, put it under the section
 it belongs to and cover:
@@ -33,10 +33,21 @@ Left unfixed on 2026-11-03: no library file reaches it, and the fix would delay 
 Dolby resume by the measurement (0.05–0.3 s). Reopen if a library sweep finds audio starting more
 than 4 s after video, or a TV resume fails with an `init.mp4` that has no `dec3`.
 
-## Web client
+## Server
 
-Recorded on 2026-11-13 from the web audit of fc27fddc and the review of PRs #267–#270, which
-fixed the audit's bugs (BUG-01..07, OBS-01/02) and left these.
+### Behind a reverse proxy, every client shares one rate-limit bucket
+
+The auth limits (`AuthLimiter` in `server/cmd/api/rate_limit.go`: 10 logins per 5 minutes, 10
+Quick Connect starts and 60 redemptions per minute) key on `clientIP`, the TCP peer, which
+`preserveClientSocketIP` captures before chi's `RealIP` rewrites `RemoteAddr` from
+`X-Forwarded-For`: a client can send that header itself, so trusting it would let anyone
+pick their own bucket. Behind a reverse proxy, though, every request's peer is the proxy, so
+one person mistyping a password ten times locks everyone out of signing in for five minutes.
+Seen in review on 2026-11-09, not reproduced. Fix: a startup setting naming the trusted
+proxies (a `TRUSTED_PROXIES` list of addresses or CIDRs, empty by default), with `clientIP`
+taking the right-most `X-Forwarded-For` address that is not a trusted proxy only when the peer
+is one. The watch-room WebSocket's Origin check, which had the same blind spot for
+TLS-terminating proxies, was fixed on 2026-11-13.
 
 ## TV app (IglooTV)
 
