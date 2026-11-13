@@ -88,6 +88,25 @@ function playlistTrackToPlayableData(
   };
 }
 
+// The observer's result once its query has no fetch in flight.
+function whenIdle<TResult extends { isFetching: boolean }>(observer: {
+  getCurrentResult: () => TResult;
+  subscribe: (listener: (result: TResult) => void) => () => void;
+}): Promise<TResult> {
+  return new Promise((resolve) => {
+    const current = observer.getCurrentResult();
+    if (!current.isFetching) {
+      resolve(current);
+      return;
+    }
+    const unsubscribe = observer.subscribe((result) => {
+      if (result.isFetching) return;
+      unsubscribe();
+      resolve(result);
+    });
+  });
+}
+
 type PlaylistHeadData = {
   name: string;
   trackCount: number;
@@ -289,12 +308,20 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
   // error; useVirtualizedInfiniteLoader passes throwOnError to get a
   // rejection instead), so a failed page shows up as isFetchNextPageError on
   // that result, which ends the loop. A 5xx page resolves only after its
-  // retries. The page-count guard stops the loop if a round ever adds no page
-  // for another reason.
+  // retries.
   //
-  // isWanted is asked before every page after the first: once the queue these
-  // pages are for has been replaced, stopped or signed out of, nothing will
-  // use them, so the drain ends there instead of fetching the rest.
+  // An edit while the drain runs (a removal or a reorder) refetches the
+  // tracks, and that refetch cancels the page in flight: fetchNextPage then
+  // resolves with the pages the refetch reloaded, no more than before. That
+  // round changed the data, so the loop goes on from what the refetch left.
+  // A round that adds no page and changes nothing ends it, so the loop cannot
+  // spin. Before each page the drain waits out a fetch someone else started
+  // (that refetch, or the list loading its own next page), which asking for
+  // a page now would cancel.
+  //
+  // isWanted is asked before every page: once the queue these pages are for
+  // has been replaced, stopped or signed out of, nothing will use them, so
+  // the drain ends there instead of fetching the rest.
   //
   // Leaving the page must not end it: the queue still plays and still needs
   // them. The page's own observer goes away on unmount, and a query left with
@@ -309,25 +336,31 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
     });
     const unsubscribe = drain.subscribe(() => {});
 
-    let result = await drain.fetchNextPage();
-    let pageCount = result.data?.pages.length ?? 0;
+    let result = drain.getCurrentResult();
+    for (;;) {
+      result = await whenIdle(drain);
+      if (!result.hasNextPage || !isWanted()) break;
 
-    while (
-      result.hasNextPage &&
-      !result.isFetchNextPageError &&
-      isWanted()
-    ) {
+      const before = result;
       result = await drain.fetchNextPage();
+      if (result.isFetchNextPageError) break;
 
-      const nextCount = result.data?.pages.length ?? 0;
-      if (nextCount <= pageCount) break;
-      pageCount = nextCount;
+      const added =
+        (result.data?.pages.length ?? 0) > (before.data?.pages.length ?? 0);
+      if (!added && result.dataUpdatedAt === before.dataUpdatedAt) break;
     }
 
     // Not in a finally: fetchNextPage without throwOnError never rejects.
     unsubscribe();
 
-    return result.data?.pages.flatMap((page) => page.tracks) ?? [];
+    const pages = result.data?.pages ?? [];
+    return {
+      tracks: pages.flatMap((page) => page.tracks),
+      // The server's count as of the last page: an edit during the drain
+      // changes it from the track_count this page was rendered with.
+      total: pages.at(-1)?.total ?? track_count,
+      complete: result.data !== undefined && !result.hasNextPage,
+    };
   };
 
   // playQueue/shuffleQueue instead of playTrack: these header buttons are
@@ -357,7 +390,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
     const isLive = () => audioPlayer.isQueueLive(queueId);
 
     setIsLoadingRest(true);
-    const tracks = await loadRemainingTracks(isLive);
+    const { tracks, total, complete } = await loadRemainingTracks(isLive);
     setIsLoadingRest(false);
 
     // The reader moved on while the pages loaded: extendQueue would drop these
@@ -373,10 +406,10 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
       { reshuffleTail: shuffle },
     );
 
-    if (tracks.length < track_count) {
+    if (!complete) {
       showActionFailed(
         action,
-        `Only ${tracks.length} of ${track_count} tracks could be loaded.`,
+        `Only ${tracks.length} of ${total} tracks could be loaded.`,
       );
     }
   };
