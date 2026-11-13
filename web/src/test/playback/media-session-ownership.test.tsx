@@ -55,10 +55,10 @@ function Music({ isPlaying, trackId = 1 }: MusicProps) {
 
 const movieVideo = { current: document.createElement("video") };
 
-function Video({ enabled = true }: { enabled?: boolean }) {
+function Video({ enabled = true, title = "Movie" }: { enabled?: boolean; title?: string }) {
   useVideoMediaSession({
     videoRef: movieVideo,
-    title: "Movie",
+    title,
     currentTime: 0,
     duration: 100,
     playing: true,
@@ -70,7 +70,13 @@ function Video({ enabled = true }: { enabled?: boolean }) {
   return null;
 }
 
-function App({ music, video }: { music: MusicProps; video?: { enabled?: boolean } }) {
+function App({
+  music,
+  video,
+}: {
+  music: MusicProps;
+  video?: { enabled?: boolean; title?: string };
+}) {
   return (
     <>
       <Music {...music} />
@@ -108,8 +114,13 @@ describe("Media Session ownership between music and video", () => {
     expect(fake.session.metadata?.title).toBe("Song");
     expect(registered()).toEqual([...MEDIA_SESSION_ACTIONS]);
 
-    // The video page pauses music and claims the session: none of music's
-    // previous/next/stop may stay wired to the OS buttons.
+    // The video page mounts and claims the session while music still reports
+    // playing: pause() is synchronous, its pause event arrives a task later.
+    rerender(<App music={{ isPlaying: true }} video={{}} />);
+    expect(fake.session.metadata?.title).toBe("Movie");
+
+    // Then music's pause lands: none of music's previous/next/stop may stay
+    // wired to the OS buttons, and music must not take the session back.
     rerender(<App music={{ isPlaying: false }} video={{}} />);
     expect(fake.session.metadata?.title).toBe("Movie");
     for (const action of MUSIC_ONLY) {
@@ -127,6 +138,40 @@ describe("Media Session ownership between music and video", () => {
     rerender(<App music={{ isPlaying: true }} />);
     expect(fake.session.playbackState).toBe("playing");
     expect(registered()).toEqual([...MEDIA_SESSION_ACTIONS]);
+  });
+
+  it("drops the video's timeline when it lets go, and publishes the paused track's", () => {
+    Object.defineProperty(musicAudio.current, "duration", { configurable: true, value: 200 });
+    musicAudio.current.currentTime = 42;
+    try {
+      const { rerender } = render(<App music={{ isPlaying: false }} video={{}} />);
+      expect(fake.session.setPositionState).toHaveBeenLastCalledWith(
+        expect.objectContaining({ duration: 100 }),
+      );
+
+      fake.session.setPositionState.mockClear();
+      rerender(<App music={{ isPlaying: false }} />);
+
+      // Cleared first (no argument), then the song's own timeline.
+      expect(fake.session.setPositionState.mock.calls[0]).toEqual([]);
+      expect(fake.session.setPositionState).toHaveBeenLastCalledWith(
+        expect.objectContaining({ duration: 200, position: 42 }),
+      );
+    } finally {
+      Reflect.deleteProperty(musicAudio.current, "duration");
+      musicAudio.current.currentTime = 0;
+    }
+  });
+
+  it("keeps a video's play state and controls when only its title changes", () => {
+    const { rerender } = render(<App music={{ isPlaying: false }} video={{ title: "Episode 1" }} />);
+    expect(fake.session.playbackState).toBe("playing");
+
+    rerender(<App music={{ isPlaying: false }} video={{ title: "Episode 2" }} />);
+
+    expect(fake.session.metadata?.title).toBe("Episode 2");
+    expect(fake.session.playbackState).toBe("playing");
+    expect(registered()).toEqual(["play", "pause", "seekbackward", "seekforward", "seekto"]);
   });
 
   it("does not let music take the session from a video while paused", () => {

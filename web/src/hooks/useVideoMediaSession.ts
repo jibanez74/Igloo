@@ -4,6 +4,7 @@ import {
   claimMediaSession,
   ownsMediaSession,
   releaseMediaSession,
+  updateMediaSessionMetadata,
 } from "@/lib/media-session";
 
 type VideoMediaSessionOptions = {
@@ -46,6 +47,21 @@ function toAbsoluteArtworkUrl(url: string | null | undefined) {
   if (!url) return null;
   if (url.startsWith("http://") || url.startsWith("https://")) return url;
   return `${window.location.origin}${url}`;
+}
+
+function videoMetadata(
+  title: string,
+  artist: string | undefined,
+  artworkUrl: string | null | undefined,
+) {
+  if (!mediaMetadataSupported()) return null;
+
+  const artwork = toAbsoluteArtworkUrl(artworkUrl);
+  return new MediaMetadata({
+    title,
+    artist,
+    artwork: artwork ? [{ src: artwork }] : [],
+  });
 }
 
 function safePositionState(
@@ -106,22 +122,19 @@ export function useVideoMediaSession({
 
   // This surface's claim on the OS media controls (see lib/media-session):
   // the full action set replaces music's, and letting go clears the session
-  // only while this surface still holds it, so music can take it back.
+  // only while this surface still holds it, so music can take it back. Held
+  // for as long as the surface is enabled: a title or artwork change only
+  // replaces the metadata, so the play state and timeline stay published.
   const [sessionToken] = useState(() => Symbol("video"));
+
+  const currentMetadata = useEffectEvent(() =>
+    videoMetadata(title, artist, artworkUrl),
+  );
 
   useEffect(() => {
     if (!enabled || !mediaSessionSupported()) return;
 
-    const artwork = toAbsoluteArtworkUrl(artworkUrl);
-    const metadata = mediaMetadataSupported()
-      ? new MediaMetadata({
-          title,
-          artist,
-          artwork: artwork ? [{ src: artwork }] : [],
-        })
-      : null;
-
-    claimMediaSession(sessionToken, metadata, {
+    claimMediaSession(sessionToken, currentMetadata(), {
       play: handlePlay,
       pause: handlePause,
       seekbackward: handleSeekBackward,
@@ -130,6 +143,15 @@ export function useVideoMediaSession({
     });
 
     return () => releaseMediaSession(sessionToken);
+  }, [enabled, sessionToken]);
+
+  useEffect(() => {
+    if (!enabled) return;
+
+    updateMediaSessionMetadata(
+      sessionToken,
+      videoMetadata(title, artist, artworkUrl),
+    );
   }, [artist, artworkUrl, enabled, sessionToken, title]);
 
   useEffect(() => {

@@ -156,6 +156,9 @@ export function useAudioMediaSession({
         seekto: handleSeekTo,
       },
     );
+    // A paused track fires no timeupdate, so publish its timeline now rather
+    // than leave the OS without one (or a video's) until it plays.
+    if (audioRef.current) syncMediaSessionPosition(audioRef.current);
   }, [
     audioRef,
     currentTrackId,

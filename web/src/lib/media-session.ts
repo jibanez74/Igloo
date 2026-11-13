@@ -83,7 +83,20 @@ export function claimMediaSession(
   setOwner(token);
 }
 
-/** Clears the session if `token` still owns it; otherwise does nothing. */
+/** Replaces the metadata if `token` still owns the session. */
+export function updateMediaSessionMetadata(
+  token: symbol,
+  metadata: MediaMetadata | null,
+) {
+  if (owner !== token || !mediaSessionSupported()) return;
+
+  navigator.mediaSession.metadata = metadata;
+}
+
+/**
+ * Clears the session if `token` still owns it, timeline included, so the next
+ * owner never shows the previous one's position; otherwise does nothing.
+ */
 export function releaseMediaSession(token: symbol) {
   if (owner !== token || !mediaSessionSupported()) return;
 
@@ -91,6 +104,12 @@ export function releaseMediaSession(token: symbol) {
   navigator.mediaSession.playbackState = "none";
   for (const action of MEDIA_SESSION_ACTIONS) {
     setHandler(action, null);
+  }
+  try {
+    // No argument clears the position state.
+    navigator.mediaSession.setPositionState?.();
+  } catch {
+    // Some browsers expose Media Session but reject position updates.
   }
   setOwner(null);
 }
