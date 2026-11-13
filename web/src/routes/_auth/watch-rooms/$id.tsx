@@ -3,11 +3,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { watchRoomQueryOpts } from "@/lib/query-opts";
 import { parseRouteId } from "@/lib/route-id";
 import { routeHead } from "@/lib/route-head";
+import { WatchRoomPage } from "@/components/watch-room/WatchRoomPage";
 import {
   WatchRoomLoading,
-  WatchRoomPage,
   WatchRoomUnavailable,
-} from "@/components/watch-room/WatchRoomPage";
+} from "@/components/watch-room/WatchRoomStatus";
 
 const WATCH_ROOM_FALLBACK_HEAD = routeHead("Watch Room");
 

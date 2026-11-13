@@ -1,5 +1,5 @@
 import { useContext } from "react";
-import { AudioPlayerActionsContext } from "@/context/AudioPlayerContext";
+import { AudioPlayerActionsContext } from "@/context/audio-player-contexts";
 
 export function useAudioPlayerActions() {
   const actions = useContext(AudioPlayerActionsContext);

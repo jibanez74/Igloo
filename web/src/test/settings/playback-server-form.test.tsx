@@ -1,7 +1,7 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AudioPlayerNowPlayingContext } from "@/context/AudioPlayerContext";
+import { AudioPlayerNowPlayingContext } from "@/context/audio-player-contexts";
 import type { PlaybackSettingsType } from "@/types";
 import { jsonResponse, requestURL } from "../helpers/api";
 import { authUser, playbackSettings } from "../helpers/fixtures";

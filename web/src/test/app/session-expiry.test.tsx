@@ -1,10 +1,8 @@
+import type { ReactNode } from "react";
 import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import {
-  AudioPlayerActionsContext,
-  AudioPlayerProvider,
-} from "@/context/AudioPlayerContext";
+import { AudioPlayerActionsContext } from "@/context/audio-player-contexts";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { getNotifications } from "@/lib/api";
 import type { AudioPlayerActions } from "@/types/audio-player";
@@ -14,6 +12,16 @@ import { homeShellResponse } from "../helpers/home";
 import { renderRoute } from "../helpers/render-route";
 
 const toastMocks = vi.hoisted(() => ({ showInfo: vi.fn() }));
+
+// The shell mounts the real player, which would shadow the player each test
+// puts above the router: a stub whose stop() it watches, or (for the pending
+// Shuffle all) the real provider.
+vi.mock("@/context/AudioPlayerContext", () => ({
+  AudioPlayerProvider: ({ children }: { children: ReactNode }) => children,
+}));
+const { AudioPlayerProvider } = await vi.importActual<
+  typeof import("@/context/AudioPlayerContext")
+>("@/context/AudioPlayerContext");
 
 vi.mock("@/lib/toast-helpers", async () => ({
   ...(await vi.importActual<typeof import("@/lib/toast-helpers")>(
@@ -108,9 +116,10 @@ describe("a session that ends while the shell is open", () => {
   });
 });
 
-// The audio player sits above the router, so it outlives a sign-out. A
-// "Shuffle all" still waiting for its first page when the session ends must
-// not bring the player back on the login page once that page lands.
+// Ending the session stops the player, and a "Shuffle all" still waiting for
+// its first page must not bring the player back once that page lands. The
+// shell's own player goes when the shell does; this one is mounted above the
+// router, so it outlives the sign-out and only stop()'s fence keeps it quiet.
 describe("a pending Shuffle all when the session ends", () => {
   const actions: { current?: AudioPlayerActions } = {};
 
