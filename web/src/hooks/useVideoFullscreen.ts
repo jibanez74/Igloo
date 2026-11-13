@@ -6,6 +6,7 @@ import {
   exitDocumentFullscreen,
   getFullscreenElement,
   isDocumentFullscreenEntryLikely,
+  isWebKitVideoFullscreen,
   requestElementFullscreen,
   tryWebKitVideoEnterFullscreen,
   tryWebKitVideoExitFullscreen,
@@ -110,6 +111,21 @@ export function useVideoFullscreen({
     };
   }, [isImmersiveViewport]);
 
+  // A video torn down inside WebKit video-only fullscreen (a playback error
+  // replacing the player) fires its end event on a detached node, which
+  // never reaches the document listener, so the mode can still read
+  // "webkitVideo" with no video in fullscreen. The controls then offer to
+  // exit full screen, so pressing that, or Escape, only clears the mode.
+  // Returns whether it did.
+  const dropStaleWebKitVideoMode = (): boolean => {
+    if (fullscreenModeRef.current !== "webkitVideo") return false;
+    const video = videoRef.current;
+    if (video && isWebKitVideoFullscreen(video)) return false;
+    fullscreenModeRef.current = "none";
+    setFullscreenMode("none");
+    return true;
+  };
+
   // The container is what goes fullscreen; the video element only matters
   // for the WebKit video-only paths, and it is absent while the trailer
   // pre-roll plays, which must still be able to go fullscreen.
@@ -120,6 +136,7 @@ export function useVideoFullscreen({
     const video = videoRef.current;
     if (!container) return;
 
+    if (dropStaleWebKitVideoMode()) return;
     if (getFullscreenElement()) {
       void exitDocumentFullscreen();
       return;
@@ -161,6 +178,7 @@ export function useVideoFullscreen({
   };
 
   const exitFullscreenIfActive = (): boolean => {
+    if (dropStaleWebKitVideoMode()) return true;
     if (getFullscreenElement()) {
       void exitDocumentFullscreen();
       return true;

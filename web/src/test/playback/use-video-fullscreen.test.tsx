@@ -77,14 +77,33 @@ function VideoFullscreenHarness() {
 function LateVideoHarness({ videoKey }: { videoKey: string | null }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const { isFullscreen } = useVideoFullscreen({ containerRef, videoRef });
+  const { isFullscreen, toggleFullscreen, exitFullscreenIfActive } =
+    useVideoFullscreen({ containerRef, videoRef });
 
   return (
     <div ref={containerRef}>
       {videoKey ? <video key={videoKey} ref={videoRef} data-testid="video" /> : null}
       <div data-testid="is-fullscreen">{String(isFullscreen)}</div>
+      <button type="button" onClick={() => void toggleFullscreen()}>
+        Toggle fullscreen
+      </button>
+      <button
+        type="button"
+        onClick={(event) => {
+          event.currentTarget.dataset.handled = String(exitFullscreenIfActive());
+        }}
+      >
+        Escape
+      </button>
     </div>
   );
+}
+
+function setDisplayingFullscreen(video: HTMLElement, displaying: boolean) {
+  Object.defineProperty(video, "webkitDisplayingFullscreen", {
+    configurable: true,
+    get: () => displaying,
+  });
 }
 
 beforeEach(() => {
@@ -181,6 +200,73 @@ describe("useVideoFullscreen", () => {
       second.dispatchEvent(new Event("webkitbeginfullscreen"));
     });
     expect(screen.getByTestId("is-fullscreen")).toHaveTextContent("true");
+  });
+
+  it("exits WebKit video fullscreen through the video while it is showing", async () => {
+    render(<LateVideoHarness videoKey="ours" />);
+    const video = screen.getByTestId("video");
+    const webkitExitFullscreen = vi.fn();
+    Object.defineProperty(video, "webkitExitFullscreen", {
+      configurable: true,
+      value: webkitExitFullscreen,
+    });
+    setDisplayingFullscreen(video, true);
+    act(() => {
+      video.dispatchEvent(new Event("webkitbeginfullscreen"));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Toggle fullscreen" }));
+    });
+
+    expect(webkitExitFullscreen).toHaveBeenCalledTimes(1);
+    // The video's own end event is what clears the mode.
+    expect(screen.getByTestId("is-fullscreen")).toHaveTextContent("true");
+  });
+
+  // Torn down inside WebKit video-only fullscreen, the video fires its end
+  // event detached, where the document listener never hears it. The
+  // controls still offer to exit, and pressing that clears the mode.
+  describe("after the video is torn down inside WebKit video fullscreen", () => {
+    function renderTornDown() {
+      const { rerender } = render(<LateVideoHarness videoKey="first" />);
+      const video = screen.getByTestId("video");
+      setDisplayingFullscreen(video, true);
+      act(() => {
+        video.dispatchEvent(new Event("webkitbeginfullscreen"));
+      });
+      rerender(<LateVideoHarness videoKey={null} />);
+      setDisplayingFullscreen(video, false);
+      act(() => {
+        video.dispatchEvent(new Event("webkitendfullscreen"));
+      });
+      expect(screen.getByTestId("is-fullscreen")).toHaveTextContent("true");
+      return { rerender };
+    }
+
+    it("clears the mode on the fullscreen toggle", async () => {
+      renderTornDown();
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "Toggle fullscreen" }));
+      });
+
+      expect(screen.getByTestId("is-fullscreen")).toHaveTextContent("false");
+    });
+
+    it("clears the mode on Escape, even once a new video has mounted", () => {
+      const { rerender } = renderTornDown();
+      rerender(<LateVideoHarness videoKey="second" />);
+      setDisplayingFullscreen(screen.getByTestId("video"), false);
+
+      const escape = screen.getByRole("button", { name: "Escape" });
+      act(() => {
+        fireEvent.click(escape);
+      });
+
+      expect(escape.dataset.handled).toBe("true");
+      expect(screen.getByTestId("is-fullscreen")).toHaveTextContent("false");
+    });
   });
 
   it("ignores WebKit fullscreen events from another video on the page", () => {
