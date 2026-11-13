@@ -49,11 +49,29 @@ func (q *Queries) GetMusicProviderMatch(ctx context.Context, arg GetMusicProvide
 	return i, err
 }
 
+const getMusicProviderMatchAttempts = `-- name: GetMusicProviderMatchAttempts :one
+SELECT CAST(COALESCE((SELECT attempts FROM music_provider_matches WHERE entity_type = ? AND entity_id = ? AND status = 'failed'), 0) AS INTEGER) AS attempts
+`
+
+type GetMusicProviderMatchAttemptsParams struct {
+	EntityType string `json:"entity_type"`
+	EntityID   int64  `json:"entity_id"`
+}
+
+// The failed lookups in a row an entity has recorded; 0 when it has no outcome.
+func (q *Queries) GetMusicProviderMatchAttempts(ctx context.Context, arg GetMusicProviderMatchAttemptsParams) (int64, error) {
+	row := q.queryRow(ctx, q.getMusicProviderMatchAttemptsStmt, getMusicProviderMatchAttempts, arg.EntityType, arg.EntityID)
+	var attempts int64
+	err := row.Scan(&attempts)
+	return attempts, err
+}
+
 const upsertMusicProviderMatch = `-- name: UpsertMusicProviderMatch :exec
-INSERT INTO music_provider_matches (entity_type, entity_id, provider, status, reason, candidate, score)
-VALUES (?, ?, ?, ?, ?, ?, ?)
+INSERT INTO music_provider_matches (entity_type, entity_id, provider, status, reason, candidate, score, attempts, retry_after)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (entity_type, entity_id) DO UPDATE
-SET provider = excluded.provider, status = excluded.status, reason = excluded.reason, candidate = excluded.candidate, score = excluded.score
+SET provider = excluded.provider, status = excluded.status, reason = excluded.reason, candidate = excluded.candidate, score = excluded.score,
+  attempts = excluded.attempts, retry_after = excluded.retry_after
 `
 
 type UpsertMusicProviderMatchParams struct {
@@ -64,6 +82,8 @@ type UpsertMusicProviderMatchParams struct {
 	Reason     sql.NullString `json:"reason"`
 	Candidate  sql.NullString `json:"candidate"`
 	Score      sql.NullInt64  `json:"score"`
+	Attempts   int64          `json:"attempts"`
+	RetryAfter sql.NullInt64  `json:"retry_after"`
 }
 
 func (q *Queries) UpsertMusicProviderMatch(ctx context.Context, arg UpsertMusicProviderMatchParams) error {
@@ -75,6 +95,8 @@ func (q *Queries) UpsertMusicProviderMatch(ctx context.Context, arg UpsertMusicP
 		arg.Reason,
 		arg.Candidate,
 		arg.Score,
+		arg.Attempts,
+		arg.RetryAfter,
 	)
 	return err
 }

@@ -8,6 +8,9 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
+
+	"igloo/cmd/internal/helpers"
 )
 
 const (
@@ -15,6 +18,10 @@ const (
 	// quotaExceededReason marks a 429 sent once the developer account's shared
 	// request quota is spent; no wait inside a scan brings it back.
 	quotaExceededReason = "QUOTA_EXCEEDED"
+	// spotifyRateLimitRetries bounds the retries of one request after a rate
+	// limit, and spotifyRateLimitMaxWait the Retry-After worth waiting for.
+	spotifyRateLimitRetries = 2
+	spotifyRateLimitMaxWait = 5 * time.Second
 )
 
 // StatusError retains the status of a failed Spotify API request and the
@@ -96,31 +103,76 @@ func (c *Client) search(ctx context.Context, query, searchType string, limit int
 	return &result, nil
 }
 
-// getJSON makes a single authenticated GET; any status but 200 is an error.
+// getJSON makes an authenticated GET; any status but 200 is an error. A rate
+// limit (429 without the quota reason) that names a short Retry-After is
+// waited out and retried, up to spotifyRateLimitRetries times; a longer wait,
+// or one past the request's deadline, returns the 429 for the scan's breaker.
 func (c *Client) getJSON(ctx context.Context, requestURL string, result any) error {
+	for attempt := 0; ; attempt++ {
+		retryAfter, err := c.getJSONOnce(ctx, requestURL, result)
+		if retryAfter < 0 || attempt == spotifyRateLimitRetries {
+			return err
+		}
+
+		deadline, hasDeadline := ctx.Deadline()
+		pastDeadline := hasDeadline && time.Now().Add(retryAfter).After(deadline)
+		if pastDeadline {
+			return err
+		}
+
+		sleepErr := helpers.SleepContext(ctx, retryAfter)
+		if sleepErr != nil {
+			return err
+		}
+	}
+}
+
+// getJSONOnce makes one request. retryAfter is the wait a retryable rate limit
+// asks for, and negative when the request must not be retried.
+func (c *Client) getJSONOnce(ctx context.Context, requestURL string, result any) (retryAfter time.Duration, err error) {
 	accessToken, err := c.tokens.token(ctx, c.httpClient)
 	if err != nil {
-		return err
+		return -1, err
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
-		return err
+		return -1, err
 	}
 
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return err
+		return -1, err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return decodeStatusError(resp)
+	if resp.StatusCode == http.StatusOK {
+		return -1, json.NewDecoder(resp.Body).Decode(result)
 	}
 
-	return json.NewDecoder(resp.Body).Decode(result)
+	statusErr := decodeStatusError(resp)
+	retryAfter = rateLimitRetryAfter(resp, statusErr)
+	return retryAfter, statusErr
+}
+
+// rateLimitRetryAfter returns the wait a 429 asks for when it is worth waiting
+// inside a request, and -1 otherwise: the quota reason never clears within a
+// scan, and a missing or long Retry-After is left to the scan's breaker.
+func rateLimitRetryAfter(resp *http.Response, err error) time.Duration {
+	if resp.StatusCode != http.StatusTooManyRequests {
+		return -1
+	}
+	status, ok := errors.AsType[*StatusError](err)
+	if !ok || status.Reason == quotaExceededReason {
+		return -1
+	}
+	retryAfter, ok := helpers.RetryAfter(resp.Header, time.Now())
+	if !ok || retryAfter > spotifyRateLimitMaxWait {
+		return -1
+	}
+	return retryAfter
 }
 
 // decodeStatusError reads Spotify's {"error":{"status","message"}} envelope,

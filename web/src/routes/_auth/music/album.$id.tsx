@@ -21,7 +21,7 @@ import { deleteAlbum } from "@/lib/api";
 import { invalidateLibraryQueries } from "@/lib/library-cache";
 import { parseRouteId } from "@/lib/route-id";
 import { listenHead, routeHead } from "@/lib/route-head";
-import { unwrapString, unwrapInt, unwrapFloat } from "@/lib/nullable";
+import { unwrapString, unwrapInt } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
 import { Button } from "@/components/ui/button";
 import {
@@ -60,13 +60,11 @@ import MusicStatList, {
   MusicStatChip,
 } from "@/components/music/MusicStatList";
 import DetailSkipLinks from "@/components/shared/DetailSkipLinks";
-import { SpotifyPopularityMeter } from "@/components/music/SpotifyPopularity";
 import CatalogLink from "@/components/music/CatalogLink";
 import {
   DETAIL_PAGE_CONTENT_ENTER_CLASS,
   DETAIL_SECTION_HEADING_CLASS,
   FOCUS_VISIBLE_RING_CLASS,
-  SPOTIFY_BRAND_TEXT_CLASS,
   MOTION_MICRO_COLORS_CLASS,
   DETAIL_TRACK_LIST_CONTAINER_CLASS,
   MUSIC_DETAIL_ACTIONS_CLASS,
@@ -187,7 +185,6 @@ function AlbumDetailsContent({
   const releaseDate = unwrapString(album.release_date);
   const releaseYear = unwrapInt(album.year);
   const musicianName = unwrapString(album.musician);
-  const spotifyPopularity = unwrapFloat(album.spotify_popularity);
   const albumType = unwrapString(album.album_type);
   const albumTypeLabel = albumType ? ALBUM_TYPE_LABELS.get(albumType) : undefined;
   const spotifyUrl = album.spotify_url;
@@ -409,10 +406,6 @@ function AlbumDetailsContent({
               </MusicStatList>
 
               <MusicGenreList genres={album_genres} />
-
-              {spotifyPopularity != null && (
-                <SpotifyPopularityMeter score={spotifyPopularity} />
-              )}
 
               <div className={MUSIC_DETAIL_ACTIONS_CLASS}>
                 {tracks.length > 0 && (
@@ -671,24 +664,6 @@ function AlbumDetailsContent({
                   </dt>
                   <dd className="mt-1 text-foreground">
                     <CatalogLink provider="spotify" href={spotifyUrl} name={album.title} />
-                  </dd>
-                </div>
-              )}
-              {spotifyPopularity != null && (
-                <div>
-                  <dt className="font-semibold tracking-wide text-muted-foreground uppercase">
-                    Spotify popularity
-                  </dt>
-                  <dd className="mt-1 flex items-baseline gap-2 text-foreground">
-                    <span
-                      className={cn(
-                        "text-lg font-semibold tabular-nums",
-                        SPOTIFY_BRAND_TEXT_CLASS,
-                      )}
-                    >
-                      {Math.round(spotifyPopularity)}
-                    </span>
-                    <span className="text-muted-foreground">/ 100</span>
                   </dd>
                 </div>
               )}

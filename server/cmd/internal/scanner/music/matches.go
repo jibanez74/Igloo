@@ -3,6 +3,7 @@ package music
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/scanner"
@@ -35,11 +36,29 @@ type resolvedMatch struct {
 }
 
 // saveMusicMatch records the provider's outcome for an entity; a nil match
-// leaves the stored one alone.
+// leaves the stored one alone. A failed outcome counts the failures in a row,
+// and from the second holds the entity back from the retry pass on the
+// scanner's miss backoff, so a lookup that keeps failing is not paid for on
+// every scan.
 func saveMusicMatch(ctx context.Context, qtx *database.Queries, provider, entityType string, entityID int64, match *resolvedMatch) error {
 	if match == nil {
 		return nil
 	}
+
+	var attempts int64
+	var retryAfter sql.NullInt64
+	if match.status == musicStatusFailed {
+		previous, err := qtx.GetMusicProviderMatchAttempts(ctx, database.GetMusicProviderMatchAttemptsParams{
+			EntityType: entityType,
+			EntityID:   entityID,
+		})
+		if err != nil {
+			return err
+		}
+		attempts = previous + 1
+		retryAfter = scanner.MissRetryAfter(attempts, time.Now())
+	}
+
 	return qtx.UpsertMusicProviderMatch(ctx, database.UpsertMusicProviderMatchParams{
 		EntityType: entityType,
 		EntityID:   entityID,
@@ -48,6 +67,8 @@ func saveMusicMatch(ctx context.Context, qtx *database.Queries, provider, entity
 		Reason:     match.reason,
 		Candidate:  match.candidate,
 		Score:      match.score,
+		Attempts:   attempts,
+		RetryAfter: retryAfter,
 	})
 }
 

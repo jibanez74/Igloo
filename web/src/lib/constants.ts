@@ -445,15 +445,11 @@ export const SELECT_CONTENT_SLOT_SELECTOR = "[data-slot='select-content']";
 /**
  * Spotify brand accent (the recognizable Spotify green). This is a deliberate
  * *brand* color, not a semantic design token — it identifies Spotify-sourced data
- * (the popularity meter/glyph) and intentionally sits outside the OKLCH token system.
+ * (the Spotify glyph) and intentionally sits outside the OKLCH token system.
  * The light-theme shades are darkened so the green stays readable on light surfaces.
  */
 // eslint-disable-next-line no-restricted-syntax -- deliberate Spotify brand green (see docstring above)
-export const SPOTIFY_BRAND_TEXT_CLASS = "text-green-600 dark:text-green-400";
-// eslint-disable-next-line no-restricted-syntax -- deliberate Spotify brand green (see docstring above)
 export const SPOTIFY_BRAND_ICON_CLASS = "text-green-600 dark:text-green-500";
-// eslint-disable-next-line no-restricted-syntax -- deliberate Spotify brand green (see docstring above)
-export const SPOTIFY_BRAND_FILL_CLASS = "bg-green-500";
 
 // Subtitle and language constants used to choose supported subtitle behavior
 // and format audio/subtitle labels.

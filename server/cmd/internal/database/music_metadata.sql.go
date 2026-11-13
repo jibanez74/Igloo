@@ -43,7 +43,7 @@ func (q *Queries) ClearMusicAlbumTrackLinks(ctx context.Context, albumID sql.Nul
 
 const countMusicAlbumRetryCandidates = `-- name: CountMusicAlbumRetryCandidates :one
 SELECT COUNT(*) FROM albums e LEFT JOIN music_provider_matches m ON m.entity_id=e.id AND m.entity_type='album'
-WHERE (m.status='failed' OR (m.provider='apple' AND m.reason='not_listed')
+WHERE ((m.status='failed' AND (m.retry_after IS NULL OR m.retry_after<=unixepoch())) OR (m.provider='apple' AND m.reason='not_listed')
 OR (m.status IS NULL AND NOT (CAST(?1 AS BOOLEAN) AND EXISTS(SELECT 1 FROM tracks t
     JOIN music_track_metadata h ON h.track_id=t.id WHERE t.album_id=e.id AND h.apple_album_id IS NOT NULL))))
 AND EXISTS(SELECT 1 FROM tracks t WHERE t.album_id=e.id)
@@ -74,7 +74,7 @@ func (q *Queries) CountMusicAppleAlbumCandidates(ctx context.Context) (int64, er
 
 const countMusicArtistRetryCandidates = `-- name: CountMusicArtistRetryCandidates :one
 SELECT COUNT(*) FROM musicians e LEFT JOIN music_provider_matches m ON m.entity_id=e.id AND m.entity_type='musician'
-WHERE (m.status IS NULL OR m.status='failed' OR EXISTS(SELECT 1 FROM music_spotify_adoptions p WHERE p.musician_id=e.id))
+WHERE (m.status IS NULL OR (m.status='failed' AND (m.retry_after IS NULL OR m.retry_after<=unixepoch())) OR EXISTS(SELECT 1 FROM music_spotify_adoptions p WHERE p.musician_id=e.id))
 AND (EXISTS(SELECT 1 FROM track_musicians t WHERE t.musician_id=e.id)
 OR EXISTS(SELECT 1 FROM music_spotify_adoptions p
     JOIN music_artist_identity ai ON ai.musician_id=p.musician_id
@@ -93,7 +93,7 @@ const countMusicTrackLinkAlbumCandidates = `-- name: CountMusicTrackLinkAlbumCan
 SELECT COUNT(*) FROM albums e
 WHERE e.spotify_id IS NOT NULL
 AND EXISTS(SELECT 1 FROM tracks t LEFT JOIN music_provider_matches m ON m.entity_type='track' AND m.entity_id=t.id
-WHERE t.album_id=e.id AND (m.status IS NULL OR m.status='failed'))
+WHERE t.album_id=e.id AND (m.status IS NULL OR (m.status='failed' AND (m.retry_after IS NULL OR m.retry_after<=unixepoch()))))
 `
 
 func (q *Queries) CountMusicTrackLinkAlbumCandidates(ctx context.Context) (int64, error) {
@@ -428,7 +428,7 @@ func (q *Queries) MusicAlbumIdentityKeys(ctx context.Context, albumID int64) ([]
 const musicAlbumRetryCandidates = `-- name: MusicAlbumRetryCandidates :many
 SELECT e.id, e.title, e.musician, e.year FROM albums e LEFT JOIN music_provider_matches m ON m.entity_id=e.id AND m.entity_type='album'
 WHERE e.id>?1
-AND (m.status='failed' OR (m.provider='apple' AND m.reason='not_listed')
+AND ((m.status='failed' AND (m.retry_after IS NULL OR m.retry_after<=unixepoch())) OR (m.provider='apple' AND m.reason='not_listed')
 OR (m.status IS NULL AND NOT (CAST(?2 AS BOOLEAN) AND EXISTS(SELECT 1 FROM tracks t
     JOIN music_track_metadata h ON h.track_id=t.id WHERE t.album_id=e.id AND h.apple_album_id IS NOT NULL))))
 AND EXISTS(SELECT 1 FROM tracks t WHERE t.album_id=e.id)
@@ -482,7 +482,7 @@ func (q *Queries) MusicAlbumRetryCandidates(ctx context.Context, arg MusicAlbumR
 const musicAlbumRetryCandidatesIn = `-- name: MusicAlbumRetryCandidatesIn :many
 SELECT e.id, e.title, e.musician, e.year FROM albums e LEFT JOIN music_provider_matches m ON m.entity_id=e.id AND m.entity_type='album'
 WHERE e.id IN (SELECT value FROM json_each(CAST(?1 AS TEXT)))
-AND (m.status='failed' OR (m.provider='apple' AND m.reason='not_listed')
+AND ((m.status='failed' AND (m.retry_after IS NULL OR m.retry_after<=unixepoch())) OR (m.provider='apple' AND m.reason='not_listed')
 OR (m.status IS NULL AND NOT (CAST(?2 AS BOOLEAN) AND EXISTS(SELECT 1 FROM tracks t
     JOIN music_track_metadata h ON h.track_id=t.id WHERE t.album_id=e.id AND h.apple_album_id IS NOT NULL))))
 AND EXISTS(SELECT 1 FROM tracks t WHERE t.album_id=e.id)
@@ -742,7 +742,7 @@ func (q *Queries) MusicAppleAlbumCandidatesIn(ctx context.Context, ids []int64) 
 
 const musicArtistRetryCandidates = `-- name: MusicArtistRetryCandidates :many
 SELECT e.id, e.name FROM musicians e LEFT JOIN music_provider_matches m ON m.entity_id=e.id AND m.entity_type='musician'
-WHERE e.id>?1 AND (m.status IS NULL OR m.status='failed' OR EXISTS(SELECT 1 FROM music_spotify_adoptions p WHERE p.musician_id=e.id))
+WHERE e.id>?1 AND (m.status IS NULL OR (m.status='failed' AND (m.retry_after IS NULL OR m.retry_after<=unixepoch())) OR EXISTS(SELECT 1 FROM music_spotify_adoptions p WHERE p.musician_id=e.id))
 AND (EXISTS(SELECT 1 FROM track_musicians t WHERE t.musician_id=e.id)
 OR EXISTS(SELECT 1 FROM music_spotify_adoptions p
     JOIN music_artist_identity ai ON ai.musician_id=p.musician_id
@@ -781,7 +781,7 @@ func (q *Queries) MusicArtistRetryCandidates(ctx context.Context, afterID int64)
 
 const musicArtistRetryCandidatesIn = `-- name: MusicArtistRetryCandidatesIn :many
 SELECT e.id, e.name FROM musicians e LEFT JOIN music_provider_matches m ON m.entity_id=e.id AND m.entity_type='musician'
-WHERE e.id IN (/*SLICE:ids*/?) AND (m.status IS NULL OR m.status='failed' OR EXISTS(SELECT 1 FROM music_spotify_adoptions p WHERE p.musician_id=e.id))
+WHERE e.id IN (/*SLICE:ids*/?) AND (m.status IS NULL OR (m.status='failed' AND (m.retry_after IS NULL OR m.retry_after<=unixepoch())) OR EXISTS(SELECT 1 FROM music_spotify_adoptions p WHERE p.musician_id=e.id))
 AND (EXISTS(SELECT 1 FROM track_musicians t WHERE t.musician_id=e.id)
 OR EXISTS(SELECT 1 FROM music_spotify_adoptions p
     JOIN music_artist_identity ai ON ai.musician_id=p.musician_id
@@ -1020,7 +1020,7 @@ const musicTrackLinkAlbumCandidates = `-- name: MusicTrackLinkAlbumCandidates :m
 SELECT e.id, e.title, e.musician, e.spotify_id FROM albums e
 WHERE e.id>?1 AND e.spotify_id IS NOT NULL
 AND EXISTS(SELECT 1 FROM tracks t LEFT JOIN music_provider_matches m ON m.entity_type='track' AND m.entity_id=t.id
-WHERE t.album_id=e.id AND (m.status IS NULL OR m.status='failed'))
+WHERE t.album_id=e.id AND (m.status IS NULL OR (m.status='failed' AND (m.retry_after IS NULL OR m.retry_after<=unixepoch()))))
 ORDER BY e.id LIMIT 100
 `
 
@@ -1066,7 +1066,7 @@ const musicTrackLinkAlbumCandidatesIn = `-- name: MusicTrackLinkAlbumCandidatesI
 SELECT e.id, e.title, e.musician, e.spotify_id FROM albums e
 WHERE e.id IN (/*SLICE:ids*/?) AND e.spotify_id IS NOT NULL
 AND EXISTS(SELECT 1 FROM tracks t LEFT JOIN music_provider_matches m ON m.entity_type='track' AND m.entity_id=t.id
-WHERE t.album_id=e.id AND (m.status IS NULL OR m.status='failed'))
+WHERE t.album_id=e.id AND (m.status IS NULL OR (m.status='failed' AND (m.retry_after IS NULL OR m.retry_after<=unixepoch()))))
 ORDER BY e.id
 `
 

@@ -543,3 +543,61 @@ func TestCompoundCreditMergeRepointsEarlierCredits(t *testing.T) {
 		t.Fatalf("primary artist = %#v, want the surviving owner %d", primary, owner.ID)
 	}
 }
+
+// A lookup that keeps failing is retried on the next scan once, then held back
+// on the miss backoff instead of costing a request on every scan; a success
+// clears the count.
+func TestSpotifyRetryBacksOffRepeatedFailures(t *testing.T) {
+	s := setupMusicScanner(t)
+	dir := t.TempDir()
+	scannertest.WriteFile(t, filepath.Join(dir, "track.m4a"), "audio")
+	s.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadata()}
+	stub := &musicScannerSpotifyStub{artistErr: errors.New("temporary"), albumErr: errors.New("temporary")}
+	s.spotify = stub
+
+	attempts := func() (int64, int64) {
+		t.Helper()
+		var withWait, total int64
+		err := s.tx.DB.QueryRow(`SELECT count(retry_after), coalesce(sum(attempts), 0) FROM music_provider_matches
+			WHERE entity_type IN ('musician','album') AND status='failed'`).Scan(&withWait, &total)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return withWait, total
+	}
+
+	s.scan(dir)
+	if withWait, total := attempts(); withWait != 0 || total != 2 {
+		t.Fatalf("after the first failure: %d held back, %d attempts; want 0 and 2", withWait, total)
+	}
+
+	s.scan(dir)
+	if stub.artistCalls != 2 || stub.albumCalls != 2 {
+		t.Fatalf("the first failure was not retried on the next scan: %+v", stub)
+	}
+	if withWait, total := attempts(); withWait != 2 || total != 4 {
+		t.Fatalf("after the second failure: %d held back, %d attempts; want 2 and 4", withWait, total)
+	}
+
+	s.scan(dir)
+	if stub.artistCalls != 2 || stub.albumCalls != 2 {
+		t.Fatalf("a held-back failure was looked up again: %+v", stub)
+	}
+
+	_, err := s.tx.DB.Exec(`UPDATE music_provider_matches SET retry_after = unixepoch() - 1`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stub.artistErr = nil
+	stub.albumErr = nil
+	stub.artist = &spotifyapi.FullArtist{SimpleArtist: spotifyapi.SimpleArtist{ID: "artist"}}
+	stub.album = &spotifyapi.FullAlbum{SimpleAlbum: spotifyapi.SimpleAlbum{ID: "album", ReleaseDate: "2001", ReleaseDatePrecision: "year"}}
+	s.scan(dir)
+	if stub.artistCalls != 3 || stub.albumCalls != 3 {
+		t.Fatalf("an elapsed backoff was not retried: %+v", stub)
+	}
+	cleared := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_provider_matches WHERE status='matched' AND attempts=0 AND retry_after IS NULL")
+	if cleared != 2 {
+		t.Fatalf("matched rows with a cleared count = %d, want 2", cleared)
+	}
+}

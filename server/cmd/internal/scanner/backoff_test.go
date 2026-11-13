@@ -37,6 +37,25 @@ func TestMissBackoffElapsed(t *testing.T) {
 	}
 }
 
+// MissRetryAfter stores the instant MissBackoffElapsed would grant.
+func TestMissRetryAfter(t *testing.T) {
+	failedAt := time.Date(2026, 9, 10, 12, 0, 0, 0, time.UTC)
+	for _, attempts := range []int64{0, 1, 2, 3, 12, 40} {
+		retryAfter := MissRetryAfter(attempts, failedAt)
+		if attempts <= 1 {
+			if retryAfter.Valid {
+				t.Fatalf("attempts %d: retry_after %v, want none", attempts, retryAfter)
+			}
+			continue
+		}
+		at := time.Unix(retryAfter.Int64, 0)
+		last := helpers.NullInt64(failedAt.Unix())
+		if MissBackoffElapsed(attempts, last, at.Add(-time.Second)) || !MissBackoffElapsed(attempts, last, at) {
+			t.Fatalf("attempts %d: retry_after %s disagrees with MissBackoffElapsed", attempts, at)
+		}
+	}
+}
+
 func TestProviderBreaker(t *testing.T) {
 	fatalErr := errors.New("fatal")
 	transientErr := errors.New("transient")

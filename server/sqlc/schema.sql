@@ -120,8 +120,6 @@ CREATE TABLE IF NOT EXISTS musicians (
   sort_name TEXT NOT NULL,
   summary TEXT,
   spotify_id TEXT UNIQUE,
-  spotify_popularity REAL,
-  spotify_followers INTEGER,
   thumb TEXT,
   thumb_source TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -144,7 +142,6 @@ CREATE TABLE IF NOT EXISTS albums (
   spotify_id TEXT UNIQUE,
   -- An album is matched by Apple or by Spotify, never both.
   apple_id INTEGER UNIQUE,
-  spotify_popularity REAL,
   album_type TEXT CHECK (album_type IN ('album', 'single', 'compilation')),
   musician TEXT,
   release_date TEXT,
@@ -345,7 +342,9 @@ CREATE TABLE IF NOT EXISTS music_spotify_adoptions (
 -- Cached provider outcomes survive rescans, one per entity: provider names the
 -- catalog that settled it. Entity type determines the owner; maintenance
 -- triggers remove entries when that owner is deleted. A miss keeps the best
--- candidate's name and score so it can be explained.
+-- candidate's name and score so it can be explained. attempts counts failed
+-- lookups in a row; from the second, retry_after (unix seconds) holds the
+-- entity back from the scan's retry pass until then.
 CREATE TABLE IF NOT EXISTS music_provider_matches (
   entity_type TEXT NOT NULL CHECK (entity_type IN ('album', 'musician', 'track')),
   entity_id INTEGER NOT NULL,
@@ -354,6 +353,8 @@ CREATE TABLE IF NOT EXISTS music_provider_matches (
   reason TEXT,
   candidate TEXT,
   score INTEGER,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  retry_after INTEGER,
   PRIMARY KEY (entity_type, entity_id)
 );
 
