@@ -347,6 +347,9 @@ type Querier interface {
 	// (playlist_id, track_id) primary key), which is bounded by the page the
 	// handler actually returns.
 	//
+	// owner_name and owner_avatar name the playlist's owner, which a collaborator's
+	// card shows; the handler folds them into an owner object.
+	//
 	// artwork is a JSON array of the album covers of the playlist's first 24
 	// tracks, in playlist order, for the card's collage. The handler keeps the
 	// first four distinct ones. The 24 are taken before the covers are looked at,

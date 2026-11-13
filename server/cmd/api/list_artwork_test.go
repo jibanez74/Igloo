@@ -421,3 +421,75 @@ func TestGetMoviePlaylists_CarriesTheFirstFourPostersInAddedOrder(t *testing.T) 
 		t.Errorf("empty playlist artwork = %q, want none", got)
 	}
 }
+
+// Both playlist lists name each playlist's owner, so a collaborator's card can
+// say whose playlist it is; the owner's raw columns stay out of the payload.
+func TestPlaylistListsNameTheOwner(t *testing.T) {
+	app := setupSessionTestApp(t)
+	owner := createTestUser(t, app, "Owner Olive", "playlist-owner@example.com", false)
+	collaborator := createTestUser(t, app, "Collaborator Cam", "playlist-collaborator@example.com", false)
+	_, err := app.DB.Exec(`UPDATE users SET avatar = 'https://avatars.example/olive.png' WHERE id = ?`, owner.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tracks, err := app.Queries.CreatePlaylist(t.Context(), database.CreatePlaylistParams{UserID: owner.ID, Name: "Shared Mix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	movies, err := app.Queries.CreateMoviePlaylist(t.Context(), database.CreateMoviePlaylistParams{UserID: owner.ID, Name: "Shared Marathon"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	own, err := app.Queries.CreatePlaylist(t.Context(), database.CreatePlaylistParams{UserID: collaborator.ID, Name: "Own Mix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, playlistID := range []int64{tracks.ID, movies.ID} {
+		_, err = app.Queries.AddCollaborator(t.Context(), database.AddCollaboratorParams{PlaylistID: playlistID, UserID: collaborator.ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	type listed struct {
+		ID    int64       `json:"id"`
+		Owner userSummary `json:"owner"`
+	}
+	avatar := "https://avatars.example/olive.png"
+	wantOwner := map[int64]userSummary{
+		tracks.ID: {ID: owner.ID, Name: "Owner Olive", Avatar: &avatar},
+		movies.ID: {ID: owner.ID, Name: "Owner Olive", Avatar: &avatar},
+		own.ID:    {ID: collaborator.ID, Name: "Collaborator Cam"},
+	}
+	for _, target := range []string{"/api/music/playlists", "/api/movies/playlists"} {
+		w := serveAs(t, app, collaborator.ID, http.MethodGet, target, "")
+		if w.Code != http.StatusOK {
+			t.Fatalf("%s status = %d: %s", target, w.Code, w.Body.String())
+		}
+		if strings.Contains(w.Body.String(), "owner_name") || strings.Contains(w.Body.String(), "owner_avatar") {
+			t.Fatalf("%s leaks the raw owner columns: %s", target, w.Body.String())
+		}
+
+		var body struct {
+			Data struct {
+				Playlists []listed `json:"playlists"`
+			} `json:"data"`
+		}
+		err = json.Unmarshal(w.Body.Bytes(), &body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(body.Data.Playlists) == 0 {
+			t.Fatalf("%s lists nothing: %s", target, w.Body.String())
+		}
+		for _, playlist := range body.Data.Playlists {
+			want := wantOwner[playlist.ID]
+			got := playlist.Owner
+			sameAvatar := (got.Avatar == nil) == (want.Avatar == nil) && (got.Avatar == nil || *got.Avatar == *want.Avatar)
+			if got.ID != want.ID || got.Name != want.Name || !sameAvatar {
+				t.Errorf("%s playlist %d owner = %+v, want %+v", target, playlist.ID, got, want)
+			}
+		}
+	}
+}

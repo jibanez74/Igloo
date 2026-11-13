@@ -186,13 +186,7 @@ func (app *Application) getPlaylistOwner(ctx context.Context, ownerID int64) (us
 		return userSummary{}, err
 	}
 
-	owner := userSummary{
-		ID:     row.ID,
-		Name:   row.Name,
-		Avatar: helpers.StringPtrFromNull(row.Avatar),
-	}
-
-	return owner, nil
+	return newUserSummary(row.ID, row.Name, row.Avatar), nil
 }
 
 // removeFromPlaylist deletes one item and moves the playlist's updated_at in

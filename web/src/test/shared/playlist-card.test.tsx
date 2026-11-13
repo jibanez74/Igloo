@@ -2,7 +2,7 @@ import { fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import PlaylistCard from "@/components/shared/PlaylistCard";
 import type { MoviePlaylistSummaryType, PlaylistSummaryType } from "@/types";
-import { nullableInt64, nullableString } from "@/test/helpers/fixtures";
+import { nullableInt64, nullableString, userSummary } from "@/test/helpers/fixtures";
 import { playlistSummary } from "@/test/helpers/music";
 import { renderWithQueryClient } from "@/test/helpers/render";
 
@@ -21,6 +21,7 @@ const playlistRow = {
   is_owner: true,
   can_edit: true,
   artwork: [] as string[],
+  owner: userSummary(),
 };
 
 function musicPlaylist(
@@ -91,6 +92,34 @@ describe("PlaylistCard", () => {
     expect(
       screen.getByRole("link", { name: "Friday Feature, 7 movies" }),
     ).toHaveAttribute("href", "/movies/playlist/9");
+  });
+
+  it("names the owner of a playlist shared with the reader", () => {
+    const owner = userSummary({ id: 2, name: "Riley" });
+    renderWithQueryClient(
+      <>
+        <PlaylistCard
+          playlist={musicPlaylist({ user_id: 2, is_owner: false, owner })}
+        />
+        <PlaylistCard
+          playlist={moviePlaylist({ user_id: 2, is_owner: false, owner })}
+        />
+      </>,
+    );
+
+    expect(screen.getByText("By Riley · 1 track · 3m 34s")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Late Shift, By Riley, 1 track, 3m 34s" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("By Riley · 7 movies")).toBeInTheDocument();
+    expect(screen.queryByText("Owner")).not.toBeInTheDocument();
+  });
+
+  it("does not name the reader on their own playlist", () => {
+    renderWithQueryClient(<PlaylistCard playlist={musicPlaylist()} />);
+
+    expect(screen.queryByText(/^By /)).not.toBeInTheDocument();
+    expect(screen.getByText("Owner")).toBeInTheDocument();
   });
 
   it("swaps a cover that fails to load for the placeholder", () => {

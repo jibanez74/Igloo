@@ -13,7 +13,7 @@ import {
 import { jsonResponse, requestURL } from "../helpers/api";
 import { runContentFadeTransitionTimeout } from "../helpers/content-fade-transition";
 import { restoreMatchMedia, setReducedMotionPreference } from "../helpers/dom";
-import { authUser, nullableInt64, nullableString } from "../helpers/fixtures";
+import { authUser, nullableInt64, nullableString, userSummary } from "../helpers/fixtures";
 import { playlistSummary, trackListItem } from "../helpers/music";
 import { renderRoute } from "../helpers/render-route";
 import { audioPlayerActionsMock } from "../helpers/audio-player";
@@ -246,6 +246,7 @@ function mockMusicFetch(options: MockMusicFetchOptions = {}) {
               total_duration: 420_000,
               is_owner: false,
               can_edit: false,
+              owner: userSummary({ id: 2, name: "Riley" }),
             }),
           ],
         },
@@ -547,7 +548,7 @@ describe("music route playlists tab", () => {
       name: "Morning Rotation, 3 tracks, 9m 0s",
     });
     const shared = screen.getByRole("link", {
-      name: "Shared Discoveries, 2 tracks, 7m 0s",
+      name: "Shared Discoveries, By Riley, 2 tracks, 7m 0s",
     });
     expect(screen.getByText("2 playlists")).toBeInTheDocument();
 
