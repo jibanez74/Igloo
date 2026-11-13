@@ -151,7 +151,8 @@ export default function PlaylistCard({ playlist }: PlaylistCardProps) {
 }
 
 // Authored beside the card it mirrors (design-system §3.4): the same padded
-// square cover, then bars sized to the name and details lines.
+// square cover, then bars sized to the name and details lines. A shared
+// playlist's owner line is not drawn: whose it is is unknown while loading.
 export function PlaylistCardSkeleton() {
   return (
     <div

@@ -119,7 +119,12 @@ export function useVideoFullscreen({
   useEffect(() => {
     if (fullscreenMode !== "webkitVideo") return;
     const video = videoRef.current;
-    if (!video) return;
+    // Gone before this effect ran: nothing would wake an observer.
+    if (!video?.isConnected) {
+      fullscreenModeRef.current = "none";
+      setFullscreenMode("none");
+      return;
+    }
     const observer = new MutationObserver(() => {
       if (video.isConnected || fullscreenModeRef.current !== "webkitVideo") {
         return;
