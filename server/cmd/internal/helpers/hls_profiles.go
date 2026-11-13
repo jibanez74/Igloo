@@ -186,3 +186,17 @@ func IsBrowserCompatibleH264(codec string) bool {
 		return false
 	}
 }
+
+// IsBrowserDirectPlayAudio reports whether browsers decode this audio codec
+// in a direct-played file. Mirrors BROWSER_COMPATIBLE_AUDIO_CODECS and
+// isAudioDirectPlayable in web/src/lib/playback.ts — keep the two in sync. An
+// empty codec passes, as it does there: the scan stored no codec name, and
+// the web client does not refuse direct play for that either.
+func IsBrowserDirectPlayAudio(codec string) bool {
+	switch normalizeCodec(codec) {
+	case "", "aac", "mp3", "opus", "vorbis", "flac":
+		return true
+	default:
+		return false
+	}
+}

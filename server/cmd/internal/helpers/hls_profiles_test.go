@@ -161,6 +161,40 @@ func TestIsBrowserCompatibleH264(t *testing.T) {
 	}
 }
 
+func TestIsBrowserDirectPlayAudio(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		codec string
+		want  bool
+	}{
+		{"aac", true},
+		{"AAC", true},
+		{"mp3", true},
+		{"opus", true},
+		{"vorbis", true},
+		{"flac", true},
+		{" flac ", true},
+		{"", true},
+		{"ac3", false},
+		{"eac3", false},
+		{"dts", false},
+		{"truehd", false},
+		{"pcm_s16le", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.codec, func(t *testing.T) {
+			t.Parallel()
+
+			got := IsBrowserDirectPlayAudio(tt.codec)
+			if got != tt.want {
+				t.Errorf("IsBrowserDirectPlayAudio(%q) = %v, want %v", tt.codec, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestHLSMaxTranscodeHeight(t *testing.T) {
 	if got := HLSMaxTranscodeHeight(HARDWARE_ACCELERATION_DEVICE_CPU); got != HLS_CPU_MAX_TRANSCODE_HEIGHT {
 		t.Fatalf("cpu max height = %d, want %d", got, HLS_CPU_MAX_TRANSCODE_HEIGHT)

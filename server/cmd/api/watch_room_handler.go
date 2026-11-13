@@ -327,6 +327,13 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 
+		// The first stream is the one browsers play (checked just above), and
+		// a codec they cannot decode plays silently or not at all.
+		if len(audioStreams) > 0 && !helpers.IsBrowserDirectPlayAudio(audioStreams[0].Codec) {
+			helpers.ErrorJSON(w, errors.New("browsers cannot play this movie's audio directly; choose another playback mode"), http.StatusBadRequest)
+			return
+		}
+
 		if videoContentType(movie.Container, movie.MimeType) != mp4ContentType {
 			helpers.ErrorJSON(w, errors.New("direct playback is only available for MP4 movies; choose another playback mode"), http.StatusBadRequest)
 			return
