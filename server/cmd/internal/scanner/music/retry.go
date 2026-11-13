@@ -115,7 +115,7 @@ func (s *Scanner) retryCatalog(ctx context.Context, scan *musicScanContext, repo
 			}
 			var adopted *resolvedMusician
 			if resolved.spotifyAlbum != nil {
-				adopted, err = s.adoptAlbumArtist(ctx, scan, candidate.Musician.String, resolved.spotifyAlbum)
+				adopted, err = s.adoptAlbumArtist(ctx, scan, candidate.Musician.String, resolved.spotifyAlbum, true)
 				if err != nil {
 					return err
 				}

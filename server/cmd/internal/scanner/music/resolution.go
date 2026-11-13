@@ -230,7 +230,7 @@ func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, 
 		}
 		resolved.album = album
 		if album.spotifyAlbum != nil {
-			adopted, adoptErr := s.adoptAlbumArtist(ctx, scan, album.albumArtist, album.spotifyAlbum)
+			adopted, adoptErr := s.adoptAlbumArtist(ctx, scan, album.albumArtist, album.spotifyAlbum, false)
 			if adoptErr != nil {
 				return nil, adoptErr
 			}
@@ -603,7 +603,11 @@ func (s *Scanner) knownArtistSpotifyID(ctx context.Context, scan *musicScanConte
 // never qualify, since "Various Artists" agrees with no local name. The
 // adopted resolution replaces the scan's record of the name; nil means nothing
 // changed.
-func (s *Scanner) adoptAlbumArtist(ctx context.Context, scan *musicScanContext, name string, album *spotifyapi.FullAlbum) (*resolvedMusician, error) {
+//
+// heldBack is set by the retry pass, which leaves alone an artist whose failed
+// lookup is still waiting out its backoff, as its own candidate query does; the
+// walk adopts regardless, as it looks changed files up regardless.
+func (s *Scanner) adoptAlbumArtist(ctx context.Context, scan *musicScanContext, name string, album *spotifyapi.FullAlbum, heldBack bool) (*resolvedMusician, error) {
 	name = strings.TrimSpace(name)
 	var target spotifyapi.ID
 	for _, credit := range album.Artists {
@@ -633,6 +637,15 @@ func (s *Scanner) adoptAlbumArtist(ctx context.Context, scan *musicScanContext, 
 	if found {
 		if existing.SpotifyID.Valid {
 			return nil, nil
+		}
+		if heldBack {
+			waiting, err := s.musicianFailureWaiting(ctx, existing.ID)
+			if err != nil {
+				return nil, err
+			}
+			if waiting {
+				return nil, nil
+			}
 		}
 		resolved.existing = &existing
 		resolved.existingID, resolved.hasExistingID = existing.ID, true

@@ -87,6 +87,22 @@ func saveMusicMatch(ctx context.Context, qtx *database.Queries, scan *musicScanC
 	})
 }
 
+// musicianFailureWaiting reports a musician whose failed Spotify lookup is
+// still inside its backoff.
+func (s *Scanner) musicianFailureWaiting(ctx context.Context, musicianID int64) (bool, error) {
+	failure, err := s.queries.GetMusicProviderMatchFailure(ctx, database.GetMusicProviderMatchFailureParams{
+		EntityType: musicEntityMusician,
+		EntityID:   musicianID,
+	})
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return failure.RetryAfter.Valid && time.Now().Before(time.Unix(failure.RetryAfter.Int64, 0)), nil
+}
+
 // musicMatchIsFinal reports a settled outcome that no provider looks up
 // again. Apple's not_listed is not one: Spotify searches that album next.
 func musicMatchIsFinal(match database.GetMusicProviderMatchRow) bool {
