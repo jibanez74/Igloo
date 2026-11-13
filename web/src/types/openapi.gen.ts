@@ -3313,11 +3313,12 @@ export interface components {
         MoviesLibraryEnvelope: components["schemas"]["JsonSuccess"] & {
             data: components["schemas"]["MoviesLibraryData"];
         };
+        MoviesStatsData: {
+            /** Format: int64 */
+            total_movies: number;
+        };
         MoviesStatsEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                /** Format: int64 */
-                total_movies: number;
-            };
+            data: components["schemas"]["MoviesStatsData"];
         };
         MovieLikeStatusEnvelope: components["schemas"]["JsonSuccess"] & {
             data: {
@@ -3407,15 +3408,16 @@ export interface components {
             id: number;
             name: string;
         };
+        MovieDetailsData: {
+            movie: components["schemas"]["Movie"];
+            cast: components["schemas"]["MovieCastCredit"][];
+            crew: components["schemas"]["MovieCrewCredit"][];
+            genres: components["schemas"]["MovieGenre"][];
+            production_companies: components["schemas"]["MovieProductionCompany"][];
+            extra_videos: components["schemas"]["ExtraVideo"][];
+        };
         MovieDetailsEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                movie: components["schemas"]["Movie"];
-                cast: components["schemas"]["MovieCastCredit"][];
-                crew: components["schemas"]["MovieCrewCredit"][];
-                genres: components["schemas"]["MovieGenre"][];
-                production_companies: components["schemas"]["MovieProductionCompany"][];
-                extra_videos: components["schemas"]["ExtraVideo"][];
-            };
+            data: components["schemas"]["MovieDetailsData"];
         };
         VideoStream: {
             /** Format: int64 */
@@ -3506,14 +3508,15 @@ export interface components {
             run_time: components["schemas"]["SqlNullInt64"];
             duration: components["schemas"]["SqlNullFloat64"];
         };
+        MovieTechnicalDetailsData: {
+            movie: components["schemas"]["MovieTechnicalFile"];
+            video_streams: components["schemas"]["VideoStream"][];
+            audio_streams: components["schemas"]["AudioStream"][];
+            subtitles: components["schemas"]["Subtitle"][];
+            chapters: components["schemas"]["Chapter"][];
+        };
         MovieTechnicalDetailsEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                movie: components["schemas"]["MovieTechnicalFile"];
-                video_streams: components["schemas"]["VideoStream"][];
-                audio_streams: components["schemas"]["AudioStream"][];
-                subtitles: components["schemas"]["Subtitle"][];
-                chapters: components["schemas"]["Chapter"][];
-            };
+            data: components["schemas"]["MovieTechnicalDetailsData"];
         };
         /** @description One playback position. progress_sec is clamped to the range 0 to duration_sec. A save whose clamped progress_sec is at or past 95% of duration_sec marks the item watched and resets its stored position to zero; any lower save stores the position and clears watched. A save is ignored when its save_session_id matches the stored one and its save_sequence is not greater than the stored sequence. */
         UpdateWatchProgressRequest: {
@@ -3894,10 +3897,11 @@ export interface components {
             /** @default false */
             delete_file?: boolean;
         };
+        TmdbStatusData: {
+            available: boolean;
+        };
         TmdbStatusEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                available: boolean;
-            };
+            data: components["schemas"]["TmdbStatusData"];
         };
         SpotifyStatusData: {
             available: boolean;

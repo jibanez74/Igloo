@@ -11212,6 +11212,19 @@
           }
         ]
       },
+      "MoviesStatsData": {
+        "type": "object",
+        "required": [
+          "total_movies"
+        ],
+        "properties": {
+          "total_movies": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
       "MoviesStatsEnvelope": {
         "allOf": [
           {
@@ -11224,17 +11237,7 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "total_movies"
-                ],
-                "properties": {
-                  "total_movies": {
-                    "type": "integer",
-                    "format": "int64"
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/MoviesStatsData"
               }
             }
           }
@@ -11550,6 +11553,53 @@
         },
         "additionalProperties": false
       },
+      "MovieDetailsData": {
+        "type": "object",
+        "required": [
+          "movie",
+          "cast",
+          "crew",
+          "genres",
+          "production_companies",
+          "extra_videos"
+        ],
+        "properties": {
+          "movie": {
+            "$ref": "#/components/schemas/Movie"
+          },
+          "cast": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MovieCastCredit"
+            }
+          },
+          "crew": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MovieCrewCredit"
+            }
+          },
+          "genres": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MovieGenre"
+            }
+          },
+          "production_companies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MovieProductionCompany"
+            }
+          },
+          "extra_videos": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExtraVideo"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
       "MovieDetailsEnvelope": {
         "allOf": [
           {
@@ -11562,51 +11612,7 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "movie",
-                  "cast",
-                  "crew",
-                  "genres",
-                  "production_companies",
-                  "extra_videos"
-                ],
-                "properties": {
-                  "movie": {
-                    "$ref": "#/components/schemas/Movie"
-                  },
-                  "cast": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/MovieCastCredit"
-                    }
-                  },
-                  "crew": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/MovieCrewCredit"
-                    }
-                  },
-                  "genres": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/MovieGenre"
-                    }
-                  },
-                  "production_companies": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/MovieProductionCompany"
-                    }
-                  },
-                  "extra_videos": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/ExtraVideo"
-                    }
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/MovieDetailsData"
               }
             }
           }
@@ -11899,6 +11905,46 @@
         },
         "additionalProperties": false
       },
+      "MovieTechnicalDetailsData": {
+        "type": "object",
+        "required": [
+          "movie",
+          "video_streams",
+          "audio_streams",
+          "subtitles",
+          "chapters"
+        ],
+        "properties": {
+          "movie": {
+            "$ref": "#/components/schemas/MovieTechnicalFile"
+          },
+          "video_streams": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VideoStream"
+            }
+          },
+          "audio_streams": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AudioStream"
+            }
+          },
+          "subtitles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Subtitle"
+            }
+          },
+          "chapters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Chapter"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
       "MovieTechnicalDetailsEnvelope": {
         "allOf": [
           {
@@ -11911,44 +11957,7 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "movie",
-                  "video_streams",
-                  "audio_streams",
-                  "subtitles",
-                  "chapters"
-                ],
-                "properties": {
-                  "movie": {
-                    "$ref": "#/components/schemas/MovieTechnicalFile"
-                  },
-                  "video_streams": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/VideoStream"
-                    }
-                  },
-                  "audio_streams": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/AudioStream"
-                    }
-                  },
-                  "subtitles": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/Subtitle"
-                    }
-                  },
-                  "chapters": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/Chapter"
-                    }
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/MovieTechnicalDetailsData"
               }
             }
           }
@@ -13452,6 +13461,18 @@
         },
         "additionalProperties": false
       },
+      "TmdbStatusData": {
+        "type": "object",
+        "required": [
+          "available"
+        ],
+        "properties": {
+          "available": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
       "TmdbStatusEnvelope": {
         "allOf": [
           {
@@ -13464,16 +13485,7 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "available"
-                ],
-                "properties": {
-                  "available": {
-                    "type": "boolean"
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/TmdbStatusData"
               }
             }
           }

@@ -11,8 +11,7 @@ export type MoviesLibraryPaginatedDataType =
   components["schemas"]["MoviesLibraryData"];
 
 /** GET /api/movies/stats */
-export type MoviesStatsDataType =
-  components["schemas"]["MoviesStatsEnvelope"]["data"];
+export type MoviesStatsDataType = components["schemas"]["MoviesStatsData"];
 
 /** Row from GET /api/movies/genres (genres that have at least one movie). */
 export type MovieGenreWithCountType =
@@ -73,11 +72,11 @@ export type LibraryMovieExtraVideoType = components["schemas"]["ExtraVideo"];
 
 // Full response from GET /api/movies/details/:id
 export type LibraryMovieDetailsResponse =
-  components["schemas"]["MovieDetailsEnvelope"]["data"];
+  components["schemas"]["MovieDetailsData"];
 
 // Technical details response (GET /api/movies/:id/technical-details)
 export type MovieTechnicalDetailsResponse =
-  components["schemas"]["MovieTechnicalDetailsEnvelope"]["data"];
+  components["schemas"]["MovieTechnicalDetailsData"];
 
 export type VideoStreamType = components["schemas"]["VideoStream"];
 
@@ -101,7 +100,7 @@ export type TmdbSearchResultType = components["schemas"]["TmdbSearchResult"];
 export type TmdbSearchMoviesRequest =
   components["schemas"]["TmdbSearchMoviesRequest"];
 
-export type TmdbStatusType = components["schemas"]["TmdbStatusEnvelope"]["data"];
+export type TmdbStatusType = components["schemas"]["TmdbStatusData"];
 
 /** PUT /api/movies/:id/metadata: a field left out keeps its value. */
 export type UpdateMovieMetadataRequest =
