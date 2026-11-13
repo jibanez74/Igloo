@@ -22,6 +22,7 @@ func (app *Application) RequestLogger(next http.Handler) http.Handler {
 				"bytes", ww.BytesWritten(),
 				"duration_ms", time.Since(start).Milliseconds(),
 				"remote_addr", r.RemoteAddr,
+				"client_ip", clientIP(r),
 				"request_id", middleware.GetReqID(r.Context()),
 			)
 		}()

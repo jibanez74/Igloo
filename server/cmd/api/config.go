@@ -4,9 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/netip"
 	"os"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"igloo/cmd/internal/helpers"
 )
@@ -42,6 +44,7 @@ const (
 	envDebug                      = "DEBUG"
 	envLogToStdout                = "LOG_TO_STDOUT"
 	envSessionCookieSecure        = "SESSION_COOKIE_SECURE"
+	envTrustedProxies             = "TRUSTED_PROXIES"
 	envViteDevServer              = "VITE_DEV_SERVER"
 	envHLSMaxCPUTranscodes        = "HLS_MAX_CPU_TRANSCODES"
 	envHLSMaxHWTranscodes         = "HLS_MAX_HW_TRANSCODES"
@@ -70,6 +73,7 @@ type RuntimeConfig struct {
 	Debug                      bool
 	LogToStdout                bool
 	SessionCookieSecure        bool
+	TrustedProxies             []netip.Prefix
 	DefaultAdminName           string
 	DefaultAdminEmail          string
 	DefaultAdminPassword       string
@@ -117,6 +121,11 @@ func NewRuntimeConfig() (RuntimeConfig, error) {
 		return RuntimeConfig{}, err
 	}
 
+	trustedProxies, err := parseTrustedProxies(os.Getenv(envTrustedProxies))
+	if err != nil {
+		return RuntimeConfig{}, err
+	}
+
 	config := RuntimeConfig{
 		DBPath:                     envString(envDBPath, defaultDBPath),
 		StaticDir:                  envString(envStaticDir, defaultStaticDir),
@@ -126,6 +135,7 @@ func NewRuntimeConfig() (RuntimeConfig, error) {
 		Debug:                      debug,
 		LogToStdout:                envBool(envLogToStdout, debug),
 		SessionCookieSecure:        envBool(envSessionCookieSecure, false),
+		TrustedProxies:             trustedProxies,
 		DefaultAdminName:           envString(envDefaultAdminName, defaultAdminName),
 		DefaultAdminEmail:          envString(envDefaultAdminEmail, defaultAdminEmail),
 		DefaultAdminPassword:       strings.TrimSpace(os.Getenv(envDefaultAdminPassword)),
@@ -157,6 +167,51 @@ func configuredPort() (int, error) {
 		return 0, fmt.Errorf("invalid %s value %q: must be between 1 and 65535", envPort, value)
 	}
 	return port, nil
+}
+
+// parseTrustedProxies reads TRUSTED_PROXIES: reverse proxy addresses, each an
+// IP or a CIDR, separated by commas or spaces. A bare IP trusts that one
+// address. An IPv4-mapped IPv6 address folds to IPv4, the form the client IP
+// middleware compares peers in. A bad entry fails startup rather than leaving
+// the proxy untrusted without a word.
+func parseTrustedProxies(value string) ([]netip.Prefix, error) {
+	fields := strings.FieldsFunc(value, func(r rune) bool {
+		return r == ',' || unicode.IsSpace(r)
+	})
+	if len(fields) == 0 {
+		return nil, nil
+	}
+
+	prefixes := make([]netip.Prefix, 0, len(fields))
+	for _, field := range fields {
+		if strings.Contains(field, "/") {
+			prefix, err := netip.ParsePrefix(field)
+			if err != nil {
+				return nil, fmt.Errorf("invalid %s entry %q: %w", envTrustedProxies, field, err)
+			}
+			addr := prefix.Addr()
+			bits := prefix.Bits()
+			if addr.Is4In6() {
+				if bits < 96 {
+					return nil, fmt.Errorf("invalid %s entry %q: an IPv4-mapped prefix needs at least /96", envTrustedProxies, field)
+				}
+				addr, bits = addr.Unmap(), bits-96
+			}
+			prefixes = append(prefixes, netip.PrefixFrom(addr, bits).Masked())
+			continue
+		}
+
+		addr, err := netip.ParseAddr(field)
+		if err != nil {
+			return nil, fmt.Errorf("invalid %s entry %q: %w", envTrustedProxies, field, err)
+		}
+		if addr.Zone() != "" {
+			return nil, fmt.Errorf("invalid %s entry %q: zoned addresses are not supported", envTrustedProxies, field)
+		}
+		addr = addr.Unmap()
+		prefixes = append(prefixes, netip.PrefixFrom(addr, addr.BitLen()))
+	}
+	return prefixes, nil
 }
 
 func envString(name string, fallback string) string {

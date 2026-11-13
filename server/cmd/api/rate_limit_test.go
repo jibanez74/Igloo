@@ -4,56 +4,211 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/go-chi/chi/v5/middleware"
 )
 
-func TestClientIPUsesSocketIPCapturedBeforeRealIP(t *testing.T) {
-	handler := preserveClientSocketIP(middleware.RealIP(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.RemoteAddr != "203.0.113.44" {
-			t.Fatalf("RealIP did not rewrite RemoteAddr from forwarded header, got %q", r.RemoteAddr)
-		}
+// resolveClientIP runs one request through clientIPMiddleware and returns
+// what clientIP saw, along with RemoteAddr as the handler received it.
+func resolveClientIP(t *testing.T, trustedProxies string, remoteAddr string, headers http.Header) (ip string, seenRemoteAddr string) {
+	t.Helper()
 
-		if got := clientIP(r); got != "198.51.100.7" {
-			t.Fatalf("clientIP() = %q, want socket IP", got)
-		}
-	})))
+	prefixes, err := parseTrustedProxies(trustedProxies)
+	if err != nil {
+		t.Fatalf("parseTrustedProxies(%q): %v", trustedProxies, err)
+	}
+
+	handler := clientIPMiddleware(prefixes)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ip = clientIP(r)
+		seenRemoteAddr = r.RemoteAddr
+	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.RemoteAddr = "198.51.100.7:54321"
-	req.Header.Set("X-Forwarded-For", "203.0.113.44")
-
+	req.RemoteAddr = remoteAddr
+	for name, values := range headers {
+		for _, value := range values {
+			req.Header.Add(name, value)
+		}
+	}
 	handler.ServeHTTP(httptest.NewRecorder(), req)
+	return ip, seenRemoteAddr
 }
 
-func TestRateLimiterCannotBeBypassedByForwardedForRotation(t *testing.T) {
+func TestClientIPMiddleware(t *testing.T) {
+	spoofed := http.Header{
+		"X-Forwarded-For": {"203.0.113.44"},
+		"X-Real-Ip":       {"203.0.113.45"},
+		"True-Client-Ip":  {"203.0.113.46"},
+	}
+
+	tests := []struct {
+		name           string
+		trustedProxies string
+		remoteAddr     string
+		headers        http.Header
+		want           string
+	}{
+		{
+			name:       "no trusted proxies ignores forwarded headers",
+			remoteAddr: "198.51.100.7:54321",
+			headers:    spoofed,
+			want:       "198.51.100.7",
+		},
+		{
+			name:       "no trusted proxies reads an IPv6 peer",
+			remoteAddr: "[2001:db8::1]:12345",
+			want:       "2001:db8::1",
+		},
+		{
+			name:       "IPv4-mapped peer folds to IPv4",
+			remoteAddr: "[::ffff:198.51.100.7]:54321",
+			want:       "198.51.100.7",
+		},
+		{
+			name:           "untrusted peer ignores forwarded headers",
+			trustedProxies: "10.0.0.2",
+			remoteAddr:     "198.51.100.7:54321",
+			headers:        spoofed,
+			want:           "198.51.100.7",
+		},
+		{
+			name:           "trusted peer names its client",
+			trustedProxies: "10.0.0.2",
+			remoteAddr:     "10.0.0.2:40000",
+			headers:        http.Header{"X-Forwarded-For": {"203.0.113.10"}},
+			want:           "203.0.113.10",
+		},
+		{
+			name:           "trusted peer behind an IPv4-mapped listener",
+			trustedProxies: "127.0.0.1",
+			remoteAddr:     "[::ffff:127.0.0.1]:40000",
+			headers:        http.Header{"X-Forwarded-For": {"203.0.113.10"}},
+			want:           "203.0.113.10",
+		},
+		{
+			name:           "client-sent entries left of the client are ignored",
+			trustedProxies: "10.0.0.2",
+			remoteAddr:     "10.0.0.2:40000",
+			headers:        http.Header{"X-Forwarded-For": {"192.0.2.99, 203.0.113.10"}},
+			want:           "203.0.113.10",
+		},
+		{
+			name:           "trusted inner proxy is skipped",
+			trustedProxies: "10.0.0.0/24",
+			remoteAddr:     "10.0.0.2:40000",
+			headers:        http.Header{"X-Forwarded-For": {"192.0.2.99, 203.0.113.10, 10.0.0.3"}},
+			want:           "203.0.113.10",
+		},
+		{
+			name:           "duplicate headers merge in order",
+			trustedProxies: "10.0.0.2",
+			remoteAddr:     "10.0.0.2:40000",
+			headers:        http.Header{"X-Forwarded-For": {"192.0.2.99", "203.0.113.10"}},
+			want:           "203.0.113.10",
+		},
+		{
+			name:           "trusted peer ignores other forwarded headers",
+			trustedProxies: "10.0.0.2",
+			remoteAddr:     "10.0.0.2:40000",
+			headers:        http.Header{"X-Real-Ip": {"203.0.113.45"}, "True-Client-Ip": {"203.0.113.46"}},
+			want:           "10.0.0.2",
+		},
+		{
+			name:           "trusted peer without X-Forwarded-For stays the client",
+			trustedProxies: "10.0.0.2",
+			remoteAddr:     "10.0.0.2:40000",
+			want:           "10.0.0.2",
+		},
+		{
+			name:           "chain of only trusted hops stays the peer",
+			trustedProxies: "10.0.0.0/24",
+			remoteAddr:     "10.0.0.2:40000",
+			headers:        http.Header{"X-Forwarded-For": {"10.0.0.3"}},
+			want:           "10.0.0.2",
+		},
+		{
+			name:           "malformed entry fails closed to the peer",
+			trustedProxies: "10.0.0.2",
+			remoteAddr:     "10.0.0.2:40000",
+			headers:        http.Header{"X-Forwarded-For": {"203.0.113.10, not-an-ip"}},
+			want:           "10.0.0.2",
+		},
+		{
+			name:           "IPv6 trusted proxy",
+			trustedProxies: "::1",
+			remoteAddr:     "[::1]:40000",
+			headers:        http.Header{"X-Forwarded-For": {"2001:db8::44"}},
+			want:           "2001:db8::44",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, seenRemoteAddr := resolveClientIP(t, tt.trustedProxies, tt.remoteAddr, tt.headers)
+			if got != tt.want {
+				t.Fatalf("clientIP() = %q, want %q", got, tt.want)
+			}
+			if seenRemoteAddr != tt.remoteAddr {
+				t.Fatalf("RemoteAddr rewritten to %q, want %q", seenRemoteAddr, tt.remoteAddr)
+			}
+		})
+	}
+}
+
+// loginAttempts sends one attempt per X-Forwarded-For value from remoteAddr
+// through clientIPMiddleware into a limiter that admits one attempt per IP,
+// and returns the status codes.
+func loginAttempts(t *testing.T, trustedProxies string, remoteAddr string, forwardedFor ...string) []int {
+	t.Helper()
+
+	prefixes, err := parseTrustedProxies(trustedProxies)
+	if err != nil {
+		t.Fatalf("parseTrustedProxies(%q): %v", trustedProxies, err)
+	}
+
 	limiter := newRateLimiter()
-	handler := preserveClientSocketIP(middleware.RealIP(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !limiter.Allow("auth:"+clientIP(r), 1, time.Minute) {
+	handler := clientIPMiddleware(prefixes)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !limiter.Allow("login:"+clientIP(r), 1, time.Minute) {
 			w.WriteHeader(http.StatusTooManyRequests)
 			return
 		}
-
 		w.WriteHeader(http.StatusOK)
-	})))
+	}))
 
-	for i, forwardedFor := range []string{"203.0.113.10", "203.0.113.11"} {
-		req := httptest.NewRequest(http.MethodPost, "/api/auth/device-login", nil)
-		req.RemoteAddr = "198.51.100.7:54321"
-		req.Header.Set("X-Forwarded-For", forwardedFor)
+	codes := make([]int, 0, len(forwardedFor))
+	for _, value := range forwardedFor {
+		req := httptest.NewRequest(http.MethodPost, "/api/auth/login", nil)
+		req.RemoteAddr = remoteAddr
+		req.Header.Set("X-Forwarded-For", value)
 
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, req)
+		codes = append(codes, w.Code)
+	}
+	return codes
+}
 
-		if i == 0 && w.Code != http.StatusOK {
-			t.Fatalf("first request status = %d, want 200", w.Code)
-		}
-		if i == 1 && w.Code != http.StatusTooManyRequests {
-			t.Fatalf("second request status = %d, want 429", w.Code)
-		}
+func TestRateLimiterCannotBeBypassedByForwardedForRotation(t *testing.T) {
+	codes := loginAttempts(t, "", "198.51.100.7:54321", "203.0.113.10", "203.0.113.11")
+	if !slices.Equal(codes, []int{http.StatusOK, http.StatusTooManyRequests}) {
+		t.Fatalf("statuses = %v, want [200 429]", codes)
+	}
+}
+
+func TestRateLimiterUntrustedPeerCannotPickItsBucket(t *testing.T) {
+	codes := loginAttempts(t, "10.0.0.2", "198.51.100.7:54321", "203.0.113.10", "203.0.113.11")
+	if !slices.Equal(codes, []int{http.StatusOK, http.StatusTooManyRequests}) {
+		t.Fatalf("statuses = %v, want [200 429]", codes)
+	}
+}
+
+func TestRateLimiterSeparatesClientsBehindTrustedProxy(t *testing.T) {
+	codes := loginAttempts(t, "10.0.0.2", "10.0.0.2:40000", "203.0.113.10", "203.0.113.11", "203.0.113.10")
+	want := []int{http.StatusOK, http.StatusOK, http.StatusTooManyRequests}
+	if !slices.Equal(codes, want) {
+		t.Fatalf("statuses = %v, want %v", codes, want)
 	}
 }
 

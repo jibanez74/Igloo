@@ -52,7 +52,7 @@ export interface paths {
         put?: never;
         /**
          * Log in with email and password
-         * @description The email is matched exactly as sent: it is not trimmed and the match is case-sensitive. Passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401. Rate limited to 10 requests per 5 minutes per client IP (the TCP peer address, not forwarded headers), shared with device login.
+         * @description The email is matched exactly as sent: it is not trimmed and the match is case-sensitive. Passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401. Rate limited to 10 requests per 5 minutes per client IP: the TCP peer address, or, when the peer is a proxy listed in the TRUSTED_PROXIES startup setting, the right-most X-Forwarded-For address that is not a trusted proxy. Shared with device login.
          */
         post: operations["authenticateUser"];
         delete?: never;
@@ -109,7 +109,7 @@ export interface paths {
         put?: never;
         /**
          * Log in with email and password from a TV or mobile client and receive a device token
-         * @description The email is matched exactly as sent: it is not trimmed and the match is case-sensitive. Passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401. Rate limited to 10 requests per 5 minutes per client IP (the TCP peer address, not forwarded headers), shared with browser login.
+         * @description The email is matched exactly as sent: it is not trimmed and the match is case-sensitive. Passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401. Rate limited to 10 requests per 5 minutes per client IP: the TCP peer address, or, when the peer is a proxy listed in the TRUSTED_PROXIES startup setting, the right-most X-Forwarded-For address that is not a trusted proxy. Shared with browser login.
          */
         post: operations["authenticateDevice"];
         delete?: never;
@@ -129,7 +129,7 @@ export interface paths {
         put?: never;
         /**
          * Request a quick-connect code to display on a device
-         * @description Starts a pairing. The code expires 5 minutes after this request; approval does not extend it. Rate limited to 10 requests per minute per client IP (the TCP peer address, not forwarded headers). Returns 503 while 1,000 codes are already pending.
+         * @description Starts a pairing. The code expires 5 minutes after this request; approval does not extend it. Rate limited to 10 requests per minute per client IP: the TCP peer address, or, when the peer is a proxy listed in the TRUSTED_PROXIES startup setting, the right-most X-Forwarded-For address that is not a trusted proxy. Returns 503 while 1,000 codes are already pending.
          */
         post: operations["initiateQuickConnect"];
         delete?: never;
@@ -149,7 +149,7 @@ export interface paths {
         put?: never;
         /**
          * Poll a quick-connect code and receive a device token once approved
-         * @description Devices poll this endpoint at the advertised interval. Pending codes live only in this server process's memory, so a restart discards them. A 404 means the code or secret is missing, unknown, expired, or mismatched; the device should request a new code and start over. 400 is returned only for a malformed body. The approved response consumes the code; it is issued at most once per approval. A redeem that arrives while another request is still issuing the token for the same code answers pending, and a failed issuance leaves the code redeemable on the next poll. Rate limited to 60 requests per minute per client IP (the TCP peer address, not forwarded headers).
+         * @description Devices poll this endpoint at the advertised interval. Pending codes live only in this server process's memory, so a restart discards them. A 404 means the code or secret is missing, unknown, expired, or mismatched; the device should request a new code and start over. 400 is returned only for a malformed body. The approved response consumes the code; it is issued at most once per approval. A redeem that arrives while another request is still issuing the token for the same code answers pending, and a failed issuance leaves the code redeemable on the next poll. Rate limited to 60 requests per minute per client IP: the TCP peer address, or, when the peer is a proxy listed in the TRUSTED_PROXIES startup setting, the right-most X-Forwarded-For address that is not a trusted proxy.
          */
         post: operations["redeemQuickConnect"];
         delete?: never;

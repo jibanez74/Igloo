@@ -1,11 +1,13 @@
 package main
 
 import (
-	"context"
 	"net"
 	"net/http"
+	"net/netip"
 	"sync"
 	"time"
+
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 const rateLimiterPruneThreshold = 1024
@@ -14,8 +16,6 @@ type rateBucket struct {
 	count       int
 	windowStart time.Time
 }
-
-type clientSocketIPContextKey struct{}
 
 // rateLimiter is a minimal fixed-window limiter for auth endpoints. State is
 // in-memory and per-process, which is sufficient for the single-binary home
@@ -85,17 +85,30 @@ func (l *rateLimiter) pruneLocked(now time.Time) {
 	}
 }
 
-func preserveClientSocketIP(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := context.WithValue(r.Context(), clientSocketIPContextKey{}, remoteAddrIP(r.RemoteAddr))
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+// clientIPMiddleware records each request's client IP for clientIP. With no
+// trusted proxies the client is the TCP peer and forwarded headers are
+// ignored, since any client can send them. With trusted proxies, a request
+// whose peer is one of them names its client in X-Forwarded-For: the
+// right-most entry that is not itself a trusted proxy. RemoteAddr is never
+// rewritten, so the request log keeps the real peer.
+func clientIPMiddleware(trustedProxies []netip.Prefix) func(http.Handler) http.Handler {
+	if len(trustedProxies) == 0 {
+		return middleware.ClientIPFromRemoteAddr
+	}
+
+	prefixes := make([]string, len(trustedProxies))
+	for i, prefix := range trustedProxies {
+		prefixes[i] = prefix.String()
+	}
+	return middleware.ClientIPFromXFF(prefixes...)
 }
 
-// clientIP returns the TCP peer IP captured before chi's RealIP middleware can
-// rewrite RemoteAddr from spoofable forwarded headers.
+// clientIP returns the IP that rate limits key on, as clientIPMiddleware
+// resolved it. When it resolved none (a trusted proxy sent no usable
+// X-Forwarded-For), the peer stands in: the proxy's shared bucket is the
+// safe answer, never a header value.
 func clientIP(r *http.Request) string {
-	if ip, ok := r.Context().Value(clientSocketIPContextKey{}).(string); ok && ip != "" {
+	if ip := middleware.GetClientIP(r.Context()); ip != "" {
 		return ip
 	}
 
