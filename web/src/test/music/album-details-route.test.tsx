@@ -258,7 +258,7 @@ describe("album details content", () => {
     });
   });
 
-  it("renders disc headers, Spotify popularity and the liked state from liked-ids", async () => {
+  it("renders disc headers and the liked state from liked-ids", async () => {
     const twoDiscs = albumDetailsResponse(42, "Blue Record", "The Band", "Alabaster");
     twoDiscs.tracks.push({
       ...albumTrack(421, 42, "Second Disc Opener", 1),
@@ -275,9 +275,6 @@ describe("album details content", () => {
     expect(screen.getByRole("heading", { name: "Track List" })).toBeInTheDocument();
     expect(screen.getByText("Disc 1")).toBeInTheDocument();
     expect(screen.getByText("Disc 2")).toBeInTheDocument();
-    expect(
-      screen.getByRole("group", { name: "Spotify popularity 76 out of 100" }),
-    ).toBeInTheDocument();
 
     // Track 420 is liked in the mock; the other row offers to like.
     expect(

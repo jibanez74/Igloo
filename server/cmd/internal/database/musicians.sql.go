@@ -78,7 +78,7 @@ func (q *Queries) GetAlbumsByMusicianID(ctx context.Context, musicianID int64) (
 
 const getMusicianByID = `-- name: GetMusicianByID :one
 SELECT
-  id, name, sort_name, summary, spotify_id, spotify_popularity, spotify_followers, thumb, thumb_source, created_at, updated_at
+  id, name, sort_name, summary, spotify_id, thumb, thumb_source, created_at, updated_at
 FROM musicians
 WHERE id = ?
 LIMIT 1
@@ -93,8 +93,6 @@ func (q *Queries) GetMusicianByID(ctx context.Context, id int64) (Musician, erro
 		&i.SortName,
 		&i.Summary,
 		&i.SpotifyID,
-		&i.SpotifyPopularity,
-		&i.SpotifyFollowers,
 		&i.Thumb,
 		&i.ThumbSource,
 		&i.CreatedAt,

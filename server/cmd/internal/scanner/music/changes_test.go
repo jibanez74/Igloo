@@ -65,7 +65,12 @@ func TestMusicChangesRunKeepsEnrichmentToTheTouchedAlbum(t *testing.T) {
 		t.Fatalf("a run of changes searched %q; only the touched album may be searched", titles)
 	}
 
-	// A library scan still retries every pending album.
+	// A library scan still retries every pending album whose backoff has
+	// elapsed; Album B has failed twice, so lift its wait first.
+	_, err := s.tx.DB.Exec(`UPDATE music_provider_matches SET retry_after = NULL`)
+	if err != nil {
+		t.Fatal(err)
+	}
 	stub.albumQueries = nil
 	s.scan(root)
 	titles = albumQueryTitles(stub)

@@ -69,7 +69,7 @@ export function unwrapInt(
  * Returns a number or null. Accepts nullable object (Valid + Float64) or plain number.
  *
  * @example
- * const popularity = unwrapFloat(album.spotify_popularity);
+ * const durationSec = unwrapFloat(movie.duration);
  */
 export function unwrapFloat(
   value: NullableFloat64Like | number | null | undefined,

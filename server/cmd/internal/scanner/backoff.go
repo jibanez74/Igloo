@@ -29,10 +29,23 @@ func MissBackoffElapsed(attempts int64, lastAttemptAt sql.NullInt64, now time.Ti
 	if attempts <= 1 || !lastAttemptAt.Valid {
 		return true
 	}
-	shift := min(attempts-2, 8)
-	backoff := min(TmdbMissBackoff<<shift, TmdbMissBackoffMax)
-	eligibleAt := time.Unix(lastAttemptAt.Int64, 0).Add(backoff)
+	eligibleAt := time.Unix(lastAttemptAt.Int64, 0).Add(missBackoff(attempts))
 	return !now.Before(eligibleAt)
+}
+
+// MissRetryAfter is the unix time before which an entity whose attempts-th
+// lookup in a row just failed at lastAttempt is not looked up again, on the
+// schedule MissBackoffElapsed applies; invalid (no wait) after the first.
+func MissRetryAfter(attempts int64, lastAttempt time.Time) sql.NullInt64 {
+	if attempts <= 1 {
+		return sql.NullInt64{}
+	}
+	return sql.NullInt64{Int64: lastAttempt.Add(missBackoff(attempts)).Unix(), Valid: true}
+}
+
+func missBackoff(attempts int64) time.Duration {
+	shift := min(attempts-2, 8)
+	return min(TmdbMissBackoff<<shift, TmdbMissBackoffMax)
 }
 
 // ProviderBreaker stops enrichment dispatch after a fatal provider failure
