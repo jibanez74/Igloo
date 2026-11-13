@@ -66,7 +66,7 @@ func TestMusicChangesRunKeepsEnrichmentToTheTouchedAlbum(t *testing.T) {
 	}
 
 	// A library scan still retries every pending album whose backoff has
-	// elapsed; Album B has failed twice, so lift its wait first.
+	// elapsed; Album A has failed in two scans by now, so lift its wait first.
 	_, err := s.tx.DB.Exec(`UPDATE music_provider_matches SET retry_after = NULL`)
 	if err != nil {
 		t.Fatal(err)

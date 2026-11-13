@@ -74,7 +74,8 @@ func (q *Queries) CountMusicAppleAlbumCandidates(ctx context.Context) (int64, er
 
 const countMusicArtistRetryCandidates = `-- name: CountMusicArtistRetryCandidates :one
 SELECT COUNT(*) FROM musicians e LEFT JOIN music_provider_matches m ON m.entity_id=e.id AND m.entity_type='musician'
-WHERE (m.status IS NULL OR (m.status='failed' AND (m.retry_after IS NULL OR m.retry_after<=unixepoch())) OR EXISTS(SELECT 1 FROM music_spotify_adoptions p WHERE p.musician_id=e.id))
+WHERE (m.status IS NULL OR m.status='failed' OR EXISTS(SELECT 1 FROM music_spotify_adoptions p WHERE p.musician_id=e.id))
+AND (m.retry_after IS NULL OR m.retry_after<=unixepoch())
 AND (EXISTS(SELECT 1 FROM track_musicians t WHERE t.musician_id=e.id)
 OR EXISTS(SELECT 1 FROM music_spotify_adoptions p
     JOIN music_artist_identity ai ON ai.musician_id=p.musician_id
@@ -742,7 +743,8 @@ func (q *Queries) MusicAppleAlbumCandidatesIn(ctx context.Context, ids []int64) 
 
 const musicArtistRetryCandidates = `-- name: MusicArtistRetryCandidates :many
 SELECT e.id, e.name FROM musicians e LEFT JOIN music_provider_matches m ON m.entity_id=e.id AND m.entity_type='musician'
-WHERE e.id>?1 AND (m.status IS NULL OR (m.status='failed' AND (m.retry_after IS NULL OR m.retry_after<=unixepoch())) OR EXISTS(SELECT 1 FROM music_spotify_adoptions p WHERE p.musician_id=e.id))
+WHERE e.id>?1 AND (m.status IS NULL OR m.status='failed' OR EXISTS(SELECT 1 FROM music_spotify_adoptions p WHERE p.musician_id=e.id))
+AND (m.retry_after IS NULL OR m.retry_after<=unixepoch())
 AND (EXISTS(SELECT 1 FROM track_musicians t WHERE t.musician_id=e.id)
 OR EXISTS(SELECT 1 FROM music_spotify_adoptions p
     JOIN music_artist_identity ai ON ai.musician_id=p.musician_id
@@ -781,7 +783,8 @@ func (q *Queries) MusicArtistRetryCandidates(ctx context.Context, afterID int64)
 
 const musicArtistRetryCandidatesIn = `-- name: MusicArtistRetryCandidatesIn :many
 SELECT e.id, e.name FROM musicians e LEFT JOIN music_provider_matches m ON m.entity_id=e.id AND m.entity_type='musician'
-WHERE e.id IN (/*SLICE:ids*/?) AND (m.status IS NULL OR (m.status='failed' AND (m.retry_after IS NULL OR m.retry_after<=unixepoch())) OR EXISTS(SELECT 1 FROM music_spotify_adoptions p WHERE p.musician_id=e.id))
+WHERE e.id IN (/*SLICE:ids*/?) AND (m.status IS NULL OR m.status='failed' OR EXISTS(SELECT 1 FROM music_spotify_adoptions p WHERE p.musician_id=e.id))
+AND (m.retry_after IS NULL OR m.retry_after<=unixepoch())
 AND (EXISTS(SELECT 1 FROM track_musicians t WHERE t.musician_id=e.id)
 OR EXISTS(SELECT 1 FROM music_spotify_adoptions p
     JOIN music_artist_identity ai ON ai.musician_id=p.musician_id
