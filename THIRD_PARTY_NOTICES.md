@@ -16,7 +16,7 @@ Development builds (`externalbin` tag) do not include FFmpeg. They use the `ffmp
 
 ## Inter typeface
 
-The web app ships `web/public/fonts/InterVariable.woff2`.
+The web app ships Inter 4.001's variable font (`InterVariable.woff2`) split into unicode-range subsets, `web/src/assets/fonts/inter-*.woff2`, by `web/scripts/subset-inter.py`. The subsets keep the font's name, copyright and license records. The license is also served beside them at `/fonts/LICENSE.txt`.
 
 - Copyright (c) 2016 The Inter Project Authors (<https://github.com/rsms/inter>)
 - **License:** SIL Open Font License, Version 1.1. The full text is in [web/public/fonts/LICENSE.txt](web/public/fonts/LICENSE.txt).

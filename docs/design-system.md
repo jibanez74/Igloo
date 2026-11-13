@@ -165,14 +165,30 @@ Rules:
 
 - **Font stack**: `Inter, ui-sans-serif, system-ui, -apple-system,
   BlinkMacSystemFont, "Segoe UI", sans-serif`, declared once on `body` in
-  `web/src/assets/boot.css` (with antialiasing). **Inter is self-hosted**: the
-  variable font (`web/public/fonts/InterVariable.woff2`, weights 100–900) is
-  loaded by an `@font-face` in `boot.css` with `font-display: swap` — no CDN,
-  no npm package, and deliberately no `<link rel="preload">` in `index.html`:
-  the 352 KB variable file would compete with the render-blocking CSS, and on
-  a Slow 4G profile that cost ~700 ms of first styled paint for ~170 ms of
-  earlier Inter (both a few milliseconds on a fast link), while Chromium's
-  "preloaded but not used" warning came and went with it. Do not declare
+  `web/src/assets/boot.css` (with antialiasing). **Inter is self-hosted**, no
+  CDN and no npm package: Inter 4.001's variable font (weights 100–900, with
+  its optical-size axis) split by script into unicode-range subsets,
+  `web/src/assets/fonts/inter-{latin,latin-ext,cyrillic,greek,symbols}.woff2`,
+  whose `@font-face` rules (`font-display: swap`) are in `fonts/inter.css`,
+  which `boot.css` imports. `web/scripts/subset-inter.py` makes all of them
+  from the release's `InterVariable.woff2`; regenerate rather than edit.
+  A page fetches a subset only once it shows one of its characters, so the
+  UI's own text costs the 64 KB Latin file, where the whole font was 352 KB,
+  and a title in another script fetches its own. Vite fingerprints the files,
+  so the server caches them as immutable. Two rules follow:
+  - UI strings stay inside the Latin subset: Basic Latin, Latin-1, General
+    Punctuation (dashes, curly quotes, `…`, `•`), the arrows `←↑→↓`, `−`,
+    `≤`, `≥`, `€` and `™`. Any other character makes every page that shows it
+    fetch a second subset; add its range to the script's Latin list first.
+  - The subsets keep the OpenType features browsers apply by default plus
+    `tnum` (`tabular-nums`). Turning on another one (`slashed-zero`,
+    `font-feature-settings`) needs it added to the script's `FEATURES` and
+    the subsets regenerated, or it silently does nothing.
+
+  There is deliberately no `<link rel="preload">` in `index.html`: measured
+  with the full 352 KB file on a Slow 4G profile, a preload competed with the
+  render-blocking CSS and cost ~700 ms of first styled paint for ~170 ms of
+  earlier Inter, and the subsets' names are fingerprinted. Do not declare
   other font families in components.
 - **Scale**: Tailwind's default type scale as utility literals; there are no
   custom font-size tokens. In practice: `text-sm`/`text-xs` for body and
