@@ -66,19 +66,19 @@ export default function PlaylistCard({ playlist }: PlaylistCardProps) {
   const isCollage = artUrls.length === COLLAGE_SIZE;
 
   // The visible line joins with " · ", the accessible name with commas; both
-  // leave out a zero duration rather than read "0s". A playlist shared with
-  // the reader names its owner first.
-  const details = [
-    ...(is_owner ? [] : [`By ${playlist.owner.name}`]),
-    ...(playlist.content_type === "track"
+  // leave out a zero duration rather than read "0s".
+  const details =
+    playlist.content_type === "track"
       ? [
           pluralize(playlist.track_count, "track"),
           ...(playlist.total_duration > 0
             ? [formatDuration(playlist.total_duration)]
             : []),
         ]
-      : [pluralize(playlist.movie_count, "movie")]),
-  ];
+      : [pluralize(playlist.movie_count, "movie")];
+  // A playlist shared with the reader names its owner on a line of its own,
+  // so a long name never pushes the counts out of view.
+  const ownerLine = is_owner ? null : `By ${playlist.owner.name}`;
 
   return (
     <article className={cn(CARD_SURFACE_CLASS, "min-w-0 p-4")}>
@@ -86,7 +86,7 @@ export default function PlaylistCard({ playlist }: PlaylistCardProps) {
         to={to}
         params={{ id: id.toString() }}
         className={cn("block", FOCUS_VISIBLE_RING_CLASS, "focus-visible:ring-inset")}
-        aria-label={[name, ...details].join(", ")}
+        aria-label={[name, ...(ownerLine ? [ownerLine] : []), ...details].join(", ")}
       >
         <div className="relative mx-auto mb-3 aspect-square w-full overflow-hidden rounded-lg bg-muted">
           {showArt && isCollage ? (
@@ -138,7 +138,10 @@ export default function PlaylistCard({ playlist }: PlaylistCardProps) {
         </div>
         <div className="text-center">
           <h3 className="truncate text-sm font-semibold text-foreground">{name}</h3>
-          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+          {ownerLine && (
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">{ownerLine}</p>
+          )}
+          <p className="mt-0.5 text-xs text-muted-foreground">
             {details.join(" · ")}
           </p>
         </div>
