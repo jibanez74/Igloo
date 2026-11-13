@@ -1,6 +1,6 @@
 # Movie probe fixtures
 
-Synthetic fixtures generated with the repository's Jellyfin FFmpeg `7.1.4-Jellyfin` Linux x64 payload. No third-party media is included.
+Synthetic fixtures, first generated with the Jellyfin FFmpeg `7.1.4-Jellyfin` Linux x64 payload the repository pinned then. No third-party media is included. The commands below also run with Igloo's own FFmpeg build, the payload pinned now (checked on 2026-11-13).
 
 - `moving.avi`: 0.6-second moving MJPEG video at absolute stream index 1, with PCM audio at index 0.
 - `artwork-with-video.mp4`: H.264 video and AAC audio, plus attached MJPEG artwork. Only the moving video is persisted as movie video.

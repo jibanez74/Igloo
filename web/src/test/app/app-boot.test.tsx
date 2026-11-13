@@ -1,4 +1,3 @@
-import type { PropsWithChildren } from "react";
 import { act, render, screen } from "@testing-library/react";
 import { QueryClient } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -8,10 +7,6 @@ import AppLoadingScreen from "@/components/app/AppLoadingScreen";
 
 vi.mock("@/App", () => ({
   default: () => <div data-testid="app-shell" />,
-}));
-
-vi.mock("@/context/AudioPlayerContext", () => ({
-  AudioPlayerProvider: ({ children }: PropsWithChildren) => children,
 }));
 
 vi.mock("sonner", () => ({

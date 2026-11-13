@@ -3,7 +3,6 @@ import type { RefObject } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
-  AlertCircle,
   ArrowLeft,
   FastForward,
   Maximize,
@@ -41,7 +40,6 @@ import { useHlsSessionRecovery } from "@/hooks/useHlsSessionRecovery";
 import { cn } from "@/lib/utils";
 import DeleteWatchRoomDialog from "@/components/watch-room/DeleteWatchRoomDialog";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
 import {
   PlayerIconButton,
   PlayerPlayButton,
@@ -56,6 +54,7 @@ import { useVideoPlaybackKeyboard } from "@/hooks/useVideoPlaybackKeyboard";
 import { useShortcutHints } from "@/hooks/useShortcutHints";
 import { useSuspendMusicPlayback } from "@/hooks/useSuspendMusicPlayback";
 import { useWatchRoomConnection } from "./useWatchRoomConnection";
+import { WatchRoomLoading, WatchRoomUnavailable } from "./WatchRoomStatus";
 import type { WatchRoomDetailType, WatchRoomMemberType } from "@/types";
 
 type WatchRoomPageProps = {
@@ -416,55 +415,6 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
           restoreFocusRef={deleteButtonRef}
         />
       ) : null}
-    </div>
-  );
-}
-
-export function WatchRoomLoading() {
-  return (
-    <div className="flex min-h-[60vh] items-center justify-center px-4">
-      <div className="text-center">
-        <Spinner size="2xl" tone="primary" className="mx-auto mb-4" />
-        <p className="text-lg font-medium text-foreground">
-          Loading watch room...
-        </p>
-      </div>
-    </div>
-  );
-}
-
-type WatchRoomUnavailableProps = {
-  message: string;
-  onBackHome: () => void;
-};
-
-export function WatchRoomUnavailable({
-  message,
-  onBackHome,
-}: WatchRoomUnavailableProps) {
-  return (
-    <div className="flex min-h-[60vh] items-center justify-center px-4">
-      <div className="max-w-md text-center">
-        <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-destructive/10">
-          <AlertCircle
-            className="size-10 text-destructive"
-            aria-hidden="true"
-          />
-        </div>
-        <h1 className="mb-2 text-xl font-semibold text-foreground">
-          Watch room unavailable
-        </h1>
-        <p className="mb-6 text-muted-foreground">{message}</p>
-        <Button
-          size="xl"
-          shape="pill"
-          onClick={onBackHome}
-          className="font-semibold shadow-glow"
-        >
-          <ArrowLeft className="size-5" aria-hidden="true" />
-          Back home
-        </Button>
-      </div>
     </div>
   );
 }

@@ -32,9 +32,6 @@
       "hls.js/light": [
         "./src/types/hls-light.d.ts"
       ],
-      "@/shared/*": [
-        "../shared/*"
-      ],
       "@/*": [
         "./src/*"
       ]

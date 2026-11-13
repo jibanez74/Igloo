@@ -1,3 +1,4 @@
+import type { ComponentProps } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Film, Play } from "lucide-react";
@@ -32,7 +33,6 @@ import { cn } from "@/lib/utils";
 import type {
   CrewMemberType,
   LibraryMovieCrewType,
-  LibraryMovieExtraVideoType,
   LibraryMovieProductionCompanyType,
   MovieDetailsType,
 } from "@/types";
@@ -77,10 +77,15 @@ function tmdbCrewToLibraryCrew(
   }));
 }
 
-function tmdbYouTubeResultsToLibraryExtras(
+// TMDB's own videos, not library extras: their type and site are TMDB's
+// strings ("Trailer", "YouTube"), which the library contract narrows to its
+// own enums. The extras section reads them case-insensitively either way.
+type TheaterExtraVideo = ComponentProps<typeof ExtraVideosSection>["videos"][number];
+
+function tmdbYouTubeResultsToExtras(
   results: NonNullable<MovieDetailsType["videos"]["results"]>,
-): LibraryMovieExtraVideoType[] {
-  const mapped: LibraryMovieExtraVideoType[] = [];
+): TheaterExtraVideo[] {
+  const mapped: TheaterExtraVideo[] = [];
   let id = 1;
   for (const v of results) {
     if (v.site !== "YouTube") {
@@ -168,7 +173,7 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
     character: c.character,
     profilePath: c.profile_path ?? null,
   }));
-  const youtubeExtraVideos = tmdbYouTubeResultsToLibraryExtras(
+  const youtubeExtraVideos = tmdbYouTubeResultsToExtras(
     movie.videos?.results ?? [],
   );
   const productionCompanies = tmdbProductionCompaniesToLibrary(

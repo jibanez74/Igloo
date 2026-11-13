@@ -1,8 +1,8 @@
 # Known issues
 
 Problems found and deliberately left unfixed, each with enough detail to act on it without
-rediscovering it. The Playback and TV entries were still open on 2026-11-03; the Web client
-entries on 2026-11-13 (dev 67011cca).
+rediscovering it. The Playback and TV entries were still open on 2026-11-03, the Server entry
+on 2026-11-13.
 
 When a fix lands, delete its entry in the same change. When adding one, put it under the section
 it belongs to and cover:
@@ -33,61 +33,21 @@ Left unfixed on 2026-11-03: no library file reaches it, and the fix would delay 
 Dolby resume by the measurement (0.05–0.3 s). Reopen if a library sweep finds audio starting more
 than 4 s after video, or a TV resume fails with an `init.mp4` that has no `dec3`.
 
-## Web client
+## Server
 
-Recorded on 2026-11-13 from the web audit of fc27fddc and the review of PRs #267–#270, which
-fixed the audit's bugs (BUG-01..07, OBS-01/02) and left these.
+### Behind a reverse proxy, every client shares one rate-limit bucket
 
-### Editing a playlist while its queue loads can cut the queue short
-
-Found in council review of the music start-race fix (2026-11-13), not reproduced. Play all or
-Shuffle all on a playlist plays the loaded rows and then drains the remaining pages
-(`loadRemainingTracks` in `web/src/routes/_auth/music/playlist.$id.tsx`). If the owner removes or
-reorders a track while that drain runs, the mutation's `invalidateQueries` on
-`[PLAYLIST_TRACKS_KEY, id]` refetches the active query, and a refetch cancels the drain's page in
-flight. That round adds no page, the page-count guard ends the loop, and the queue keeps only the
-pages loaded so far, with an "Only N of M tracks could be loaded" toast for a load that did not
-fail. Only an edit inside the few seconds a drain runs does this. Reproduce by holding a later
-page, removing a track, then releasing it. Fix: when a round adds no page while the result is
-still fetching (a refetch took it over), wait for that and try the page again instead of
-stopping.
-
-### The musician page mounts a row for every track
-
-`web/src/routes/_auth/music/musician.$id.tsx` maps the whole musician-tracks response into
-`TrackItem` rows, so a large discography builds every row up front. The main tracks view and long
-playlists use `useWindowVirtualizer`, each with its own copy of the setup; a shared window-virtualized
-track list (scroll margin, list roles with `aria-posinset`/`aria-setsize`, memoized rows) would
-serve all three. Measure a large fixture before and after (audit PERF-02).
-
-### The signed-out login page loads music UI and the full font
-
-`AudioPlayerProvider` sits above the router (`web/src/AppBoot.tsx`) and imports the player UI
-eagerly, so `/login` loads the audio-context and volume chunks, and `boot.css` loads the full
-`InterVariable.woff2` (352 kB of the ~698 kB measured on a cold production `/login`). Options:
-defer the expanded player UI while keeping the provider, or a subset font if the design system's
-glyph coverage allows. Set a byte budget from a throttled measurement first (audit PERF-01).
-
-### WebKit video-only fullscreen can stay "on" if the video is torn down inside it
-
-`useVideoFullscreen` listens for `webkitbeginfullscreen`/`webkitendfullscreen` on the document in
-the capture phase. If the `<video>` unmounts while in WebKit video-only fullscreen (a playback
-error replacing the player while the page stays), the end event may fire on a detached node, never
-reach the document, and leave `fullscreenModeRef` at `"webkitVideo"`. Not reproduced: it depends
-on iOS Safari behavior. Fix if seen: in `toggleFullscreen`, treat `"webkitVideo"` with no video, or
-one not `webkitDisplayingFullscreen`, as `"none"`.
-
-### Some movie wire types are handwritten copies of OpenAPI schemas
-
-`web/src/types/movies.ts` declares `VideoStreamType`, `AudioStreamType`, `SubtitleType`,
-`TmdbSearchResultType`, `TmdbSearchMoviesRequest` and `UpdateMovieMetadataRequest` by hand,
-though `openapi.gen.ts` has named schemas for each (`VideoStream`, `AudioStream`, `Subtitle`,
-`TmdbSearchResult`, …), against `web/AGENTS.md`'s alias-only rule. `check:openapi` cannot catch
-drift in these copies. Differences to handle when aliasing: `TmdbSearchMoviesRequest.title` is
-optional in the schema, `UpdateMovieMetadataRequest` fields are `?: T | null` there, and
-`ExtraVideo` narrows `type`/`site` to enums. Likewise `PlaylistData` (`PlaylistFormDialog.tsx`)
-and `OwnedPlaylist` (`PlaylistOwnerActions.tsx`) repeat one editable-playlist shape that could be
-one `Pick<components["schemas"]["Playlist"], …>` in `lib/playlist-kinds.ts` (audit DRY-01/02).
+The auth limits (`AuthLimiter` in `server/cmd/api/rate_limit.go`: 10 logins per 5 minutes, 10
+Quick Connect starts and 60 redemptions per minute) key on `clientIP`, the TCP peer, which
+`preserveClientSocketIP` captures before chi's `RealIP` rewrites `RemoteAddr` from
+`X-Forwarded-For`: a client can send that header itself, so trusting it would let anyone
+pick their own bucket. Behind a reverse proxy, though, every request's peer is the proxy, so
+one person mistyping a password ten times locks everyone out of signing in for five minutes.
+Seen in review on 2026-11-09, not reproduced. Fix: a startup setting naming the trusted
+proxies (a `TRUSTED_PROXIES` list of addresses or CIDRs, empty by default), with `clientIP`
+taking the right-most `X-Forwarded-For` address that is not a trusted proxy only when the peer
+is one. The watch-room WebSocket's Origin check, which had the same blind spot for
+TLS-terminating proxies, was fixed on 2026-11-13.
 
 ## TV app (IglooTV)
 

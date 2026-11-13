@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   InfiniteQueryObserver,
@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import TrackItem from "@/components/music/TrackItem";
+import VirtualTrackList from "@/components/music/VirtualTrackList";
 import PlaylistOwnerActions from "@/components/shared/PlaylistOwnerActions";
 import DetailSkipLinks from "@/components/shared/DetailSkipLinks";
 import MusicDetailArt from "@/components/music/MusicDetailArt";
@@ -40,22 +41,20 @@ import { removeTrackFromPlaylist, reorderPlaylistTracks } from "@/lib/api";
 import { convertToAudioTrack, dedupeById } from "@/lib/audio-utils";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useTrackPlaybackMatcher } from "@/hooks/useTrackPlaybackMatcher";
-import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import {
   useVirtualizedInfiniteLoader,
   type FetchNextPage,
 } from "@/hooks/useVirtualizedInfiniteLoader";
-import { useWindowScrollMargin } from "@/hooks/useWindowScrollMargin";
 import { formatDuration, pluralize } from "@/lib/format";
 import {
   DETAIL_PAGE_CONTENT_ENTER_CLASS,
   DETAIL_RAIL_HEADING_CLASS,
+  DETAIL_TRACK_LIST_CONTAINER_CLASS,
   FOCUS_VISIBLE_RING_CLASS,
   MUSIC_DETAIL_ACTIONS_CLASS,
   MUSIC_DETAIL_HERO_ROW_CLASS,
   PLAYLIST_TRACKS_KEY,
   PLAYLISTS_KEY,
-  VIRTUAL_LIST_TRACK_HEIGHT,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { apiErrorMessage } from "@/lib/is-api-failure";
@@ -86,6 +85,25 @@ function playlistTrackToPlayableData(
     musician_name: track.musician_name,
     album_title: track.album_title,
   };
+}
+
+// The observer's result once its query has no fetch in flight.
+function whenIdle<TResult extends { isFetching: boolean }>(observer: {
+  getCurrentResult: () => TResult;
+  subscribe: (listener: (result: TResult) => void) => () => void;
+}): Promise<TResult> {
+  return new Promise((resolve) => {
+    const current = observer.getCurrentResult();
+    if (!current.isFetching) {
+      resolve(current);
+      return;
+    }
+    const unsubscribe = observer.subscribe((result) => {
+      if (result.isFetching) return;
+      unsubscribe();
+      resolve(result);
+    });
+  });
 }
 
 type PlaylistHeadData = {
@@ -289,12 +307,20 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
   // error; useVirtualizedInfiniteLoader passes throwOnError to get a
   // rejection instead), so a failed page shows up as isFetchNextPageError on
   // that result, which ends the loop. A 5xx page resolves only after its
-  // retries. The page-count guard stops the loop if a round ever adds no page
-  // for another reason.
+  // retries.
   //
-  // isWanted is asked before every page after the first: once the queue these
-  // pages are for has been replaced, stopped or signed out of, nothing will
-  // use them, so the drain ends there instead of fetching the rest.
+  // An edit while the drain runs (a removal or a reorder) refetches the
+  // tracks, and that refetch cancels the page in flight: fetchNextPage then
+  // resolves with the pages the refetch reloaded, no more than before. That
+  // round changed the data, so the loop goes on from what the refetch left.
+  // A round that adds no page and changes nothing ends it, so the loop cannot
+  // spin. Before each page the drain waits out a fetch someone else started
+  // (that refetch, or the list loading its own next page), which asking for
+  // a page now would cancel.
+  //
+  // isWanted is asked before every page: once the queue these pages are for
+  // has been replaced, stopped or signed out of, nothing will use them, so
+  // the drain ends there instead of fetching the rest.
   //
   // Leaving the page must not end it: the queue still plays and still needs
   // them. The page's own observer goes away on unmount, and a query left with
@@ -309,25 +335,31 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
     });
     const unsubscribe = drain.subscribe(() => {});
 
-    let result = await drain.fetchNextPage();
-    let pageCount = result.data?.pages.length ?? 0;
+    let result = drain.getCurrentResult();
+    for (;;) {
+      result = await whenIdle(drain);
+      if (!result.hasNextPage || !isWanted()) break;
 
-    while (
-      result.hasNextPage &&
-      !result.isFetchNextPageError &&
-      isWanted()
-    ) {
+      const before = result;
       result = await drain.fetchNextPage();
+      if (result.isFetchNextPageError) break;
 
-      const nextCount = result.data?.pages.length ?? 0;
-      if (nextCount <= pageCount) break;
-      pageCount = nextCount;
+      const added =
+        (result.data?.pages.length ?? 0) > (before.data?.pages.length ?? 0);
+      if (!added && result.dataUpdatedAt === before.dataUpdatedAt) break;
     }
 
     // Not in a finally: fetchNextPage without throwOnError never rejects.
     unsubscribe();
 
-    return result.data?.pages.flatMap((page) => page.tracks) ?? [];
+    const pages = result.data?.pages ?? [];
+    return {
+      tracks: pages.flatMap((page) => page.tracks),
+      // The server's count as of the last page: an edit during the drain
+      // changes it from the track_count this page was rendered with.
+      total: pages.at(-1)?.total ?? track_count,
+      complete: result.data !== undefined && !result.hasNextPage,
+    };
   };
 
   // playQueue/shuffleQueue instead of playTrack: these header buttons are
@@ -357,7 +389,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
     const isLive = () => audioPlayer.isQueueLive(queueId);
 
     setIsLoadingRest(true);
-    const tracks = await loadRemainingTracks(isLive);
+    const { tracks, total, complete } = await loadRemainingTracks(isLive);
     setIsLoadingRest(false);
 
     // The reader moved on while the pages loaded: extendQueue would drop these
@@ -373,10 +405,10 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
       { reshuffleTail: shuffle },
     );
 
-    if (tracks.length < track_count) {
+    if (!complete) {
       showActionFailed(
         action,
-        `Only ${tracks.length} of ${track_count} tracks could be loaded.`,
+        `Only ${tracks.length} of ${total} tracks could be loaded.`,
       );
     }
   };
@@ -685,10 +717,7 @@ function VirtualizedPlaylistTracksList({
   onPlayTrack,
   onRemoveTrack,
 }: VirtualizedPlaylistTracksListProps) {
-  "use no memo";
-
   const matchTrackPlayback = useTrackPlaybackMatcher();
-  const { listRef, scrollMargin } = useWindowScrollMargin<HTMLDivElement>();
 
   const onChange = useVirtualizedInfiniteLoader({
     itemCount: tracks.length,
@@ -698,81 +727,35 @@ function VirtualizedPlaylistTracksList({
     scopeKey: playlistId,
   });
 
-  const virtualizer = useWindowVirtualizer({
-    count: tracks.length,
-    estimateSize: () => VIRTUAL_LIST_TRACK_HEIGHT,
-    overscan: 5,
-    scrollMargin,
-    onChange,
-  });
-
-  const renderedVirtualItems = virtualizer.getVirtualItems();
-
-  useEffect(() => {
-    virtualizer.measure();
-  }, [tracks.length, scrollMargin, virtualizer]);
-
-  // Only a window of rows is mounted, so each row says where it sits in the
-  // whole playlist, loaded or not (the main tracks view does the same). A
-  // removal can land before track_count catches up, hence the max.
-  const setSize = Math.max(totalTracks, tracks.length);
-
   return (
-    <div
-      ref={listRef}
-      className="overflow-hidden rounded-xl border border-primary/10 bg-muted/30"
-    >
-      {/* The sizing box is the list itself, so the rows are its direct items
-          and the load-more footer below stays outside it. Tailwind's preflight
-          drops <ul> semantics in Safari/VoiceOver; the role keeps them. */}
-      {/* react-doctor-disable-next-line react-doctor/prefer-tag-over-role */}
-      <div
-        role="list"
-        aria-label="Playlist tracks"
-        style={{
-          height: `${virtualizer.getTotalSize()}px`,
-          width: "100%",
-          position: "relative",
-        }}
-      >
-        {renderedVirtualItems.map((virtualRow) => {
-          const track = tracks[virtualRow.index];
-          if (!track) return null;
-
-          return (
-            <div
-              key={virtualRow.key}
-              role="listitem"
-              aria-posinset={virtualRow.index + 1}
-              aria-setsize={setSize}
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                height: `${virtualRow.size}px`,
-                transform: `translateY(${virtualRow.start - scrollMargin}px)`,
-              }}
-            >
-              <TrackItem
-                {...trackRowProps(track)}
-                variant="playlist"
-                {...matchTrackPlayback(track.id)}
-                onPlay={() => onPlayTrack(track)}
-                showActionsMenu
-                canRemoveFromPlaylist={canEdit}
-                onRemoveFromPlaylist={() => onRemoveTrack(track.id)}
-              />
-            </div>
-          );
-        })}
-      </div>
-
-      <InfiniteListFooter
-        isFetchingNextPage={isFetchingNextPage}
-        loadMoreError={loadMoreError}
-        onRetry={() => void fetchNextPage()}
-      />
-    </div>
+    <VirtualTrackList
+      className={DETAIL_TRACK_LIST_CONTAINER_CLASS}
+      label="Playlist tracks"
+      count={tracks.length}
+      // A removal can land before track_count catches up, hence the max.
+      setSize={Math.max(totalTracks, tracks.length)}
+      onChange={onChange}
+      renderRow={(index) => {
+        const track = tracks[index];
+        return (
+          <TrackItem
+            {...trackRowProps(track)}
+            variant="playlist"
+            {...matchTrackPlayback(track.id)}
+            onPlay={() => onPlayTrack(track)}
+            showActionsMenu
+            canRemoveFromPlaylist={canEdit}
+            onRemoveFromPlaylist={() => onRemoveTrack(track.id)}
+          />
+        );
+      }}
+      footer={
+        <InfiniteListFooter
+          isFetchingNextPage={isFetchingNextPage}
+          loadMoreError={loadMoreError}
+          onRetry={() => void fetchNextPage()}
+        />
+      }
+    />
   );
 }

@@ -7,22 +7,18 @@ import ConfirmDialog from "@/components/shared/ConfirmDialog";
 import PlaylistFormDialog from "@/components/shared/PlaylistFormDialog";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { PLAYLIST_KINDS, type PlaylistKind } from "@/lib/playlist-kinds";
+import {
+  PLAYLIST_KINDS,
+  type EditablePlaylist,
+  type PlaylistKind,
+} from "@/lib/playlist-kinds";
 import { showActionFailed, showDeleted } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
-import type { ApiResponseType, NullableString } from "@/types";
-
-type OwnedPlaylist = {
-  id: number;
-  name: string;
-  description: NullableString;
-  cover_image: NullableString;
-  is_public: boolean;
-};
+import type { ApiResponseType } from "@/types";
 
 type PlaylistOwnerActionsProps = {
   kind: PlaylistKind;
-  playlist: OwnedPlaylist;
+  playlist: EditablePlaylist;
   className?: string;
 };
 

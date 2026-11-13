@@ -1,7 +1,8 @@
+import type { ReactNode } from "react";
 import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AudioPlayerNowPlayingContext } from "@/context/AudioPlayerContext";
+import { AudioPlayerNowPlayingContext } from "@/context/audio-player-contexts";
 import {
   GENERAL_SETTINGS_KEY,
   MOTION_CONTROL_THUMB_TRANSFORM_CLASS,
@@ -15,6 +16,12 @@ import { jsonResponse, requestURL } from "../helpers/api";
 import { restoreMatchMedia, expectNoClass } from "../helpers/dom";
 import { authUserData, playbackSettings } from "../helpers/fixtures";
 import { renderRoute } from "../helpers/render-route";
+
+// The shell mounts the real player, whose state would shadow the wrapper's
+// now-playing slice below; these tests only need the shell to see one.
+vi.mock("@/context/AudioPlayerContext", () => ({
+  AudioPlayerProvider: ({ children }: { children: ReactNode }) => children,
+}));
 
 const originalStartViewTransition = (document as Document & {
   startViewTransition?: unknown;

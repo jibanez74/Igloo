@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -162,6 +163,40 @@ func TestListNotifications_AdminSeesQueueRequesterDoesNot(t *testing.T) {
 	}
 	if len(requesterResp.Data.Notifications) != 0 || requesterResp.Data.UnreadCount != 0 {
 		t.Fatalf("requester saw admin queue: %d notifications, unread %d", len(requesterResp.Data.Notifications), requesterResp.Data.UnreadCount)
+	}
+}
+
+// created_at has one-second resolution, so requests filed in the same second
+// tie; the newest of them (the highest id) still comes first.
+func TestListNotifications_NewestFirstWithinOneSecond(t *testing.T) {
+	app := setupSessionTestApp(t)
+	admin := createTestUser(t, app, "Admin", "admin@example.com", true)
+	requester := createTestUser(t, app, "Requester", "requester@example.com", false)
+
+	for _, message := range []string{"first", "second", "third"} {
+		_, err := app.DB.ExecContext(context.Background(),
+			"INSERT INTO notifications (created_by_user_id, title, message, created_at) VALUES (?, ?, ?, ?)",
+			requester.ID, notificationTitleMovieRequest, message, "2026-11-13 12:00:00")
+		if err != nil {
+			t.Fatalf("seed %s: %v", message, err)
+		}
+	}
+
+	w := httptest.NewRecorder()
+	authenticatedRouter(t, app, admin.ID).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/notifications", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("list status = %d, want 200, body = %s", w.Code, w.Body.String())
+	}
+	var resp notificationListResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	var got []string
+	for _, notification := range resp.Data.Notifications {
+		got = append(got, notification.Message)
+	}
+	if want := []string{"third", "second", "first"}; !slices.Equal(got, want) {
+		t.Fatalf("order = %v, want %v", got, want)
 	}
 }
 

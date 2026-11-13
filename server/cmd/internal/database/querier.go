@@ -575,7 +575,9 @@ type Querier interface {
 	ListNetworkArtworkInFolders(ctx context.Context, keys string) ([]ListNetworkArtworkInFoldersRow, error)
 	// The shared admin request queue, newest first. Visibility is admin-only and
 	// enforced by the handlers; user_id here only selects the viewer's read state
-	// from notification_reads.
+	// from notification_reads. created_at has one-second resolution, so the id
+	// orders requests filed in the same second; idx_notifications_created_at is
+	// ascending so a backward scan of it serves both terms.
 	ListNotificationsForUser(ctx context.Context, arg ListNotificationsForUserParams) ([]ListNotificationsForUserRow, error)
 	ListPendingAlbumArtwork(ctx context.Context, arg ListPendingAlbumArtworkParams) ([]ListPendingAlbumArtworkRow, error)
 	ListPendingArtistArtwork(ctx context.Context, arg ListPendingArtistArtworkParams) ([]ListPendingArtistArtworkRow, error)

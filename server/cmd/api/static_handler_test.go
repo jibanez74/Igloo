@@ -347,6 +347,8 @@ func TestServeStaticFiles_RejectsTraversalDirectoriesAndMissingFiles(t *testing.
 		{"parent traversal", "/api/static/../igloo.db", http.StatusForbidden, "Forbidden"},
 		{"directory", "/api/static/posters", http.StatusForbidden, "Forbidden"},
 		{"missing file", "/api/static/posters/two.png", http.StatusNotFound, "Not Found"},
+		// stat reports ENOTDIR, not ENOENT, for a path that runs through a file.
+		{"path through a file", "/api/static/posters/one.png/two.png", http.StatusNotFound, "Not Found"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

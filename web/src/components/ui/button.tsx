@@ -111,6 +111,11 @@ function Button({
       data-size={size}
       data-shape={shape}
       className={buttonVariants({ variant, size, shape, className })}
+      // A native button submits the form around it unless told otherwise,
+      // so a Button that only acts (an invitee chip's remove, rendered
+      // inside the create-room form) submitted it. A submit button says
+      // type="submit"; asChild renders the child's own element.
+      {...(asChild ? {} : { type: "button" as const })}
       {...props}
     />
   )

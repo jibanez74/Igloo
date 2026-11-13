@@ -1,5 +1,5 @@
 import { useContext } from "react";
-import { AudioPlayerNowPlayingContext } from "@/context/AudioPlayerContext";
+import { AudioPlayerNowPlayingContext } from "@/context/audio-player-contexts";
 
 // Whether the docked mini bar is on screen, so app chrome can leave room for
 // it. Reads the now-playing context (not the queue) so growing an endless

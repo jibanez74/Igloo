@@ -5,6 +5,7 @@ import { authUserQueryOpts } from "@/lib/query-opts";
 import { ApiFailureError } from "@/lib/is-api-failure";
 import { useSignOutOnSessionExpiry } from "@/hooks/useEndSession";
 import AppShell from "@/components/app/AppShell";
+import { AudioPlayerProvider } from "@/context/AudioPlayerContext";
 import AppLoadingScreen, { AppLoadError } from "@/components/app/AppLoadingScreen";
 
 export const Route = createFileRoute("/_auth")({
@@ -41,7 +42,19 @@ export const Route = createFileRoute("/_auth")({
   component: AuthLayout,
 });
 
+// The music player lives with the shell, not above the router: the login
+// page never loads it, and signing out (which leaves the shell) takes it down
+// with the session. It wraps everything here so ending a session from the
+// shell (useSignOutOnSessionExpiry) can stop it first.
 function AuthLayout() {
+  return (
+    <AudioPlayerProvider>
+      <AuthShell />
+    </AudioPlayerProvider>
+  );
+}
+
+function AuthShell() {
   useSignOutOnSessionExpiry();
   const { data } = useQuery(authUserQueryOpts());
   const librariesVisible = useLocation({ select: location => location.pathname.replace(/\/+$/, "") === "/settings/libraries" });

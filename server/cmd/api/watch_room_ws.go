@@ -469,13 +469,12 @@ func isAllowedWatchRoomOrigin(r *http.Request) bool {
 		return false
 	}
 
-	expectedScheme := "http"
-	if r.TLS != nil {
-		expectedScheme = "https"
-	}
-
-	sameOrigin := originURL.Host == r.Host && sameWatchRoomOrigin(originURL, expectedScheme, r.Host)
-	if sameOrigin {
+	// The page's own host, over either web scheme. Behind a TLS-terminating
+	// proxy that keeps the Host header the page is https while this hop is
+	// http, so the scheme cannot be matched against r.TLS; a cross-site page
+	// cannot put this host in its Origin either way.
+	if sameWatchRoomOrigin(originURL, "https", r.Host) ||
+		sameWatchRoomOrigin(originURL, "http", r.Host) {
 		return true
 	}
 

@@ -419,6 +419,31 @@ describe("music playlist route", () => {
       expect(showActionFailedMock).not.toHaveBeenCalled();
     });
 
+    // An edit while the rest loads (here a removal) refetches the tracks,
+    // which cancels the page in flight. The drain waits for that refetch and
+    // asks for the page again: the whole playlist is queued, and no shortfall
+    // toast is shown for a load that never failed. Edited while page 3 is in
+    // flight, inside the loop: the refetch hands back the two pages it
+    // reloaded, which used to read as a round that added no page.
+    it("keeps loading the rest when an edit refetches the tracks", async () => {
+      audioPlayerActionsMock.playQueue.mockReturnValueOnce(7);
+      const { releasePage, requested } = mockPagedPlaylist();
+
+      const { queryClient } = await startPlayAll();
+      releasePage(2);
+      await waitFor(() => expect(requested(3)).toBe(true));
+      // What a removal's or a reorder's onSuccess does.
+      await queryClient.invalidateQueries({ queryKey: [PLAYLIST_TRACKS_KEY, 21] });
+      releasePage(3);
+
+      await waitFor(() => {
+        expect(audioPlayerActionsMock.extendQueue).toHaveBeenCalledTimes(1);
+      });
+      const [queued] = audioPlayerActionsMock.extendQueue.mock.calls[0];
+      expect(queued.map((track) => track.id)).toEqual([1, 2, 3, 4]);
+      expect(showActionFailedMock).not.toHaveBeenCalled();
+    });
+
     // Unmounted so only the drain asks for pages: on a mounted page the list's
     // own loader fetches every visible page too, which would hide whether the
     // drain stopped.

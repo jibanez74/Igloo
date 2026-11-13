@@ -1,13 +1,8 @@
-/* Self-hosted InterVariable (docs/design-system.md §1.3): one variable file
-   covering weights 100–900, served from public/ so this plain stylesheet
-   resolves it identically in dev and production builds. */
-@font-face {
-  font-family: Inter;
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-  src: url("/fonts/InterVariable.woff2") format("woff2");
-}
+/* Self-hosted Inter (docs/design-system.md §1.3): the variable font
+   (weights 100–900) split into unicode-range subsets, so a page fetches only
+   the scripts it shows. Vite fingerprints the files under assets/, which the
+   server caches as immutable. */
+@import "./fonts/inter.css";
 
 html,
 body,

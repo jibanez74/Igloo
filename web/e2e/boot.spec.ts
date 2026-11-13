@@ -52,6 +52,33 @@ test.describe("production startup", () => {
     });
   }
 
+  // The signed-out page loads only what it shows (docs/design-system.md
+  // §1.3): the Latin face of Inter, not the subsets for other scripts, and
+  // none of the music player, which loads with the signed-in shell. The
+  // player's now-playing announcement marks its code.
+  test("loads the Latin font face and no player on /login", async ({ page }) => {
+    const fonts: string[] = [];
+    const scripts: Promise<string>[] = [];
+    page.on("response", response => {
+      const path = new URL(response.url()).pathname;
+      if (path.endsWith(".woff2")) fonts.push(path);
+      if (path.endsWith(".js")) scripts.push(response.text());
+    });
+
+    await page.goto("/login", { waitUntil: "networkidle" });
+    await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
+    expect(await page.evaluate(async () => {
+      await document.fonts.ready;
+      return document.fonts.check("16px Inter");
+    })).toBe(true);
+
+    expect(fonts).toEqual([expect.stringMatching(/^\/assets\/inter-latin-[\w-]+\.woff2$/)]);
+    const playerScripts = (await Promise.all(scripts)).filter(body =>
+      body.includes("Now playing: "),
+    );
+    expect(playerScripts).toEqual([]);
+  });
+
   // The component gallery is a development page (src/routes/gallery.tsx). Its
   // route stays in the build so the route tree is the same in every mode, but
   // it must send a visitor home, here on to the sign-in page, and never render.

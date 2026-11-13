@@ -1,7 +1,7 @@
 import { useContext, useEffect, useEffectEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation, useRouter } from "@tanstack/react-router";
-import { AudioPlayerActionsContext } from "@/context/AudioPlayerContext";
+import { AudioPlayerActionsContext } from "@/context/audio-player-contexts";
 import { onSessionExpired } from "@/lib/api";
 import {
   beginEndingSession,

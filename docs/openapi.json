@@ -4443,7 +4443,7 @@
             }
           }
         },
-        "description": "Requires an authenticated room member before upgrading. Invalid room IDs, authentication failures, membership denial (including nonexistent rooms), and database failures use JSON error envelopes. Upgrade failures use text/plain: 400 for malformed handshake headers or key/version, 403 for a rejected Origin, and 500 for an unsupported server upgrade. Origin may be absent; otherwise it must match the request host with an https scheme when the server itself terminates TLS and http otherwise (X-Forwarded-Proto is not consulted), the configured VITE_DEV_SERVER origin, or HTTP port 3000 on the same local development hostname (localhost, 127.0.0.1, or ::1). On connection the server sends room_snapshot immediately. Client JSON messages follow WatchRoomClientEvent; server messages follow WatchRoomServerEvent. Any member may send playback commands. join requests another snapshot, ping receives pong, playback commands broadcast playback_changed to all room connections, member_joined goes to the other connections when a user opens their first connection, and member_left when a user's last connection closes while others remain. Playback state lives in server memory and resets to paused at 0 when the last connection leaves. Room deletion, including the removal of its movie or of its owner's account, sends room_deleted and closes connections. Invalid JSON and unknown event types are ignored. The server sends a ping control frame every 40 seconds and closes a connection that sends no message or pong for 60 seconds, or that falls 256 messages behind.",
+        "description": "Requires an authenticated room member before upgrading. Invalid room IDs, authentication failures, membership denial (including nonexistent rooms), and database failures use JSON error envelopes. Upgrade failures use text/plain: 400 for malformed handshake headers or key/version, 403 for a rejected Origin, and 500 for an unsupported server upgrade. Origin may be absent; otherwise it must be the request host over http or https (a TLS-terminating proxy that keeps the Host header serves the page over https while this server sees http), the configured VITE_DEV_SERVER origin, or HTTP port 3000 on the same local development hostname (localhost, 127.0.0.1, or ::1). On connection the server sends room_snapshot immediately. Client JSON messages follow WatchRoomClientEvent; server messages follow WatchRoomServerEvent. Any member may send playback commands. join requests another snapshot, ping receives pong, playback commands broadcast playback_changed to all room connections, member_joined goes to the other connections when a user opens their first connection, and member_left when a user's last connection closes while others remain. Playback state lives in server memory and resets to paused at 0 when the last connection leaves. Room deletion, including the removal of its movie or of its owner's account, sends room_deleted and closes connections. Invalid JSON and unknown event types are ignored. The server sends a ping control frame every 40 seconds and closes a connection that sends no message or pong for 60 seconds, or that falls 256 messages behind.",
         "x-websocket-client-event": {
           "$ref": "#/components/schemas/WatchRoomClientEvent"
         },
@@ -11212,6 +11212,19 @@
           }
         ]
       },
+      "MoviesStatsData": {
+        "type": "object",
+        "required": [
+          "total_movies"
+        ],
+        "properties": {
+          "total_movies": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
       "MoviesStatsEnvelope": {
         "allOf": [
           {
@@ -11224,17 +11237,7 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "total_movies"
-                ],
-                "properties": {
-                  "total_movies": {
-                    "type": "integer",
-                    "format": "int64"
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/MoviesStatsData"
               }
             }
           }
@@ -11550,6 +11553,53 @@
         },
         "additionalProperties": false
       },
+      "MovieDetailsData": {
+        "type": "object",
+        "required": [
+          "movie",
+          "cast",
+          "crew",
+          "genres",
+          "production_companies",
+          "extra_videos"
+        ],
+        "properties": {
+          "movie": {
+            "$ref": "#/components/schemas/Movie"
+          },
+          "cast": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MovieCastCredit"
+            }
+          },
+          "crew": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MovieCrewCredit"
+            }
+          },
+          "genres": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MovieGenre"
+            }
+          },
+          "production_companies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MovieProductionCompany"
+            }
+          },
+          "extra_videos": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExtraVideo"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
       "MovieDetailsEnvelope": {
         "allOf": [
           {
@@ -11562,51 +11612,7 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "movie",
-                  "cast",
-                  "crew",
-                  "genres",
-                  "production_companies",
-                  "extra_videos"
-                ],
-                "properties": {
-                  "movie": {
-                    "$ref": "#/components/schemas/Movie"
-                  },
-                  "cast": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/MovieCastCredit"
-                    }
-                  },
-                  "crew": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/MovieCrewCredit"
-                    }
-                  },
-                  "genres": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/MovieGenre"
-                    }
-                  },
-                  "production_companies": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/MovieProductionCompany"
-                    }
-                  },
-                  "extra_videos": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/ExtraVideo"
-                    }
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/MovieDetailsData"
               }
             }
           }
@@ -11899,6 +11905,46 @@
         },
         "additionalProperties": false
       },
+      "MovieTechnicalDetailsData": {
+        "type": "object",
+        "required": [
+          "movie",
+          "video_streams",
+          "audio_streams",
+          "subtitles",
+          "chapters"
+        ],
+        "properties": {
+          "movie": {
+            "$ref": "#/components/schemas/MovieTechnicalFile"
+          },
+          "video_streams": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VideoStream"
+            }
+          },
+          "audio_streams": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AudioStream"
+            }
+          },
+          "subtitles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Subtitle"
+            }
+          },
+          "chapters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Chapter"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
       "MovieTechnicalDetailsEnvelope": {
         "allOf": [
           {
@@ -11911,44 +11957,7 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "movie",
-                  "video_streams",
-                  "audio_streams",
-                  "subtitles",
-                  "chapters"
-                ],
-                "properties": {
-                  "movie": {
-                    "$ref": "#/components/schemas/MovieTechnicalFile"
-                  },
-                  "video_streams": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/VideoStream"
-                    }
-                  },
-                  "audio_streams": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/AudioStream"
-                    }
-                  },
-                  "subtitles": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/Subtitle"
-                    }
-                  },
-                  "chapters": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/Chapter"
-                    }
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/MovieTechnicalDetailsData"
               }
             }
           }
@@ -13452,6 +13461,18 @@
         },
         "additionalProperties": false
       },
+      "TmdbStatusData": {
+        "type": "object",
+        "required": [
+          "available"
+        ],
+        "properties": {
+          "available": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
       "TmdbStatusEnvelope": {
         "allOf": [
           {
@@ -13464,16 +13485,7 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "available"
-                ],
-                "properties": {
-                  "available": {
-                    "type": "boolean"
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/TmdbStatusData"
               }
             }
           }

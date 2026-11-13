@@ -1,5 +1,4 @@
 import {
-  createContext,
   useState,
   useRef,
   useEffect,
@@ -8,12 +7,15 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import type {
   AudioPlayerActions,
-  AudioPlayerNowPlaying,
   AudioPlayerQueueState,
   PlayableTrackData,
   TrackType,
 } from "@/types";
 import AudioPlayer from "@/components/playback/AudioPlayer";
+import {
+  AudioPlayerActionsContext,
+  AudioPlayerNowPlayingContext,
+} from "@/context/audio-player-contexts";
 import { useEndlessQueueRefill } from "@/hooks/useEndlessQueueRefill";
 import {
   getShuffleTracks,
@@ -62,14 +64,6 @@ function createInitialQueueState(): AudioPlayerQueueState {
     trimmedCount: 0,
   };
 }
-
-const AudioPlayerActionsContext = createContext<AudioPlayerActions | null>(null);
-// The queue itself is passed to AudioPlayer as props rather than published as
-// a context, so appends to an endless queue re-render only the player. Every
-// other subscriber (track rows, the app shell) reads this primitive-only
-// slice instead.
-const AudioPlayerNowPlayingContext =
-  createContext<AudioPlayerNowPlaying | null>(null);
 
 export function AudioPlayerProvider({
   children,
@@ -838,4 +832,3 @@ export function AudioPlayerProvider({
   );
 }
 
-export { AudioPlayerActionsContext, AudioPlayerNowPlayingContext };

@@ -5,7 +5,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { dismissBootSplash } from "@/lib/boot-splash";
 import { applyTheme, getStoredTheme } from "@/lib/theme";
 import App from "./App";
-import { AudioPlayerProvider } from "./context/AudioPlayerContext";
 
 type AppBootProps = {
   queryClient: QueryClient;
@@ -21,12 +20,10 @@ export default function AppBoot({ queryClient }: AppBootProps) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AudioPlayerProvider>
-        <TooltipProvider>
-          <App queryClient={queryClient} />
-        </TooltipProvider>
-        <Toaster />
-      </AudioPlayerProvider>
+      <TooltipProvider>
+        <App queryClient={queryClient} />
+      </TooltipProvider>
+      <Toaster />
     </QueryClientProvider>
   );
 }

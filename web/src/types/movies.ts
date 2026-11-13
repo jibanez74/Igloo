@@ -1,10 +1,4 @@
-import type {
-  NullableFloat64,
-  NullableInt64,
-  NullableString,
-} from "./nullable";
 import type { components } from "./openapi.gen";
-import type { SortOrder } from "./api";
 
 // Movie from our library (scanned) - used for Latest Movies on home (API returns poster_path; frontend builds URL)
 export type LatestMovieType = components["schemas"]["LatestMovie"];
@@ -13,19 +7,11 @@ export type LatestMovieType = components["schemas"]["LatestMovie"];
 export type MoviesLibraryListItemType = components["schemas"]["MovieLibraryItem"];
 
 /** Paginated movie list payload (library, liked, playlist items). */
-export type MoviesLibraryPaginatedDataType = {
-  movies: MoviesLibraryListItemType[];
-  total: number;
-  page: number;
-  per_page: number;
-  total_pages: number;
-  sort: SortOrder;
-};
+export type MoviesLibraryPaginatedDataType =
+  components["schemas"]["MoviesLibraryData"];
 
 /** GET /api/movies/stats */
-export type MoviesStatsDataType = {
-  total_movies: number;
-};
+export type MoviesStatsDataType = components["schemas"]["MoviesStatsData"];
 
 /** Row from GET /api/movies/genres (genres that have at least one movie). */
 export type MovieGenreWithCountType =
@@ -75,110 +61,28 @@ export type LibraryMovieCastType = components["schemas"]["MovieCastCredit"];
 export type LibraryMovieCrewType = components["schemas"]["MovieCrewCredit"];
 
 // Library genre row (GET /api/movies/details/:id genres array)
-export type LibraryMovieGenreType = {
-  id: number;
-  tag: string;
-};
+export type LibraryMovieGenreType = components["schemas"]["MovieGenre"];
 
 // Library production company row (GET /api/movies/details/:id production_companies array)
-export type LibraryMovieProductionCompanyType = {
-  id: number;
-  name: string;
-};
+export type LibraryMovieProductionCompanyType =
+  components["schemas"]["MovieProductionCompany"];
 
 // Library extra video (GET /api/movies/details/:id extra_videos array)
-export type LibraryMovieExtraVideoType = {
-  id: number;
-  title: string;
-  key: string;
-  type: string;
-  site: string;
-};
+export type LibraryMovieExtraVideoType = components["schemas"]["ExtraVideo"];
 
 // Full response from GET /api/movies/details/:id
-export type LibraryMovieDetailsResponse = {
-  movie: LibraryMovieDetailsMovieType;
-  cast: LibraryMovieCastType[];
-  crew: LibraryMovieCrewType[];
-  genres: LibraryMovieGenreType[];
-  production_companies: LibraryMovieProductionCompanyType[];
-  extra_videos: LibraryMovieExtraVideoType[];
-};
+export type LibraryMovieDetailsResponse =
+  components["schemas"]["MovieDetailsData"];
 
 // Technical details response (GET /api/movies/:id/technical-details)
-export type MovieTechnicalDetailsResponse = {
-  movie: {
-    file_name: string;
-    size: number;
-    container: string;
-    mime_type: string;
-    run_time: NullableInt64;
-    /** Exact duration in seconds (ffprobe), when scanned. */
-    duration: NullableFloat64;
-  };
-  video_streams: VideoStreamType[];
-  audio_streams: AudioStreamType[];
-  subtitles: SubtitleType[];
-  chapters: ChapterType[];
-};
+export type MovieTechnicalDetailsResponse =
+  components["schemas"]["MovieTechnicalDetailsData"];
 
-export type VideoStreamType = {
-  id: number;
-  movie_id: number;
-  stream_index: number;
-  codec: string;
-  codec_profile: NullableString;
-  codec_level: NullableInt64;
-  bit_rate: number;
-  width: number;
-  height: number;
-  coded_width: NullableInt64;
-  coded_height: NullableInt64;
-  aspect_ratio: NullableString;
-  frame_rate: number;
-  avg_frame_rate: NullableString;
-  bit_depth: NullableInt64;
-  pixel_format: NullableString;
-  color_range: NullableString;
-  color_space: NullableString;
-  color_primaries: NullableString;
-  color_transfer: NullableString;
-  /** ffprobe field_order; tt/bb/tb/bt mark interlaced content. */
-  field_order: NullableString;
-  /** Display-matrix rotation in degrees; null when the stream has none. */
-  rotation: NullableInt64;
-  /** Dolby Vision profile and base-layer compatibility id; null without a configuration record. */
-  dv_profile: NullableInt64;
-  dv_bl_signal_compatibility_id: NullableInt64;
-  language: NullableString;
-  title: NullableString;
-};
+export type VideoStreamType = components["schemas"]["VideoStream"];
 
-export type AudioStreamType = {
-  id: number;
-  movie_id: number;
-  stream_index: number;
-  codec: string;
-  codec_profile: NullableString;
-  bit_rate: number;
-  sample_rate: NullableInt64;
-  channels: number;
-  channel_layout: NullableString;
-  language: NullableString;
-  title: NullableString;
-  is_default: boolean;
-};
+export type AudioStreamType = components["schemas"]["AudioStream"];
 
-export type SubtitleType = {
-  id: number;
-  movie_id: number;
-  stream_index: number;
-  codec: string;
-  language: NullableString;
-  title: NullableString;
-  is_forced: boolean;
-  is_default: boolean;
-};
+export type SubtitleType = components["schemas"]["Subtitle"];
 
 /** Source-capability chip (4K / HDR / 7.1 / CC) shown in the details hero. */
 export type MediaCapabilityBadge = {
@@ -191,34 +95,13 @@ export type MediaCapabilityBadge = {
 export type ChapterType = components["schemas"]["Chapter"];
 
 // TMDB search result (from POST /api/tmdb/movies/search)
-export type TmdbSearchResultType = {
-  tmdb_id: number;
-  title: string;
-  release_date: string;
-  overview: string;
-  poster_path: string;
-  already_in_library: boolean;
-  library_movie_id?: number;
-};
+export type TmdbSearchResultType = components["schemas"]["TmdbSearchResult"];
 
-export type TmdbSearchMoviesRequest = {
-  title: string;
-  year?: number;
-  tmdb_id?: number;
-};
+export type TmdbSearchMoviesRequest =
+  components["schemas"]["TmdbSearchMoviesRequest"];
 
-export type TmdbStatusType = {
-  available: boolean;
-};
+export type TmdbStatusType = components["schemas"]["TmdbStatusData"];
 
-export type UpdateMovieMetadataRequest = {
-  title?: string;
-  year?: number;
-  release_date?: string;
-  overview?: string;
-  tag_line?: string;
-  certification?: string;
-  poster_path?: string;
-  backdrop_path?: string;
-  language?: string;
-};
+/** PUT /api/movies/:id/metadata: a field left out keeps its value. */
+export type UpdateMovieMetadataRequest =
+  components["schemas"]["UpdateMovieMetadataRequest"];

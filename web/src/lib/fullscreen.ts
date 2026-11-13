@@ -11,6 +11,7 @@ type WebkitHTMLElement = HTMLElement & {
 type WebkitHTMLVideoElement = HTMLVideoElement & {
   webkitEnterFullscreen?: () => void;
   webkitExitFullscreen?: () => void;
+  webkitDisplayingFullscreen?: boolean;
 };
 
 export function getFullscreenElement(): Element | null {
@@ -91,6 +92,11 @@ export function tryWebKitVideoEnterFullscreen(video: HTMLVideoElement): boolean 
   } catch {
     return false;
   }
+}
+
+// Whether the element is in WebKit video-only fullscreen right now.
+export function isWebKitVideoFullscreen(video: HTMLVideoElement): boolean {
+  return (video as WebkitHTMLVideoElement).webkitDisplayingFullscreen === true;
 }
 
 export function tryWebKitVideoExitFullscreen(video: HTMLVideoElement): boolean {

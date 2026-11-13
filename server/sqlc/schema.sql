@@ -775,7 +775,9 @@ CREATE TABLE IF NOT EXISTS notifications (
 
 CREATE INDEX IF NOT EXISTS idx_notifications_created_by_user ON notifications (created_by_user_id);
 
-CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications (created_at DESC);
+-- Ascending on purpose: the queue lists created_at DESC, id DESC, and a
+-- backward scan of (created_at, rowid) yields exactly that order.
+CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications (created_at);
 
 CREATE TABLE IF NOT EXISTS notification_reads (
   notification_id INTEGER NOT NULL,

@@ -94,7 +94,7 @@ INNER JOIN users AS creator
 LEFT JOIN notification_reads AS nr
   ON nr.notification_id = n.id
   AND nr.user_id = ?1
-ORDER BY n.created_at DESC
+ORDER BY n.created_at DESC, n.id DESC
 LIMIT ?2
 `
 
@@ -114,7 +114,9 @@ type ListNotificationsForUserRow struct {
 
 // The shared admin request queue, newest first. Visibility is admin-only and
 // enforced by the handlers; user_id here only selects the viewer's read state
-// from notification_reads.
+// from notification_reads. created_at has one-second resolution, so the id
+// orders requests filed in the same second; idx_notifications_created_at is
+// ascending so a backward scan of it serves both terms.
 func (q *Queries) ListNotificationsForUser(ctx context.Context, arg ListNotificationsForUserParams) ([]ListNotificationsForUserRow, error) {
 	rows, err := q.query(ctx, q.listNotificationsForUserStmt, listNotificationsForUser, arg.UserID, arg.RowLimit)
 	if err != nil {
