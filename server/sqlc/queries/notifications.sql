@@ -9,7 +9,9 @@ VALUES (?, ?, ?);
 -- name: ListNotificationsForUser :many
 -- The shared admin request queue, newest first. Visibility is admin-only and
 -- enforced by the handlers; user_id here only selects the viewer's read state
--- from notification_reads.
+-- from notification_reads. created_at has one-second resolution, so the id
+-- orders requests filed in the same second; idx_notifications_created_at is
+-- ascending so a backward scan of it serves both terms.
 SELECT
   n.id,
   n.title,
@@ -23,7 +25,7 @@ INNER JOIN users AS creator
 LEFT JOIN notification_reads AS nr
   ON nr.notification_id = n.id
   AND nr.user_id = sqlc.arg(user_id)
-ORDER BY n.created_at DESC
+ORDER BY n.created_at DESC, n.id DESC
 LIMIT sqlc.arg(row_limit);
 
 -- name: MarkNotificationReadForUser :exec
