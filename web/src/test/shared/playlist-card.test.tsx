@@ -107,11 +107,12 @@ describe("PlaylistCard", () => {
       </>,
     );
 
-    expect(screen.getByText("By Riley · 1 track · 3m 34s")).toBeInTheDocument();
+    expect(screen.getAllByText("By Riley")).toHaveLength(2);
+    expect(screen.getByText("1 track · 3m 34s")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Late Shift, By Riley, 1 track, 3m 34s" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("By Riley · 7 movies")).toBeInTheDocument();
+    expect(screen.getByText("7 movies")).toBeInTheDocument();
     expect(screen.queryByText("Owner")).not.toBeInTheDocument();
   });
 
