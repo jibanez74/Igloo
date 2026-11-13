@@ -9,6 +9,7 @@ import type {
   AdminUserType,
   ApiFailureType,
   ApiResponseType,
+  ApiSuccessType,
   AuthUser,
   CreateMoviePlaylistRequest,
   CreateNotificationRequest,
@@ -228,16 +229,58 @@ async function apiRequest<T extends Record<string, unknown>>(
     return ERROR_NOTFOUND;
   }
 
+  return readEnvelope<T>(res, endpoint, "The request could not be completed.");
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Reads a response body as the shared JSON envelope, trusting neither the
+ * status nor the body alone:
+ * - success needs a 2xx status and `error: false` (`data` is optional: many
+ *   routes answer with a message only);
+ * - `error: true` with a string message is the server's failure, kept as is;
+ * - anything else (a proxy's HTML page, a JSON body without the envelope, a
+ *   non-2xx claiming success) becomes a failure carrying the real status, or
+ *   NETWORK_ERROR when a 2xx body is unreadable.
+ * Every failure is stamped with the HTTP status, so a surface can word it by
+ * what happened (401 on login, 403 on a room) and fall back on the message.
+ */
+async function readEnvelope<T extends Record<string, unknown>>(
+  res: Response,
+  endpoint: string,
+  failedMessage: string,
+): Promise<ApiResponseType<T>> {
+  let body: unknown;
   try {
-    const data = (await res.json()) as ApiResponseType<T>;
-    // Stamp the status so a surface can word a failure by what happened
-    // (401 on login, 403 on a room) while keeping the server's message as its
-    // fallback.
-    return data.error ? { ...data, status: res.status } : data;
+    body = await res.json();
   } catch (err) {
     warnUnlessAborted(endpoint, err);
+  }
+
+  const failed: ApiFailureType = {
+    error: true,
+    message: `${res.status} - ${failedMessage}`,
+    status: res.status,
+  };
+
+  if (!isRecord(body)) {
+    return res.ok ? NETWORK_ERROR : failed;
+  }
+  if (body.error === true) {
+    return typeof body.message === "string"
+      ? { error: true, message: body.message, status: res.status }
+      : failed;
+  }
+  if (!res.ok) {
+    return failed;
+  }
+  if (body.error !== false) {
     return NETWORK_ERROR;
   }
+  return body as ApiSuccessType<T>;
 }
 
 // ============================================================================
@@ -357,30 +400,11 @@ export const uploadUserAvatar = async (
       return ERROR_NOTFOUND;
     }
 
-    const uploadFailed: ApiFailureType = {
-      error: true,
-      message: `${response.status} - The avatar could not be uploaded.`,
-      status: response.status,
-    };
-
-    // A malformed body — empty, non-JSON, or literal `null` — must not fall
-    // through to the catch below, which would report the generic 500 instead
-    // of the status the server actually sent.
-    const data: unknown = await response.json().catch(() => null);
-
-    if (typeof data !== "object" || data === null) {
-      return response.ok ? NETWORK_ERROR : uploadFailed;
-    }
-
-    const body = data as ApiResponseType<{ user: AuthUser }>;
-
-    // An HTTP failure whose body is not already an error envelope would
-    // otherwise be reported to the caller as a successful upload.
-    if (!response.ok && !body.error) {
-      return uploadFailed;
-    }
-
-    return body;
+    return await readEnvelope<{ user: AuthUser }>(
+      response,
+      "/api/user/avatar/upload",
+      "The avatar could not be uploaded.",
+    );
   } catch {
     return NETWORK_ERROR;
   }

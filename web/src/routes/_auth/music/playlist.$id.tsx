@@ -494,6 +494,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
           <PlaylistTracksList
             playlistId={playlistId}
             tracks={allTracks}
+            totalTracks={track_count}
             canEdit={can_edit}
             hasNextPage={hasNextPage}
             isFetchingNextPage={isFetchingNextPage}
@@ -523,6 +524,8 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
 type PlaylistTracksListProps = {
   playlistId: number;
   tracks: PlaylistTrackType[];
+  /** The playlist's whole length, loaded or not. */
+  totalTracks: number;
   canEdit: boolean;
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
@@ -541,6 +544,7 @@ const DRAGGABLE_TRACK_LIMIT = 200;
 function PlaylistTracksList({
   playlistId,
   tracks,
+  totalTracks,
   canEdit,
   hasNextPage,
   isFetchingNextPage,
@@ -609,6 +613,7 @@ function PlaylistTracksList({
     <VirtualizedPlaylistTracksList
       playlistId={playlistId}
       tracks={orderedTracks}
+      totalTracks={totalTracks}
       canEdit={canEdit}
       hasNextPage={hasNextPage}
       isFetchingNextPage={isFetchingNextPage}
@@ -622,6 +627,7 @@ function PlaylistTracksList({
 
 type VirtualizedPlaylistTracksListProps = {
   tracks: PlaylistTrackType[];
+  totalTracks: number;
   playlistId: number;
   canEdit: boolean;
   hasNextPage: boolean;
@@ -634,6 +640,7 @@ type VirtualizedPlaylistTracksListProps = {
 
 function VirtualizedPlaylistTracksList({
   tracks,
+  totalTracks,
   playlistId,
   canEdit,
   hasNextPage,
@@ -670,12 +677,23 @@ function VirtualizedPlaylistTracksList({
     virtualizer.measure();
   }, [tracks.length, scrollMargin, virtualizer]);
 
+  // Only a window of rows is mounted, so each row says where it sits in the
+  // whole playlist, loaded or not (the main tracks view does the same). A
+  // removal can land before track_count catches up, hence the max.
+  const setSize = Math.max(totalTracks, tracks.length);
+
   return (
     <div
       ref={listRef}
       className="overflow-hidden rounded-xl border border-primary/10 bg-muted/30"
     >
+      {/* The sizing box is the list itself, so the rows are its direct items
+          and the load-more footer below stays outside it. Tailwind's preflight
+          drops <ul> semantics in Safari/VoiceOver; the role keeps them. */}
+      {/* react-doctor-disable-next-line react-doctor/prefer-tag-over-role */}
       <div
+        role="list"
+        aria-label="Playlist tracks"
         style={{
           height: `${virtualizer.getTotalSize()}px`,
           width: "100%",
@@ -689,6 +707,9 @@ function VirtualizedPlaylistTracksList({
           return (
             <div
               key={virtualRow.key}
+              role="listitem"
+              aria-posinset={virtualRow.index + 1}
+              aria-setsize={setSize}
               style={{
                 position: "absolute",
                 top: 0,

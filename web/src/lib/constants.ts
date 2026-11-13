@@ -69,6 +69,9 @@ export const MOVIES_LIBRARY_KEY = "movies-library";
 export const MOVIES_GENRES_KEY = "movies-genres";
 export const MOVIES_BY_GENRE_KEY = "movies-by-genre";
 export const MOVIES_STATS_KEY = "movies-stats";
+// A person page: TMDB credits joined with the local movies and shows they
+// link to, so a library change can change it.
+export const PERSON_KEY = "person";
 export const MOVIES_LIKED_KEY = "movies-liked";
 export const MOVIE_LIKE_STATUS_KEY = "movie-like-status";
 export const MOVIE_WATCH_PROGRESS_KEY = "movie-watch-progress";

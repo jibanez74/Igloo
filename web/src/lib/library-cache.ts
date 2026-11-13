@@ -20,6 +20,7 @@ import {
   MOVIES_LIBRARY_KEY,
   MOVIES_LIKED_KEY,
   MOVIES_STATS_KEY,
+  PERSON_KEY,
   MUSIC_STATS_KEY,
   MUSICIAN_DETAILS_KEY,
   MUSICIANS_PAGINATED_KEY,
@@ -44,7 +45,8 @@ import { showActionFailed, showSuccess } from "@/lib/toast-helpers";
 // Every query a scan or a bulk change to one library can leave stale: its
 // lists, details, statistics and playlists, the search results that list its
 // items, and the rows elsewhere that show them (continue watching; the watch
-// room list's and an open room's movie title and poster).
+// room list's and an open room's movie title and poster; a person page's
+// "in your library" credits and links).
 const LIBRARY_QUERY_KEYS = {
   movies: [
     MOVIES_STATS_KEY,
@@ -63,6 +65,7 @@ const LIBRARY_QUERY_KEYS = {
     CONTINUE_WATCHING_KEY,
     WATCH_ROOMS_KEY,
     WATCH_ROOM_KEY,
+    PERSON_KEY,
   ],
   music: [
     MUSIC_STATS_KEY,
@@ -95,6 +98,7 @@ const LIBRARY_QUERY_KEYS = {
     SEARCH_ALL_KEY,
     SEARCH_CATEGORY_KEYS.shows,
     CONTINUE_WATCHING_KEY,
+    PERSON_KEY,
   ],
 } as const;
 
@@ -132,8 +136,9 @@ export function onArtworkReset(listener: () => void) {
 }
 
 /**
- * Marks stale every query that shows library artwork: each library's, and the
- * person pages, whose photos and credits come from the libraries too. A
+ * Marks stale every query that shows library artwork: each library's, which
+ * include the person pages, whose photos and credits come from the libraries
+ * too. A
  * settings save that stops serving the downloaded copies calls it, since the
  * cached image URLs point at files the server deletes or no longer serves;
  * the onArtworkReset listeners then refresh the URLs they hold.
@@ -142,7 +147,6 @@ export function invalidateArtworkQueries(queryClient: QueryClient) {
   for (const library of Object.keys(LIBRARY_QUERY_KEYS) as Library[]) {
     invalidateLibraryQueries(queryClient, library);
   }
-  void queryClient.invalidateQueries({ queryKey: ["person"] });
   for (const listener of artworkResetListeners) {
     listener();
   }

@@ -223,6 +223,39 @@ describe("music playlist route", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
+  // A viewer's playlist renders through the virtual list, which mounts only a
+  // window of rows; each still says where it sits in the whole playlist.
+  it("gives the virtual list's rows their place in the whole playlist", async () => {
+    const tracks = [
+      playlistTrack({ id: 1, title: "Alabaster", position: 1, duration: 180 }),
+      playlistTrack({ id: 2, title: "Borrowed Light", position: 2, duration: 240 }),
+      playlistTrack({ id: 3, title: "Cinder", position: 3, duration: 200 }),
+    ];
+    const mock = roadTrip({ track_count: 40, is_owner: false, can_edit: false }, tracks);
+    const fetchMock = mockPlaylistFetch(mock);
+    const respond = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((input, init) => {
+      if (requestURL(input) === TRACKS_PAGE_URL(0)) {
+        return jsonResponse({
+          error: false,
+          data: { tracks, total: 40, has_more: true, next_offset: 3 },
+        });
+      }
+      return respond(input, init);
+    });
+
+    await renderRoute("/music/playlist/21");
+
+    const list = await screen.findByRole("list", { name: "Playlist tracks" });
+    const rows = within(list).getAllByRole("listitem");
+    expect(rows).toHaveLength(3);
+    expect(rows.map((row) => row.getAttribute("aria-posinset"))).toEqual(["1", "2", "3"]);
+    for (const row of rows) {
+      expect(row).toHaveAttribute("aria-setsize", "40");
+    }
+    expect(within(rows[0]).getByText("Alabaster")).toBeInTheDocument();
+  });
+
   it("stops loading the rest after a failed page and says how much was queued", async () => {
     const user = userEvent.setup();
     const mock = roadTrip({ track_count: 3 });

@@ -123,6 +123,7 @@ import {
   MOVIES_PER_PAGE,
   SHOWS_PER_PAGE,
   MOVIES_STATS_KEY,
+  PERSON_KEY,
   MOVIE_SCAN_STATUS_KEY,
   MUSIC_SCAN_STATUS_KEY,
   SHOW_SCAN_STATUS_KEY,
@@ -978,7 +979,7 @@ export const showScanStatusQueryOpts = () =>
 
 export function personQueryOpts(id: number) {
   return queryOptions({
-    queryKey: ["person", id],
+    queryKey: [PERSON_KEY, id],
     queryFn: ({ signal }) => getPerson(id, signal),
     enabled: id > 0,
     staleTime: freshFor(STALE_CATALOG),
