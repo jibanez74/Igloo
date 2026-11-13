@@ -1,7 +1,47 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { expectNoClass } from "../helpers/dom";
+
+// A native button defaults to submit. Inside a form that turned an action
+// button (an invitee chip's remove in the create-room form) into a submit.
+describe("Button type", () => {
+  function renderInForm(button: React.ReactNode) {
+    const onSubmit = vi.fn((event: React.FormEvent) => event.preventDefault());
+    render(<form onSubmit={onSubmit}>{button}</form>);
+    return onSubmit;
+  }
+
+  it("is a plain button unless told otherwise, so it never submits its form", () => {
+    const onClick = vi.fn();
+    const onSubmit = renderInForm(<Button onClick={onClick}>Remove</Button>);
+
+    const button = screen.getByRole("button", { name: "Remove" });
+    expect(button).toHaveAttribute("type", "button");
+    fireEvent.click(button);
+
+    expect(onClick).toHaveBeenCalledOnce();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("submits its form when it says type=submit", () => {
+    const onSubmit = renderInForm(<Button type="submit">Save</Button>);
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSubmit).toHaveBeenCalledOnce();
+  });
+
+  it("gives an asChild element no type of its own", () => {
+    render(
+      <Button asChild>
+        <a href="/movies">Movies</a>
+      </Button>,
+    );
+
+    expect(screen.getByRole("link", { name: "Movies" })).not.toHaveAttribute("type");
+  });
+});
 
 // A disabled primary button used to be the same glacier at half opacity, which
 // still read as a live action next to a real one (design-system §1.6).
