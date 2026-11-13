@@ -17,12 +17,10 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Spinner } from "@/components/ui/spinner";
 import { useContentFadeTransition } from "@/hooks/useContentFadeTransition";
-import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import {
   useVirtualizedInfiniteLoader,
   type FetchNextPage,
 } from "@/hooks/useVirtualizedInfiniteLoader";
-import { useWindowScrollMargin } from "@/hooks/useWindowScrollMargin";
 import { showActionFailed } from "@/lib/toast-helpers";
 import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
 import InfiniteListFooter from "@/components/shared/InfiniteListFooter";
@@ -74,6 +72,7 @@ import PlaylistCard, { PlaylistCardSkeleton } from "@/components/shared/Playlist
 import PlaylistsTabToolbar from "@/components/shared/PlaylistsTabToolbar";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import TrackItem from "@/components/music/TrackItem";
+import VirtualTrackList from "@/components/music/VirtualTrackList";
 import LibraryEmptyState from "@/components/shared/LibraryEmptyState";
 import { Button } from "@/components/ui/button";
 import PlaylistFormDialog from "@/components/shared/PlaylistFormDialog";
@@ -535,10 +534,6 @@ function VirtualizedTracksList({
   fetchNextPage,
   loadMoreError,
 }: VirtualizedTracksListProps) {
-  "use no memo";
-
-  const { listRef, scrollMargin } = useWindowScrollMargin<HTMLDivElement>();
-
   // Rows are memoized (see TrackListItem), so they receive the loaded track
   // list through a ref whose identity never changes; clicking play reads the
   // freshest list from it to queue the whole tab.
@@ -555,95 +550,47 @@ function VirtualizedTracksList({
     scopeKey: "music-tracks",
   });
 
-  const virtualizer = useWindowVirtualizer({
-    count: virtualItems.length,
-
-    estimateSize: index => {
-      const item = virtualItems[index];
-
-      return item?.type === "letter"
-        ? VIRTUAL_LIST_LETTER_HEIGHT
-        : VIRTUAL_LIST_TRACK_HEIGHT;
-    },
-
-    overscan: 5,
-    scrollMargin,
-    onChange,
-  });
-
-  const renderedVirtualItems = virtualizer.getVirtualItems();
-
-  useEffect(() => {
-    virtualizer.measure();
-  }, [scrollMargin, virtualizer, virtualItems.length]);
-
   return (
-    <div
-      ref={listRef}
+    <VirtualTrackList
       className={TRACK_LIST_CONTAINER_CLASS}
-      // Tailwind's preflight sets list-style:none on every <ul>, which drops list
-      // semantics in Safari/VoiceOver; the role restores them.
-      // react-doctor-disable-next-line react-doctor/prefer-tag-over-role
-      role="list"
-      aria-label="Tracks"
-    >
-      {/* Presentational spacer: keeps the list -> listitem ownership intact so
-          the intervening positioning wrapper doesn't strip the list semantics. */}
-      <div
-        role="presentation"
-        style={{
-          height: `${virtualizer.getTotalSize()}px`,
-          width: "100%",
-          position: "relative",
-        }}
-      >
-        {renderedVirtualItems.map(virtualRow => {
-          const item = virtualItems[virtualRow.index];
+      label="Tracks"
+      count={virtualItems.length}
+      setSize={totalTracks}
+      estimateSize={(index) =>
+        virtualItems[index]?.type === "letter"
+          ? VIRTUAL_LIST_LETTER_HEIGHT
+          : VIRTUAL_LIST_TRACK_HEIGHT
+      }
+      // The letter headers sit between the tracks, outside the count.
+      positionOf={(index) => {
+        const item = virtualItems[index];
+        return item?.type === "track" ? item.trackIndex : null;
+      }}
+      onChange={onChange}
+      renderRow={(index) => {
+        const item = virtualItems[index];
+        if (!item) return null;
+        if (item.type === "letter") return <LetterHeader letter={item.letter} />;
 
-          if (!item) return null;
-
-          return (
-            <div
-              key={virtualRow.key}
-              role={item.type === "track" ? "listitem" : "presentation"}
-              aria-posinset={item.type === "track" ? item.trackIndex : undefined}
-              aria-setsize={item.type === "track" ? totalTracks : undefined}
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                height: `${virtualRow.size}px`,
-                transform: `translateY(${virtualRow.start - scrollMargin}px)`,
-              }}
-            >
-              {item.type === "letter" ? (
-                <LetterHeader letter={item.letter} />
-              ) : (
-                <>
-                  {item.sectionLetter !== undefined && (
-                    <span className="sr-only">
-                      {sectionCueLabel(item.sectionLetter)}
-                    </span>
-                  )}
-                  <TrackListItem
-                    track={item.track}
-                    queueRef={allTracksRef}
-                  />
-                </>
-              )}
-            </div>
-          );
-        })}
-
-      </div>
-
-      <InfiniteListFooter
-        isFetchingNextPage={isFetchingNextPage}
-        loadMoreError={loadMoreError}
-        onRetry={() => void fetchNextPage()}
-      />
-    </div>
+        return (
+          <>
+            {item.sectionLetter !== undefined && (
+              <span className="sr-only">
+                {sectionCueLabel(item.sectionLetter)}
+              </span>
+            )}
+            <TrackListItem track={item.track} queueRef={allTracksRef} />
+          </>
+        );
+      }}
+      footer={
+        <InfiniteListFooter
+          isFetchingNextPage={isFetchingNextPage}
+          loadMoreError={loadMoreError}
+          onRetry={() => void fetchNextPage()}
+        />
+      }
+    />
   );
 }
 

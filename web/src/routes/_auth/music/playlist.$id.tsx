@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   InfiniteQueryObserver,
@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import TrackItem from "@/components/music/TrackItem";
+import VirtualTrackList from "@/components/music/VirtualTrackList";
 import PlaylistOwnerActions from "@/components/shared/PlaylistOwnerActions";
 import DetailSkipLinks from "@/components/shared/DetailSkipLinks";
 import MusicDetailArt from "@/components/music/MusicDetailArt";
@@ -40,22 +41,20 @@ import { removeTrackFromPlaylist, reorderPlaylistTracks } from "@/lib/api";
 import { convertToAudioTrack, dedupeById } from "@/lib/audio-utils";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useTrackPlaybackMatcher } from "@/hooks/useTrackPlaybackMatcher";
-import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import {
   useVirtualizedInfiniteLoader,
   type FetchNextPage,
 } from "@/hooks/useVirtualizedInfiniteLoader";
-import { useWindowScrollMargin } from "@/hooks/useWindowScrollMargin";
 import { formatDuration, pluralize } from "@/lib/format";
 import {
   DETAIL_PAGE_CONTENT_ENTER_CLASS,
   DETAIL_RAIL_HEADING_CLASS,
+  DETAIL_TRACK_LIST_CONTAINER_CLASS,
   FOCUS_VISIBLE_RING_CLASS,
   MUSIC_DETAIL_ACTIONS_CLASS,
   MUSIC_DETAIL_HERO_ROW_CLASS,
   PLAYLIST_TRACKS_KEY,
   PLAYLISTS_KEY,
-  VIRTUAL_LIST_TRACK_HEIGHT,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { apiErrorMessage } from "@/lib/is-api-failure";
@@ -718,10 +717,7 @@ function VirtualizedPlaylistTracksList({
   onPlayTrack,
   onRemoveTrack,
 }: VirtualizedPlaylistTracksListProps) {
-  "use no memo";
-
   const matchTrackPlayback = useTrackPlaybackMatcher();
-  const { listRef, scrollMargin } = useWindowScrollMargin<HTMLDivElement>();
 
   const onChange = useVirtualizedInfiniteLoader({
     itemCount: tracks.length,
@@ -731,81 +727,35 @@ function VirtualizedPlaylistTracksList({
     scopeKey: playlistId,
   });
 
-  const virtualizer = useWindowVirtualizer({
-    count: tracks.length,
-    estimateSize: () => VIRTUAL_LIST_TRACK_HEIGHT,
-    overscan: 5,
-    scrollMargin,
-    onChange,
-  });
-
-  const renderedVirtualItems = virtualizer.getVirtualItems();
-
-  useEffect(() => {
-    virtualizer.measure();
-  }, [tracks.length, scrollMargin, virtualizer]);
-
-  // Only a window of rows is mounted, so each row says where it sits in the
-  // whole playlist, loaded or not (the main tracks view does the same). A
-  // removal can land before track_count catches up, hence the max.
-  const setSize = Math.max(totalTracks, tracks.length);
-
   return (
-    <div
-      ref={listRef}
-      className="overflow-hidden rounded-xl border border-primary/10 bg-muted/30"
-    >
-      {/* The sizing box is the list itself, so the rows are its direct items
-          and the load-more footer below stays outside it. Tailwind's preflight
-          drops <ul> semantics in Safari/VoiceOver; the role keeps them. */}
-      {/* react-doctor-disable-next-line react-doctor/prefer-tag-over-role */}
-      <div
-        role="list"
-        aria-label="Playlist tracks"
-        style={{
-          height: `${virtualizer.getTotalSize()}px`,
-          width: "100%",
-          position: "relative",
-        }}
-      >
-        {renderedVirtualItems.map((virtualRow) => {
-          const track = tracks[virtualRow.index];
-          if (!track) return null;
-
-          return (
-            <div
-              key={virtualRow.key}
-              role="listitem"
-              aria-posinset={virtualRow.index + 1}
-              aria-setsize={setSize}
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                height: `${virtualRow.size}px`,
-                transform: `translateY(${virtualRow.start - scrollMargin}px)`,
-              }}
-            >
-              <TrackItem
-                {...trackRowProps(track)}
-                variant="playlist"
-                {...matchTrackPlayback(track.id)}
-                onPlay={() => onPlayTrack(track)}
-                showActionsMenu
-                canRemoveFromPlaylist={canEdit}
-                onRemoveFromPlaylist={() => onRemoveTrack(track.id)}
-              />
-            </div>
-          );
-        })}
-      </div>
-
-      <InfiniteListFooter
-        isFetchingNextPage={isFetchingNextPage}
-        loadMoreError={loadMoreError}
-        onRetry={() => void fetchNextPage()}
-      />
-    </div>
+    <VirtualTrackList
+      className={DETAIL_TRACK_LIST_CONTAINER_CLASS}
+      label="Playlist tracks"
+      count={tracks.length}
+      // A removal can land before track_count catches up, hence the max.
+      setSize={Math.max(totalTracks, tracks.length)}
+      onChange={onChange}
+      renderRow={(index) => {
+        const track = tracks[index];
+        return (
+          <TrackItem
+            {...trackRowProps(track)}
+            variant="playlist"
+            {...matchTrackPlayback(track.id)}
+            onPlay={() => onPlayTrack(track)}
+            showActionsMenu
+            canRemoveFromPlaylist={canEdit}
+            onRemoveFromPlaylist={() => onRemoveTrack(track.id)}
+          />
+        );
+      }}
+      footer={
+        <InfiniteListFooter
+          isFetchingNextPage={isFetchingNextPage}
+          loadMoreError={loadMoreError}
+          onRetry={() => void fetchNextPage()}
+        />
+      }
+    />
   );
 }

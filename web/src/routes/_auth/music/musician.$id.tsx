@@ -31,6 +31,7 @@ import CatalogLink from "@/components/music/CatalogLink";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useTrackPlaybackMatcher } from "@/hooks/useTrackPlaybackMatcher";
 import TrackItem from "@/components/music/TrackItem";
+import VirtualTrackList from "@/components/music/VirtualTrackList";
 import { formatDuration, pluralize } from "@/lib/format";
 import { convertToAudioTrack } from "@/lib/audio-utils";
 import { trackRowProps } from "@/lib/track-row-props";
@@ -390,11 +391,19 @@ function MusicianDetailsContent({
                 All Tracks
               </h2>
 
-              <div className={DETAIL_TRACK_LIST_CONTAINER_CLASS}>
-                <div className="divide-y divide-border/30">
-                  {playableTracks.map((track) => (
+              {/* Virtual: a long discography would otherwise build every
+                  row up front. */}
+              <VirtualTrackList
+                className={DETAIL_TRACK_LIST_CONTAINER_CLASS}
+                label="All tracks"
+                count={playableTracks.length}
+                setSize={playableTracks.length}
+                getItemKey={(index) => playableTracks[index].id}
+                divided
+                renderRow={(index) => {
+                  const track = playableTracks[index];
+                  return (
                     <TrackItem
-                      key={track.id}
                       {...trackRowProps(track)}
                       musicianId={null}
                       subtitle={unwrapString(track.album_title) ?? "Unknown Album"}
@@ -402,9 +411,9 @@ function MusicianDetailsContent({
                       {...matchTrackPlayback(track.id)}
                       onPlay={() => handlePlayTrack(track.id)}
                     />
-                  ))}
-                </div>
-              </div>
+                  );
+                }}
+              />
             </section>
           )}
 

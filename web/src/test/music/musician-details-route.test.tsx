@@ -153,6 +153,16 @@ function mockMusicianDetailsFetch() {
         trackAlbumTitles: ["Blue Record", "Dark Record"],
       }),
     ],
+    [
+      24,
+      musicianDetailsResponse({
+        id: 24,
+        name: "The Prolific",
+        sortName: "Prolific, The",
+        trackIds: Array.from({ length: 300 }, (_, index) => 2400 + index),
+        trackTitles: Array.from({ length: 300 }, (_, index) => `Take ${index + 1}`),
+      }),
+    ],
   ]);
 
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
@@ -434,6 +444,34 @@ describe("musician details route accessibility", () => {
     expect(screen.queryByRole("link", { name: /on Spotify/ })).not.toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Back to Musicians library" }),
+    ).toBeInTheDocument();
+  });
+
+  // A long discography would otherwise build every row up front: the list
+  // mounts the rows near the viewport, and each says where it sits among all
+  // of the musician's tracks.
+  it("mounts only a window of a long track list, each row placed in the whole", async () => {
+    mockMusicianDetailsFetch();
+
+    await renderRoute("/music/musician/24");
+
+    const list = await screen.findByRole("list", { name: "All tracks" });
+    const rows = within(list).getAllByRole("listitem");
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.length).toBeLessThan(40);
+    expect(rows.map((row) => row.getAttribute("aria-posinset")).slice(0, 3)).toEqual([
+      "1",
+      "2",
+      "3",
+    ]);
+    for (const row of rows) {
+      expect(row).toHaveAttribute("aria-setsize", "300");
+    }
+    expect(within(rows[0]).getByText("Take 1")).toBeInTheDocument();
+    expect(screen.queryByText("Take 300")).not.toBeInTheDocument();
+    // The header still counts and plays every track, mounted or not.
+    expect(
+      screen.getByRole("button", { name: "Play all 300 tracks by The Prolific" }),
     ).toBeInTheDocument();
   });
 

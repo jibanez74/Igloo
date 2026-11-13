@@ -841,7 +841,12 @@ The styling families:
 - **Lists** — `TRACK_LIST_CONTAINER_CLASS` (library/search lists),
   `DETAIL_TRACK_LIST_CONTAINER_CLASS` (the softer glacier-tinted frame shared
   by the album and musician detail pages and the show episode list), and the
-  `VIRTUAL_LIST_*` row heights.
+  `VIRTUAL_LIST_*` row heights. A track list that can run long (the library's
+  Tracks tab, a playlist past the drag limit, a musician's All Tracks) renders
+  through `components/music/VirtualTrackList`: it mounts only the rows near
+  the viewport, gives each track row `aria-posinset`/`aria-setsize` in the
+  whole list, keeps a load-more footer outside the list, and draws the
+  `divide-y` hairline (`divided`) by growing each row's slot by a pixel.
 
 **Promotion rule**: a class string used by ≥2 components, or containing
 motion/focus behavior, moves here (where the contracts tests can see it)
@@ -1032,7 +1037,7 @@ collapse, while the mobile trigger controls the sheet.
   content never hides behind it. The desktop sidebar column takes the same
   class, so its footer (the account block) sits above the full-width bar instead of under
   it; the mobile sheet opens above the bar and needs none. **Scrolling happens on the window** — virtual
-  lists must use `useWindowVirtualizer` (§3.4), never a nested scroll
+  lists must use `useWindowVirtualizer` (`VirtualTrackList` for tracks), never a nested scroll
   container. For the same reason the content column clips with
   `overflow-x-clip`, not `overflow-x-hidden`/`auto`: those create a scroll
   container, and sticky children inside pages then stop sticking to the
