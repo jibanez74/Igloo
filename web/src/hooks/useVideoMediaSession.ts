@@ -1,5 +1,18 @@
-import { useEffect, useEffectEvent, useRef } from "react";
+import {
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import type { RefObject } from "react";
+import {
+  claimMediaSession,
+  getMediaSessionOwner,
+  releaseMediaSession,
+  subscribeMediaSessionOwner,
+  updateMediaSessionMetadata,
+} from "@/lib/media-session";
 
 type VideoMediaSessionOptions = {
   videoRef: RefObject<HTMLVideoElement | null>;
@@ -41,6 +54,21 @@ function toAbsoluteArtworkUrl(url: string | null | undefined) {
   if (!url) return null;
   if (url.startsWith("http://") || url.startsWith("https://")) return url;
   return `${window.location.origin}${url}`;
+}
+
+function videoMetadata(
+  title: string,
+  artist: string | undefined,
+  artworkUrl: string | null | undefined,
+) {
+  if (!mediaMetadataSupported()) return null;
+
+  const artwork = toAbsoluteArtworkUrl(artworkUrl);
+  return new MediaMetadata({
+    title,
+    artist,
+    artwork: artwork ? [{ src: artwork }] : [],
+  });
 }
 
 function safePositionState(
@@ -99,48 +127,62 @@ export function useVideoMediaSession({
     },
   );
 
-  useEffect(() => {
-    if (!enabled || !mediaSessionSupported() || !mediaMetadataSupported()) return;
+  // This surface's claim on the OS media controls (see lib/media-session):
+  // the full action set replaces music's, and letting go clears the session
+  // only while this surface still holds it, so music can take it back. Held
+  // for as long as the surface is enabled: a title or artwork change only
+  // replaces the metadata, so the play state and timeline stay published.
+  const [sessionToken] = useState(() => Symbol("video"));
+  const sessionOwner = useSyncExternalStore(
+    subscribeMediaSessionOwner,
+    getMediaSessionOwner,
+    getMediaSessionOwner,
+  );
+  const ownsSession = sessionOwner === sessionToken;
+  const sessionFree = sessionOwner === null;
 
-    const artwork = toAbsoluteArtworkUrl(artworkUrl);
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title,
-      artist,
-      artwork: artwork ? [{ src: artwork }] : [],
-    });
-
-    return () => {
-      navigator.mediaSession.metadata = null;
-    };
-  }, [artist, artworkUrl, enabled, title]);
+  const claimSession = useEffectEvent(() => {
+    claimMediaSession(
+      sessionToken,
+      videoMetadata(title, artist, artworkUrl),
+      {
+        play: handlePlay,
+        pause: handlePause,
+        seekbackward: handleSeekBackward,
+        seekforward: handleSeekForward,
+        seekto: handleSeekTo,
+      },
+    );
+  });
 
   useEffect(() => {
     if (!enabled || !mediaSessionSupported()) return;
+
+    claimSession();
+
+    return () => releaseMediaSession(sessionToken);
+  }, [enabled, sessionToken]);
+
+  // Music played over this video and then closed: the controls are free
+  // again, and the surface still on screen takes them back.
+  useEffect(() => {
+    if (enabled && sessionFree && mediaSessionSupported()) claimSession();
+  }, [enabled, sessionFree]);
+
+  useEffect(() => {
+    if (!enabled) return;
+
+    updateMediaSessionMetadata(
+      sessionToken,
+      videoMetadata(title, artist, artworkUrl),
+    );
+  }, [artist, artworkUrl, enabled, sessionToken, title]);
+
+  useEffect(() => {
+    if (!enabled || !ownsSession) return;
 
     navigator.mediaSession.playbackState = playing ? "playing" : "paused";
-  }, [enabled, playing]);
-
-  useEffect(() => {
-    if (!enabled || !mediaSessionSupported()) return;
-
-    navigator.mediaSession.setActionHandler("play", handlePlay);
-    navigator.mediaSession.setActionHandler("pause", handlePause);
-    navigator.mediaSession.setActionHandler("seekbackward", handleSeekBackward);
-    navigator.mediaSession.setActionHandler("seekforward", handleSeekForward);
-    navigator.mediaSession.setActionHandler("seekto", handleSeekTo);
-
-    return () => {
-      for (const action of [
-        "play",
-        "pause",
-        "seekbackward",
-        "seekforward",
-        "seekto",
-      ] as const) {
-        navigator.mediaSession.setActionHandler(action, null);
-      }
-    };
-  }, [enabled]);
+  }, [enabled, ownsSession, playing]);
 
   const lastReportedPositionRef = useRef<{
     position: number;
@@ -150,7 +192,10 @@ export function useVideoMediaSession({
   } | null>(null);
 
   useEffect(() => {
-    if (!enabled || !mediaSessionSupported()) {
+    // Re-run on (re)gaining the session too: a claim cleared whatever timeline
+    // the previous owner left, so the next report must not be skipped as
+    // redundant.
+    if (!enabled || !ownsSession) {
       lastReportedPositionRef.current = null;
       return;
     }
@@ -179,5 +224,5 @@ export function useVideoMediaSession({
     } catch {
       // Some mobile browsers expose Media Session but reject position updates.
     }
-  }, [currentTime, duration, enabled, playing, videoRef]);
+  }, [currentTime, duration, enabled, ownsSession, playing, videoRef]);
 }

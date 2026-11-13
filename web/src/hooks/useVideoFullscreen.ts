@@ -73,24 +73,31 @@ export function useVideoFullscreen({
     };
   }, []);
 
+  // The WebKit video-only fullscreen events fire on the <video>, which mounts
+  // after a room loads or a pre-roll ends, and is replaced on a source swap,
+  // while videoRef stays the same object. Listening on the document in the
+  // capture phase reaches whichever element is current (capture runs for
+  // events that do not bubble), so no mount is ever missed.
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
+    const isOurVideo = (event: Event) =>
+      videoRef.current !== null && event.target === videoRef.current;
 
-    const onWebKitBegin = () => {
+    const onWebKitBegin = (event: Event) => {
+      if (!isOurVideo(event)) return;
       fullscreenModeRef.current = "webkitVideo";
       setFullscreenMode("webkitVideo");
     };
-    const onWebKitEnd = () => {
+    const onWebKitEnd = (event: Event) => {
+      if (!isOurVideo(event)) return;
       fullscreenModeRef.current = "none";
       setFullscreenMode("none");
     };
 
-    video.addEventListener("webkitbeginfullscreen", onWebKitBegin);
-    video.addEventListener("webkitendfullscreen", onWebKitEnd);
+    document.addEventListener("webkitbeginfullscreen", onWebKitBegin, true);
+    document.addEventListener("webkitendfullscreen", onWebKitEnd, true);
     return () => {
-      video.removeEventListener("webkitbeginfullscreen", onWebKitBegin);
-      video.removeEventListener("webkitendfullscreen", onWebKitEnd);
+      document.removeEventListener("webkitbeginfullscreen", onWebKitBegin, true);
+      document.removeEventListener("webkitendfullscreen", onWebKitEnd, true);
     };
   }, [videoRef]);
 

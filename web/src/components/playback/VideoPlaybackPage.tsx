@@ -60,7 +60,7 @@ import {
   playbackSettingsToPlaySearch,
   type PlaySearchParams,
 } from "@/lib/route-search";
-import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
+import { useSuspendMusicPlayback } from "@/hooks/useSuspendMusicPlayback";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import { useVideoMediaSession } from "@/hooks/useVideoMediaSession";
 import { useVideoFullscreen } from "@/hooks/useVideoFullscreen";
@@ -133,7 +133,7 @@ export default function VideoPlaybackPage({
   const currentMediaKey = mediaKey(media);
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { pause, suspendKeyboard, resumeKeyboard } = useAudioPlayerActions();
+  useSuspendMusicPlayback();
 
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -153,12 +153,6 @@ export default function VideoPlaybackPage({
   // fallback consumed the native error, the paired onError must not raise
   // the error screen.
   const fallbackConsumedErrorRef = useRef(false);
-
-  useEffect(() => {
-    pause();
-    suspendKeyboard();
-    return () => resumeKeyboard();
-  }, [pause, suspendKeyboard, resumeKeyboard]);
 
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);

@@ -30,7 +30,7 @@ import { movieDetailsQueryOpts } from "@/lib/query-opts";
 import { trailerSearchSchema } from "@/lib/route-search";
 import { routeHead } from "@/lib/route-head";
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer";
-import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
+import { useSuspendMusicPlayback } from "@/hooks/useSuspendMusicPlayback";
 import { useShortcutHints } from "@/hooks/useShortcutHints";
 import { formatTimecode } from "@/lib/format";
 import {
@@ -107,7 +107,7 @@ function TrailerPage() {
   const { mediaType, tmdbId, videoKey, returnTo } = Route.useSearch();
   const navigate = Route.useNavigate();
   const router = useRouter();
-  const { pause, suspendKeyboard, resumeKeyboard } = useAudioPlayerActions();
+  useSuspendMusicPlayback();
   const { showShortcutHints, withShortcut } = useShortcutHints();
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -115,12 +115,6 @@ function TrailerPage() {
   const [isBrowserFullscreen, setIsBrowserFullscreen] = useState(
     () => !!getFullscreenElement(),
   );
-
-  useEffect(() => {
-    pause();
-    suspendKeyboard();
-    return () => resumeKeyboard();
-  }, [pause, suspendKeyboard, resumeKeyboard]);
 
   const shouldFetchMovie =
     mediaType === "movie" && tmdbId != null && tmdbId > 0 && !videoKey;
