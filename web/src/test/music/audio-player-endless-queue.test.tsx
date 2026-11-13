@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AudioPlayerProvider } from "@/context/AudioPlayerContext";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
@@ -498,6 +498,9 @@ describe("a pending Shuffle all / Play all", () => {
   type Held = { resolve: (value: unknown) => void };
 
   const errors: unknown[] = [];
+  // Every start the harness made, so a test can wait for the actions
+  // themselves to finish rather than for time to pass.
+  const starts: Promise<void>[] = [];
 
   function PendingStartHarness() {
     const actions = useAudioPlayerActions();
@@ -508,13 +511,16 @@ describe("a pending Shuffle all / Play all", () => {
         errors.push(error);
       }
     };
+    const track = (start: () => Promise<void>) => {
+      starts.push(run(start));
+    };
 
     return (
       <>
-        <button type="button" onClick={() => void run(actions.startShufflePlayback)}>
+        <button type="button" onClick={() => track(actions.startShufflePlayback)}>
           start shuffle
         </button>
-        <button type="button" onClick={() => void run(actions.startPlayAllPlayback)}>
+        <button type="button" onClick={() => track(actions.startPlayAllPlayback)}>
           start play all
         </button>
         <button type="button" onClick={actions.stop}>
@@ -555,9 +561,18 @@ describe("a pending Shuffle all / Play all", () => {
     return held;
   }
 
-  // Lets a released response run through the action's continuation.
-  const settle = async () => {
-    await new Promise(resolve => setTimeout(resolve, 0));
+  // Releases a held answer and waits, inside act, for the start it answers
+  // (the latest one unless named) to finish: anything it rendered, toasted or
+  // threw has happened by the time this resolves.
+  const release = async (
+    request: Held,
+    response: unknown,
+    start: Promise<void> | undefined = starts.at(-1),
+  ) => {
+    await act(async () => {
+      request.resolve(response);
+      await start;
+    });
   };
 
   const renderHarness = () =>
@@ -575,6 +590,7 @@ describe("a pending Shuffle all / Play all", () => {
   beforeEach(async () => {
     stubMediaElement();
     errors.length = 0;
+    starts.length = 0;
     const { toast } = await import("sonner");
     infoSpy = vi.spyOn(toast, "info");
   });
@@ -602,8 +618,7 @@ describe("a pending Shuffle all / Play all", () => {
     await waitFor(() => expect(held).toHaveLength(1));
     click("stop");
 
-    held[0].resolve(response);
-    await settle();
+    await release(held[0], response);
 
     expectNoPlayer();
     expect(infoSpy).not.toHaveBeenCalled();
@@ -622,8 +637,7 @@ describe("a pending Shuffle all / Play all", () => {
     await waitFor(() => expect(held).toHaveLength(1));
     click("stop");
 
-    held[0].resolve(response);
-    await settle();
+    await release(held[0], response);
 
     expectNoPlayer();
     expect(infoSpy).not.toHaveBeenCalled();
@@ -642,13 +656,10 @@ describe("a pending Shuffle all / Play all", () => {
       expect(heldPlayAll).toHaveLength(1);
     });
 
-    heldPlayAll[0].resolve(playAllPage(range(101, BATCH_SIZE)));
-    await waitFor(() => expectCounterAt(1));
+    await release(heldPlayAll[0], playAllPage(range(101, BATCH_SIZE)), starts[1]);
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Song 101");
 
-    heldShuffle[0].resolve(shufflePage(range(1, BATCH_SIZE)));
-    await settle();
-
+    await release(heldShuffle[0], shufflePage(range(1, BATCH_SIZE)), starts[0]);
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Song 101");
   });
 
@@ -660,12 +671,11 @@ describe("a pending Shuffle all / Play all", () => {
     click("start shuffle");
     await waitFor(() => expect(held).toHaveLength(2));
 
-    held[0].resolve(shufflePage(range(1, BATCH_SIZE)));
-    await settle();
+    await release(held[0], shufflePage(range(1, BATCH_SIZE)), starts[0]);
     expectNoPlayer();
 
-    held[1].resolve(shufflePage(range(201, BATCH_SIZE)));
-    await waitFor(() => expectCounterAt(1));
+    await release(held[1], shufflePage(range(201, BATCH_SIZE)), starts[1]);
+    expectCounterAt(1);
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Song 201");
   });
 });
@@ -688,6 +698,7 @@ describe("a stale shuffle refill", () => {
     const infoSpy = vi.spyOn(toast, "info");
 
     const heldRefills: Array<() => void> = [];
+    const refillAnswers: Promise<unknown>[] = [];
     let call = 0;
     vi.mocked(getShuffleTracks).mockImplementation(() => {
       call += 1;
@@ -701,9 +712,11 @@ describe("a stale shuffle refill", () => {
       if (call === 1) return Promise.resolve(page(1, BATCH_SIZE));
       // 2: A's refill, held until queue B is playing, then answered empty.
       if (call === 2) {
-        return new Promise(resolve => {
+        const refill = new Promise<ReturnType<typeof page>>(resolve => {
           heldRefills.push(() => resolve(page(0, 0)));
         });
+        refillAnswers.push(refill);
+        return refill;
       }
       // 3: queue B opens with 20 tracks; 4+: B's own refills.
       if (call === 3) return Promise.resolve(page(101, 20));
@@ -727,8 +740,12 @@ describe("a stale shuffle refill", () => {
       expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Song 101"),
     );
 
-    heldRefills[0]();
-    await new Promise(resolve => setTimeout(resolve, 0));
+    // Awaiting the answer after releasing it runs the refill's own
+    // continuation (registered first) before this one.
+    await act(async () => {
+      heldRefills[0]();
+      await refillAnswers[0];
+    });
     expect(infoSpy).not.toHaveBeenCalled();
 
     // 20 queued against a lookahead of 10: the runway gets short at 12.

@@ -12,6 +12,7 @@ import SpotifyPicker, {
   type SpotifySearchResult,
 } from "@/components/music/SpotifyPicker";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
+import { sessionEndedSince, sessionStamp } from "@/hooks/useEndSession";
 import { createNotification } from "@/lib/api";
 import { NOTIFICATION_TITLES } from "@/lib/constants";
 import {
@@ -109,10 +110,13 @@ export default function SpotifyRequestDialog<T extends SpotifySearchResult>({
       `Spotify URL: ${spotifyURL}`,
     ].filter(Boolean);
 
+    const session = sessionStamp();
     const response = await createNotification({
       title: copy.notificationTitle,
       message: lines.join("\n"),
     });
+    // Signed out meanwhile: the next reader's page is not ours to toast on.
+    if (sessionEndedSince(session)) return;
 
     if (response.error) {
       showActionFailed(copy.failureAction, response);

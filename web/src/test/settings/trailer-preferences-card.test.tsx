@@ -1,6 +1,6 @@
 import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import TrailerPreferencesCard from "@/components/settings/TrailerPreferencesCard";
 import { LIVE_ANNOUNCE_DELAY_MS } from "@/lib/constants";
@@ -38,6 +38,10 @@ function success(data: TrailerPreferencesData) {
 function toggle() {
   return screen.getByRole("switch", { name: "Play trailers before movies" });
 }
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 beforeEach(() => {
   getTrailerPreferencesMock.mockResolvedValue(success(defaults));
@@ -199,7 +203,6 @@ describe("TrailerPreferencesCard", () => {
       await vi.advanceTimersByTimeAsync(LIVE_ANNOUNCE_DELAY_MS);
     });
     expect(screen.queryByText(/Saved to your account\./)).toBeNull();
-    vi.useRealTimers();
   });
 
   it("explains that theaters trailers fall back to the library without TMDB", async () => {

@@ -41,9 +41,13 @@ export function sessionStamp() {
   return { session: endedSessions };
 }
 
-/** Whether the session a mutation was stamped in has ended since. */
+/**
+ * Whether the session a mutation was stamped in has ended since, or is ending:
+ * from the moment useEndSession starts leaving for /login, nothing the old
+ * session started should toast, write or navigate any more.
+ */
 export function sessionEndedSince(stamp: { session: number } | undefined) {
-  return stamp?.session !== endedSessions;
+  return endingSession || stamp?.session !== endedSessions;
 }
 
 type EndSessionOptions = {

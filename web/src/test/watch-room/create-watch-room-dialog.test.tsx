@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ComponentProps } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -25,6 +25,20 @@ import {
 } from "../helpers/tech-details";
 
 const createWatchRoomMock = vi.fn();
+// Lets a test end the session at a chosen moment: the dialog's own check after
+// its refetch, and useSessionMutation's at each callback, read it.
+const sessionEnded = vi.hoisted(() => ({ value: false }));
+
+vi.mock("@/hooks/useEndSession", async () => {
+  const actual = await vi.importActual<typeof import("@/hooks/useEndSession")>(
+    "@/hooks/useEndSession",
+  );
+  return {
+    ...actual,
+    sessionEndedSince: (stamp: { session: number } | undefined) =>
+      sessionEnded.value || actual.sessionEndedSince(stamp),
+  };
+});
 const getMovieTechnicalDetailsMock = vi.fn();
 const navigateMock = vi.fn();
 const showActionFailedMock = vi.fn();
@@ -322,6 +336,36 @@ describe("CreateWatchRoomDialog", () => {
       to: "/watch-rooms/$id",
       params: { id: 123 },
     });
+  });
+
+  it("neither toasts nor navigates when the session ends during the rooms refetch", async () => {
+    createWatchRoomMock.mockResolvedValue(
+      success<CreateWatchRoomResponseType>({ room_id: 123 }),
+    );
+    const user = userEvent.setup();
+    const { invalidateSpy } = renderDialog();
+    let finishRefetch: () => void = () => {};
+    const refetch = new Promise<void>((resolve) => {
+      finishRefetch = resolve;
+    });
+    invalidateSpy.mockImplementation(() => refetch);
+
+    await user.click(screen.getByRole("checkbox", { name: /invite dana scully/i }));
+    await user.click(screen.getByRole("button", { name: "Create and join room" }));
+    await waitFor(() => expect(invalidateSpy).toHaveBeenCalled());
+
+    sessionEnded.value = true;
+    try {
+      await act(async () => {
+        finishRefetch();
+        await refetch;
+      });
+
+      expect(showCreatedMock).not.toHaveBeenCalled();
+      expect(navigateMock).not.toHaveBeenCalled();
+    } finally {
+      sessionEnded.value = false;
+    }
   });
 
   it("keeps the dialog open and reports API errors", async () => {

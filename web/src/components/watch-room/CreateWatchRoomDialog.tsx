@@ -47,6 +47,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
+import { sessionEndedSince, sessionStamp } from "@/hooks/useEndSession";
 import { apiErrorMessage } from "@/lib/is-api-failure";
 import { getMediaImageUrl } from "@/lib/media-image-url";
 
@@ -158,7 +159,12 @@ export default function CreateWatchRoomDialog({
         return;
       }
 
+      // The callback starts in its own session (useSessionMutation checks);
+      // a sign-out during this refetch must still stop the toast and the
+      // navigation away from the login page.
+      const session = sessionStamp();
       await queryClient.invalidateQueries({ queryKey: [WATCH_ROOMS_KEY] });
+      if (sessionEndedSince(session)) return;
       showCreated(
         "Watch room",
         `"${movieTitle}" is ready to watch together.`,

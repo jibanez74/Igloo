@@ -26,6 +26,7 @@ import { unwrapString, unwrapStringOrUndefined } from "@/lib/nullable";
 import { playlistFieldsError } from "@/lib/form-validation";
 import type { NullableString } from "@/types";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
+import { sessionEndedSince, sessionStamp } from "@/hooks/useEndSession";
 
 // ============================================================================
 // Types
@@ -180,9 +181,11 @@ function PlaylistForm({
         // The playlist page's head takes the name from its loader data: wait
         // for the details refetch, then reload that route so the tab title
         // follows a rename.
+        const session = sessionStamp();
         await queryClient.invalidateQueries({
           queryKey: [api.detailsKey, playlist.id],
         });
+        if (sessionEndedSince(session)) return;
         await router.invalidate({
           filter: match => match.routeId === api.routeId,
         });

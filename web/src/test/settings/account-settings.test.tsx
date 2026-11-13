@@ -1,5 +1,5 @@
 import type React from "react";
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { authUserFrom, authUserQueryOpts } from "@/lib/query-opts";
@@ -74,6 +74,8 @@ type AccountFetchOptions = {
   passwordResponse?: Promise<Response>;
   /** Answers the avatar upload in place of the stored-copy reply. */
   uploadResponse?: Promise<Response>;
+  /** Answers an email change; by default the server saves it. */
+  emailResponse?: Promise<Response>;
 };
 
 function setupAccountFetch(
@@ -86,6 +88,7 @@ function setupAccountFetch(
     failPassword = false,
     passwordResponse,
     uploadResponse,
+    emailResponse,
   }: AccountFetchOptions = {},
 ) {
   const requests: CapturedRequest[] = [];
@@ -143,6 +146,11 @@ function setupAccountFetch(
         error: false,
         message: "Password updated successfully",
       });
+    }
+
+    if (url === "/api/user/email" && method === "PUT") {
+      if (emailResponse) return emailResponse;
+      return jsonResponse({ error: false, data: { user: currentUser } });
     }
 
     if (url === "/api/user/name" && method === "PUT") {
@@ -295,6 +303,54 @@ describe("Account settings", () => {
     expect(queryClient.getQueryCache().getAll()).toEqual([]);
     expect(showSuccessMock).not.toHaveBeenCalled();
     expect(showActionFailedMock).not.toHaveBeenCalled();
+  });
+
+  // Saving both fields sends the email first and the name once it answers.
+  // An email answer that lands in the next session must not start the name
+  // change there, where it would go out with the next reader's cookie.
+  it("does not send the name change once the session ended during the email save", async () => {
+    const user = userEvent.setup();
+    const emailRequest = deferredResponse();
+    const { router, requests, queryClient } = await renderAccountRoute(testUser(), {
+      emailResponse: emailRequest.promise,
+      acceptName: true,
+    });
+
+    const emailInput = screen.getByLabelText("Email");
+    await user.clear(emailInput);
+    await user.type(emailInput, "fox@example.com");
+    const nameInput = screen.getByLabelText("Name");
+    await user.clear(nameInput);
+    await user.type(nameInput, "Fox Mulder");
+    await user.click(screen.getByRole("button", { name: "Save profile" }));
+    await waitFor(() => {
+      expect(requestsFor(requests, "PUT", "/api/user/email")).toHaveLength(1);
+    });
+
+    await router.navigate({
+      to: "/login",
+      replace: true,
+      state: previous => ({ ...previous, loggedOut: true }),
+    });
+
+    await waitFor(() => {
+      expect(queryClient.getQueryCache().getAll()).toEqual([]);
+    });
+
+    // The email mutation finishing (callbacks included), then the save
+    // handler's continuation after mutateAsync, which act flushes.
+    const settled = mutationSettled(queryClient);
+    emailRequest.resolve(
+      jsonResponse({
+        error: false,
+        data: { user: testUser({ email: "fox@example.com" }) },
+      }),
+    );
+    await settled;
+    await act(async () => {});
+
+    expect(requestsFor(requests, "PUT", "/api/user/name")).toHaveLength(0);
+    expect(showSuccessMock).not.toHaveBeenCalled();
   });
 
   it("undoes only the avatar when the URL fails after a name change saved", async () => {

@@ -63,7 +63,11 @@ import { useFocusHandoff } from "@/hooks/useFocusHandoff";
 import QuickConnectApproveCard from "@/components/settings/QuickConnectApproveCard";
 import DevicesCard from "@/components/settings/DevicesCard";
 import ProfilePinCard from "@/components/settings/ProfilePinCard";
-import { useEndSession } from "@/hooks/useEndSession";
+import {
+  sessionEndedSince,
+  sessionStamp,
+  useEndSession,
+} from "@/hooks/useEndSession";
 import { routeHead } from "@/lib/route-head";
 import { apiErrorMessage } from "@/lib/is-api-failure";
 
@@ -398,6 +402,7 @@ function AccountSettings() {
       return;
     }
 
+    const session = sessionStamp();
     if (trimmedEmail !== user.email) {
       clearError("email");
       try {
@@ -405,6 +410,9 @@ function AccountSettings() {
       } catch {
         // The mutation reports its own error; a valid name change can still save.
       }
+      // mutateAsync resolves even when the session ended under it. The name
+      // change would then start in the next session, with its cookie.
+      if (sessionEndedSince(session)) return;
     }
     if (trimmedName !== user.name) {
       clearError("name");

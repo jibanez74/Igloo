@@ -37,8 +37,9 @@ export type SessionMutationOptions<
   ) => Promise<TOnMutateResult> | TOnMutateResult;
 };
 
-// No stamp only when the caller's own onMutate threw, synchronously with the
-// mutation's start, so the session is still the one it began in.
+// No stamp only when the caller's own onMutate threw or rejected. Its
+// callbacks then run unfenced: no current onMutate can fail after an await,
+// so the session is still the one the mutation began in.
 function endedFor(wrapped: SessionContext<unknown> | undefined) {
   return wrapped !== undefined && sessionEndedSince(wrapped.session);
 }
@@ -57,6 +58,12 @@ function endedFor(wrapped: SessionContext<unknown> | undefined) {
  * onMutate gets a third argument for the one window the wrapper cannot cover:
  * an optimistic write after `await queryClient.cancelQueries(...)` must return
  * early when `session.ended()`, or it lands in the next account's cache.
+ *
+ * The fence is checked as each callback starts. A callback that awaits (a
+ * refetch, a navigation) and then toasts, writes or navigates takes
+ * `sessionStamp()` at its start and checks `sessionEndedSince` after the
+ * await, as must code after `await mutation.mutateAsync(...)`, which resolves
+ * even when the callbacks were dropped.
  *
  * Per-call `mutate(vars, { onSuccess })` callbacks need no fence: TanStack
  * runs them only while the calling component is mounted, and signing out
