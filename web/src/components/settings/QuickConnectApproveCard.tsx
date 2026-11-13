@@ -1,6 +1,8 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSessionMutation } from "@/hooks/useSessionMutation";
+import { sessionEndedSince, sessionStamp } from "@/lib/session";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { FieldError, FieldHint } from "@/components/ui/field";
@@ -122,7 +124,7 @@ export default function QuickConnectApproveCard() {
   // A pure in-memory lookup, POST only because the code travels in the body.
   // It changes no server state and no query caches it.
   // react-doctor-disable-next-line react-doctor/query-mutation-missing-invalidation
-  const lookupMutation = useMutation({
+  const lookupMutation = useSessionMutation({
     mutationFn: (deviceCode: string) => lookupQuickConnect(deviceCode),
     onSuccess: res => {
       if (res.error) {
@@ -142,8 +144,9 @@ export default function QuickConnectApproveCard() {
   // The mutationFn refreshes [DEVICES_KEY] itself via fetchQuery, and the poll
   // below keeps it current, so there is nothing left to invalidate.
   // react-doctor-disable-next-line react-doctor/query-mutation-missing-invalidation
-  const approveMutation = useMutation({
+  const approveMutation = useSessionMutation({
     mutationFn: async (deviceCode: string): Promise<ApprovalResult> => {
+      const session = sessionStamp();
       let baselineDeviceIds: number[] | null = null;
 
       try {
@@ -155,6 +158,13 @@ export default function QuickConnectApproveCard() {
         );
       } catch {
         baselineDeviceIds = null;
+      }
+
+      // Signed out while the device list loaded: the approval would go out
+      // with the next reader's cookie and pair the device to their account.
+      // Rejecting here leaves the dropped callbacks to useSessionMutation.
+      if (sessionEndedSince(session)) {
+        throw new Error("The session ended before the device was approved.");
       }
 
       return {

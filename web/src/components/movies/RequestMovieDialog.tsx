@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import TmdbMoviePicker from "@/components/movies/TmdbMoviePicker";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
+import { sessionEndedSince, sessionStamp } from "@/lib/session";
 import { createNotification } from "@/lib/api";
 import { NOTIFICATION_TITLES } from "@/lib/constants";
 import { catalogYear } from "@/lib/format";
@@ -56,10 +57,13 @@ export default function RequestMovieDialog({
       `TMDB URL: https://www.themoviedb.org/movie/${selectedResult.tmdb_id}`,
     ].filter(Boolean);
 
+    const session = sessionStamp();
     const response = await createNotification({
       title: NOTIFICATION_TITLES.MOVIE_REQUEST,
       message: lines.join("\n"),
     });
+    // Signed out meanwhile: the next reader's page is not ours to toast on.
+    if (sessionEndedSince(session)) return;
 
     if (response.error) {
       showActionFailed("send movie request", response);

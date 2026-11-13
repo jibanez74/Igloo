@@ -7,6 +7,7 @@ import {
   showSuccess,
 } from "@/lib/toast-helpers";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
+import { sessionEndedSince, sessionStamp } from "@/lib/session";
 
 type DeleteWatchRoomDialogProps = {
   roomId: number;
@@ -36,9 +37,12 @@ export default function DeleteWatchRoomDialog({
     setDeleting(true);
     onDeleteStart?.();
     let deleteSucceeded = false;
+    const session = sessionStamp();
 
     try {
       const res = await deleteWatchRoom(roomId);
+      // Signed out meanwhile: the next reader's cache and page are not ours.
+      if (sessionEndedSince(session)) return;
       if (res.error) {
         onDeleteError?.();
         showActionFailed("close watch room", res);

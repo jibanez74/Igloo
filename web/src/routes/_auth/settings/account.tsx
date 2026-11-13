@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
+import { useSessionMutation } from "@/hooks/useSessionMutation";
 import { useId, useRef, useState, useTransition } from "react";
 import type { FormEvent } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -62,11 +63,8 @@ import { useFocusHandoff } from "@/hooks/useFocusHandoff";
 import QuickConnectApproveCard from "@/components/settings/QuickConnectApproveCard";
 import DevicesCard from "@/components/settings/DevicesCard";
 import ProfilePinCard from "@/components/settings/ProfilePinCard";
-import {
-  sessionEndedSince,
-  sessionStamp,
-  useEndSession,
-} from "@/hooks/useEndSession";
+import { useEndSession } from "@/hooks/useEndSession";
+import { sessionEndedSince, sessionStamp } from "@/lib/session";
 import { routeHead } from "@/lib/route-head";
 import { apiErrorMessage } from "@/lib/is-api-failure";
 
@@ -181,18 +179,15 @@ function AccountSettings() {
   };
 
   // Name update mutation
-  const updateNameMutation = useMutation({
+  const updateNameMutation = useSessionMutation({
     mutationFn: (newName: string) => updateUserName(newName),
-    onMutate: sessionStamp,
-    onError: (err, _newName, stamp) => {
-      if (sessionEndedSince(stamp)) return;
+    onError: (err) => {
       showActionFailed(
         "update name",
         err instanceof Error ? err.message : "An error occurred",
       );
     },
-    onSuccess: (res, _newName, stamp) => {
-      if (sessionEndedSince(stamp)) return;
+    onSuccess: (res) => {
       if (res.error) {
         setErrors(current => ({
           ...current,
@@ -208,18 +203,15 @@ function AccountSettings() {
   });
 
   // Email update mutation
-  const updateEmailMutation = useMutation({
+  const updateEmailMutation = useSessionMutation({
     mutationFn: (newEmail: string) => updateUserEmail(newEmail),
-    onMutate: sessionStamp,
-    onError: (err, _newEmail, stamp) => {
-      if (sessionEndedSince(stamp)) return;
+    onError: (err) => {
       showActionFailed(
         "update email",
         err instanceof Error ? err.message : "An error occurred",
       );
     },
-    onSuccess: (res, _newEmail, stamp) => {
-      if (sessionEndedSince(stamp)) return;
+    onSuccess: (res) => {
       if (res.error) {
         setErrors(current => ({
           ...current,
@@ -237,7 +229,7 @@ function AccountSettings() {
   // Password update mutation
   // A password change touches no field held by any cached query.
   // react-doctor-disable-next-line react-doctor/query-mutation-missing-invalidation
-  const updatePasswordMutation = useMutation({
+  const updatePasswordMutation = useSessionMutation({
     mutationFn: ({
       currentPassword,
       newPassword,
@@ -301,11 +293,11 @@ function AccountSettings() {
   };
 
   // Avatar URL update mutation with optimistic updates
-  const updateAvatarUrlMutation = useMutation({
+  const updateAvatarUrlMutation = useSessionMutation({
     mutationFn: (avatar: string) => updateUserAvatar(avatar),
-    onMutate: async newAvatar => {
-      const stamp = sessionStamp();
+    onMutate: async (newAvatar, _context, session) => {
       await queryClient.cancelQueries({ queryKey: authKey });
+      if (session.ended()) return undefined;
       const previousData = queryClient.getQueryData(authKey);
       let rollback: AvatarRollback | undefined;
 
@@ -322,10 +314,9 @@ function AccountSettings() {
         };
       }
 
-      return { ...stamp, rollback };
+      return { rollback };
     },
     onError: (err, _newAvatar, context) => {
-      if (sessionEndedSince(context)) return;
       restoreAvatar(context?.rollback);
       showActionFailed(
         "update avatar",
@@ -333,7 +324,6 @@ function AccountSettings() {
       );
     },
     onSuccess: (res, _newAvatar, context) => {
-      if (sessionEndedSince(context)) return;
       if (res.error) {
         restoreAvatar(context?.rollback);
         setErrors(current => ({
@@ -354,18 +344,15 @@ function AccountSettings() {
 
   // Avatar upload mutation: the server returns the user with the stored
   // avatar, which replaces the cached one.
-  const uploadAvatarMutation = useMutation({
+  const uploadAvatarMutation = useSessionMutation({
     mutationFn: (file: File) => uploadUserAvatar(file),
-    onMutate: sessionStamp,
-    onError: (err, _file, stamp) => {
-      if (sessionEndedSince(stamp)) return;
+    onError: (err) => {
       showActionFailed(
         "upload avatar",
         err instanceof Error ? err.message : "An error occurred",
       );
     },
-    onSuccess: (res, _file, stamp) => {
-      if (sessionEndedSince(stamp)) return;
+    onSuccess: (res) => {
       if (res.error) {
         setErrors(current => ({
           ...current,
@@ -412,6 +399,7 @@ function AccountSettings() {
       return;
     }
 
+    const session = sessionStamp();
     if (trimmedEmail !== user.email) {
       clearError("email");
       try {
@@ -419,6 +407,9 @@ function AccountSettings() {
       } catch {
         // The mutation reports its own error; a valid name change can still save.
       }
+      // mutateAsync resolves even when the session ended under it. The name
+      // change would then start in the next session, with its cookie.
+      if (sessionEndedSince(session)) return;
     }
     if (trimmedName !== user.name) {
       clearError("name");

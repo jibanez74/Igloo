@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSessionMutation } from "@/hooks/useSessionMutation";
 import { Bell, BellOff, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -127,7 +128,7 @@ export default function NotificationBell() {
   }, [freshListData, queryClient]);
 
 
-  const markReadMutation = useMutation({
+  const markReadMutation = useSessionMutation({
     mutationFn: (id: number) => markNotificationRead(id),
     onSuccess: (res) => {
       if (res.error) {
@@ -139,7 +140,7 @@ export default function NotificationBell() {
     onError: () => showActionFailed("update notification"),
   });
 
-  const markAllMutation = useMutation({
+  const markAllMutation = useSessionMutation({
     mutationFn: () => markAllNotificationsRead(),
     onSuccess: (res) => {
       if (res.error) {
@@ -151,7 +152,7 @@ export default function NotificationBell() {
     onError: () => showActionFailed("mark all as read"),
   });
 
-  const deleteMutation = useMutation({
+  const deleteMutation = useSessionMutation({
     mutationFn: (id: number) => deleteNotification(id),
     onSuccess: (res) => {
       if (res.error) {

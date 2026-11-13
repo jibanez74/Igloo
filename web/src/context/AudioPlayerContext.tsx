@@ -108,6 +108,15 @@ export function AudioPlayerProvider({
   // Cleared implicitly: startQueue mints a new id, which can never match.
   const exhaustedQueueIdRef = useRef<number | null>(null);
 
+  // The latest request to change what plays: every queue start, Stop, and the
+  // Shuffle all / Play all buttons the moment they are pressed. Those two await
+  // their first page before a queue exists, so they cannot be fenced by
+  // liveQueueIdRef: bumping that early would orphan the queue still playing
+  // if the request then failed. A start whose intent is no longer the latest
+  // when its page lands (the reader pressed Stop, signed out, or started
+  // something else) drops the page without a queue, a toast or an error.
+  const startIntentRef = useRef(0);
+
   const populateTrackMetadata = (tracks: PlayableTrackData[]) => {
     if (trackCoversRef.current === null) {
       trackCoversRef.current = new Map();
@@ -282,11 +291,18 @@ export function AudioPlayerProvider({
   // them. It used to re-sample the whole library blind, which on a library
   // smaller than the queue returned nothing but duplicates and burned a full
   // table scan per retry.
-  const fetchShuffleBatch = async () => {
+  // fetchedForQueueId is the queue the refill runs for. Everything after the
+  // await (the exhaustion latch, its toast, the metadata maps) belongs to that
+  // queue, and a replacement started meanwhile must not inherit any of it; a
+  // refill whose queue was replaced before it even started has nothing to do.
+  const fetchShuffleBatch = async (fetchedForQueueId: number) => {
+    if (liveQueueIdRef.current !== fetchedForQueueId) {
+      return [];
+    }
     // The library had nothing left for this queue last time we asked, and the
     // exclusions only grow. Checked here rather than in the `enabled` flag so
     // the ref is not read during render.
-    if (exhaustedQueueIdRef.current === liveQueueIdRef.current) {
+    if (exhaustedQueueIdRef.current === fetchedForQueueId) {
       return [];
     }
 
@@ -297,16 +313,16 @@ export function AudioPlayerProvider({
       // The most recent ids matter most if the queue ever outgrows the cap.
       knownIds.slice(-SHUFFLE_EXCLUDE_LIMIT),
     );
-    if (response.error) {
+    if (response.error || liveQueueIdRef.current !== fetchedForQueueId) {
       return [];
     }
 
     // An empty batch now means the exclusions covered everything left, so say
-    // so instead of letting the queue quietly run dry. Latch it against the
-    // live queue: tracksAhead keeps shrinking as the tail plays out, and
-    // without the latch every advance would re-ask and re-toast.
+    // so instead of letting the queue quietly run dry. Latch it against this
+    // queue: tracksAhead keeps shrinking as the tail plays out, and without
+    // the latch every advance would re-ask and re-toast.
     if (response.data.tracks.length === 0) {
-      exhaustedQueueIdRef.current = liveQueueIdRef.current;
+      exhaustedQueueIdRef.current = fetchedForQueueId;
       showInfo(
         "That's the whole library",
         "Shuffle has played everything it hasn't already queued.",
@@ -326,7 +342,11 @@ export function AudioPlayerProvider({
     return rawTracks.map(convertToAudioTrack);
   };
 
-  const fetchPlayAllBatch = async () => {
+  const fetchPlayAllBatch = async (fetchedForQueueId: number) => {
+    if (liveQueueIdRef.current !== fetchedForQueueId) {
+      return [];
+    }
+
     // Play-all walks the library in order, so it stops once the last page has
     // been fetched. Checked here rather than in the `enabled` flag so the refs
     // are not read during render.
@@ -334,12 +354,10 @@ export function AudioPlayerProvider({
       return [];
     }
 
-    // Both the queue this page belongs to and the offset it starts at are read
-    // before the await. The offset must not be re-read afterwards: restarting
-    // play-all resets it, and a `+=` landing after that reset would push the
-    // cursor past a page the new queue has not fetched, silently skipping it
-    // for the rest of the session.
-    const fetchedForQueueId = liveQueueIdRef.current;
+    // The offset this page starts at is read before the await and must not be
+    // re-read afterwards: restarting play-all resets it, and a `+=` landing
+    // after that reset would push the cursor past a page the new queue has not
+    // fetched, silently skipping it for the rest of the session.
     const offset = playAllOffsetRef.current;
 
     const response = await getTracksPaginated(TRACKS_INFINITE_PAGE_SIZE, offset);
@@ -476,6 +494,7 @@ export function AudioPlayerProvider({
     // rather than inside the updater so callers (and code resuming after an
     // await) can name this queue without waiting for a commit.
     const queueId = ++liveQueueIdRef.current;
+    startIntentRef.current += 1;
 
     setQueueState({
       queueId,
@@ -645,7 +664,12 @@ export function AudioPlayerProvider({
 
   const startShufflePlayback: AudioPlayerActions["startShufflePlayback"] =
     async () => {
+      const intent = ++startIntentRef.current;
       const response = await getShuffleTracks(SHUFFLE_TRACKS_LIMIT);
+      // Checked before the error too, so a stale failure does not toast.
+      if (startIntentRef.current !== intent) {
+        return;
+      }
       // apiRequest resolves an error envelope rather than rejecting, so throw
       // here or the caller's catch (and its toast) never runs.
       if (response.error) {
@@ -663,7 +687,12 @@ export function AudioPlayerProvider({
 
   const startPlayAllPlayback: AudioPlayerActions["startPlayAllPlayback"] =
     async () => {
+      const intent = ++startIntentRef.current;
       const response = await getTracksPaginated(TRACKS_INFINITE_PAGE_SIZE, 0);
+      // Same stale-intent check as startShufflePlayback above.
+      if (startIntentRef.current !== intent) {
+        return;
+      }
       // Same error-envelope caveat as startShufflePlayback above.
       if (response.error) {
         throw new Error(response.message || "Failed to fetch tracks");
@@ -700,6 +729,8 @@ export function AudioPlayerProvider({
     // Keep advancing the identity so a batch still in flight is not appended
     // into the cleared queue.
     const queueId = ++liveQueueIdRef.current;
+    // And drop a Shuffle all / Play all still waiting for its first page.
+    startIntentRef.current += 1;
     setQueueState({
       ...createInitialQueueState(),
       queueId,

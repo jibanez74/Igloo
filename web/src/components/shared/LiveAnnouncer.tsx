@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from "react";
+import { LIVE_ANNOUNCE_DELAY_MS } from "@/lib/constants";
 import { clearTimeoutRef } from "@/lib/utils";
 
 /**
@@ -28,8 +29,6 @@ type LiveAnnouncerProps = {
   politeness?: "polite" | "assertive";
 };
 
-const ANNOUNCE_DELAY_MS = 100;
-
 export default function LiveAnnouncer({
   message,
   announcementKey,
@@ -53,7 +52,7 @@ export default function LiveAnnouncer({
         text: message,
         slot: prev.slot === 0 ? 1 : 0,
       }));
-    }, ANNOUNCE_DELAY_MS);
+    }, LIVE_ANNOUNCE_DELAY_MS);
 
     return () => clearTimeoutRef(timeoutRef);
   }, [message, announcementKey]);

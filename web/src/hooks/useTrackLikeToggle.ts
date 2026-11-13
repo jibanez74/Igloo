@@ -1,9 +1,9 @@
 import {
   useIsMutating,
-  useMutation,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
+import { useSessionMutation } from "@/hooks/useSessionMutation";
 import { toggleLikeTrack } from "@/lib/api";
 import { LIKED_TRACKS_KEY } from "@/lib/constants";
 import { likedTrackIdsQueryOpts } from "@/lib/query-opts";
@@ -65,11 +65,12 @@ function useTrackLikeToggle(trackId: number) {
     );
   };
 
-  const mutation = useMutation({
+  const mutation = useSessionMutation({
     mutationKey,
     mutationFn: () => toggleLikeTrack(trackId),
-    onMutate: async () => {
+    onMutate: async (_variables, _context, session) => {
       await queryClient.cancelQueries({ queryKey: LIKED_IDS_QUERY_KEY });
+      if (session.ended()) return undefined;
       const previous =
         queryClient.getQueryData(LIKED_IDS_QUERY_KEY);
       if (previous?.error === false) {

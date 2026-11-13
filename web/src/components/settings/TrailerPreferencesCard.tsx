@@ -1,4 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSessionMutation } from "@/hooks/useSessionMutation";
 import { Clapperboard } from "lucide-react";
 import { useId, useState } from "react";
 
@@ -82,10 +83,11 @@ export default function TrailerPreferencesCard() {
     if (previousData) queryClient.setQueryData(prefsKey, previousData);
   };
 
-  const saveMutation = useMutation({
+  const saveMutation = useSessionMutation({
     mutationFn: ({ prefs }: SaveVariables) => updateTrailerPreferences(prefs),
-    onMutate: async ({ prefs }) => {
+    onMutate: async ({ prefs }, _context, session) => {
       await queryClient.cancelQueries({ queryKey: prefsKey });
+      if (session.ended()) return undefined;
       const previousData = queryClient.getQueryData(prefsKey);
       queryClient.setQueryData(prefsKey, { error: false, data: prefs });
       return { previousData };

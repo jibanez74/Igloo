@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSessionMutation } from "@/hooks/useSessionMutation";
 import { showDeleted, showActionFailed } from "@/lib/toast-helpers";
 import {
   Disc3,
@@ -201,7 +202,7 @@ function AlbumDetailsContent({
 
   // Deleting an album also removes its tracks, which the musician pages, the
   // liked lists and any playlist may show, so every music query goes stale.
-  const deleteMutation = useMutation({
+  const deleteMutation = useSessionMutation({
     mutationFn: () => deleteAlbum(album.id),
     onSuccess: async (result) => {
       if (result.error) {

@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
+import { useSessionMutation } from "@/hooks/useSessionMutation";
 import { useNavigate } from "@tanstack/react-router";
 import { Pencil, Trash2 } from "lucide-react";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
@@ -56,7 +57,7 @@ export default function PlaylistOwnerActions({
   const editButtonRef = useRef<HTMLButtonElement | null>(null);
   const deleteButtonRef = useRef<HTMLButtonElement | null>(null);
 
-  const deleteMutation = useMutation({
+  const deleteMutation = useSessionMutation({
     mutationFn: () => api.remove(playlist.id),
     onSuccess: async (result) => {
       if (result.error) {

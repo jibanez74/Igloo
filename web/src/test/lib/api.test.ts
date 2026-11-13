@@ -9,7 +9,8 @@ import {
   updateUserPin,
   uploadUserAvatar,
 } from "@/lib/api";
-import { jsonResponse } from "../helpers/api";
+import { forgetEndedSession } from "@/lib/session";
+import { deferredResponse, jsonResponse } from "../helpers/api";
 
 const NOT_AUTHORIZED = { error: true, message: "not authorized" };
 
@@ -31,6 +32,25 @@ afterEach(() => {
 });
 
 describe("session expiry", () => {
+  // The previous reader's request, still in flight when they signed out and
+  // the next reader signed in: its 401 is about the session it was sent in.
+  it.each([
+    ["getNotifications", () => getNotifications()],
+    ["uploadUserAvatar", () => uploadUserAvatar(new File(["x"], "me.png"))],
+  ])("ignores a %s 401 that answers a session already over", async (_name, send) => {
+    const answer = deferredResponse();
+    answerEveryRequest(() => answer.promise);
+    const listener = listenForExpiry();
+
+    const pending = send();
+    forgetEndedSession();
+    answer.resolve(await jsonResponse(NOT_AUTHORIZED, 401));
+    const res = await pending;
+
+    expect(res.error).toBe(true);
+    expect(listener).not.toHaveBeenCalled();
+  });
+
   it("reports a 401 and still resolves its envelope", async () => {
     answerEveryRequest(() => jsonResponse(NOT_AUTHORIZED, 401));
     const listener = listenForExpiry();

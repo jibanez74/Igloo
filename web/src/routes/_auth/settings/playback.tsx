@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSessionMutation } from "@/hooks/useSessionMutation";
 import { useId, useState, useTransition } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { Apple, CircuitBoard, Cpu, MonitorCog, Server } from "lucide-react";
@@ -255,7 +256,7 @@ function ServerPlaybackForm({ settings }: ServerPlaybackFormProps) {
     }
   }
 
-  const updateMutation = useMutation({
+  const updateMutation = useSessionMutation({
     mutationFn: updatePlaybackSettings,
     onSuccess: res => {
       if (res.error) {

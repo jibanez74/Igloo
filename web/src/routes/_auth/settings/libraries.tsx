@@ -1,6 +1,7 @@
 import ScanProgress from "@/components/settings/ScanProgress";
 import { createFileRoute } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSessionMutation } from "@/hooks/useSessionMutation";
 import { Fragment, useId, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import {
@@ -252,7 +253,7 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
     }
   }
 
-  const updateMutation = useMutation({
+  const updateMutation = useSessionMutation({
     mutationFn: updateLibrarySettings,
     onSuccess: res => {
       if (res.error) {

@@ -1,5 +1,6 @@
 import { useState, type RefObject } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSessionMutation } from "@/hooks/useSessionMutation";
 import { showAdded, showActionFailed, showInfo } from "@/lib/toast-helpers";
 import { Check, ListMusic, ListVideo, type LucideIcon } from "lucide-react";
 import {
@@ -79,7 +80,7 @@ export default function AddToPlaylistDialog({
         p.name.toLowerCase().includes(searchQuery.toLowerCase())
       );
 
-  const mutation = useMutation({
+  const mutation = useSessionMutation({
     mutationFn: (playlistIds: number[]) =>
       Promise.all(playlistIds.map((id) => addItems(id, [itemId]))),
     onSuccess: (results, playlistIds) => {

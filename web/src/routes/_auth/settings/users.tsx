@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSessionMutation } from "@/hooks/useSessionMutation";
 import { useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Alert } from "@/components/ui/alert";
@@ -157,7 +158,7 @@ function UsersSettings() {
     });
   };
 
-  const createMutation = useMutation({
+  const createMutation = useSessionMutation({
     mutationFn: adminCreateUser,
     onSuccess: res => {
       if (res.error) {
@@ -176,7 +177,7 @@ function UsersSettings() {
     },
   });
 
-  const updateMutation = useMutation({
+  const updateMutation = useSessionMutation({
     mutationFn: ({ id, data }: { id: number; data: { name: string; email: string; is_admin: boolean } }) =>
       adminUpdateUser(id, data),
     onSuccess: res => {
@@ -196,7 +197,7 @@ function UsersSettings() {
     },
   });
 
-  const deleteMutation = useMutation({
+  const deleteMutation = useSessionMutation({
     mutationFn: adminDeleteUser,
     onSuccess: (res, id) => {
       if (res.error) {
@@ -231,7 +232,7 @@ function UsersSettings() {
   // An admin password reset changes nothing either user list renders,
   // which is why it is the only mutation here without an invalidate.
   // react-doctor-disable-next-line react-doctor/query-mutation-missing-invalidation
-  const resetPasswordMutation = useMutation({
+  const resetPasswordMutation = useSessionMutation({
     mutationFn: ({ id, password }: { id: number; password: string }) =>
       adminResetUserPassword(id, password),
     onSuccess: res => {

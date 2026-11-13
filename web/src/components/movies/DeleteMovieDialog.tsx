@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { deleteMovie } from "@/lib/api";
 import { invalidateLibraryQueries } from "@/lib/library-cache";
 import { libraryMovieDetailsQueryOpts } from "@/lib/query-opts";
+import { sessionEndedSince, sessionStamp } from "@/lib/session";
 import { showActionFailed, showDeleted } from "@/lib/toast-helpers";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -33,8 +34,11 @@ export default function DeleteMovieDialog({
     setDeleting(true);
 
     let deleted = false;
+    const session = sessionStamp();
     try {
       const res = await deleteMovie(movieId, deleteFile);
+      // Signed out meanwhile: the next reader's cache and page are not ours.
+      if (sessionEndedSince(session)) return;
 
       if (res.error) {
         showActionFailed("delete movie", res);

@@ -1,6 +1,7 @@
 import type { PersonData } from "@/types/people";
 import type { MovieScanStatus, MusicScanStatus, ShowScanStatus } from "@/types/settings";
 import { mediaApiBasePath, movieMediaRef } from "@/lib/media-ref";
+import { sessionEndedSince, sessionStamp, type SessionStamp } from "@/lib/session";
 import type {
   AddMoviesToPlaylistRequest,
   AlbumDetailsResponseType,
@@ -148,7 +149,11 @@ export function onSessionExpired(listener: () => void) {
   };
 }
 
-function notifySessionExpired() {
+// `session` is the session the request was sent in. A 401 that answers a
+// request from a session that has since ended (or is ending) speaks for that
+// one: the next reader signed in meanwhile, and must not be signed out by it.
+function notifySessionExpired(session: SessionStamp) {
+  if (sessionEndedSince(session)) return;
   for (const listener of sessionExpiredListeners) {
     listener();
   }
@@ -197,6 +202,7 @@ async function apiRequest<T extends Record<string, unknown>>(
 ): Promise<ApiResponseType<T>> {
   const { method = "GET", body, signal, handlesUnauthorized = false } = options;
 
+  const session = sessionStamp();
   let res: Response;
   try {
     res = await fetch(endpoint, {
@@ -215,7 +221,7 @@ async function apiRequest<T extends Record<string, unknown>>(
   // counts, and outside the try, so a listener's own failure is not reported
   // as a network error.
   if (res.status === 401 && !handlesUnauthorized) {
-    notifySessionExpired();
+    notifySessionExpired(session);
   }
 
   if (res.status === 404) {
@@ -335,6 +341,7 @@ export const uploadUserAvatar = async (
   const formData = new FormData();
   formData.append("avatar", file);
 
+  const session = sessionStamp();
   try {
     const response = await fetch("/api/user/avatar/upload", {
       method: "POST",
@@ -343,7 +350,7 @@ export const uploadUserAvatar = async (
     });
 
     if (response.status === 401) {
-      notifySessionExpired();
+      notifySessionExpired(session);
     }
 
     if (response.status === 404) {

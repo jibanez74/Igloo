@@ -3,6 +3,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useLocation, useRouter } from "@tanstack/react-router";
 import { AudioPlayerActionsContext } from "@/context/AudioPlayerContext";
 import { onSessionExpired } from "@/lib/api";
+import {
+  beginEndingSession,
+  forgetEndedSession,
+  isSessionEnding,
+} from "@/lib/session";
 import { showInfo } from "@/lib/toast-helpers";
 
 /**
@@ -19,30 +24,6 @@ export function arrivedLoggedOut(state: unknown): boolean {
     "loggedOut" in state &&
     state.loggedOut === true
   );
-}
-
-/**
- * How many sessions have ended on this page. Clearing the cache does not stop
- * a mutation that is still in flight: its callbacks run when the response
- * arrives and would write the previous user back into the cache, or over the
- * next one's. A mutation that writes the signed-in user therefore stamps the
- * session it started in (sessionStamp, from onMutate) and drops its response
- * once that session has ended (sessionEndedSince).
- */
-let endedSessions = 0;
-
-// From the moment a session starts ending until the login page forgets it, so
-// a 401 that lands meanwhile (a burst of refetches, or a request racing a
-// logout) does not end it a second time.
-let endingSession = false;
-
-export function sessionStamp() {
-  return { session: endedSessions };
-}
-
-/** Whether the session a mutation was stamped in has ended since. */
-export function sessionEndedSince(stamp: { session: number } | undefined) {
-  return stamp?.session !== endedSessions;
 }
 
 type EndSessionOptions = {
@@ -64,7 +45,7 @@ export function useEndSession() {
   const audioPlayer = useContext(AudioPlayerActionsContext);
 
   return async ({ returnTo }: EndSessionOptions = {}) => {
-    endingSession = true;
+    beginEndingSession();
     audioPlayer?.stop();
     await router.navigate({
       to: "/login",
@@ -89,7 +70,7 @@ export function useSignOutOnSessionExpiry() {
   const endSession = useEndSession();
 
   const handleExpiry = useEffectEvent(() => {
-    if (endingSession) return;
+    if (isSessionEnding()) return;
     showInfo("You've been signed out.");
     void endSession({ returnTo: router.state.location.href });
   });
@@ -115,8 +96,7 @@ export function useForgetEndedSession() {
 
   useEffect(() => {
     if (!loggedOut) return;
-    endedSessions += 1;
-    endingSession = false;
+    forgetEndedSession();
     queryClient.clear();
     router.clearCache();
   }, [loggedOut, queryClient, router]);

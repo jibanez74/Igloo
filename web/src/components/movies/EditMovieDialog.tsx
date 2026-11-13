@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
+import { sessionEndedSince, sessionStamp } from "@/lib/session";
 import type {
   LibraryMovieDetailsMovieType,
   UpdateMovieMetadataRequest,
@@ -295,7 +296,10 @@ function TmdbTab({
   const router = useRouter();
 
   async function handleApply(selectedId: number) {
+    const session = sessionStamp();
     const res = await identifyMovie(movieId, selectedId);
+    // Signed out meanwhile: the next reader's cache and page are not ours.
+    if (sessionEndedSince(session)) return;
     if (res.error) {
       showActionFailed("identify movie", res);
       return;
@@ -355,7 +359,10 @@ function ManualTab({
       return;
     }
 
+    const session = sessionStamp();
     const res = await updateMovieMetadata(movieId, body);
+    // Signed out meanwhile: the next reader's cache and page are not ours.
+    if (sessionEndedSince(session)) return;
     // updateMovieMetadata resolves an envelope and never rejects, so this clears on
     // both outcomes; `finally` would bail the React Compiler out of the component.
     // react-doctor-disable-next-line react-doctor/no-loading-flag-reset-outside-finally

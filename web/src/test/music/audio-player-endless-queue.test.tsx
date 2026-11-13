@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AudioPlayerProvider } from "@/context/AudioPlayerContext";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
@@ -487,5 +487,276 @@ describe("endless play-all queue", () => {
     }
 
     expect(vi.mocked(getTracksPaginated).mock.calls.length).toBe(2);
+  });
+});
+
+// Shuffle all and Play all await their first page before any queue exists, so
+// the queue identity cannot fence them. A page that lands after the reader
+// pressed Stop, signed out (which stops the player) or started something newer
+// must not bring the player back, toast, or throw into the caller's catch.
+describe("a pending Shuffle all / Play all", () => {
+  type Held = { resolve: (value: unknown) => void };
+
+  const errors: unknown[] = [];
+  // Every start the harness made, so a test can wait for the actions
+  // themselves to finish rather than for time to pass.
+  const starts: Promise<void>[] = [];
+
+  function PendingStartHarness() {
+    const actions = useAudioPlayerActions();
+    const run = async (start: () => Promise<void>) => {
+      try {
+        await start();
+      } catch (error) {
+        errors.push(error);
+      }
+    };
+    const track = (start: () => Promise<void>) => {
+      starts.push(run(start));
+    };
+
+    return (
+      <>
+        <button type="button" onClick={() => track(actions.startShufflePlayback)}>
+          start shuffle
+        </button>
+        <button type="button" onClick={() => track(actions.startPlayAllPlayback)}>
+          start play all
+        </button>
+        <button type="button" onClick={actions.stop}>
+          stop
+        </button>
+      </>
+    );
+  }
+
+  const shufflePage = (ids: number[]) => ({
+    error: false as const,
+    data: { tracks: ids.map(rawTrack) },
+  });
+
+  const playAllPage = (ids: number[]) => ({
+    error: false as const,
+    data: {
+      tracks: ids.map(rawTrack),
+      total: ids.length,
+      offset: 0,
+      limit: BATCH_SIZE,
+      has_more: false,
+    },
+  });
+
+  const range = (from: number, count: number) =>
+    Array.from({ length: count }, (_, index) => from + index);
+
+  // Each call parks its promise here; the test resolves them in any order.
+  function holdEveryRequest(mock: typeof getShuffleTracks | typeof getTracksPaginated) {
+    const held: Held[] = [];
+    vi.mocked(mock).mockImplementation(
+      () =>
+        new Promise(resolve => {
+          held.push({ resolve: resolve as Held["resolve"] });
+        }) as never,
+    );
+    return held;
+  }
+
+  // Releases a held answer and waits, inside act, for the start it answers
+  // (the latest one unless named) to finish: anything it rendered, toasted or
+  // threw has happened by the time this resolves.
+  const release = async (
+    request: Held,
+    response: unknown,
+    start: Promise<void> | undefined = starts.at(-1),
+  ) => {
+    await act(async () => {
+      request.resolve(response);
+      await start;
+    });
+  };
+
+  const renderHarness = () =>
+    renderWithQueryClient(
+      <AudioPlayerProvider>
+        <PendingStartHarness />
+      </AudioPlayerProvider>,
+    );
+
+  const click = (name: string) =>
+    fireEvent.click(screen.getByRole("button", { name }));
+
+  let infoSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(async () => {
+    stubMediaElement();
+    errors.length = 0;
+    starts.length = 0;
+    const { toast } = await import("sonner");
+    infoSpy = vi.spyOn(toast, "info");
+  });
+
+  afterEach(() => {
+    infoSpy.mockRestore();
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  const expectNoPlayer = () => {
+    expect(screen.queryByText(/^Track \d+ of \d+$/)).toBeNull();
+    expect(document.querySelector("audio")).toBeNull();
+  };
+
+  it.each([
+    ["success", shufflePage(range(1, BATCH_SIZE))],
+    ["empty", shufflePage([])],
+    ["error", { error: true as const, message: "Shuffle failed", status: 500 }],
+  ])("drops a shuffle %s that lands after Stop", async (_label, response) => {
+    const held = holdEveryRequest(getShuffleTracks);
+    renderHarness();
+
+    click("start shuffle");
+    await waitFor(() => expect(held).toHaveLength(1));
+    click("stop");
+
+    await release(held[0], response);
+
+    expectNoPlayer();
+    expect(infoSpy).not.toHaveBeenCalled();
+    expect(errors).toEqual([]);
+  });
+
+  it.each([
+    ["success", playAllPage(range(1, BATCH_SIZE))],
+    ["empty", playAllPage([])],
+    ["error", { error: true as const, message: "Tracks failed", status: 500 }],
+  ])("drops a play-all %s that lands after Stop", async (_label, response) => {
+    const held = holdEveryRequest(getTracksPaginated);
+    renderHarness();
+
+    click("start play all");
+    await waitFor(() => expect(held).toHaveLength(1));
+    click("stop");
+
+    await release(held[0], response);
+
+    expectNoPlayer();
+    expect(infoSpy).not.toHaveBeenCalled();
+    expect(errors).toEqual([]);
+  });
+
+  it("keeps the newer start when the older one lands last", async () => {
+    const heldShuffle = holdEveryRequest(getShuffleTracks);
+    const heldPlayAll = holdEveryRequest(getTracksPaginated);
+    renderHarness();
+
+    click("start shuffle");
+    click("start play all");
+    await waitFor(() => {
+      expect(heldShuffle).toHaveLength(1);
+      expect(heldPlayAll).toHaveLength(1);
+    });
+
+    await release(heldPlayAll[0], playAllPage(range(101, BATCH_SIZE)), starts[1]);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Song 101");
+
+    await release(heldShuffle[0], shufflePage(range(1, BATCH_SIZE)), starts[0]);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Song 101");
+  });
+
+  it("drops the older start when it lands first", async () => {
+    const held = holdEveryRequest(getShuffleTracks);
+    renderHarness();
+
+    click("start shuffle");
+    click("start shuffle");
+    await waitFor(() => expect(held).toHaveLength(2));
+
+    await release(held[0], shufflePage(range(1, BATCH_SIZE)), starts[0]);
+    expectNoPlayer();
+
+    await release(held[1], shufflePage(range(201, BATCH_SIZE)), starts[1]);
+    expectCounterAt(1);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Song 201");
+  });
+});
+
+// A shuffle refill that was in flight when the reader started a new shuffle
+// belongs to the old queue. Its empty answer used to latch the *new* queue as
+// exhausted, which then never refilled and toasted a false "whole library".
+describe("a stale shuffle refill", () => {
+  beforeEach(() => {
+    stubMediaElement();
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("does not mark the replacement queue exhausted", async () => {
+    const { toast } = await import("sonner");
+    const infoSpy = vi.spyOn(toast, "info");
+
+    const heldRefills: Array<() => void> = [];
+    const refillAnswers: Promise<unknown>[] = [];
+    let call = 0;
+    vi.mocked(getShuffleTracks).mockImplementation(() => {
+      call += 1;
+      const page = (from: number, count: number) => ({
+        error: false as const,
+        data: {
+          tracks: Array.from({ length: count }, (_, index) => rawTrack(from + index)),
+        },
+      });
+      // 1: queue A opens with a lookahead's worth, so one advance refills it.
+      if (call === 1) return Promise.resolve(page(1, BATCH_SIZE));
+      // 2: A's refill, held until queue B is playing, then answered empty.
+      if (call === 2) {
+        const refill = new Promise<ReturnType<typeof page>>(resolve => {
+          heldRefills.push(() => resolve(page(0, 0)));
+        });
+        refillAnswers.push(refill);
+        return refill;
+      }
+      // 3: queue B opens with 20 tracks; 4+: B's own refills.
+      if (call === 3) return Promise.resolve(page(101, 20));
+      return Promise.resolve(page(1000 + call * 50, BATCH_SIZE));
+    });
+
+    renderWithQueryClient(
+      <AudioPlayerProvider>
+        <EndlessQueueHarness />
+      </AudioPlayerProvider>,
+    );
+
+    const startButton = screen.getByRole("button", { name: "start shuffle" });
+    fireEvent.click(startButton);
+    await waitFor(() => expectCounterAt(1));
+    fireEvent.click(await screen.findByRole("button", { name: "Next track" }));
+    await waitFor(() => expect(heldRefills).toHaveLength(1));
+
+    fireEvent.click(startButton);
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Song 101"),
+    );
+
+    // Awaiting the answer after releasing it runs the refill's own
+    // continuation (registered first) before this one.
+    await act(async () => {
+      heldRefills[0]();
+      await refillAnswers[0];
+    });
+    expect(infoSpy).not.toHaveBeenCalled();
+
+    // 20 queued against a lookahead of 10: the runway gets short at 12.
+    for (let position = 2; position <= 12; position++) {
+      fireEvent.click(await screen.findByRole("button", { name: "Next track" }));
+      await waitFor(() => expectCounterAt(position));
+    }
+
+    await waitFor(() => expect(call).toBeGreaterThanOrEqual(4));
+    expect(infoSpy).not.toHaveBeenCalled();
+
+    infoSpy.mockRestore();
   });
 });

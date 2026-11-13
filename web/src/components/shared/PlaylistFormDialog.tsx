@@ -1,5 +1,6 @@
 import { useState, type RefObject } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
+import { useSessionMutation } from "@/hooks/useSessionMutation";
 import { useRouter } from "@tanstack/react-router";
 import {
   showCreated,
@@ -25,6 +26,7 @@ import { unwrapString, unwrapStringOrUndefined } from "@/lib/nullable";
 import { playlistFieldsError } from "@/lib/form-validation";
 import type { NullableString } from "@/types";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
+import { sessionEndedSince, sessionStamp } from "@/lib/session";
 
 // ============================================================================
 // Types
@@ -133,7 +135,7 @@ function PlaylistForm({
   );
 
   // Create mutation
-  const createMutation = useMutation({
+  const createMutation = useSessionMutation({
     mutationFn: () =>
       api.create({
         name: name.trim(),
@@ -155,7 +157,7 @@ function PlaylistForm({
   });
 
   // Update mutation
-  const updateMutation = useMutation({
+  const updateMutation = useSessionMutation({
     mutationFn: () => {
       if (!playlist) throw new Error("Playlist is required for edit mode");
       // PUT replaces every field, so the dialog resends the cover it does not
@@ -179,9 +181,11 @@ function PlaylistForm({
         // The playlist page's head takes the name from its loader data: wait
         // for the details refetch, then reload that route so the tab title
         // follows a rename.
+        const session = sessionStamp();
         await queryClient.invalidateQueries({
           queryKey: [api.detailsKey, playlist.id],
         });
+        if (sessionEndedSince(session)) return;
         await router.invalidate({
           filter: match => match.routeId === api.routeId,
         });
