@@ -49,6 +49,15 @@ function setHandler(
   }
 }
 
+function clearPositionState() {
+  try {
+    // No argument clears the position state.
+    navigator.mediaSession.setPositionState?.();
+  } catch {
+    // Some browsers expose Media Session but reject position updates.
+  }
+}
+
 /** The player that owns the session, or null. For useSyncExternalStore. */
 export function getMediaSessionOwner() {
   return owner;
@@ -76,6 +85,9 @@ export function claimMediaSession(
 ) {
   if (!mediaSessionSupported()) return;
 
+  // Taking over from another player: its timeline is not ours. The new owner
+  // publishes its own as soon as it knows it.
+  if (owner !== token) clearPositionState();
   navigator.mediaSession.metadata = metadata;
   for (const action of MEDIA_SESSION_ACTIONS) {
     setHandler(action, handlers[action] ?? null);
@@ -105,11 +117,6 @@ export function releaseMediaSession(token: symbol) {
   for (const action of MEDIA_SESSION_ACTIONS) {
     setHandler(action, null);
   }
-  try {
-    // No argument clears the position state.
-    navigator.mediaSession.setPositionState?.();
-  } catch {
-    // Some browsers expose Media Session but reject position updates.
-  }
+  clearPositionState();
   setOwner(null);
 }

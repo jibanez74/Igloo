@@ -198,6 +198,39 @@ describe("Media Session ownership between music and video", () => {
     expect(fake.session.playbackState).toBe("playing");
   });
 
+  // Music resumed while a room was still loading keeps playing as the room's
+  // video claims the controls and later lets them go: nothing about the track
+  // or its play state changes when the video leaves, yet music must get them.
+  it("gives playing music the controls back when a video it did not pause leaves", () => {
+    const { rerender } = render(<App music={{ isPlaying: true }} />);
+
+    rerender(<App music={{ isPlaying: true }} video={{}} />);
+    expect(fake.session.metadata?.title).toBe("Movie");
+
+    rerender(<App music={{ isPlaying: true }} />);
+    expect(fake.session.metadata?.title).toBe("Song");
+    expect(registered()).toEqual([...MEDIA_SESSION_ACTIONS]);
+    expect(fake.session.playbackState).toBe("playing");
+  });
+
+  it("drops music's timeline when a video takes over", () => {
+    Object.defineProperty(musicAudio.current, "duration", { configurable: true, value: 200 });
+    try {
+      const { rerender } = render(<App music={{ isPlaying: true }} />);
+      fake.session.setPositionState.mockClear();
+
+      rerender(<App music={{ isPlaying: true }} video={{}} />);
+
+      // Cleared as the video claims, before it reports its own (duration 100).
+      expect(fake.session.setPositionState.mock.calls[0]).toEqual([]);
+      expect(fake.session.setPositionState).toHaveBeenLastCalledWith(
+        expect.objectContaining({ duration: 100 }),
+      );
+    } finally {
+      Reflect.deleteProperty(musicAudio.current, "duration");
+    }
+  });
+
   it("clears the session once music stops with no video", () => {
     const { rerender } = render(<App music={{ isPlaying: true }} />);
     rerender(<App music={{ isPlaying: false, trackId: null }} />);

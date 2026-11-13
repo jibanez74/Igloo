@@ -119,29 +119,7 @@ export function useAudioMediaSession({
     audio.currentTime = seekTime;
   });
 
-  // A video page pauses music and takes the session. Music leaves it alone
-  // until the reader plays music again or the video lets the session go, then
-  // claims it back with its own metadata and full action set: resuming the
-  // same track changes nothing else this effect could react to.
-  const sessionOwner = useSyncExternalStore(
-    subscribeMediaSessionOwner,
-    getMediaSessionOwner,
-    getMediaSessionOwner,
-  );
-  const mayClaim =
-    sessionOwner === null || sessionOwner === MUSIC_SESSION || isPlaying;
-
-  useEffect(() => {
-    if (!("mediaSession" in navigator)) return;
-
-    // Clear stale lock-screen/OS media info once playback stops; otherwise
-    // the last track keeps showing after the player is closed.
-    if (currentTrackId === null) {
-      releaseMediaSession(MUSIC_SESSION);
-      return;
-    }
-    if (!mayClaim) return;
-
+  const claimSession = useEffectEvent(() => {
     claimMediaSession(
       MUSIC_SESSION,
       trackMetadata(trackTitle, albumTitle, albumCover, musicianName),
@@ -159,15 +137,48 @@ export function useAudioMediaSession({
     // A paused track fires no timeupdate, so publish its timeline now rather
     // than leave the OS without one (or a video's) until it plays.
     if (audioRef.current) syncMediaSessionPosition(audioRef.current);
+  });
+
+  // Who holds the OS controls. A video page pauses music and claims them;
+  // music leaves them alone until that video lets go (the owner turns null)
+  // and then claims them back with its own metadata and full action set,
+  // whether the track is paused or still playing: nothing about the track
+  // itself changes at that moment for an effect to react to.
+  const sessionOwner = useSyncExternalStore(
+    subscribeMediaSessionOwner,
+    getMediaSessionOwner,
+    getMediaSessionOwner,
+  );
+  const heldByMusicOrFree =
+    sessionOwner === null || sessionOwner === MUSIC_SESSION;
+
+  useEffect(() => {
+    if (!("mediaSession" in navigator)) return;
+
+    // Clear stale lock-screen/OS media info once playback stops; otherwise
+    // the last track keeps showing after the player is closed.
+    if (currentTrackId === null) {
+      releaseMediaSession(MUSIC_SESSION);
+      return;
+    }
+    if (heldByMusicOrFree) claimSession();
   }, [
-    audioRef,
     currentTrackId,
     trackTitle,
     albumCover,
     albumTitle,
     musicianName,
-    mayClaim,
+    heldByMusicOrFree,
   ]);
+
+  // The reader pressing play is the one way music takes the controls from a
+  // video that still holds them. Keyed on the transition rather than on
+  // "music is playing": a video page claims them while music's own pause is
+  // still on its way, and must not lose them back in that moment.
+  useEffect(() => {
+    if (!("mediaSession" in navigator)) return;
+    if (isPlaying && currentTrackId !== null) claimSession();
+  }, [isPlaying, currentTrackId]);
 
   useEffect(() => {
     if (!ownsMediaSession(MUSIC_SESSION)) return;

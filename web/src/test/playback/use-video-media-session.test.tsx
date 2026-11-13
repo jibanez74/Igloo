@@ -34,6 +34,12 @@ function mockMediaSession(): MockMediaSession {
   return mediaSession;
 }
 
+// The position reports, without the argument-less calls that clear the
+// timeline when a player takes the session over.
+function positionReports(mediaSession: { setPositionState: { mock: { calls: unknown[][] } } }) {
+  return mediaSession.setPositionState.mock.calls.filter((call) => call.length > 0);
+}
+
 function restoreProperty(
   object: object,
   property: string,
@@ -220,7 +226,7 @@ describe("useVideoMediaSession", () => {
         videoRef={videoRef}
       />,
     );
-    expect(mediaSession.setPositionState).toHaveBeenCalledTimes(1);
+    expect(positionReports(mediaSession)).toHaveLength(1);
     expect(mediaSession.setPositionState).toHaveBeenLastCalledWith({
       duration: 600,
       playbackRate: 1,
@@ -234,13 +240,13 @@ describe("useVideoMediaSession", () => {
     rerender(
       <Harness currentTime={14} duration={600} playing videoRef={videoRef} />,
     );
-    expect(mediaSession.setPositionState).toHaveBeenCalledTimes(1);
+    expect(positionReports(mediaSession)).toHaveLength(1);
 
     // 16 - 10 >= 5: reports again.
     rerender(
       <Harness currentTime={16} duration={600} playing videoRef={videoRef} />,
     );
-    expect(mediaSession.setPositionState).toHaveBeenCalledTimes(2);
+    expect(positionReports(mediaSession)).toHaveLength(2);
     expect(mediaSession.setPositionState).toHaveBeenLastCalledWith({
       duration: 600,
       playbackRate: 1,
@@ -258,7 +264,7 @@ describe("useVideoMediaSession", () => {
         videoRef={videoRef}
       />,
     );
-    expect(mediaSession.setPositionState).toHaveBeenCalledTimes(1);
+    expect(positionReports(mediaSession)).toHaveLength(1);
 
     rerender(
       <Harness
@@ -268,7 +274,7 @@ describe("useVideoMediaSession", () => {
         videoRef={videoRef}
       />,
     );
-    expect(mediaSession.setPositionState).toHaveBeenCalledTimes(2);
+    expect(positionReports(mediaSession)).toHaveLength(2);
 
     rerender(
       <Harness
@@ -278,7 +284,7 @@ describe("useVideoMediaSession", () => {
         videoRef={videoRef}
       />,
     );
-    expect(mediaSession.setPositionState).toHaveBeenCalledTimes(3);
+    expect(positionReports(mediaSession)).toHaveLength(3);
   });
 
   it("never reports a position without a valid duration", () => {
@@ -289,6 +295,6 @@ describe("useVideoMediaSession", () => {
     rerender(
       <Harness currentTime={20} duration={0} playing videoRef={videoRef} />,
     );
-    expect(mediaSession.setPositionState).not.toHaveBeenCalled();
+    expect(positionReports(mediaSession)).toHaveLength(0);
   });
 });

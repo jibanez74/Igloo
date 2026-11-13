@@ -194,6 +194,12 @@ function mockMediaSession() {
   return mediaSession;
 }
 
+// The position reports, without the argument-less calls that clear the
+// timeline when a player takes the session over.
+function positionReports(mediaSession: { setPositionState: { mock: { calls: unknown[][] } } }) {
+  return mediaSession.setPositionState.mock.calls.filter((call) => call.length > 0);
+}
+
 function restoreProperty(
   object: object,
   property: string,
@@ -254,7 +260,7 @@ describe("AudioPlayer Media Session", () => {
       });
     }).not.toThrow();
 
-    expect(mediaSession.setPositionState).not.toHaveBeenCalled();
+    expect(positionReports(mediaSession)).toHaveLength(0);
   });
 
   it("sends finite, clamped position state values", async () => {
