@@ -389,6 +389,36 @@ func TestIsAllowedWatchRoomOrigin(t *testing.T) {
 			tls:        true,
 			want:       true,
 		},
+		{
+			// A TLS-terminating proxy (Caddy, nginx, tailscale serve) that
+			// keeps the Host header: the page is https, the hop to Igloo http.
+			name:       "allows the same host behind a TLS-terminating proxy",
+			requestURL: "http://igloo.example/api/watch-rooms/2/ws",
+			host:       "igloo.example",
+			origin:     "https://igloo.example",
+			want:       true,
+		},
+		{
+			name:       "rejects another host behind a TLS-terminating proxy",
+			requestURL: "http://igloo.example/api/watch-rooms/2/ws",
+			host:       "igloo.example",
+			origin:     "https://evil.example",
+			want:       false,
+		},
+		{
+			name:       "rejects the same host on another port",
+			requestURL: "http://igloo.example/api/watch-rooms/2/ws",
+			host:       "igloo.example",
+			origin:     "https://igloo.example:8443",
+			want:       false,
+		},
+		{
+			name:       "rejects a non-web scheme on the same host",
+			requestURL: "http://igloo.example/api/watch-rooms/2/ws",
+			host:       "igloo.example",
+			origin:     "file://igloo.example",
+			want:       false,
+		},
 	}
 
 	for _, tt := range tests {
