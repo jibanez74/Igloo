@@ -79,6 +79,7 @@ Some values apply every time the server starts:
 
 - `PORT` defaults to `8080`; `DB_PATH` defaults to `db/igloo.db`; `LOGS_DIR` defaults to `logs`.
 - `SESSION_COOKIE_SECURE` controls HTTPS-only session cookies. `DEBUG` and `LOG_TO_STDOUT` control logging.
+- `TRUSTED_PROXIES` lists the addresses or CIDRs of reverse proxies in front of Igloo, separated by commas or spaces. Requests from a listed proxy take their client address from `X-Forwarded-For`, so sign-in rate limits apply per client instead of to everyone behind the proxy. It is empty by default, and forwarded headers are then ignored.
 - `HLS_MAX_CPU_TRANSCODES` limits concurrent HLS sessions that encode video on the CPU, and `HLS_MAX_HW_TRANSCODES` limits those that encode video with a hardware encoder; copy-video sessions count against neither. `HLS_MAX_SESSIONS_PER_USER` limits personal HLS sessions, including remuxing. Their defaults are based on CPU count, `3`, and `3`, respectively.
 - `IGLOO_FFMPEG_PATH` and `IGLOO_FFPROBE_PATH` can override executable lookup in development or other `externalbin` builds. Embedded production builds use their bundled tools.
 

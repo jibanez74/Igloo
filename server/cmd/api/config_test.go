@@ -3,6 +3,8 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 )
 
@@ -27,6 +29,7 @@ func clearRuntimeConfigEnv(t *testing.T) {
 		envHardwareAccelerationDevice,
 		envEnableWatcher,
 		envDownloadImages,
+		envTrustedProxies,
 		envMoviesDir,
 		envShowsDir,
 		envMusicDir,
@@ -192,5 +195,74 @@ func TestNewRuntimeConfig_BooleansAndDefaultAdmin(t *testing.T) {
 	}
 	if config.DefaultAdminName != defaultAdminName || config.DefaultAdminEmail != defaultAdminEmail {
 		t.Fatalf("default admin = %q %q, want the built-in defaults", config.DefaultAdminName, config.DefaultAdminEmail)
+	}
+}
+
+func TestParseTrustedProxies(t *testing.T) {
+	tests := []struct {
+		value string
+		want  []string
+	}{
+		{value: "", want: nil},
+		{value: " , ", want: nil},
+		{value: "127.0.0.1", want: []string{"127.0.0.1/32"}},
+		{value: "127.0.0.1, ::1", want: []string{"127.0.0.1/32", "::1/128"}},
+		{value: "10.0.0.7/24 172.16.0.0/12", want: []string{"10.0.0.0/24", "172.16.0.0/12"}},
+		{value: "fd00::5/64,\n2001:db8::1", want: []string{"fd00::/64", "2001:db8::1/128"}},
+		{value: "::ffff:10.0.0.2", want: []string{"10.0.0.2/32"}},
+		{value: "::ffff:10.0.0.0/120", want: []string{"10.0.0.0/24"}},
+	}
+
+	for _, tt := range tests {
+		got, err := parseTrustedProxies(tt.value)
+		if err != nil {
+			t.Fatalf("parseTrustedProxies(%q): %v", tt.value, err)
+		}
+		gotStrings := make([]string, len(got))
+		for i, prefix := range got {
+			gotStrings[i] = prefix.String()
+		}
+		if len(got) == 0 && tt.want == nil {
+			continue
+		}
+		if !slices.Equal(gotStrings, tt.want) {
+			t.Fatalf("parseTrustedProxies(%q) = %v, want %v", tt.value, gotStrings, tt.want)
+		}
+	}
+}
+
+func TestParseTrustedProxiesRejectsBadEntries(t *testing.T) {
+	for _, value := range []string{
+		"proxy.local",
+		"127.0.0.1, nonsense",
+		"10.0.0.0/33",
+		"fe80::1%eth0",
+		"::ffff:0:0/80",
+	} {
+		_, err := parseTrustedProxies(value)
+		if err == nil {
+			t.Fatalf("parseTrustedProxies(%q) succeeded, want an error", value)
+		}
+		if !strings.Contains(err.Error(), envTrustedProxies) {
+			t.Fatalf("parseTrustedProxies(%q) error %q does not name %s", value, err, envTrustedProxies)
+		}
+	}
+}
+
+func TestNewRuntimeConfig_TrustedProxies(t *testing.T) {
+	clearRuntimeConfigEnv(t)
+	t.Setenv(envTrustedProxies, "127.0.0.1, 10.0.0.0/8")
+
+	config, err := NewRuntimeConfig()
+	if err != nil {
+		t.Fatalf("NewRuntimeConfig: %v", err)
+	}
+	if len(config.TrustedProxies) != 2 {
+		t.Fatalf("TrustedProxies = %v, want 2 prefixes", config.TrustedProxies)
+	}
+
+	t.Setenv(envTrustedProxies, "nonsense")
+	if _, err := NewRuntimeConfig(); err == nil || !strings.Contains(err.Error(), "nonsense") {
+		t.Fatalf("NewRuntimeConfig error = %v, want one naming the bad entry", err)
 	}
 }

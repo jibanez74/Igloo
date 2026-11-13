@@ -10,8 +10,7 @@ import (
 func (app *Application) InitRouter() {
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID)
-	router.Use(preserveClientSocketIP)
-	router.Use(middleware.RealIP)
+	router.Use(clientIPMiddleware(app.Config.TrustedProxies))
 	router.Use(app.RequestLogger)
 	router.Use(middleware.Recoverer)
 
