@@ -280,7 +280,7 @@ func TestSpotifyRecoveryCreditSelection(t *testing.T) {
 			s.spotify = scriptedSpotify(t, steps...)
 			album := testAlbum()
 			album.Artists = tc.credits
-			adopted, err := s.adoptAlbumArtist(context.Background(), newMusicScanContext(nil), "Test Artist", album)
+			adopted, err := s.adoptAlbumArtist(context.Background(), newMusicScanContext(nil), "Test Artist", album, false)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -633,7 +633,7 @@ func TestSpotifyRecoveryBreakerDefersAdoption(t *testing.T) {
 		t.Fatal(err)
 	}
 	scan.breaker.Stopped = true
-	adopted, err := s.adoptAlbumArtist(context.Background(), scan, "Test Artist", album.spotifyAlbum)
+	adopted, err := s.adoptAlbumArtist(context.Background(), scan, "Test Artist", album.spotifyAlbum, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -879,5 +879,44 @@ func TestSpotifyRecoveryPreservesMatchedMusician(t *testing.T) {
 	s.scan(dir)
 	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musicians WHERE spotify_id='retained'") != 1 || scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_spotify_adoptions") != 0 {
 		t.Fatal("matched identity changed or obsolete adoption not cleared")
+	}
+}
+
+// The retry pass leaves an artist whose failed lookup is waiting out its
+// backoff alone even when an album it retries credits that artist; the walk
+// adopts regardless.
+func TestRetryAdoptionHonorsTheArtistBackoff(t *testing.T) {
+	s := setupMusicScanner(t)
+	dir := t.TempDir()
+	scannertest.WriteFile(t, filepath.Join(dir, "track.m4a"), "audio")
+	s.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadata()}
+	s.scan(dir)
+	markArtistsUnmatched(t, s)
+	_, err := s.tx.DB.Exec(`UPDATE music_provider_matches SET status='failed', attempts=2, failed_at=0, retry_after=unixepoch()+3600
+		WHERE entity_type='musician'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scan := newMusicScanContext(nil)
+	s.spotify = scriptedSpotify(t, spotifyStep{operation: "match", target: "Test Album", album: testAlbum()})
+	album, err := s.resolveAlbum(context.Background(), scan, albumQuery{title: "Test Album", artist: "Test Artist"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	scan.breaker.Stopped = true // any GetArtist would be skipped; the outcome tells whether one was tried
+	adopted, err := s.adoptAlbumArtist(context.Background(), scan, "Test Artist", album.spotifyAlbum, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if adopted != nil {
+		t.Fatalf("the retry pass adopted an artist inside its backoff: %+v", adopted)
+	}
+	adopted, err = s.adoptAlbumArtist(context.Background(), scan, "Test Artist", album.spotifyAlbum, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if adopted == nil {
+		t.Fatal("the walk did not adopt the album's artist")
 	}
 }
