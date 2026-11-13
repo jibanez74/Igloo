@@ -1,9 +1,16 @@
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import {
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import type { RefObject } from "react";
 import {
   claimMediaSession,
-  ownsMediaSession,
+  getMediaSessionOwner,
   releaseMediaSession,
+  subscribeMediaSessionOwner,
   updateMediaSessionMetadata,
 } from "@/lib/media-session";
 
@@ -126,24 +133,41 @@ export function useVideoMediaSession({
   // for as long as the surface is enabled: a title or artwork change only
   // replaces the metadata, so the play state and timeline stay published.
   const [sessionToken] = useState(() => Symbol("video"));
-
-  const currentMetadata = useEffectEvent(() =>
-    videoMetadata(title, artist, artworkUrl),
+  const sessionOwner = useSyncExternalStore(
+    subscribeMediaSessionOwner,
+    getMediaSessionOwner,
+    getMediaSessionOwner,
   );
+  const ownsSession = sessionOwner === sessionToken;
+  const sessionFree = sessionOwner === null;
+
+  const claimSession = useEffectEvent(() => {
+    claimMediaSession(
+      sessionToken,
+      videoMetadata(title, artist, artworkUrl),
+      {
+        play: handlePlay,
+        pause: handlePause,
+        seekbackward: handleSeekBackward,
+        seekforward: handleSeekForward,
+        seekto: handleSeekTo,
+      },
+    );
+  });
 
   useEffect(() => {
     if (!enabled || !mediaSessionSupported()) return;
 
-    claimMediaSession(sessionToken, currentMetadata(), {
-      play: handlePlay,
-      pause: handlePause,
-      seekbackward: handleSeekBackward,
-      seekforward: handleSeekForward,
-      seekto: handleSeekTo,
-    });
+    claimSession();
 
     return () => releaseMediaSession(sessionToken);
   }, [enabled, sessionToken]);
+
+  // Music played over this video and then closed: the controls are free
+  // again, and the surface still on screen takes them back.
+  useEffect(() => {
+    if (enabled && sessionFree && mediaSessionSupported()) claimSession();
+  }, [enabled, sessionFree]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -155,10 +179,10 @@ export function useVideoMediaSession({
   }, [artist, artworkUrl, enabled, sessionToken, title]);
 
   useEffect(() => {
-    if (!enabled || !ownsMediaSession(sessionToken)) return;
+    if (!enabled || !ownsSession) return;
 
     navigator.mediaSession.playbackState = playing ? "playing" : "paused";
-  }, [enabled, playing, sessionToken]);
+  }, [enabled, ownsSession, playing]);
 
   const lastReportedPositionRef = useRef<{
     position: number;
@@ -168,7 +192,10 @@ export function useVideoMediaSession({
   } | null>(null);
 
   useEffect(() => {
-    if (!enabled || !ownsMediaSession(sessionToken)) {
+    // Re-run on (re)gaining the session too: a claim cleared whatever timeline
+    // the previous owner left, so the next report must not be skipped as
+    // redundant.
+    if (!enabled || !ownsSession) {
       lastReportedPositionRef.current = null;
       return;
     }
@@ -197,5 +224,5 @@ export function useVideoMediaSession({
     } catch {
       // Some mobile browsers expose Media Session but reject position updates.
     }
-  }, [currentTime, duration, enabled, playing, sessionToken, videoRef]);
+  }, [currentTime, duration, enabled, ownsSession, playing, videoRef]);
 }

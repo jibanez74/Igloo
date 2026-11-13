@@ -1867,7 +1867,8 @@ require the full playback test pass.
   a time: a video claims them with its own actions only (no music
   previous/next/stop), and when it lets go, the music player claims them back
   with its track and every action, without waiting for a new track. Music
-  takes them from a video only if the reader plays music over it.
+  takes them from a video only if the reader plays music over it, and a video
+  still on screen takes them back once that music is closed.
 
 ### 3.6 Toasts & notifications
 

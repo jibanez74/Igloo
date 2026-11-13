@@ -231,6 +231,25 @@ describe("Media Session ownership between music and video", () => {
     }
   });
 
+  // The reader plays music over a video, then closes the music player: the
+  // video is still on screen and gets its controls, play state and timeline
+  // back without pressing anything.
+  it("gives a video its controls back when music played over it is closed", () => {
+    const { rerender } = render(<App music={{ isPlaying: false }} video={{}} />);
+    rerender(<App music={{ isPlaying: true }} video={{}} />);
+    expect(fake.session.metadata?.title).toBe("Song");
+    fake.session.setPositionState.mockClear();
+
+    rerender(<App music={{ isPlaying: false, trackId: null }} video={{}} />);
+
+    expect(fake.session.metadata?.title).toBe("Movie");
+    expect(registered()).toEqual(["play", "pause", "seekbackward", "seekforward", "seekto"]);
+    expect(fake.session.playbackState).toBe("playing");
+    expect(fake.session.setPositionState).toHaveBeenLastCalledWith(
+      expect.objectContaining({ duration: 100 }),
+    );
+  });
+
   it("clears the session once music stops with no video", () => {
     const { rerender } = render(<App music={{ isPlaying: true }} />);
     rerender(<App music={{ isPlaying: false, trackId: null }} />);
