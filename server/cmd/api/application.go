@@ -77,6 +77,11 @@ type Application struct {
 	HLSHWTranscodeLimiter   *hlsTranscodeLimiter
 	PersonalHLSMu           sync.Mutex
 	PersonalHLSReservations map[int64]int
+	// PersonalHLSReplacing counts the in-flight reservations whose start will
+	// retire the cached windows of each owner, media and playback UUID. Those
+	// windows keep serving meanwhile but are not counted against the cap, where
+	// the reservation already stands in for them.
+	PersonalHLSReplacing map[hlsPlaybackWindow]int
 	// HLSShutdown is cancelled when shutdown begins (beginHLSShutdown): from
 	// then on no HLS session starts or is published, and a start parked for a
 	// transcode permit gives up.
@@ -568,6 +573,7 @@ func (app *Application) initRuntimeCaches() {
 	app.HLSHWTranscodeLimiter = newHLSTranscodeLimiter(hlsTranscodePoolHardware, configuredHLSMaxHWTranscodes())
 	app.HLSMaxPersonalSessionsPerUser = configuredHLSMaxPersonalSessionsPerUser()
 	app.PersonalHLSReservations = make(map[int64]int)
+	app.PersonalHLSReplacing = make(map[hlsPlaybackWindow]int)
 	app.HLSShutdown, app.beginHLSShutdown = context.WithCancel(context.Background())
 
 	// Eviction tears an aged-out session down off the sweep goroutine, tracked in

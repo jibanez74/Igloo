@@ -138,6 +138,9 @@ func TestStopHLSSessions_RefusesACreationThatFinishesAfterIt(t *testing.T) {
 	if len(app.PersonalHLSReservations) != 0 {
 		t.Fatalf("reservations left behind: %v", app.PersonalHLSReservations)
 	}
+	if len(app.PersonalHLSReplacing) != 0 {
+		t.Fatalf("replaced windows left behind: %v", app.PersonalHLSReplacing)
+	}
 	_, statErr := os.Stat(fake.Calls()[0].OutDir)
 	if !os.IsNotExist(statErr) {
 		t.Fatalf("the refused session's temp dir survived: %v", statErr)

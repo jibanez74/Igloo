@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -639,6 +640,17 @@ func (app *Application) cleanupPersonalHLSSessionsForOwner(media mediaRef, owner
 	return len(sessions)
 }
 
+// retireSupersededPersonalHLSSessions removes the owner's other windows for
+// this media and playback UUID from the cache and retires them, stopping their
+// FFmpeg in line and deleting their output in the background.
+func (app *Application) retireSupersededPersonalHLSSessions(media mediaRef, ownerUserID int64, playbackSession string, keepKey string) {
+	app.PersonalHLSMu.Lock()
+	removed := app.cleanupPersonalHLSSessionsForOwnerLocked(media, ownerUserID, playbackSession, keepKey)
+	app.PersonalHLSMu.Unlock()
+
+	app.retireDisplacedHLSSessions(removed)
+}
+
 // cleanupPersonalHLSSessionsForOwnerLocked requires PersonalHLSMu to be held.
 // It removes only the owner's other sessions for this media and this
 // playback_session UUID — superseded windows from the same client (seeks,
@@ -786,24 +798,58 @@ type hlsOwnedSessionEntry struct {
 	expiration int64
 }
 
+// hlsPlaybackWindow names the personal windows one client plays of one media:
+// a start for it supersedes every cached window it names.
+type hlsPlaybackWindow struct {
+	ownerUserID     int64
+	media           mediaRef
+	playbackSession string
+}
+
+func (window hlsPlaybackWindow) names(session *HLSSession) bool {
+	return session.PlaybackSession == window.playbackSession &&
+		canAccessPersonalHLSSession(session, window.media, window.ownerUserID)
+}
+
 type hlsPersonalSessionReservation struct {
 	app         *Application
 	ownerUserID int64
-	once        sync.Once
+	// replaces is the window this start supersedes; reservations built
+	// without one (tests) replace nothing.
+	replaces *hlsPlaybackWindow
+	once     sync.Once
 }
 
 func (reservation *hlsPersonalSessionReservation) release() {
 	reservation.once.Do(func() {
 		app := reservation.app
 		app.PersonalHLSMu.Lock()
-		remaining := app.PersonalHLSReservations[reservation.ownerUserID] - 1
-		if remaining > 0 {
-			app.PersonalHLSReservations[reservation.ownerUserID] = remaining
-		} else {
-			delete(app.PersonalHLSReservations, reservation.ownerUserID)
-		}
+		reservation.endLocked()
 		app.PersonalHLSMu.Unlock()
 	})
+}
+
+// endLocked hands the reservation's slot and its replaced window back.
+// Requires PersonalHLSMu to be held.
+func (reservation *hlsPersonalSessionReservation) endLocked() {
+	app := reservation.app
+	remaining := app.PersonalHLSReservations[reservation.ownerUserID] - 1
+	if remaining > 0 {
+		app.PersonalHLSReservations[reservation.ownerUserID] = remaining
+	} else {
+		delete(app.PersonalHLSReservations, reservation.ownerUserID)
+	}
+
+	if reservation.replaces == nil {
+		return
+	}
+	window := *reservation.replaces
+	replacing := app.PersonalHLSReplacing[window] - 1
+	if replacing > 0 {
+		app.PersonalHLSReplacing[window] = replacing
+	} else {
+		delete(app.PersonalHLSReplacing, window)
+	}
 }
 
 // commit exchanges the reservation for the cached session. It refuses, and
@@ -833,12 +879,7 @@ func (reservation *hlsPersonalSessionReservation) commit(
 			app.HLSSessionCache.Set(key, session, hlsPersonalSessionTTL)
 		}
 
-		remaining := app.PersonalHLSReservations[reservation.ownerUserID] - 1
-		if remaining > 0 {
-			app.PersonalHLSReservations[reservation.ownerUserID] = remaining
-		} else {
-			delete(app.PersonalHLSReservations, reservation.ownerUserID)
-		}
+		reservation.endLocked()
 		app.PersonalHLSMu.Unlock()
 
 		// The new session was never cached, so nothing else tears it down.
@@ -853,6 +894,11 @@ func (reservation *hlsPersonalSessionReservation) commit(
 
 // reservePersonalHLSSession admits one personal session before FFmpeg starts.
 // Cached sessions and concurrent reservations share the same per-user cap.
+// The windows this start supersedes (same owner, media and playback UUID) are
+// left serving and do not count against the cap: the start retires them once
+// its plan succeeds, so a replacement that fails to plan never ends them. The
+// same holds for the windows other in-flight starts of the owner supersede,
+// whose reservations already count in their place.
 func (app *Application) reservePersonalHLSSession(
 	media mediaRef,
 	ownerUserID int64,
@@ -861,10 +907,16 @@ func (app *Application) reservePersonalHLSSession(
 	app.PersonalHLSMu.Lock()
 
 	app.HLSSessionCache.DeleteExpired()
-	removed := app.cleanupPersonalHLSSessionsForOwnerLocked(media, ownerUserID, playbackSession, "")
+	var removed []*HLSSession
 
+	window := hlsPlaybackWindow{ownerUserID: ownerUserID, media: media, playbackSession: playbackSession}
 	limit := app.hlsMaxPersonalSessionsPerUser()
-	entries := app.personalHLSSessionsForOwnerLocked(ownerUserID)
+	entries := slices.DeleteFunc(
+		app.personalHLSSessionsForOwnerLocked(ownerUserID),
+		func(entry hlsOwnedSessionEntry) bool {
+			return app.personalHLSWindowReplacedLocked(window, entry.session)
+		},
+	)
 	reserved := app.PersonalHLSReservations[ownerUserID]
 	// Evicting cached sessions only makes room when the in-flight reservations
 	// leave some; otherwise it would kill them all and still refuse.
@@ -887,14 +939,31 @@ func (app *Application) reservePersonalHLSSession(
 	}
 
 	app.PersonalHLSReservations[ownerUserID] = reserved + 1
+	app.PersonalHLSReplacing[window]++
 	reservation := &hlsPersonalSessionReservation{
 		app:         app,
 		ownerUserID: ownerUserID,
+		replaces:    &window,
 	}
 	app.PersonalHLSMu.Unlock()
 
 	app.retireDisplacedHLSSessions(removed)
 	return reservation, nil
+}
+
+// personalHLSWindowReplacedLocked reports a cached session that a start
+// already admitted, or the one being admitted (current), will retire.
+// Requires PersonalHLSMu to be held.
+func (app *Application) personalHLSWindowReplacedLocked(current hlsPlaybackWindow, session *HLSSession) bool {
+	if current.names(session) {
+		return true
+	}
+	for window := range app.PersonalHLSReplacing {
+		if window.names(session) {
+			return true
+		}
+	}
+	return false
 }
 
 // reclaimIdlePersonalHLSSessionForOwner evicts the owner's least-recently-used
@@ -1575,6 +1644,16 @@ func (app *Application) GetOrCreateHLSSession(
 		if planErr != nil {
 			return nil, planErr
 		}
+
+		// Only now that the replacement has a plan does it end the windows it
+		// supersedes: their FFmpeg is stopped before the new one starts,
+		// handing back the permit and the CPU it needs. A request canceled
+		// meanwhile could not start a replacement, so it leaves them playing.
+		ctxErr := ctx.Err()
+		if ctxErr != nil {
+			return nil, ctxErr
+		}
+		app.retireSupersededPersonalHLSSessions(media, ownerUserID, playbackSession, key)
 
 		session, createErr := app.runHLSSessionPlan(ctx, plan, 0)
 		if createErr != nil {

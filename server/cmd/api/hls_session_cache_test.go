@@ -1319,3 +1319,187 @@ func TestGetOrCreateHLSSession_ReplacesOnlyFailedSessions(t *testing.T) {
 		})
 	}
 }
+
+// A seek whose replacement fails to plan keeps the window that was playing:
+// the start retires superseded windows only after its plan succeeds. Once a
+// replacement does plan, it retires the old window as before.
+func TestGetOrCreateHLSSession_FailedReplacementKeepsSupersededWindow(t *testing.T) {
+	app := setupTestApp(t)
+	app.HLSMaxPersonalSessionsPerUser = 1
+	fake := &fakeFFmpeg{plans: []fakeFFmpegRunPlan{
+		hlsRunPlan(transcodeFixture),
+		hlsRunPlan(transcodeFixture),
+	}}
+	app.FFmpeg = fake
+
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+	userID := int64(100)
+
+	oldSession, oldKey, err := app.GetOrCreateHLSSession(
+		context.Background(), movieRef(movieID), helpers.HLS_PROFILE_720P_3MBPS,
+		testIntPtr(0), nil, helpers.HLSVideoCodecs{}, testPlaybackSessionID, 0, userID,
+	)
+	if err != nil {
+		t.Fatalf("initial creation error: %v", err)
+	}
+	defer cleanupHLSSession(oldSession)
+
+	// An audio ordinal the movie does not have fails planning.
+	_, _, err = app.GetOrCreateHLSSession(
+		context.Background(), movieRef(movieID), helpers.HLS_PROFILE_720P_3MBPS,
+		testIntPtr(9), nil, helpers.HLSVideoCodecs{}, testPlaybackSessionID, 600, userID,
+	)
+	if _, invalid := errors.AsType[*hlsInvalidAudioSelectionError](err); !invalid {
+		t.Fatalf("replacement error = %v, want an invalid audio selection", err)
+	}
+	if raw, cached := app.HLSSessionCache.Get(oldKey); !cached || raw != oldSession {
+		t.Fatal("a replacement that failed to plan ended the window that was playing")
+	}
+	if oldSession.stopped() {
+		t.Fatal("a replacement that failed to plan stopped the playing window's FFmpeg")
+	}
+	app.PersonalHLSMu.Lock()
+	reserved := app.PersonalHLSReservations[userID]
+	app.PersonalHLSMu.Unlock()
+	if reserved != 0 {
+		t.Fatalf("pending reservations after the failed replacement = %d, want 0", reserved)
+	}
+
+	// At a per-user cap of one, a seek that plans replaces the window rather
+	// than being refused for it.
+	newSession, newKey, err := app.GetOrCreateHLSSession(
+		context.Background(), movieRef(movieID), helpers.HLS_PROFILE_720P_3MBPS,
+		testIntPtr(0), nil, helpers.HLSVideoCodecs{}, testPlaybackSessionID, 600, userID,
+	)
+	if err != nil {
+		t.Fatalf("replacement creation error: %v", err)
+	}
+	defer cleanupHLSSession(newSession)
+	if newKey == oldKey {
+		t.Fatalf("replacement key %q must differ from the original", newKey)
+	}
+	if _, cached := app.HLSSessionCache.Get(oldKey); cached {
+		t.Fatal("the superseded window stayed cached after its replacement started")
+	}
+	if !oldSession.stopped() {
+		t.Fatal("the superseded window's FFmpeg was not stopped")
+	}
+	if fake.CallCount() != 2 {
+		t.Fatalf("RunHLS call count = %d, want 2", fake.CallCount())
+	}
+}
+
+// Superseded windows do not count against the per-user cap, so admitting a
+// seek never evicts the owner's other playback for room the seek frees itself.
+func TestReservePersonalHLSSession_SupersededWindowsDoNotCountAgainstCap(t *testing.T) {
+	app := setupTestApp(t)
+	app.HLSMaxPersonalSessionsPerUser = 2
+
+	userID := int64(100)
+	sameKey := HLSSessionKey(movieRef(5), helpers.HLS_PROFILE_720P_3MBPS, nil, nil, helpers.HLSVideoCodecs{}, testPlaybackSessionID, 0, userID)
+	otherKey := HLSSessionKey(movieRef(6), helpers.HLS_PROFILE_720P_3MBPS, nil, nil, helpers.HLSVideoCodecs{}, testOtherPlaybackSessionID, 0, userID)
+	for key, session := range map[string]*HLSSession{
+		sameKey:  {Media: movieRef(5), FileID: 5, OwnerUserID: userID, PlaybackSession: testPlaybackSessionID, TempDir: t.TempDir(), Exited: true},
+		otherKey: {Media: movieRef(6), FileID: 6, OwnerUserID: userID, PlaybackSession: testOtherPlaybackSessionID, TempDir: t.TempDir(), Exited: true},
+	} {
+		defer cleanupHLSSession(session)
+		app.HLSSessionCache.Set(key, session, hlsPersonalSessionTTL)
+	}
+
+	reservation, err := app.reservePersonalHLSSession(movieRef(5), userID, testPlaybackSessionID)
+	if err != nil {
+		t.Fatalf("reservePersonalHLSSession returned error: %v", err)
+	}
+	reservation.release()
+
+	for _, key := range []string{sameKey, otherKey} {
+		if _, cached := app.HLSSessionCache.Get(key); !cached {
+			t.Fatalf("admission removed %q", key)
+		}
+	}
+}
+
+// Two of one owner's clients seeking at once each leave their own window outside the
+// cap, and neither counts the other's superseded window beside the
+// reservation that stands in for it, so neither evicts the other's window.
+func TestReservePersonalHLSSession_ConcurrentReplacementsKeepEachOthersWindows(t *testing.T) {
+	app := setupTestApp(t)
+	app.HLSMaxPersonalSessionsPerUser = 2
+
+	userID := int64(100)
+	firstKey := HLSSessionKey(movieRef(5), helpers.HLS_PROFILE_720P_3MBPS, nil, nil, helpers.HLSVideoCodecs{}, testPlaybackSessionID, 0, userID)
+	secondKey := HLSSessionKey(movieRef(6), helpers.HLS_PROFILE_720P_3MBPS, nil, nil, helpers.HLSVideoCodecs{}, testOtherPlaybackSessionID, 0, userID)
+	for key, session := range map[string]*HLSSession{
+		firstKey:  {Media: movieRef(5), FileID: 5, OwnerUserID: userID, PlaybackSession: testPlaybackSessionID, TempDir: t.TempDir(), Exited: true},
+		secondKey: {Media: movieRef(6), FileID: 6, OwnerUserID: userID, PlaybackSession: testOtherPlaybackSessionID, TempDir: t.TempDir(), Exited: true},
+	} {
+		defer cleanupHLSSession(session)
+		app.HLSSessionCache.Set(key, session, hlsPersonalSessionTTL)
+	}
+
+	first, err := app.reservePersonalHLSSession(movieRef(5), userID, testPlaybackSessionID)
+	if err != nil {
+		t.Fatalf("first replacement reservation error: %v", err)
+	}
+	second, err := app.reservePersonalHLSSession(movieRef(6), userID, testOtherPlaybackSessionID)
+	if err != nil {
+		t.Fatalf("second replacement reservation error: %v", err)
+	}
+
+	// Both plans fail.
+	first.release()
+	second.release()
+
+	for _, key := range []string{firstKey, secondKey} {
+		if _, cached := app.HLSSessionCache.Get(key); !cached {
+			t.Fatalf("overlapping replacements that failed removed %q", key)
+		}
+	}
+	app.PersonalHLSMu.Lock()
+	reserved, replacing := len(app.PersonalHLSReservations), len(app.PersonalHLSReplacing)
+	app.PersonalHLSMu.Unlock()
+	if reserved != 0 || replacing != 0 {
+		t.Fatalf("after release: %d owners with reservations, %d replaced windows; want 0 and 0", reserved, replacing)
+	}
+}
+
+// A seek stops the window it supersedes before its own FFmpeg asks for a
+// permit. Retiring the window only at commit would leave the pool full: the
+// window is fresh, so reclaim skips it, and the seek would time out with 503.
+func TestGetOrCreateHLSSession_SeekFreesSupersededPermitBeforeStarting(t *testing.T) {
+	app := setupTestApp(t)
+	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{hlsRunPlan(transcodeFixture)}}
+	withTestHLSTranscodeAcquireWait(t, 50*time.Millisecond)
+
+	app.HLSCPUTranscodeLimiter = newHLSTranscodeLimiter(hlsTranscodePoolCPU, 1)
+	release := holdHLSTranscodePermit(t, app, hlsTranscodePoolCPU)
+	var releaseOnce sync.Once
+	releasePermit := func() { releaseOnce.Do(release) }
+	defer releasePermit()
+
+	userID := int64(100)
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+	oldKey := HLSSessionKey(movieRef(movieID), helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), nil, helpers.HLSVideoCodecs{}, testPlaybackSessionID, 0, userID)
+	oldSession := &HLSSession{
+		Media:           movieRef(movieID),
+		FileID:          movieID,
+		OwnerUserID:     userID,
+		PlaybackSession: testPlaybackSessionID,
+		TempDir:         t.TempDir(),
+		Cancel:          releasePermit,
+		TranscodePool:   hlsTranscodePoolCPU,
+	}
+	app.HLSSessionCache.Set(oldKey, oldSession, hlsPersonalSessionTTL)
+
+	session, _, err := app.GetOrCreateHLSSession(
+		context.Background(), movieRef(movieID), helpers.HLS_PROFILE_720P_3MBPS,
+		testIntPtr(0), nil, helpers.HLSVideoCodecs{}, testPlaybackSessionID, 600, userID,
+	)
+	if err != nil {
+		t.Fatalf("seek on a full pool returned error: %v", err)
+	}
+	defer cleanupHLSSession(session)
+	if _, cached := app.HLSSessionCache.Get(oldKey); cached {
+		t.Fatal("the superseded window stayed cached after the seek")
+	}
+}
