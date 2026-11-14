@@ -77,6 +77,7 @@ DELETE FROM musicians WHERE id=?;
 -- name: MusicArtistRetryCandidates :many
 SELECT e.id, e.name FROM musicians e LEFT JOIN music_provider_matches m ON m.entity_id=e.id AND m.entity_type='musician'
 WHERE e.id>sqlc.arg(after_id) AND (m.status IS NULL OR m.status='failed' OR EXISTS(SELECT 1 FROM music_spotify_adoptions p WHERE p.musician_id=e.id))
+AND (m.retry_after IS NULL OR m.retry_after<=unixepoch())
 AND (EXISTS(SELECT 1 FROM track_musicians t WHERE t.musician_id=e.id)
 OR EXISTS(SELECT 1 FROM music_spotify_adoptions p
     JOIN music_artist_identity ai ON ai.musician_id=p.musician_id
@@ -89,6 +90,7 @@ ORDER BY e.id LIMIT 100;
 -- changes touched; the set is small, so it is one unpaged query.
 SELECT e.id, e.name FROM musicians e LEFT JOIN music_provider_matches m ON m.entity_id=e.id AND m.entity_type='musician'
 WHERE e.id IN (sqlc.slice(ids)) AND (m.status IS NULL OR m.status='failed' OR EXISTS(SELECT 1 FROM music_spotify_adoptions p WHERE p.musician_id=e.id))
+AND (m.retry_after IS NULL OR m.retry_after<=unixepoch())
 AND (EXISTS(SELECT 1 FROM track_musicians t WHERE t.musician_id=e.id)
 OR EXISTS(SELECT 1 FROM music_spotify_adoptions p
     JOIN music_artist_identity ai ON ai.musician_id=p.musician_id
@@ -99,6 +101,7 @@ ORDER BY e.id;
 -- name: CountMusicArtistRetryCandidates :one
 SELECT COUNT(*) FROM musicians e LEFT JOIN music_provider_matches m ON m.entity_id=e.id AND m.entity_type='musician'
 WHERE (m.status IS NULL OR m.status='failed' OR EXISTS(SELECT 1 FROM music_spotify_adoptions p WHERE p.musician_id=e.id))
+AND (m.retry_after IS NULL OR m.retry_after<=unixepoch())
 AND (EXISTS(SELECT 1 FROM track_musicians t WHERE t.musician_id=e.id)
 OR EXISTS(SELECT 1 FROM music_spotify_adoptions p
     JOIN music_artist_identity ai ON ai.musician_id=p.musician_id
@@ -125,7 +128,7 @@ DELETE FROM albums WHERE id=?;
 -- collection id.
 SELECT e.id, e.title, e.musician, e.year FROM albums e LEFT JOIN music_provider_matches m ON m.entity_id=e.id AND m.entity_type='album'
 WHERE e.id>sqlc.arg(after_id)
-AND (m.status='failed' OR (m.provider='apple' AND m.reason='not_listed')
+AND ((m.status='failed' AND (m.retry_after IS NULL OR m.retry_after<=unixepoch())) OR (m.provider='apple' AND m.reason='not_listed')
 OR (m.status IS NULL AND NOT (CAST(sqlc.arg(apple_enabled) AS BOOLEAN) AND EXISTS(SELECT 1 FROM tracks t
     JOIN music_track_metadata h ON h.track_id=t.id WHERE t.album_id=e.id AND h.apple_album_id IS NOT NULL))))
 AND EXISTS(SELECT 1 FROM tracks t WHERE t.album_id=e.id)
@@ -138,7 +141,7 @@ ORDER BY e.id LIMIT 100;
 -- anonymous placeholders before it, so ?2 would bind the second album id.
 SELECT e.id, e.title, e.musician, e.year FROM albums e LEFT JOIN music_provider_matches m ON m.entity_id=e.id AND m.entity_type='album'
 WHERE e.id IN (SELECT value FROM json_each(CAST(sqlc.arg(ids) AS TEXT)))
-AND (m.status='failed' OR (m.provider='apple' AND m.reason='not_listed')
+AND ((m.status='failed' AND (m.retry_after IS NULL OR m.retry_after<=unixepoch())) OR (m.provider='apple' AND m.reason='not_listed')
 OR (m.status IS NULL AND NOT (CAST(sqlc.arg(apple_enabled) AS BOOLEAN) AND EXISTS(SELECT 1 FROM tracks t
     JOIN music_track_metadata h ON h.track_id=t.id WHERE t.album_id=e.id AND h.apple_album_id IS NOT NULL))))
 AND EXISTS(SELECT 1 FROM tracks t WHERE t.album_id=e.id)
@@ -146,7 +149,7 @@ ORDER BY e.id;
 
 -- name: CountMusicAlbumRetryCandidates :one
 SELECT COUNT(*) FROM albums e LEFT JOIN music_provider_matches m ON m.entity_id=e.id AND m.entity_type='album'
-WHERE (m.status='failed' OR (m.provider='apple' AND m.reason='not_listed')
+WHERE ((m.status='failed' AND (m.retry_after IS NULL OR m.retry_after<=unixepoch())) OR (m.provider='apple' AND m.reason='not_listed')
 OR (m.status IS NULL AND NOT (CAST(sqlc.arg(apple_enabled) AS BOOLEAN) AND EXISTS(SELECT 1 FROM tracks t
     JOIN music_track_metadata h ON h.track_id=t.id WHERE t.album_id=e.id AND h.apple_album_id IS NOT NULL))))
 AND EXISTS(SELECT 1 FROM tracks t WHERE t.album_id=e.id);
@@ -195,7 +198,7 @@ WHERE id = sqlc.arg(id);
 SELECT e.id, e.title, e.musician, e.spotify_id FROM albums e
 WHERE e.id>sqlc.arg(after_id) AND e.spotify_id IS NOT NULL
 AND EXISTS(SELECT 1 FROM tracks t LEFT JOIN music_provider_matches m ON m.entity_type='track' AND m.entity_id=t.id
-WHERE t.album_id=e.id AND (m.status IS NULL OR m.status='failed'))
+WHERE t.album_id=e.id AND (m.status IS NULL OR (m.status='failed' AND (m.retry_after IS NULL OR m.retry_after<=unixepoch()))))
 ORDER BY e.id LIMIT 100;
 
 -- name: MusicTrackLinkAlbumCandidatesIn :many
@@ -204,14 +207,14 @@ ORDER BY e.id LIMIT 100;
 SELECT e.id, e.title, e.musician, e.spotify_id FROM albums e
 WHERE e.id IN (sqlc.slice(ids)) AND e.spotify_id IS NOT NULL
 AND EXISTS(SELECT 1 FROM tracks t LEFT JOIN music_provider_matches m ON m.entity_type='track' AND m.entity_id=t.id
-WHERE t.album_id=e.id AND (m.status IS NULL OR m.status='failed'))
+WHERE t.album_id=e.id AND (m.status IS NULL OR (m.status='failed' AND (m.retry_after IS NULL OR m.retry_after<=unixepoch()))))
 ORDER BY e.id;
 
 -- name: CountMusicTrackLinkAlbumCandidates :one
 SELECT COUNT(*) FROM albums e
 WHERE e.spotify_id IS NOT NULL
 AND EXISTS(SELECT 1 FROM tracks t LEFT JOIN music_provider_matches m ON m.entity_type='track' AND m.entity_id=t.id
-WHERE t.album_id=e.id AND (m.status IS NULL OR m.status='failed'));
+WHERE t.album_id=e.id AND (m.status IS NULL OR (m.status='failed' AND (m.retry_after IS NULL OR m.retry_after<=unixepoch()))));
 
 -- name: MusicAlbumTracksToLink :many
 -- Every track of the album with its outcome: one without an outcome, or with

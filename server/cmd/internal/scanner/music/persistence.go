@@ -274,7 +274,7 @@ func (s *Scanner) persistMusician(ctx context.Context, qtx *database.Queries, sc
 			return 0, err
 		}
 	}
-	err = saveMusicMatch(ctx, qtx, musicProviderSpotify, musicEntityMusician, musician.ID, input.spotifyMatch)
+	err = saveMusicMatch(ctx, qtx, scan, musicProviderSpotify, musicEntityMusician, musician.ID, input.spotifyMatch)
 	if err != nil {
 		return 0, err
 	}
@@ -368,7 +368,7 @@ func (s *Scanner) persistAlbum(ctx context.Context, qtx *database.Queries, scan 
 			return 0, err
 		}
 	}
-	err = saveMusicMatch(ctx, qtx, musicProviderSpotify, musicEntityAlbum, album.ID, input.spotifyMatch)
+	err = saveMusicMatch(ctx, qtx, scan, musicProviderSpotify, musicEntityAlbum, album.ID, input.spotifyMatch)
 	if err != nil {
 		return 0, err
 	}

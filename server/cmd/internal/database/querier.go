@@ -291,6 +291,9 @@ type Querier interface {
 	// The music stats endpoint needs all three; one round trip instead of three.
 	GetMusicLibraryCounts(ctx context.Context) (GetMusicLibraryCountsRow, error)
 	GetMusicProviderMatch(ctx context.Context, arg GetMusicProviderMatchParams) (GetMusicProviderMatchRow, error)
+	// The failure bookkeeping of an entity whose stored outcome is failed; no row
+	// otherwise.
+	GetMusicProviderMatchFailure(ctx context.Context, arg GetMusicProviderMatchFailureParams) (GetMusicProviderMatchFailureRow, error)
 	GetMusicSpotifyAdoption(ctx context.Context, musicianID int64) (string, error)
 	GetMusicianByID(ctx context.Context, id int64) (Musician, error)
 	GetMusicianBySpotifyID(ctx context.Context, spotifyID sql.NullString) (GetMusicianBySpotifyIDRow, error)

@@ -4,6 +4,7 @@ import (
 	"igloo/cmd/internal/itunes"
 	"igloo/cmd/internal/scanner"
 	spotifyapi "igloo/cmd/internal/spotify"
+	"time"
 )
 
 // Database caches use transaction overlays; lookup outcomes and splitting
@@ -20,9 +21,12 @@ type musicScanContext struct {
 	// must be read again before the next enrichment pass.
 	merged            bool
 	invalidatedTracks map[int64]bool
-	artistAttempts    map[string]*resolvedMusician
-	albumAttempts     map[string]*resolvedAlbum
-	enrichmentCounts  map[string]int
+	// startedAt is when the scan began. It names the scan in a failed
+	// outcome's failed_at, so the scan counts each entity's failure once.
+	startedAt        time.Time
+	artistAttempts   map[string]*resolvedMusician
+	albumAttempts    map[string]*resolvedAlbum
+	enrichmentCounts map[string]int
 	// enrichmentOutcome keys the entities already tallied into enrichmentCounts
 	// by their status, so a name resolved for a hundred tracks contributes one
 	// outcome, and an adoption can move it.
@@ -71,6 +75,7 @@ func newMusicScanContext(trackIndex map[string]scanner.FileFingerprint) *musicSc
 	// Take ownership of trackIndex: loadMusicScanIndex already cleaned its keys
 	// and the caller discards its reference, so no defensive copy is needed.
 	return &musicScanContext{
+		startedAt:           time.Now(),
 		trackIndex:          trackIndex,
 		artistAttemptsByID:  make(map[int64]*resolvedMusician),
 		albumAttemptsByID:   make(map[int64]*resolvedAlbum),
@@ -102,6 +107,7 @@ func (scan *musicScanContext) touch(path string) {
 
 func (scan *musicScanContext) clone() *musicScanContext {
 	return &musicScanContext{
+		startedAt:           scan.startedAt,
 		compoundSplits:      scan.compoundSplits,
 		artistAttemptsByID:  scan.artistAttemptsByID,
 		albumAttemptsByID:   scan.albumAttemptsByID,

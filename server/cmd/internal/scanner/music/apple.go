@@ -221,7 +221,7 @@ func (s *Scanner) claimAppleAlbum(ctx context.Context, qtx *database.Queries, tx
 			return 0, err
 		}
 	}
-	return owner, saveMusicMatch(ctx, qtx, musicProviderApple, musicEntityAlbum, owner, &resolvedMatch{status: musicStatusMatched})
+	return owner, saveMusicMatch(ctx, qtx, txScan, musicProviderApple, musicEntityAlbum, owner, &resolvedMatch{status: musicStatusMatched})
 }
 
 // pairAppleTracks settles the album's tracks that have no outcome: a file
@@ -247,7 +247,7 @@ func pairAppleTracks(ctx context.Context, qtx *database.Queries, txScan *musicSc
 			txScan.tracksLinked++
 			match = resolvedMatch{status: musicStatusMatched}
 		}
-		err = saveMusicMatch(ctx, qtx, musicProviderApple, musicEntityTrack, row.ID, &match)
+		err = saveMusicMatch(ctx, qtx, txScan, musicProviderApple, musicEntityTrack, row.ID, &match)
 		if err != nil {
 			return err
 		}
@@ -261,7 +261,7 @@ func pairAppleTracks(ctx context.Context, qtx *database.Queries, txScan *musicSc
 func (s *Scanner) handAlbumToSpotify(ctx context.Context, scan *musicScanContext, albumID int64, countKey string) error {
 	match := &resolvedMatch{status: musicStatusUnmatched, reason: sql.NullString{String: musicAppleReasonNotListed, Valid: true}}
 	err := s.persistEnrichment(ctx, scan, func(qtx *database.Queries, _ *musicScanContext) error {
-		return saveMusicMatch(ctx, qtx, musicProviderApple, musicEntityAlbum, albumID, match)
+		return saveMusicMatch(ctx, qtx, scan, musicProviderApple, musicEntityAlbum, albumID, match)
 	})
 	if err != nil {
 		return err

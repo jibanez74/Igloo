@@ -9,9 +9,10 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
+
+	"igloo/cmd/internal/helpers"
 )
 
 var ErrNoMoviesFound = errors.New("no movies found with the given query")
@@ -318,26 +319,10 @@ func (t *tmdbClient) getJSON(ctx context.Context, requestURL string) ([]byte, in
 			return bodyBytes, resp.StatusCode, nil
 		}
 
-		err = sleepWithContext(ctx, t.retryDelay(header, attempt))
+		err = helpers.SleepContext(ctx, t.retryDelay(header, attempt))
 		if err != nil {
 			return nil, 0, err
 		}
-	}
-}
-
-func sleepWithContext(ctx context.Context, delay time.Duration) error {
-	if delay <= 0 {
-		return ctx.Err()
-	}
-
-	timer := time.NewTimer(delay)
-	defer timer.Stop()
-
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-timer.C:
-		return nil
 	}
 }
 
@@ -384,14 +369,9 @@ func tmdbStatusError(statusCode int, fallback string) error {
 // retryDelay honors a Retry-After header (seconds or an HTTP date, capped);
 // headers is nil after a transport failure, which Get reads as empty.
 func (t *tmdbClient) retryDelay(headers http.Header, attempt int) time.Duration {
-	retryAfter := strings.TrimSpace(headers.Get("Retry-After"))
-	seconds, secondsErr := strconv.Atoi(retryAfter)
-	if secondsErr == nil && seconds > 0 {
-		return min(time.Duration(seconds)*time.Second, tmdbHTTPRetryMaxDelay)
-	}
-	retryTime, timeErr := http.ParseTime(retryAfter)
-	if timeErr == nil {
-		return min(max(time.Until(retryTime), 0), tmdbHTTPRetryMaxDelay)
+	retryAfter, ok := helpers.RetryAfter(headers, time.Now())
+	if ok {
+		return min(retryAfter, tmdbHTTPRetryMaxDelay)
 	}
 
 	delay := t.retryBaseDelay

@@ -3,6 +3,8 @@ package music
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"time"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/scanner"
@@ -35,11 +37,42 @@ type resolvedMatch struct {
 }
 
 // saveMusicMatch records the provider's outcome for an entity; a nil match
-// leaves the stored one alone.
-func saveMusicMatch(ctx context.Context, qtx *database.Queries, provider, entityType string, entityID int64, match *resolvedMatch) error {
+// leaves the stored one alone. A failed outcome counts the scans in a row whose
+// lookup failed, and from the second holds the entity back from the retry pass
+// on the scanner's miss backoff, so a lookup that keeps failing is not paid for
+// on every scan. One scan counts once: the same failure is saved again whenever
+// a later file, merge or adoption resolves the entity from the scan's cache.
+// The count lives in the row, so a rolled-back transaction takes it back too.
+func saveMusicMatch(ctx context.Context, qtx *database.Queries, scan *musicScanContext, provider, entityType string, entityID int64, match *resolvedMatch) error {
 	if match == nil {
 		return nil
 	}
+
+	var attempts int64
+	var failedAt, retryAfter sql.NullInt64
+	if match.status == musicStatusFailed {
+		previous, err := qtx.GetMusicProviderMatchFailure(ctx, database.GetMusicProviderMatchFailureParams{
+			EntityType: entityType,
+			EntityID:   entityID,
+		})
+		hasPrevious := err == nil
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		scanID := scan.startedAt.UnixMilli()
+		countedThisScan := hasPrevious && previous.FailedAt.Valid && previous.FailedAt.Int64 == scanID
+		if countedThisScan {
+			attempts, failedAt, retryAfter = previous.Attempts, previous.FailedAt, previous.RetryAfter
+		} else {
+			if hasPrevious {
+				attempts = previous.Attempts
+			}
+			attempts++
+			failedAt = sql.NullInt64{Int64: scanID, Valid: true}
+			retryAfter = scanner.MissRetryAfter(attempts, time.Now())
+		}
+	}
+
 	return qtx.UpsertMusicProviderMatch(ctx, database.UpsertMusicProviderMatchParams{
 		EntityType: entityType,
 		EntityID:   entityID,
@@ -48,7 +81,26 @@ func saveMusicMatch(ctx context.Context, qtx *database.Queries, provider, entity
 		Reason:     match.reason,
 		Candidate:  match.candidate,
 		Score:      match.score,
+		Attempts:   attempts,
+		FailedAt:   failedAt,
+		RetryAfter: retryAfter,
 	})
+}
+
+// musicianFailureWaiting reports a musician whose failed Spotify lookup is
+// still inside its backoff.
+func (s *Scanner) musicianFailureWaiting(ctx context.Context, musicianID int64) (bool, error) {
+	failure, err := s.queries.GetMusicProviderMatchFailure(ctx, database.GetMusicProviderMatchFailureParams{
+		EntityType: musicEntityMusician,
+		EntityID:   musicianID,
+	})
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return failure.RetryAfter.Valid && time.Now().Before(time.Unix(failure.RetryAfter.Int64, 0)), nil
 }
 
 // musicMatchIsFinal reports a settled outcome that no provider looks up

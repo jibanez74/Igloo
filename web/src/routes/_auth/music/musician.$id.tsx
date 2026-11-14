@@ -6,7 +6,7 @@ import {
   ListOrdered,
 } from "lucide-react";
 import { musicianDetailsQueryOpts } from "@/lib/query-opts";
-import { unwrapString, unwrapInt, unwrapFloat } from "@/lib/nullable";
+import { unwrapString, unwrapInt } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
 import { parseRouteId } from "@/lib/route-id";
 import { listenHead, routeHead } from "@/lib/route-head";
@@ -23,10 +23,6 @@ import MusicStatList, {
 } from "@/components/music/MusicStatList";
 import MusicDetailBackNav from "@/components/music/MusicDetailBackNav";
 import MusicDetailSkeleton from "@/components/music/MusicDetailSkeleton";
-import {
-  SpotifyGlyph,
-  SpotifyPopularityMeter,
-} from "@/components/music/SpotifyPopularity";
 import CatalogLink from "@/components/music/CatalogLink";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useTrackPlaybackMatcher } from "@/hooks/useTrackPlaybackMatcher";
@@ -44,8 +40,6 @@ import {
   MUSIC_DETAIL_ACTIONS_CLASS,
   MUSIC_DETAIL_HERO_ROW_CLASS,
   MUSIC_DETAIL_SHELL_CLASS,
-  SPOTIFY_BRAND_ICON_CLASS,
-  SPOTIFY_BRAND_TEXT_CLASS,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type {
@@ -128,19 +122,6 @@ function MusicianDetailsPage() {
   );
 }
 
-// Format follower count for display
-function formatFollowers(count: number) {
-  if (count >= 1_000_000) {
-    return `${(count / 1_000_000).toFixed(1)}M`;
-  }
-
-  if (count >= 1_000) {
-    return `${Math.floor(count / 1_000)}K`;
-  }
-
-  return count.toString();
-}
-
 function MusicianDetailsContent({
   musician,
   albums,
@@ -153,8 +134,6 @@ function MusicianDetailsContent({
 
   const thumbUrl = getMediaImageUrl(unwrapString(musician.thumb)) ?? "";
   const summary = unwrapString(musician.summary);
-  const spotifyPopularity = unwrapFloat(musician.spotify_popularity);
-  const spotifyFollowers = unwrapInt(musician.spotify_followers);
   const spotifyUrl = musician.spotify_url;
 
   // A musician's tracks span every album they appear on, so each row carries its
@@ -312,30 +291,6 @@ function MusicianDetailsContent({
                 </div>
               )}
 
-              {/* Spotify stats */}
-              {(spotifyPopularity !== null || spotifyFollowers !== null) && (
-                <div className="mt-4">
-                  {spotifyPopularity !== null && (
-                    <SpotifyPopularityMeter score={spotifyPopularity} />
-                  )}
-                  {spotifyFollowers !== null && (
-                    <div className="mt-3 flex items-center justify-center gap-1.5 text-sm text-muted-foreground lg:justify-start">
-                      <SpotifyGlyph
-                        className={cn("size-4 shrink-0", SPOTIFY_BRAND_ICON_CLASS)}
-                      />
-                      <span>Followers</span>
-                      <span
-                        className={cn(
-                          "font-semibold tabular-nums",
-                          SPOTIFY_BRAND_TEXT_CLASS,
-                        )}
-                      >
-                        {formatFollowers(spotifyFollowers)}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           </header>
         </div>

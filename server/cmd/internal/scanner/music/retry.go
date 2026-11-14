@@ -115,7 +115,7 @@ func (s *Scanner) retryCatalog(ctx context.Context, scan *musicScanContext, repo
 			}
 			var adopted *resolvedMusician
 			if resolved.spotifyAlbum != nil {
-				adopted, err = s.adoptAlbumArtist(ctx, scan, candidate.Musician.String, resolved.spotifyAlbum)
+				adopted, err = s.adoptAlbumArtist(ctx, scan, candidate.Musician.String, resolved.spotifyAlbum, true)
 				if err != nil {
 					return err
 				}
@@ -266,7 +266,7 @@ func (s *Scanner) linkAlbum(ctx context.Context, scan *musicScanContext, candida
 				txScan.invalidatedTracks[row.ID] = true
 				txScan.tracksLinked++
 			}
-			err := saveMusicMatch(ctx, qtx, musicProviderSpotify, musicEntityTrack, row.ID, &match)
+			err := saveMusicMatch(ctx, qtx, scan, musicProviderSpotify, musicEntityTrack, row.ID, &match)
 			if err != nil {
 				return err
 			}
@@ -338,7 +338,7 @@ func dropAlbumMatch(ctx context.Context, qtx *database.Queries, txScan *musicSca
 		txScan.invalidatedTracks[row.ID] = true
 	}
 	txScan.matchesDropped++
-	return saveMusicMatch(ctx, qtx, musicProviderSpotify, musicEntityAlbum, albumID, &resolvedMatch{
+	return saveMusicMatch(ctx, qtx, txScan, musicProviderSpotify, musicEntityAlbum, albumID, &resolvedMatch{
 		status: musicStatusUnmatched,
 		reason: sql.NullString{String: musicSpotifyReasonTracksDisagree, Valid: true},
 	})
