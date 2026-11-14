@@ -927,13 +927,55 @@ func TestRetryAdoptionHonorsTheArtistBackoff(t *testing.T) {
 		t.Fatal("the held-back artist's failure and its wait were not kept")
 	}
 
+	s.spotify = scriptedSpotify(t, spotifyStep{operation: "artist", target: adopted.adoptionTarget, artist: testArtist()})
 	walkScan := newMusicScanContext(nil)
-	walkScan.breaker.Stopped = true // the walk would request; the open breaker only defers it
 	adopted, err = s.adoptAlbumArtist(context.Background(), walkScan, "Test Artist", album.spotifyAlbum, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if adopted == nil {
-		t.Fatal("the walk did not adopt the album's artist")
+	if adopted == nil || adopted.spotifyArtist == nil {
+		t.Fatalf("the walk did not request and adopt the album's artist: %+v", adopted)
+	}
+}
+
+// Another alias's failed request for the same target, cached for the scan,
+// gives a held-back artist no outcome: its failure count and wait stay as
+// they were.
+func TestRetryAdoptionIgnoresACachedFailureForAHeldBackArtist(t *testing.T) {
+	s := setupMusicScanner(t)
+	dir := t.TempDir()
+	scannertest.WriteFile(t, filepath.Join(dir, "track.m4a"), "audio")
+	s.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadata()}
+	s.scan(dir)
+	markArtistsUnmatched(t, s)
+	_, err := s.tx.DB.Exec(`UPDATE music_provider_matches SET status='failed', attempts=2, failed_at=0, retry_after=unixepoch()+3600
+		WHERE entity_type='musician'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scan := newMusicScanContext(nil)
+	s.spotify = scriptedSpotify(t, spotifyStep{operation: "match", target: "Test Album", album: testAlbum()})
+	album, err := s.resolveAlbum(context.Background(), scan, albumQuery{title: "Test Album", artist: "Test Artist"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	scan.artistIDAttempts["artist"] = artistIDResult{err: errors.New("transport")}
+
+	adopted, err := s.adoptAlbumArtist(context.Background(), scan, "Test Artist", album.spotifyAlbum, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if adopted == nil || adopted.spotifyMatch != nil || adopted.adoptionTarget != "artist" {
+		t.Fatalf("a held-back adoption must keep its target and take no cached failure: %+v", adopted)
+	}
+	err = s.persistEnrichment(context.Background(), scan, func(q *database.Queries, txScan *musicScanContext) error {
+		_, err := s.persistMusician(context.Background(), q, txScan, *adopted)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_provider_matches WHERE entity_type='musician' AND status='failed' AND attempts=2 AND failed_at=0") != 1 {
+		t.Fatal("the cached failure counted against the held-back artist")
 	}
 }

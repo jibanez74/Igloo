@@ -692,6 +692,12 @@ type artistIDResult struct {
 func (s *Scanner) resolveArtistAdoption(ctx context.Context, scan *musicScanContext, resolved *resolvedMusician, target spotifyapi.ID, deferRequest bool) (*resolvedMusician, error) {
 	resolved.adoptionTarget = target.String()
 	result, attempted := scan.artistIDAttempts[target]
+	// A held-back artist takes another alias's answer for the target but not
+	// its failure: the artist is already waiting out its own, and the cached
+	// failure would count against it again and push its retry further out.
+	if deferRequest && attempted && result.err != nil && !spotifyNotFound(result.err) {
+		attempted = false
+	}
 	if !attempted && !deferRequest && s.spotifyReady(scan) {
 		result.artist, result.err = s.spotify.GetArtist(ctx, target)
 		contextErr := ctx.Err()
