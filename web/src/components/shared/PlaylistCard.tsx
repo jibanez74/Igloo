@@ -76,6 +76,9 @@ export default function PlaylistCard({ playlist }: PlaylistCardProps) {
             : []),
         ]
       : [pluralize(playlist.movie_count, "movie")];
+  // A playlist shared with the reader names its owner on a line of its own,
+  // so a long name never pushes the counts out of view.
+  const ownerLine = is_owner ? null : `By ${playlist.owner.name}`;
 
   return (
     <article className={cn(CARD_SURFACE_CLASS, "min-w-0 p-4")}>
@@ -83,7 +86,7 @@ export default function PlaylistCard({ playlist }: PlaylistCardProps) {
         to={to}
         params={{ id: id.toString() }}
         className={cn("block", FOCUS_VISIBLE_RING_CLASS, "focus-visible:ring-inset")}
-        aria-label={[name, ...details].join(", ")}
+        aria-label={[name, ...(ownerLine ? [ownerLine] : []), ...details].join(", ")}
       >
         <div className="relative mx-auto mb-3 aspect-square w-full overflow-hidden rounded-lg bg-muted">
           {showArt && isCollage ? (
@@ -135,6 +138,9 @@ export default function PlaylistCard({ playlist }: PlaylistCardProps) {
         </div>
         <div className="text-center">
           <h3 className="truncate text-sm font-semibold text-foreground">{name}</h3>
+          {ownerLine && (
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">{ownerLine}</p>
+          )}
           <p className="mt-0.5 text-xs text-muted-foreground">
             {details.join(" · ")}
           </p>
@@ -145,7 +151,8 @@ export default function PlaylistCard({ playlist }: PlaylistCardProps) {
 }
 
 // Authored beside the card it mirrors (design-system §3.4): the same padded
-// square cover, then bars sized to the name and details lines.
+// square cover, then bars sized to the name and details lines. A shared
+// playlist's owner line is not drawn: whose it is is unknown while loading.
 export function PlaylistCardSkeleton() {
   return (
     <div

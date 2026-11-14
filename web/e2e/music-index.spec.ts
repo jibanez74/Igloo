@@ -112,6 +112,7 @@ const mockPlaylists = [
     total_duration: 420000,
     is_owner: false,
     can_edit: false,
+    owner: { id: 2, name: "Riley Collaborator", avatar: null },
     artwork: [1, 2, 3, 4].map(n => `/api/static/music/albums/${n}/cover.jpg`),
   }),
 ];
@@ -455,7 +456,7 @@ test("playlists tab creates a playlist from the toolbar dialog", async ({ page }
 
   await expect(page.getByRole("tab", { name: "Playlists" })).toHaveAttribute("aria-selected", "true");
   const plainPlaylist = "Morning Rotation, 3 tracks, 9m 0s";
-  const collagePlaylist = "Shared Discoveries, 4 tracks, 7m 0s";
+  const collagePlaylist = "Shared Discoveries, By Riley Collaborator, 4 tracks, 7m 0s";
   await expect(page.getByRole("link", { name: plainPlaylist })).toBeVisible();
   // Four album covers make a collage; a playlist without artwork keeps its icon.
   await expect(cardFor(page, collagePlaylist).locator("img")).toHaveCount(4);

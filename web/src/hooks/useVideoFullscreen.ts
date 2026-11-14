@@ -113,10 +113,32 @@ export function useVideoFullscreen({
 
   // A video torn down inside WebKit video-only fullscreen (a playback error
   // replacing the player) fires its end event on a detached node, which
-  // never reaches the document listener, so the mode can still read
-  // "webkitVideo" with no video in fullscreen. The controls then offer to
-  // exit full screen, so pressing that, or Escape, only clears the mode.
-  // Returns whether it did.
+  // never reaches the document listener. Watching for that video to leave
+  // the document clears the mode as it goes, so the controls never offer to
+  // exit a fullscreen that has already ended.
+  useEffect(() => {
+    if (fullscreenMode !== "webkitVideo") return;
+    const video = videoRef.current;
+    // Gone before this effect ran: nothing would wake an observer.
+    if (!video?.isConnected) {
+      fullscreenModeRef.current = "none";
+      setFullscreenMode("none");
+      return;
+    }
+    const observer = new MutationObserver(() => {
+      if (video.isConnected || fullscreenModeRef.current !== "webkitVideo") {
+        return;
+      }
+      fullscreenModeRef.current = "none";
+      setFullscreenMode("none");
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [fullscreenMode, videoRef]);
+
+  // Should the mode still read "webkitVideo" with no video in fullscreen,
+  // pressing the fullscreen toggle, or Escape, only clears it. Returns
+  // whether it did.
   const dropStaleWebKitVideoMode = (): boolean => {
     if (fullscreenModeRef.current !== "webkitVideo") return false;
     const video = videoRef.current;
