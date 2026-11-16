@@ -1017,6 +1017,10 @@ func canAccessPersonalHLSSession(session *HLSSession, media mediaRef, ownerUserI
 		session.OwnerUserID == ownerUserID
 }
 
+// errWatchRoomDeleted marks a room HLS request that raced the room's deletion.
+// It answers 404, the same as a room that was already gone.
+var errWatchRoomDeleted = errors.New("watch room was deleted")
+
 func (app *Application) markRoomHLSSessionDeleted(roomID int64) {
 	app.RoomHLSTombstone.SetDefault(RoomHLSSessionKey(roomID), struct{}{})
 }
@@ -1049,7 +1053,7 @@ func (app *Application) storeRoomHLSSessionIfActive(roomID int64, key string, se
 
 	if deleted {
 		cleanupHLSSession(session)
-		return fmt.Errorf("watch room %d was deleted during hls session creation", roomID)
+		return fmt.Errorf("watch room %d: %w during hls session creation", roomID, errWatchRoomDeleted)
 	}
 
 	return nil
@@ -1060,7 +1064,7 @@ func (app *Application) getActiveRoomHLSSession(roomID int64, key string) (*HLSS
 	defer app.RoomHLSMu.Unlock()
 
 	if app.isRoomHLSSessionDeleted(roomID) {
-		return nil, false, fmt.Errorf("watch room %d was deleted", roomID)
+		return nil, false, fmt.Errorf("watch room %d: %w", roomID, errWatchRoomDeleted)
 	}
 
 	raw, ok := app.HLSSessionCache.Get(key)
@@ -1761,7 +1765,7 @@ func (app *Application) GetOrCreateRoomHLSSession(
 		}
 
 		if app.isRoomHLSSessionDeleted(roomID) {
-			return nil, fmt.Errorf("watch room %d was deleted", roomID)
+			return nil, fmt.Errorf("watch room %d: %w", roomID, errWatchRoomDeleted)
 		}
 
 		var source playbackSource

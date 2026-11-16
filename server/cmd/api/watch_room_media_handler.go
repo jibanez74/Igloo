@@ -170,6 +170,10 @@ func (app *Application) WatchRoomHLSSegment(w http.ResponseWriter, r *http.Reque
 
 	key := RoomHLSSessionKey(room.ID)
 	session, found, err := app.getActiveRoomHLSSession(room.ID, key)
+	if errors.Is(err, errWatchRoomDeleted) {
+		helpers.ErrorJSON(w, errors.New("room not found"), http.StatusNotFound)
+		return
+	}
 	if err != nil {
 		app.serverError(w, err, "watch room hls session fetch failed", internalServerErrorMessage, "room_id", room.ID)
 		return
