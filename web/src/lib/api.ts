@@ -22,6 +22,8 @@ import type {
   CreateWatchRoomRequestType,
   CreateWatchRoomResponseType,
   JoinWatchRoomResponseType,
+  LeaveWatchRoomResponseType,
+  UpdateWatchRoomMembersRequestType,
   ContinueWatchingDataType,
   LatestMovieType,
   LatestShowsDataType,
@@ -1120,6 +1122,20 @@ export const joinWatchRoom = (id: number) =>
     `/api/watch-rooms/${id}/join`,
     { method: "POST" },
   );
+
+export const updateWatchRoomMembers = (
+  id: number,
+  body: UpdateWatchRoomMembersRequestType,
+) =>
+  apiRequest<WatchRoomResponseType>(`/api/watch-rooms/${id}/members`, {
+    method: "PUT",
+    body,
+  });
+
+export const leaveWatchRoom = (id: number) =>
+  apiRequest<LeaveWatchRoomResponseType>(`/api/watch-rooms/${id}/leave`, {
+    method: "POST",
+  });
 
 export const getWatchRooms = (signal?: AbortSignal) =>
   apiRequest<{ rooms: WatchRoomType[] }>("/api/watch-rooms", { signal });

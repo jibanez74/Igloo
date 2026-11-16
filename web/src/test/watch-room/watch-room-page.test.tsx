@@ -13,7 +13,9 @@ import {
   PLAYER_PRIMARY_BUTTON_CLASS,
   WATCH_ROOMS_KEY,
   WATCH_ROOM_KEY,
+  WATCH_ROOM_SEEK_COALESCE_MS,
   WATCH_ROOM_SEEK_STEP_SEC,
+  AUTH_USER_KEY,
 } from "@/lib/constants";
 import type { WatchRoomDetailType } from "@/types";
 import { renderWithQueryClient } from "@/test/helpers/render";
@@ -640,12 +642,30 @@ describe("WatchRoomPageContent", () => {
       "shadow-glow",
     );
 
-    const leave = screen.getByRole("button", { name: "Leave room" });
-    expect(leave).toHaveAttribute("data-variant", "outline");
-    expect(leave).toHaveAttribute("data-shape", "pill");
+    const backHome = screen.getByRole("button", { name: "Back home" });
+    expect(backHome).toHaveAttribute("data-variant", "outline");
+    expect(backHome).toHaveAttribute("data-shape", "pill");
+    expect(
+      screen.getByRole("button", { name: /^Edit invitees for/ }),
+    ).toHaveAttribute("data-shape", "pill");
     expect(
       screen.getByRole("button", { name: /^Close watch room for/ }),
     ).toHaveAttribute("data-shape", "pill");
+  });
+
+  // An invitee leaves for good from the header; the owner never sees it.
+  it("offers an invitee Leave room as an outline removal", () => {
+    renderRoomPage(buildRoom({ is_owner: false }));
+
+    const leave = screen.getByRole("button", { name: "Leave watch room for Arrival" });
+    expect(leave).toHaveAttribute("data-variant", "outline-destructive");
+    expect(leave).toHaveAttribute("data-shape", "pill");
+    expect(
+      screen.queryByRole("button", { name: /^Edit invitees for/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /^Close watch room for/ }),
+    ).not.toBeInTheDocument();
   });
 
   it("sends playback events for local play, pause, and seek controls", async () => {
@@ -1128,7 +1148,10 @@ describe("WatchRoomPageContent", () => {
     expect(screen.queryByText("failed to get watch room")).not.toBeInTheDocument();
   });
 
-  it("shows a controlled error when joining the room throws", async () => {
+  // A join that throws (offline, a proxy dropping the request) used to end
+  // syncing until the page was reloaded; it now waits and tries again.
+  it("keeps reconnecting when joining the room throws", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     useQueryMock.mockImplementation(() => ({
       data: {
         error: false,
@@ -1139,20 +1162,31 @@ describe("WatchRoomPageContent", () => {
       isPending: false,
       isError: false,
     }));
-    joinWatchRoomMock.mockRejectedValue(new Error("Network offline"));
+    joinWatchRoomMock.mockRejectedValueOnce(new Error("Network offline"));
+    joinWatchRoomMock.mockImplementation(async (id: number) => ({
+      error: false,
+      data: { room_id: id, joined: true },
+    }));
 
     renderWithQueryClient(<WatchRoomPageContent roomId={7} />);
 
-    await waitFor(() => {
-      expect(joinWatchRoomMock).toHaveBeenCalledWith(7);
+    expect(
+      await screen.findByText(/reconnecting: your changes won't reach the room/i),
+    ).toBeInTheDocument();
+    expect(FakeWebSocket.instances).toHaveLength(0);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
     });
 
-    expect(await screen.findByText("Network offline")).toBeInTheDocument();
-    expect(
-      screen.getByText(/connecting realtime sync/i),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/arrival/i)).toBeInTheDocument();
-    expect(FakeWebSocket.instances).toHaveLength(0);
+    await waitFor(() => {
+      expect(joinWatchRoomMock).toHaveBeenCalledTimes(2);
+    });
+    await waitFor(() => {
+      expect(FakeWebSocket.instances).toHaveLength(1);
+    });
+    expect(await screen.findByText("Realtime sync connected")).toBeInTheDocument();
     expect(navigateMock).not.toHaveBeenCalled();
   });
 
@@ -1690,5 +1724,361 @@ describe("WatchRoomPageContent", () => {
     await screen.findByTestId("video-player");
 
     expect(lastVideoPlayerProps.current?.isHlsSource).toBe(false);
+  });
+
+  describe("membership and sync", () => {
+    const sent = (socket: FakeWebSocket) =>
+      socket.sentMessages
+        .map(message => JSON.parse(message) as { type: string; position_sec?: number })
+        .filter(message => message.type !== "ping");
+
+    async function openRoom(room = buildRoom({ is_owner: false })) {
+      const rendered = renderRoomPage(room);
+      await waitFor(() => {
+        expect(FakeWebSocket.instances).toHaveLength(1);
+      });
+      const socket = FakeWebSocket.instances[0];
+      await act(async () => {
+        socket.emitMessage({
+          type: "room_snapshot",
+          room_id: 7,
+          playback: { paused: true, position_sec: 0, updated_at: "2026-04-14T12:00:00Z" },
+          connected_user_ids: [1, 2],
+        });
+      });
+      return { ...rendered, socket };
+    }
+
+    // The server sends a command back to everyone, its sender included. Before,
+    // the page announced its own press and could snap back to it.
+    it("follows its own echo without announcing it, and announces another member's", async () => {
+      const user = userEvent.setup();
+      const { socket } = await openRoom();
+
+      await user.click(screen.getByRole("button", { name: "Play playback" }));
+      await waitFor(() => {
+        expect(sent(socket).at(-1)).toEqual({ type: "play", position_sec: 0 });
+      });
+
+      await act(async () => {
+        socket.emitMessage({
+          type: "playback_changed",
+          room_id: 7,
+          playback: { paused: false, position_sec: 0.05, updated_at: "2026-04-14T12:00:01Z" },
+        });
+      });
+      // The first announcer speaks the room's sync, the second its recovery.
+      const syncAnnouncer = () => screen.getAllByTestId("live-announcer")[0];
+      expect(syncAnnouncer()).not.toHaveTextContent("Playing Arrival");
+
+      await act(async () => {
+        socket.emitMessage({
+          type: "playback_changed",
+          room_id: 7,
+          playback: { paused: true, position_sec: 4, updated_at: "2026-04-14T12:00:05Z" },
+        });
+      });
+      await waitFor(() => {
+        expect(syncAnnouncer()).toHaveTextContent("Paused Arrival");
+      });
+      expect(mockVideoController.paused).toBe(true);
+    });
+
+    // Play then Pause: the play's echo arrives while the pause is still on
+    // its way, so it is out of date and must not start the video again.
+    it("ignores an out-of-date echo while a newer command is on its way", async () => {
+      const user = userEvent.setup();
+      const { socket } = await openRoom();
+
+      await user.click(screen.getByRole("button", { name: "Play playback" }));
+      await user.click(await screen.findByRole("button", { name: "Pause playback" }));
+      expect(sent(socket).map(message => message.type)).toEqual(["play", "pause"]);
+      const playCalls = mockVideoController.playCalls;
+
+      await act(async () => {
+        socket.emitMessage({
+          type: "playback_changed",
+          room_id: 7,
+          playback: { paused: false, position_sec: 0, updated_at: "2026-04-14T12:00:01Z" },
+        });
+      });
+      expect(mockVideoController.playCalls).toBe(playCalls);
+      expect(mockVideoController.paused).toBe(true);
+    });
+
+    // Scrubbing used to send a seek for every input event, each broadcast to
+    // the whole room.
+    it("sends a run of seeks to the room once, at the last position", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const { socket } = await openRoom();
+      const forward = screen.getByRole("button", {
+        name: `Fast-forward ${WATCH_ROOM_SEEK_STEP_SEC} seconds`,
+      });
+
+      for (let press = 0; press < 3; press += 1) {
+        await act(async () => {
+          forward.click();
+        });
+      }
+      expect(mockVideoController.currentTime).toBe(3 * WATCH_ROOM_SEEK_STEP_SEC);
+      expect(sent(socket)).toEqual([]);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(WATCH_ROOM_SEEK_COALESCE_MS);
+      });
+      expect(sent(socket)).toEqual([
+        { type: "seek", position_sec: 3 * WATCH_ROOM_SEEK_STEP_SEC },
+      ]);
+    });
+
+    it("lets a play replace a seek still waiting to go out", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const { socket } = await openRoom();
+
+      await act(async () => {
+        screen
+          .getByRole("button", { name: `Fast-forward ${WATCH_ROOM_SEEK_STEP_SEC} seconds` })
+          .click();
+      });
+      await act(async () => {
+        screen.getByRole("button", { name: "Play playback" }).click();
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(WATCH_ROOM_SEEK_COALESCE_MS * 2);
+      });
+
+      expect(sent(socket)).toEqual([
+        { type: "play", position_sec: WATCH_ROOM_SEEK_STEP_SEC },
+      ]);
+    });
+
+    // While the socket is down the last presence the room sent is stale, and
+    // presses reach nobody: say so instead of showing everyone connected.
+    it("marks presence unknown and says changes won't reach the room while reconnecting", async () => {
+      const { socket } = await openRoom();
+      expect(screen.getByText("2 connected now")).toBeInTheDocument();
+      expect(screen.getAllByText("Connected")).toHaveLength(2);
+
+      await act(async () => {
+        socket.serverClose();
+      });
+
+      expect(
+        screen.getByText("Reconnecting: your changes won't reach the room"),
+      ).toBeInTheDocument();
+      expect(screen.queryByText("2 connected now")).not.toBeInTheDocument();
+      expect(screen.queryByText("Connected")).not.toBeInTheDocument();
+      expect(screen.queryByText("Away")).not.toBeInTheDocument();
+    });
+
+    it("keeps a playback error when the socket drops", async () => {
+      const fetchMock = vi.fn(async () => new Response(null, { status: 200 }));
+      vi.stubGlobal("fetch", fetchMock);
+      try {
+        const { socket } = await openRoom();
+        const playerProps = lastVideoPlayerProps.current as unknown as {
+          onError: (message: string | null) => void;
+        };
+
+        act(() => {
+          playerProps.onError("The browser could not decode this video stream.");
+        });
+        expect(screen.getByRole("alert")).toHaveTextContent(
+          "The browser could not decode this video stream.",
+        );
+
+        await act(async () => {
+          socket.serverClose();
+        });
+        expect(screen.getByRole("alert")).toHaveTextContent(
+          "The browser could not decode this video stream.",
+        );
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it("explains a 409 from the room's stream as tracks that no longer match", async () => {
+      const fetchMock = vi.fn(async () => new Response(null, { status: 409 }));
+      vi.stubGlobal("fetch", fetchMock);
+      try {
+        await openRoom();
+        const playerProps = lastVideoPlayerProps.current as unknown as {
+          onError: (message: string | null) => void;
+        };
+
+        act(() => {
+          playerProps.onError("This video format or stream is not supported by the browser.");
+        });
+
+        await waitFor(() => {
+          expect(screen.getByRole("alert")).toHaveTextContent(
+            /file changed since the room was made/i,
+          );
+        });
+        expect(fetchMock).toHaveBeenCalledWith(
+          "/api/watch-rooms/7/stream",
+          expect.objectContaining({ method: "HEAD" }),
+        );
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it("writes members_changed into the room and the rooms list", async () => {
+      const { queryClient, socket } = await openRoom();
+      queryClient.setQueryData([WATCH_ROOM_KEY, 7], {
+        error: false,
+        data: { room: buildRoom({ is_owner: false }) },
+      });
+      queryClient.setQueryData([WATCH_ROOMS_KEY], {
+        error: false,
+        data: { rooms: [{ id: 7, members: [] }, { id: 8, members: [] }] },
+      });
+      const members = [
+        { id: 1, name: "Room Owner", avatar: null },
+        { id: 3, name: "New Guest", avatar: null },
+      ];
+
+      await act(async () => {
+        socket.emitMessage({ type: "members_changed", room_id: 7, members });
+      });
+
+      expect(
+        (queryClient.getQueryData([WATCH_ROOM_KEY, 7]) as { data: { room: WatchRoomDetailType } })
+          .data.room.members,
+      ).toEqual(members);
+      expect(queryClient.getQueryData([WATCH_ROOMS_KEY])).toEqual({
+        error: false,
+        data: { rooms: [{ id: 7, members }, { id: 8, members: [] }] },
+      });
+      expect(navigateMock).not.toHaveBeenCalled();
+    });
+
+    it("leaves and forgets the room when room_access_revoked arrives", async () => {
+      const { queryClient, socket } = await openRoom();
+      queryClient.setQueryData([WATCH_ROOM_KEY, 7], {
+        error: false,
+        data: { room: buildRoom({ is_owner: false }) },
+      });
+
+      await act(async () => {
+        socket.emitMessage({ type: "room_access_revoked", room_id: 7 });
+      });
+
+      await waitFor(() => {
+        expect(navigateMock).toHaveBeenCalledWith({ to: "/", replace: true });
+      });
+      expect(showInfoMock).toHaveBeenCalledWith(
+        "No longer in this watch room",
+        "You are no longer invited to \"Arrival\".",
+      );
+      await waitFor(() => {
+        expect(queryClient.getQueryData([WATCH_ROOM_KEY, 7])).toBeUndefined();
+      });
+      expect(socket.readyState).toBe(FakeWebSocket.CLOSED);
+    });
+
+    // Removed while away: the reconnect's join answers 403, which ends the
+    // room for this viewer instead of retrying forever.
+    it.each([
+      [403, "No longer in this watch room"],
+      [404, "Watch room closed"],
+    ])("ends the room when a reconnect's join answers %i", async (status, title) => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const { socket } = await openRoom();
+      joinWatchRoomMock.mockResolvedValue({ error: true, status, message: "access denied" });
+
+      await act(async () => {
+        socket.serverClose();
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+
+      await waitFor(() => {
+        expect(navigateMock).toHaveBeenCalledWith({ to: "/", replace: true });
+      });
+      expect(showInfoMock).toHaveBeenCalledWith(title, expect.any(String));
+      expect(FakeWebSocket.instances).toHaveLength(1);
+    });
+
+    it("stops reconnecting when the join answers 401", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const { socket } = await openRoom();
+      joinWatchRoomMock.mockResolvedValue({ error: true, status: 401, message: "Unauthorized" });
+
+      await act(async () => {
+        socket.serverClose();
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(20_000);
+      });
+
+      expect(joinWatchRoomMock).toHaveBeenCalledTimes(2);
+      expect(FakeWebSocket.instances).toHaveLength(1);
+      expect(navigateMock).not.toHaveBeenCalled();
+    });
+
+    // A room left empty forgets its place (server restart, or this viewer was
+    // its last connection). Back alone, the viewer puts it back, as IglooTV does.
+    it("puts a forgotten room back where this viewer was when it rejoins alone", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      useQueryMock.mockImplementation((options: { queryKey: unknown[] }) =>
+        options.queryKey[0] === AUTH_USER_KEY
+          ? {
+              data: { error: false, data: { user: { id: 2, name: "Invited Guest" } } },
+              isPending: false,
+              isError: false,
+            }
+          : {
+              data: { error: false, data: { room: buildRoom({ is_owner: false }) } },
+              isPending: false,
+              isError: false,
+            },
+      );
+      joinWatchRoomMock.mockImplementation(async (id: number) => ({
+        error: false,
+        data: { room_id: id, joined: true },
+      }));
+      renderWithQueryClient(<WatchRoomPageContent roomId={7} />);
+      await waitFor(() => {
+        expect(FakeWebSocket.instances).toHaveLength(1);
+      });
+      await act(async () => {
+        FakeWebSocket.instances[0].emitMessage({
+          type: "room_snapshot",
+          room_id: 7,
+          playback: { paused: true, position_sec: 50, updated_at: "2026-04-14T12:00:00Z" },
+          connected_user_ids: [1, 2],
+        });
+      });
+      expect(mockVideoController.currentTime).toBe(50);
+
+      await act(async () => {
+        FakeWebSocket.instances[0].serverClose();
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+      await waitFor(() => {
+        expect(FakeWebSocket.instances).toHaveLength(2);
+      });
+      const socket = FakeWebSocket.instances[1];
+      await act(async () => {
+        socket.emitMessage({
+          type: "room_snapshot",
+          room_id: 7,
+          playback: { paused: true, position_sec: 0, updated_at: "2026-04-14T12:01:00Z" },
+          connected_user_ids: [2],
+        });
+      });
+
+      expect(mockVideoController.currentTime).toBe(50);
+      expect(sent(socket)).toEqual([{ type: "pause", position_sec: 50 }]);
+    });
   });
 });

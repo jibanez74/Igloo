@@ -12,13 +12,30 @@ import type { ApiResponseType, WatchRoomType } from "@/types";
 import { renderWithQueryClient } from "@/test/helpers/render";
 
 const deleteWatchRoomMock = vi.fn();
+const leaveWatchRoomMock = vi.fn();
+const updateWatchRoomMembersMock = vi.fn();
+const getWatchRoomInviteUsersMock = vi.fn();
 const showActionFailedMock = vi.fn();
 const showSuccessMock = vi.fn();
+const showUpdatedMock = vi.fn();
 
 beforeEach(() => {
   deleteWatchRoomMock.mockReset();
+  leaveWatchRoomMock.mockReset();
+  updateWatchRoomMembersMock.mockReset();
+  getWatchRoomInviteUsersMock.mockReset();
+  getWatchRoomInviteUsersMock.mockResolvedValue({
+    error: false,
+    data: {
+      users: [
+        { id: 2, name: "Invited Guest", email: "guest@example.test", avatar: null },
+        { id: 3, name: "Third Viewer", email: "third@example.test", avatar: null },
+      ],
+    },
+  });
   showActionFailedMock.mockReset();
   showSuccessMock.mockReset();
+  showUpdatedMock.mockReset();
 });
 
 vi.mock("@tanstack/react-router", async () => {
@@ -66,6 +83,11 @@ vi.mock("@/components/ui/avatar", () => ({
 vi.mock("@/lib/api", async () => ({
   ...(await vi.importActual<typeof import("@/lib/api")>("@/lib/api")),
   deleteWatchRoom: (...args: unknown[]) => deleteWatchRoomMock(...args),
+  leaveWatchRoom: (...args: unknown[]) => leaveWatchRoomMock(...args),
+  updateWatchRoomMembers: (...args: unknown[]) =>
+    updateWatchRoomMembersMock(...args),
+  getWatchRoomInviteUsers: (...args: unknown[]) =>
+    getWatchRoomInviteUsersMock(...args),
 }));
 
 vi.mock("@/lib/toast-helpers", async () => {
@@ -78,6 +100,7 @@ vi.mock("@/lib/toast-helpers", async () => {
     ...actual,
     showActionFailed: (...args: unknown[]) => showActionFailedMock(...args),
     showSuccess: (...args: unknown[]) => showSuccessMock(...args),
+    showUpdated: (...args: unknown[]) => showUpdatedMock(...args),
   };
 });
 
@@ -265,5 +288,140 @@ describe("WatchRoomCard", () => {
       "\"Moonfall\" is no longer available.",
     );
     expect(screen.queryByText("Close watch room?")).not.toBeInTheDocument();
+  });
+
+  it("offers an invitee Leave instead of the owner's edit and close", () => {
+    renderWithQueryClient(<WatchRoomCard room={buildRoom({ is_owner: false })} />);
+
+    expect(
+      screen.getByRole("button", { name: "Leave watch room for Moonfall" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /edit invitees for/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("drops a room the invitee left from the cached rooms", async () => {
+    leaveWatchRoomMock.mockResolvedValue({ error: false, data: { left: true } });
+    const user = userEvent.setup();
+    const room = buildRoom({ is_owner: false });
+    const { queryClient } = renderWithQueryClient(<WatchRoomCard room={room} />);
+    queryClient.setQueryData([WATCH_ROOMS_KEY], {
+      error: false,
+      data: { rooms: [room, buildRoom({ id: 43 })] },
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: "Leave watch room for Moonfall" }),
+    );
+    expect(screen.getByText("Leave watch room?")).toBeInTheDocument();
+    expect(screen.getByText(/only room owner can invite you back/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Leave room" }));
+
+    await waitFor(() => {
+      expect(leaveWatchRoomMock).toHaveBeenCalledWith(42);
+    });
+    await waitFor(() => {
+      const cached = queryClient.getQueryData<
+        ApiResponseType<{ rooms: WatchRoomType[] }>
+      >([WATCH_ROOMS_KEY]);
+      expect(
+        cached?.error === false ? cached.data.rooms.map(item => item.id) : null,
+      ).toEqual([43]);
+    });
+    expect(showSuccessMock).toHaveBeenCalledWith(
+      "Left watch room",
+      "\"Moonfall\" is off your list.",
+    );
+  });
+
+  it("keeps the leave dialog open when leaving fails", async () => {
+    leaveWatchRoomMock.mockResolvedValue({ error: true, message: "access denied" });
+    const user = userEvent.setup();
+    renderWithQueryClient(<WatchRoomCard room={buildRoom({ is_owner: false })} />);
+
+    await user.click(
+      screen.getByRole("button", { name: "Leave watch room for Moonfall" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Leave room" }));
+
+    await waitFor(() => {
+      expect(showActionFailedMock).toHaveBeenCalledWith(
+        "leave the watch room",
+        expect.objectContaining({ message: "access denied" }),
+      );
+    });
+    expect(screen.getByText("Leave watch room?")).toBeInTheDocument();
+  });
+
+  // The owner swaps the current guest for another user: the dialog opens on
+  // the room's invitees, saves only a change, and writes the result back.
+  it("lets the owner change who is invited", async () => {
+    const updatedMembers = [
+      { id: 1, name: "Room Owner", avatar: null },
+      { id: 3, name: "Third Viewer", avatar: null },
+    ];
+    updateWatchRoomMembersMock.mockResolvedValue({
+      error: false,
+      data: { room: { ...buildRoom(), members: updatedMembers } },
+    });
+    const user = userEvent.setup();
+    const room = buildRoom();
+    const { queryClient } = renderWithQueryClient(<WatchRoomCard room={room} />);
+    queryClient.setQueryData([WATCH_ROOMS_KEY], {
+      error: false,
+      data: { rooms: [room] },
+    });
+
+    await user.click(screen.getByRole("button", { name: "Edit invitees for Moonfall" }));
+    const guest = await screen.findByRole("checkbox", { name: "Invite Invited Guest" });
+    expect(guest).toBeChecked();
+    const save = screen.getByRole("button", { name: "Save invitees" });
+    expect(save).toBeDisabled();
+
+    await user.click(guest);
+    await user.click(screen.getByRole("checkbox", { name: "Invite Third Viewer" }));
+    expect(save).toBeEnabled();
+    await user.click(save);
+
+    await waitFor(() => {
+      expect(updateWatchRoomMembersMock).toHaveBeenCalledWith(42, {
+        invited_user_ids: [3],
+      });
+    });
+    await waitFor(() => {
+      expect(screen.queryByText("Edit invitees")).not.toBeInTheDocument();
+    });
+    const cached = queryClient.getQueryData<
+      ApiResponseType<{ rooms: WatchRoomType[] }>
+    >([WATCH_ROOMS_KEY]);
+    expect(cached?.error === false ? cached.data.rooms[0].members : null).toEqual(
+      updatedMembers,
+    );
+    expect(showUpdatedMock).toHaveBeenCalledWith(
+      "Invitees",
+      "The room for \"Moonfall\" is up to date.",
+    );
+  });
+
+  it("keeps the edit dialog open when saving fails", async () => {
+    updateWatchRoomMembersMock.mockResolvedValue({
+      error: true,
+      message: "one or more invited users do not exist",
+    });
+    const user = userEvent.setup();
+    renderWithQueryClient(<WatchRoomCard room={buildRoom()} />);
+
+    await user.click(screen.getByRole("button", { name: "Edit invitees for Moonfall" }));
+    await user.click(await screen.findByRole("checkbox", { name: "Invite Third Viewer" }));
+    await user.click(screen.getByRole("button", { name: "Save invitees" }));
+
+    await waitFor(() => {
+      expect(showActionFailedMock).toHaveBeenCalledWith(
+        "update the invitees",
+        expect.objectContaining({ message: "one or more invited users do not exist" }),
+      );
+    });
+    expect(screen.getByText("Edit invitees")).toBeInTheDocument();
   });
 });

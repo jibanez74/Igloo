@@ -159,7 +159,9 @@ describe("constants contracts", () => {
       "playback_changed",
       "member_joined",
       "member_left",
+      "members_changed",
       "room_deleted",
+      "room_access_revoked",
       "pong",
     ]);
     expect(Object.values(WATCH_ROOM_CLIENT_EVENT_TYPES)).toEqual([

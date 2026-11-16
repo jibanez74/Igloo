@@ -210,6 +210,8 @@ export type {
   WatchRoomInviteUsersResponseType,
   CreateWatchRoomRequestType,
   CreateWatchRoomResponseType,
+  UpdateWatchRoomMembersRequestType,
+  LeaveWatchRoomResponseType,
   WatchRoomResponseType,
   JoinWatchRoomResponseType,
   WatchRoomPlaybackStateType,
