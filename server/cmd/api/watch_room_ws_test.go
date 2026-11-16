@@ -833,10 +833,12 @@ func TestWatchRoomWebSocket_ServerPingKeepsIdleConnectionAlive(t *testing.T) {
 	origPingInterval := watchRoomPingInterval
 	watchRoomReadTimeout = 100 * time.Millisecond
 	watchRoomPingInterval = 40 * time.Millisecond
-	defer func() {
+	// A cleanup registered first runs last, after the server's cleanup has
+	// waited out every socket handler still reading these.
+	t.Cleanup(func() {
 		watchRoomReadTimeout = origReadTimeout
 		watchRoomPingInterval = origPingInterval
-	}()
+	})
 
 	app := setupTestApp(t)
 
@@ -844,6 +846,10 @@ func TestWatchRoomWebSocket_ServerPingKeepsIdleConnectionAlive(t *testing.T) {
 	room := createTestRoom(t, app, ownerID, movieID)
 	addMembersToRoom(t, app, room.ID, ownerID)
 	server := setupWatchRoomWSTestServer(t, app)
+	// Each event read is checked against the contract. Parse it before
+	// dialing: a first parse takes seconds under -race, and a client that is
+	// not reading answers no pings, so the short read window would expire.
+	loadOpenAPIContract(t)
 
 	conn, _ := dialWatchRoomSocket(t, app, server.URL, room.ID, ownerID)
 	defer conn.Close()
