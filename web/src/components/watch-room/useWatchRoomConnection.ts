@@ -75,6 +75,11 @@ type UseWatchRoomConnectionOptions = {
   onCurrentTimeChange: (time: number) => void;
   onPlayingChange: (playing: boolean) => void;
   onMembersChanged: (members: WatchRoomMemberType[]) => void;
+  /**
+   * The socket is back after a drop: anything the room said while it was
+   * down (a member change) never reached this viewer, so the room is re-read.
+   */
+  onReconnected: () => void;
   onRoomEnded: (reason: WatchRoomEndReason) => void;
 };
 
@@ -101,6 +106,7 @@ export function useWatchRoomConnection({
   onCurrentTimeChange,
   onPlayingChange,
   onMembersChanged,
+  onReconnected,
   onRoomEnded,
 }: UseWatchRoomConnectionOptions) {
   const socketRef = useRef<WebSocket | null>(null);
@@ -113,6 +119,8 @@ export function useWatchRoomConnection({
   const socketInstanceIdRef = useRef(0);
   const prevRoomIdRef = useRef<number | null>(null);
   const roomEndHandledRef = useRef(false);
+  // Whether a socket has opened for this room yet: the next one is a reconnect.
+  const openedOnceRef = useRef(false);
   const pendingPlaybackRef = useRef<RoomPlaybackSnapshot | null>(null);
   const pendingEchoesRef = useRef<PendingEcho[]>([]);
   // The room's latest known playback state: what the server last sent, or
@@ -390,6 +398,8 @@ export function useWatchRoomConnection({
     // The server sends the room's snapshot first thing, right behind this.
     setConnectionState("live");
     reconnectAttemptsRef.current = 0;
+    if (openedOnceRef.current) onReconnected();
+    openedOnceRef.current = true;
     const ws = socketRef.current;
     if (!ws) return;
     heartbeatRef.current = window.setInterval(() => {
@@ -423,7 +433,9 @@ export function useWatchRoomConnection({
     clearPendingSeek();
     // Nothing sent on this socket will come back.
     pendingEchoesRef.current = [];
-    if (!intentionalCloseRef.current) {
+    // A room this viewer is leaving or closing is not reconnected: its own
+    // request ends it, or markRoomEndHandled(false) brings the socket back.
+    if (!intentionalCloseRef.current && !roomEndHandledRef.current) {
       scheduleReconnect();
     }
   });
@@ -432,10 +444,13 @@ export function useWatchRoomConnection({
   // the heartbeat interval and the reconnect and seek timeouts.
   // react-doctor-disable-next-line react-doctor/effect-needs-cleanup
   useEffect(() => {
-    roomEndHandledRef.current = false;
     intentionalCloseRef.current = false;
     if (prevRoomIdRef.current !== currentRoomId) {
       prevRoomIdRef.current = currentRoomId;
+      // Only a new room clears it: a reconnect while this viewer's own close
+      // or leave is out must not let the socket end the room a second time.
+      roomEndHandledRef.current = false;
+      openedOnceRef.current = false;
       reconnectAttemptsRef.current = 0;
       pendingPlaybackRef.current = null;
       roomPlaybackRef.current = null;
@@ -638,6 +653,13 @@ export function useWatchRoomConnection({
    */
   const markRoomEndHandled = (handled: boolean) => {
     roomEndHandledRef.current = handled;
+    // The request failed and the room goes on: if its socket closed meanwhile,
+    // connect again.
+    const socket = socketRef.current;
+    const socketGone = !socket || socket.readyState === WebSocket.CLOSED;
+    if (!handled && socketGone && !intentionalCloseRef.current) {
+      setReconnectKey(k => k + 1);
+    }
   };
 
   return {

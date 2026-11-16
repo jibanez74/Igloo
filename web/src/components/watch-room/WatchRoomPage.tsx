@@ -144,6 +144,11 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
     onPlayingChange: setPlaying,
     onMembersChanged: members =>
       setWatchRoomMembers(queryClient, roomId, members),
+    onReconnected: () =>
+      void queryClient.invalidateQueries({
+        queryKey: watchRoomQueryOpts(roomId).queryKey,
+        exact: true,
+      }),
     // The owner closed the room, or this viewer is no longer in it: leave,
     // and drop it from this viewer's cache so Home's list and the room's
     // loader cannot offer it again.

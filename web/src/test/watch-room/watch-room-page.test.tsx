@@ -2080,5 +2080,101 @@ describe("WatchRoomPageContent", () => {
       expect(mockVideoController.currentTime).toBe(50);
       expect(sent(socket)).toEqual([{ type: "pause", position_sec: 50 }]);
     });
+
+    // A member change while the socket was down never reached this viewer: the
+    // room is re-read once the socket is back, so the roster (and the owner's
+    // next edit) works from the server's list.
+    it("re-reads the room when the socket reconnects", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const { queryClient, socket } = await openRoom();
+      queryClient.setQueryData([WATCH_ROOM_KEY, 7], {
+        error: false,
+        data: { room: buildRoom({ is_owner: false }) },
+      });
+      expect(queryClient.getQueryState([WATCH_ROOM_KEY, 7])?.isInvalidated).toBe(false);
+
+      await act(async () => {
+        socket.serverClose();
+      });
+      expect(queryClient.getQueryState([WATCH_ROOM_KEY, 7])?.isInvalidated).toBe(false);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+      await waitFor(() => {
+        expect(FakeWebSocket.instances).toHaveLength(2);
+      });
+      await waitFor(() => {
+        expect(queryClient.getQueryState([WATCH_ROOM_KEY, 7])?.isInvalidated).toBe(true);
+      });
+    });
+
+    // The owner's own close: the server's room_deleted and hang-up land
+    // before the DELETE answers. That is not a dropped link to reconnect, and
+    // the room must end once, from the close itself.
+    it("does not reconnect or end the room twice while its owner closes it", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      let answer: (value: unknown) => void = () => {};
+      deleteWatchRoomMock.mockImplementation(
+        () => new Promise(resolve => { answer = resolve; }),
+      );
+      const { socket } = await openRoom(buildRoom({ is_owner: true }));
+
+      await act(async () => {
+        screen.getByRole("button", { name: "Close watch room for Arrival" }).click();
+      });
+      await act(async () => {
+        screen.getByRole("button", { name: "Close room" }).click();
+      });
+      await act(async () => {
+        socket.emitMessage({ type: "room_deleted", room_id: 7 });
+        socket.serverClose();
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5000);
+      });
+
+      expect(
+        screen.queryByText("Reconnecting: your changes won't reach the room"),
+      ).not.toBeInTheDocument();
+      expect(joinWatchRoomMock).toHaveBeenCalledTimes(1);
+      expect(showInfoMock).not.toHaveBeenCalled();
+
+      await act(async () => {
+        answer({ error: false, data: { deleted: true } });
+      });
+      await waitFor(() => {
+        expect(navigateMock).toHaveBeenCalledWith({ to: "/", replace: true });
+      });
+      expect(navigateMock).toHaveBeenCalledTimes(1);
+      expect(showInfoMock).not.toHaveBeenCalled();
+    });
+
+    it("connects again when its owner's close fails after the socket went", async () => {
+      let answer: (value: unknown) => void = () => {};
+      deleteWatchRoomMock.mockImplementation(
+        () => new Promise(resolve => { answer = resolve; }),
+      );
+      const { socket } = await openRoom(buildRoom({ is_owner: true }));
+
+      await act(async () => {
+        screen.getByRole("button", { name: "Close watch room for Arrival" }).click();
+      });
+      await act(async () => {
+        screen.getByRole("button", { name: "Close room" }).click();
+      });
+      await act(async () => {
+        socket.serverClose();
+      });
+      expect(joinWatchRoomMock).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        answer({ error: true, status: 500, message: "failed to delete watch room" });
+      });
+
+      await waitFor(() => {
+        expect(joinWatchRoomMock).toHaveBeenCalledTimes(2);
+      });
+      expect(navigateMock).not.toHaveBeenCalled();
+    });
   });
 });
