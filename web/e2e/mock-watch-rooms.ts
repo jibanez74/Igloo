@@ -266,7 +266,12 @@ export function createMockWatchRooms(deps: WatchRoomDeps) {
         deps.sendFailure(response, 403, "only the room owner can change who is invited");
         return true;
       }
-      const invited = invitedIds(await deps.readJSONBody(request), userId);
+      const body = await deps.readJSONBody(request);
+      if (!Array.isArray(body.invited_user_ids)) {
+        deps.sendFailure(response, 400, "invited_user_ids is required");
+        return true;
+      }
+      const invited = invitedIds(body, userId);
       if (!invited) {
         deps.sendFailure(response, 400, "one or more invited users do not exist");
         return true;
@@ -437,14 +442,20 @@ export function createMockWatchRooms(deps: WatchRoomDeps) {
     });
   }
 
-  /** A deleted account leaves every room, and the rooms it owned go. */
+  /**
+   * A deleted account leaves every room, and the rooms it owned go. Its own
+   * sockets close without a word, as the server closes a revoked
+   * credential's; their reconnect is refused.
+   */
   function forgetUser(userId: number) {
+    for (const socket of [...sockets]) {
+      if (socket.userId === userId) socket.ws.close();
+    }
     for (const room of [...rooms.values()]) {
       if (room.ownerId === userId) {
         deleteRoom(room.id);
       } else if (room.memberIds.includes(userId)) {
         room.memberIds = room.memberIds.filter(id => id !== userId);
-        revoke(room.id, [userId]);
         announceMembers(room);
       }
     }
