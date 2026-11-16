@@ -498,13 +498,13 @@ func (app *Application) DeleteUserAccount(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	roomIDs, err := app.deleteUserWithRooms(r.Context(), userID)
+	rooms, err := app.deleteUserWithRooms(r.Context(), userID)
 	if err != nil {
 		app.serverError(w, err, "failed to delete user", internalServerErrorMessage, "user_id", userID)
 		return
 	}
 
-	app.endDeletedOwnerRooms(roomIDs)
+	app.endDeletedUserRooms(r.Context(), rooms)
 	app.forgetDeletedSessionUser(userID)
 	app.stopPersonalHLSSessionsForOwner(userID)
 	app.forgetUserDevices(userID)
@@ -523,23 +523,23 @@ func (app *Application) DeleteUserAccount(w http.ResponseWriter, r *http.Request
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "Account deleted successfully"})
 }
 
-// deleteUserWithRooms deletes the user and returns the ids of the watch rooms
-// the cascade removed with them, read in the same transaction.
-func (app *Application) deleteUserWithRooms(ctx context.Context, userID int64) ([]int64, error) {
+// deleteUserWithRooms deletes the user and returns the watch rooms the cascade
+// changed, read in the same transaction.
+func (app *Application) deleteUserWithRooms(ctx context.Context, userID int64) (deletedUserRooms, error) {
 	tx, err := app.DB.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, err
+		return deletedUserRooms{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
 
 	qtx := app.Queries.WithTx(tx)
-	roomIDs, err := qtx.ListWatchRoomIDsByOwnerID(ctx, userID)
+	rooms, err := listDeletedUserRooms(ctx, qtx, userID)
 	if err != nil {
-		return nil, err
+		return deletedUserRooms{}, err
 	}
 	err = qtx.DeleteUser(ctx, userID)
 	if err != nil {
-		return nil, err
+		return deletedUserRooms{}, err
 	}
-	return roomIDs, tx.Commit()
+	return rooms, tx.Commit()
 }

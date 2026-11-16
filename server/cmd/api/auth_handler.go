@@ -196,11 +196,13 @@ func (app *Application) DestroySession(w http.ResponseWriter, r *http.Request) {
 		app.forgetDevice(auth.DeviceID)
 		app.Logger.Info("device revoked via logout", "user_id", auth.UserID, "device_id", auth.DeviceID)
 	} else {
+		token := app.SessionManager.Token(r.Context())
 		err := app.SessionManager.Destroy(r.Context())
 		if err != nil {
 			app.serverError(w, err, "failed to destroy session during logout", internalServerErrorMessage)
 			return
 		}
+		app.WatchRoomHub.disconnectSessionToken(token)
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: "You have been logged out successfully"})

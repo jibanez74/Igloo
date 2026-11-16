@@ -180,12 +180,15 @@ const getWatchRoomForMemberWithSummary = `-- name: GetWatchRoomForMemberWithSumm
 SELECT
   wr.id, wr.owner_user_id, wr.movie_id, wr.playback_mode, wr.audio_track, wr.subtitle_track, wr.audio_stream_index, wr.audio_language, wr.subtitle_stream_index, wr.subtitle_language, wr.created_at,
   u.name AS member_name,
-  u.avatar AS member_avatar
+  u.avatar AS member_avatar,
+  m.duration AS movie_duration
 FROM watch_rooms AS wr
 INNER JOIN watch_room_members AS wrm
   ON wrm.room_id = wr.id
 INNER JOIN users AS u
   ON u.id = wrm.user_id
+INNER JOIN movies AS m
+  ON m.id = wr.movie_id
 WHERE wr.id = ?
   AND wrm.user_id = ?
 LIMIT 1
@@ -197,24 +200,26 @@ type GetWatchRoomForMemberWithSummaryParams struct {
 }
 
 type GetWatchRoomForMemberWithSummaryRow struct {
-	ID                  int64          `json:"id"`
-	OwnerUserID         int64          `json:"owner_user_id"`
-	MovieID             int64          `json:"movie_id"`
-	PlaybackMode        string         `json:"playback_mode"`
-	AudioTrack          int64          `json:"audio_track"`
-	SubtitleTrack       sql.NullInt64  `json:"subtitle_track"`
-	AudioStreamIndex    sql.NullInt64  `json:"audio_stream_index"`
-	AudioLanguage       sql.NullString `json:"audio_language"`
-	SubtitleStreamIndex sql.NullInt64  `json:"subtitle_stream_index"`
-	SubtitleLanguage    sql.NullString `json:"subtitle_language"`
-	CreatedAt           string         `json:"created_at"`
-	MemberName          string         `json:"member_name"`
-	MemberAvatar        sql.NullString `json:"member_avatar"`
+	ID                  int64           `json:"id"`
+	OwnerUserID         int64           `json:"owner_user_id"`
+	MovieID             int64           `json:"movie_id"`
+	PlaybackMode        string          `json:"playback_mode"`
+	AudioTrack          int64           `json:"audio_track"`
+	SubtitleTrack       sql.NullInt64   `json:"subtitle_track"`
+	AudioStreamIndex    sql.NullInt64   `json:"audio_stream_index"`
+	AudioLanguage       sql.NullString  `json:"audio_language"`
+	SubtitleStreamIndex sql.NullInt64   `json:"subtitle_stream_index"`
+	SubtitleLanguage    sql.NullString  `json:"subtitle_language"`
+	CreatedAt           string          `json:"created_at"`
+	MemberName          string          `json:"member_name"`
+	MemberAvatar        sql.NullString  `json:"member_avatar"`
+	MovieDuration       sql.NullFloat64 `json:"movie_duration"`
 }
 
 // GetWatchRoomForMember plus the requesting member's presence summary
-// (name, avatar), for the websocket upgrade only: it needs both and runs
-// once per socket. HTTP media requests keep the leaner GetWatchRoomForMember.
+// (name, avatar) and the movie's duration, for the websocket upgrade only:
+// it needs all three and runs once per socket. HTTP media requests keep the
+// leaner GetWatchRoomForMember.
 func (q *Queries) GetWatchRoomForMemberWithSummary(ctx context.Context, arg GetWatchRoomForMemberWithSummaryParams) (GetWatchRoomForMemberWithSummaryRow, error) {
 	row := q.queryRow(ctx, q.getWatchRoomForMemberWithSummaryStmt, getWatchRoomForMemberWithSummary, arg.ID, arg.UserID)
 	var i GetWatchRoomForMemberWithSummaryRow
@@ -232,6 +237,7 @@ func (q *Queries) GetWatchRoomForMemberWithSummary(ctx context.Context, arg GetW
 		&i.CreatedAt,
 		&i.MemberName,
 		&i.MemberAvatar,
+		&i.MovieDuration,
 	)
 	return i, err
 }
@@ -414,6 +420,40 @@ func (q *Queries) IsWatchRoomMember(ctx context.Context, arg IsWatchRoomMemberPa
 	return is_member, err
 }
 
+const listWatchRoomIDsByMemberID = `-- name: ListWatchRoomIDsByMemberID :many
+SELECT room_id FROM watch_room_members AS wrm
+INNER JOIN watch_rooms AS wr
+  ON wr.id = wrm.room_id
+WHERE wrm.user_id = ?
+  AND wr.owner_user_id != wrm.user_id
+ORDER BY room_id
+`
+
+// The rooms a user belongs to but does not own: deleting the user cascades
+// their membership away, and the rooms' remaining members are told.
+func (q *Queries) ListWatchRoomIDsByMemberID(ctx context.Context, userID int64) ([]int64, error) {
+	rows, err := q.query(ctx, q.listWatchRoomIDsByMemberIDStmt, listWatchRoomIDsByMemberID, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var room_id int64
+		if err := rows.Scan(&room_id); err != nil {
+			return nil, err
+		}
+		items = append(items, room_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listWatchRoomIDsByMovieID = `-- name: ListWatchRoomIDsByMovieID :many
 SELECT id FROM watch_rooms
 WHERE movie_id = ?
@@ -472,4 +512,52 @@ func (q *Queries) ListWatchRoomIDsByOwnerID(ctx context.Context, ownerUserID int
 		return nil, err
 	}
 	return items, nil
+}
+
+const listWatchRoomMemberIDs = `-- name: ListWatchRoomMemberIDs :many
+SELECT user_id FROM watch_room_members
+WHERE room_id = ?
+ORDER BY user_id
+`
+
+func (q *Queries) ListWatchRoomMemberIDs(ctx context.Context, roomID int64) ([]int64, error) {
+	rows, err := q.query(ctx, q.listWatchRoomMemberIDsStmt, listWatchRoomMemberIDs, roomID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var user_id int64
+		if err := rows.Scan(&user_id); err != nil {
+			return nil, err
+		}
+		items = append(items, user_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const removeWatchRoomMember = `-- name: RemoveWatchRoomMember :execrows
+DELETE FROM watch_room_members
+WHERE room_id = ?
+  AND user_id = ?
+`
+
+type RemoveWatchRoomMemberParams struct {
+	RoomID int64 `json:"room_id"`
+	UserID int64 `json:"user_id"`
+}
+
+func (q *Queries) RemoveWatchRoomMember(ctx context.Context, arg RemoveWatchRoomMemberParams) (int64, error) {
+	result, err := q.exec(ctx, q.removeWatchRoomMemberStmt, removeWatchRoomMember, arg.RoomID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }

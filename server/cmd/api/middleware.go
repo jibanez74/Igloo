@@ -233,21 +233,24 @@ func (app *Application) forgetDeviceAuth(match func(*deviceAuth) bool) {
 }
 
 // forgetDevice drops the caches keyed on a device so a revoked device is
-// rejected on its next request.
+// rejected on its next request, and closes the watch-room sockets it opened.
 func (app *Application) forgetDevice(deviceID int64) {
 	app.DeviceLastSeen.Delete(strconv.FormatInt(deviceID, 10))
 	app.forgetDeviceAuth(func(auth *deviceAuth) bool {
 		return auth.DeviceID == deviceID
 	})
+	app.WatchRoomHub.disconnectDevice(deviceID)
 }
 
 // forgetUserDevices drops cached bearer auth for every device belonging to a
 // user. Deleting the user cascades its device rows away, so without this a
-// token could keep authenticating until the cache entry expired.
+// token could keep authenticating until the cache entry expired. The
+// watch-room sockets those tokens opened are closed too.
 func (app *Application) forgetUserDevices(userID int64) {
 	app.forgetDeviceAuth(func(auth *deviceAuth) bool {
 		return auth.UserID == userID
 	})
+	app.WatchRoomHub.disconnectUserDevices(userID)
 }
 
 // RequireAdmin rejects requests from non-admin users with 403. Admin routes

@@ -4375,7 +4375,83 @@
             "$ref": "#/components/responses/InternalServerError"
           }
         },
-        "description": "Confirms that the caller is a member. Membership is granted only when the room is created, through invited_user_ids; this endpoint never adds members. Returns 404 for an unknown room and 403 for a non-member."
+        "description": "Confirms that the caller is a member. Members are set when the room is created, through invited_user_ids, and changed by the owner with PUT /api/watch-rooms/{id}/members; this endpoint never adds members. Returns 404 for an unknown room and 403 for a non-member."
+      }
+    },
+    "/api/watch-rooms/{id}/leave": {
+      "post": {
+        "tags": [
+          "Watch Rooms"
+        ],
+        "summary": "Leave a watch room",
+        "operationId": "leaveWatchRoom",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/LeaveWatchRoomResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "description": "Removes the caller from a room they were invited to. The caller's cached authorization is invalidated, their open WebSocket connections in the room receive room_access_revoked and are closed, and the connections still open receive members_changed. Returns 404 for an unknown room, 403 for a non-member, and 409 for the owner, who closes the room with DELETE instead."
+      }
+    },
+    "/api/watch-rooms/{id}/members": {
+      "put": {
+        "tags": [
+          "Watch Rooms"
+        ],
+        "summary": "Change who is invited to a watch room",
+        "operationId": "updateWatchRoomMembers",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/UpdateWatchRoomMembersRequest"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/WatchRoomResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "description": "Only the room owner may change the members. invited_user_ids replaces every member but the owner, who always stays; the owner's own id and duplicates are dropped, and an id that names no user returns 400. An empty list leaves the owner alone in the room. Removed members lose access at once: their cached authorizations are invalidated, and their open WebSocket connections receive room_access_revoked and are closed. When the member list changed, every connection still open receives members_changed. Returns the room's details as the owner now sees them; 404 for an unknown room and 403 for a caller who is not the owner."
       }
     },
     "/api/watch-rooms/{id}/ws": {
@@ -4443,7 +4519,7 @@
             }
           }
         },
-        "description": "Requires an authenticated room member before upgrading. Invalid room IDs, authentication failures, membership denial (including nonexistent rooms), and database failures use JSON error envelopes. Upgrade failures use text/plain: 400 for malformed handshake headers or key/version, 403 for a rejected Origin, and 500 for an unsupported server upgrade. Origin may be absent; otherwise it must be the request host over http or https (a TLS-terminating proxy that keeps the Host header serves the page over https while this server sees http), the configured VITE_DEV_SERVER origin, or HTTP port 3000 on the same local development hostname (localhost, 127.0.0.1, or ::1). On connection the server sends room_snapshot immediately. Client JSON messages follow WatchRoomClientEvent; server messages follow WatchRoomServerEvent. Any member may send playback commands. join requests another snapshot, ping receives pong, playback commands broadcast playback_changed to all room connections, member_joined goes to the other connections when a user opens their first connection, and member_left when a user's last connection closes while others remain. Playback state lives in server memory and resets to paused at 0 when the last connection leaves. Room deletion, including the removal of its movie or of its owner's account, sends room_deleted and closes connections. Invalid JSON and unknown event types are ignored. The server sends a ping control frame every 40 seconds and closes a connection that sends no message or pong for 60 seconds, or that falls 256 messages behind.",
+        "description": "Requires an authenticated room member before upgrading. Invalid room IDs, authentication failures, membership denial (including nonexistent rooms), and database failures use JSON error envelopes. Upgrade failures use text/plain: 400 for malformed handshake headers or key/version, 403 for a rejected Origin, and 500 for an unsupported server upgrade. Origin may be absent; otherwise it must be the request host over http or https (a TLS-terminating proxy that keeps the Host header serves the page over https while this server sees http), the configured VITE_DEV_SERVER origin, or HTTP port 3000 on the same local development hostname (localhost, 127.0.0.1, or ::1). On connection the server sends room_snapshot immediately. Client JSON messages follow WatchRoomClientEvent; server messages follow WatchRoomServerEvent. Any member may send playback commands. join requests another snapshot, ping receives pong, playback commands broadcast playback_changed to all room connections, the sender's included, in the order the server applied them, member_joined goes to the other connections when a user opens their first connection, and member_left when a user's last connection closes while others remain. Playback state lives in server memory and resets to paused at 0 when the last connection leaves. Room deletion, including the removal of its movie or of its owner's account, sends room_deleted and closes connections. A member removed by the owner, or who leaves, gets room_access_revoked on each of their connections, which are then closed; the connections still open get members_changed, as they do when a member's account is deleted. Revoking the credential a connection opened with (logging that cookie session out, a password change that ends the session, revoking or logging out the device, deleting the account) closes it without a message; reconnecting then fails with 401. Invalid JSON and unknown event types are ignored. A message larger than 4 KiB closes the connection. A playback position past the movie's known duration is clamped to it. The server sends a ping control frame every 40 seconds and closes a connection that sends no message or pong for 60 seconds, or that falls 256 messages behind.",
         "x-websocket-client-event": {
           "$ref": "#/components/schemas/WatchRoomClientEvent"
         },
@@ -7256,6 +7332,16 @@
           }
         }
       },
+      "UpdateWatchRoomMembersRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/UpdateWatchRoomMembersRequest"
+            }
+          }
+        }
+      },
       "RecordPlayEventRequest": {
         "required": true,
         "content": {
@@ -8422,6 +8508,16 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/DeleteWatchRoomEnvelope"
+            }
+          }
+        }
+      },
+      "LeaveWatchRoomResponse": {
+        "description": "Watch-room leave response.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/LeaveWatchRoomEnvelope"
             }
           }
         }
@@ -13869,6 +13965,23 @@
         },
         "additionalProperties": false
       },
+      "UpdateWatchRoomMembersRequest": {
+        "type": "object",
+        "required": [
+          "invited_user_ids"
+        ],
+        "properties": {
+          "invited_user_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "description": "The users who should be members besides the owner. The owner's own id and duplicates are dropped."
+          }
+        },
+        "additionalProperties": false
+      },
       "WatchRoomsEnvelope": {
         "allOf": [
           {
@@ -14022,6 +14135,33 @@
           }
         ]
       },
+      "LeaveWatchRoomEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/JsonSuccess"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "left"
+                ],
+                "properties": {
+                  "left": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        ]
+      },
       "WatchRoomPlaybackState": {
         "type": "object",
         "required": [
@@ -14046,7 +14186,7 @@
       },
       "WatchRoomServerEvent": {
         "type": "object",
-        "description": "Server JSON message. room_snapshot carries playback and connected_user_ids; playback_changed carries playback; member_joined and member_left carry member and connected_user_ids; room_deleted and pong carry only type and room_id.",
+        "description": "Server JSON message. room_snapshot carries playback and connected_user_ids; playback_changed carries playback; member_joined and member_left carry member and connected_user_ids; members_changed carries members; room_deleted, room_access_revoked and pong carry only type and room_id.",
         "required": [
           "type",
           "room_id"
@@ -14059,7 +14199,9 @@
               "playback_changed",
               "member_joined",
               "member_left",
+              "members_changed",
               "room_deleted",
+              "room_access_revoked",
               "pong"
             ]
           },
@@ -14072,6 +14214,13 @@
           },
           "member": {
             "$ref": "#/components/schemas/UserSummary"
+          },
+          "members": {
+            "type": "array",
+            "description": "The room's members after the change, the owner included, in the order they joined.",
+            "items": {
+              "$ref": "#/components/schemas/UserSummary"
+            }
           },
           "connected_user_ids": {
             "type": "array",

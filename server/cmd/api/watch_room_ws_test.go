@@ -22,6 +22,7 @@ type watchRoomWSTestEvent struct {
 	RoomID           int64                   `json:"room_id"`
 	Playback         *watchRoomPlaybackState `json:"playback"`
 	Member           *userSummary            `json:"member"`
+	Members          []userSummary           `json:"members"`
 	ConnectedUserIDs []int64                 `json:"connected_user_ids"`
 }
 

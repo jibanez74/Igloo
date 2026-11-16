@@ -528,14 +528,42 @@ func (app *Application) invalidateDeletedWatchRooms(roomIDs []int64) {
 	}
 }
 
-// endDeletedOwnerRooms runs after a user deletion commits. The cascade removed
+// deletedUserRooms are the watch rooms a user deletion changes: the ones the
+// user owned, which the cascade deletes, and the ones they were invited to,
+// which lose a member.
+type deletedUserRooms struct {
+	owned  []int64
+	joined []int64
+}
+
+// listDeletedUserRooms reads, inside the deleting transaction, the rooms the
+// cascade is about to change.
+func listDeletedUserRooms(ctx context.Context, qtx *database.Queries, userID int64) (deletedUserRooms, error) {
+	owned, err := qtx.ListWatchRoomIDsByOwnerID(ctx, userID)
+	if err != nil {
+		return deletedUserRooms{}, err
+	}
+	joined, err := qtx.ListWatchRoomIDsByMemberID(ctx, userID)
+	if err != nil {
+		return deletedUserRooms{}, err
+	}
+	return deletedUserRooms{owned: owned, joined: joined}, nil
+}
+
+// endDeletedUserRooms runs after a user deletion commits. The cascade removed
 // the rooms the user owned, so their members get room_deleted, and each room's
 // HLS session is torn down here: unlike a deleted movie's, nothing else would
-// stop it before its 30-minute idle expiry.
-func (app *Application) endDeletedOwnerRooms(roomIDs []int64) {
-	app.invalidateDeletedWatchRooms(roomIDs)
-	for _, roomID := range roomIDs {
+// stop it before its 30-minute idle expiry. The rooms the user was invited to
+// tell their members the new member list; the user's own sockets are closed
+// with their credentials.
+func (app *Application) endDeletedUserRooms(ctx context.Context, rooms deletedUserRooms) {
+	app.invalidateDeletedWatchRooms(rooms.owned)
+	for _, roomID := range rooms.owned {
 		app.CleanupRoomHLSSession(roomID)
+	}
+	for _, roomID := range rooms.joined {
+		app.WatchRoomAuthCache.invalidateRoom(roomID)
+		app.announceWatchRoomMembers(ctx, roomID)
 	}
 }
 

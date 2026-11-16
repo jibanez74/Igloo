@@ -530,8 +530,9 @@ type Querier interface {
 	// deliberately do not distinguish.
 	GetWatchRoomForMember(ctx context.Context, arg GetWatchRoomForMemberParams) (WatchRoom, error)
 	// GetWatchRoomForMember plus the requesting member's presence summary
-	// (name, avatar), for the websocket upgrade only: it needs both and runs
-	// once per socket. HTTP media requests keep the leaner GetWatchRoomForMember.
+	// (name, avatar) and the movie's duration, for the websocket upgrade only:
+	// it needs all three and runs once per socket. HTTP media requests keep the
+	// leaner GetWatchRoomForMember.
 	GetWatchRoomForMemberWithSummary(ctx context.Context, arg GetWatchRoomForMemberWithSummaryParams) (GetWatchRoomForMemberWithSummaryRow, error)
 	GetWatchRoomMembers(ctx context.Context, roomID int64) ([]GetWatchRoomMembersRow, error)
 	GetWatchRoomMembersByRoomIDs(ctx context.Context, roomIds []int64) ([]GetWatchRoomMembersByRoomIDsRow, error)
@@ -600,10 +601,14 @@ type Querier interface {
 	// Season and episode copies live in their show's folder, named by its TMDB id.
 	ListShowSeasonArtwork(ctx context.Context, arg ListShowSeasonArtworkParams) ([]ListShowSeasonArtworkRow, error)
 	ListShowSeasonArtworkInFolders(ctx context.Context, keys string) ([]ListShowSeasonArtworkInFoldersRow, error)
+	// The rooms a user belongs to but does not own: deleting the user cascades
+	// their membership away, and the rooms' remaining members are told.
+	ListWatchRoomIDsByMemberID(ctx context.Context, userID int64) ([]int64, error)
 	ListWatchRoomIDsByMovieID(ctx context.Context, movieID int64) ([]int64, error)
 	// Deleting a user cascades away the rooms they own; the ids are read in the
 	// same transaction so the rooms' live state can be torn down after the commit.
 	ListWatchRoomIDsByOwnerID(ctx context.Context, ownerUserID int64) ([]int64, error)
+	ListWatchRoomMemberIDs(ctx context.Context, roomID int64) ([]int64, error)
 	// SQLite needs a WHERE clause before an upsert's ON CONFLICT in INSERT ... SELECT,
 	// or it parses ON as a join constraint.
 	MarkAllNotificationsReadForUser(ctx context.Context, userID int64) error
@@ -722,6 +727,7 @@ type Querier interface {
 	RemoveCollaborator(ctx context.Context, arg RemoveCollaboratorParams) error
 	RemoveMovieFromPlaylist(ctx context.Context, arg RemoveMovieFromPlaylistParams) error
 	RemoveTrackFromPlaylist(ctx context.Context, arg RemoveTrackFromPlaylistParams) error
+	RemoveWatchRoomMember(ctx context.Context, arg RemoveWatchRoomMemberParams) (int64, error)
 	RenameDevice(ctx context.Context, arg RenameDeviceParams) (int64, error)
 	RevertAlbumCoverArtwork(ctx context.Context) (int64, error)
 	RevertArtistProfileArtwork(ctx context.Context) (int64, error)

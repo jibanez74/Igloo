@@ -95,7 +95,7 @@ func TestWatchRoomHub_ApplyPlaybackEventTransitions(t *testing.T) {
 
 	t.Run("play sets position and unpauses", func(t *testing.T) {
 		hub := newHubWithSession(1)
-		event, ok := hub.applyPlaybackEvent(1, "play", 30)
+		event, ok := hub.applyPlaybackEvent(1, "play", 30, 0)
 		if !ok || event == nil || event.Playback == nil {
 			t.Fatalf("applyPlaybackEvent(play) = %+v, %v", event, ok)
 		}
@@ -106,8 +106,8 @@ func TestWatchRoomHub_ApplyPlaybackEventTransitions(t *testing.T) {
 
 	t.Run("pause keeps position and pauses", func(t *testing.T) {
 		hub := newHubWithSession(1)
-		_, _ = hub.applyPlaybackEvent(1, "play", 30)
-		event, ok := hub.applyPlaybackEvent(1, "pause", 31)
+		_, _ = hub.applyPlaybackEvent(1, "play", 30, 0)
+		event, ok := hub.applyPlaybackEvent(1, "pause", 31, 0)
 		if !ok || event == nil || !event.Playback.Paused || event.Playback.PositionSec != 31 {
 			t.Fatalf("unexpected pause event: %+v ok=%v", event, ok)
 		}
@@ -115,8 +115,8 @@ func TestWatchRoomHub_ApplyPlaybackEventTransitions(t *testing.T) {
 
 	t.Run("seek repositions without changing paused state", func(t *testing.T) {
 		hub := newHubWithSession(1)
-		_, _ = hub.applyPlaybackEvent(1, "play", 5)
-		event, ok := hub.applyPlaybackEvent(1, "seek", 90)
+		_, _ = hub.applyPlaybackEvent(1, "play", 5, 0)
+		event, ok := hub.applyPlaybackEvent(1, "seek", 90, 0)
 		if !ok || event == nil || event.Playback.Paused {
 			t.Fatalf("seek while playing should stay unpaused: %+v ok=%v", event, ok)
 		}
@@ -124,8 +124,8 @@ func TestWatchRoomHub_ApplyPlaybackEventTransitions(t *testing.T) {
 			t.Fatalf("seek position = %.3f, want ~90", event.Playback.PositionSec)
 		}
 
-		_, _ = hub.applyPlaybackEvent(1, "pause", 90)
-		event, ok = hub.applyPlaybackEvent(1, "seek", 10)
+		_, _ = hub.applyPlaybackEvent(1, "pause", 90, 0)
+		event, ok = hub.applyPlaybackEvent(1, "seek", 10, 0)
 		if !ok || event == nil || !event.Playback.Paused || event.Playback.PositionSec != 10 {
 			t.Fatalf("seek while paused should stay paused: %+v ok=%v", event, ok)
 		}
@@ -133,9 +133,9 @@ func TestWatchRoomHub_ApplyPlaybackEventTransitions(t *testing.T) {
 
 	t.Run("missing position falls back to extrapolated current position", func(t *testing.T) {
 		hub := newHubWithSession(1)
-		_, _ = hub.applyPlaybackEvent(1, "play", 20)
+		_, _ = hub.applyPlaybackEvent(1, "play", 20, 0)
 		time.Sleep(50 * time.Millisecond)
-		event, ok := hub.applyPlaybackEvent(1, "pause", -1)
+		event, ok := hub.applyPlaybackEvent(1, "pause", -1, 0)
 		if !ok || event == nil || !event.Playback.Paused {
 			t.Fatalf("unexpected fallback pause event: %+v ok=%v", event, ok)
 		}
@@ -146,7 +146,7 @@ func TestWatchRoomHub_ApplyPlaybackEventTransitions(t *testing.T) {
 
 	t.Run("unknown event type is rejected", func(t *testing.T) {
 		hub := newHubWithSession(1)
-		event, ok := hub.applyPlaybackEvent(1, "warp", 10)
+		event, ok := hub.applyPlaybackEvent(1, "warp", 10, 0)
 		if ok || event != nil {
 			t.Fatalf("expected unknown event to be rejected, got %+v ok=%v", event, ok)
 		}
@@ -154,7 +154,7 @@ func TestWatchRoomHub_ApplyPlaybackEventTransitions(t *testing.T) {
 
 	t.Run("unknown room is rejected", func(t *testing.T) {
 		hub := NewWatchRoomHub()
-		event, ok := hub.applyPlaybackEvent(404, "play", 10)
+		event, ok := hub.applyPlaybackEvent(404, "play", 10, 0)
 		if ok || event != nil {
 			t.Fatalf("expected unknown room to be rejected, got %+v ok=%v", event, ok)
 		}

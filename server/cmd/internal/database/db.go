@@ -906,11 +906,17 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.listShowSeasonArtworkInFoldersStmt, err = db.PrepareContext(ctx, listShowSeasonArtworkInFolders); err != nil {
 		return nil, fmt.Errorf("error preparing query ListShowSeasonArtworkInFolders: %w", err)
 	}
+	if q.listWatchRoomIDsByMemberIDStmt, err = db.PrepareContext(ctx, listWatchRoomIDsByMemberID); err != nil {
+		return nil, fmt.Errorf("error preparing query ListWatchRoomIDsByMemberID: %w", err)
+	}
 	if q.listWatchRoomIDsByMovieIDStmt, err = db.PrepareContext(ctx, listWatchRoomIDsByMovieID); err != nil {
 		return nil, fmt.Errorf("error preparing query ListWatchRoomIDsByMovieID: %w", err)
 	}
 	if q.listWatchRoomIDsByOwnerIDStmt, err = db.PrepareContext(ctx, listWatchRoomIDsByOwnerID); err != nil {
 		return nil, fmt.Errorf("error preparing query ListWatchRoomIDsByOwnerID: %w", err)
+	}
+	if q.listWatchRoomMemberIDsStmt, err = db.PrepareContext(ctx, listWatchRoomMemberIDs); err != nil {
+		return nil, fmt.Errorf("error preparing query ListWatchRoomMemberIDs: %w", err)
 	}
 	if q.markAllNotificationsReadForUserStmt, err = db.PrepareContext(ctx, markAllNotificationsReadForUser); err != nil {
 		return nil, fmt.Errorf("error preparing query MarkAllNotificationsReadForUser: %w", err)
@@ -1085,6 +1091,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.removeTrackFromPlaylistStmt, err = db.PrepareContext(ctx, removeTrackFromPlaylist); err != nil {
 		return nil, fmt.Errorf("error preparing query RemoveTrackFromPlaylist: %w", err)
+	}
+	if q.removeWatchRoomMemberStmt, err = db.PrepareContext(ctx, removeWatchRoomMember); err != nil {
+		return nil, fmt.Errorf("error preparing query RemoveWatchRoomMember: %w", err)
 	}
 	if q.renameDeviceStmt, err = db.PrepareContext(ctx, renameDevice); err != nil {
 		return nil, fmt.Errorf("error preparing query RenameDevice: %w", err)
@@ -2810,6 +2819,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing listShowSeasonArtworkInFoldersStmt: %w", cerr)
 		}
 	}
+	if q.listWatchRoomIDsByMemberIDStmt != nil {
+		if cerr := q.listWatchRoomIDsByMemberIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listWatchRoomIDsByMemberIDStmt: %w", cerr)
+		}
+	}
 	if q.listWatchRoomIDsByMovieIDStmt != nil {
 		if cerr := q.listWatchRoomIDsByMovieIDStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing listWatchRoomIDsByMovieIDStmt: %w", cerr)
@@ -2818,6 +2832,11 @@ func (q *Queries) Close() error {
 	if q.listWatchRoomIDsByOwnerIDStmt != nil {
 		if cerr := q.listWatchRoomIDsByOwnerIDStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing listWatchRoomIDsByOwnerIDStmt: %w", cerr)
+		}
+	}
+	if q.listWatchRoomMemberIDsStmt != nil {
+		if cerr := q.listWatchRoomMemberIDsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listWatchRoomMemberIDsStmt: %w", cerr)
 		}
 	}
 	if q.markAllNotificationsReadForUserStmt != nil {
@@ -3108,6 +3127,11 @@ func (q *Queries) Close() error {
 	if q.removeTrackFromPlaylistStmt != nil {
 		if cerr := q.removeTrackFromPlaylistStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing removeTrackFromPlaylistStmt: %w", cerr)
+		}
+	}
+	if q.removeWatchRoomMemberStmt != nil {
+		if cerr := q.removeWatchRoomMemberStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing removeWatchRoomMemberStmt: %w", cerr)
 		}
 	}
 	if q.renameDeviceStmt != nil {
@@ -3858,8 +3882,10 @@ type Queries struct {
 	listShowEpisodeArtworkInFoldersStmt         *sql.Stmt
 	listShowSeasonArtworkStmt                   *sql.Stmt
 	listShowSeasonArtworkInFoldersStmt          *sql.Stmt
+	listWatchRoomIDsByMemberIDStmt              *sql.Stmt
 	listWatchRoomIDsByMovieIDStmt               *sql.Stmt
 	listWatchRoomIDsByOwnerIDStmt               *sql.Stmt
+	listWatchRoomMemberIDsStmt                  *sql.Stmt
 	markAllNotificationsReadForUserStmt         *sql.Stmt
 	markMovieTmdbRetryStmt                      *sql.Stmt
 	markMovieUnwatchedStmt                      *sql.Stmt
@@ -3918,6 +3944,7 @@ type Queries struct {
 	removeCollaboratorStmt                      *sql.Stmt
 	removeMovieFromPlaylistStmt                 *sql.Stmt
 	removeTrackFromPlaylistStmt                 *sql.Stmt
+	removeWatchRoomMemberStmt                   *sql.Stmt
 	renameDeviceStmt                            *sql.Stmt
 	revertAlbumCoverArtworkStmt                 *sql.Stmt
 	revertArtistProfileArtworkStmt              *sql.Stmt
@@ -4301,8 +4328,10 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		listShowEpisodeArtworkInFoldersStmt:         q.listShowEpisodeArtworkInFoldersStmt,
 		listShowSeasonArtworkStmt:                   q.listShowSeasonArtworkStmt,
 		listShowSeasonArtworkInFoldersStmt:          q.listShowSeasonArtworkInFoldersStmt,
+		listWatchRoomIDsByMemberIDStmt:              q.listWatchRoomIDsByMemberIDStmt,
 		listWatchRoomIDsByMovieIDStmt:               q.listWatchRoomIDsByMovieIDStmt,
 		listWatchRoomIDsByOwnerIDStmt:               q.listWatchRoomIDsByOwnerIDStmt,
+		listWatchRoomMemberIDsStmt:                  q.listWatchRoomMemberIDsStmt,
 		markAllNotificationsReadForUserStmt:         q.markAllNotificationsReadForUserStmt,
 		markMovieTmdbRetryStmt:                      q.markMovieTmdbRetryStmt,
 		markMovieUnwatchedStmt:                      q.markMovieUnwatchedStmt,
@@ -4361,6 +4390,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		removeCollaboratorStmt:                      q.removeCollaboratorStmt,
 		removeMovieFromPlaylistStmt:                 q.removeMovieFromPlaylistStmt,
 		removeTrackFromPlaylistStmt:                 q.removeTrackFromPlaylistStmt,
+		removeWatchRoomMemberStmt:                   q.removeWatchRoomMemberStmt,
 		renameDeviceStmt:                            q.renameDeviceStmt,
 		revertAlbumCoverArtworkStmt:                 q.revertAlbumCoverArtworkStmt,
 		revertArtistProfileArtworkStmt:              q.revertArtistProfileArtworkStmt,
