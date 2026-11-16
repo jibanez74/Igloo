@@ -14,16 +14,16 @@ describe("watch-room utilities", () => {
     );
   });
 
-  it("builds websocket URLs with the current browser protocol", () => {
+  // The page's own host and port, in development too: Vite proxies the
+  // socket like every other /api request.
+  it("builds websocket URLs on the page's origin with its protocol", () => {
     const url = new URL(watchRoomWebSocketUrl(42));
 
     expect(url.protocol).toBe(
       window.location.protocol === "https:" ? "wss:" : "ws:",
     );
+    expect(url.host).toBe(window.location.host);
     expect(url.pathname).toBe("/api/watch-rooms/42/ws");
-    if (import.meta.env.DEV) {
-      expect(url.port).toBe("8080");
-    }
   });
 
   it("announces meaningful realtime events", () => {

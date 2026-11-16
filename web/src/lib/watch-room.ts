@@ -25,10 +25,6 @@ export function watchRoomWebSocketUrl(roomId: number) {
   const baseUrl = new URL(window.location.origin);
   baseUrl.protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
 
-  if (import.meta.env.DEV) {
-    baseUrl.port = "8080";
-  }
-
   return new URL(`/api/watch-rooms/${roomId}/ws`, baseUrl).toString();
 }
 
