@@ -607,6 +607,10 @@ func (app *Application) UpdateWatchRoomMembers(w http.ResponseWriter, r *http.Re
 	}
 
 	removedIDs, changed, err := app.replaceWatchRoomInvitees(r.Context(), roomID, userID, invitedIDs)
+	if errors.Is(err, errWatchRoomDeleted) {
+		helpers.ErrorJSON(w, errors.New("room not found"), http.StatusNotFound)
+		return
+	}
 	if err != nil {
 		app.serverError(w, err, "failed to update watch room members", internalServerErrorMessage, "room_id", roomID)
 		return
@@ -623,7 +627,8 @@ func (app *Application) UpdateWatchRoomMembers(w http.ResponseWriter, r *http.Re
 
 // replaceWatchRoomInvitees makes the room's members exactly the owner plus
 // invitedIDs, in one transaction. It returns the users it removed and whether
-// anything changed.
+// anything changed, or errWatchRoomDeleted when the room went between the
+// handler's owner check and this transaction.
 func (app *Application) replaceWatchRoomInvitees(ctx context.Context, roomID, ownerID int64, invitedIDs []int64) ([]int64, bool, error) {
 	tx, err := app.DB.BeginTx(ctx, nil)
 	if err != nil {
@@ -632,6 +637,13 @@ func (app *Application) replaceWatchRoomInvitees(ctx context.Context, roomID, ow
 	defer func() { _ = tx.Rollback() }()
 
 	qtx := app.Queries.WithTx(tx)
+	_, err = qtx.GetWatchRoomByID(ctx, roomID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, false, errWatchRoomDeleted
+	}
+	if err != nil {
+		return nil, false, err
+	}
 	currentIDs, err := qtx.ListWatchRoomMemberIDs(ctx, roomID)
 	if err != nil {
 		return nil, false, err

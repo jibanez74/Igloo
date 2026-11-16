@@ -146,17 +146,20 @@ func (hub *WatchRoomHub) getOrCreateSession(roomID int64) *watchRoomSession {
 	return session
 }
 
-// broadcastLocked queues payload for every client in the session but sender;
-// a nil sender reaches everyone. The caller holds hub.mu.
+// broadcastLocked queues payload for every open client in the session but
+// sender; a nil sender reaches everyone. A client already closed (revoked,
+// evicted) is skipped: its read loop removes it shortly, and what it was last
+// told stays its last word. The caller holds hub.mu.
 func broadcastLocked(session *watchRoomSession, sender *watchRoomClient, payload watchRoomServerEvent) {
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return
 	}
 	for client := range session.clients {
-		if client != sender {
-			client.enqueue(data)
+		if client == sender || client.closed() {
+			continue
 		}
+		client.enqueue(data)
 	}
 }
 
@@ -426,6 +429,16 @@ func (client *watchRoomClient) close() {
 	client.closeOnce.Do(func() {
 		close(client.done)
 	})
+}
+
+// closed reports whether close has been called.
+func (client *watchRoomClient) closed() bool {
+	select {
+	case <-client.done:
+		return true
+	default:
+		return false
+	}
 }
 
 // enqueue queues a payload without blocking. A full outbox means the peer has
@@ -754,13 +767,22 @@ func (app *Application) watchRoomSocketStillAllowed(r *http.Request, client *wat
 }
 
 // watchRoomCredentialCurrent reports whether the socket's credential still
-// authenticates: the device row still exists, or the cookie session's
-// recorded version is still the user's.
+// authenticates: the device row still exists, or the cookie session still
+// exists (a logout destroys it without changing the version) and its recorded
+// version is still the user's.
 func (app *Application) watchRoomCredentialCurrent(r *http.Request, userID int64, auth watchRoomClientAuth) bool {
 	if auth.deviceID != 0 {
 		token, _ := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 		device, err := app.Queries.GetDeviceByTokenHash(r.Context(), hashDeviceToken(token))
 		return err == nil && device.ID == auth.deviceID
+	}
+
+	if auth.sessionToken == "" {
+		return false
+	}
+	_, found, err := app.SessionManager.Store.Find(auth.sessionToken)
+	if err != nil || !found {
+		return false
 	}
 
 	current, err := app.currentSessionVersion(r.Context(), userID)

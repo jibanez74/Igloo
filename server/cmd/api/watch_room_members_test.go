@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -640,5 +641,91 @@ func TestWatchRoomSocketStillAllowed_CatchesChangesDuringUpgrade(t *testing.T) {
 				t.Fatal("the socket was not closed")
 			}
 		})
+	}
+}
+
+// A logout destroys the session without changing its version, so the
+// post-connect re-check must look for the session itself: a socket that
+// registered after the logout's sweep would otherwise keep its control.
+func TestWatchRoomCredentialCurrent_RejectsALoggedOutCookieSession(t *testing.T) {
+	app := setupSessionTestApp(t)
+	ownerID, _ := createTestUserAndMovie(t, app)
+	cookie := newAuthSessionCookie(t, app, ownerID)
+	version, err := app.Queries.GetUserSessionVersion(context.Background(), ownerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	auth := watchRoomClientAuth{sessionToken: cookie.Value, sessionVersion: version}
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+
+	if !app.watchRoomCredentialCurrent(req, ownerID, auth) {
+		t.Fatal("a live session was refused")
+	}
+
+	err = app.SessionManager.Store.Delete(cookie.Value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if app.watchRoomCredentialCurrent(req, ownerID, auth) {
+		t.Fatal("a logged-out session was still allowed")
+	}
+}
+
+// An edit that loses the race with the room's deletion answers the documented
+// 404, not the foreign-key failure of adding a member to a missing room.
+func TestReplaceWatchRoomInvitees_RoomDeletedAnswersDeleted(t *testing.T) {
+	app := setupSessionTestApp(t)
+	ownerID, movieID := createTestUserAndMovie(t, app)
+	guest := createTestUser(t, app, "Guest", "race-guest@example.com", false)
+	room := createTestRoom(t, app, ownerID, movieID)
+	addMembersToRoom(t, app, room.ID, ownerID)
+	err := app.deleteWatchRoom(context.Background(), room.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err = app.replaceWatchRoomInvitees(context.Background(), room.ID, ownerID, []int64{guest.ID})
+	if !errors.Is(err, errWatchRoomDeleted) {
+		t.Fatalf("err = %v, want errWatchRoomDeleted", err)
+	}
+}
+
+// A revoked socket's last word is room_access_revoked: the member list that
+// follows goes only to the sockets still open.
+func TestWatchRoomHub_RevokedClientsMissLaterBroadcasts(t *testing.T) {
+	hub := NewWatchRoomHub()
+	kept := newWatchRoomClient(nil, 1, userSummary{ID: 1})
+	revoked := newWatchRoomClient(nil, 1, userSummary{ID: 2})
+	for _, client := range []*watchRoomClient{kept, revoked} {
+		if !hub.connect(1, client) {
+			t.Fatal("connect refused")
+		}
+	}
+	drain := func(client *watchRoomClient) []string {
+		var types []string
+		for {
+			select {
+			case data := <-client.send:
+				var event watchRoomWSTestEvent
+				if err := json.Unmarshal(data, &event); err != nil {
+					t.Fatal(err)
+				}
+				types = append(types, event.Type)
+			default:
+				return types
+			}
+		}
+	}
+	drain(kept)
+	drain(revoked)
+
+	hub.revokeMembers(1, []int64{2})
+	hub.membersChanged(1, []userSummary{{ID: 1}})
+
+	if got := drain(revoked); !slices.Equal(got, []string{"room_access_revoked"}) {
+		t.Fatalf("revoked client got %v", got)
+	}
+	if got := drain(kept); !slices.Equal(got, []string{"members_changed"}) {
+		t.Fatalf("kept client got %v", got)
 	}
 }
