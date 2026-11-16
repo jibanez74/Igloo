@@ -42,6 +42,7 @@ import {
   type ServerResponse,
 } from "node:http";
 import { MOVIES_PER_PAGE, STREAM_MODES } from "../src/lib/constants";
+import { createMockWatchRooms } from "./mock-watch-rooms";
 
 // The stateful API behind the specs that do not call mockApi (settings, auth,
 // devices, the players, trailer, scan progress, head metadata and motion). It
@@ -432,6 +433,7 @@ function touchUser(user: User) {
 }
 
 function removeUser(userId: number) {
+  watchRooms.forgetUser(userId);
   const index = users.findIndex(user => user.id === userId);
   if (index >= 0) {
     users.splice(index, 1);
@@ -1175,6 +1177,12 @@ function handleMoviesRoutes(
     return true;
   }
 
+  // Nothing is liked; the like itself is the movie-details spec's (mockApi).
+  if (/^\/api\/movies\/\d+\/like-status$/.test(url.pathname)) {
+    sendSuccess(response, { is_liked: false });
+    return true;
+  }
+
   // The mocked player never plays far enough to save progress.
   if (/^\/api\/movies\/\d+\/watch-progress$/.test(url.pathname)) {
     sendSuccess(response, NO_PROGRESS);
@@ -1230,9 +1238,6 @@ function handleHomeRoutes(
       return true;
     case "/api/tmdb/movies/in-theaters":
       sendSuccess(response, { movies: theaterMovies });
-      return true;
-    case "/api/watch-rooms":
-      sendSuccess(response, { rooms: [] });
       return true;
     default:
       return false;
@@ -1334,6 +1339,21 @@ function handleSharedRoutes(
   }
 }
 
+const watchRooms = createMockWatchRooms({
+  currentUserId: request => currentUser(request)?.id ?? null,
+  findUser: id => users.find(user => user.id === id) ?? null,
+  listUsers: () => users,
+  findMovie: id => {
+    const movie = libraryMovies.find(item => item.id === id);
+    return movie
+      ? { title: movie.title, poster: movie.poster_path.Valid ? movie.poster_path.String : null }
+      : null;
+  },
+  sendSuccess,
+  sendFailure,
+  readJSONBody,
+});
+
 async function handleRequest(request: IncomingMessage, response: ServerResponse) {
   const method = request.method ?? "GET";
   const url = new URL(request.url ?? "/", `http://${HOST}:${PORT}`);
@@ -1352,6 +1372,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
   }
 
   try {
+    if (watchRooms.handleTestRoute(response, url)) return;
     if (await handleAuthRoutes(request, response, url)) return;
     if (await handleQuickConnectPublicRoutes(request, response, url)) return;
 
@@ -1369,6 +1390,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     if (await handleSettingsRoutes(request, response, url, user)) return;
     if (handleMoviesRoutes(request, response, url, user)) return;
     if (handleShowsRoutes(request, response, url)) return;
+    if (await watchRooms.handleRoute(request, response, url, user.id)) return;
     if (handleHomeRoutes(request, response, url)) return;
     if (handleSharedRoutes(request, response, url)) return;
     if (await handleDeviceRoutes(request, response, url)) return;
@@ -1383,6 +1405,8 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
 const server = createServer((request, response) => {
   void handleRequest(request, response);
 });
+
+watchRooms.attach(server);
 
 server.listen(PORT, HOST, () => {
   process.stdout.write(`E2E mock API listening on http://${HOST}:${PORT}\n`);
