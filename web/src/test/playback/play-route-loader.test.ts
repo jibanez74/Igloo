@@ -22,7 +22,7 @@ describe("loadPlayRoute hls.js warm-up", () => {
       queryClient: createTestQueryClient(),
       media: movieMediaRef(7),
       ensureDetails: async () => undefined,
-      deps: { mode: "remux" },
+      deps: { mode: "remux", start: 0 },
     });
 
     expect(preloadHlsLight).toHaveBeenCalledOnce();
@@ -33,7 +33,7 @@ describe("loadPlayRoute hls.js warm-up", () => {
       queryClient: createTestQueryClient(),
       media: movieMediaRef(7),
       ensureDetails: async () => undefined,
-      deps: { mode: "direct" },
+      deps: { mode: "direct", start: 0 },
     });
 
     expect(preloadHlsLight).not.toHaveBeenCalled();

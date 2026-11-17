@@ -66,6 +66,14 @@ type VideoPlayerProps = {
   startSec?: number;
   /** Requested absolute start that identifies the current HLS session. */
   requestedStartSec?: number;
+  /**
+   * The absolute position an hls.js source should start at. With it the
+   * player places the start itself from the manifest's measured actual start
+   * (`startSec` = target − actual), so the parent's offset changing after
+   * that report does not rebuild the source; without it, as before, any
+   * `startSec` change rebuilds.
+   */
+  startTargetSec?: number;
   onStartApplied?: (time: number) => void;
   onSessionLost?: (currentTime: number) => void;
   onCapacityBusy?: (retryAfterSec: number) => void;
@@ -272,6 +280,7 @@ export default function VideoPlayer({
   subtitleTrack = null,
   startSec = 0,
   requestedStartSec,
+  startTargetSec,
   onStartApplied,
   onSessionLost,
   onCapacityBusy,
@@ -443,7 +452,7 @@ export default function VideoPlayer({
   );
 
   const reportManifestMetadata = useEffectEvent(
-    (headers: ManifestHeaders | null) => {
+    (headers: ManifestHeaders | null): ManifestMetadata => {
       const metadata = parseManifestMetadata(headers, requestedStartSec);
 
       if (onManifestLoaded) {
@@ -455,8 +464,23 @@ export default function VideoPlayer({
       if (metadata.actualStartSec !== null && onActualStart) {
         onActualStart(metadata.actualStartSec);
       }
+      return metadata;
     },
   );
+
+  // The latest start in the source's local time; the parent recomputes it
+  // when the manifest's measured actual start arrives.
+  const currentStartSec = useEffectEvent(() => startSec);
+
+  // Where an hls.js source starts loading: the target less the measured
+  // actual start when the manifest named one, else the parent's offset.
+  const hlsLoadStartSec = useEffectEvent(
+    (measuredActualStartSec: number | null) =>
+      startTargetSec === undefined || measuredActualStartSec === null
+        ? startSec
+        : Math.max(0, startTargetSec - measuredActualStartSec),
+  );
+  const hlsSourceStartKey = startTargetSec ?? startSec;
   const needsNativeManifestPreflight =
     isHlsSource &&
     (onCapacityBusy !== undefined ||
@@ -497,10 +521,13 @@ export default function VideoPlayer({
     }
   });
 
-  // hls.js source lifecycle. `startSec` stays in the deps deliberately: the
+  // hls.js source lifecycle. The start stays in the deps deliberately: the
   // playlist URL can stay identical while the resume target changes (any seek
-  // inside the rewind buffer keeps start=0 in the URL), and rebuilding with
-  // `startPosition` is what applies that seek.
+  // inside the rewind buffer keeps start=0 in the URL), and rebuilding is
+  // what applies that seek. It is the absolute target when the parent gives
+  // one: the offset also moves when the first manifest reports the measured
+  // actual start, and rebuilding for that aborted the first segment and
+  // fetched the manifest, the MediaSource and the segment again.
   // The cleanup calls disposeHls() -> hls.destroy(), which removes every listener
   // registered below; the rule does not model destroy().
   // react-doctor-disable-next-line react-doctor/effect-needs-cleanup
@@ -543,11 +570,14 @@ export default function VideoPlayer({
             HLS_FRAGMENT_SERVER_DECIDED_STATUSES,
           ),
           backBufferLength: HLS_JS_BACK_BUFFER_LENGTH_SEC,
+          // Loading starts at MANIFEST_PARSED below, once the manifest has
+          // said where the session really begins.
+          autoStartLoad: false,
           // Always explicit, 0 included: hls.js's default (-1) joins a live
           // playlist at its edge, and a copy session's playlist is a live
           // EVENT one until FFmpeg finishes, so a play from the start began
           // tens of seconds in.
-          startPosition: startSec,
+          startPosition: currentStartSec(),
         });
         hlsRef.current = hls;
         hlsLoadStoppedAtEndRef.current = false;
@@ -570,19 +600,24 @@ export default function VideoPlayer({
           void resumePlayRequest(video);
         });
 
-        if (startSec > 0) {
-          hls.once(Hls.Events.MANIFEST_PARSED, () => {
-            handleStartApplied(startSec);
-          });
-        }
-
         // The manifest response names the profile the server really ran. The
         // request URL cannot: a remux request that fails the safety gate is
-        // still served from the /hls/remux/ path.
-        hls.once(Hls.Events.MANIFEST_LOADED, (_event, data) => {
-          reportManifestMetadata(
+        // still served from the /hls/remux/ path. It also carries the
+        // measured actual start, which places the first load. Every manifest
+        // counts, including one fetched again by the network recovery below.
+        let measuredActualStartSec: number | null = null;
+        hls.on(Hls.Events.MANIFEST_LOADED, (_event, data) => {
+          const metadata = reportManifestMetadata(
             manifestHeadersFromNetworkDetails(data.networkDetails),
           );
+          if (metadata.actualStartSec !== null) {
+            measuredActualStartSec = metadata.actualStartSec;
+          }
+        });
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          const loadStart = hlsLoadStartSec(measuredActualStartSec);
+          hls.startLoad(loadStart);
+          if (loadStart > 0) handleStartApplied(loadStart);
         });
 
         // Every way the server reports that a session no longer exists. It
@@ -608,7 +643,7 @@ export default function VideoPlayer({
         // session's playlist, so a retry that early restarts at the start this
         // source was built for.
         const restartLoad = () => {
-          hls.startLoad(fragmentBuffered ? -1 : startSec);
+          hls.startLoad(fragmentBuffered ? -1 : currentStartSec());
         };
         // One report per instance: a lost session fails the requests that
         // are still in flight too, and the page replaces this instance after
@@ -762,7 +797,7 @@ export default function VideoPlayer({
       carryPlayRequest(video);
       disposeHls?.();
     };
-  }, [isHlsSource, src, startSec, videoRef]);
+  }, [isHlsSource, src, hlsSourceStartKey, videoRef]);
 
   // Native source lifecycle: direct play, and built-in HLS on browsers without
   // Media Source Extensions (iPhone Safari). No

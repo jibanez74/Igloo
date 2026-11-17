@@ -1288,6 +1288,63 @@ describe("VideoPlayer HLS capability and effective profile", () => {
     expect(onActualStart).toHaveBeenCalledWith(581);
   });
 
+  // Every copy-video resume past 0:00 gets its measured start on the first
+  // manifest. Keyed on the local offset, that tore the instance down mid-way
+  // through its first segment and fetched everything again.
+  it.each([
+    ["the measured actual start", "581", 19],
+    ["the requested start when the manifest names none", null, 10],
+  ])(
+    "starts loading from %s without rebuilding for it",
+    async (_case, header, expectedStart) => {
+      const onStartApplied = vi.fn();
+      function TargetHarness() {
+        const videoRef = useRef<HTMLVideoElement>(null);
+        const [actualStartSec, setActualStartSec] = useState(590);
+        return (
+          <VideoPlayer
+            videoRef={videoRef}
+            src={hlsSrc}
+            isHlsSource
+            title="Test Movie"
+            onError={vi.fn()}
+            startSec={600 - actualStartSec}
+            startTargetSec={600}
+            requestedStartSec={590}
+            onStartApplied={onStartApplied}
+            onActualStart={setActualStartSec}
+          />
+        );
+      }
+
+      render(<TargetHarness />);
+      await waitFor(() => {
+        expect(fakeHlsInstances).toHaveLength(1);
+      });
+      const hls = fakeHlsInstances[0];
+      expect(hls.startLoadCalls).toBe(0);
+
+      act(() => {
+        hls.trigger("hlsManifestLoaded", {
+          networkDetails: {
+            getResponseHeader: (name: string) =>
+              name === "X-Igloo-Actual-Start" ? header : null,
+          },
+        });
+      });
+      await act(async () => {});
+      act(() => {
+        hls.trigger("hlsManifestParsed", {});
+      });
+      await act(async () => {});
+
+      expect(fakeHlsInstances).toHaveLength(1);
+      expect(hls.destroyed).toBe(false);
+      expect(hls.startLoadPositions).toEqual([expectedStart]);
+      expect(onStartApplied).toHaveBeenCalledWith(expectedStart);
+    },
+  );
+
   it("rebuilds at most once when an earlier actual start changes the local offset", async () => {
     function ActualStartHarness() {
       const videoRef = useRef<HTMLVideoElement>(null);
