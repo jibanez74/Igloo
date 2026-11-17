@@ -19,12 +19,13 @@ export const Route = createFileRoute("/_auth/movies/$id/play")({
   // The player fills the window: no sidebar, header or page padding.
   staticData: { immersive: true },
   validateSearch: playSearchSchema,
-  loaderDeps: ({ search }) => ({
-    mode: search.mode,
-    audio_track: search.audio_track,
-    subtitle_track: search.subtitle_track,
-    start: search.start,
-  }),
+  // The loader reads the start only to build the redirect for a URL without a
+  // mode. Keyed on it otherwise, every HLS rebase (a new start) reran the
+  // loader and the head for nothing.
+  loaderDeps: ({ search }) =>
+    search.mode === undefined
+      ? { mode: search.mode, start: search.start }
+      : { mode: search.mode },
   loader: async ({ context, params, deps }) => {
     const movieId = parseRouteId(params.id);
     if (movieId == null) return { title: null };
