@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useLastSuccess } from "@/hooks/useLastSuccess";
 import { useSessionMutation } from "@/hooks/useSessionMutation";
 import { Bell, BellOff, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,9 +16,16 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
 } from "@/lib/api";
-import { FOCUS_VISIBLE_RING_CLASS, NOTIFICATION_TITLES } from "@/lib/constants";
+import {
+  FOCUS_VISIBLE_RING_CLASS,
+  NOTIFICATION_TITLES,
+  NOTIFICATIONS_KEY,
+  NOTIFICATIONS_UNREAD_COUNT_KEY,
+} from "@/lib/constants";
 import { parseServerTimestamp } from "@/lib/format";
 import {
+  authUserFrom,
+  authUserQueryOpts,
   invalidateNotifications,
   notificationsQueryOpts,
   unreadNotificationCountQueryOpts,
@@ -27,8 +35,6 @@ import { cn } from "@/lib/utils";
 import type {
   NotificationListItemType,
   NotificationTitle,
-  NotificationsListResponseType,
-  UnreadNotificationCountResponseType,
 } from "@/types";
 
 const NOTIFICATION_TITLE_LABELS: Partial<Record<string, string>> = {
@@ -65,15 +71,19 @@ export default function NotificationBell() {
   const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
 
+  // Only administrators receive requests; the server answers everyone else
+  // with an empty queue, so their bell has nothing to poll for.
+  const { data: authData } = useQuery(authUserQueryOpts());
+  const isAdmin = authUserFrom(authData)?.is_admin ?? false;
+
   // Both queries return the `{ error, data }` envelope as query data, so narrow
   // on `error === false` before reading the success shape (like every other
   // query consumer). An error envelope surfaces as `showRefreshError`, not a
   // thrown query error.
-  const { data: countEnvelope, isError: countIsError } = useQuery(
-    unreadNotificationCountQueryOpts(),
-  );
-  const freshCountData =
-    countEnvelope?.error === false ? countEnvelope.data : undefined;
+  const { data: countEnvelope, isError: countIsError } = useQuery({
+    ...unreadNotificationCountQueryOpts(),
+    enabled: isAdmin,
+  });
 
   // Only fetch the full list while the panel is open.
   const {
@@ -87,24 +97,14 @@ export default function NotificationBell() {
   const freshListData =
     listEnvelope?.error === false ? listEnvelope.data : undefined;
 
-  // react-query stores an error envelope as (successful) data, dropping the last
-  // good payload. Retain it so a failed refresh keeps showing the previous list
-  // and badge instead of flashing empty. Adjusting state during render is the
-  // supported way to remember a value across renders here (React re-renders
-  // immediately without committing the intermediate paint).
-  const [lastCountData, setLastCountData] =
-    useState<UnreadNotificationCountResponseType>();
-  const [lastListData, setLastListData] =
-    useState<NotificationsListResponseType>();
-  if (freshCountData && freshCountData !== lastCountData) {
-    setLastCountData(freshCountData);
-  }
-  if (freshListData && freshListData !== lastListData) {
-    setLastListData(freshListData);
-  }
+  // A failed refresh keeps showing the previous list and badge instead of
+  // flashing empty.
+  const shownCount = useLastSuccess(countEnvelope, NOTIFICATIONS_UNREAD_COUNT_KEY);
+  const shownList = useLastSuccess(listEnvelope, NOTIFICATIONS_KEY);
 
-  const listData = freshListData ?? lastListData;
-  const countUnreadCount = (freshCountData ?? lastCountData)?.unread_count ?? 0;
+  const listData = shownList?.error === false ? shownList.data : undefined;
+  const countUnreadCount =
+    shownCount?.error === false ? shownCount.data.unread_count : 0;
   const notifications = listData?.notifications ?? [];
   const listUnreadCount = open ? listData?.unread_count : undefined;
   const unreadCount = listUnreadCount ?? countUnreadCount;

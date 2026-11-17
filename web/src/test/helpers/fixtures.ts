@@ -58,7 +58,7 @@ export function userSummary(overrides: Partial<UserSummaryType> = {}): UserSumma
 /** A `GET /api/auth/user` payload. Override any user field via `overrides`. */
 export function authUser(overrides: Partial<AuthUser> = {}) {
   return {
-    error: false,
+    error: false as const,
     data: { user: authUserData(overrides) },
   };
 }

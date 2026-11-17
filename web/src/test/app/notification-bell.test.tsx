@@ -3,12 +3,14 @@ import userEvent from "@testing-library/user-event";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import NotificationBell from "@/components/app/NotificationBell";
 import { FOCUS_VISIBLE_RING_CLASS } from "@/lib/constants";
+import { authUserQueryOpts } from "@/lib/query-opts";
 import type {
   ApiResponseType,
   NotificationListItemType,
   NotificationsListResponseType,
   UnreadNotificationCountResponseType,
 } from "@/types";
+import { authUser } from "../helpers/fixtures";
 import { createTestQueryClient, renderWithQueryClient } from "../helpers/render";
 
 const apiMocks = vi.hoisted(() => ({
@@ -97,8 +99,14 @@ function countResponse(
   return success({ unread_count: unread });
 }
 
-function renderBell() {
+// The shell's guard has already cached the signed-in user; requests reach
+// administrators only, so the bell polls for them alone.
+function renderBell({ isAdmin = true }: { isAdmin?: boolean } = {}) {
   const queryClient = createTestQueryClient();
+  queryClient.setQueryData(
+    authUserQueryOpts().queryKey,
+    authUser({ is_admin: isAdmin }),
+  );
 
   renderWithQueryClient(<NotificationBell />, { queryClient });
 }
@@ -122,6 +130,16 @@ describe("NotificationBell", () => {
     });
     expect(trigger).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument();
+  });
+
+  it("does not poll the unread count for a reader who is not an administrator", async () => {
+    const user = userEvent.setup();
+    apiMocks.getNotifications.mockResolvedValue(listResponse([]));
+    renderBell({ isAdmin: false });
+
+    await user.click(screen.getByRole("button", { name: "Notifications" }));
+    expect(await screen.findByText("You're all caught up.")).toBeVisible();
+    expect(apiMocks.getUnreadNotificationCount).not.toHaveBeenCalled();
   });
 
   it("opens the panel, lists notifications, and marks an unread one read on click", async () => {
