@@ -611,6 +611,8 @@ export default function VideoPlayer({
         // MANIFEST_PARSED before ours has read the header, so starting at
         // MANIFEST_PARSED alone placed every resume from the requested start.
         let measuredActualStartSec: number | null = null;
+        // Whether the gate below has started loading at least once.
+        let loadStarted = false;
         let manifestRead = false;
         let levelsParsed = false;
         const startLoadWhenReady = () => {
@@ -619,6 +621,7 @@ export default function VideoPlayer({
           manifestRead = false;
           levelsParsed = false;
           const loadStart = hlsLoadStartSec(measuredActualStartSec);
+          loadStarted = true;
           hls.startLoad(loadStart);
           if (loadStart > 0) handleStartApplied(loadStart);
         };
@@ -765,10 +768,13 @@ export default function VideoPlayer({
             // hls.js stops loading on a fatal error before this listener
             // runs, and with autoStartLoad off nothing restarts it after the
             // media is reattached, so the stream would stall. Resume at the
-            // playhead, read before the detach resets it.
+            // playhead, read before the detach resets it. Before the first
+            // manifest the gate still starts loading itself.
             const resumeAt = video.currentTime;
             hls.recoverMediaError();
-            hls.startLoad(resumeAt > 0 ? resumeAt : currentStartSec());
+            if (loadStarted) {
+              hls.startLoad(resumeAt > 0 ? resumeAt : currentStartSec());
+            }
             return;
           }
 

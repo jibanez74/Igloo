@@ -658,6 +658,46 @@ describe("VideoPlayer hls.js error routing", () => {
     expect(hls.startLoadPositions).toEqual([10, 10]);
   });
 
+  it("resumes at the playhead after a media-error recovery mid-film", async () => {
+    const hls = await renderHlsPlayer({ startSec: 10 });
+    act(() => {
+      hls.trigger("hlsManifestLoaded", {});
+      hls.trigger("hlsManifestParsed", {});
+    });
+    const video = screen.getByLabelText("Video player for Test Movie") as HTMLVideoElement;
+    Object.defineProperty(video, "currentTime", { configurable: true, value: 42.5 });
+
+    act(() => {
+      hls.trigger("hlsError", {
+        type: "mediaError",
+        details: "bufferAppendError",
+        fatal: true,
+      });
+    });
+
+    expect(hls.startLoadPositions).toEqual([10, 42.5]);
+  });
+
+  it("leaves a media-error recovery before the first manifest to the gate", async () => {
+    const hls = await renderHlsPlayer({ startSec: 10 });
+
+    act(() => {
+      hls.trigger("hlsError", {
+        type: "mediaError",
+        details: "bufferAppendError",
+        fatal: true,
+      });
+    });
+    expect(hls.recoverMediaErrorCalls).toBe(1);
+    expect(hls.startLoadCalls).toBe(0);
+
+    act(() => {
+      hls.trigger("hlsManifestLoaded", {});
+      hls.trigger("hlsManifestParsed", {});
+    });
+    expect(hls.startLoadPositions).toEqual([10]);
+  });
+
   it("starts loading once per manifest, and again for a manifest fetched anew", async () => {
     const hls = await renderHlsPlayer({ startSec: 10 });
     act(() => {
