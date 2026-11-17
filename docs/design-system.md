@@ -1813,8 +1813,10 @@ require the full playback test pass.
   **unmounted** while trailers play (mounting it starts the HLS session) and
   is warmed up only in the last trailer's final `PREROLL_MOVIE_WARMUP_SEC`
   (once YouTube reports the trailer's duration; without one, no warm-up);
-  it stops clicks so the fullscreen click-to-toggle never reaches the movie,
-  and a transparent layer over the iframe keeps focus in our document. Its
+  it stops clicks so the fullscreen click-to-toggle never reaches the movie;
+  a transparent layer over the iframe takes the clicks and the embed's
+  container is `inert`, so the iframe is never a Tab stop and focus stays in
+  our document. Its
   chrome replaces `PlayerControls` in the footer slot with the same panel
   classes (so it hides on idle in fullscreen): "Trailer X of N · title" in
   `tabular-nums`, `ProgressBar variant="trailer"`, the primary play/pause,
@@ -1836,7 +1838,14 @@ require the full playback test pass.
   progress is saved until the movie starts. No feature-presentation card and
   no link to the trailer's movie.
 - **Trailer player** (`routes/_auth/trailer.tsx`, YouTube behind
-  `useYouTubePlayer`): one `DialogFullscreenContent` whose view swaps in place
+  `useYouTubePlayer` with its own controls off, as in the pre-roll, so the
+  footer is the one set of controls; a transparent layer over the iframe takes
+  the clicks and the embed's container is `inert`, so focus, the shortcuts and
+  Escape stay in our document; the frame is bounded
+  by the height too, so the footer stays on a short window). It shares the
+  movie player's keys through `useVideoPlaybackKeyboard` (`playerReady`, no
+  `<video>`) and, like the pre-roll, claims the OS media controls while it
+  plays: one `DialogFullscreenContent` whose view swaps in place
   — loading, load error, no trailer, the player, a playback error. Every view
   wears the same `TrailerHeader` (film icon, title, "Close trailer"), so the
   way out never moves between states; only the player view's header holds the

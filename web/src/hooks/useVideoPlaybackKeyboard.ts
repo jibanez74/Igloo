@@ -1,10 +1,16 @@
 import { useEffect, useEffectEvent } from "react";
 import type { RefObject } from "react";
-import { isEditableTarget } from "@/lib/utils";
+import { shouldIgnorePlayerShortcut } from "@/lib/player-shortcuts";
 
 type VideoPlaybackKeyboardOptions = {
   containerRef: RefObject<HTMLElement | null>;
-  videoRef: RefObject<HTMLVideoElement | null>;
+  /**
+   * The element whose readiness gates the shortcuts and whose volume they
+   * change. A surface without one (the YouTube trailer) passes
+   * `playerReady` and the volume callbacks instead.
+   */
+  videoRef?: RefObject<HTMLVideoElement | null>;
+  playerReady?: boolean;
   enabled?: boolean;
   fullscreenActive?: boolean;
   volumeStep?: number;
@@ -20,24 +26,45 @@ type VideoPlaybackKeyboardOptions = {
 };
 
 const DEFAULT_VOLUME_STEP = 0.05;
-const MIN_PLAYABLE_READY_STATE =
-  typeof HTMLMediaElement === "undefined"
-    ? 3
-    : HTMLMediaElement.HAVE_FUTURE_DATA;
+const HAVE_METADATA =
+  typeof HTMLMediaElement === "undefined" ? 1 : HTMLMediaElement.HAVE_METADATA;
+const SEEK_KEYS: ReadonlySet<string> = new Set([
+  "ArrowLeft",
+  "ArrowRight",
+  "j",
+  "J",
+  "l",
+  "L",
+  "Home",
+  "0",
+]);
 
-function isVideoReadyForShortcuts(
-  video: HTMLVideoElement | null,
-): video is HTMLVideoElement {
-  return (
-    !!video &&
-    !video.error &&
-    video.readyState >= MIN_PLAYABLE_READY_STATE
-  );
+// The element's own volume, for a surface that passes no volume callbacks.
+function nudgeVolume(video: HTMLVideoElement, delta: number) {
+  video.volume = Math.min(1, Math.max(0, video.volume + delta));
+  video.muted = false;
+}
+
+function toggleMuted(video: HTMLVideoElement) {
+  video.muted = !video.muted;
+}
+
+/**
+ * Which shortcuts the element can take. A seek needs a timeline, so it waits
+ * for metadata; everything else only needs an element that has not failed.
+ * Play, pause, mute and fullscreen therefore keep working through a
+ * mid-playback stall, a rebase or a recovery reload, exactly as the on-screen
+ * buttons do.
+ */
+function acceptsShortcut(video: HTMLVideoElement | null, key: string) {
+  if (!video || video.error) return false;
+  return !SEEK_KEYS.has(key) || video.readyState >= HAVE_METADATA;
 }
 
 export function useVideoPlaybackKeyboard({
   containerRef,
   videoRef,
+  playerReady = false,
   enabled = true,
   fullscreenActive = false,
   volumeStep = DEFAULT_VOLUME_STEP,
@@ -60,12 +87,12 @@ export function useVideoPlaybackKeyboard({
     const targetIsPageBody =
       target === document.body || target === document.documentElement;
 
-    if (isEditableTarget(target)) return;
+    if (shouldIgnorePlayerShortcut(e)) return;
     if (!targetInsidePlayer && !targetIsPageBody) return;
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
 
-    const video = videoRef.current;
-    if (!isVideoReadyForShortcuts(video)) {
+    const video = videoRef?.current;
+    const ready = videoRef ? acceptsShortcut(video ?? null, e.key) : playerReady;
+    if (!ready) {
       if (e.key === "Escape" && fullscreenActive && onEscape) {
         onEscape();
       }
@@ -110,10 +137,9 @@ export function useVideoPlaybackKeyboard({
         if (onAdjustVolume) {
           consume();
           onAdjustVolume(volumeStep);
-        } else {
+        } else if (video) {
           consume();
-          video.volume = Math.min(1, video.volume + volumeStep);
-          video.muted = false;
+          nudgeVolume(video, volumeStep);
         }
         break;
       }
@@ -121,10 +147,9 @@ export function useVideoPlaybackKeyboard({
         if (onAdjustVolume) {
           consume();
           onAdjustVolume(-volumeStep);
-        } else {
+        } else if (video) {
           consume();
-          video.volume = Math.max(0, video.volume - volumeStep);
-          video.muted = false;
+          nudgeVolume(video, -volumeStep);
         }
         break;
       }
@@ -133,9 +158,9 @@ export function useVideoPlaybackKeyboard({
         if (onToggleMute) {
           consume();
           onToggleMute();
-        } else {
+        } else if (video) {
           consume();
-          video.muted = !video.muted;
+          toggleMuted(video);
         }
         break;
       }

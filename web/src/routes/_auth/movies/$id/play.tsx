@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { Film } from "lucide-react";
 import VideoPlaybackPage from "@/components/playback/VideoPlaybackPage";
+import { useLastSuccess } from "@/hooks/useLastSuccess";
 import { TMDB_BACKDROP_SIZE, TMDB_POSTER_SIZE } from "@/lib/constants";
 import { movieMediaRef } from "@/lib/media-ref";
 import { unwrapFloatOrUndefined, unwrapString } from "@/lib/nullable";
@@ -18,12 +19,13 @@ export const Route = createFileRoute("/_auth/movies/$id/play")({
   // The player fills the window: no sidebar, header or page padding.
   staticData: { immersive: true },
   validateSearch: playSearchSchema,
-  loaderDeps: ({ search }) => ({
-    mode: search.mode,
-    audio_track: search.audio_track,
-    subtitle_track: search.subtitle_track,
-    start: search.start,
-  }),
+  // The loader reads the start only to build the redirect for a URL without a
+  // mode. Keyed on it otherwise, every HLS rebase (a new start) reran the
+  // loader and the head for nothing.
+  loaderDeps: ({ search }) =>
+    search.mode === undefined
+      ? { mode: search.mode, start: search.start }
+      : { mode: search.mode },
   loader: async ({ context, params, deps }) => {
     const movieId = parseRouteId(params.id);
     if (movieId == null) return { title: null };
@@ -73,9 +75,10 @@ function PlayMoviePage() {
   const parsedId = parseRouteId(id);
   const movieId = parsedId ?? 0;
 
-  const { data, isPending, isError } = useQuery(
-    libraryMovieDetailsQueryOpts(movieId),
-  );
+  const detailsQuery = useQuery(libraryMovieDetailsQueryOpts(movieId));
+  const { isPending, isError } = detailsQuery;
+  // A failed background refetch must not turn a playing movie "not found".
+  const data = useLastSuccess(detailsQuery.data, movieId);
   const movie = data && !data.error ? data.data?.movie : null;
   const notFound =
     parsedId === null ||

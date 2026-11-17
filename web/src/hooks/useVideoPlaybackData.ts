@@ -27,6 +27,7 @@ import {
   playbackTechnicalFile,
 } from "@/lib/query-opts";
 import { useDevicePlaybackPreferences } from "@/hooks/useDevicePlaybackPreferences";
+import { useLastSuccess } from "@/hooks/useLastSuccess";
 import { unwrapFloatOrUndefined } from "@/lib/nullable";
 import {
   playbackSettingsToPlaySearch,
@@ -70,22 +71,22 @@ export function useVideoPlaybackData({
   const mode: StreamModeId = search.mode ?? "direct";
   const provisionalMode = resolveModeForAudioTrack(mode, audioTrack);
 
-  const {
-    data: techData,
-    isPending: techPending,
-    refetch: refetchTech,
-  } = useQuery(mediaTechnicalDetailsQueryOpts(media));
+  // Each input to the stream keeps its last success through a failed
+  // background refetch: losing the technical details mid-film raised the error
+  // screen, and losing the user or the server settings could re-resolve the
+  // mode and restart the stream.
+  const techQuery = useQuery(mediaTechnicalDetailsQueryOpts(media));
+  const { isPending: techPending, refetch: refetchTech } = techQuery;
+  const techData = useLastSuccess(techQuery.data, mediaKey(media));
   const { data: watchProgressData, isPending: watchProgressPending } = useQuery(
     mediaWatchProgressQueryOpts(media),
   );
-  const { data: userData, isPending: authUserPending } = useQuery(
-    authUserQueryOpts(),
-  );
-  const user = authUserFrom(userData);
-  const {
-    data: playbackSettingsData,
-    isPending: playbackSettingsPending,
-  } = useQuery(playbackSettingsQueryOpts());
+  const authUserQuery = useQuery(authUserQueryOpts());
+  const authUserPending = authUserQuery.isPending;
+  const user = authUserFrom(useLastSuccess(authUserQuery.data, "auth"));
+  const playbackSettingsQuery = useQuery(playbackSettingsQueryOpts());
+  const playbackSettingsPending = playbackSettingsQuery.isPending;
+  const playbackSettingsData = useLastSuccess(playbackSettingsQuery.data, "settings");
   const serverPlaybackSettings =
     playbackSettingsFromResponse(playbackSettingsData);
   const devicePrefs = useDevicePlaybackPreferences(user?.id ?? 0);

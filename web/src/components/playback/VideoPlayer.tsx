@@ -19,6 +19,7 @@ import {
   HLS_SEGMENT_STATUS_PAST_END,
   MOTION_MEDIA_OVERLAY_ENTER_CLASS,
   MOVIE_BUFFERING_SPINNER_DELAY_MS,
+  PLAYBACK_FAILED_MESSAGE,
   PLAYER_FRAME_CLASS,
   PLAYER_FRAME_SHELL_CLASS,
 } from "@/lib/constants";
@@ -30,7 +31,7 @@ import {
 } from "@/lib/video-playback";
 import { clearTimeoutRef, cn } from "@/lib/utils";
 
-type SubtitleTrackInfo = {
+export type SubtitleTrackInfo = {
   url: string;
   label: string;
   srclang: string;
@@ -1085,9 +1086,7 @@ export default function VideoPlayer({
                 );
                 return;
               default:
-                onError(
-                  "Playback failed — the browser could not play this stream.",
-                );
+                onError(PLAYBACK_FAILED_MESSAGE);
             }
           }}
         />

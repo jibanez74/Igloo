@@ -1,6 +1,6 @@
 import { expect, type APIRequestContext, type Page } from "@playwright/test";
 
-import { WATCH_ROOM_SEEK_STEP_SEC } from "../src/lib/constants";
+import { MOVIE_SEEK_STEP_SEC } from "../src/lib/constants";
 import { readJSON } from "./e2e-api";
 import type { Credentials } from "./e2e-env";
 import { expectPageHasNoHorizontalScroll } from "./e2e-layout";
@@ -174,13 +174,13 @@ export async function videoCurrentTime(page: Page) {
 export async function expectWatchRoomChrome(page: Page) {
   await expect(
     page.getByRole("button", {
-      name: `Rewind ${WATCH_ROOM_SEEK_STEP_SEC} seconds`,
+      name: `Rewind ${MOVIE_SEEK_STEP_SEC} seconds`,
     }),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Play playback" })).toBeVisible();
   await expect(
     page.getByRole("button", {
-      name: `Fast-forward ${WATCH_ROOM_SEEK_STEP_SEC} seconds`,
+      name: `Fast-forward ${MOVIE_SEEK_STEP_SEC} seconds`,
     }),
   ).toBeVisible();
   await expect(

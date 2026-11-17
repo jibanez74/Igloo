@@ -49,6 +49,7 @@ import {
   MOVIE_CONTROLS_IDLE_MS,
   MOVIE_SEEK_STEP_SEC,
   MOVIE_VOLUME_STEP,
+  PLAYBACK_FAILED_MESSAGE,
   PLAYER_FRAME_CLASS,
   PLAYER_FRAME_SHELL_CLASS,
   PLAYER_ICON_BUTTON_CLASS,
@@ -298,6 +299,13 @@ export default function VideoPlaybackPage({
   // waved it away; anything that puts playback back in motion retracts it.
   const upNextOpen = ended && !!upNext && !upNextDismissed;
 
+  // The playhead the controls show, and the ref the progress saver and the
+  // recovery read between renders; always written together.
+  const setPlayhead = (timeSec: number) => {
+    currentTimeRef.current = timeSec;
+    setCurrentTime(timeSec);
+  };
+
   const retractUpNext = () => {
     setEnded(false);
     setUpNextDismissed(false);
@@ -478,9 +486,7 @@ export default function VideoPlaybackPage({
       // the direct-play fallback consumed it and is switching to remux, when
       // a report from here would raise the error screen over the fallback.
       if (isSourceFailurePlayError(error)) return;
-      setPlaybackError(
-        "Playback failed — the browser could not play this stream.",
-      );
+      setPlaybackError(PLAYBACK_FAILED_MESSAGE);
     }
   };
 
@@ -554,7 +560,7 @@ export default function VideoPlaybackPage({
     // also what the next relative seek (a key press, a skip button) builds on.
     if (rebase) {
       requestRebase(t);
-      setCurrentTime(t);
+      setPlayhead(t);
       return;
     }
 
@@ -562,7 +568,7 @@ export default function VideoPlaybackPage({
     // same drag passed through is dropped.
     cancelRebase();
     video.currentTime = toMediaPlaybackTime(t, playbackTiming);
-    setCurrentTime(t);
+    setPlayhead(t);
   };
 
   // The same rule for every seek the element makes, not just the ones seek()
@@ -606,12 +612,9 @@ export default function VideoPlaybackPage({
   };
 
   // durationRef is written where the duration is learned — onDurationChange
-  // below, and the HLS seed further down — not copied back out of state here.
+  // below, and the HLS seed further down — never copied back out of state.
   // Round-tripping it meant every timeupdate restamped the ref with whatever
   // `duration` held, which is 0 until the media reports one, wiping the seed.
-  useEffect(() => {
-    currentTimeRef.current = currentTime;
-  }, [currentTime]);
 
   const { handlePauseSave, handleEndedSave, flushProgress } =
     useWatchProgressSaver({
@@ -845,9 +848,7 @@ export default function VideoPlaybackPage({
         // The controls hold a pending rebase target; the old session's
         // playhead must not snap them back before it goes out.
         if (isRebasePending()) return;
-        const absoluteTime = toAbsolutePlaybackTime(time, playbackTiming);
-        currentTimeRef.current = absoluteTime;
-        setCurrentTime(absoluteTime);
+        setPlayhead(toAbsolutePlaybackTime(time, playbackTiming));
       }}
       onDurationChange={(nextDuration) => {
         const absoluteDuration = toAbsoluteDuration(
@@ -865,13 +866,13 @@ export default function VideoPlaybackPage({
       // An HLS start lands on the target by construction (offset = target −
       // actual start); the timing may not have taken the measured start yet
       // when the player reports it, so the target is used as is.
-      onStartApplied={(time) => {
-        const absoluteTime = isHlsPlayback
-          ? playbackStartSec
-          : toAbsolutePlaybackTime(time, playbackTiming);
-        currentTimeRef.current = absoluteTime;
-        setCurrentTime(absoluteTime);
-      }}
+      onStartApplied={(time) =>
+        setPlayhead(
+          isHlsPlayback
+            ? playbackStartSec
+            : toAbsolutePlaybackTime(time, playbackTiming),
+        )
+      }
       onSessionLost={(time) =>
         handleSessionLost(toAbsolutePlaybackTime(time, playbackTiming))
       }
@@ -933,7 +934,7 @@ export default function VideoPlaybackPage({
           carriedPlayRef.current = false;
           setPlaybackError(null);
           setPlaying(false);
-          setCurrentTime(0);
+          setPlayhead(0);
           setDuration(0);
         }}
         backButtonRef={backButtonRef}

@@ -896,7 +896,18 @@ export function watchRoomsQueryOpts() {
 export function watchRoomQueryOpts(id: number) {
   return queryOptions({
     queryKey: [WATCH_ROOM_KEY, id],
-    queryFn: ({ signal }) => getWatchRoom(id, signal),
+    // A refetch that fails for a moment (a window focus while the server
+    // restarts) keeps the room it already has: cached as data, the failure
+    // tore down a room in progress, and the members updates written into the
+    // cache had no room to land in. Only the server saying the room is gone
+    // or not this viewer's (404, 403) replaces it.
+    queryFn: async ({ signal, client, queryKey }) => {
+      const res = await getWatchRoom(id, signal);
+      if (!res.error || res.status === 403 || res.status === 404) return res;
+      const cached =
+        client.getQueryData<Awaited<ReturnType<typeof getWatchRoom>>>(queryKey);
+      return cached && !cached.error ? cached : res;
+    },
     enabled: id > 0,
     staleTime: freshFor(STALE_30S),
   });

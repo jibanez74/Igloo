@@ -128,6 +128,8 @@ describe("PrerollPlayer", () => {
     expect(region).toHaveTextContent("Trailer 1 of 2");
     expect(region).toHaveTextContent("Signal Fire");
     expect(fake.options?.videoId).toBe("one");
+    // The embed is no Tab stop: focus and the shortcuts stay in the page.
+    expect(region.querySelector("[inert]")).not.toBeNull();
     expect(
       screen.getByRole("button", { name: "Skip trailer (N)" }),
     ).toHaveFocus();
@@ -304,5 +306,42 @@ describe("PrerollPlayer muted fallback", () => {
     expect(screen.queryByText(/M to unmute/)).not.toBeInTheDocument();
     fireEvent.keyDown(document.body, { key: "m" });
     expect(fake.unmute).not.toHaveBeenCalled();
+  });
+});
+
+describe("PrerollPlayer media session", () => {
+  const original = Object.getOwnPropertyDescriptor(navigator, "mediaSession");
+
+  afterEach(() => {
+    if (original) Object.defineProperty(navigator, "mediaSession", original);
+    else Reflect.deleteProperty(navigator, "mediaSession");
+  });
+
+  it("takes the OS media controls for the trailer and gives them back", () => {
+    const handlers = new Map<string, ((details: MediaSessionActionDetails) => void) | null>();
+    Object.defineProperty(navigator, "mediaSession", {
+      configurable: true,
+      value: {
+        metadata: null,
+        playbackState: "none",
+        setActionHandler: (
+          action: string,
+          handler: ((details: MediaSessionActionDetails) => void) | null,
+        ) => handlers.set(action, handler),
+        setPositionState: vi.fn(),
+      },
+    });
+    fake.seekTo.mockClear();
+
+    const { unmount } = renderPreroll();
+
+    // A headset's Play must reach the trailer, not the paused music.
+    expect(handlers.get("play")).toBeTypeOf("function");
+    expect(handlers.get("pause")).toBeTypeOf("function");
+    handlers.get("seekto")?.({ action: "seekto", seekTime: 42 });
+    expect(fake.seekTo).toHaveBeenCalledWith(42);
+
+    unmount();
+    expect(handlers.get("play")).toBeNull();
   });
 });

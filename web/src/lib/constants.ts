@@ -295,6 +295,12 @@ export const MOVIE_VOLUME_STEP = 0.1;
 export const AUDIO_VOLUME_STEP = 0.1;
 export const MOVIE_CONTROLS_IDLE_MS = 3000;
 export const WATCH_PROGRESS_SAVE_INTERVAL_MS = 15_000;
+/**
+ * How long an ordinary watch-progress save may take. Saves run one after
+ * another, so a request the server never answers would hold back every later
+ * one; giving up before the next interval save lets that save go out.
+ */
+export const WATCH_PROGRESS_SAVE_TIMEOUT_MS = 10_000;
 export const PLAYBACK_EXIT_SYNC_TIMEOUT_MS = 2_000;
 /** Seconds the up-next card counts down before starting the next episode. */
 export const UP_NEXT_COUNTDOWN_SEC = 10;
@@ -775,9 +781,21 @@ export const CONTENT_FADE_ENTER_CLASS = MOTION_SECTION_ENTER_CLASS;
 export const CONTENT_FADE_EXIT_CLASS =
   "animate-out duration-standard ease-in fade-out-0 fill-mode-both motion-reduce:animate-none motion-reduce:opacity-100";
 
-// Watch-room playback and synchronization behavior.
-export const WATCH_ROOM_SEEK_STEP_SEC = 10;
+// Watch-room playback and synchronization behavior. A playing member is
+// moved only past the drift threshold, since every hard seek stutters; a
+// paused one is put on the room's position, within the paused tolerance, so
+// its next Play starts the room from where everyone is.
 export const WATCH_ROOM_SYNC_DRIFT_THRESHOLD_SEC = 1.5;
+/** A play() the browser refused outright, on any video surface. */
+export const PLAYBACK_FAILED_MESSAGE =
+  "Playback failed — the browser could not play this stream.";
+export const WATCH_ROOM_PAUSED_SYNC_TOLERANCE_SEC = 0.05;
+// The socket ping, well inside the server's idle timeout.
+export const WATCH_ROOM_HEARTBEAT_INTERVAL_MS = 25_000;
+// A connection that stays open this long resets the reconnect backoff; one
+// that opens and drops at once keeps backing off instead of retrying every
+// second.
+export const WATCH_ROOM_STABLE_CONNECTION_MS = 10_000;
 export const WATCH_ROOM_SYNC_ANNOUNCE_DEBOUNCE_MS = 1200;
 // A run of seeks (scrubbing, held arrow keys) goes to the room as one, this
 // long after the last; the player itself moves at once. IglooTV coalesces

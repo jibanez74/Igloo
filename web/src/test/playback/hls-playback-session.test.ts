@@ -17,6 +17,25 @@ describe("HLS playback sessions", () => {
     expect(second).not.toBe(first);
   });
 
+  // randomUUID exists only in a secure context; a LAN address over plain
+  // HTTP has getRandomValues alone.
+  it("mints a version 4 UUID without randomUUID", () => {
+    // Shadows the prototype's method on the instance; deleting it restores it.
+    Object.defineProperty(globalThis.crypto, "randomUUID", {
+      configurable: true,
+      value: undefined,
+    });
+    try {
+      const id = createPlaybackSessionId();
+
+      expect(id).toMatch(uuidPattern);
+      expect(id[14]).toBe("4");
+      expect(["8", "9", "a", "b"]).toContain(id[19]);
+    } finally {
+      delete (globalThis.crypto as { randomUUID?: unknown }).randomUUID;
+    }
+  });
+
   it("stops an episode session on the episode route", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response("{}"));
     vi.stubGlobal("fetch", fetchMock);

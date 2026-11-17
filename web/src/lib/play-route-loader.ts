@@ -25,7 +25,8 @@ type PlayRouteLoaderArgs = {
   media: PlaybackMediaRef;
   /** Warms the media's own header query alongside the playback ones. */
   ensureDetails: () => Promise<unknown>;
-  deps: Pick<PlaySearchParams, "mode" | "start" | "autoplay">;
+  /** The start and autoplay flag arrive only when the URL has no mode. */
+  deps: Partial<Pick<PlaySearchParams, "mode" | "start" | "autoplay">>;
 };
 
 /**

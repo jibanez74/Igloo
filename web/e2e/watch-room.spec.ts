@@ -7,7 +7,7 @@ import {
   type E2EEnv,
 } from "./e2e-env";
 import {
-  WATCH_ROOM_SEEK_STEP_SEC,
+  MOVIE_SEEK_STEP_SEC,
   WATCH_ROOM_SYNC_DRIFT_THRESHOLD_SEC,
 } from "../src/lib/constants";
 import { loginViaApi } from "./e2e-auth";
@@ -123,14 +123,14 @@ test.describe("Watch room realtime playback", () => {
 
       await ownerPage
         .getByRole("button", {
-          name: `Fast-forward ${WATCH_ROOM_SEEK_STEP_SEC} seconds`,
+          name: `Fast-forward ${MOVIE_SEEK_STEP_SEC} seconds`,
         })
         .click();
       await expect
         .poll(() => videoCurrentTime(guestPage), {
           timeout: env.responseTimeoutMs,
         })
-        .toBeGreaterThanOrEqual(WATCH_ROOM_SEEK_STEP_SEC - 0.5);
+        .toBeGreaterThanOrEqual(MOVIE_SEEK_STEP_SEC - 0.5);
 
       await guestPage.getByRole("button", { name: "Pause playback" }).click();
       await expect(
@@ -237,7 +237,7 @@ test.describe("Watch room HLS playback with real media", () => {
         .toBeGreaterThan(2);
 
       await ownerPage
-        .getByRole("button", { name: `Fast-forward ${WATCH_ROOM_SEEK_STEP_SEC} seconds` })
+        .getByRole("button", { name: `Fast-forward ${MOVIE_SEEK_STEP_SEC} seconds` })
         .click();
       await expect
         .poll(
@@ -246,7 +246,7 @@ test.describe("Watch room HLS playback with real media", () => {
               videoCurrentTime(ownerPage),
               videoCurrentTime(guestPage),
             ]);
-            return owner > WATCH_ROOM_SEEK_STEP_SEC ? Math.abs(owner - guest) : Infinity;
+            return owner > MOVIE_SEEK_STEP_SEC ? Math.abs(owner - guest) : Infinity;
           },
           { timeout: env.responseTimeoutMs },
         )

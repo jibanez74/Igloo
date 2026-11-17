@@ -1,4 +1,4 @@
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ComponentType } from "react";
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
@@ -14,7 +14,7 @@ import {
   WATCH_ROOMS_KEY,
   WATCH_ROOM_KEY,
   WATCH_ROOM_SEEK_COALESCE_MS,
-  WATCH_ROOM_SEEK_STEP_SEC,
+  MOVIE_SEEK_STEP_SEC,
   AUTH_USER_KEY,
 } from "@/lib/constants";
 import type { WatchRoomDetailType } from "@/types";
@@ -229,8 +229,16 @@ vi.mock("@/components/playback/ProgressBar", () => ({
 }));
 
 vi.mock("@/components/shared/LiveAnnouncer", () => ({
-  default: ({ message }: { message?: string }) => (
-    <div data-testid="live-announcer">{message}</div>
+  default: ({
+    message,
+    announcementKey,
+  }: {
+    message?: string;
+    announcementKey?: string | number;
+  }) => (
+    <div data-testid="live-announcer" data-announcement-key={announcementKey}>
+      {message}
+    </div>
   ),
 }));
 
@@ -342,13 +350,11 @@ function buildRoom(overrides: Partial<WatchRoomDetailType> = {}): WatchRoomDetai
 }
 
 function renderRoomPage(room: WatchRoomDetailType) {
+  // One envelope per room, as React Query hands back the same data object
+  // until a refetch replaces it.
+  const roomEnvelope = { error: false, data: { room } };
   useQueryMock.mockImplementation(() => ({
-    data: {
-      error: false,
-      data: {
-        room,
-      },
-    },
+    data: roomEnvelope,
     isPending: false,
     isError: false,
   }));
@@ -493,7 +499,27 @@ describe("WatchRoomPageContent", () => {
     });
   });
 
-  it("ignores playback keyboard shortcuts until the media is playable", async () => {
+  it("holds seek shortcuts until the media has a timeline", async () => {
+    mockVideoController.readyState = 0;
+    renderRoomPage(buildRoom({ is_owner: false }));
+
+    await waitFor(() => {
+      expect(joinWatchRoomMock).toHaveBeenCalledWith(7);
+    });
+
+    const event = new KeyboardEvent("keydown", {
+      key: "l",
+      bubbles: true,
+      cancelable: true,
+    });
+    document.body.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  // The Play button works before the stream loads (the press takes over the
+  // join snapshot), so the shortcut does too.
+  it("plays from the keyboard before the media has loaded, as the button does", async () => {
     mockVideoController.readyState = 0;
     renderRoomPage(buildRoom({ is_owner: false }));
 
@@ -508,8 +534,10 @@ describe("WatchRoomPageContent", () => {
     });
     document.body.dispatchEvent(event);
 
-    expect(event.defaultPrevented).toBe(false);
-    expect(mockVideoController.playCalls).toBe(0);
+    expect(event.defaultPrevented).toBe(true);
+    await waitFor(() => {
+      expect(mockVideoController.playCalls).toBe(1);
+    });
   });
 
   it("allows playback keyboard shortcuts once the media can play", async () => {
@@ -638,8 +666,8 @@ describe("WatchRoomPageContent", () => {
     renderRoomPage(buildRoom({ is_owner: true }));
 
     for (const name of [
-      `Rewind ${WATCH_ROOM_SEEK_STEP_SEC} seconds`,
-      `Fast-forward ${WATCH_ROOM_SEEK_STEP_SEC} seconds`,
+      `Rewind ${MOVIE_SEEK_STEP_SEC} seconds`,
+      `Fast-forward ${MOVIE_SEEK_STEP_SEC} seconds`,
       "Fullscreen",
     ]) {
       const button = screen.getByRole("button", { name });
@@ -688,9 +716,9 @@ describe("WatchRoomPageContent", () => {
 
     const socket = FakeWebSocket.instances[0];
     for (const name of [
-      `Rewind ${WATCH_ROOM_SEEK_STEP_SEC} seconds`,
+      `Rewind ${MOVIE_SEEK_STEP_SEC} seconds`,
       "Play playback",
-      `Fast-forward ${WATCH_ROOM_SEEK_STEP_SEC} seconds`,
+      `Fast-forward ${MOVIE_SEEK_STEP_SEC} seconds`,
       "Fullscreen",
     ]) {
       expect(screen.getByRole("button", { name })).toHaveClass(
@@ -709,14 +737,14 @@ describe("WatchRoomPageContent", () => {
 
     await user.click(
       screen.getByRole("button", {
-        name: `Fast-forward ${WATCH_ROOM_SEEK_STEP_SEC} seconds`,
+        name: `Fast-forward ${MOVIE_SEEK_STEP_SEC} seconds`,
       }),
     );
 
     await waitFor(() => {
       expect(JSON.parse(socket.sentMessages.at(-1) ?? "{}")).toEqual({
         type: "seek",
-        position_sec: WATCH_ROOM_SEEK_STEP_SEC,
+        position_sec: MOVIE_SEEK_STEP_SEC,
       });
     });
 
@@ -725,13 +753,13 @@ describe("WatchRoomPageContent", () => {
     await waitFor(() => {
       expect(JSON.parse(socket.sentMessages.at(-1) ?? "{}")).toEqual({
         type: "pause",
-        position_sec: WATCH_ROOM_SEEK_STEP_SEC,
+        position_sec: MOVIE_SEEK_STEP_SEC,
       });
     });
 
     await user.click(
       screen.getByRole("button", {
-        name: `Rewind ${WATCH_ROOM_SEEK_STEP_SEC} seconds`,
+        name: `Rewind ${MOVIE_SEEK_STEP_SEC} seconds`,
       }),
     );
 
@@ -894,7 +922,7 @@ describe("WatchRoomPageContent", () => {
     ]);
   });
 
-  it("only hard-seeks when remote playback drifts past the sync threshold", async () => {
+  it("only hard-seeks a playing room when it drifts past the sync threshold", async () => {
     renderRoomPage(buildRoom({ is_owner: false }));
 
     await waitFor(() => {
@@ -903,7 +931,35 @@ describe("WatchRoomPageContent", () => {
 
     mockVideoController.currentTime = 10;
 
-    // Drift below the 1.5s threshold: position must be left alone.
+    // Playing, a drift below the 1.5s threshold is left alone: every hard
+    // seek stutters.
+    FakeWebSocket.instances[0].emitMessage({
+      type: "playback_changed",
+      room_id: 7,
+      playback: {
+        paused: false,
+        position_sec: 10.8,
+        updated_at: "2026-04-18T12:00:00Z",
+      },
+    });
+
+    await waitFor(() => {
+      expect(mockVideoController.playCalls).toBe(1);
+    });
+    expect(mockVideoController.currentTime).toBe(10);
+  });
+
+  // A paused member left up to 1.5 s off showed the room's time over its own
+  // frame, and its next Play moved the whole room back by the difference.
+  it("puts a paused member exactly on the room's position", async () => {
+    renderRoomPage(buildRoom({ is_owner: false }));
+
+    await waitFor(() => {
+      expect(FakeWebSocket.instances).toHaveLength(1);
+    });
+
+    mockVideoController.currentTime = 10;
+
     FakeWebSocket.instances[0].emitMessage({
       type: "playback_changed",
       room_id: 7,
@@ -915,11 +971,8 @@ describe("WatchRoomPageContent", () => {
     });
 
     await waitFor(() => {
-      expect(
-        screen.getByRole("button", { name: /play playback/i }),
-      ).toBeInTheDocument();
+      expect(mockVideoController.currentTime).toBe(10.8);
     });
-    expect(mockVideoController.currentTime).toBe(10);
 
     // Drift far past the threshold: the player must hard-seek.
     FakeWebSocket.instances[0].emitMessage({
@@ -1468,8 +1521,9 @@ describe("WatchRoomPageContent", () => {
       },
     }));
 
+    // The route keys the page on the room id, as here.
     const view = renderWithQueryClient(
-      <WatchRoomPageContent roomId={currentRoom.id} />,
+      <WatchRoomPageContent key={currentRoom.id} roomId={currentRoom.id} />,
     );
 
     await waitFor(() => {
@@ -1489,7 +1543,9 @@ describe("WatchRoomPageContent", () => {
       is_owner: false,
     });
 
-    view.rerender(<WatchRoomPageContent roomId={currentRoom.id} />);
+    view.rerender(
+      <WatchRoomPageContent key={currentRoom.id} roomId={currentRoom.id} />,
+    );
 
     await waitFor(() => {
       expect(joinWatchRoomMock).toHaveBeenNthCalledWith(2, 8);
@@ -1601,7 +1657,7 @@ describe("WatchRoomPageContent", () => {
     await waitFor(() => {
       expect(
         screen.getByText(
-          "The server is running at its transcoding limit. Try again shortly.",
+          "The server is running at its transcoding limit. Try again in a few minutes.",
         ),
       ).toBeInTheDocument();
     });
@@ -1806,14 +1862,14 @@ describe("WatchRoomPageContent", () => {
     await user.click(screen.getByRole("button", { name: /play playback/i }));
     await user.click(
       screen.getByRole("button", {
-        name: `Fast-forward ${WATCH_ROOM_SEEK_STEP_SEC} seconds`,
+        name: `Fast-forward ${MOVIE_SEEK_STEP_SEC} seconds`,
       }),
     );
     await user.click(screen.getByRole("button", { name: /pause playback/i }));
     const playsBeforeReload = mockVideoController.playCalls;
 
     act(() => {
-      lastVideoPlayerProps.current?.onSessionLost?.(WATCH_ROOM_SEEK_STEP_SEC);
+      lastVideoPlayerProps.current?.onSessionLost?.(MOVIE_SEEK_STEP_SEC);
     });
     await waitFor(() => {
       expect(lastVideoPlayerProps.current?.src).toContain("reload=1");
@@ -1824,7 +1880,7 @@ describe("WatchRoomPageContent", () => {
     });
 
     await waitFor(() => {
-      expect(mockVideoController.currentTime).toBe(WATCH_ROOM_SEEK_STEP_SEC);
+      expect(mockVideoController.currentTime).toBe(MOVIE_SEEK_STEP_SEC);
     });
     expect(mockVideoController.paused).toBe(true);
     expect(mockVideoController.playCalls).toBe(playsBeforeReload);
@@ -1975,7 +2031,7 @@ describe("WatchRoomPageContent", () => {
       vi.useFakeTimers({ shouldAdvanceTime: true });
       const { socket } = await openRoom();
       const forward = screen.getByRole("button", {
-        name: `Fast-forward ${WATCH_ROOM_SEEK_STEP_SEC} seconds`,
+        name: `Fast-forward ${MOVIE_SEEK_STEP_SEC} seconds`,
       });
 
       for (let press = 0; press < 3; press += 1) {
@@ -1983,14 +2039,14 @@ describe("WatchRoomPageContent", () => {
           forward.click();
         });
       }
-      expect(mockVideoController.currentTime).toBe(3 * WATCH_ROOM_SEEK_STEP_SEC);
+      expect(mockVideoController.currentTime).toBe(3 * MOVIE_SEEK_STEP_SEC);
       expect(sent(socket)).toEqual([]);
 
       await act(async () => {
         await vi.advanceTimersByTimeAsync(WATCH_ROOM_SEEK_COALESCE_MS);
       });
       expect(sent(socket)).toEqual([
-        { type: "seek", position_sec: 3 * WATCH_ROOM_SEEK_STEP_SEC },
+        { type: "seek", position_sec: 3 * MOVIE_SEEK_STEP_SEC },
       ]);
     });
 
@@ -2000,7 +2056,7 @@ describe("WatchRoomPageContent", () => {
 
       await act(async () => {
         screen
-          .getByRole("button", { name: `Fast-forward ${WATCH_ROOM_SEEK_STEP_SEC} seconds` })
+          .getByRole("button", { name: `Fast-forward ${MOVIE_SEEK_STEP_SEC} seconds` })
           .click();
       });
       await act(async () => {
@@ -2011,7 +2067,7 @@ describe("WatchRoomPageContent", () => {
       });
 
       expect(sent(socket)).toEqual([
-        { type: "play", position_sec: WATCH_ROOM_SEEK_STEP_SEC },
+        { type: "play", position_sec: MOVIE_SEEK_STEP_SEC },
       ]);
     });
 
@@ -2393,6 +2449,182 @@ describe("WatchRoomPageContent", () => {
         expect(joinWatchRoomMock).toHaveBeenCalledTimes(2);
       });
       expect(navigateMock).not.toHaveBeenCalled();
+    });
+
+    // Pausing while a reload's new source has no metadata read its playhead,
+    // 0, and paused the whole room at the start of the film.
+    it("pauses the room where it is while a reloaded stream has not loaded", async () => {
+      const { socket } = await openRoom();
+      await act(async () =>
+        socket.emitMessage({
+          type: "playback_changed",
+          room_id: 7,
+          playback: { paused: false, position_sec: 300, updated_at: "2026-04-14T12:00:00Z" },
+        }),
+      );
+      await screen.findByRole("button", { name: "Pause playback" });
+
+      // A recovery reload: new source, nothing loaded, playhead at 0, and no
+      // pause event.
+      mockVideoController.readyState = 0;
+      mockVideoController.currentTime = 0;
+      mockVideoController.paused = true;
+      fireEvent.click(screen.getByRole("button", { name: "Pause playback" }));
+
+      const pause = sent(socket).at(-1);
+      expect(pause?.type).toBe("pause");
+      expect(pause?.position_sec).toBeGreaterThanOrEqual(300);
+      expect(pause?.position_sec).toBeLessThan(302);
+      expect(
+        await screen.findByRole("button", { name: "Play playback" }),
+      ).toBeInTheDocument();
+
+      // The new source loads: it takes the paused room position.
+      act(() => mockVideoController.setReadyState(4));
+      await waitFor(() => {
+        expect(mockVideoController.currentTime).toBe(pause?.position_sec);
+      });
+    });
+
+    it("announces the same sync twice when it happens twice", async () => {
+      const { socket } = await openRoom();
+      const playing = (position: number) => ({
+        type: "playback_changed",
+        room_id: 7,
+        playback: {
+          paused: false,
+          position_sec: position,
+          updated_at: "2026-04-14T12:00:00Z",
+        },
+      });
+      const announcerKey = () =>
+        screen
+          .getAllByTestId("live-announcer")
+          .find((node) => node.textContent === "Playing Arrival")
+          ?.getAttribute("data-announcement-key");
+
+      await act(async () => socket.emitMessage(playing(5)));
+      const first = announcerKey();
+      expect(first).toBeTruthy();
+
+      // Same words: only a new key makes the announcer speak them again.
+      await act(async () => socket.emitMessage(playing(9)));
+      expect(announcerKey()).toBeTruthy();
+      expect(announcerKey()).not.toBe(first);
+    });
+
+    // A stream reload leaves the element paused without a pause event, so the
+    // button kept saying Pause and a press on it changed nothing.
+    it("shows Play after a Pause pressed on an element that was already paused", async () => {
+      const user = userEvent.setup();
+      await openRoom();
+      await user.click(screen.getByRole("button", { name: "Play playback" }));
+      await screen.findByRole("button", { name: "Pause playback" });
+
+      mockVideoController.paused = true; // the reload, without an event
+      await user.click(screen.getByRole("button", { name: "Pause playback" }));
+
+      expect(
+        await screen.findByRole("button", { name: "Play playback" }),
+      ).toBeInTheDocument();
+    });
+
+    it("keeps backing off from a socket that opens and drops at once", async () => {
+      renderRoomPage(buildRoom({ is_owner: false }));
+      await waitFor(() => {
+        expect(FakeWebSocket.instances).toHaveLength(1);
+      });
+
+      const delays: number[] = [];
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        const socket = FakeWebSocket.instances.at(-1)!;
+        // Let it open (the microtask), then drop it straight away.
+        await act(async () => {
+          await Promise.resolve();
+        });
+        const callbacks: { reconnect?: () => void } = {};
+        const spy = vi
+          .spyOn(window, "setTimeout")
+          .mockImplementation((handler: TimerHandler, timeout?: number) => {
+            if (
+              typeof handler === "function" &&
+              typeof timeout === "number" &&
+              timeout >= 1000 &&
+              timeout < 10_000
+            ) {
+              callbacks.reconnect = handler as () => void;
+              delays.push(timeout);
+            }
+            return 1 as unknown as ReturnType<typeof window.setTimeout>;
+          });
+        try {
+          act(() => socket.serverClose());
+          act(() => callbacks.reconnect?.());
+        } finally {
+          spy.mockRestore();
+        }
+        await waitFor(() => {
+          expect(FakeWebSocket.instances).toHaveLength(attempt + 1);
+        });
+      }
+
+      expect(delays).toEqual([1000, 2000, 4000]);
+    });
+
+    it("never takes a snapshot that does not list who is here as being alone", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      useQueryMock.mockImplementation((options: { queryKey: unknown[] }) =>
+        options.queryKey[0] === AUTH_USER_KEY
+          ? {
+              data: { error: false, data: { user: { id: 2, name: "Invited Guest" } } },
+              isPending: false,
+              isError: false,
+            }
+          : {
+              data: { error: false, data: { room: buildRoom({ is_owner: false }) } },
+              isPending: false,
+              isError: false,
+            },
+      );
+      joinWatchRoomMock.mockImplementation(async (id: number) => ({
+        error: false,
+        data: { room_id: id, joined: true },
+      }));
+      renderWithQueryClient(<WatchRoomPageContent roomId={7} />);
+      await waitFor(() => {
+        expect(FakeWebSocket.instances).toHaveLength(1);
+      });
+      await act(async () => {
+        FakeWebSocket.instances[0].emitMessage({
+          type: "room_snapshot",
+          room_id: 7,
+          playback: { paused: true, position_sec: 50, updated_at: "2026-04-14T12:00:00Z" },
+          connected_user_ids: [1, 2],
+        });
+      });
+
+      await act(async () => {
+        FakeWebSocket.instances[0].serverClose();
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+      await waitFor(() => {
+        expect(FakeWebSocket.instances).toHaveLength(2);
+      });
+      const socket = FakeWebSocket.instances[1];
+      // A forgotten room again, but without the list of who is connected:
+      // others may be there, so this viewer must not overwrite the room.
+      await act(async () => {
+        socket.emitMessage({
+          type: "room_snapshot",
+          room_id: 7,
+          playback: { paused: true, position_sec: 0, updated_at: "2026-04-14T12:01:00Z" },
+        });
+      });
+
+      expect(sent(socket)).toEqual([]);
+      expect(mockVideoController.currentTime).toBe(0);
     });
   });
 });

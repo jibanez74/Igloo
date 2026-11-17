@@ -678,6 +678,7 @@ export const updateMediaWatchProgress = (
   durationSec: number,
   saveSessionId: string,
   saveSequence: number,
+  signal?: AbortSignal,
 ) =>
   apiRequest<{ watched: boolean }>(
     `${mediaApiBasePath(media)}/watch-progress`,
@@ -689,6 +690,7 @@ export const updateMediaWatchProgress = (
         save_session_id: saveSessionId,
         save_sequence: saveSequence,
       },
+      signal,
     },
   );
 

@@ -1,8 +1,9 @@
-import { type RefObject } from "react";
+import { useRef, type RefObject } from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import VolumeControl from "@/components/playback/VolumeControl";
+import { useVideoPlaybackKeyboard } from "@/hooks/useVideoPlaybackKeyboard";
 import { PLAYER_ICON_BUTTON_CLASS } from "@/lib/constants";
 
 const prefersCoarse = vi.hoisted(() => ({ value: false }));
@@ -75,6 +76,45 @@ describe("VolumeControl", () => {
     });
     expect(trigger).toHaveAttribute("aria-expanded", "false");
     expect(trigger).toHaveFocus();
+  });
+
+  it("spends Escape on the open panel, not on the player's fullscreen exit", async () => {
+    const onEscape = vi.fn();
+    function PlayerWithVolume() {
+      const containerRef = useRef<HTMLDivElement | null>(null);
+      const videoRef = useRef<HTMLVideoElement | null>(null);
+      // Registered first, as the page's shortcuts are: the panel's own
+      // listener only arrives when it opens.
+      useVideoPlaybackKeyboard({
+        containerRef,
+        videoRef,
+        fullscreenActive: true,
+        onEscape,
+      });
+      return (
+        <div ref={containerRef}>
+          <video ref={videoRef} />
+          <VolumeControl mediaRef={videoRef} />
+        </div>
+      );
+    }
+    const user = userEvent.setup();
+    render(<PlayerWithVolume />);
+
+    await user.click(screen.getByRole("button", { name: "Adjust volume" }));
+    screen.getByRole("slider").focus();
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("group", { name: "Volume controls" }),
+      ).not.toBeInTheDocument();
+    });
+    expect(onEscape).not.toHaveBeenCalled();
+
+    // With the panel closed, Escape is the player's again.
+    await user.keyboard("{Escape}");
+    expect(onEscape).toHaveBeenCalledTimes(1);
   });
 
   it("closes the minimized panel when focus leaves the control", async () => {

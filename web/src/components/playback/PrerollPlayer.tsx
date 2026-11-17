@@ -7,15 +7,20 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { usePrerollQueue } from "@/hooks/usePrerollQueue";
 import { useShortcutHints } from "@/hooks/useShortcutHints";
+import { useVideoMediaSession } from "@/hooks/useVideoMediaSession";
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer";
 import {
   MOTION_PLAYER_CHROME_PANEL_CLASS,
+  MOVIE_SEEK_STEP_SEC,
   PLAYER_ICON_BUTTON_CLASS,
   PLAYER_PRIMARY_BUTTON_CLASS,
   PREROLL_MOVIE_WARMUP_SEC,
 } from "@/lib/constants";
 import { formatTimecode } from "@/lib/format";
+import { fullscreenToggleLabel } from "@/lib/fullscreen";
+import { shouldIgnorePlayerShortcut } from "@/lib/player-shortcuts";
 import { cn } from "@/lib/utils";
+import { buildYouTubeThumbnailUrl } from "@/lib/youtube-thumb-url";
 import type { PrerollTrailer } from "@/types";
 
 type PrerollPlayerProps = {
@@ -84,6 +89,8 @@ export default function PrerollPlayer({
     duration,
     isMuted,
     error,
+    play,
+    pause,
     togglePlay,
     seekTo,
     unmute,
@@ -92,11 +99,27 @@ export default function PrerollPlayer({
     autoplay: true,
     controls: false,
     muteOnAutoplayBlocked: true,
-    onEnd: queue.handleTrailerEnded,
+    onEnd: queue.advance,
     onError: () => {
       codeErrorKeyRef.current = current?.youtube_key ?? null;
-      queue.handleTrailerError();
+      queue.advance();
     },
+  });
+
+  // The OS media controls belong to the trailer while it plays (the movie's
+  // own claim is off for the pre-roll): left to the paused music, a headset
+  // Play would resume the music over the trailer.
+  useVideoMediaSession({
+    title: current?.title ?? "Trailer",
+    artworkUrl: buildYouTubeThumbnailUrl(current?.youtube_key) || null,
+    currentTime,
+    duration,
+    playing: isPlaying,
+    seekStepSec: MOVIE_SEEK_STEP_SEC,
+    onPlay: play,
+    onPause: pause,
+    onSeek: seekTo,
+    enabled: current !== null,
   });
 
   const finish = useEffectEvent(onFinish);
@@ -127,42 +150,7 @@ export default function PrerollPlayer({
   }, [loading, done, skipButtonRef]);
 
   const handleKeyboardShortcut = useEffectEvent((event: KeyboardEvent) => {
-    if (
-      event.defaultPrevented ||
-      event.ctrlKey ||
-      event.metaKey ||
-      event.altKey
-    ) {
-      return;
-    }
-    const target = event.target;
-    if (!(target instanceof HTMLElement)) return;
-    if (
-      target.isContentEditable ||
-      target.closest('textarea, select, input:not([type="range"])')
-    ) {
-      return;
-    }
-    const sliderKeys = [
-      "ArrowLeft",
-      "ArrowRight",
-      "ArrowUp",
-      "ArrowDown",
-      "Home",
-      "End",
-    ];
-    if (
-      target.closest('input[type="range"]') &&
-      sliderKeys.includes(event.key)
-    ) {
-      return;
-    }
-    if (
-      target.closest("button, a[href]") &&
-      (event.key === " " || event.key === "Enter")
-    ) {
-      return;
-    }
+    if (shouldIgnorePlayerShortcut(event)) return;
 
     switch (event.key) {
       case " ":
@@ -174,7 +162,7 @@ export default function PrerollPlayer({
       case "n":
       case "N":
         event.preventDefault();
-        queue.skip();
+        queue.advance();
         break;
       case "s":
       case "S":
@@ -215,11 +203,11 @@ export default function PrerollPlayer({
     skipButtonRef.current?.focus({ preventScroll: true });
   };
 
-  const fullscreenLabel = chromeFullscreenMode
-    ? isImmersiveViewport && !isFullscreen
-      ? "Exit expanded view"
-      : "Exit fullscreen"
-    : "Fullscreen";
+  const fullscreenLabel = fullscreenToggleLabel({
+    chromeFullscreenMode,
+    isFullscreen,
+    isImmersiveViewport,
+  });
 
   return (
     // The layer sits on the player's fullscreen click-to-toggle surface; a
@@ -266,7 +254,8 @@ export default function PrerollPlayer({
         ) : null}
         {current ? (
           <div className="relative aspect-video max-h-full w-full max-w-6xl bg-black">
-            <div ref={containerRef} className="size-full" />
+            {/* Inert: the embed's iframe is not a Tab stop (see trailer.tsx). */}
+            <div ref={containerRef} className="size-full" inert />
             {!isReady ? (
               <div
                 role="status"
@@ -376,7 +365,7 @@ export default function PrerollPlayer({
                   ref={skipButtonRef}
                   variant="outline"
                   size="sm"
-                  onClick={queue.skip}
+                  onClick={queue.advance}
                   aria-label={withShortcut("Skip trailer", "N")}
                 >
                   Skip trailer

@@ -32,6 +32,25 @@ type VolumeAction = {
   isMuted: boolean;
 };
 
+/**
+ * The speaker for a volume level from 0 to 1: crossed out when silent, then
+ * one, two or three waves. Shared by every volume control.
+ */
+export function VolumeLevelIcon({
+  level,
+  muted,
+  className,
+}: {
+  level: number;
+  muted: boolean;
+  className?: string;
+}) {
+  if (muted || level === 0) return <VolumeX className={className} aria-hidden="true" />;
+  if (level < 0.3) return <Volume className={className} aria-hidden="true" />;
+  if (level < 0.7) return <Volume1 className={className} aria-hidden="true" />;
+  return <Volume2 className={className} aria-hidden="true" />;
+}
+
 const initialVolumeState: VolumeState = {
   volume: 1,
   isMuted: false,
@@ -116,14 +135,9 @@ export default function VolumeControl({
     }
   };
 
-  const iconClassName = "size-5";
-
-  const getVolumeIcon = () => {
-    if (isMuted || volume === 0) return <VolumeX className={iconClassName} />;
-    if (volume < 0.3) return <Volume className={iconClassName} />;
-    if (volume < 0.7) return <Volume1 className={iconClassName} />;
-    return <Volume2 className={iconClassName} />;
-  };
+  const getVolumeIcon = () => (
+    <VolumeLevelIcon level={volume} muted={isMuted} className="size-5" />
+  );
 
   const closeMinimizedPanel = useEffectEvent((focusTrigger?: boolean) => {
     setIsMinimizedPanelOpen(false);
@@ -159,12 +173,15 @@ export default function VolumeControl({
 
     document.addEventListener("pointerdown", handleDocumentPointerDown);
     document.addEventListener("focusin", handleDocumentFocusIn);
-    document.addEventListener("keydown", handleDocumentKeyDown);
+    // Capture phase: the open panel's Escape is spent here, before the page's
+    // playback shortcuts (bubble-phase document listeners registered earlier)
+    // see it and also leave fullscreen or the expanded view.
+    document.addEventListener("keydown", handleDocumentKeyDown, true);
 
     return () => {
       document.removeEventListener("pointerdown", handleDocumentPointerDown);
       document.removeEventListener("focusin", handleDocumentFocusIn);
-      document.removeEventListener("keydown", handleDocumentKeyDown);
+      document.removeEventListener("keydown", handleDocumentKeyDown, true);
     };
   }, [isExpanded, isMinimizedPanelOpen]);
 

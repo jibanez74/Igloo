@@ -671,6 +671,45 @@ describe("useVideoPlaybackData", () => {
     });
   });
 
+  it("keeps playing on loaded technical details when a background refetch fails", async () => {
+    const movieId = 94;
+    const queryClient = createTestQueryClient();
+    seedSettledPlaybackPreferences(queryClient);
+    seedPreferenceResolutionMovie(queryClient, movieId);
+
+    const { result } = renderHook(
+      () =>
+        useVideoPlaybackData({
+          media: movieMediaRef(movieId),
+          search: { mode: "direct", audio_track: 0, subtitle_track: "off", start: 0 },
+          streamReloadKey: 0,
+          playbackSessionId,
+          onSyncSearch: vi.fn(),
+        }),
+      { wrapper: queryClientWrapper(queryClient) },
+    );
+    expect(playbackStatus(result.current, "direct")).toEqual({ kind: "ready" });
+    const streamUrl = result.current.streamUrl;
+
+    // A window-focus refetch while the server restarts caches the failure.
+    await act(async () => {
+      queryClient.setQueryData([MOVIE_TECHNICAL_DETAILS_KEY, movieId], {
+        error: true,
+        message: "Technical details unavailable",
+      });
+      queryClient.setQueryData([PLAYBACK_SETTINGS_KEY], {
+        error: true,
+        message: "Server unavailable",
+      });
+      // React Query notifies observers on a macrotask.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(result.current.techError).toBeNull();
+    expect(playbackStatus(result.current, "direct")).toEqual({ kind: "ready" });
+    expect(result.current.streamUrl).toBe(streamUrl);
+  });
+
   it("keeps cold direct playback preparing until technical details resolve", async () => {
     const movieId = 93;
     const queryClient = createTestQueryClient();

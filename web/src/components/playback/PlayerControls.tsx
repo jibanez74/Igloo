@@ -20,6 +20,7 @@ import {
   MOTION_PLAYER_CHROME_PANEL_CLASS,
 } from "@/lib/constants";
 import { formatTimecode } from "@/lib/format";
+import { fullscreenToggleLabel } from "@/lib/fullscreen";
 import { cn } from "@/lib/utils";
 import type { PlaybackChapterType } from "@/types";
 
@@ -64,13 +65,11 @@ export default function PlayerControls({
 }: PlayerControlsProps) {
   const { withShortcut } = useShortcutHints();
 
-  const exitFullscreenLabel =
-    isImmersiveViewport && !isFullscreen
-      ? "Exit expanded view"
-      : "Exit fullscreen";
-  const fullscreenLabel = chromeFullscreenMode
-    ? exitFullscreenLabel
-    : "Fullscreen";
+  const fullscreenLabel = fullscreenToggleLabel({
+    chromeFullscreenMode,
+    isFullscreen,
+    isImmersiveViewport,
+  });
 
   return (
     <footer
