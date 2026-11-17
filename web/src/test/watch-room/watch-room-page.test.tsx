@@ -376,6 +376,13 @@ describe("WatchRoomPageContent", () => {
     joinWatchRoomMock.mockReset();
     deleteWatchRoomMock.mockReset();
     getWatchRoomMock.mockReset();
+    // Any test that reconnects re-reads the room: answer as the real helper
+    // does when it fails, so the page keeps what it has.
+    getWatchRoomMock.mockResolvedValue({
+      error: true,
+      status: 500,
+      message: "getWatchRoom is not mocked in this test",
+    });
     showActionFailedMock.mockReset();
     showInfoMock.mockReset();
     showSuccessMock.mockReset();
