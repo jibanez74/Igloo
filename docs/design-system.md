@@ -1738,7 +1738,8 @@ require the full playback test pass.
   since it is stale. Its "Back home" on an unavailable room is the status
   screens' `xl` call to action. In a room the **player card** (video plus
   transport row), not the page, is what goes fullscreen or into the expanded
-  view: it fills the screen exactly, square-cornered and borderless on
+  view (where the browser lacks element fullscreen, never the video's own
+  video-only fullscreen, which would hide the room's controls): it fills the screen exactly, square-cornered and borderless on
   `bg-background`, with the video taking what the transport row leaves, so
   Exit stays on screen. The header and the people column stay behind, and
   the header is `inert` meanwhile so focus cannot reach it under the card;

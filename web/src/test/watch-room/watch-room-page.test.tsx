@@ -1350,6 +1350,42 @@ describe("WatchRoomPageContent", () => {
     expect(header).not.toHaveAttribute("inert");
   });
 
+  // iPhone Safari has no element fullscreen but can take a <video> fullscreen
+  // on its own, which would hide the room's controls and its warnings.
+  it("never hands fullscreen to the video's own WebKit fullscreen", async () => {
+    mockVideoController.readyState = 3;
+    const user = userEvent.setup();
+    renderRoomPage(buildRoom({ is_owner: true }));
+    await waitFor(() => {
+      expect(joinWatchRoomMock).toHaveBeenCalledWith(7);
+    });
+
+    const video = screen.getByTestId("video-player");
+    const player = video.closest("section")!;
+    const webkitEnterFullscreen = vi.fn();
+    Object.defineProperty(video, "webkitEnterFullscreen", {
+      configurable: true,
+      value: webkitEnterFullscreen,
+    });
+
+    await user.click(screen.getByRole("button", { name: "Fullscreen" }));
+    expect(player).toHaveClass("fixed", "inset-0");
+    await user.click(screen.getByRole("button", { name: "Exit expanded view" }));
+    expect(player).not.toHaveClass("fixed");
+
+    const press = new KeyboardEvent("keydown", {
+      key: "f",
+      bubbles: true,
+      cancelable: true,
+    });
+    document.body.dispatchEvent(press);
+    await waitFor(() => {
+      expect(player).toHaveClass("fixed", "inset-0");
+    });
+
+    expect(webkitEnterFullscreen).not.toHaveBeenCalled();
+  });
+
   it("redirects only once for owner-initiated deletion", async () => {
     deleteWatchRoomMock.mockResolvedValue({
       error: false,

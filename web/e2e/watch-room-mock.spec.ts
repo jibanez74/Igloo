@@ -229,9 +229,10 @@ test.describe("Watch rooms", () => {
     const layout = await page.evaluate(() => {
       const fullscreen = document.fullscreenElement;
       const video = document.querySelector("video")!.getBoundingClientRect();
-      const button = document
-        .querySelector('button[aria-label="Exit fullscreen"]')!
-        .getBoundingClientRect();
+      const exitButton = document.querySelector('button[aria-label="Exit fullscreen"]')!;
+      const button = exitButton.getBoundingClientRect();
+      // The transport row is the bordered block under the video that holds Exit.
+      const transport = exitButton.closest(".border-t")!.getBoundingClientRect();
       return {
         tag: fullscreen?.tagName ?? null,
         holdsVideo: !!fullscreen?.querySelector("video"),
@@ -239,6 +240,9 @@ test.describe("Watch rooms", () => {
         holdsHeading: !!fullscreen?.querySelector("h1"),
         videoLeft: video.left,
         videoWidth: video.width,
+        videoTop: video.top,
+        videoBottom: video.bottom,
+        transportTop: transport.top,
         exitBottom: button.bottom,
         innerWidth: window.innerWidth,
         innerHeight: window.innerHeight,
@@ -251,7 +255,11 @@ test.describe("Watch rooms", () => {
       holdsHeading: false,
       videoLeft: 0,
       videoWidth: layout.innerWidth,
+      videoTop: 0,
     });
+    // The video takes all the height the transport row leaves it.
+    expect(layout.videoBottom).toBeGreaterThan(layout.innerHeight / 2);
+    expect(Math.abs(layout.transportTop - layout.videoBottom)).toBeLessThanOrEqual(1);
     expect(layout.exitBottom).toBeLessThanOrEqual(layout.innerHeight);
 
     await exit.click();

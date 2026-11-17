@@ -108,6 +108,11 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
     toggleFullscreen,
     exitFullscreenIfActive,
   } = useVideoFullscreen({ containerRef: playerRef, videoRef });
+  // Never the video's own WebKit fullscreen: it would hide the room's
+  // transport row and its reconnecting warning, so a browser without element
+  // fullscreen gets the expanded player card instead.
+  const togglePlayerFullscreen = () =>
+    void toggleFullscreen({ videoFallback: false });
 
   const queryClient = useQueryClient();
   const { data, isPending, isError } = useQuery(watchRoomQueryOpts(roomId));
@@ -322,7 +327,7 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
     onSeekBackward: seekBackward,
     onSeekForward: seekForward,
     onSeekToStart: () => seek(0),
-    onToggleFullscreen: () => void toggleFullscreen(),
+    onToggleFullscreen: togglePlayerFullscreen,
     onEscape: exitFullscreenIfActive,
   });
   const { showShortcutHints } = useShortcutHints();
@@ -440,7 +445,7 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
             onSeekBackward={seekBackward}
             onSeekForward={seekForward}
             onTogglePlay={() => void togglePlay()}
-            onToggleFullscreen={() => void toggleFullscreen()}
+            onToggleFullscreen={togglePlayerFullscreen}
           />
 
           {!playerFullscreenMode ? (
