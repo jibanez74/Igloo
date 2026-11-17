@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { Tv } from "lucide-react";
 import VideoPlaybackPage from "@/components/playback/VideoPlaybackPage";
+import { useLastSuccess } from "@/hooks/useLastSuccess";
 import { TMDB_BACKDROP_SIZE, TMDB_POSTER_SIZE, TMDB_STILL_SIZE } from "@/lib/constants";
 import { episodeUpNextPresentation } from "@/lib/episode-playback";
 import { episodeTitle } from "@/lib/format";
@@ -85,9 +86,10 @@ function PlayEpisodePage() {
   const parsedId = parseRouteId(episodeIdParam);
   const episodeId = parsedId ?? 0;
 
-  const { data, isPending, isError } = useQuery(
-    showEpisodeQueryOpts(episodeId),
-  );
+  const episodeQuery = useQuery(showEpisodeQueryOpts(episodeId));
+  const { isPending, isError } = episodeQuery;
+  // A failed background refetch must not turn a playing episode "not found".
+  const data = useLastSuccess(episodeQuery.data);
   const payload = data && !data.error ? data.data : null;
   const notFound =
     parsedId === null || Boolean(isError || (data && data.error));

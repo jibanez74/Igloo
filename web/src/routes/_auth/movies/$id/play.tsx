@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { Film } from "lucide-react";
 import VideoPlaybackPage from "@/components/playback/VideoPlaybackPage";
+import { useLastSuccess } from "@/hooks/useLastSuccess";
 import { TMDB_BACKDROP_SIZE, TMDB_POSTER_SIZE } from "@/lib/constants";
 import { movieMediaRef } from "@/lib/media-ref";
 import { unwrapFloatOrUndefined, unwrapString } from "@/lib/nullable";
@@ -73,9 +74,10 @@ function PlayMoviePage() {
   const parsedId = parseRouteId(id);
   const movieId = parsedId ?? 0;
 
-  const { data, isPending, isError } = useQuery(
-    libraryMovieDetailsQueryOpts(movieId),
-  );
+  const detailsQuery = useQuery(libraryMovieDetailsQueryOpts(movieId));
+  const { isPending, isError } = detailsQuery;
+  // A failed background refetch must not turn a playing movie "not found".
+  const data = useLastSuccess(detailsQuery.data);
   const movie = data && !data.error ? data.data?.movie : null;
   const notFound =
     parsedId === null ||
