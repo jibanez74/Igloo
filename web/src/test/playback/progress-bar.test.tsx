@@ -358,6 +358,17 @@ describe("ProgressBar", () => {
     expect(slider.value).toBe("102");
   });
 
+  it("renders a NaN playhead without looping", () => {
+    const { rerender } = render(
+      <ProgressBar currentTime={NaN} duration={NaN} onSeek={vi.fn()} variant="video" />,
+    );
+    rerender(
+      <ProgressBar currentTime={NaN} duration={NaN} onSeek={vi.fn()} variant="video" />,
+    );
+
+    expect(screen.getByRole("slider")).toHaveAttribute("aria-disabled", "true");
+  });
+
   it("drops a pending scrub value when resetKey changes", () => {
     const onSeek = vi.fn();
 

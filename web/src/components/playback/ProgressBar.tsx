@@ -119,7 +119,9 @@ export default function ProgressBar({
   const [scrubTime, setScrubTime] = useState<number | null>(null);
   const [pointerScrubbing, setPointerScrubbing] = useState(false);
   const [prevCurrentTime, setPrevCurrentTime] = useState(currentTime);
-  if (currentTime !== prevCurrentTime) {
+  // Object.is: a NaN playhead (no metadata yet) must not count as a change on
+  // every render, or this adjustment re-renders forever.
+  if (!Object.is(currentTime, prevCurrentTime)) {
     setPrevCurrentTime(currentTime);
     if (!pointerScrubbing && scrubTime !== null) setScrubTime(null);
   }
