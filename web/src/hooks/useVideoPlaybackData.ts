@@ -77,16 +77,16 @@ export function useVideoPlaybackData({
   // mode and restart the stream.
   const techQuery = useQuery(mediaTechnicalDetailsQueryOpts(media));
   const { isPending: techPending, refetch: refetchTech } = techQuery;
-  const techData = useLastSuccess(techQuery.data);
+  const techData = useLastSuccess(techQuery.data, mediaKey(media));
   const { data: watchProgressData, isPending: watchProgressPending } = useQuery(
     mediaWatchProgressQueryOpts(media),
   );
   const authUserQuery = useQuery(authUserQueryOpts());
   const authUserPending = authUserQuery.isPending;
-  const user = authUserFrom(useLastSuccess(authUserQuery.data));
+  const user = authUserFrom(useLastSuccess(authUserQuery.data, "auth"));
   const playbackSettingsQuery = useQuery(playbackSettingsQueryOpts());
   const playbackSettingsPending = playbackSettingsQuery.isPending;
-  const playbackSettingsData = useLastSuccess(playbackSettingsQuery.data);
+  const playbackSettingsData = useLastSuccess(playbackSettingsQuery.data, "settings");
   const serverPlaybackSettings =
     playbackSettingsFromResponse(playbackSettingsData);
   const devicePrefs = useDevicePlaybackPreferences(user?.id ?? 0);

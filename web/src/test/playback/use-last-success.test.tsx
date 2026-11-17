@@ -12,7 +12,7 @@ const failure: Envelope = { error: true, message: "Server unavailable" };
 describe("useLastSuccess", () => {
   it("passes a failure through before anything has loaded", () => {
     const { result, rerender } = renderHook(
-      ({ data }: { data: Envelope | undefined }) => useLastSuccess(data),
+      ({ data, key = 1 }: { data: Envelope | undefined; key?: number }) => useLastSuccess(data, key),
       { initialProps: { data: undefined as Envelope | undefined } },
     );
     expect(result.current).toBeUndefined();
@@ -21,11 +21,29 @@ describe("useLastSuccess", () => {
     expect(result.current).toBe(failure);
   });
 
+  it("never lends one item's success to the next item's failure", () => {
+    const episodeOne = success("Episode 1");
+    const { result, rerender } = renderHook(
+      ({ data, key }: { data: Envelope | undefined; key: number }) =>
+        useLastSuccess(data, key),
+      { initialProps: { data: episodeOne, key: 1 } },
+    );
+
+    // The up-next hand-off moves the route to episode 2, whose first load fails.
+    rerender({ data: failure, key: 2 });
+    expect(result.current).toBe(failure);
+
+    const episodeTwo = success("Episode 2");
+    rerender({ data: episodeTwo, key: 2 });
+    rerender({ data: failure, key: 2 });
+    expect(result.current).toBe(episodeTwo);
+  });
+
   it("keeps the latest success through a failure that follows it", () => {
     const first = success("First");
     const second = success("Second");
     const { result, rerender } = renderHook(
-      ({ data }: { data: Envelope | undefined }) => useLastSuccess(data),
+      ({ data, key = 1 }: { data: Envelope | undefined; key?: number }) => useLastSuccess(data, key),
       { initialProps: { data: first } },
     );
 

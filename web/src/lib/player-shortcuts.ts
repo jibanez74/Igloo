@@ -12,7 +12,18 @@ const SLIDER_KEYS: ReadonlySet<string> = new Set([
 
 const TEXT_ENTRY_SELECTOR = 'textarea, select, input:not([type="range"])';
 const SLIDER_SELECTOR = 'input[type="range"], [role="slider"]';
-const ACTIVATABLE_SELECTOR = 'button, a[href], [role="button"]';
+const ACTIVATABLE_SELECTOR = [
+  "button",
+  "a[href]",
+  "summary",
+  '[role="button"]',
+  '[role="checkbox"]',
+  '[role="menuitem"]',
+  '[role="option"]',
+  '[role="radio"]',
+  '[role="switch"]',
+  '[role="tab"]',
+].join(", ");
 
 /**
  * Whether a keydown belongs to the focused control rather than to a video
@@ -20,7 +31,7 @@ const ACTIVATABLE_SELECTOR = 'button, a[href], [role="button"]';
  * - anything that takes typing owns every key;
  * - a slider (seek, volume) owns only the keys it moves by, so Space still
  *   plays and pauses after a drag left focus on it;
- * - a button or link owns Space and Enter, which activate it;
+ * - a button, link or other activatable control owns Space and Enter;
  * - a key with Ctrl, Cmd or Alt is the browser's or the OS's, and a key a
  *   widget already handled (a menu, a dialog) is spent.
  */

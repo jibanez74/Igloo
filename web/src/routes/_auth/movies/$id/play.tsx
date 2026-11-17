@@ -78,7 +78,7 @@ function PlayMoviePage() {
   const detailsQuery = useQuery(libraryMovieDetailsQueryOpts(movieId));
   const { isPending, isError } = detailsQuery;
   // A failed background refetch must not turn a playing movie "not found".
-  const data = useLastSuccess(detailsQuery.data);
+  const data = useLastSuccess(detailsQuery.data, movieId);
   const movie = data && !data.error ? data.data?.movie : null;
   const notFound =
     parsedId === null ||

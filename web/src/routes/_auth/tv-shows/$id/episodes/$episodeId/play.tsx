@@ -90,7 +90,7 @@ function PlayEpisodePage() {
   const episodeQuery = useQuery(showEpisodeQueryOpts(episodeId));
   const { isPending, isError } = episodeQuery;
   // A failed background refetch must not turn a playing episode "not found".
-  const data = useLastSuccess(episodeQuery.data);
+  const data = useLastSuccess(episodeQuery.data, episodeId);
   const payload = data && !data.error ? data.data : null;
   const notFound =
     parsedId === null || Boolean(isError || (data && data.error));
