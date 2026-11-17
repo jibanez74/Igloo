@@ -810,6 +810,19 @@ export function moviePlaylistMoviesQueryOpts(
 }
 
 // ============================================================================
+// People (cast and crew, with their credits in the libraries)
+// ============================================================================
+
+export function personQueryOpts(id: number) {
+  return queryOptions({
+    queryKey: [PERSON_KEY, id],
+    queryFn: ({ signal }) => getPerson(id, signal),
+    enabled: id > 0,
+    staleTime: freshFor(STALE_CATALOG),
+  });
+}
+
+// ============================================================================
 // Settings
 // ============================================================================
 
@@ -1001,42 +1014,31 @@ export function watchRoomInviteUsersQueryOpts(enabled: boolean = true) {
 }
 
 // ============================================================================
-// Library scan status. Unlike the queries above these throw on a failure
-// envelope, so a failed poll is a query error rather than cached data.
+// Library scan status. Unlike the queries above these throw a failure envelope
+// (ApiFailureError), so a failed poll is a query error that keeps the last
+// report on screen rather than cached data that replaces it.
 // ============================================================================
 
-const scanStatusQueryOpts = <T extends Record<string, unknown>,>(
+function scanStatusQueryOpts<T extends Record<string, unknown>>(
   key: string,
   fetchStatus: (signal?: AbortSignal) => Promise<ApiResponseType<T>>,
-  unavailableMessage: string,
-) => queryOptions({
-  queryKey: [key],
-  queryFn: async ({ signal }) => {
-    const response = await fetchStatus(signal);
-    if (response.error) {
-      throw new Error(response.message || unavailableMessage);
-    }
-    return response.data;
-  },
-  retry: false,
-});
-
-export type ScanStatusQueryOpts<T extends Record<string, unknown>> = ReturnType<typeof scanStatusQueryOpts<T>>;
-
-export const movieScanStatusQueryOpts = () =>
-  scanStatusQueryOpts(MOVIE_SCAN_STATUS_KEY, getMovieScanStatus, "Movie scan status is unavailable.");
-
-export const musicScanStatusQueryOpts = () =>
-  scanStatusQueryOpts(MUSIC_SCAN_STATUS_KEY, getMusicScanStatus, "Music scan status is unavailable.");
-
-export const showScanStatusQueryOpts = () =>
-  scanStatusQueryOpts(SHOW_SCAN_STATUS_KEY, getShowScanStatus, "TV shows scan status is unavailable.");
-
-export function personQueryOpts(id: number) {
+) {
   return queryOptions({
-    queryKey: [PERSON_KEY, id],
-    queryFn: ({ signal }) => getPerson(id, signal),
-    enabled: id > 0,
-    staleTime: freshFor(STALE_CATALOG),
+    queryKey: [key],
+    queryFn: async ({ signal }) => unwrapApiData(await fetchStatus(signal)),
+    retry: false,
   });
 }
+
+export type ScanStatusQueryOpts<T extends Record<string, unknown>> = ReturnType<
+  typeof scanStatusQueryOpts<T>
+>;
+
+export const movieScanStatusQueryOpts = () =>
+  scanStatusQueryOpts(MOVIE_SCAN_STATUS_KEY, getMovieScanStatus);
+
+export const musicScanStatusQueryOpts = () =>
+  scanStatusQueryOpts(MUSIC_SCAN_STATUS_KEY, getMusicScanStatus);
+
+export const showScanStatusQueryOpts = () =>
+  scanStatusQueryOpts(SHOW_SCAN_STATUS_KEY, getShowScanStatus);

@@ -91,15 +91,6 @@ import type {
   MoviePrerollData,
   SortOrder,
 } from "@/types";
-import {
-  ALBUMS_PER_PAGE,
-  LIKED_TRACKS_PER_PAGE,
-  MOVIES_PER_PAGE,
-  SHOWS_PER_PAGE,
-  MUSICIANS_PER_PAGE,
-  SEARCH_PER_PAGE,
-  SHUFFLE_TRACKS_LIMIT,
-} from "@/lib/constants";
 
 // ============================================================================
 // Request handling (shared)
@@ -121,6 +112,7 @@ type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 type ApiRequestOptions = {
   method?: HttpMethod;
+  /** Sent as JSON, or as multipart form data when it is a FormData. */
   body?: unknown;
   /**
    * Aborting resolves the usual network-failure envelope; it never throws.
@@ -136,6 +128,8 @@ type ApiRequestOptions = {
    * session, which onSessionExpired reports.
    */
   handlesUnauthorized?: boolean;
+  /** The failure message when the response is not an API envelope. */
+  failedMessage?: string;
 };
 
 const sessionExpiredListeners = new Set<() => void>();
@@ -178,21 +172,43 @@ function withQuery(path: string, params: Record<string, string | number | boolea
   return `${path}?${query}`;
 }
 
-/** One page of a paged list: `page`/`per_page`, plus `sort` where the list takes one. */
+/**
+ * One page of a paged list: `page`/`per_page`, plus `sort` where the list
+ * takes one and any other `params` it filters by.
+ */
 function getPage<T extends Record<string, unknown>>(
   path: string,
   page: number,
   perPage: number,
-  { sort, signal }: { sort?: SortOrder; signal?: AbortSignal } = {},
+  {
+    sort,
+    params = {},
+    signal,
+  }: {
+    sort?: SortOrder;
+    params?: Record<string, string>;
+    signal?: AbortSignal;
+  } = {},
 ) {
   return apiRequest<T>(
     withQuery(path, {
+      ...params,
       page,
       per_page: perPage,
       ...(sort === undefined ? {} : { sort }),
     }),
     { signal },
   );
+}
+
+/** One slice of a list paged by `limit`/`offset` (the infinite track lists). */
+function getOffsetPage<T extends Record<string, unknown>>(
+  path: string,
+  limit: number,
+  offset: number,
+  signal?: AbortSignal,
+) {
+  return apiRequest<T>(withQuery(path, { limit, offset }), { signal });
 }
 
 /**
@@ -203,7 +219,16 @@ async function apiRequest<T extends Record<string, unknown>>(
   endpoint: string,
   options: ApiRequestOptions = {},
 ): Promise<ApiResponseType<T>> {
-  const { method = "GET", body, signal, handlesUnauthorized = false } = options;
+  const {
+    method = "GET",
+    body,
+    signal,
+    handlesUnauthorized = false,
+    failedMessage = "The request could not be completed.",
+  } = options;
+  // The browser writes a FormData's multipart Content-Type, boundary
+  // included, itself.
+  const formData = body instanceof FormData;
 
   const session = sessionStamp();
   let res: Response;
@@ -211,8 +236,8 @@ async function apiRequest<T extends Record<string, unknown>>(
     res = await fetch(endpoint, {
       method,
       credentials: "include",
-      headers: body ? { "Content-Type": "application/json" } : undefined,
-      body: body ? JSON.stringify(body) : undefined,
+      headers: body && !formData ? { "Content-Type": "application/json" } : undefined,
+      body: formData ? body : body ? JSON.stringify(body) : undefined,
       signal,
     });
   } catch (err) {
@@ -231,7 +256,7 @@ async function apiRequest<T extends Record<string, unknown>>(
     return ERROR_NOTFOUND;
   }
 
-  return readEnvelope<T>(res, endpoint, "The request could not be completed.");
+  return readEnvelope<T>(res, endpoint, failedMessage);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -369,7 +394,9 @@ export const updateUserPin = (pin: string, currentPin?: string) =>
     method: "PUT",
     body:
       currentPin === undefined ? { pin } : { pin, current_pin: currentPin },
-    handlesUnauthorized: true,
+    // Only a wrong current PIN is the caller's 401; setting a first PIN sends
+    // none, so a 401 there means the session ended.
+    handlesUnauthorized: currentPin !== undefined,
   });
 
 export const updateUserAvatar = (avatar: string) =>
@@ -378,38 +405,15 @@ export const updateUserAvatar = (avatar: string) =>
     body: { avatar },
   });
 
-// Bypasses apiRequest because it sends multipart FormData rather than JSON, but
-// returns the same failure shape (NETWORK_ERROR) on a fetch rejection.
-export const uploadUserAvatar = async (
-  file: File,
-): Promise<ApiResponseType<{ user: AuthUser }>> => {
+export const uploadUserAvatar = (file: File) => {
   const formData = new FormData();
   formData.append("avatar", file);
 
-  const session = sessionStamp();
-  try {
-    const response = await fetch("/api/user/avatar/upload", {
-      method: "POST",
-      body: formData,
-      credentials: "include",
-    });
-
-    if (response.status === 401) {
-      notifySessionExpired(session);
-    }
-
-    if (response.status === 404) {
-      return ERROR_NOTFOUND;
-    }
-
-    return await readEnvelope<{ user: AuthUser }>(
-      response,
-      "/api/user/avatar/upload",
-      "The avatar could not be uploaded.",
-    );
-  } catch {
-    return NETWORK_ERROR;
-  }
+  return apiRequest<{ user: AuthUser }>("/api/user/avatar/upload", {
+    method: "POST",
+    body: formData,
+    failedMessage: "The avatar could not be uploaded.",
+  });
 };
 
 export const deleteUserAccount = () =>
@@ -488,8 +492,8 @@ export const getShowEpisodeTechnicalDetails = (
 
 export const getShowsLibrary = (
   page: number,
-  perPage: number = SHOWS_PER_PAGE,
-  sort: SortOrder = "asc",
+  perPage: number,
+  sort: SortOrder,
   signal?: AbortSignal,
 ) =>
   getPage<ShowsLibraryDataType>(
@@ -505,8 +509,8 @@ export const getShowGenresWithCounts = (signal?: AbortSignal) =>
 export const getShowsByGenre = (
   genreId: number,
   page: number,
-  perPage: number = SHOWS_PER_PAGE,
-  sort: SortOrder = "asc",
+  perPage: number,
+  sort: SortOrder,
   signal?: AbortSignal,
 ) =>
   getPage<ShowsLibraryDataType>(
@@ -600,8 +604,8 @@ export const deleteMovie = (movieId: number, deleteFile: boolean) =>
 
 export const getMoviesLibrary = (
   page: number,
-  perPage: number = MOVIES_PER_PAGE,
-  sort: SortOrder = "asc",
+  perPage: number,
+  sort: SortOrder,
   signal?: AbortSignal,
 ) =>
   getPage<MoviesLibraryPaginatedDataType>(
@@ -620,8 +624,8 @@ export const getMovieGenresWithCounts = (signal?: AbortSignal) =>
 export const getMoviesByGenre = (
   genreId: number,
   page: number,
-  perPage: number = MOVIES_PER_PAGE,
-  sort: SortOrder = "asc",
+  perPage: number,
+  sort: SortOrder,
   signal?: AbortSignal,
 ) =>
   getPage<MoviesLibraryPaginatedDataType>(
@@ -636,8 +640,8 @@ export const getMoviesStats = (signal?: AbortSignal) =>
 
 export const getLikedMovies = (
   page: number,
-  perPage: number = MOVIES_PER_PAGE,
-  sort: SortOrder = "asc",
+  perPage: number,
+  sort: SortOrder,
   signal?: AbortSignal,
 ) =>
   getPage<MoviesLibraryPaginatedDataType>(
@@ -729,7 +733,7 @@ export const deleteAlbum = (id: number) =>
 
 export const getAlbumsPaginated = (
   page: number,
-  perPage: number = ALBUMS_PER_PAGE,
+  perPage: number,
   signal?: AbortSignal,
 ) =>
   getPage<AlbumsListResponseType>(
@@ -744,16 +748,13 @@ export const getTracksPaginated = (
   offset: number,
   signal?: AbortSignal,
 ) =>
-  apiRequest<TracksListResponseType>(
-    withQuery("/api/music/tracks", { limit, offset }),
-    { signal },
-  );
+  getOffsetPage<TracksListResponseType>("/api/music/tracks", limit, offset, signal);
 
 // excludeTrackIds tells the server what the caller already holds so the random
 // sample is drawn around it. Sent comma-separated rather than as repeated
 // params - the server accepts either and one entry keeps the URL short.
 export const getShuffleTracks = (
-  limit: number = SHUFFLE_TRACKS_LIMIT,
+  limit: number,
   excludeTrackIds: number[] = [],
 ) =>
   apiRequest<ShuffleTracksResponseType>(
@@ -773,7 +774,7 @@ export const toggleLikeTrack = (trackId: number) =>
 
 export const getLikedTracks = (
   page: number,
-  perPage: number = LIKED_TRACKS_PER_PAGE,
+  perPage: number,
   signal?: AbortSignal,
 ) =>
   getPage<LikedTracksResponseType>(
@@ -791,7 +792,7 @@ export const getLikedTrackIds = (signal?: AbortSignal) =>
 
 export const getMusiciansPaginated = (
   page: number,
-  perPage: number = MUSICIANS_PER_PAGE,
+  perPage: number,
   signal?: AbortSignal,
 ) =>
   getPage<MusiciansListResponseType>(
@@ -843,9 +844,11 @@ export const getPlaylistTracks = (
   offset: number,
   signal?: AbortSignal,
 ) =>
-  apiRequest<PlaylistTracksResponseType>(
-    withQuery(`/api/music/playlists/${id}/tracks`, { limit, offset }),
-    { signal },
+  getOffsetPage<PlaylistTracksResponseType>(
+    `/api/music/playlists/${id}/tracks`,
+    limit,
+    offset,
+    signal,
   );
 
 export const createPlaylist = (data: CreatePlaylistRequest) =>
@@ -907,8 +910,8 @@ export const getMoviePlaylistDetails = (id: number, signal?: AbortSignal) =>
 export const getMoviePlaylistMovies = (
   playlistId: number,
   page: number,
-  perPage: number = MOVIES_PER_PAGE,
-  sort: SortOrder = "asc",
+  perPage: number,
+  sort: SortOrder,
   signal?: AbortSignal,
 ) =>
   getPage<MoviesLibraryPaginatedDataType>(
@@ -1089,17 +1092,13 @@ export const searchCategory = <K extends PagedSearchTab>(
   kind: K,
   q: string,
   page: number,
-  perPage: number = SEARCH_PER_PAGE,
+  perPage: number,
   signal?: AbortSignal,
 ) =>
-  apiRequest<SearchCategoryData[K]>(
-    withQuery(`/api/search/${kind}`, {
-      q,
-      page,
-      per_page: perPage,
-    }),
-    { signal },
-  );
+  getPage<SearchCategoryData[K]>(`/api/search/${kind}`, page, perPage, {
+    params: { q },
+    signal,
+  });
 
 // ============================================================================
 // Watch rooms

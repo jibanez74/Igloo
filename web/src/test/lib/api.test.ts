@@ -92,6 +92,45 @@ describe("session expiry", () => {
     expect(res).toMatchObject({ error: true, status: 401 });
   });
 
+  // A first PIN sends no current one, so its 401 can only mean the session
+  // ended.
+  it("reports a 401 from setting a first PIN", async () => {
+    answerEveryRequest(() => jsonResponse(NOT_AUTHORIZED, 401));
+    const listener = listenForExpiry();
+
+    const res = await updateUserPin("5678");
+
+    expect(listener).toHaveBeenCalledOnce();
+    expect(res).toMatchObject({ error: true, status: 401 });
+  });
+
+  it("does not report a listener's own failure as a failed upload", async () => {
+    answerEveryRequest(() => jsonResponse(NOT_AUTHORIZED, 401));
+    unsubscribe = onSessionExpired(() => {
+      throw new Error("listener broke");
+    });
+
+    await expect(
+      uploadUserAvatar(new File(["avatar"], "avatar.png", { type: "image/png" })),
+    ).rejects.toThrow("listener broke");
+  });
+
+  it("sends the avatar as multipart form data, not JSON", async () => {
+    const fetchMock = vi.fn(() =>
+      jsonResponse({ error: false, data: { user: {} } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const file = new File(["avatar"], "avatar.png", { type: "image/png" });
+
+    await uploadUserAvatar(file);
+
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(init.method).toBe("POST");
+    expect(init.headers).toBeUndefined();
+    expect(init.body).toBeInstanceOf(FormData);
+    expect((init.body as FormData).get("avatar")).toBe(file);
+  });
+
   it("reports a 401 from the avatar upload", async () => {
     answerEveryRequest(() => jsonResponse(NOT_AUTHORIZED, 401));
     const listener = listenForExpiry();
