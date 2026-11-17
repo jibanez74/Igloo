@@ -431,6 +431,9 @@ export function useYouTubePlayer(
 
   const handleAutoplayBlocked = useEffectEvent((event: YT.PlayerEvent) => {
     if (!options.muteOnAutoplayBlocked) return;
+    // A local write like any other, so the tick does not read it back as
+    // unmuted before the iframe reports it.
+    lastAudioWriteAtRef.current = Date.now();
     event.target.mute();
     event.target.playVideo();
     setPlayerState(previous => ({
@@ -621,7 +624,9 @@ export function useYouTubePlayer(
     player.setVolume(clampedVol);
     let nextIsMuted = currentPlayerState.isMuted;
 
-    if (clampedVol > 0 && getPlayerMuted(player)) {
+    // Muted by the hook's own state too: the getter can still answer from
+    // before a mute pressed a moment ago.
+    if (clampedVol > 0 && (currentPlayerState.isMuted || getPlayerMuted(player))) {
       player.unMute();
       nextIsMuted = false;
     }
