@@ -485,9 +485,9 @@ export function useWatchRoomConnection({
 
   // The cleanup closes the socket, which releases its listeners, and clears
   // the heartbeat interval and the reconnect and seek timeouts.
-  // react-doctor-disable-next-line react-doctor/effect-needs-cleanup
   // One room per mount: the route keys the page on the room id, so nothing
   // here carries over from another room.
+  // react-doctor-disable-next-line react-doctor/effect-needs-cleanup
   useEffect(() => {
     intentionalCloseRef.current = false;
     if (!currentRoomId) return;
@@ -658,6 +658,19 @@ export function useWatchRoomConnection({
     pendingPlaybackRef.current = null;
   };
 
+  /** Where the room is now, as far as this viewer knows; null before any state. */
+  const roomPosition = () => {
+    const snapshot = pendingPlaybackRef.current ?? roomPlaybackRef.current;
+    return snapshot ? projectedPosition(snapshot) : null;
+  };
+
+  // A pause sent before the source has loaded: the room's state (just
+  // recorded as paused) is what the source takes on once it can, even if the
+  // echo never comes back.
+  const holdPausedRoomPlayback = () => {
+    pendingPlaybackRef.current = roomPlaybackRef.current;
+  };
+
   /**
    * This viewer ended the room themselves (closed or left it): the socket's
    * own room_deleted or room_access_revoked must not end it a second time.
@@ -685,6 +698,8 @@ export function useWatchRoomConnection({
     sendPlaybackEvent,
     syncToPendingPlayback,
     clearPendingPlayback,
+    roomPosition,
+    holdPausedRoomPlayback,
     markRoomEndHandled,
   };
 }

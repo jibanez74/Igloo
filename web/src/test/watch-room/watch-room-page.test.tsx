@@ -1,4 +1,4 @@
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ComponentType } from "react";
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
@@ -2467,29 +2467,39 @@ describe("WatchRoomPageContent", () => {
       expect(navigateMock).not.toHaveBeenCalled();
     });
 
-    // A refetch that fails (a window focus while the server restarts) caches
-    // its error envelope; the room used to unmount, socket and all.
-    it("keeps the room through a failed refetch, and ends it on a 404", async () => {
-      const { socket, rerender } = await openRoom();
-      expect(screen.getByRole("heading", { name: "Arrival" })).toBeInTheDocument();
+    // Pausing while a reload's new source has no metadata read its playhead,
+    // 0, and paused the whole room at the start of the film.
+    it("pauses the room where it is while a reloaded stream has not loaded", async () => {
+      const { socket } = await openRoom();
+      await act(async () =>
+        socket.emitMessage({
+          type: "playback_changed",
+          room_id: 7,
+          playback: { paused: false, position_sec: 300, updated_at: "2026-04-14T12:00:00Z" },
+        }),
+      );
+      await screen.findByRole("button", { name: "Pause playback" });
 
-      useQueryMock.mockImplementation(() => ({
-        data: { error: true, message: "Network error", status: 500 },
-        isPending: false,
-        isError: false,
-      }));
-      rerender(<WatchRoomPageContent roomId={7} />);
-      expect(screen.getByRole("heading", { name: "Arrival" })).toBeInTheDocument();
-      expect(screen.queryByText("Watch room unavailable")).not.toBeInTheDocument();
-      expect(socket.readyState).toBe(FakeWebSocket.OPEN);
+      // A recovery reload: new source, nothing loaded, playhead at 0, and no
+      // pause event.
+      mockVideoController.readyState = 0;
+      mockVideoController.currentTime = 0;
+      mockVideoController.paused = true;
+      fireEvent.click(screen.getByRole("button", { name: "Pause playback" }));
 
-      useQueryMock.mockImplementation(() => ({
-        data: { error: true, message: "not found", status: 404 },
-        isPending: false,
-        isError: false,
-      }));
-      rerender(<WatchRoomPageContent roomId={7} />);
-      expect(screen.getByText("Watch room unavailable")).toBeInTheDocument();
+      const pause = sent(socket).at(-1);
+      expect(pause?.type).toBe("pause");
+      expect(pause?.position_sec).toBeGreaterThanOrEqual(300);
+      expect(pause?.position_sec).toBeLessThan(302);
+      expect(
+        await screen.findByRole("button", { name: "Play playback" }),
+      ).toBeInTheDocument();
+
+      // The new source loads: it takes the paused room position.
+      act(() => mockVideoController.setReadyState(4));
+      await waitFor(() => {
+        expect(mockVideoController.currentTime).toBe(pause?.position_sec);
+      });
     });
 
     it("announces the same sync twice when it happens twice", async () => {

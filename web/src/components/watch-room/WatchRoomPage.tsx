@@ -50,7 +50,6 @@ import { sessionEndedSince, sessionStamp } from "@/lib/session";
 import { useHlsCapacityRetry } from "@/hooks/useHlsCapacityRetry";
 import { useHlsSessionKeepalive } from "@/hooks/useHlsSessionKeepalive";
 import { useHlsSessionRecovery } from "@/hooks/useHlsSessionRecovery";
-import { useLastSuccess } from "@/hooks/useLastSuccess";
 import { cn } from "@/lib/utils";
 import DeleteWatchRoomDialog from "@/components/watch-room/DeleteWatchRoomDialog";
 import EditWatchRoomMembersDialog from "@/components/watch-room/EditWatchRoomMembersDialog";
@@ -120,16 +119,9 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
     void toggleFullscreen({ videoFallback: false });
 
   const queryClient = useQueryClient();
-  const roomQuery = useQuery(watchRoomQueryOpts(roomId));
-  const { isPending, isError } = roomQuery;
-  // A refetch that failed (a window focus during a server restart) must not
-  // tear down a room in progress: the last loaded room stands. One the server
-  // refuses (403) or no longer has (404) is gone, and the page says so.
-  const keptRoomData = useLastSuccess(roomQuery.data, roomId);
-  const roomGone =
-    roomQuery.data?.error === true &&
-    (roomQuery.data.status === 403 || roomQuery.data.status === 404);
-  const data = roomGone ? roomQuery.data : keptRoomData;
+  // The query keeps the loaded room through a failed refetch (see
+  // watchRoomQueryOpts), so the page never tears down a room in progress.
+  const { data, isPending, isError } = useQuery(watchRoomQueryOpts(roomId));
   const { data: authUserData } = useQuery(authUserQueryOpts());
   const selfUserId = authUserFrom(authUserData)?.id ?? null;
   const room = data?.error === false ? data.data.room : null;
@@ -158,6 +150,8 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
     sendPlaybackEvent,
     syncToPendingPlayback,
     clearPendingPlayback,
+    roomPosition,
+    holdPausedRoomPlayback,
     markRoomEndHandled,
   } = useWatchRoomConnection({
     currentRoomId,
@@ -284,8 +278,18 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
     // without a `pause` event, so the controls would keep showing Pause.
     if (video.paused) setPlaying(false);
     video.pause();
-    clearPendingPlayback();
-    sendPlaybackEvent(WATCH_ROOM_CLIENT_EVENT_TYPES.PAUSE, video.currentTime);
+    // Until the new source has metadata its playhead reads 0: the room is
+    // paused where it was, and that state waits for the source to load.
+    const unloaded = video.readyState < HTMLMediaElement.HAVE_METADATA;
+    const position = unloaded
+      ? (roomPosition() ?? video.currentTime)
+      : video.currentTime;
+    sendPlaybackEvent(WATCH_ROOM_CLIENT_EVENT_TYPES.PAUSE, position);
+    if (unloaded) {
+      holdPausedRoomPlayback();
+    } else {
+      clearPendingPlayback();
+    }
   };
 
   // The viewer's intent, not just the element: a stream reload leaves the
