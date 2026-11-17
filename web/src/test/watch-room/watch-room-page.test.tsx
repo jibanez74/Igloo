@@ -180,25 +180,9 @@ vi.mock("@tanstack/react-query", async () => {
       "@tanstack/react-query",
     );
 
-  // React Query shares structure: a query hands back the same data object
-  // until its content changes. The mocks below build a fresh envelope on
-  // every call, so equal content keeps the previous reference here, as the
-  // real hook would (useLastSuccess relies on it).
-  const lastData = new Map<string, { json: string; data: unknown }>();
   return {
     ...actual,
-    useQuery: (...args: unknown[]) => {
-      const result = useQueryMock(...args) as { data?: unknown } | undefined;
-      if (!result || result.data === undefined) return result;
-      const key = JSON.stringify(
-        (args[0] as { queryKey?: unknown } | undefined)?.queryKey ?? null,
-      );
-      const json = JSON.stringify(result.data);
-      const previous = lastData.get(key);
-      if (previous?.json === json) return { ...result, data: previous.data };
-      lastData.set(key, { json, data: result.data });
-      return result;
-    },
+    useQuery: (...args: unknown[]) => useQueryMock(...args),
   };
 });
 

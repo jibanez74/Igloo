@@ -163,8 +163,8 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
     onPlayingChange: setPlaying,
     onMembersChanged: members =>
       setWatchRoomMembers(queryClient, roomId, members),
-    // Only a room that loads replaces the members: a refetch that failed for
-    // a moment would cache its error envelope and empty the page.
+    // Only a re-read that loads replaces the members; one that fails leaves
+    // the roster as it is.
     onReconnected: () => {
       const session = sessionStamp();
       void getWatchRoom(roomId).then(res => {
