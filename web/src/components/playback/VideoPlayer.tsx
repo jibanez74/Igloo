@@ -570,8 +570,9 @@ export default function VideoPlayer({
             HLS_FRAGMENT_SERVER_DECIDED_STATUSES,
           ),
           backBufferLength: HLS_JS_BACK_BUFFER_LENGTH_SEC,
-          // Loading starts at MANIFEST_PARSED below, once the manifest has
-          // said where the session really begins.
+          // Loading starts once the manifest has been both read and parsed
+          // (see startLoadWhenReady below), so it knows where the session
+          // really begins.
           autoStartLoad: false,
           // Always explicit, 0 included: hls.js's default (-1) joins a live
           // playlist at its edge, and a copy session's playlist is a live
@@ -761,7 +762,13 @@ export default function VideoPlayer({
 
           if (data.type === HLS_MEDIA_ERROR && !mediaRecoveryAttempted) {
             mediaRecoveryAttempted = true;
+            // hls.js stops loading on a fatal error before this listener
+            // runs, and with autoStartLoad off nothing restarts it after the
+            // media is reattached, so the stream would stall. Resume at the
+            // playhead, read before the detach resets it.
+            const resumeAt = video.currentTime;
             hls.recoverMediaError();
+            hls.startLoad(resumeAt > 0 ? resumeAt : currentStartSec());
             return;
           }
 
@@ -905,8 +912,8 @@ export default function VideoPlayer({
   useEffect(() => {
     const video = videoRef.current;
     if (!video || startSec <= 0) return;
-    // HLS.js owns the initial seek via its startPosition config and fires
-    // onStartApplied via MANIFEST_PARSED; don't compete with it. Gated on
+    // hls.js owns the initial seek (startLoad at the manifest gate) and fires
+    // onStartApplied there; don't compete with it. Gated on
     // source type because hlsRef is assigned asynchronously and is still
     // null when this effect runs on a fresh hls.js mount.
     if (isHlsSource && !prefersNativeHLS) return;

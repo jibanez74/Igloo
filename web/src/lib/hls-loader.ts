@@ -10,8 +10,8 @@ export function loadHlsLight() {
  * it only once its stream is known (after the user, the technical details
  * and the server settings), so on a cold cache the ~360 KB chunk used to
  * download after all of them instead of alongside. A browser that plays HLS
- * natively (iPhone Safari) never needs it. A failure here is the player's to
- * report when it imports the chunk itself.
+ * natively (iPhone Safari) never needs it. A failure here is left to the
+ * player's own import, which reports it.
  */
 export function preloadHlsLight() {
   if (prefersNativeHLS) return;
@@ -19,7 +19,7 @@ export function preloadHlsLight() {
     try {
       await loadHlsLight();
     } catch {
-      // The player retries the import and reports its own failure.
+      // The player's own import reports the failure.
     }
   })();
 }

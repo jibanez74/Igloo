@@ -636,6 +636,45 @@ describe("VideoPlayer hls.js error routing", () => {
     return fakeHlsInstances[0];
   }
 
+  // hls.js stops loading on a fatal error before our listener runs, and with
+  // autoStartLoad off the media recovery's reattach restarts nothing.
+  it("restarts loading after recovering from a fatal media error", async () => {
+    const hls = await renderHlsPlayer({ startSec: 10 });
+    act(() => {
+      hls.trigger("hlsManifestLoaded", {});
+      hls.trigger("hlsManifestParsed", {});
+    });
+    expect(hls.startLoadPositions).toEqual([10]);
+
+    act(() => {
+      hls.trigger("hlsError", {
+        type: "mediaError",
+        details: "bufferAppendError",
+        fatal: true,
+      });
+    });
+
+    expect(hls.recoverMediaErrorCalls).toBe(1);
+    expect(hls.startLoadPositions).toEqual([10, 10]);
+  });
+
+  it("starts loading once per manifest, and again for a manifest fetched anew", async () => {
+    const hls = await renderHlsPlayer({ startSec: 10 });
+    act(() => {
+      hls.trigger("hlsManifestLoaded", {});
+      hls.trigger("hlsManifestParsed", {});
+      hls.trigger("hlsManifestParsed", {});
+    });
+    expect(hls.startLoadCalls).toBe(1);
+
+    // Network recovery's loadSource: a new manifest, a new start.
+    act(() => {
+      hls.trigger("hlsManifestLoaded", {});
+      hls.trigger("hlsManifestParsed", {});
+    });
+    expect(hls.startLoadCalls).toBe(2);
+  });
+
   it("reports 503 manifest errors as capacity-busy with the Retry-After delay", async () => {
     const onCapacityBusy = vi.fn();
     const onError = vi.fn();

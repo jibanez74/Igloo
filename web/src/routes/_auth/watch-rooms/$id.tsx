@@ -31,9 +31,8 @@ export const Route = createFileRoute("/_auth/watch-rooms/$id")({
     const res = await context.queryClient.ensureQueryData(
       watchRoomQueryOpts(id),
     );
-    if (!res.error && res.data.room?.playback_mode !== "direct") {
-      preloadHlsLight();
-    }
+    const playbackMode = res.error ? undefined : res.data.room?.playback_mode;
+    if (playbackMode && playbackMode !== "direct") preloadHlsLight();
 
     return {
       movieTitle: res.error ? null : res.data.room?.movie_title || null,
