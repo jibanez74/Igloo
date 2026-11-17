@@ -605,7 +605,22 @@ export default function VideoPlayer({
         // still served from the /hls/remux/ path. It also carries the
         // measured actual start, which places the first load. Every manifest
         // counts, including one fetched again by the network recovery below.
+        // Loading waits for both events, in whichever order they come:
+        // hls.js's own MANIFEST_LOADED listener parses the levels and fires
+        // MANIFEST_PARSED before ours has read the header, so starting at
+        // MANIFEST_PARSED alone placed every resume from the requested start.
         let measuredActualStartSec: number | null = null;
+        let manifestRead = false;
+        let levelsParsed = false;
+        const startLoadWhenReady = () => {
+          if (!manifestRead || !levelsParsed) return;
+          // A manifest fetched again (network recovery) gates again.
+          manifestRead = false;
+          levelsParsed = false;
+          const loadStart = hlsLoadStartSec(measuredActualStartSec);
+          hls.startLoad(loadStart);
+          if (loadStart > 0) handleStartApplied(loadStart);
+        };
         hls.on(Hls.Events.MANIFEST_LOADED, (_event, data) => {
           const metadata = reportManifestMetadata(
             manifestHeadersFromNetworkDetails(data.networkDetails),
@@ -613,11 +628,12 @@ export default function VideoPlayer({
           if (metadata.actualStartSec !== null) {
             measuredActualStartSec = metadata.actualStartSec;
           }
+          manifestRead = true;
+          startLoadWhenReady();
         });
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          const loadStart = hlsLoadStartSec(measuredActualStartSec);
-          hls.startLoad(loadStart);
-          if (loadStart > 0) handleStartApplied(loadStart);
+          levelsParsed = true;
+          startLoadWhenReady();
         });
 
         // Every way the server reports that a session no longer exists. It

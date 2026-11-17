@@ -1292,11 +1292,14 @@ describe("VideoPlayer HLS capability and effective profile", () => {
   // manifest. Keyed on the local offset, that tore the instance down mid-way
   // through its first segment and fetched everything again.
   it.each([
-    ["the measured actual start", "581", 19],
-    ["the requested start when the manifest names none", null, 10],
+    ["the measured actual start", "581", 19, false],
+    ["the requested start when the manifest names none", null, 10, false],
+    // hls.js's own MANIFEST_LOADED listener fires MANIFEST_PARSED before
+    // ours runs, which is the order a real stream sees.
+    ["the measured actual start, parsed before it is read", "581", 19, true],
   ])(
     "starts loading from %s without rebuilding for it",
-    async (_case, header, expectedStart) => {
+    async (_case, header, expectedStart, parsedFirst) => {
       const onStartApplied = vi.fn();
       function TargetHarness() {
         const videoRef = useRef<HTMLVideoElement>(null);
@@ -1324,17 +1327,22 @@ describe("VideoPlayer HLS capability and effective profile", () => {
       const hls = fakeHlsInstances[0];
       expect(hls.startLoadCalls).toBe(0);
 
-      act(() => {
+      const loaded = () =>
         hls.trigger("hlsManifestLoaded", {
           networkDetails: {
             getResponseHeader: (name: string) =>
               name === "X-Igloo-Actual-Start" ? header : null,
           },
         });
-      });
-      await act(async () => {});
+      const parsed = () => hls.trigger("hlsManifestParsed", {});
       act(() => {
-        hls.trigger("hlsManifestParsed", {});
+        if (parsedFirst) {
+          parsed();
+          loaded();
+        } else {
+          loaded();
+          parsed();
+        }
       });
       await act(async () => {});
 
