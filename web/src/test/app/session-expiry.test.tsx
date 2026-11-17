@@ -337,18 +337,22 @@ describe("the shell's guard once someone is signed in", () => {
     expect(router.state.location.pathname).toBe("/");
   });
 
-  it("asks the server, rather than reuse a fresh user, while the session is ending", async () => {
+  it("asks the server, rather than reuse a fresh user, while the session is ending, and leaves on its 401", async () => {
     const server = countingServer();
     const { router } = await renderShell().view;
     await screen.findByRole("button", { name: /^Account: / });
     expect(server.authRequests).toBe(1);
 
     beginEndingSession();
+    server.unauthorized = true;
     try {
       await act(async () => {
         await router.invalidate();
       });
       expect(server.authRequests).toBe(2);
+      await waitFor(() => {
+        expect(router.state.location.pathname).toBe("/login");
+      });
     } finally {
       forgetEndedSession();
     }

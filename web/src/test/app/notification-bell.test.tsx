@@ -166,11 +166,14 @@ describe("NotificationBell", () => {
     const queryClient = renderBell();
     await screen.findByRole("button", { name: "Notifications, 3 unread" });
 
-    act(() => {
+    // Query observers notify on a later tick: let the bell re-render before
+    // asserting that nothing changed.
+    await act(async () => {
       queryClient.setQueryData(authUserQueryOpts().queryKey, {
         error: true,
         message: "500 - internal error",
       });
+      await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
     expect(
