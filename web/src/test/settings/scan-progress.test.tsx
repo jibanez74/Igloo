@@ -1,9 +1,11 @@
 import { act, render, screen } from "@testing-library/react";
+import { useQuery } from "@tanstack/react-query";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import ScanProgress from "@/components/settings/ScanProgress";
 import { useMovieScanStatus, useMusicScanStatus, useShowScanStatus } from "@/hooks/useScanStatus";
 import { ALBUMS_PAGINATED_KEY, MOVIES_STATS_KEY, MOVIES_LIBRARY_KEY, MUSIC_STATS_KEY } from "@/lib/constants";
+import { moviesLibraryQueryOpts, moviesStatsQueryOpts } from "@/lib/query-opts";
 import { createTestQueryClient, renderWithQueryClient } from "../helpers/render";
 import {
   movieScanStatus,
@@ -15,6 +17,13 @@ import { jsonResponse, requestURL } from "../helpers/api";
 function ScanView() {
   const query = useMovieScanStatus();
   return <ScanProgress library="movies" status={query.data} unavailable={query.isError} />;
+}
+
+// What a movie library page and its statistics keep mounted while a scan runs.
+function MovieLibraryObservers() {
+  useQuery(moviesLibraryQueryOpts(1));
+  useQuery(moviesStatsQueryOpts());
+  return null;
 }
 
 function BackgroundScanView() {
@@ -322,29 +331,41 @@ describe("runs of watcher-detected changes", () => {
   it("only marks stale, without refetching, what the finished scan it finds at load covers", async () => {
     vi.useFakeTimers();
     let status = movieScanStatus({ run_id: "startup-scan", state: "completed", phase: "enrichment", processed: 418, imported: 418, catalog_revision: 418 });
-    const fetchMock = vi.fn((input: RequestInfo | URL) => jsonResponse(requestURL(input) === "/api/settings/scan/movies"
-      ? { error: false, data: status }
-      : { error: false, data: { movies: [], total: 0 } }));
+    const library = { error: false, data: { movies: [], total: 0 } };
+    const stats = { error: false, data: { total_movies: 418 } };
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = requestURL(input);
+      if (url === "/api/settings/scan/movies") return jsonResponse({ error: false, data: status });
+      if (url === "/api/movies/stats") return jsonResponse(stats);
+      return jsonResponse(library);
+    });
     vi.stubGlobal("fetch", fetchMock);
+    const requests = (path: string) => fetchMock.mock.calls.filter(([input]) => requestURL(input).split("?")[0] === path).length;
     const client = createTestQueryClient();
-    // A library page the loaders filled; the scan may have ended after it.
-    client.setQueryData([MOVIES_LIBRARY_KEY, 1, 24, "asc"], { error: false, data: { movies: [], total: 0 } });
+    // A library page and the statistics the loaders filled, both on screen;
+    // the scan may have ended after they loaded.
+    client.setQueryData(moviesLibraryQueryOpts(1).queryKey, library as never);
+    client.setQueryData(moviesStatsQueryOpts().queryKey, stats as never);
     const invalidate = vi.spyOn(client, "invalidateQueries");
-    renderWithQueryClient(<ScanView />, { queryClient: client });
+    renderWithQueryClient(<><ScanView /><MovieLibraryObservers /></>, { queryClient: client });
     await act(async () => { await vi.advanceTimersByTimeAsync(1); });
     expect(screen.getByRole("status")).toHaveTextContent("Movie scan completed");
     await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
 
     // Stale, so its next mount or focus refetches it, but nothing refetched now.
-    expect(client.getQueryState([MOVIES_LIBRARY_KEY, 1, 24, "asc"])?.isInvalidated).toBe(true);
+    expect(client.getQueryState(moviesLibraryQueryOpts(1).queryKey)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(moviesStatsQueryOpts().queryKey)?.isInvalidated).toBe(true);
+    expect(requests("/api/movies/library")).toBe(0);
+    expect(requests("/api/movies/stats")).toBe(0);
     expect(invalidate).not.toHaveBeenCalledWith({ queryKey: [MOVIES_LIBRARY_KEY] });
     expect(invalidate).not.toHaveBeenCalledWith({ queryKey: [MOVIES_STATS_KEY] });
-    expect(fetchMock.mock.calls.every(([input]) => requestURL(input) === "/api/settings/scan/movies")).toBe(true);
 
-    // The next scan is news.
+    // The next scan is news: what is on screen refetches at once.
     status = movieScanStatus({ run_id: "next-scan", catalog_revision: 418 });
     await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: [MOVIES_LIBRARY_KEY] });
+    expect(requests("/api/movies/library")).toBe(1);
+    expect(requests("/api/movies/stats")).toBe(1);
     client.clear();
   });
 

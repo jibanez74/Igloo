@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import NotificationBell from "@/components/app/NotificationBell";
@@ -109,6 +109,7 @@ function renderBell({ isAdmin = true }: { isAdmin?: boolean } = {}) {
   );
 
   renderWithQueryClient(<NotificationBell />, { queryClient });
+  return queryClient;
 }
 
 beforeEach(() => {
@@ -140,6 +141,41 @@ describe("NotificationBell", () => {
     await user.click(screen.getByRole("button", { name: "Notifications" }));
     expect(await screen.findByText("You're all caught up.")).toBeVisible();
     expect(apiMocks.getUnreadNotificationCount).not.toHaveBeenCalled();
+  });
+
+  it("drops the badge once the reader is confirmed to no longer be an administrator", async () => {
+    apiMocks.getUnreadNotificationCount.mockResolvedValue(countResponse(3));
+    const queryClient = renderBell();
+    await screen.findByRole("button", { name: "Notifications, 3 unread" });
+
+    act(() => {
+      queryClient.setQueryData(
+        authUserQueryOpts().queryKey,
+        authUser({ is_admin: false }),
+      );
+    });
+
+    expect(
+      await screen.findByRole("button", { name: "Notifications" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("3")).not.toBeInTheDocument();
+  });
+
+  it("keeps the badge while the session check fails", async () => {
+    apiMocks.getUnreadNotificationCount.mockResolvedValue(countResponse(3));
+    const queryClient = renderBell();
+    await screen.findByRole("button", { name: "Notifications, 3 unread" });
+
+    act(() => {
+      queryClient.setQueryData(authUserQueryOpts().queryKey, {
+        error: true,
+        message: "500 - internal error",
+      });
+    });
+
+    expect(
+      screen.getByRole("button", { name: "Notifications, 3 unread" }),
+    ).toBeInTheDocument();
   });
 
   it("opens the panel, lists notifications, and marks an unread one read on click", async () => {

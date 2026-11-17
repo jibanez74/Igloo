@@ -7,6 +7,7 @@ import { STALE_1M } from "@/lib/query-client";
 import type { ApiResponseType, AuthUser } from "@/types";
 import { ApiFailureError } from "@/lib/is-api-failure";
 import { useSignOutOnSessionExpiry } from "@/hooks/useEndSession";
+import { isSessionEnding } from "@/lib/session";
 import AppShell from "@/components/app/AppShell";
 import { AudioPlayerProvider } from "@/context/AudioPlayerContext";
 import AppLoadingScreen, { AppLoadError } from "@/components/app/AppLoadingScreen";
@@ -54,7 +55,9 @@ export const Route = createFileRoute("/_auth")({
  * that can still happen: a server lost then, and a section whose code has not
  * loaded yet, reload onto the offline page. A session that ends within the
  * minute is caught by the first request that hears its 401
- * (onSessionExpired).
+ * (onSessionExpired). A session that is ending always asks: if the way to
+ * /login is superseded, the guard must not keep the shell on the cached user
+ * while the expiry handler ignores 401s.
  */
 async function signedInUser(queryClient: QueryClient) {
   const options = authUserQueryOpts();
@@ -62,7 +65,7 @@ async function signedInUser(queryClient: QueryClient) {
     .getQueryCache()
     .find<ApiResponseType<{ user: AuthUser }>>({ queryKey: options.queryKey, exact: true });
   const cached = query?.state.data;
-  if (cached?.error === false && !query?.isStaleByTime(STALE_1M)) {
+  if (cached?.error === false && !query?.isStaleByTime(STALE_1M) && !isSessionEnding()) {
     return cached;
   }
   return queryClient.fetchQuery(authUserQueryOpts({ revalidate: true }));

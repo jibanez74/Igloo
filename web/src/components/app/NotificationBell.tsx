@@ -75,6 +75,10 @@ export default function NotificationBell() {
   // with an empty queue, so their bell has nothing to poll for.
   const { data: authData } = useQuery(authUserQueryOpts());
   const isAdmin = authUserFrom(authData)?.is_admin ?? false;
+  // A disabled query keeps its cached count, so a reader who stops being an
+  // administrator would keep the last badge. Only a confirmed answer zeroes
+  // it: a failed auth check keeps what was shown.
+  const confirmedNonAdmin = authData?.error === false && !isAdmin;
 
   // Both queries return the `{ error, data }` envelope as query data, so narrow
   // on `error === false` before reading the success shape (like every other
@@ -107,7 +111,9 @@ export default function NotificationBell() {
     shownCount?.error === false ? shownCount.data.unread_count : 0;
   const notifications = listData?.notifications ?? [];
   const listUnreadCount = open ? listData?.unread_count : undefined;
-  const unreadCount = listUnreadCount ?? countUnreadCount;
+  const unreadCount = confirmedNonAdmin
+    ? 0
+    : (listUnreadCount ?? countUnreadCount);
   const showRefreshError = Boolean(
     countIsError ||
       countEnvelope?.error ||

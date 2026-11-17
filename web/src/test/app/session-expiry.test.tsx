@@ -7,6 +7,7 @@ import { AudioPlayerActionsContext } from "@/context/audio-player-contexts";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { getNotifications } from "@/lib/api";
 import { authUserQueryOpts } from "@/lib/query-opts";
+import { beginEndingSession, forgetEndedSession } from "@/lib/session";
 import type { AudioPlayerActions } from "@/types/audio-player";
 import { deferredResponse, jsonResponse, requestURL } from "../helpers/api";
 import { stubMediaElement } from "../helpers/dom";
@@ -334,6 +335,23 @@ describe("the shell's guard once someone is signed in", () => {
 
     expect(server.authRequests).toBe(2);
     expect(router.state.location.pathname).toBe("/");
+  });
+
+  it("asks the server, rather than reuse a fresh user, while the session is ending", async () => {
+    const server = countingServer();
+    const { router } = await renderShell().view;
+    await screen.findByRole("button", { name: /^Account: / });
+    expect(server.authRequests).toBe(1);
+
+    beginEndingSession();
+    try {
+      await act(async () => {
+        await router.invalidate();
+      });
+      expect(server.authRequests).toBe(2);
+    } finally {
+      forgetEndedSession();
+    }
   });
 
   it("signs out when the check finds the session gone", async () => {
