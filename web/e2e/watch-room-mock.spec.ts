@@ -212,4 +212,55 @@ test.describe("Watch rooms", () => {
     ).toBeVisible();
     await issues.assertClean();
   });
+
+  // Fullscreen used to take the whole room page: the header stayed on top,
+  // the video kept its card's width and the Exit button fell off the screen.
+  test("fullscreen fills the screen with the player and keeps its controls on screen", async () => {
+    const page = owner.page;
+    const issues = trackBrowserIssues(page);
+    const roomId = await createWatchRoom(owner.context.request, MOCK_MOVIE_ID, []);
+    await page.goto(`/watch-rooms/${roomId}`);
+    await expectLive(page, 1);
+
+    await page.getByRole("button", { name: "Fullscreen" }).click();
+    const exit = page.getByRole("button", { name: "Exit fullscreen" });
+    await expect(exit).toHaveAttribute("aria-pressed", "true");
+
+    const layout = await page.evaluate(() => {
+      const fullscreen = document.fullscreenElement;
+      const video = document.querySelector("video")!.getBoundingClientRect();
+      const button = document
+        .querySelector('button[aria-label="Exit fullscreen"]')!
+        .getBoundingClientRect();
+      return {
+        tag: fullscreen?.tagName ?? null,
+        holdsVideo: !!fullscreen?.querySelector("video"),
+        holdsExit: !!fullscreen?.querySelector('button[aria-label="Exit fullscreen"]'),
+        holdsHeading: !!fullscreen?.querySelector("h1"),
+        videoLeft: video.left,
+        videoWidth: video.width,
+        exitBottom: button.bottom,
+        innerWidth: window.innerWidth,
+        innerHeight: window.innerHeight,
+      };
+    });
+    expect(layout).toMatchObject({
+      tag: "SECTION",
+      holdsVideo: true,
+      holdsExit: true,
+      holdsHeading: false,
+      videoLeft: 0,
+      videoWidth: layout.innerWidth,
+    });
+    expect(layout.exitBottom).toBeLessThanOrEqual(layout.innerHeight);
+
+    await exit.click();
+    await expect(page.getByRole("button", { name: "Fullscreen" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(await page.evaluate(() => document.fullscreenElement)).toBeNull();
+    await expect(page.getByRole("heading", { name: "People in this room" })).toBeVisible();
+    await issues.assertClean();
+  });
 });

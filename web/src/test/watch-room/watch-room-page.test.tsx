@@ -1233,6 +1233,123 @@ describe("WatchRoomPageContent", () => {
     expect(screen.getByText(/arrival/i)).toBeInTheDocument();
   });
 
+  // Fullscreen took the whole room page: the header stayed on screen, the
+  // video kept its card's width and the transport row fell below the screen.
+  // The player card alone is what goes fullscreen.
+  it("takes only the player card fullscreen, transport row included", async () => {
+    const user = userEvent.setup();
+    const requested: Element[] = [];
+    const requestDescriptor = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      "requestFullscreen",
+    );
+    const exitDescriptor = Object.getOwnPropertyDescriptor(
+      document,
+      "exitFullscreen",
+    );
+    let fullscreenElement: Element | null = null;
+    const changeFullscreen = (next: Element | null) => {
+      fullscreenElement = next;
+      document.dispatchEvent(new Event("fullscreenchange"));
+    };
+    Object.defineProperty(document, "fullscreenElement", {
+      configurable: true,
+      get: () => fullscreenElement,
+    });
+    Object.defineProperty(HTMLElement.prototype, "requestFullscreen", {
+      configurable: true,
+      value(this: HTMLElement) {
+        requested.push(this);
+        changeFullscreen(this);
+        return Promise.resolve();
+      },
+    });
+    Object.defineProperty(document, "exitFullscreen", {
+      configurable: true,
+      value: () => {
+        changeFullscreen(null);
+        return Promise.resolve();
+      },
+    });
+
+    try {
+      renderRoomPage(buildRoom({ is_owner: true }));
+      await user.click(screen.getByRole("button", { name: "Fullscreen" }));
+
+      expect(requested).toHaveLength(1);
+      const player = requested[0];
+      expect(player.tagName).toBe("SECTION");
+      expect(player).toContainElement(screen.getByTestId("video-player"));
+      expect(player).not.toContainElement(
+        screen.getByRole("heading", { level: 1, name: "Arrival" }),
+      );
+      const exit = screen.getByRole("button", { name: "Exit fullscreen" });
+      expect(player).toContainElement(exit);
+      // Hidden behind the player, its buttons must not take focus.
+      const header = screen
+        .getByRole("heading", { level: 1, name: "Arrival" })
+        .closest("header")!;
+      expect(header).toHaveAttribute("inert");
+      expect(exit).toHaveAttribute("aria-pressed", "true");
+      expect(player).toHaveClass("rounded-none", "border-0", "bg-background");
+      expect(
+        screen.queryByRole("heading", { name: "People in this room" }),
+      ).not.toBeInTheDocument();
+
+      await user.click(exit);
+
+      expect(fullscreenElement).toBeNull();
+      expect(
+        screen.getByRole("button", { name: "Fullscreen" }),
+      ).toHaveAttribute("aria-pressed", "false");
+      expect(player).toHaveClass("rounded-2xl");
+      expect(header).not.toHaveAttribute("inert");
+      expect(
+        screen.getByRole("heading", { name: "People in this room" }),
+      ).toBeInTheDocument();
+    } finally {
+      if (requestDescriptor) {
+        Object.defineProperty(HTMLElement.prototype, "requestFullscreen", requestDescriptor);
+      } else {
+        delete (HTMLElement.prototype as Partial<HTMLElement>).requestFullscreen;
+      }
+      if (exitDescriptor) {
+        Object.defineProperty(document, "exitFullscreen", exitDescriptor);
+      } else {
+        delete (document as Partial<Document>).exitFullscreen;
+      }
+      Reflect.deleteProperty(document, "fullscreenElement");
+    }
+  });
+
+  // Without element fullscreen (jsdom has none) the card covers the window,
+  // and the header left underneath must not take focus.
+  it("expands only the player card where element fullscreen is missing", async () => {
+    const user = userEvent.setup();
+    renderRoomPage(buildRoom({ is_owner: true }));
+
+    const player = screen.getByTestId("video-player").closest("section")!;
+    const header = screen
+      .getByRole("heading", { level: 1, name: "Arrival" })
+      .closest("header")!;
+    expect(header).not.toHaveAttribute("inert");
+
+    await user.click(screen.getByRole("button", { name: "Fullscreen" }));
+
+    const exit = screen.getByRole("button", { name: "Exit expanded view" });
+    expect(player).toContainElement(exit);
+    expect(player).toHaveClass("fixed", "inset-0", "z-modal", "h-dvh");
+    expect(header).toHaveAttribute("inert");
+    expect(showInfoMock).toHaveBeenCalledWith(
+      "Full screen isn't available in this browser. Using expanded view instead.",
+    );
+
+    await user.click(exit);
+
+    expect(player).not.toHaveClass("fixed");
+    expect(header).not.toHaveAttribute("inert");
+  });
+
   it("redirects only once for owner-initiated deletion", async () => {
     deleteWatchRoomMock.mockResolvedValue({
       error: false,
@@ -1879,6 +1996,26 @@ describe("WatchRoomPageContent", () => {
       expect(screen.queryByText("2 connected now")).not.toBeInTheDocument();
       expect(screen.queryByText("Connected")).not.toBeInTheDocument();
       expect(screen.queryByText("Away")).not.toBeInTheDocument();
+    });
+
+    // Fullscreen covers the header and its sync chip, so the player card
+    // carries the warning itself while it is fullscreen.
+    it("repeats the reconnecting warning inside the player while it is fullscreen", async () => {
+      const { socket } = await openRoom();
+      const player = screen.getByTestId("video-player").closest("section")!;
+
+      await act(async () => {
+        socket.serverClose();
+      });
+      const warning = "Reconnecting: your changes won't reach the room";
+      expect(within(player).queryByText(warning)).not.toBeInTheDocument();
+
+      // jsdom has no element fullscreen: this is the expanded view.
+      await act(async () => {
+        screen.getByRole("button", { name: "Fullscreen" }).click();
+      });
+
+      expect(within(player).getByRole("status")).toHaveTextContent(warning);
     });
 
     it("keeps a playback error when the socket drops", async () => {

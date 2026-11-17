@@ -13,7 +13,7 @@ import {
 } from "@/lib/fullscreen";
 
 type VideoFullscreenOptions = {
-  containerRef: RefObject<HTMLDivElement | null>;
+  containerRef: RefObject<HTMLElement | null>;
   videoRef: RefObject<HTMLVideoElement | null>;
 };
 

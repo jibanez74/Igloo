@@ -1046,8 +1046,8 @@ collapse, while the mobile trigger controls the sheet.
   room (`immersive-routes.test.ts` pins the list); each brings its own title
   and way back. A player fills the window exactly; the watch room is a page
   of cards, so its route adds the page padding back and it scrolls when it
-  is taller than the window. Nothing moves in the route tree and no URL
-  changes.
+  is taller than the window (its player card alone goes fullscreen, §3.5).
+  Nothing moves in the route tree and no URL changes.
 - Content: `px-4 py-6 sm:px-6 lg:px-8`; when the mini audio player is visible
   the shell adds `MINI_PLAYER_CLEARANCE_PADDING_CLASS` (`pb-28 sm:pb-24`) so
   content never hides behind it. The desktop sidebar column takes the same
@@ -1736,7 +1736,15 @@ require the full playback test pass.
   the destructive tint and says changes won't reach the room, and presence
   (the "N connected now" chip and each member's Connected/Away) is hidden,
   since it is stale. Its "Back home" on an unavailable room is the status
-  screens' `xl` call to action.
+  screens' `xl` call to action. In a room the **player card** (video plus
+  transport row), not the page, is what goes fullscreen or into the expanded
+  view: it fills the screen exactly, square-cornered and borderless on
+  `bg-background`, with the video taking what the transport row leaves, so
+  Exit stays on screen. The header and the people column stay behind, and
+  the header is `inert` meanwhile so focus cannot reach it under the card;
+  while the socket reconnects, the card repeats the header's warning as a
+  destructive status line. The room's transport row stays in flow (no idle
+  hiding).
   **One time readout per width**: from `sm` up it sits in the transport row
   and the progress bar's own labels are hidden; below `sm` the row cannot hold
   it beside seven controls, so the bar shows the labels and the row hides its
