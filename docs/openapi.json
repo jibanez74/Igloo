@@ -14135,6 +14135,18 @@
           }
         ]
       },
+      "LeaveWatchRoomData": {
+        "type": "object",
+        "required": [
+          "left"
+        ],
+        "properties": {
+          "left": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
       "LeaveWatchRoomEnvelope": {
         "allOf": [
           {
@@ -14147,16 +14159,7 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "left"
-                ],
-                "properties": {
-                  "left": {
-                    "type": "boolean"
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/LeaveWatchRoomData"
               }
             }
           }

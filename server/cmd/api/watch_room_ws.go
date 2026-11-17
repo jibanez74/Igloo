@@ -230,15 +230,22 @@ func (hub *WatchRoomHub) disconnect(client *watchRoomClient) {
 	})
 }
 
-// applyPlaybackEvent updates the room's playback state and queues the change
-// for every client, the sender included. maxPositionSec is the movie's
-// duration, or 0 when it is unknown; a position past it is clamped to it.
-func (hub *WatchRoomHub) applyPlaybackEvent(roomID int64, eventType string, positionSec, maxPositionSec float64) (*watchRoomServerEvent, bool) {
+// applyPlaybackEvent updates the sender's room's playback state and queues the
+// change for every client, the sender included. maxPositionSec is the movie's
+// duration, or 0 when it is unknown; a position past it is clamped to it. A
+// sender already closed (revoked, evicted) or no longer in the room changes
+// nothing: its read loop can still hand over a command read after revokeMembers
+// closed it, and the check shares the lock that revocation takes.
+func (hub *WatchRoomHub) applyPlaybackEvent(sender *watchRoomClient, eventType string, positionSec, maxPositionSec float64) (*watchRoomServerEvent, bool) {
 	hub.mu.Lock()
 	defer hub.mu.Unlock()
 
+	roomID := sender.roomID
 	session, ok := hub.sessions[roomID]
 	if !ok {
+		return nil, false
+	}
+	if _, registered := session.clients[sender]; !registered || sender.closed() {
 		return nil, false
 	}
 
@@ -511,17 +518,18 @@ func (hub *WatchRoomHub) buildSnapshotLocked(roomID int64, session *watchRoomSes
 	}
 }
 
-func (hub *WatchRoomHub) currentSnapshot(roomID int64) *watchRoomServerEvent {
+// sendSnapshot queues the client's room's current snapshot, built and queued
+// under one lock hold, so no playback change applied meanwhile can reach the
+// client ahead of the older snapshot.
+func (hub *WatchRoomHub) sendSnapshot(client *watchRoomClient) {
 	hub.mu.Lock()
 	defer hub.mu.Unlock()
 
-	session, ok := hub.sessions[roomID]
+	session, ok := hub.sessions[client.roomID]
 	if !ok {
-		return nil
+		return
 	}
-
-	snapshot := hub.buildSnapshotLocked(roomID, session, time.Now().UTC())
-	return &snapshot
+	client.enqueueEvent(hub.buildSnapshotLocked(client.roomID, session, time.Now().UTC()))
 }
 
 func connectedUserIDs(ids map[int64]bool) []int64 {
@@ -704,9 +712,7 @@ func (app *Application) WatchRoomWebSocket(w http.ResponseWriter, r *http.Reques
 
 		switch event.Type {
 		case "join":
-			if fresh := app.WatchRoomHub.currentSnapshot(row.ID); fresh != nil {
-				client.enqueueEvent(*fresh)
-			}
+			app.WatchRoomHub.sendSnapshot(client)
 		case "ping":
 			client.enqueueEvent(watchRoomServerEvent{Type: "pong", RoomID: row.ID})
 		case "play", "pause", "seek":
@@ -714,7 +720,7 @@ func (app *Application) WatchRoomWebSocket(w http.ResponseWriter, r *http.Reques
 			if event.PositionSec != nil {
 				positionSec = *event.PositionSec
 			}
-			app.WatchRoomHub.applyPlaybackEvent(row.ID, event.Type, positionSec, maxPositionSec)
+			app.WatchRoomHub.applyPlaybackEvent(client, event.Type, positionSec, maxPositionSec)
 		}
 	}
 }

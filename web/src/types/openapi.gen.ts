@@ -4075,10 +4075,11 @@ export interface components {
                 deleted: boolean;
             };
         };
+        LeaveWatchRoomData: {
+            left: boolean;
+        };
         LeaveWatchRoomEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                left: boolean;
-            };
+            data: components["schemas"]["LeaveWatchRoomData"];
         };
         WatchRoomPlaybackState: {
             paused: boolean;

@@ -557,6 +557,9 @@ func listDeletedUserRooms(ctx context.Context, qtx *database.Queries, userID int
 // tell their members the new member list; the user's own sockets are closed
 // with their credentials.
 func (app *Application) endDeletedUserRooms(ctx context.Context, rooms deletedUserRooms) {
+	// The deletion is committed: a client that hangs up must not cancel the
+	// member-list read the rooms' announcements need.
+	ctx = context.WithoutCancel(ctx)
 	app.invalidateDeletedWatchRooms(rooms.owned)
 	for _, roomID := range rooms.owned {
 		app.CleanupRoomHLSSession(roomID)
