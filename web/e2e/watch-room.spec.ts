@@ -1,259 +1,118 @@
-import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { expect, test, type Browser, type Page } from "@playwright/test";
 
 import {
   intEnv,
   readE2EEnv,
   requireRealInstance,
-  type Credentials,
   type E2EEnv,
 } from "./e2e-env";
-import { expectPageHasNoHorizontalScroll } from "./e2e-layout";
-import { WATCH_ROOM_SEEK_STEP_SEC } from "../src/lib/constants";
-import { readJSON } from "./e2e-api";
+import {
+  WATCH_ROOM_SEEK_STEP_SEC,
+  WATCH_ROOM_SYNC_DRIFT_THRESHOLD_SEC,
+} from "../src/lib/constants";
 import { loginViaApi } from "./e2e-auth";
-import { createUser, deleteUser } from "./e2e-users";
+import { deleteUser } from "./e2e-users";
 import { realMediaTimeouts } from "./media-e2e-helpers";
+import {
+  cleanupWatchRoom,
+  createGuest,
+  createWatchRoom,
+  expectWatchRoomChrome,
+  fakeWatchRoomMedia,
+  videoCurrentTime,
+  type E2EGuest,
+} from "./watch-room-e2e";
+
+// Watch rooms against a real server: its socket, its membership rules and,
+// for the HLS room, its media. The mocked twin is watch-room-mock.spec.ts.
 
 type WatchRoomEnv = E2EEnv & {
-  movieId: number;
+  movieId: number | null;
+  hlsMovieId: number | null;
   responseTimeoutMs: number;
 };
 
-type E2EGuest = Credentials & {
-  id: number;
-};
-
-function readWatchRoomEnv(): WatchRoomEnv | null {
-  const movieId = intEnv("E2E_WATCH_ROOM_MOVIE_ID");
-
-  if (!movieId) {
-    return null;
-  }
-
+function readWatchRoomEnv(): WatchRoomEnv {
   return {
     ...readE2EEnv(),
-    movieId,
+    movieId: intEnv("E2E_WATCH_ROOM_MOVIE_ID") || null,
+    hlsMovieId: intEnv("E2E_WATCH_ROOM_HLS_MOVIE_ID") || null,
     responseTimeoutMs: intEnv("E2E_WATCH_ROOM_RESPONSE_TIMEOUT_MS", 30_000),
   };
 }
 
-async function createGuest(request: APIRequestContext): Promise<E2EGuest> {
-  const unique = Date.now().toString(36);
-  const credentials = {
-    email: `watch-room-e2e-${unique}@example.test`,
-    password: `WatchRoom-${unique}-pass`,
-  };
-  const user = await createUser(request, {
-    name: "Watch Room E2E Guest",
-    ...credentials,
-  });
+const env = readWatchRoomEnv();
 
-  return { id: user.id, ...credentials };
-}
+// A guest's player starts from another member's command, without a click of
+// its own; real media needs the browser to allow that.
+test.use({ launchOptions: { args: ["--autoplay-policy=no-user-gesture-required"] } });
 
-async function createWatchRoom(
-  request: APIRequestContext,
-  movieId: number,
-  guestId: number,
-) {
-  const response = await request.post("/api/watch-rooms", {
-    data: {
-      movie_id: movieId,
-      mode: "direct",
-      audio_track: 0,
-      subtitle_track: null,
-      invited_user_ids: [guestId],
-    },
-    failOnStatusCode: false,
-  });
-  expect(response.status()).toBe(201);
+/** An owner (the configured admin) and invitees, each in their own browser. */
+async function openRoomParty(browser: Browser, guestCount: number) {
+  const ownerContext = await browser.newContext({ baseURL: env.baseURL });
+  await loginViaApi(ownerContext.request, env);
+  const guests: E2EGuest[] = [];
+  for (let i = 0; i < guestCount; i += 1) {
+    guests.push(await createGuest(ownerContext.request, `Watch Room Guest ${i + 1}`));
+  }
+  const guestContexts = await Promise.all(
+    guests.map(async guest => {
+      const context = await browser.newContext({ baseURL: env.baseURL });
+      await loginViaApi(context.request, guest);
+      return context;
+    }),
+  );
 
-  const body = await readJSON<{ room_id: number }>(response);
-  expect(body.error, body.message).toBe(false);
-  return body.data!.room_id;
-}
-
-async function cleanupWatchRoom(request: APIRequestContext, roomId: number | null) {
-  if (!roomId) return;
-
-  const response = await request.delete(`/api/watch-rooms/${roomId}`, {
-    failOnStatusCode: false,
-  });
-  expect([200, 404]).toContain(response.status());
-}
-
-async function prepareWatchRoomPage(page: Page) {
-  await page.addInitScript(() => {
-    type MediaState = {
-      currentTime: number;
-      duration: number;
-      paused: boolean;
-      src: string;
-    };
-
-    const states = new WeakMap<HTMLMediaElement, MediaState>();
-    const stateFor = (media: HTMLMediaElement) => {
-      let state = states.get(media);
-      if (!state) {
-        state = {
-          currentTime: 0,
-          duration: 120,
-          paused: true,
-          src: "",
-        };
-        states.set(media, state);
+  return {
+    ownerContext,
+    guests,
+    guestContexts,
+    async close(roomId: number | null) {
+      await cleanupWatchRoom(ownerContext.request, roomId);
+      for (const guest of guests) {
+        await deleteUser(ownerContext.request, guest.id, { allowMissing: true });
       }
-      return state;
-    };
-
-    const dispatchMediaReady = (media: HTMLMediaElement) => {
-      queueMicrotask(() => {
-        media.dispatchEvent(new Event("durationchange"));
-        media.dispatchEvent(new Event("loadedmetadata"));
-        media.dispatchEvent(new Event("canplay"));
-      });
-    };
-
-    Object.defineProperty(HTMLMediaElement.prototype, "readyState", {
-      configurable: true,
-      get() {
-        return 4;
-      },
-    });
-    Object.defineProperty(HTMLMediaElement.prototype, "duration", {
-      configurable: true,
-      get() {
-        return stateFor(this).duration;
-      },
-    });
-    Object.defineProperty(HTMLMediaElement.prototype, "currentTime", {
-      configurable: true,
-      get() {
-        return stateFor(this).currentTime;
-      },
-      set(value: number) {
-        const state = stateFor(this);
-        state.currentTime = Math.max(0, Number(value) || 0);
-        this.dispatchEvent(new Event("timeupdate"));
-      },
-    });
-    Object.defineProperty(HTMLMediaElement.prototype, "paused", {
-      configurable: true,
-      get() {
-        return stateFor(this).paused;
-      },
-    });
-    Object.defineProperty(HTMLMediaElement.prototype, "src", {
-      configurable: true,
-      get() {
-        return stateFor(this).src;
-      },
-      set(value: string) {
-        stateFor(this).src = String(value);
-        dispatchMediaReady(this);
-      },
-    });
-
-    HTMLMediaElement.prototype.play = async function play() {
-      const state = stateFor(this);
-      state.paused = false;
-      this.dispatchEvent(new Event("play"));
-    };
-    HTMLMediaElement.prototype.pause = function pause() {
-      const state = stateFor(this);
-      state.paused = true;
-      this.dispatchEvent(new Event("pause"));
-    };
-    HTMLMediaElement.prototype.load = function load() {
-      dispatchMediaReady(this);
-    };
-  });
-
-  await page.route("**/api/watch-rooms/*/stream", async route => {
-    await route.fulfill({
-      status: 200,
-      contentType: "video/mp4",
-      body: "",
-    });
-  });
+      await Promise.all(guestContexts.map(context => context.close()));
+      await ownerContext.close();
+    },
+  };
 }
 
-async function videoCurrentTime(page: Page) {
-  return page.locator("video").evaluate(video => {
-    return video instanceof HTMLVideoElement ? video.currentTime : 0;
+async function expectLive(page: Page, connected: number) {
+  await expect(page.getByText("Realtime sync connected")).toBeVisible({
+    timeout: env.responseTimeoutMs,
+  });
+  await expect(page.getByText(`${connected} connected now`)).toBeVisible({
+    timeout: env.responseTimeoutMs,
   });
 }
-
-async function expectWatchRoomChrome(page: Page) {
-  await expect(
-    page.getByRole("button", {
-      name: `Rewind ${WATCH_ROOM_SEEK_STEP_SEC} seconds`,
-    }),
-  ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Play playback" })).toBeVisible();
-  await expect(
-    page.getByRole("button", {
-      name: `Fast-forward ${WATCH_ROOM_SEEK_STEP_SEC} seconds`,
-    }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Adjust volume" }),
-  ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Fullscreen" })).toBeVisible();
-  await expectPageHasNoHorizontalScroll(page);
-}
-
-const watchRoomEnv = readWatchRoomEnv();
 
 test.describe("Watch room realtime playback", () => {
   requireRealInstance("watch rooms need a real websocket and media");
-  test.skip(
-    !watchRoomEnv,
-    "Set E2E_WATCH_ROOM_MOVIE_ID to run watch-room e2e tests.",
-  );
   test.describe.configure({ timeout: realMediaTimeouts().test });
 
   test("syncs direct-room playback controls across owner and guest browsers", async ({
     browser,
   }) => {
-    const env = watchRoomEnv!;
-    const ownerContext = await browser.newContext({ baseURL: env.baseURL });
-    const guestContext = await browser.newContext({ baseURL: env.baseURL });
-    let guest: E2EGuest | null = null;
+    test.skip(!env.movieId, "Set E2E_WATCH_ROOM_MOVIE_ID to run the direct-room test.");
+    const party = await openRoomParty(browser, 1);
     let roomId: number | null = null;
 
     try {
-      await loginViaApi(ownerContext.request, env);
-      guest = await createGuest(ownerContext.request);
-      roomId = await createWatchRoom(
-        ownerContext.request,
-        env.movieId,
-        guest.id,
-      );
-      await loginViaApi(guestContext.request, guest);
-
-      const ownerPage = await ownerContext.newPage();
-      const guestPage = await guestContext.newPage();
-      await prepareWatchRoomPage(ownerPage);
-      await prepareWatchRoomPage(guestPage);
+      roomId = await createWatchRoom(party.ownerContext.request, env.movieId!, [
+        party.guests[0].id,
+      ]);
+      const ownerPage = await party.ownerContext.newPage();
+      const guestPage = await party.guestContexts[0].newPage();
+      await fakeWatchRoomMedia(ownerPage);
+      await fakeWatchRoomMedia(guestPage);
 
       await Promise.all([
         ownerPage.goto(`/watch-rooms/${roomId}`),
         guestPage.goto(`/watch-rooms/${roomId}`),
       ]);
-
-      await expect(ownerPage.getByText("Realtime sync connected")).toBeVisible({
-        timeout: env.responseTimeoutMs,
-      });
-      await expect(guestPage.getByText("Realtime sync connected")).toBeVisible({
-        timeout: env.responseTimeoutMs,
-      });
-      await expect(ownerPage.getByText("2 connected now")).toBeVisible({
-        timeout: env.responseTimeoutMs,
-      });
-      await expect(guestPage.getByText("2 connected now")).toBeVisible({
-        timeout: env.responseTimeoutMs,
-      });
+      await expectLive(ownerPage, 2);
+      await expectLive(guestPage, 2);
       await expectWatchRoomChrome(ownerPage);
       await expectWatchRoomChrome(guestPage);
 
@@ -288,12 +147,117 @@ test.describe("Watch room realtime playback", () => {
       });
       roomId = null;
     } finally {
-      await cleanupWatchRoom(ownerContext.request, roomId);
-      if (guest) {
-        await deleteUser(ownerContext.request, guest.id, { allowMissing: true });
+      await party.close(roomId);
+    }
+  });
+
+  test("edits invitees and lets a guest leave", async ({ browser }) => {
+    test.skip(!env.movieId, "Set E2E_WATCH_ROOM_MOVIE_ID to run the members test.");
+    const party = await openRoomParty(browser, 2);
+    const [removed, added] = party.guests;
+    let roomId: number | null = null;
+
+    try {
+      roomId = await createWatchRoom(party.ownerContext.request, env.movieId!, [removed.id]);
+      const ownerPage = await party.ownerContext.newPage();
+      const removedPage = await party.guestContexts[0].newPage();
+      const addedPage = await party.guestContexts[1].newPage();
+      for (const page of [ownerPage, removedPage, addedPage]) {
+        await fakeWatchRoomMedia(page);
       }
-      await guestContext.close();
-      await ownerContext.close();
+      await Promise.all([
+        ownerPage.goto(`/watch-rooms/${roomId}`),
+        removedPage.goto(`/watch-rooms/${roomId}`),
+      ]);
+      await expectLive(ownerPage, 2);
+      await expectLive(removedPage, 2);
+
+      // The owner swaps the first guest for the second.
+      await ownerPage.getByRole("button", { name: /^Edit invitees for/ }).click();
+      const dialog = ownerPage.getByRole("dialog", { name: "Edit invitees" });
+      await dialog.getByRole("checkbox", { name: `Invite ${removed.name}` }).click();
+      await dialog.getByRole("checkbox", { name: `Invite ${added.name}` }).click();
+      await dialog.getByRole("button", { name: "Save invitees" }).click();
+      await expect(dialog).toBeHidden({ timeout: env.responseTimeoutMs });
+
+      await expect(removedPage).toHaveURL(/\/$/, { timeout: env.responseTimeoutMs });
+      await expect(ownerPage.getByText("1 connected now")).toBeVisible({
+        timeout: env.responseTimeoutMs,
+      });
+      await expect(
+        ownerPage.getByRole("complementary").getByText(added.name),
+      ).toBeVisible();
+
+      // The added guest joins, then leaves for good.
+      await addedPage.goto(`/watch-rooms/${roomId}`);
+      await expectLive(addedPage, 2);
+      await addedPage.getByRole("button", { name: /^Leave watch room for/ }).click();
+      await addedPage.getByRole("button", { name: "Leave room" }).click();
+      await expect(addedPage).toHaveURL(/\/$/, { timeout: env.responseTimeoutMs });
+      await expect(ownerPage.getByText("1 connected now")).toBeVisible({
+        timeout: env.responseTimeoutMs,
+      });
+      await expect(
+        ownerPage.getByRole("complementary").getByText(added.name),
+      ).toBeHidden();
+    } finally {
+      await party.close(roomId);
+    }
+  });
+});
+
+test.describe("Watch room HLS playback with real media", () => {
+  requireRealInstance("an HLS room needs a real transcode");
+  test.describe.configure({ timeout: realMediaTimeouts().test });
+
+  test("keeps two viewers of an HLS room on the same position", async ({ browser }) => {
+    test.skip(!env.hlsMovieId, "Set E2E_WATCH_ROOM_HLS_MOVIE_ID to run the HLS-room test.");
+    const party = await openRoomParty(browser, 1);
+    let roomId: number | null = null;
+
+    try {
+      roomId = await createWatchRoom(
+        party.ownerContext.request,
+        env.hlsMovieId!,
+        [party.guests[0].id],
+        "720p_3mbps",
+      );
+      const ownerPage = await party.ownerContext.newPage();
+      const guestPage = await party.guestContexts[0].newPage();
+      await Promise.all([
+        ownerPage.goto(`/watch-rooms/${roomId}`),
+        guestPage.goto(`/watch-rooms/${roomId}`),
+      ]);
+      await expectLive(ownerPage, 2);
+      await expectLive(guestPage, 2);
+
+      await ownerPage.getByRole("button", { name: "Play playback" }).click();
+      await expect
+        .poll(() => videoCurrentTime(guestPage), { timeout: env.responseTimeoutMs })
+        .toBeGreaterThan(2);
+
+      await ownerPage
+        .getByRole("button", { name: `Fast-forward ${WATCH_ROOM_SEEK_STEP_SEC} seconds` })
+        .click();
+      await expect
+        .poll(
+          async () => {
+            const [owner, guest] = await Promise.all([
+              videoCurrentTime(ownerPage),
+              videoCurrentTime(guestPage),
+            ]);
+            return owner > WATCH_ROOM_SEEK_STEP_SEC ? Math.abs(owner - guest) : Infinity;
+          },
+          { timeout: env.responseTimeoutMs },
+        )
+        .toBeLessThan(WATCH_ROOM_SYNC_DRIFT_THRESHOLD_SEC);
+
+      await guestPage.getByRole("button", { name: "Pause playback" }).click();
+      await expect(ownerPage.getByRole("button", { name: "Play playback" })).toBeVisible({
+        timeout: env.responseTimeoutMs,
+      });
+    } finally {
+      await party.close(roomId);
     }
   });
 });

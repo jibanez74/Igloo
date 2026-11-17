@@ -3,7 +3,10 @@ import type { RefObject } from "react";
 import { joinWatchRoom } from "@/lib/api";
 import {
   WATCH_ROOM_CLIENT_EVENT_TYPES,
+  WATCH_ROOM_ECHO_POSITION_TOLERANCE_SEC,
+  WATCH_ROOM_ECHO_TIMEOUT_MS,
   WATCH_ROOM_EVENT_TYPES,
+  WATCH_ROOM_SEEK_COALESCE_MS,
   WATCH_ROOM_SYNC_ANNOUNCE_DEBOUNCE_MS,
   WATCH_ROOM_SYNC_DRIFT_THRESHOLD_SEC,
 } from "@/lib/constants";
@@ -11,19 +14,20 @@ import {
   watchRoomAnnouncement,
   watchRoomWebSocketUrl,
 } from "@/lib/watch-room";
-import { showInfo } from "@/lib/toast-helpers";
 import {
   isInterruptedPlayError,
   isSourceFailurePlayError,
 } from "@/lib/video-playback";
 import type {
+  WatchRoomMemberType,
   WatchRoomPlaybackStateType,
   WatchRoomServerEventType,
 } from "@/types";
 import { clearTimeoutRef } from "@/lib/utils";
-import { apiErrorMessage } from "@/lib/is-api-failure";
 
 const MAX_RECONNECT_DELAY_MS = 16_000;
+// Echoes still waiting past this many are dropped oldest first.
+const MAX_PENDING_ECHOES = 8;
 
 type WatchRoomPlaybackEventType =
   | typeof WATCH_ROOM_CLIENT_EVENT_TYPES.PLAY
@@ -40,38 +44,88 @@ type RoomPlaybackSnapshot = {
   overtakenByPlay?: boolean;
 };
 
+/** A command this viewer sent, waiting for the server to send it back. */
+type PendingEcho = {
+  type: WatchRoomPlaybackEventType;
+  positionSec: number;
+  sentAt: number;
+};
+
+/**
+ * - `connecting`: the first join and socket are on their way.
+ * - `live`: the socket is open and the room's state has arrived.
+ * - `reconnecting`: the link dropped; this viewer's presses move only their
+ *   own player until it is back, and the room's state wins then.
+ */
+export type WatchRoomConnectionState = "connecting" | "live" | "reconnecting";
+
+/**
+ * Why the room ended for this viewer: the owner closed it, or this viewer is
+ * no longer a member (removed, left on another device, or gone while away).
+ */
+export type WatchRoomEndReason = "deleted" | "revoked";
+
 type UseWatchRoomConnectionOptions = {
   currentRoomId: number | null;
+  /** The signed-in user, so a room the server forgot can be put back. */
+  selfUserId: number | null;
   movieTitle: string;
   streamUrl: string;
   videoRef: RefObject<HTMLVideoElement | null>;
   onCurrentTimeChange: (time: number) => void;
   onPlayingChange: (playing: boolean) => void;
-  onRoomDeleted: () => void;
+  onMembersChanged: (members: WatchRoomMemberType[]) => void;
+  /**
+   * The socket is back after a drop: anything the room said while it was
+   * down (a member change) never reached this viewer, so the room is re-read.
+   */
+  onReconnected: () => void;
+  onRoomEnded: (reason: WatchRoomEndReason) => void;
 };
+
+function isEchoOf(echo: PendingEcho, playback: WatchRoomPlaybackStateType) {
+  const pausedMatches =
+    echo.type === WATCH_ROOM_CLIENT_EVENT_TYPES.PLAY
+      ? !playback.paused
+      : echo.type === WATCH_ROOM_CLIENT_EVENT_TYPES.PAUSE
+        ? playback.paused
+        : true;
+  return (
+    pausedMatches &&
+    Math.abs(playback.position_sec - echo.positionSec) <
+      WATCH_ROOM_ECHO_POSITION_TOLERANCE_SEC
+  );
+}
 
 export function useWatchRoomConnection({
   currentRoomId,
+  selfUserId,
   movieTitle,
   streamUrl,
   videoRef,
   onCurrentTimeChange,
   onPlayingChange,
-  onRoomDeleted,
+  onMembersChanged,
+  onReconnected,
+  onRoomEnded,
 }: UseWatchRoomConnectionOptions) {
   const socketRef = useRef<WebSocket | null>(null);
   const heartbeatRef = useRef<number | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
+  const seekTimeoutRef = useRef<number | null>(null);
+  const pendingSeekRef = useRef<number | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const intentionalCloseRef = useRef(false);
   const socketInstanceIdRef = useRef(0);
   const prevRoomIdRef = useRef<number | null>(null);
-  const roomDeletionHandledRef = useRef(false);
+  const roomEndHandledRef = useRef(false);
+  // Whether a socket has opened for this room yet: the next one is a reconnect.
+  const openedOnceRef = useRef(false);
   const pendingPlaybackRef = useRef<RoomPlaybackSnapshot | null>(null);
+  const pendingEchoesRef = useRef<PendingEcho[]>([]);
   // The room's latest known playback state: what the server last sent, or
-  // what this viewer last sent it (the server does not echo a sender's own
-  // events). A replaced stream source starts over at its beginning, paused,
-  // so this is applied to it again.
+  // what this viewer last pressed. A replaced stream source starts over at its
+  // beginning, paused, so this is applied to it again.
   const roomPlaybackRef = useRef<RoomPlaybackSnapshot | null>(null);
 
   const [playbackError, setPlaybackError] = useState<string | null>(null);
@@ -79,10 +133,18 @@ export function useWatchRoomConnection({
     { text: string; token: number } | undefined
   >(undefined);
   const [connectedUserIds, setConnectedUserIds] = useState<number[]>([]);
-  const [connectionReady, setConnectionReady] = useState(false);
+  const [connectionState, setConnectionState] =
+    useState<WatchRoomConnectionState>("connecting");
   const [reconnectKey, setReconnectKey] = useState(0);
 
   const syncAnnouncement = syncAnnouncementState?.text;
+
+  const announce = (text: string) => {
+    setSyncAnnouncementState(currentAnnouncement => ({
+      text,
+      token: (currentAnnouncement?.token ?? 0) + 1,
+    }));
+  };
 
   const clearHeartbeat = () => {
     if (heartbeatRef.current !== null) {
@@ -91,11 +153,16 @@ export function useWatchRoomConnection({
     }
   };
 
+  const clearPendingSeek = () => {
+    clearTimeoutRef(seekTimeoutRef);
+    pendingSeekRef.current = null;
+  };
+
   const closeRoomConnection = () => {
     intentionalCloseRef.current = true;
 
     clearTimeoutRef(reconnectTimeoutRef);
-
+    clearPendingSeek();
     clearHeartbeat();
 
     const socket = socketRef.current;
@@ -108,9 +175,14 @@ export function useWatchRoomConnection({
     ) {
       socket.close();
     }
-
-    setConnectionReady(false);
   };
+
+  const endRoom = useEffectEvent((reason: WatchRoomEndReason) => {
+    if (roomEndHandledRef.current) return;
+    roomEndHandledRef.current = true;
+    closeRoomConnection();
+    onRoomEnded(reason);
+  });
 
   const applyPlaybackState = useEffectEvent(
     async (playback: WatchRoomPlaybackStateType, overtakenByPlay: boolean) => {
@@ -186,6 +258,84 @@ export function useWatchRoomConnection({
     }
   });
 
+  const followRoom = useEffectEvent(
+    async (playback: WatchRoomPlaybackStateType) => {
+      const snapshot = { state: playback, receivedAt: Date.now() };
+      pendingPlaybackRef.current = snapshot;
+      roomPlaybackRef.current = snapshot;
+      await flushPendingPlayback();
+    },
+  );
+
+  const sendCommand = (type: WatchRoomPlaybackEventType, positionSec: number) => {
+    const socket = socketRef.current;
+    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+    socket.send(JSON.stringify({ type, position_sec: positionSec }));
+
+    const now = Date.now();
+    pendingEchoesRef.current = [
+      ...pendingEchoesRef.current.filter(
+        echo => now - echo.sentAt < WATCH_ROOM_ECHO_TIMEOUT_MS,
+      ),
+      { type, positionSec, sentAt: now },
+    ].slice(-MAX_PENDING_ECHOES);
+  };
+
+  /**
+   * The playback_changed the server sent: this viewer's own command coming
+   * back, or another member's. Returns whether it was an echo.
+   */
+  const takeEcho = (playback: WatchRoomPlaybackStateType) => {
+    const now = Date.now();
+    const echoes = pendingEchoesRef.current.filter(
+      echo => now - echo.sentAt < WATCH_ROOM_ECHO_TIMEOUT_MS,
+    );
+    const head = echoes[0];
+    if (head && isEchoOf(head, playback)) {
+      pendingEchoesRef.current = echoes.slice(1);
+      return { echo: true, newerPending: echoes.length > 1 };
+    }
+    pendingEchoesRef.current = echoes;
+    return { echo: false, newerPending: false };
+  };
+
+  const handleSnapshot = useEffectEvent(async (
+    playback: WatchRoomPlaybackStateType,
+    connected: number[],
+  ) => {
+    pendingEchoesRef.current = [];
+
+    // An emptied room forgets where it was and starts again paused at 0: this
+    // viewer's own drop was its last connection, or the server restarted.
+    // Back in it alone, this viewer is the only memory of the room, so it
+    // puts the room back where it was. IglooTV does the same.
+    const known = roomPlaybackRef.current;
+    const video = videoRef.current;
+    const ownPosition =
+      video && video.readyState >= 1 ? video.currentTime : null;
+    const forgotten =
+      playback.paused && playback.position_sec === 0 && (ownPosition ?? 0) > 0;
+    const alone =
+      selfUserId !== null && connected.every(id => id === selfUserId);
+    if (known && forgotten && alone && ownPosition !== null) {
+      const type = video?.paused
+        ? WATCH_ROOM_CLIENT_EVENT_TYPES.PAUSE
+        : WATCH_ROOM_CLIENT_EVENT_TYPES.PLAY;
+      sendCommand(type, ownPosition);
+      roomPlaybackRef.current = {
+        state: {
+          paused: type === WATCH_ROOM_CLIENT_EVENT_TYPES.PAUSE,
+          position_sec: ownPosition,
+          updated_at: new Date().toISOString(),
+        },
+        receivedAt: Date.now(),
+      };
+      return;
+    }
+
+    await followRoom(playback);
+  });
+
   const handleSocketMessage = useEffectEvent(async (rawEvent: MessageEvent) => {
     let event: WatchRoomServerEventType;
     try {
@@ -197,41 +347,59 @@ export function useWatchRoomConnection({
       return;
     }
 
-    if (event.type === WATCH_ROOM_EVENT_TYPES.ROOM_DELETED) {
-      if (roomDeletionHandledRef.current) {
+    switch (event.type) {
+      case WATCH_ROOM_EVENT_TYPES.ROOM_DELETED:
+        endRoom("deleted");
         return;
-      }
-
-      roomDeletionHandledRef.current = true;
-      closeRoomConnection();
-      showInfo("Watch room closed", `"${movieTitle}" is no longer available.`);
-      onRoomDeleted();
-      return;
+      case WATCH_ROOM_EVENT_TYPES.ROOM_ACCESS_REVOKED:
+        endRoom("revoked");
+        return;
+      case WATCH_ROOM_EVENT_TYPES.MEMBERS_CHANGED:
+        if (event.members) onMembersChanged(event.members);
+        return;
+      case WATCH_ROOM_EVENT_TYPES.PONG:
+        return;
+      default:
+        break;
     }
 
     if (event.connected_user_ids) {
       setConnectedUserIds(event.connected_user_ids);
     }
 
-    const announcement = watchRoomAnnouncement(event, movieTitle);
-    if (announcement) {
-      setSyncAnnouncementState(currentAnnouncement => ({
-        text: announcement,
-        token: (currentAnnouncement?.token ?? 0) + 1,
-      }));
+    if (event.type === WATCH_ROOM_EVENT_TYPES.ROOM_SNAPSHOT) {
+      if (event.playback) {
+        await handleSnapshot(event.playback, event.connected_user_ids ?? []);
+      }
+      return;
     }
 
-    if (!event.playback) return;
+    if (event.type === WATCH_ROOM_EVENT_TYPES.PLAYBACK_CHANGED && event.playback) {
+      const { echo, newerPending } = takeEcho(event.playback);
+      // This viewer's own command, back from the server. With newer ones
+      // still on their way it is out of date and changes nothing. The last
+      // one is the server's word on the room and is followed: usually the
+      // player is already there and the drift threshold makes it a no-op,
+      // but another member's command can have landed in between.
+      if (echo && newerPending) return;
+      if (!echo) {
+        const announcement = watchRoomAnnouncement(event, movieTitle);
+        if (announcement) announce(announcement);
+      }
+      await followRoom(event.playback);
+      return;
+    }
 
-    const snapshot = { state: event.playback, receivedAt: Date.now() };
-    pendingPlaybackRef.current = snapshot;
-    roomPlaybackRef.current = snapshot;
-    await flushPendingPlayback();
+    const announcement = watchRoomAnnouncement(event, movieTitle);
+    if (announcement) announce(announcement);
   });
 
   const handleSocketOpen = useEffectEvent(() => {
-    setConnectionReady(true);
+    // The server sends the room's snapshot first thing, right behind this.
+    setConnectionState("live");
     reconnectAttemptsRef.current = 0;
+    if (openedOnceRef.current) onReconnected();
+    openedOnceRef.current = true;
     const ws = socketRef.current;
     if (!ws) return;
     heartbeatRef.current = window.setInterval(() => {
@@ -243,42 +411,51 @@ export function useWatchRoomConnection({
     }, 25_000);
   });
 
+  const scheduleReconnect = () => {
+    const delay = Math.min(
+      1000 * 2 ** Math.min(reconnectAttemptsRef.current, 10),
+      MAX_RECONNECT_DELAY_MS,
+    );
+    reconnectAttemptsRef.current += 1;
+    setConnectionState("reconnecting");
+    reconnectTimeoutRef.current = window.setTimeout(() => {
+      reconnectTimeoutRef.current = null;
+      setReconnectKey(k => k + 1);
+    }, delay);
+  };
+
   const handleSocketClose = useEffectEvent((closedInstanceId: number) => {
     // Guard first: a replaced socket's close event can land after the new one
-    // has opened, and clearing the heartbeat/ready flag here would silence the
-    // live connection until the server dropped it.
+    // has opened, and clearing the heartbeat here would silence the live
+    // connection until the server dropped it.
     if (closedInstanceId !== socketInstanceIdRef.current) return;
-    setConnectionReady(false);
     clearHeartbeat();
-    if (!intentionalCloseRef.current) {
-      const delay = Math.min(
-        1000 * 2 ** Math.min(reconnectAttemptsRef.current, 10),
-        MAX_RECONNECT_DELAY_MS,
-      );
-      reconnectAttemptsRef.current += 1;
-      setPlaybackError(null);
-      reconnectTimeoutRef.current = window.setTimeout(() => {
-        reconnectTimeoutRef.current = null;
-        setReconnectKey(k => k + 1);
-      }, delay);
+    clearPendingSeek();
+    // Nothing sent on this socket will come back.
+    pendingEchoesRef.current = [];
+    // A room this viewer is leaving or closing is not reconnected: its own
+    // request ends it, or markRoomEndHandled(false) brings the socket back.
+    if (!intentionalCloseRef.current && !roomEndHandledRef.current) {
+      scheduleReconnect();
     }
   });
 
-  const handleSocketError = useEffectEvent(() => {
-    setPlaybackError("Realtime sync connection failed for this watch room.");
-  });
-
-  // The cleanup closes the socket, which releases its four listeners, and clears
-  // both the heartbeat interval and the reconnect timeout.
+  // The cleanup closes the socket, which releases its listeners, and clears
+  // the heartbeat interval and the reconnect and seek timeouts.
   // react-doctor-disable-next-line react-doctor/effect-needs-cleanup
   useEffect(() => {
-    roomDeletionHandledRef.current = false;
     intentionalCloseRef.current = false;
     if (prevRoomIdRef.current !== currentRoomId) {
       prevRoomIdRef.current = currentRoomId;
+      // Only a new room clears it: a reconnect while this viewer's own close
+      // or leave is out must not let the socket end the room a second time.
+      roomEndHandledRef.current = false;
+      openedOnceRef.current = false;
       reconnectAttemptsRef.current = 0;
       pendingPlaybackRef.current = null;
       roomPlaybackRef.current = null;
+      pendingEchoesRef.current = [];
+      setConnectionState("connecting");
     }
     if (!currentRoomId) return;
 
@@ -288,23 +465,26 @@ export function useWatchRoomConnection({
     const instanceId = socketInstanceIdRef.current;
 
     const initRoomConnection = async () => {
-      let res: Awaited<ReturnType<typeof joinWatchRoom>>;
+      let res: Awaited<ReturnType<typeof joinWatchRoom>> | null = null;
       try {
         res = await joinWatchRoom(currentRoomId);
-      } catch (error) {
-        if (cancelled) return;
-        setPlaybackError(
-          error instanceof Error
-            ? error.message
-            : "Unable to join this watch room.",
-        );
-        return;
+      } catch {
+        res = null;
       }
 
       if (cancelled) return;
 
-      if (res.error) {
-        setPlaybackError(apiErrorMessage(res, "Unable to join this watch room."));
+      if (!res || res.error) {
+        const status = res?.error ? res.status : undefined;
+        // Gone or no longer ours: the room ended for this viewer.
+        if (status === 403 || status === 404) {
+          endRoom(status === 404 ? "deleted" : "revoked");
+          return;
+        }
+        // The session ended; apiRequest has already signed the viewer out.
+        if (status === 401) return;
+        // A network failure or a server restart: try again later.
+        scheduleReconnect();
         return;
       }
 
@@ -316,7 +496,7 @@ export function useWatchRoomConnection({
         void handleSocketMessage(event);
       });
       socket.addEventListener("close", () => handleSocketClose(instanceId));
-      socket.addEventListener("error", handleSocketError);
+      // An error is always followed by close, which reconnects.
     };
 
     void initRoomConnection();
@@ -326,10 +506,8 @@ export function useWatchRoomConnection({
       intentionalCloseRef.current = true;
 
       clearTimeoutRef(reconnectTimeoutRef);
-
+      clearPendingSeek();
       clearHeartbeat();
-      // Teardown owns this now that a stale close returns early above.
-      setConnectionReady(false);
 
       if (socketRef.current === socket) {
         socketRef.current = null;
@@ -388,19 +566,10 @@ export function useWatchRoomConnection({
     };
   }, [streamUrl, currentRoomId, videoRef]);
 
-  const sendPlaybackEvent = (
+  const rememberPress = (
     type: WatchRoomPlaybackEventType,
     positionSec: number,
   ) => {
-    const socket = socketRef.current;
-    if (!socket || socket.readyState !== WebSocket.OPEN) return;
-    socket.send(
-      JSON.stringify({
-        type,
-        position_sec: positionSec,
-      }),
-    );
-
     // A seek keeps the room playing or paused as it was.
     let paused = roomPlaybackRef.current?.state.paused ?? true;
     if (type === WATCH_ROOM_CLIENT_EVENT_TYPES.PLAY) paused = false;
@@ -413,6 +582,36 @@ export function useWatchRoomConnection({
       },
       receivedAt: Date.now(),
     };
+  };
+
+  /**
+   * Sends a play, pause or seek to the room. A seek waits
+   * WATCH_ROOM_SEEK_COALESCE_MS for the next one, so a scrub or a held key
+   * reaches the room as its final position; a play or pause carries its own
+   * position and replaces a seek still waiting.
+   */
+  const sendPlaybackEvent = (
+    type: WatchRoomPlaybackEventType,
+    positionSec: number,
+  ) => {
+    rememberPress(type, positionSec);
+
+    if (type !== WATCH_ROOM_CLIENT_EVENT_TYPES.SEEK) {
+      clearPendingSeek();
+      sendCommand(type, positionSec);
+      return;
+    }
+
+    pendingSeekRef.current = positionSec;
+    clearTimeoutRef(seekTimeoutRef);
+    seekTimeoutRef.current = window.setTimeout(() => {
+      seekTimeoutRef.current = null;
+      const position = pendingSeekRef.current;
+      pendingSeekRef.current = null;
+      if (position !== null) {
+        sendCommand(WATCH_ROOM_CLIENT_EVENT_TYPES.SEEK, position);
+      }
+    }, WATCH_ROOM_SEEK_COALESCE_MS);
   };
 
   // Called by a local Play before it plays, so the press starts from the
@@ -447,8 +646,20 @@ export function useWatchRoomConnection({
     pendingPlaybackRef.current = null;
   };
 
-  const markRoomDeletionHandled = (handled: boolean) => {
-    roomDeletionHandledRef.current = handled;
+  /**
+   * This viewer ended the room themselves (closed or left it): the socket's
+   * own room_deleted or room_access_revoked must not end it a second time.
+   * `false` undoes that after the request failed.
+   */
+  const markRoomEndHandled = (handled: boolean) => {
+    roomEndHandledRef.current = handled;
+    // The request failed and the room goes on: if its socket closed meanwhile,
+    // connect again.
+    const socket = socketRef.current;
+    const socketGone = !socket || socket.readyState === WebSocket.CLOSED;
+    if (!handled && socketGone && !intentionalCloseRef.current) {
+      setReconnectKey(k => k + 1);
+    }
   };
 
   return {
@@ -456,11 +667,11 @@ export function useWatchRoomConnection({
     setPlaybackError,
     syncAnnouncement,
     connectedUserIds,
-    connectionReady,
+    connectionState,
     closeRoomConnection,
     sendPlaybackEvent,
     syncToPendingPlayback,
     clearPendingPlayback,
-    markRoomDeletionHandled,
+    markRoomEndHandled,
   };
 }

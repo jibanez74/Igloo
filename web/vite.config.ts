@@ -19,6 +19,9 @@ export default defineConfig(({ mode }) => {
           // free port; plain `bun run dev` keeps talking to the Go server.
           target: `http://127.0.0.1:${process.env.E2E_MOCK_API_PORT ?? "8080"}`,
           changeOrigin: true,
+          // The watch-room socket lives under /api too. `vite preview`
+          // inherits this proxy, so the production e2e build reaches it.
+          ws: true,
         },
       },
     },

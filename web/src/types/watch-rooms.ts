@@ -8,6 +8,9 @@ export type WatchRoomDetailType = Schema["WatchRoomDetail"];
 export type WatchRoomInviteUsersResponseType = Schema["InviteUsersData"];
 export type CreateWatchRoomRequestType = Schema["CreateWatchRoomRequest"];
 export type CreateWatchRoomResponseType = Schema["CreateWatchRoomData"];
+export type UpdateWatchRoomMembersRequestType =
+  Schema["UpdateWatchRoomMembersRequest"];
+export type LeaveWatchRoomResponseType = Schema["LeaveWatchRoomData"];
 export type WatchRoomResponseType = Schema["WatchRoomData"];
 export type JoinWatchRoomResponseType = Schema["JoinWatchRoomData"];
 export type WatchRoomPlaybackStateType = Schema["WatchRoomPlaybackState"];

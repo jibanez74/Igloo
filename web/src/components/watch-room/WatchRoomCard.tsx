@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { Film, Trash2, Users } from "lucide-react";
+import { Film, LogOut, Trash2, UserPen, Users } from "lucide-react";
 import {
   CARD_FOCUS_WITHIN_RING_CLASS,
   CARD_SURFACE_CLASS,
@@ -13,6 +13,8 @@ import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button, buttonVariants } from "@/components/ui/button";
 import DeleteWatchRoomDialog from "@/components/watch-room/DeleteWatchRoomDialog";
+import EditWatchRoomMembersDialog from "@/components/watch-room/EditWatchRoomMembersDialog";
+import LeaveWatchRoomDialog from "@/components/watch-room/LeaveWatchRoomDialog";
 import { cn, getInitials } from "@/lib/utils";
 import type { WatchRoomType } from "@/types";
 
@@ -26,7 +28,11 @@ const WATCH_ROOM_MEMBER_NAME_LIMIT = 3;
 
 export default function WatchRoomCard({ room }: Props) {
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [leaveOpen, setLeaveOpen] = useState(false);
   const closeRoomButtonRef = useRef<HTMLButtonElement | null>(null);
+  const editButtonRef = useRef<HTMLButtonElement | null>(null);
+  const leaveButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const posterUrl = buildTmdbImageUrl(room.movie_poster, TMDB_POSTER_SIZE);
 
@@ -87,15 +93,36 @@ export default function WatchRoomCard({ room }: Props) {
             </p>
           </div>
 
-          {room.is_owner && (
+          {room.is_owner ? (
+            <div className="flex shrink-0 items-center gap-1">
+              <Button
+                ref={editButtonRef}
+                variant="ghost-muted"
+                size="icon-sm"
+                aria-label={`Edit invitees for ${room.movie_title}`}
+                onClick={() => setEditOpen(true)}
+              >
+                <UserPen className="size-4" aria-hidden="true" />
+              </Button>
+              <Button
+                ref={closeRoomButtonRef}
+                variant="ghost-destructive"
+                size="icon-sm"
+                aria-label={`Close watch room for ${room.movie_title}`}
+                onClick={() => setConfirmOpen(true)}
+              >
+                <Trash2 className="size-4" aria-hidden="true" />
+              </Button>
+            </div>
+          ) : (
             <Button
-              ref={closeRoomButtonRef}
+              ref={leaveButtonRef}
               variant="ghost-destructive"
               size="icon-sm"
-              aria-label={`Close watch room for ${room.movie_title}`}
-              onClick={() => setConfirmOpen(true)}
+              aria-label={`Leave watch room for ${room.movie_title}`}
+              onClick={() => setLeaveOpen(true)}
             >
-              <Trash2 className="size-4" aria-hidden="true" />
+              <LogOut className="size-4" aria-hidden="true" />
             </Button>
           )}
         </div>
@@ -151,13 +178,34 @@ export default function WatchRoomCard({ room }: Props) {
         </div>
       </div>
 
-      {room.is_owner && (
-        <DeleteWatchRoomDialog
+      {room.is_owner ? (
+        <>
+          <DeleteWatchRoomDialog
+            roomId={room.id}
+            movieTitle={room.movie_title}
+            open={confirmOpen}
+            onOpenChange={setConfirmOpen}
+            restoreFocusRef={closeRoomButtonRef}
+          />
+          <EditWatchRoomMembersDialog
+            roomId={room.id}
+            movieTitle={room.movie_title}
+            inviteeIds={room.members
+              .filter(member => member.id !== room.owner.id)
+              .map(member => member.id)}
+            open={editOpen}
+            onOpenChange={setEditOpen}
+            restoreFocusRef={editButtonRef}
+          />
+        </>
+      ) : (
+        <LeaveWatchRoomDialog
           roomId={room.id}
           movieTitle={room.movie_title}
-          open={confirmOpen}
-          onOpenChange={setConfirmOpen}
-          restoreFocusRef={closeRoomButtonRef}
+          hostName={room.owner.name}
+          open={leaveOpen}
+          onOpenChange={setLeaveOpen}
+          restoreFocusRef={leaveButtonRef}
         />
       )}
     </article>

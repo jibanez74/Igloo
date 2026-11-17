@@ -5,6 +5,7 @@ import { useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeft,
   FastForward,
+  LogOut,
   Maximize,
   Minimize,
   Pause,
@@ -12,6 +13,7 @@ import {
   Radio,
   Rewind,
   Trash2,
+  UserPen,
   Users,
 } from "lucide-react";
 import {
@@ -23,8 +25,11 @@ import { formatTimecode } from "@/lib/format";
 import { apiErrorMessage } from "@/lib/is-api-failure";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import {
+  authUserFrom,
+  authUserQueryOpts,
   forgetWatchRoom,
   movieTechnicalDetailsQueryOpts,
+  setWatchRoomMembers,
   watchRoomQueryOpts,
 } from "@/lib/query-opts";
 import { movieMediaRef } from "@/lib/media-ref";
@@ -33,12 +38,20 @@ import {
   isInterruptedPlayError,
   isSourceFailurePlayError,
 } from "@/lib/video-playback";
-import { watchRoomStreamUrl } from "@/lib/watch-room";
+import {
+  watchRoomStreamConflicted,
+  watchRoomStreamUrl,
+} from "@/lib/watch-room";
+import { showInfo } from "@/lib/toast-helpers";
+import { getWatchRoom } from "@/lib/api";
+import { sessionEndedSince, sessionStamp } from "@/lib/session";
 import { useHlsCapacityRetry } from "@/hooks/useHlsCapacityRetry";
 import { useHlsSessionKeepalive } from "@/hooks/useHlsSessionKeepalive";
 import { useHlsSessionRecovery } from "@/hooks/useHlsSessionRecovery";
 import { cn } from "@/lib/utils";
 import DeleteWatchRoomDialog from "@/components/watch-room/DeleteWatchRoomDialog";
+import EditWatchRoomMembersDialog from "@/components/watch-room/EditWatchRoomMembersDialog";
+import LeaveWatchRoomDialog from "@/components/watch-room/LeaveWatchRoomDialog";
 import { Button } from "@/components/ui/button";
 import {
   PlayerIconButton,
@@ -53,9 +66,15 @@ import { useVideoFullscreen } from "@/hooks/useVideoFullscreen";
 import { useVideoPlaybackKeyboard } from "@/hooks/useVideoPlaybackKeyboard";
 import { useShortcutHints } from "@/hooks/useShortcutHints";
 import { useSuspendMusicPlayback } from "@/hooks/useSuspendMusicPlayback";
-import { useWatchRoomConnection } from "./useWatchRoomConnection";
+import {
+  useWatchRoomConnection,
+  type WatchRoomConnectionState,
+} from "./useWatchRoomConnection";
 import { WatchRoomLoading, WatchRoomUnavailable } from "./WatchRoomStatus";
 import type { WatchRoomDetailType, WatchRoomMemberType } from "@/types";
+
+const WATCH_ROOM_TRACKS_CHANGED_MESSAGE =
+  "This movie's file changed since the room was made, so its audio or subtitles no longer match. The host needs to close this room and start a new one.";
 
 type WatchRoomPageProps = {
   roomId: number;
@@ -66,10 +85,14 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const deleteButtonRef = useRef<HTMLButtonElement>(null);
+  const editButtonRef = useRef<HTMLButtonElement>(null);
+  const leaveButtonRef = useRef<HTMLButtonElement>(null);
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
   const [streamReloadKey, setStreamReloadKey] = useState(0);
   // Joining a room is choosing to watch it: music steps aside from the
   // start, through the room's loading and error states too.
@@ -85,6 +108,8 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
 
   const queryClient = useQueryClient();
   const { data, isPending, isError } = useQuery(watchRoomQueryOpts(roomId));
+  const { data: authUserData } = useQuery(authUserQueryOpts());
+  const selfUserId = authUserFrom(authUserData)?.id ?? null;
   const room = data?.error === false ? data.data.room : null;
   const currentRoomId = room?.id ?? null;
   const movieTitle = room?.movie_title ?? "";
@@ -105,26 +130,61 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
     setPlaybackError,
     syncAnnouncement,
     connectedUserIds,
-    connectionReady,
+    connectionState,
     closeRoomConnection,
     sendPlaybackEvent,
     syncToPendingPlayback,
     clearPendingPlayback,
-    markRoomDeletionHandled,
+    markRoomEndHandled,
   } = useWatchRoomConnection({
     currentRoomId,
+    selfUserId,
     movieTitle,
     streamUrl,
     videoRef,
     onCurrentTimeChange: setCurrentTime,
     onPlayingChange: setPlaying,
-    // The owner closed the room: leave it, and drop it from this viewer's
-    // cache so Home's list and the room's loader cannot offer it again.
-    onRoomDeleted: () =>
+    onMembersChanged: members =>
+      setWatchRoomMembers(queryClient, roomId, members),
+    // Only a room that loads replaces the members: a refetch that failed for
+    // a moment would cache its error envelope and empty the page.
+    onReconnected: () => {
+      const session = sessionStamp();
+      void getWatchRoom(roomId).then(res => {
+        if (sessionEndedSince(session) || res.error) return;
+        setWatchRoomMembers(queryClient, roomId, res.data.room.members);
+      });
+    },
+    // The owner closed the room, or this viewer is no longer in it: leave,
+    // and drop it from this viewer's cache so Home's list and the room's
+    // loader cannot offer it again.
+    onRoomEnded: reason => {
+      if (reason === "deleted") {
+        showInfo("Watch room closed", `"${movieTitle}" is no longer available.`);
+      } else {
+        showInfo(
+          "No longer in this watch room",
+          `You are no longer invited to "${movieTitle}".`,
+        );
+      }
       void forgetWatchRoom(queryClient, roomId, () =>
         navigate({ to: "/", replace: true }),
-      ),
+      );
+    },
   });
+
+  // The player only says the stream failed. A room whose tracks no longer
+  // match its file answers 409, which only reloading the room will not fix,
+  // so the page asks the stream route itself.
+  const handlePlayerError = (message: string | null) => {
+    setPlaybackError(message);
+    if (message === null || !room) return;
+    void watchRoomStreamConflicted(streamUrl, room.playback_mode).then(
+      conflicted => {
+        if (conflicted) setPlaybackError(WATCH_ROOM_TRACKS_CHANGED_MESSAGE);
+      },
+    );
+  };
 
   const subtitleTrackIndex = room?.subtitle_track ?? null;
   const techDetailsOpts = movieTechnicalDetailsQueryOpts(room?.movie_id ?? 0);
@@ -270,6 +330,7 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
     closeRoomConnection();
     return navigate({ to: "/", replace: true });
   };
+  const handleLeft = handleOwnerDeleteSuccess;
 
   if (isPending) {
     return <WatchRoomLoading />;
@@ -341,10 +402,14 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
         <WatchRoomHeader
           room={room}
           connectedCount={connectedMembers.length}
-          connectionReady={connectionReady}
+          connectionState={connectionState}
           deleteButtonRef={deleteButtonRef}
+          editButtonRef={editButtonRef}
+          leaveButtonRef={leaveButtonRef}
           onDelete={() => setDeleteDialogOpen(true)}
-          onLeave={() => navigate({ to: "/" })}
+          onEditMembers={() => setEditDialogOpen(true)}
+          onLeave={() => setLeaveDialogOpen(true)}
+          onBackHome={() => navigate({ to: "/" })}
         />
 
         <div
@@ -370,7 +435,7 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
             playerFullscreenMode={playerFullscreenMode}
             isFullscreen={isFullscreen}
             isImmersiveViewport={isImmersiveViewport}
-            onError={setPlaybackError}
+            onError={handlePlayerError}
             onPlayingChange={setPlaying}
             onTimeUpdate={setCurrentTime}
             onDurationChange={setDuration}
@@ -394,27 +459,56 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
               members={room.members}
               ownerId={room.owner.id}
               connectedUserIds={connectedUserIds}
+              presenceKnown={connectionState === "live"}
             />
           ) : null}
         </div>
       </div>
 
       {room.is_owner ? (
-        <DeleteWatchRoomDialog
+        <>
+          <DeleteWatchRoomDialog
+            roomId={room.id}
+            movieTitle={room.movie_title}
+            open={deleteDialogOpen}
+            onOpenChange={setDeleteDialogOpen}
+            onDeleteStart={() => {
+              markRoomEndHandled(true);
+            }}
+            onDeleteError={() => {
+              markRoomEndHandled(false);
+            }}
+            onDeleted={handleOwnerDeleteSuccess}
+            restoreFocusRef={deleteButtonRef}
+          />
+          <EditWatchRoomMembersDialog
+            roomId={room.id}
+            movieTitle={room.movie_title}
+            inviteeIds={room.members
+              .filter(member => member.id !== room.owner.id)
+              .map(member => member.id)}
+            open={editDialogOpen}
+            onOpenChange={setEditDialogOpen}
+            restoreFocusRef={editButtonRef}
+          />
+        </>
+      ) : (
+        <LeaveWatchRoomDialog
           roomId={room.id}
           movieTitle={room.movie_title}
-          open={deleteDialogOpen}
-          onOpenChange={setDeleteDialogOpen}
-          onDeleteStart={() => {
-            markRoomDeletionHandled(true);
+          hostName={room.owner.name}
+          open={leaveDialogOpen}
+          onOpenChange={setLeaveDialogOpen}
+          onLeaveStart={() => {
+            markRoomEndHandled(true);
           }}
-          onDeleteError={() => {
-            markRoomDeletionHandled(false);
+          onLeaveError={() => {
+            markRoomEndHandled(false);
           }}
-          onDeleted={handleOwnerDeleteSuccess}
-          restoreFocusRef={deleteButtonRef}
+          onLeft={handleLeft}
+          restoreFocusRef={leaveButtonRef}
         />
-      ) : null}
+      )}
     </div>
   );
 }
@@ -422,19 +516,33 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
 type WatchRoomHeaderProps = {
   room: WatchRoomDetailType;
   connectedCount: number;
-  connectionReady: boolean;
+  connectionState: WatchRoomConnectionState;
   deleteButtonRef: RefObject<HTMLButtonElement | null>;
+  editButtonRef: RefObject<HTMLButtonElement | null>;
+  leaveButtonRef: RefObject<HTMLButtonElement | null>;
   onDelete: () => void;
+  onEditMembers: () => void;
   onLeave: () => void;
+  onBackHome: () => void;
+};
+
+const CONNECTION_STATE_LABELS: Record<WatchRoomConnectionState, string> = {
+  connecting: "Connecting realtime sync...",
+  live: "Realtime sync connected",
+  reconnecting: "Reconnecting: your changes won't reach the room",
 };
 
 function WatchRoomHeader({
   room,
   connectedCount,
-  connectionReady,
+  connectionState,
   deleteButtonRef,
+  editButtonRef,
+  leaveButtonRef,
   onDelete,
+  onEditMembers,
   onLeave,
+  onBackHome,
 }: WatchRoomHeaderProps) {
   return (
     <header className="flex flex-col gap-4 rounded-2xl border border-border bg-card/90 p-4">
@@ -455,36 +563,69 @@ function WatchRoomHeader({
 
         <div className="flex flex-wrap items-center gap-3">
           {room.is_owner ? (
+            <>
+              <Button
+                ref={editButtonRef}
+                variant="outline"
+                size="sm"
+                shape="pill"
+                aria-label={`Edit invitees for ${room.movie_title}`}
+                onClick={onEditMembers}
+              >
+                <UserPen className="size-4" aria-hidden="true" />
+                Edit invitees
+              </Button>
+              <Button
+                ref={deleteButtonRef}
+                variant="destructive"
+                size="sm"
+                shape="pill"
+                aria-label={`Close watch room for ${room.movie_title}`}
+                onClick={onDelete}
+              >
+                <Trash2 className="size-4" aria-hidden="true" />
+                Close room
+              </Button>
+            </>
+          ) : (
             <Button
-              ref={deleteButtonRef}
-              type="button"
-              variant="destructive"
+              ref={leaveButtonRef}
+              variant="outline-destructive"
               size="sm"
               shape="pill"
-              aria-label={`Close watch room for ${room.movie_title}`}
-              onClick={onDelete}
+              aria-label={`Leave watch room for ${room.movie_title}`}
+              onClick={onLeave}
             >
-              <Trash2 className="size-4" aria-hidden="true" />
-              Close room
+              <LogOut className="size-4" aria-hidden="true" />
+              Leave room
             </Button>
-          ) : null}
+          )}
 
-          <Button variant="outline" size="sm" shape="pill" onClick={onLeave}>
+          <Button variant="outline" size="sm" shape="pill" onClick={onBackHome}>
             <ArrowLeft className="size-4" aria-hidden="true" />
-            Leave room
+            Back home
           </Button>
         </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-        <span className="rounded-full border border-border bg-background/60 px-3 py-1">
-          {connectionReady
-            ? "Realtime sync connected"
-            : "Connecting realtime sync..."}
+        <span
+          role="status"
+          className={cn(
+            "rounded-full border px-3 py-1",
+            connectionState === "reconnecting"
+              ? "border-destructive/30 bg-destructive/10 text-destructive"
+              : "border-border bg-background/60",
+          )}
+        >
+          {CONNECTION_STATE_LABELS[connectionState]}
         </span>
-        <span className="rounded-full border border-border bg-background/60 px-3 py-1">
-          {connectedCount} connected now
-        </span>
+        {/* Presence is only known while the socket is live. */}
+        {connectionState === "live" ? (
+          <span className="rounded-full border border-border bg-background/60 px-3 py-1">
+            {connectedCount} connected now
+          </span>
+        ) : null}
       </div>
     </header>
   );
@@ -670,12 +811,15 @@ type WatchRoomMembersPanelProps = {
   members: WatchRoomMemberType[];
   ownerId: number;
   connectedUserIds: number[];
+  /** False while reconnecting: the last presence the room sent is stale. */
+  presenceKnown: boolean;
 };
 
 function WatchRoomMembersPanel({
   members,
   ownerId,
   connectedUserIds,
+  presenceKnown,
 }: WatchRoomMembersPanelProps) {
   return (
     <aside className="rounded-2xl border border-border bg-card/90 p-4 sm:p-5">
@@ -702,16 +846,18 @@ function WatchRoomMembersPanel({
                   ) : null}
                 </p>
               </div>
-              <span
-                className={cn(
-                  "rounded-full px-2 py-1 text-xs font-medium",
-                  isConnected
-                    ? "bg-success/15 text-success"
-                    : "bg-muted text-muted-foreground",
-                )}
-              >
-                {isConnected ? "Connected" : "Away"}
-              </span>
+              {presenceKnown ? (
+                <span
+                  className={cn(
+                    "rounded-full px-2 py-1 text-xs font-medium",
+                    isConnected
+                      ? "bg-success/15 text-success"
+                      : "bg-muted text-muted-foreground",
+                  )}
+                >
+                  {isConnected ? "Connected" : "Away"}
+                </span>
+              ) : null}
             </li>
           );
         })}

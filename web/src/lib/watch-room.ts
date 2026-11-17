@@ -21,15 +21,36 @@ export function watchRoomStreamUrl(
   return `/api/watch-rooms/${roomId}/hls/playlist.m3u8${query}`;
 }
 
+// The page's own origin, as every API call uses: in development Vite proxies
+// /api, the socket included, to the Go server.
 export function watchRoomWebSocketUrl(roomId: number) {
   const baseUrl = new URL(window.location.origin);
   baseUrl.protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
 
-  if (import.meta.env.DEV) {
-    baseUrl.port = "8080";
-  }
-
   return new URL(`/api/watch-rooms/${roomId}/ws`, baseUrl).toString();
+}
+
+/**
+ * Whether the room's stream answers 409: the tracks the room pinned no longer
+ * match its file after a rescan. Asked only after the player failed, because
+ * the player cannot see the status. A direct room takes HEAD; an HLS room's
+ * manifest only answers GET, which also refreshes its session.
+ */
+export async function watchRoomStreamConflicted(
+  streamUrl: string,
+  playbackMode: string,
+): Promise<boolean> {
+  try {
+    const response = await fetch(streamUrl, {
+      method: playbackMode === "direct" ? "HEAD" : "GET",
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+    void response.body?.cancel();
+    return response.status === 409;
+  } catch {
+    return false;
+  }
 }
 
 export function watchRoomAnnouncement(

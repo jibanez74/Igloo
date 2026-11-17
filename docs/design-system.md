@@ -1727,8 +1727,15 @@ require the full playback test pass.
   circle with `shadow-glow`) from `components/playback/PlayerButtons.tsx`;
   the watch room's transport row uses the same two, so a room reads as the
   same player. They stay plain buttons on the `PLAYER_*` recipes, not
-  `Button` variants (§2.3). The room's header pair (Close room, Leave room)
-  is two `sm` pills; its "Back home" on an unavailable room is the status
+  `Button` variants (§2.3). The room's header actions are `sm` pills: the
+  owner's Edit invitees (`outline`) and Close room (`destructive`), an
+  invitee's Leave room (`outline-destructive`, a removal outside a
+  confirmation), and everyone's Back home (`outline`). A room card repeats
+  them as `icon-sm` row icons (`ghost-muted` edit, `ghost-destructive` close
+  or leave). While the room's socket reconnects, the header's sync chip takes
+  the destructive tint and says changes won't reach the room, and presence
+  (the "N connected now" chip and each member's Connected/Away) is hidden,
+  since it is stale. Its "Back home" on an unavailable room is the status
   screens' `xl` call to action.
   **One time readout per width**: from `sm` up it sits in the transport row
   and the progress bar's own labels are hidden; below `sm` the row cannot hold

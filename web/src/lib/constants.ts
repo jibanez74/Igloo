@@ -38,7 +38,9 @@ export const WATCH_ROOM_EVENT_TYPES = {
   PLAYBACK_CHANGED: "playback_changed",
   MEMBER_JOINED: "member_joined",
   MEMBER_LEFT: "member_left",
+  MEMBERS_CHANGED: "members_changed",
   ROOM_DELETED: "room_deleted",
+  ROOM_ACCESS_REVOKED: "room_access_revoked",
   PONG: "pong",
 } as const;
 
@@ -777,6 +779,15 @@ export const CONTENT_FADE_EXIT_CLASS =
 export const WATCH_ROOM_SEEK_STEP_SEC = 10;
 export const WATCH_ROOM_SYNC_DRIFT_THRESHOLD_SEC = 1.5;
 export const WATCH_ROOM_SYNC_ANNOUNCE_DEBOUNCE_MS = 1200;
+// A run of seeks (scrubbing, held arrow keys) goes to the room as one, this
+// long after the last; the player itself moves at once. IglooTV coalesces
+// its held seeks the same way.
+export const WATCH_ROOM_SEEK_COALESCE_MS = 400;
+// The server sends each command back to everyone, its sender included. An
+// echo is the same play or pause within this of the position sent, and one
+// that has not come back in this long never will.
+export const WATCH_ROOM_ECHO_POSITION_TOLERANCE_SEC = 0.5;
+export const WATCH_ROOM_ECHO_TIMEOUT_MS = 5_000;
 
 // How long LiveAnnouncer waits before speaking a message, so the region is in
 // the DOM first. Tests advance past it to prove a message was never spoken.

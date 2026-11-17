@@ -15,6 +15,7 @@ import type {
   ShowEpisodeTechnicalDetailsDataType,
   SortOrder,
   WatchProgressType,
+  WatchRoomMemberType,
 } from "@/types";
 import { unwrapApiData } from "@/lib/is-api-failure";
 import { movieMediaRef } from "@/lib/media-ref";
@@ -932,6 +933,39 @@ export async function forgetWatchRoom(
     queryClient.removeQueries({
       queryKey: watchRoomQueryOpts(roomId).queryKey,
       exact: true,
+    });
+  }
+}
+
+/**
+ * Writes a room's new member list into its cached detail and its row in the
+ * rooms list, after the owner changed it (here or on another device).
+ */
+export function setWatchRoomMembers(
+  queryClient: QueryClient,
+  roomId: number,
+  members: WatchRoomMemberType[],
+) {
+  const roomKey = watchRoomQueryOpts(roomId).queryKey;
+  const room = queryClient.getQueryData(roomKey);
+  if (room?.error === false) {
+    queryClient.setQueryData(roomKey, {
+      ...room,
+      data: { ...room.data, room: { ...room.data.room, members } },
+    });
+  }
+
+  const roomsKey = watchRoomsQueryOpts().queryKey;
+  const rooms = queryClient.getQueryData(roomsKey);
+  if (rooms?.error === false) {
+    queryClient.setQueryData(roomsKey, {
+      ...rooms,
+      data: {
+        ...rooms.data,
+        rooms: rooms.data.rooms.map(item =>
+          item.id === roomId ? { ...item, members } : item,
+        ),
+      },
     });
   }
 }
