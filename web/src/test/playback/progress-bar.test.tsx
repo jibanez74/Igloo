@@ -195,6 +195,7 @@ describe("ProgressBar", () => {
 
     const slider = screen.getByRole("slider") as HTMLInputElement;
 
+    fireEvent.pointerDown(slider);
     fireEvent.change(slider, { target: { value: "100" } });
 
     // A stale timeupdate re-render must not snap the thumb back mid-drag.
@@ -234,6 +235,7 @@ describe("ProgressBar", () => {
 
     const slider = screen.getByRole("slider") as HTMLInputElement;
 
+    fireEvent.pointerDown(slider);
     fireEvent.change(slider, { target: { value: "100" } });
     fireEvent.pointerCancel(slider);
 
@@ -322,6 +324,38 @@ describe("ProgressBar", () => {
 
     expect(screen.getByText("39:00")).toBeInTheDocument();
     expect(screen.getByText("38:49")).toBeInTheDocument();
+  });
+
+  it("follows the playhead again after a change no pointer made", () => {
+    const onSeek = vi.fn();
+
+    const { rerender } = render(
+      <ProgressBar
+        currentTime={50}
+        duration={200}
+        onSeek={onSeek}
+        variant="video"
+      />,
+    );
+
+    const slider = screen.getByRole("slider") as HTMLInputElement;
+
+    // A VoiceOver adjust: a change with no pointer and no blur after it.
+    fireEvent.change(slider, { target: { value: "100" } });
+    expect(onSeek).toHaveBeenLastCalledWith(100);
+    expect(slider.value).toBe("100");
+
+    for (const time of [100, 101, 102]) {
+      rerender(
+        <ProgressBar
+          currentTime={time}
+          duration={200}
+          onSeek={onSeek}
+          variant="video"
+        />,
+      );
+    }
+    expect(slider.value).toBe("102");
   });
 
   it("drops a pending scrub value when resetKey changes", () => {

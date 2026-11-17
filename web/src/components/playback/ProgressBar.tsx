@@ -112,7 +112,17 @@ export default function ProgressBar({
   // While the user is scrubbing, the media element's currentTime lags behind
   // (seeks are async), so the displayed position follows the pending scrub
   // value instead of snapping back to the stale currentTime prop.
+  // Held only while a pointer drags the thumb. A change without one (an iOS
+  // VoiceOver adjust, which this native input exists for) has no release to
+  // wait for, so its value lasts until the playhead next moves; held until
+  // blur, it froze the bar while playback went on.
   const [scrubTime, setScrubTime] = useState<number | null>(null);
+  const [pointerScrubbing, setPointerScrubbing] = useState(false);
+  const [prevCurrentTime, setPrevCurrentTime] = useState(currentTime);
+  if (currentTime !== prevCurrentTime) {
+    setPrevCurrentTime(currentTime);
+    if (!pointerScrubbing && scrubTime !== null) setScrubTime(null);
+  }
   // When the playing media changes (e.g. track auto-advance mid-drag), a
   // pending scrub value belongs to the old media and must not carry over.
   const [prevResetKey, setPrevResetKey] = useState(resetKey);
@@ -153,6 +163,7 @@ export default function ProgressBar({
   };
 
   const clearScrub = () => {
+    setPointerScrubbing(false);
     setScrubTime(null);
   };
 
@@ -212,6 +223,7 @@ export default function ProgressBar({
         value={safeCurrentTime}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
+        onPointerDown={() => setPointerScrubbing(true)}
         onPointerUp={clearScrub}
         onPointerCancel={clearScrub}
         onBlur={clearScrub}
