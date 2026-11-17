@@ -3,7 +3,12 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { DETAIL_PAGE_CONTENT_ENTER_CLASS } from "@/lib/constants";
 import { showDetailsQueryOpts } from "@/lib/query-opts";
-import { countFetchRequests, jsonResponse, requestURL } from "../helpers/api";
+import {
+  countFetchRequests,
+  deferredResponse,
+  jsonResponse,
+  requestURL,
+} from "../helpers/api";
 import { createTestQueryClient } from "../helpers/render";
 import { readDocumentHead, renderRoute } from "../helpers/render-route";
 import {
@@ -154,6 +159,30 @@ describe("show details route", () => {
         name: /Specials episodes, 1 in this library/,
       }),
     ).toBeInTheDocument();
+  });
+
+  it("asks for the season the URL names beside the details, not after them", async () => {
+    const fetchMock = mockShowDetailsFetch();
+    const details = deferredResponse();
+    const serve = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(input =>
+      requestURL(input) === `/api/shows/details/${SHOW_ID}`
+        ? details.promise
+        : serve(input),
+    );
+    const episodesUrl = `/api/shows/${SHOW_ID}/seasons/2/episodes`;
+
+    const view = renderRoute(`/tv-shows/${SHOW_ID}?season=2`);
+    await waitFor(() => {
+      expect(countFetchRequests(fetchMock, episodesUrl)).toBe(1);
+    });
+    details.resolve(jsonResponse({ error: false, data: showDetails() }));
+    await view;
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: /Frost Harbor/ }),
+    ).toBeInTheDocument();
+    expect(countFetchRequests(fetchMock, episodesUrl)).toBe(1);
   });
 
   it("falls back to the default season when the URL names one the show lacks, and rewrites the URL", async () => {
