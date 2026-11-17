@@ -4,7 +4,6 @@ import {
   HLS_SESSION_LOST_MAX_ATTEMPTS,
   HLS_SESSION_LOST_MIN_INTERVAL_MS,
 } from "@/lib/constants";
-import { currentPlaybackTimestampMs } from "@/lib/video-playback";
 import { clearTimeoutRef } from "@/lib/utils";
 
 type HlsSessionRecoveryOptions = {
@@ -42,7 +41,7 @@ export function useHlsSessionRecovery({
 
   const attempt = (currentTimeSec: number) => {
     attemptsRef.current += 1;
-    lastAttemptAtRef.current = currentPlaybackTimestampMs();
+    lastAttemptAtRef.current = Date.now();
     setRecoveryAttempt((previous) => previous + 1);
     onRecover(currentTimeSec);
   };
@@ -52,7 +51,7 @@ export function useHlsSessionRecovery({
     if (retryTimerRef.current !== null) return;
 
     const sinceLastAttemptMs =
-      currentPlaybackTimestampMs() - lastAttemptAtRef.current;
+      Date.now() - lastAttemptAtRef.current;
     if (
       attemptsRef.current > 0 &&
       sinceLastAttemptMs >= HLS_SESSION_LOST_INCIDENT_WINDOW_MS

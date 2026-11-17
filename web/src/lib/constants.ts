@@ -295,6 +295,12 @@ export const MOVIE_VOLUME_STEP = 0.1;
 export const AUDIO_VOLUME_STEP = 0.1;
 export const MOVIE_CONTROLS_IDLE_MS = 3000;
 export const WATCH_PROGRESS_SAVE_INTERVAL_MS = 15_000;
+/**
+ * How long an ordinary watch-progress save may take. Saves run one after
+ * another, so a request the server never answers would hold back every later
+ * one; giving up before the next interval save lets that save go out.
+ */
+export const WATCH_PROGRESS_SAVE_TIMEOUT_MS = 10_000;
 export const PLAYBACK_EXIT_SYNC_TIMEOUT_MS = 2_000;
 /** Seconds the up-next card counts down before starting the next episode. */
 export const UP_NEXT_COUNTDOWN_SEC = 10;

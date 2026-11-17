@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { Tv } from "lucide-react";
 import VideoPlaybackPage from "@/components/playback/VideoPlaybackPage";
+import { useLastSuccess } from "@/hooks/useLastSuccess";
 import { TMDB_BACKDROP_SIZE, TMDB_POSTER_SIZE, TMDB_STILL_SIZE } from "@/lib/constants";
 import { episodeUpNextPresentation } from "@/lib/episode-playback";
 import { episodeTitle } from "@/lib/format";
@@ -23,13 +24,14 @@ export const Route = createFileRoute(
   // The player fills the window: no sidebar, header or page padding.
   staticData: { immersive: true },
   validateSearch: playSearchSchema,
-  loaderDeps: ({ search }) => ({
-    mode: search.mode,
-    audio_track: search.audio_track,
-    subtitle_track: search.subtitle_track,
-    start: search.start,
-    autoplay: search.autoplay,
-  }),
+  // The loader reads the start and the hand-off's autoplay flag only to build
+  // the redirect for a URL without a mode. Keyed on them otherwise, every HLS
+  // rebase (a new start) and the spent flag's removal reran the loader and
+  // the head for nothing.
+  loaderDeps: ({ search }) =>
+    search.mode === undefined
+      ? { mode: search.mode, start: search.start, autoplay: search.autoplay }
+      : { mode: search.mode },
   loader: async ({ context, params, deps }) => {
     const episodeId = parseRouteId(params.episodeId);
     if (episodeId == null) return { title: null };
@@ -85,9 +87,10 @@ function PlayEpisodePage() {
   const parsedId = parseRouteId(episodeIdParam);
   const episodeId = parsedId ?? 0;
 
-  const { data, isPending, isError } = useQuery(
-    showEpisodeQueryOpts(episodeId),
-  );
+  const episodeQuery = useQuery(showEpisodeQueryOpts(episodeId));
+  const { isPending, isError } = episodeQuery;
+  // A failed background refetch must not turn a playing episode "not found".
+  const data = useLastSuccess(episodeQuery.data, episodeId);
   const payload = data && !data.error ? data.data : null;
   const notFound =
     parsedId === null || Boolean(isError || (data && data.error));

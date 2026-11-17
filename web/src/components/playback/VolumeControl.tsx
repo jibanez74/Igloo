@@ -159,12 +159,15 @@ export default function VolumeControl({
 
     document.addEventListener("pointerdown", handleDocumentPointerDown);
     document.addEventListener("focusin", handleDocumentFocusIn);
-    document.addEventListener("keydown", handleDocumentKeyDown);
+    // Capture phase: the open panel's Escape is spent here, before the page's
+    // playback shortcuts (bubble-phase document listeners registered earlier)
+    // see it and also leave fullscreen or the expanded view.
+    document.addEventListener("keydown", handleDocumentKeyDown, true);
 
     return () => {
       document.removeEventListener("pointerdown", handleDocumentPointerDown);
       document.removeEventListener("focusin", handleDocumentFocusIn);
-      document.removeEventListener("keydown", handleDocumentKeyDown);
+      document.removeEventListener("keydown", handleDocumentKeyDown, true);
     };
   }, [isExpanded, isMinimizedPanelOpen]);
 

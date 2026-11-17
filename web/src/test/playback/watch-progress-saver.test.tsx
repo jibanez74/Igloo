@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { useWatchProgressSaver } from "@/hooks/useWatchProgressSaver";
+import { WATCH_PROGRESS_SAVE_TIMEOUT_MS } from "@/lib/constants";
 import { episodeMediaRef, movieMediaRef } from "@/lib/media-ref";
 
 const updateMediaWatchProgress = vi.hoisted(() => vi.fn());
@@ -113,6 +114,7 @@ describe("watch progress saver", () => {
       1000,
       saveSessionId,
       1,
+      expect.any(AbortSignal),
     );
     expect(updateMediaWatchProgress).toHaveBeenNthCalledWith(
       2,
@@ -121,7 +123,67 @@ describe("watch progress saver", () => {
       1000,
       saveSessionId,
       2,
+      expect.any(AbortSignal),
     );
+  });
+
+  it("gives up on a save the server never answers, so the next one goes out", async () => {
+    const deadline = new AbortController();
+    const timeoutSpy = vi
+      .spyOn(AbortSignal, "timeout")
+      .mockReturnValue(deadline.signal);
+    try {
+      // The request settles only when its deadline aborts it, as apiRequest
+      // resolves an aborted fetch as a failure envelope.
+      updateMediaWatchProgress
+        .mockImplementationOnce(
+          (...args: unknown[]) =>
+            new Promise((resolve) => {
+              (args[5] as AbortSignal).addEventListener("abort", () =>
+                resolve({ error: true, message: "timed out" }),
+              );
+            }),
+        )
+        .mockResolvedValueOnce(successfulUpdate);
+      const currentTimeRef = { current: 300 };
+      const durationRef = { current: 1000 };
+      const { result } = renderHook(() =>
+        useWatchProgressSaver({
+          media: movieMediaRef(7),
+          playing: true,
+          currentTimeRef,
+          durationRef,
+        }),
+      );
+
+      act(() => {
+        void result.current.handlePauseSave();
+      });
+      await waitFor(() =>
+        expect(updateMediaWatchProgress).toHaveBeenCalledOnce(),
+      );
+      expect(timeoutSpy).toHaveBeenCalledWith(WATCH_PROGRESS_SAVE_TIMEOUT_MS);
+
+      currentTimeRef.current = 450;
+      let exitSave!: Promise<void>;
+      act(() => {
+        exitSave = result.current.flushProgress();
+      });
+      expect(updateMediaWatchProgress).toHaveBeenCalledOnce();
+
+      deadline.abort();
+      await exitSave;
+      expect(updateMediaWatchProgress).toHaveBeenLastCalledWith(
+        { kind: "movie", id: 7 },
+        450,
+        1000,
+        expect.any(String),
+        2,
+        expect.any(AbortSignal),
+      );
+    } finally {
+      timeoutSpy.mockRestore();
+    }
   });
 
   it("addresses an episode's own watch-progress route", async () => {
@@ -148,6 +210,7 @@ describe("watch progress saver", () => {
       1000,
       expect.any(String),
       1,
+      expect.any(AbortSignal),
     );
 
     currentTimeRef.current = 320;
@@ -344,6 +407,7 @@ describe("watch progress saver", () => {
       1000,
       saveSessionId,
       1,
+      expect.any(AbortSignal),
     );
     expect(requestBody(fetchMock)).toEqual({
       progress_sec: 450,
@@ -431,6 +495,7 @@ describe("watch progress saver", () => {
       1000,
       expect.any(String),
       2,
+      expect.any(AbortSignal),
     );
   });
 
@@ -542,6 +607,7 @@ describe("watch progress saver", () => {
       1000,
       expect.any(String),
       1,
+      expect.any(AbortSignal),
     );
   });
 
@@ -601,6 +667,7 @@ describe("watch progress saver", () => {
       1000,
       expect.any(String),
       1,
+      expect.any(AbortSignal),
     );
   });
 
@@ -701,6 +768,7 @@ describe("watch progress saver", () => {
       1000,
       expect.any(String),
       2,
+      expect.any(AbortSignal),
     );
   });
 
@@ -733,6 +801,7 @@ describe("watch progress saver", () => {
       1000,
       expect.any(String),
       2,
+      expect.any(AbortSignal),
     );
   });
 
@@ -794,6 +863,7 @@ describe("watch progress saver", () => {
       1000,
       expect.any(String),
       2,
+      expect.any(AbortSignal),
     );
   });
 

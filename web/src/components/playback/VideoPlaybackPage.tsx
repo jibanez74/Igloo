@@ -298,6 +298,13 @@ export default function VideoPlaybackPage({
   // waved it away; anything that puts playback back in motion retracts it.
   const upNextOpen = ended && !!upNext && !upNextDismissed;
 
+  // The playhead the controls show, and the ref the progress saver and the
+  // recovery read between renders; always written together.
+  const setPlayhead = (timeSec: number) => {
+    currentTimeRef.current = timeSec;
+    setCurrentTime(timeSec);
+  };
+
   const retractUpNext = () => {
     setEnded(false);
     setUpNextDismissed(false);
@@ -554,7 +561,7 @@ export default function VideoPlaybackPage({
     // also what the next relative seek (a key press, a skip button) builds on.
     if (rebase) {
       requestRebase(t);
-      setCurrentTime(t);
+      setPlayhead(t);
       return;
     }
 
@@ -562,7 +569,7 @@ export default function VideoPlaybackPage({
     // same drag passed through is dropped.
     cancelRebase();
     video.currentTime = toMediaPlaybackTime(t, playbackTiming);
-    setCurrentTime(t);
+    setPlayhead(t);
   };
 
   // The same rule for every seek the element makes, not just the ones seek()
@@ -606,12 +613,9 @@ export default function VideoPlaybackPage({
   };
 
   // durationRef is written where the duration is learned — onDurationChange
-  // below, and the HLS seed further down — not copied back out of state here.
+  // below, and the HLS seed further down — never copied back out of state.
   // Round-tripping it meant every timeupdate restamped the ref with whatever
   // `duration` held, which is 0 until the media reports one, wiping the seed.
-  useEffect(() => {
-    currentTimeRef.current = currentTime;
-  }, [currentTime]);
 
   const { handlePauseSave, handleEndedSave, flushProgress } =
     useWatchProgressSaver({
@@ -845,9 +849,7 @@ export default function VideoPlaybackPage({
         // The controls hold a pending rebase target; the old session's
         // playhead must not snap them back before it goes out.
         if (isRebasePending()) return;
-        const absoluteTime = toAbsolutePlaybackTime(time, playbackTiming);
-        currentTimeRef.current = absoluteTime;
-        setCurrentTime(absoluteTime);
+        setPlayhead(toAbsolutePlaybackTime(time, playbackTiming));
       }}
       onDurationChange={(nextDuration) => {
         const absoluteDuration = toAbsoluteDuration(
@@ -861,11 +863,9 @@ export default function VideoPlaybackPage({
       subtitleTrack={subtitleInfo}
       startSec={isHlsPlayback ? hlsPlaybackOffset : playbackStartSec}
       requestedStartSec={requestedHlsStartSec}
-      onStartApplied={(time) => {
-        const absoluteTime = toAbsolutePlaybackTime(time, playbackTiming);
-        currentTimeRef.current = absoluteTime;
-        setCurrentTime(absoluteTime);
-      }}
+      onStartApplied={(time) =>
+        setPlayhead(toAbsolutePlaybackTime(time, playbackTiming))
+      }
       onSessionLost={(time) =>
         handleSessionLost(toAbsolutePlaybackTime(time, playbackTiming))
       }
@@ -927,7 +927,7 @@ export default function VideoPlaybackPage({
           carriedPlayRef.current = false;
           setPlaybackError(null);
           setPlaying(false);
-          setCurrentTime(0);
+          setPlayhead(0);
           setDuration(0);
         }}
         backButtonRef={backButtonRef}

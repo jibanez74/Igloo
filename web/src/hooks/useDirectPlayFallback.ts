@@ -38,13 +38,9 @@ export function useDirectPlayFallback({
   onFallback,
 }: DirectPlayFallbackOptions) {
   const attemptedRef = useRef(false);
-  const trackedKeyRef = useRef("");
 
   useEffect(() => {
-    if (trackedKeyRef.current !== streamWindowKey) {
-      trackedKeyRef.current = streamWindowKey;
-      attemptedRef.current = false;
-    }
+    attemptedRef.current = false;
   }, [streamWindowKey]);
 
   const attemptFallback = (
@@ -63,11 +59,6 @@ export function useDirectPlayFallback({
     attemptedRef.current = true;
     onFallback();
     return true;
-  };
-
-  /** Returns true when the error was consumed by a fallback navigation. */
-  const handleNativeError = (code: number | null | undefined): boolean => {
-    return attemptFallback(code);
   };
 
   const fireStallFallback = useEffectEvent(() => {
@@ -105,5 +96,7 @@ export function useDirectPlayFallback({
     };
   }, [stallGuardArmed, streamWindowKey, videoRef]);
 
-  return { handleNativeError };
+  // handleNativeError returns true when a fallback navigation consumed the
+  // error.
+  return { handleNativeError: attemptFallback };
 }

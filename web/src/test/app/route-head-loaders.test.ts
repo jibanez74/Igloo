@@ -183,3 +183,34 @@ describe("route loaders feed their head", () => {
     expect(queryClient.getQueryCache().getAll()).toHaveLength(0);
   });
 });
+
+type RouteWithLoaderDeps = {
+  options: { loaderDeps?: (ctx: { search: Record<string, unknown> }) => unknown };
+};
+
+describe("play route loader deps", () => {
+  it.each([
+    ["movie player", PlayMovieRoute as RouteWithLoaderDeps],
+    ["episode player", PlayEpisodeRoute as RouteWithLoaderDeps],
+  ])(
+    "keys the %s loader on the start only while the URL has no mode",
+    (_name, route) => {
+      const loaderDeps = route.options.loaderDeps!;
+      const playing = {
+        mode: "remux",
+        audio_track: 1,
+        subtitle_track: 2,
+        autoplay: true,
+      };
+
+      // An HLS rebase rewrites the start (and a hand-off drops its spent
+      // autoplay flag); neither may rerun the loader.
+      expect(loaderDeps({ search: { ...playing, start: 0 } })).toEqual(
+        loaderDeps({ search: { ...playing, start: 600, autoplay: undefined } }),
+      );
+      expect(
+        loaderDeps({ search: { audio_track: 0, start: 600 } }),
+      ).toMatchObject({ mode: undefined, start: 600 });
+    },
+  );
+});
