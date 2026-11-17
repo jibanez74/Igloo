@@ -4,7 +4,13 @@ import { shouldIgnorePlayerShortcut } from "@/lib/player-shortcuts";
 
 type VideoPlaybackKeyboardOptions = {
   containerRef: RefObject<HTMLElement | null>;
-  videoRef: RefObject<HTMLVideoElement | null>;
+  /**
+   * The element whose readiness gates the shortcuts and whose volume they
+   * change. A surface without one (the YouTube trailer) passes
+   * `playerReady` and the volume callbacks instead.
+   */
+  videoRef?: RefObject<HTMLVideoElement | null>;
+  playerReady?: boolean;
   enabled?: boolean;
   fullscreenActive?: boolean;
   volumeStep?: number;
@@ -40,10 +46,17 @@ const SEEK_KEYS: ReadonlySet<string> = new Set([
  * mid-playback stall, a rebase or a recovery reload, exactly as the on-screen
  * buttons do.
  */
-function acceptsShortcut(
-  video: HTMLVideoElement | null,
-  key: string,
-): video is HTMLVideoElement {
+// The element's own volume, for a surface that passes no volume callbacks.
+function nudgeVolume(video: HTMLVideoElement, delta: number) {
+  video.volume = Math.min(1, Math.max(0, video.volume + delta));
+  video.muted = false;
+}
+
+function toggleMuted(video: HTMLVideoElement) {
+  video.muted = !video.muted;
+}
+
+function acceptsShortcut(video: HTMLVideoElement | null, key: string) {
   if (!video || video.error) return false;
   return !SEEK_KEYS.has(key) || video.readyState >= HAVE_METADATA;
 }
@@ -51,6 +64,7 @@ function acceptsShortcut(
 export function useVideoPlaybackKeyboard({
   containerRef,
   videoRef,
+  playerReady = false,
   enabled = true,
   fullscreenActive = false,
   volumeStep = DEFAULT_VOLUME_STEP,
@@ -76,8 +90,9 @@ export function useVideoPlaybackKeyboard({
     if (shouldIgnorePlayerShortcut(e)) return;
     if (!targetInsidePlayer && !targetIsPageBody) return;
 
-    const video = videoRef.current;
-    if (!acceptsShortcut(video, e.key)) {
+    const video = videoRef?.current;
+    const ready = videoRef ? acceptsShortcut(video ?? null, e.key) : playerReady;
+    if (!ready) {
       if (e.key === "Escape" && fullscreenActive && onEscape) {
         onEscape();
       }
@@ -122,10 +137,9 @@ export function useVideoPlaybackKeyboard({
         if (onAdjustVolume) {
           consume();
           onAdjustVolume(volumeStep);
-        } else {
+        } else if (video) {
           consume();
-          video.volume = Math.min(1, video.volume + volumeStep);
-          video.muted = false;
+          nudgeVolume(video, volumeStep);
         }
         break;
       }
@@ -133,10 +147,9 @@ export function useVideoPlaybackKeyboard({
         if (onAdjustVolume) {
           consume();
           onAdjustVolume(-volumeStep);
-        } else {
+        } else if (video) {
           consume();
-          video.volume = Math.max(0, video.volume - volumeStep);
-          video.muted = false;
+          nudgeVolume(video, -volumeStep);
         }
         break;
       }
@@ -145,9 +158,9 @@ export function useVideoPlaybackKeyboard({
         if (onToggleMute) {
           consume();
           onToggleMute();
-        } else {
+        } else if (video) {
           consume();
-          video.muted = !video.muted;
+          toggleMuted(video);
         }
         break;
       }

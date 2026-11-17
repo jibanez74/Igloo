@@ -255,3 +255,35 @@ describe("useVideoPlaybackKeyboard", () => {
     expect(onTogglePlay).not.toHaveBeenCalled();
   });
 });
+
+function PlayerReadyHarness(
+  options: Omit<Parameters<typeof useVideoPlaybackKeyboard>[0], "containerRef">,
+) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  useVideoPlaybackKeyboard({ containerRef, ...options });
+  return <div ref={containerRef} />;
+}
+
+describe("useVideoPlaybackKeyboard without a video element", () => {
+  it("waits for playerReady, then drives the callbacks", () => {
+    const onTogglePlay = vi.fn();
+    const onAdjustVolume = vi.fn();
+    const onToggleMute = vi.fn();
+    const props = { onTogglePlay, onAdjustVolume, onToggleMute, volumeStep: 0.1 };
+    const { rerender } = render(<PlayerReadyHarness {...props} />);
+
+    // An embed still loading has nothing to control yet.
+    fireEvent.keyDown(document.body, { key: "k" });
+    fireEvent.keyDown(document.body, { key: "ArrowUp" });
+    expect(onTogglePlay).not.toHaveBeenCalled();
+    expect(onAdjustVolume).not.toHaveBeenCalled();
+
+    rerender(<PlayerReadyHarness {...props} playerReady />);
+    fireEvent.keyDown(document.body, { key: "k" });
+    fireEvent.keyDown(document.body, { key: "ArrowUp" });
+    fireEvent.keyDown(document.body, { key: "m" });
+    expect(onTogglePlay).toHaveBeenCalledTimes(1);
+    expect(onAdjustVolume).toHaveBeenCalledWith(0.1);
+    expect(onToggleMute).toHaveBeenCalledTimes(1);
+  });
+});
