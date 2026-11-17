@@ -68,9 +68,12 @@ func (app *Application) observeSessionVersion(userID, version int64) {
 	_ = app.SessionVersionCache.Add(sessionVersionKey(userID), version, sessionVersionCacheTTL)
 }
 
-// rememberSessionVersion records a version this process just wrote.
+// rememberSessionVersion records a version this process just wrote, and
+// closes the watch-room sockets of cookie sessions it leaves behind: IsAuth
+// rejects their next request, but an open socket makes none.
 func (app *Application) rememberSessionVersion(userID, version int64) {
 	app.SessionVersionCache.Set(sessionVersionKey(userID), version, sessionVersionCacheTTL)
+	app.WatchRoomHub.disconnectStaleCookieSessions(userID, version)
 }
 
 // forgetDeletedSessionUser ends every cookie session of a deleted user: the

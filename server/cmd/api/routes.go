@@ -257,6 +257,8 @@ func (app *Application) registerWatchRoomRoutes(r chi.Router) {
 		r.Post("/", app.CreateWatchRoom)
 		r.Get("/{id}", app.GetWatchRoom)
 		r.Post("/{id}/join", app.JoinWatchRoom)
+		r.Post("/{id}/leave", app.LeaveWatchRoom)
+		r.Put("/{id}/members", app.UpdateWatchRoomMembers)
 		r.Get("/{id}/stream", app.StreamWatchRoomMovie)
 		r.Head("/{id}/stream", app.StreamWatchRoomMovie)
 		r.Get("/{id}/hls/"+helpers.HLS_PLAYLIST_FILENAME, app.WatchRoomHLSManifest)

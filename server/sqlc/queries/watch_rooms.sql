@@ -83,17 +83,21 @@ LIMIT 1;
 
 -- name: GetWatchRoomForMemberWithSummary :one
 -- GetWatchRoomForMember plus the requesting member's presence summary
--- (name, avatar), for the websocket upgrade only: it needs both and runs
--- once per socket. HTTP media requests keep the leaner GetWatchRoomForMember.
+-- (name, avatar) and the movie's duration, for the websocket upgrade only:
+-- it needs all three and runs once per socket. HTTP media requests keep the
+-- leaner GetWatchRoomForMember.
 SELECT
   wr.*,
   u.name AS member_name,
-  u.avatar AS member_avatar
+  u.avatar AS member_avatar,
+  m.duration AS movie_duration
 FROM watch_rooms AS wr
 INNER JOIN watch_room_members AS wrm
   ON wrm.room_id = wr.id
 INNER JOIN users AS u
   ON u.id = wrm.user_id
+INNER JOIN movies AS m
+  ON m.id = wr.movie_id
 WHERE wr.id = ?
   AND wrm.user_id = ?
 LIMIT 1;
@@ -128,3 +132,23 @@ ORDER BY id;
 SELECT id FROM watch_rooms
 WHERE owner_user_id = ?
 ORDER BY id;
+
+-- name: ListWatchRoomMemberIDs :many
+SELECT user_id FROM watch_room_members
+WHERE room_id = ?
+ORDER BY user_id;
+
+-- name: RemoveWatchRoomMember :execrows
+DELETE FROM watch_room_members
+WHERE room_id = ?
+  AND user_id = ?;
+
+-- name: ListWatchRoomIDsByMemberID :many
+-- The rooms a user belongs to but does not own: deleting the user cascades
+-- their membership away, and the rooms' remaining members are told.
+SELECT room_id FROM watch_room_members AS wrm
+INNER JOIN watch_rooms AS wr
+  ON wr.id = wrm.room_id
+WHERE wrm.user_id = ?
+  AND wr.owner_user_id != wrm.user_id
+ORDER BY room_id;

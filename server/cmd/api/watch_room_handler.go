@@ -551,3 +551,199 @@ func (app *Application) DeleteWatchRoom(w http.ResponseWriter, r *http.Request) 
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"deleted": true}})
 }
+
+type updateWatchRoomMembersRequest struct {
+	InvitedUserIDs []int64 `json:"invited_user_ids"`
+}
+
+// UpdateWatchRoomMembers replaces the room's invitees. Only the owner may, and
+// the owner always stays a member. Removed members lose access at once: their
+// cached authorization is dropped and their open sockets get
+// room_access_revoked; everyone still connected gets members_changed.
+func (app *Application) UpdateWatchRoomMembers(w http.ResponseWriter, r *http.Request) {
+	userID := app.userIDFromRequest(r)
+
+	roomID, err := parseRoomID(r)
+	if err != nil {
+		helpers.ErrorJSON(w, err, http.StatusBadRequest)
+		return
+	}
+
+	var req updateWatchRoomMembersRequest
+	if err := helpers.ReadJSON(w, r, &req); err != nil {
+		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
+		return
+	}
+	if req.InvitedUserIDs == nil {
+		helpers.ErrorJSON(w, errors.New("invited_user_ids is required"), http.StatusBadRequest)
+		return
+	}
+
+	ownerUserID, err := app.Queries.GetWatchRoomByID(r.Context(), roomID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			helpers.ErrorJSON(w, errors.New("room not found"), http.StatusNotFound)
+			return
+		}
+		app.serverError(w, err, "failed to fetch watch room for member update", internalServerErrorMessage, "room_id", roomID)
+		return
+	}
+	if ownerUserID != userID {
+		helpers.ErrorJSON(w, errors.New("only the room owner can change who is invited"), http.StatusForbidden)
+		return
+	}
+
+	invitedIDs := deduplicateAndFilterUserIDs(req.InvitedUserIDs, userID)
+	if len(invitedIDs) > 0 {
+		count, err := app.Queries.CountUsersByIDs(r.Context(), invitedIDs)
+		if err != nil {
+			app.serverError(w, err, "failed to validate invited user IDs", internalServerErrorMessage)
+			return
+		}
+		if count != int64(len(invitedIDs)) {
+			helpers.ErrorJSON(w, errors.New("one or more invited users do not exist"), http.StatusBadRequest)
+			return
+		}
+	}
+
+	removedIDs, changed, err := app.replaceWatchRoomInvitees(r.Context(), roomID, userID, invitedIDs)
+	if errors.Is(err, errWatchRoomDeleted) {
+		helpers.ErrorJSON(w, errors.New("room not found"), http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		app.serverError(w, err, "failed to update watch room members", internalServerErrorMessage, "room_id", roomID)
+		return
+	}
+
+	if changed {
+		app.WatchRoomAuthCache.invalidateRoom(roomID)
+		app.WatchRoomHub.revokeMembers(roomID, removedIDs)
+		app.announceWatchRoomMembers(r.Context(), roomID)
+	}
+
+	app.GetWatchRoom(w, r)
+}
+
+// replaceWatchRoomInvitees makes the room's members exactly the owner plus
+// invitedIDs, in one transaction. It returns the users it removed and whether
+// anything changed, or errWatchRoomDeleted when the room went between the
+// handler's owner check and this transaction.
+func (app *Application) replaceWatchRoomInvitees(ctx context.Context, roomID, ownerID int64, invitedIDs []int64) ([]int64, bool, error) {
+	tx, err := app.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, false, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	qtx := app.Queries.WithTx(tx)
+	_, err = qtx.GetWatchRoomByID(ctx, roomID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, false, errWatchRoomDeleted
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	currentIDs, err := qtx.ListWatchRoomMemberIDs(ctx, roomID)
+	if err != nil {
+		return nil, false, err
+	}
+
+	wanted := make(map[int64]bool, len(invitedIDs)+1)
+	wanted[ownerID] = true
+	for _, id := range invitedIDs {
+		wanted[id] = true
+	}
+	current := make(map[int64]bool, len(currentIDs))
+	for _, id := range currentIDs {
+		current[id] = true
+	}
+
+	removedIDs := []int64{}
+	for _, id := range currentIDs {
+		if wanted[id] {
+			continue
+		}
+		_, err = qtx.RemoveWatchRoomMember(ctx, database.RemoveWatchRoomMemberParams{RoomID: roomID, UserID: id})
+		if err != nil {
+			return nil, false, err
+		}
+		removedIDs = append(removedIDs, id)
+	}
+
+	added := 0
+	for _, id := range invitedIDs {
+		if current[id] {
+			continue
+		}
+		err = qtx.AddWatchRoomMember(ctx, database.AddWatchRoomMemberParams{RoomID: roomID, UserID: id})
+		if err != nil {
+			return nil, false, err
+		}
+		added++
+	}
+
+	if len(removedIDs) == 0 && added == 0 {
+		return removedIDs, false, nil
+	}
+	return removedIDs, true, tx.Commit()
+}
+
+// LeaveWatchRoom removes the caller from a room they were invited to. The
+// owner cannot leave; they close the room instead. The caller's other open
+// sockets in the room get room_access_revoked, the rest of the room
+// members_changed.
+func (app *Application) LeaveWatchRoom(w http.ResponseWriter, r *http.Request) {
+	userID := app.userIDFromRequest(r)
+
+	roomID, err := parseRoomID(r)
+	if err != nil {
+		helpers.ErrorJSON(w, err, http.StatusBadRequest)
+		return
+	}
+
+	ownerUserID, err := app.Queries.GetWatchRoomByID(r.Context(), roomID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			helpers.ErrorJSON(w, errors.New("room not found"), http.StatusNotFound)
+			return
+		}
+		app.serverError(w, err, "failed to fetch watch room for leave", internalServerErrorMessage, "room_id", roomID)
+		return
+	}
+	if ownerUserID == userID {
+		helpers.ErrorJSON(w, errors.New("the room owner cannot leave; close the room instead"), http.StatusConflict)
+		return
+	}
+
+	removed, err := app.Queries.RemoveWatchRoomMember(r.Context(), database.RemoveWatchRoomMemberParams{
+		RoomID: roomID,
+		UserID: userID,
+	})
+	if err != nil {
+		app.serverError(w, err, "failed to leave watch room", internalServerErrorMessage, "room_id", roomID, "user_id", userID)
+		return
+	}
+	if removed == 0 {
+		helpers.ErrorJSON(w, errors.New(accessDeniedMessage), http.StatusForbidden)
+		return
+	}
+
+	app.WatchRoomAuthCache.invalidateRoom(roomID)
+	app.WatchRoomHub.revokeMembers(roomID, []int64{userID})
+	app.announceWatchRoomMembers(r.Context(), roomID)
+
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{"left": true}})
+}
+
+// announceWatchRoomMembers sends the room's current member list to its open
+// sockets. A failed read is logged and skipped: the change is already
+// committed, and each client re-reads the room when it next loads it.
+func (app *Application) announceWatchRoomMembers(ctx context.Context, roomID int64) {
+	members, err := app.loadRoomMembers(ctx, roomID)
+	if err != nil {
+		app.Logger.Error("failed to load watch room members to announce", "error", err, "room_id", roomID)
+		return
+	}
+	app.WatchRoomHub.membersChanged(roomID, members)
+}

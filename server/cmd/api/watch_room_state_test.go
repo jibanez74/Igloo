@@ -85,17 +85,20 @@ func TestWatchRoomPlaybackState_SnapshotRebasesUpdatedAt(t *testing.T) {
 }
 
 func TestWatchRoomHub_ApplyPlaybackEventTransitions(t *testing.T) {
-	newHubWithSession := func(roomID int64) *WatchRoomHub {
+	// A hub with one client connected to room 1: playback commands come from
+	// a registered sender.
+	newHubWithSession := func(roomID int64) (*WatchRoomHub, *watchRoomClient) {
 		hub := NewWatchRoomHub()
-		hub.mu.Lock()
-		hub.getOrCreateSession(roomID)
-		hub.mu.Unlock()
-		return hub
+		client := newWatchRoomClient(nil, roomID, userSummary{ID: 1})
+		if !hub.connect(roomID, client) {
+			t.Fatal("connect refused")
+		}
+		return hub, client
 	}
 
 	t.Run("play sets position and unpauses", func(t *testing.T) {
-		hub := newHubWithSession(1)
-		event, ok := hub.applyPlaybackEvent(1, "play", 30)
+		hub, client := newHubWithSession(1)
+		event, ok := hub.applyPlaybackEvent(client, "play", 30, 0)
 		if !ok || event == nil || event.Playback == nil {
 			t.Fatalf("applyPlaybackEvent(play) = %+v, %v", event, ok)
 		}
@@ -105,18 +108,18 @@ func TestWatchRoomHub_ApplyPlaybackEventTransitions(t *testing.T) {
 	})
 
 	t.Run("pause keeps position and pauses", func(t *testing.T) {
-		hub := newHubWithSession(1)
-		_, _ = hub.applyPlaybackEvent(1, "play", 30)
-		event, ok := hub.applyPlaybackEvent(1, "pause", 31)
+		hub, client := newHubWithSession(1)
+		_, _ = hub.applyPlaybackEvent(client, "play", 30, 0)
+		event, ok := hub.applyPlaybackEvent(client, "pause", 31, 0)
 		if !ok || event == nil || !event.Playback.Paused || event.Playback.PositionSec != 31 {
 			t.Fatalf("unexpected pause event: %+v ok=%v", event, ok)
 		}
 	})
 
 	t.Run("seek repositions without changing paused state", func(t *testing.T) {
-		hub := newHubWithSession(1)
-		_, _ = hub.applyPlaybackEvent(1, "play", 5)
-		event, ok := hub.applyPlaybackEvent(1, "seek", 90)
+		hub, client := newHubWithSession(1)
+		_, _ = hub.applyPlaybackEvent(client, "play", 5, 0)
+		event, ok := hub.applyPlaybackEvent(client, "seek", 90, 0)
 		if !ok || event == nil || event.Playback.Paused {
 			t.Fatalf("seek while playing should stay unpaused: %+v ok=%v", event, ok)
 		}
@@ -124,18 +127,18 @@ func TestWatchRoomHub_ApplyPlaybackEventTransitions(t *testing.T) {
 			t.Fatalf("seek position = %.3f, want ~90", event.Playback.PositionSec)
 		}
 
-		_, _ = hub.applyPlaybackEvent(1, "pause", 90)
-		event, ok = hub.applyPlaybackEvent(1, "seek", 10)
+		_, _ = hub.applyPlaybackEvent(client, "pause", 90, 0)
+		event, ok = hub.applyPlaybackEvent(client, "seek", 10, 0)
 		if !ok || event == nil || !event.Playback.Paused || event.Playback.PositionSec != 10 {
 			t.Fatalf("seek while paused should stay paused: %+v ok=%v", event, ok)
 		}
 	})
 
 	t.Run("missing position falls back to extrapolated current position", func(t *testing.T) {
-		hub := newHubWithSession(1)
-		_, _ = hub.applyPlaybackEvent(1, "play", 20)
+		hub, client := newHubWithSession(1)
+		_, _ = hub.applyPlaybackEvent(client, "play", 20, 0)
 		time.Sleep(50 * time.Millisecond)
-		event, ok := hub.applyPlaybackEvent(1, "pause", -1)
+		event, ok := hub.applyPlaybackEvent(client, "pause", -1, 0)
 		if !ok || event == nil || !event.Playback.Paused {
 			t.Fatalf("unexpected fallback pause event: %+v ok=%v", event, ok)
 		}
@@ -145,8 +148,8 @@ func TestWatchRoomHub_ApplyPlaybackEventTransitions(t *testing.T) {
 	})
 
 	t.Run("unknown event type is rejected", func(t *testing.T) {
-		hub := newHubWithSession(1)
-		event, ok := hub.applyPlaybackEvent(1, "warp", 10)
+		hub, client := newHubWithSession(1)
+		event, ok := hub.applyPlaybackEvent(client, "warp", 10, 0)
 		if ok || event != nil {
 			t.Fatalf("expected unknown event to be rejected, got %+v ok=%v", event, ok)
 		}
@@ -154,9 +157,33 @@ func TestWatchRoomHub_ApplyPlaybackEventTransitions(t *testing.T) {
 
 	t.Run("unknown room is rejected", func(t *testing.T) {
 		hub := NewWatchRoomHub()
-		event, ok := hub.applyPlaybackEvent(404, "play", 10)
+		stranger := newWatchRoomClient(nil, 404, userSummary{ID: 1})
+		event, ok := hub.applyPlaybackEvent(stranger, "play", 10, 0)
 		if ok || event != nil {
 			t.Fatalf("expected unknown room to be rejected, got %+v ok=%v", event, ok)
+		}
+	})
+
+	// revokeMembers closes a socket before its read loop ends; a command read
+	// in between must not move the room for the members still in it.
+	t.Run("a closed or unregistered sender changes nothing", func(t *testing.T) {
+		hub, client := newHubWithSession(1)
+		other := newWatchRoomClient(nil, 1, userSummary{ID: 2})
+		event, ok := hub.applyPlaybackEvent(other, "play", 10, 0)
+		if ok || event != nil {
+			t.Fatalf("an unregistered sender changed playback: %+v ok=%v", event, ok)
+		}
+
+		hub.revokeMembers(1, []int64{1})
+		event, ok = hub.applyPlaybackEvent(client, "play", 10, 0)
+		if ok || event != nil {
+			t.Fatalf("a revoked sender changed playback: %+v ok=%v", event, ok)
+		}
+		hub.mu.Lock()
+		paused := hub.sessions[1].state.Paused
+		hub.mu.Unlock()
+		if !paused {
+			t.Fatal("the room started playing from a revoked sender")
 		}
 	})
 }

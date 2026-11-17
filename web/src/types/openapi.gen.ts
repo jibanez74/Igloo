@@ -1869,9 +1869,49 @@ export interface paths {
         put?: never;
         /**
          * Confirm watch-room membership
-         * @description Confirms that the caller is a member. Membership is granted only when the room is created, through invited_user_ids; this endpoint never adds members. Returns 404 for an unknown room and 403 for a non-member.
+         * @description Confirms that the caller is a member. Members are set when the room is created, through invited_user_ids, and changed by the owner with PUT /api/watch-rooms/{id}/members; this endpoint never adds members. Returns 404 for an unknown room and 403 for a non-member.
          */
         post: operations["joinWatchRoom"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/watch-rooms/{id}/leave": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Leave a watch room
+         * @description Removes the caller from a room they were invited to. The caller's cached authorization is invalidated, their open WebSocket connections in the room receive room_access_revoked and are closed, and the connections still open receive members_changed. Returns 404 for an unknown room, 403 for a non-member, and 409 for the owner, who closes the room with DELETE instead.
+         */
+        post: operations["leaveWatchRoom"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/watch-rooms/{id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Change who is invited to a watch room
+         * @description Only the room owner may change the members. invited_user_ids replaces every member but the owner, who always stays; the owner's own id and duplicates are dropped, and an id that names no user returns 400. An empty list leaves the owner alone in the room. Removed members lose access at once: their cached authorizations are invalidated, and their open WebSocket connections receive room_access_revoked and are closed. When the member list changed, every connection still open receives members_changed. Returns the room's details as the owner now sees them; 404 for an unknown room and 403 for a caller who is not the owner.
+         */
+        put: operations["updateWatchRoomMembers"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1887,7 +1927,7 @@ export interface paths {
         };
         /**
          * Open a watch-room WebSocket
-         * @description Requires an authenticated room member before upgrading. Invalid room IDs, authentication failures, membership denial (including nonexistent rooms), and database failures use JSON error envelopes. Upgrade failures use text/plain: 400 for malformed handshake headers or key/version, 403 for a rejected Origin, and 500 for an unsupported server upgrade. Origin may be absent; otherwise it must be the request host over http or https (a TLS-terminating proxy that keeps the Host header serves the page over https while this server sees http), the configured VITE_DEV_SERVER origin, or HTTP port 3000 on the same local development hostname (localhost, 127.0.0.1, or ::1). On connection the server sends room_snapshot immediately. Client JSON messages follow WatchRoomClientEvent; server messages follow WatchRoomServerEvent. Any member may send playback commands. join requests another snapshot, ping receives pong, playback commands broadcast playback_changed to all room connections, member_joined goes to the other connections when a user opens their first connection, and member_left when a user's last connection closes while others remain. Playback state lives in server memory and resets to paused at 0 when the last connection leaves. Room deletion, including the removal of its movie or of its owner's account, sends room_deleted and closes connections. Invalid JSON and unknown event types are ignored. The server sends a ping control frame every 40 seconds and closes a connection that sends no message or pong for 60 seconds, or that falls 256 messages behind.
+         * @description Requires an authenticated room member before upgrading. Invalid room IDs, authentication failures, membership denial (including nonexistent rooms), and database failures use JSON error envelopes. Upgrade failures use text/plain: 400 for malformed handshake headers or key/version, 403 for a rejected Origin, and 500 for an unsupported server upgrade. Origin may be absent; otherwise it must be the request host over http or https (a TLS-terminating proxy that keeps the Host header serves the page over https while this server sees http), the configured VITE_DEV_SERVER origin, or HTTP port 3000 on the same local development hostname (localhost, 127.0.0.1, or ::1). On connection the server sends room_snapshot immediately. Client JSON messages follow WatchRoomClientEvent; server messages follow WatchRoomServerEvent. Any member may send playback commands. join requests another snapshot, ping receives pong, playback commands broadcast playback_changed to all room connections, the sender's included, in the order the server applied them, member_joined goes to the other connections when a user opens their first connection, and member_left when a user's last connection closes while others remain. Playback state lives in server memory and resets to paused at 0 when the last connection leaves. Room deletion, including the removal of its movie or of its owner's account, sends room_deleted and closes connections. A member removed by the owner, or who leaves, gets room_access_revoked on each of their connections, which are then closed; the connections still open get members_changed, as they do when a member's account is deleted. Revoking the credential a connection opened with (logging that cookie session out, revoking or logging out the device, deleting the account) closes it without a message; reconnecting then fails with 401. A password change closes every cookie connection the user has, the changing session's own included; that one reconnects at once under its renewed cookie, the others get 401. Invalid JSON and unknown event types are ignored. A message larger than 4 KiB closes the connection. A playback position past the movie's known duration is clamped to it. The server sends a ping control frame every 40 seconds and closes a connection that sends no message or pong for 60 seconds, or that falls 256 messages behind.
          */
         get: operations["watchRoomWebSocket"];
         put?: never;
@@ -1931,7 +1971,7 @@ export interface paths {
         };
         /**
          * Get the HLS playlist for a watch room
-         * @description Creates or reuses the room's single HLS session, which always starts at 0, and returns its media playlist. Every member must authenticate every manifest and asset request; room membership is authorized on each request, with successful membership lookups cached for up to 30 seconds. An unknown room returns 403, the same as a room the caller is not a member of. Credentials are not embedded in playlist URLs. Rewritten asset URLs carry the room's selected audio_track. Any member's manifest or asset request keeps the session alive; after 30 minutes without one, or after its FFmpeg process fails, the next manifest request starts a new session from the beginning. Room sessions never wait for transcode capacity: a full pool returns 503 at once. A cold room can spend up to 30 seconds on a remux preflight and up to 30 seconds waiting for the first output before a retryable 503. A direct-mode room returns 400. 404 means the session was stopped while the request waited (request the manifest again) or has no playable media. Returns 409 when a pinned selected audio or subtitle ordinal is out of range after rescanning, selects a different stream_index, or its pinned non-null language changes. Recreate the room to select current tracks. The audio check is skipped when the room was created for a movie without audio, and the subtitle check when subtitle_track is null. Responses generated by this handler carry Cache-Control: no-store, including handler errors. Authentication or session middleware failures (401 or 500) can omit this header.
+         * @description Creates or reuses the room's single HLS session, which always starts at 0, and returns its media playlist. Every member must authenticate every manifest and asset request; room membership is authorized on each request, with successful membership lookups cached for up to 30 seconds and dropped at once when the owner changes the members or a member leaves. An unknown room returns 403, the same as a room the caller is not a member of; a room deleted while the request waits returns 404. Credentials are not embedded in playlist URLs. Rewritten asset URLs carry the room's selected audio_track. Any member's manifest or asset request keeps the session alive; after 30 minutes without one, or after its FFmpeg process fails, the next manifest request starts a new session from the beginning. Room sessions never wait for transcode capacity: a full pool returns 503 at once. A cold room can spend up to 30 seconds on a remux preflight and up to 30 seconds waiting for the first output before a retryable 503. A direct-mode room returns 400. 404 means the session was stopped while the request waited (request the manifest again) or has no playable media. Returns 409 when a pinned selected audio or subtitle ordinal is out of range after rescanning, selects a different stream_index, or its pinned non-null language changes. Recreate the room to select current tracks. The audio check is skipped when the room was created for a movie without audio, and the subtitle check when subtitle_track is null. Responses generated by this handler carry Cache-Control: no-store, including handler errors. Authentication or session middleware failures (401 or 500) can omit this header.
          */
         get: operations["watchRoomHLSManifest"];
         put?: never;
@@ -1951,7 +1991,7 @@ export interface paths {
         };
         /**
          * Get a watch-room HLS initialization file or media segment
-         * @description Serves an asset from a room HLS session after independently authenticating the requester and authorizing current room membership. Successful membership lookups are cached for up to 30 seconds. An unknown room returns 403, the same as a room the caller is not a member of. Request the room manifest first and follow its rewritten asset URLs. The session is selected by the room alone; query parameters on asset URLs are ignored. A ready file supports conditional and byte-range requests. A file that FFmpeg has not completed yet can wait up to 120 seconds before a retryable 503. Ready assets use video/mp4 and Last-Modified, without ETag. If-Match with a specific entity tag fails with empty 412; If-None-Match: * returns 304. If-Range supports date validators; a nonmatching validator causes a full 200 response. Asset requests refresh the session's 30-minute idle timer but never create a session; with no live session, including in a direct-mode room, they return 404. A 500 can mean FFmpeg failed before writing this file; the next manifest request replaces the failed session. Responses generated by this handler carry Cache-Control: no-store, including handler errors. Authentication or session middleware failures (401 or 500) can omit this header; the plain-text 416 generated by Go's http.ServeContent strips it.
+         * @description Serves an asset from a room HLS session after independently authenticating the requester and authorizing current room membership. Successful membership lookups are cached for up to 30 seconds and dropped at once when the owner changes the members or a member leaves. An unknown room returns 403, the same as a room the caller is not a member of; a room deleted while the request is served returns 404. Request the room manifest first and follow its rewritten asset URLs. The session is selected by the room alone; query parameters on asset URLs are ignored. A ready file supports conditional and byte-range requests. A file that FFmpeg has not completed yet can wait up to 120 seconds before a retryable 503. Ready assets use video/mp4 and Last-Modified, without ETag. If-Match with a specific entity tag fails with empty 412; If-None-Match: * returns 304. If-Range supports date validators; a nonmatching validator causes a full 200 response. Asset requests refresh the session's 30-minute idle timer but never create a session; with no live session, including in a direct-mode room, they return 404. A 500 can mean FFmpeg failed before writing this file; the next manifest request replaces the failed session. Responses generated by this handler carry Cache-Control: no-store, including handler errors. Authentication or session middleware failures (401 or 500) can omit this header; the plain-text 416 generated by Go's http.ServeContent strips it.
          */
         get: operations["watchRoomHLSSegment"];
         put?: never;
@@ -4000,6 +4040,10 @@ export interface components {
              */
             invited_user_ids?: number[];
         };
+        UpdateWatchRoomMembersRequest: {
+            /** @description The users who should be members besides the owner. The owner's own id and duplicates are dropped. */
+            invited_user_ids: number[];
+        };
         WatchRoomsEnvelope: components["schemas"]["JsonSuccess"] & {
             data: {
                 rooms: components["schemas"]["WatchRoomListItem"][];
@@ -4031,6 +4075,12 @@ export interface components {
                 deleted: boolean;
             };
         };
+        LeaveWatchRoomData: {
+            left: boolean;
+        };
+        LeaveWatchRoomEnvelope: components["schemas"]["JsonSuccess"] & {
+            data: components["schemas"]["LeaveWatchRoomData"];
+        };
         WatchRoomPlaybackState: {
             paused: boolean;
             /** @description Room position in seconds at updated_at; while not paused it advances in real time from updated_at. */
@@ -4038,14 +4088,16 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
-        /** @description Server JSON message. room_snapshot carries playback and connected_user_ids; playback_changed carries playback; member_joined and member_left carry member and connected_user_ids; room_deleted and pong carry only type and room_id. */
+        /** @description Server JSON message. room_snapshot carries playback and connected_user_ids; playback_changed carries playback; member_joined and member_left carry member and connected_user_ids; members_changed carries members; room_deleted, room_access_revoked and pong carry only type and room_id. */
         WatchRoomServerEvent: {
             /** @enum {string} */
-            type: "room_snapshot" | "playback_changed" | "member_joined" | "member_left" | "room_deleted" | "pong";
+            type: "room_snapshot" | "playback_changed" | "member_joined" | "member_left" | "members_changed" | "room_deleted" | "room_access_revoked" | "pong";
             /** Format: int64 */
             room_id: number;
             playback?: components["schemas"]["WatchRoomPlaybackState"];
             member?: components["schemas"]["UserSummary"];
+            /** @description The room's members after the change, the owner included, in the order they joined. */
+            members?: components["schemas"]["UserSummary"][];
             /** @description Users with at least one open connection after the event, ascending. */
             connected_user_ids?: number[];
         };
@@ -5986,6 +6038,15 @@ export interface components {
                 "application/json": components["schemas"]["DeleteWatchRoomEnvelope"];
             };
         };
+        /** @description Watch-room leave response. */
+        LeaveWatchRoomResponse: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["LeaveWatchRoomEnvelope"];
+            };
+        };
         /** @description Latest albums response. */
         LatestAlbumsResponse: {
             headers: {
@@ -6787,6 +6848,11 @@ export interface components {
         CreateWatchRoomRequest: {
             content: {
                 "application/json": components["schemas"]["CreateWatchRoomRequest"];
+            };
+        };
+        UpdateWatchRoomMembersRequest: {
+            content: {
+                "application/json": components["schemas"]["UpdateWatchRoomMembersRequest"];
             };
         };
         RecordPlayEventRequest: {
@@ -9264,6 +9330,45 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["JoinWatchRoomResponse"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    leaveWatchRoom: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["LeaveWatchRoomResponse"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    updateWatchRoomMembers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["UpdateWatchRoomMembersRequest"];
+        responses: {
+            200: components["responses"]["WatchRoomResponse"];
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];

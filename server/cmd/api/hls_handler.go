@@ -573,6 +573,11 @@ func writeHLSSessionError(w http.ResponseWriter, err error) {
 		return
 	}
 
+	if errors.Is(err, errWatchRoomDeleted) {
+		helpers.ErrorJSON(w, errors.New("room not found"), http.StatusNotFound)
+		return
+	}
+
 	if errors.Is(err, errHLSSessionNotFound) || errors.Is(err, errHLSSessionEmpty) {
 		message := "HLS session not found"
 		if errors.Is(err, errHLSSessionEmpty) {
