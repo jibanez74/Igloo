@@ -1,5 +1,5 @@
-import { screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { jsonResponse, requestURL } from "../helpers/api";
 import { authUser } from "../helpers/fixtures";
 import { renderRoute } from "../helpers/render-route";
@@ -93,5 +93,135 @@ describe("trailer route with a hand-edited link", () => {
     ).toBeInTheDocument();
     expect(screen.queryByText("Something went wrong!")).not.toBeInTheDocument();
     expect(movieResponse).not.toHaveBeenCalled();
+  });
+});
+
+type FakeTrailerPlayer = {
+  events: YT.PlayerEvents;
+  volume: number;
+  muted: boolean;
+  playVideo: ReturnType<typeof vi.fn>;
+  pauseVideo: ReturnType<typeof vi.fn>;
+  setVolume: ReturnType<typeof vi.fn>;
+};
+
+// useYouTubePlayer skips the iframe_api script when window.YT.Player exists.
+function installFakeYouTube(players: FakeTrailerPlayer[]) {
+  class FakePlayer {
+    events: YT.PlayerEvents;
+    volume = 0;
+    muted = false;
+    playVideo = vi.fn();
+    pauseVideo = vi.fn();
+    setVolume = vi.fn((level: number) => {
+      this.volume = level;
+    });
+    constructor(_id: string, options: YT.PlayerOptions) {
+      this.events = options.events ?? {};
+      players.push(this);
+    }
+    mute() {
+      this.muted = true;
+    }
+    unMute() {
+      this.muted = false;
+    }
+    isMuted() {
+      return this.muted;
+    }
+    getVolume() {
+      return this.volume;
+    }
+    getDuration() {
+      return 120;
+    }
+    getCurrentTime() {
+      return 0;
+    }
+    getPlayerState() {
+      return 2;
+    }
+    seekTo() {}
+    destroy() {}
+  }
+  (window as unknown as { YT: unknown }).YT = {
+    Player: FakePlayer,
+    PlayerState: { UNSTARTED: -1, ENDED: 0, PLAYING: 1, PAUSED: 2, BUFFERING: 3, CUED: 5 },
+    PlayerError: { INVALID_PARAM: 2, HTML5_ERROR: 5, NOT_FOUND: 100, NOT_ALLOWED: 101, NOT_ALLOWED_DISGUISE: 150 },
+  };
+}
+
+describe("trailer route player", () => {
+  const originalSession = Object.getOwnPropertyDescriptor(navigator, "mediaSession");
+
+  afterEach(() => {
+    delete (window as unknown as { YT?: unknown }).YT;
+    if (originalSession) Object.defineProperty(navigator, "mediaSession", originalSession);
+    else Reflect.deleteProperty(navigator, "mediaSession");
+  });
+
+  async function openPlayer() {
+    const players: FakeTrailerPlayer[] = [];
+    installFakeYouTube(players);
+    const handlers = new Map<string, ((details: MediaSessionActionDetails) => void) | null>();
+    Object.defineProperty(navigator, "mediaSession", {
+      configurable: true,
+      value: {
+        metadata: null,
+        playbackState: "none",
+        setActionHandler: (
+          action: string,
+          handler: ((details: MediaSessionActionDetails) => void) | null,
+        ) => handlers.set(action, handler),
+        setPositionState: vi.fn(),
+      },
+    });
+    // Close lands on Home, which renders its error states from these.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) =>
+        requestURL(input) === "/api/auth/user"
+          ? jsonResponse(authUser())
+          : jsonResponse({ error: true, message: "unavailable" }, 503),
+      ),
+    );
+    const view = await renderRoute("/trailer?videoKey=signal-fire&returnTo=/");
+    await waitFor(() => expect(players).toHaveLength(1));
+    const player = players[0];
+    act(() => player.events.onReady?.({ target: player as unknown as YT.Player }));
+    return { ...view, player, handlers };
+  }
+
+  // A Tab stop there handed focus, the shortcuts and Escape to the iframe.
+  it("keeps the embed out of the tab order", async () => {
+    const { container } = await openPlayer();
+    const embed = document.querySelector('[id^="yt-player-"]')?.parentElement;
+
+    expect(embed).toHaveAttribute("inert");
+    expect(container).toBeTruthy();
+  });
+
+  it("takes the OS media controls for the trailer", async () => {
+    const { player, handlers } = await openPlayer();
+
+    expect(handlers.get("play")).toBeTypeOf("function");
+    act(() => handlers.get("play")?.({ action: "play" }));
+    expect(player.playVideo).toHaveBeenCalled();
+  });
+
+  it("brings the sound back when unmuting at volume 0", async () => {
+    const { player } = await openPlayer();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Unmute/ }));
+    expect(player.setVolume).toHaveBeenCalledWith(50);
+  });
+
+  it("hands focus to the page once Close has navigated away", async () => {
+    await openPlayer();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Close trailer/ }));
+    await waitFor(() => {
+      expect(document.activeElement?.id).toBe("main");
+    });
   });
 });

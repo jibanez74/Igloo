@@ -7,13 +7,12 @@ import {
   useCallback,
 } from "react";
 import type { RefCallback } from "react";
+import { clampPlaybackTime } from "@/lib/video-playback";
 
 type UseYouTubePlayerOptions = {
   videoId: string | null;
   autoplay?: boolean;
   controls?: boolean;
-  onReady?: () => void;
-  onStateChange?: (state: YT.PlayerState) => void;
   onError?: (error: YT.PlayerError) => void;
   onEnd?: () => void;
   /**
@@ -40,7 +39,6 @@ type UseYouTubePlayerReturn = {
   seekForward: (seconds: number) => void;
   seekBackward: (seconds: number) => void;
   setVolume: (volume: number) => void;
-  mute: () => void;
   unmute: () => void;
   toggleMute: () => void;
   retry: () => void;
@@ -52,7 +50,6 @@ const YOUTUBE_PLAYER_READY_TIMEOUT_MS = 12000;
 const YOUTUBE_IFRAME_API_ERROR_ATTR = "data-yt-api-load-error";
 
 let apiLoading = false;
-let apiLoadError: Error | null = null;
 let apiLoadTimeoutId: number | null = null;
 let cleanupApiScriptListeners: (() => void) | null = null;
 const apiReadyResolvers: Array<() => void> = [];
@@ -78,7 +75,6 @@ function cleanupPendingApiLoad() {
 function resolveApiLoad() {
   cleanupPendingApiLoad();
   apiLoading = false;
-  apiLoadError = null;
 
   const resolvers = apiReadyResolvers.splice(0);
   apiReadyRejectors.length = 0;
@@ -91,7 +87,6 @@ function resolveApiLoad() {
 function rejectApiLoad(error: Error) {
   cleanupPendingApiLoad();
   apiLoading = false;
-  apiLoadError = error;
 
   const rejectors = apiReadyRejectors.splice(0);
   apiReadyResolvers.length = 0;
@@ -105,15 +100,10 @@ function markYouTubeApiScriptFailed(script: HTMLScriptElement | null) {
   script?.setAttribute(YOUTUBE_IFRAME_API_ERROR_ATTR, "true");
 }
 
+// A script marked failed (an error event or a load that timed out) never
+// fires `load` again, so a retry needs a fresh one.
 function shouldReplaceYouTubeApiScript(script: HTMLScriptElement) {
-  const scriptReadyState =
-    "readyState" in script ? script.readyState : undefined;
-
-  return (
-    script.getAttribute(YOUTUBE_IFRAME_API_ERROR_ATTR) === "true" ||
-    (scriptReadyState === "complete" && !isYouTubeApiReady()) ||
-    (scriptReadyState === "loaded" && !isYouTubeApiReady())
-  );
+  return script.getAttribute(YOUTUBE_IFRAME_API_ERROR_ATTR) === "true";
 }
 
 function loadYouTubeAPI(): Promise<void> {
@@ -130,20 +120,16 @@ function loadYouTubeAPI(): Promise<void> {
       return;
     }
 
-    if (apiLoadError) {
-      apiLoadError = null;
-    }
-
     apiLoading = true;
     apiReadyResolvers.push(resolve);
     apiReadyRejectors.push(reject);
-
-    cleanupPendingApiLoad();
 
     let activeScript = document.querySelector<HTMLScriptElement>(
       `script[src="${YOUTUBE_IFRAME_API_SRC}"]`,
     );
 
+    // Reads `activeScript` when it fires, so a replaced script is the one
+    // marked failed and the next retry replaces it in turn.
     apiLoadTimeoutId = window.setTimeout(() => {
       markYouTubeApiScriptFailed(activeScript);
       rejectApiLoad(new Error("Timed out loading the YouTube player API."));
@@ -165,13 +151,8 @@ function loadYouTubeAPI(): Promise<void> {
     };
 
     if (activeScript && shouldReplaceYouTubeApiScript(activeScript)) {
-      cleanupPendingApiLoad();
       activeScript.remove();
       activeScript = null;
-
-      apiLoadTimeoutId = window.setTimeout(() => {
-        rejectApiLoad(new Error("Timed out loading the YouTube player API."));
-      }, YOUTUBE_API_LOAD_TIMEOUT_MS);
     }
 
     if (!activeScript) {
@@ -192,45 +173,46 @@ function loadYouTubeAPI(): Promise<void> {
   });
 }
 
-function getCurrentPlayerTime(player: YT.Player | null) {
-  if (!player) return 0;
-
+// The embed's getters throw once its iframe is gone (a destroy racing a
+// tick), so every read falls back instead.
+function readPlayer<T>(
+  player: YT.Player | null,
+  read: (player: YT.Player) => T,
+  fallback: T,
+): T {
+  if (!player) return fallback;
   try {
-    return player.getCurrentTime() || 0;
+    return read(player) ?? fallback;
   } catch {
-    return 0;
+    return fallback;
   }
 }
 
-function getCurrentPlayerDuration(player: YT.Player | null) {
-  if (!player) return 0;
+const getCurrentPlayerTime = (player: YT.Player | null) =>
+  readPlayer(player, (p) => p.getCurrentTime() || 0, 0);
+const getCurrentPlayerDuration = (player: YT.Player | null) =>
+  readPlayer(player, (p) => p.getDuration() || 0, 0);
+const getPlayerVolume = (player: YT.Player | null, fallback: number) =>
+  readPlayer(player, (p) => p.getVolume(), fallback);
+const getPlayerMuted = (player: YT.Player | null) =>
+  readPlayer(player, (p) => p.isMuted(), false);
 
-  try {
-    return player.getDuration() || 0;
-  } catch {
-    return 0;
-  }
+/**
+ * Whether the viewer has the trailer going. BUFFERING says nothing either
+ * way (every seek passes through it, paused or playing), so it keeps what
+ * the player was doing: read as paused, a seek while playing announced
+ * "Paused", flickered the button and made Space play; read as playing, a
+ * seek while paused did the same the other way.
+ */
+function isPlayingIntent(state: YT.PlayerState | null, wasPlaying: boolean) {
+  if (state === window.YT.PlayerState.BUFFERING) return wasPlaying;
+  return state === window.YT.PlayerState.PLAYING;
 }
 
-function getPlayerState(player: YT.Player | null) {
-  if (!player) return null;
-
-  try {
-    return player.getPlayerState();
-  } catch {
-    return null;
-  }
-}
-
-function getPlayerMuted(player: YT.Player | null) {
-  if (!player) return false;
-
-  try {
-    return player.isMuted();
-  } catch {
-    return false;
-  }
-}
+// The embed's getters answer from the last state its iframe posted, so for
+// a moment after a write they still report the old volume or mute; the tick
+// leaves those to the write until the iframe has caught up.
+const LOCAL_AUDIO_WRITE_SETTLE_MS = 1000;
 
 type YouTubePlayerState = {
   playerIdentity: string;
@@ -280,9 +262,9 @@ export function useYouTubePlayer(
     setContainerReady(node != null);
   }, []);
   const playerRef = useRef<YT.Player | null>(null);
-  const uniqueId = useId();
-  const playerIdRef = useRef(`yt-player-${uniqueId.replace(/:/g, "")}`);
+  const playerId = `yt-player-${useId().replace(/:/g, "")}`;
   const progressIntervalRef = useRef<number | null>(null);
+  const lastAudioWriteAtRef = useRef(0);
   const [reloadKey, setReloadKey] = useState(0);
   const playerIdentity = getYouTubePlayerIdentity(
     videoId,
@@ -324,13 +306,36 @@ export function useYouTubePlayer(
     }
 
     const nextTime = getCurrentPlayerTime(player);
-    const nextDuration = getCurrentPlayerDuration(player);
+    const reportedDuration = getCurrentPlayerDuration(player);
+    const adoptAudio =
+      Date.now() - lastAudioWriteAtRef.current >= LOCAL_AUDIO_WRITE_SETTLE_MS;
 
-    setPlayerState(previous => ({
-      ...previous,
-      currentTime: nextTime,
-      duration: nextDuration > 0 ? nextDuration : previous.duration,
-    }));
+    // Bails out when nothing moved (paused, or a stalled tick), so the
+    // surface does not re-render four times a second for nothing. Volume and
+    // mute are read too: the embed can change them without telling us.
+    setPlayerState(previous => {
+      const nextDuration =
+        reportedDuration > 0 ? reportedDuration : previous.duration;
+      const nextVolume = adoptAudio
+        ? getPlayerVolume(player, previous.volume)
+        : previous.volume;
+      const nextMuted = adoptAudio ? getPlayerMuted(player) : previous.isMuted;
+      if (
+        previous.currentTime === nextTime &&
+        previous.duration === nextDuration &&
+        previous.volume === nextVolume &&
+        previous.isMuted === nextMuted
+      ) {
+        return previous;
+      }
+      return {
+        ...previous,
+        currentTime: nextTime,
+        duration: nextDuration,
+        volume: nextVolume,
+        isMuted: nextMuted,
+      };
+    });
   });
 
   const startProgressTracking = useEffectEvent(() => {
@@ -344,6 +349,10 @@ export function useYouTubePlayer(
   });
 
   const handlePlayerReady = useEffectEvent((event: YT.PlayerEvent) => {
+    // Only now: before onReady the embed has none of its control methods
+    // (seekTo, setVolume, playVideo, …), so a shortcut pressed while the
+    // trailer loaded threw a TypeError.
+    playerRef.current = event.target;
     setPlayerState(previous => ({
       ...previous,
       isReady: true,
@@ -352,19 +361,25 @@ export function useYouTubePlayer(
       volume: event.target.getVolume(),
       isMuted: event.target.isMuted(),
     }));
-    options.onReady?.();
   });
 
   const handlePlayerStateChange = useEffectEvent(
     (event: YT.OnStateChangeEvent) => {
       const state = event.data;
 
-      setPlayerState(previous => ({
-        ...previous,
-        isPlaying: state === window.YT.PlayerState.PLAYING,
-      }));
+      setPlayerState(previous => {
+        const playing = isPlayingIntent(state, previous.isPlaying);
+        return previous.isPlaying === playing
+          ? previous
+          : { ...previous, isPlaying: playing };
+      });
 
-      if (state === window.YT.PlayerState.PLAYING) {
+      // Tracking runs through a buffering spell too: the position still moves
+      // when a seek lands.
+      if (
+        state === window.YT.PlayerState.PLAYING ||
+        state === window.YT.PlayerState.BUFFERING
+      ) {
         startProgressTracking();
         syncProgressState();
       } else {
@@ -374,8 +389,6 @@ export function useYouTubePlayer(
       if (state === window.YT.PlayerState.ENDED) {
         options.onEnd?.();
       }
-
-      options.onStateChange?.(state);
     },
   );
 
@@ -418,6 +431,9 @@ export function useYouTubePlayer(
 
   const handleAutoplayBlocked = useEffectEvent((event: YT.PlayerEvent) => {
     if (!options.muteOnAutoplayBlocked) return;
+    // A local write like any other, so the tick does not read it back as
+    // unmuted before the iframe reports it.
+    lastAudioWriteAtRef.current = Date.now();
     event.target.mute();
     event.target.playVideo();
     setPlayerState(previous => ({
@@ -465,7 +481,7 @@ export function useYouTubePlayer(
       if (!mounted || !containerRef.current) return;
 
       // Include reloadKey so a retry mounts a fresh element for the new player.
-      const elementId = `${playerIdRef.current}-${reloadKey}`;
+      const elementId = `${playerId}-${reloadKey}`;
       const playerDiv = document.createElement("div");
       playerDiv.id = elementId;
       containerRef.current.innerHTML = "";
@@ -509,7 +525,6 @@ export function useYouTubePlayer(
         });
 
         createdPlayer = player;
-        playerRef.current = player;
 
         // Watchdog: if the embed never reaches `onReady` (e.g. the YouTube
         // iframe is blocked by an ad blocker or a network issue), surface an
@@ -551,7 +566,7 @@ export function useYouTubePlayer(
         clearPlayerRef(createdPlayer);
       }
     };
-  }, [videoId, autoplay, controls, containerReady, reloadKey]);
+  }, [videoId, autoplay, controls, containerReady, reloadKey, playerId]);
 
   const play = () => {
     playerRef.current?.playVideo();
@@ -563,17 +578,12 @@ export function useYouTubePlayer(
 
   const togglePlay = () => {
     const player = playerRef.current;
-    const playerStateEnum = window.YT?.PlayerState;
-    if (!player || !playerStateEnum) {
-      return;
-    }
+    if (!player) return;
 
-    const playerState = getPlayerState(player);
-    if (playerState === null) {
-      return;
-    }
+    const playerState = readPlayer(player, (p) => p.getPlayerState(), null);
+    if (playerState === null) return;
 
-    if (playerState === playerStateEnum.PLAYING) {
+    if (isPlayingIntent(playerState, isPlaying)) {
       player.pauseVideo();
       return;
     }
@@ -583,44 +593,25 @@ export function useYouTubePlayer(
 
   const seekTo = (seconds: number) => {
     const player = playerRef.current;
-    if (!player) {
-      return;
-    }
+    if (!player) return;
 
-    const nextTime = Number.isFinite(seconds) ? seconds : 0;
-    const playerDuration = getCurrentPlayerDuration(player);
-    const clampedTime =
-      playerDuration > 0 ? Math.min(playerDuration, Math.max(0, nextTime)) : Math.max(0, nextTime);
-
-    player.seekTo(clampedTime, true);
+    const nextTime = clampPlaybackTime(
+      Number.isFinite(seconds) ? seconds : 0,
+      getCurrentPlayerDuration(player),
+      duration,
+    );
+    player.seekTo(nextTime, true);
     setPlayerState(previous => ({
       ...previous,
-      currentTime: clampedTime,
+      currentTime: nextTime,
     }));
   };
 
-  const seekForward = (seconds: number) => {
-    const player = playerRef.current;
-    if (!player) {
-      return;
-    }
+  const seekForward = (seconds: number) =>
+    seekTo(getCurrentPlayerTime(playerRef.current) + seconds);
 
-    const now = getCurrentPlayerTime(player);
-    const totalDuration = Math.max(duration, getCurrentPlayerDuration(player));
-    const newTime = Math.min(totalDuration, now + seconds);
-    seekTo(newTime);
-  };
-
-  const seekBackward = (seconds: number) => {
-    const player = playerRef.current;
-    if (!player) {
-      return;
-    }
-
-    const now = getCurrentPlayerTime(player);
-    const newTime = Math.max(0, now - seconds);
-    seekTo(newTime);
-  };
+  const seekBackward = (seconds: number) =>
+    seekTo(getCurrentPlayerTime(playerRef.current) - seconds);
 
   const setVolume = (vol: number) => {
     const clampedVol = Math.max(0, Math.min(100, vol));
@@ -629,10 +620,13 @@ export function useYouTubePlayer(
       return;
     }
 
+    lastAudioWriteAtRef.current = Date.now();
     player.setVolume(clampedVol);
     let nextIsMuted = currentPlayerState.isMuted;
 
-    if (clampedVol > 0 && getPlayerMuted(player)) {
+    // Muted by the hook's own state too: the getter can still answer from
+    // before a mute pressed a moment ago.
+    if (clampedVol > 0 && (currentPlayerState.isMuted || getPlayerMuted(player))) {
       player.unMute();
       nextIsMuted = false;
     }
@@ -650,6 +644,7 @@ export function useYouTubePlayer(
       return;
     }
 
+    lastAudioWriteAtRef.current = Date.now();
     player.mute();
     setPlayerState(previous => ({
       ...previous,
@@ -663,6 +658,7 @@ export function useYouTubePlayer(
       return;
     }
 
+    lastAudioWriteAtRef.current = Date.now();
     player.unMute();
     setPlayerState(previous => ({
       ...previous,
@@ -671,25 +667,11 @@ export function useYouTubePlayer(
   };
 
   const toggleMute = () => {
-    const player = playerRef.current;
-    if (!player) {
-      return;
+    if (isMuted) {
+      unmute();
+    } else {
+      mute();
     }
-
-    if (getPlayerMuted(player)) {
-      player.unMute();
-      setPlayerState(previous => ({
-        ...previous,
-        isMuted: false,
-      }));
-      return;
-    }
-
-    player.mute();
-    setPlayerState(previous => ({
-      ...previous,
-      isMuted: true,
-    }));
   };
 
   const retry = () => {
@@ -712,7 +694,6 @@ export function useYouTubePlayer(
     seekForward,
     seekBackward,
     setVolume,
-    mute,
     unmute,
     toggleMute,
     retry,

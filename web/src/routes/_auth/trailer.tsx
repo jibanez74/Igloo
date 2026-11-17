@@ -1,4 +1,12 @@
-import { useRef, useEffect, useEffectEvent, useState, type RefObject } from "react";
+import {
+  useRef,
+  useEffect,
+  useEffectEvent,
+  useState,
+  type ComponentType,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -10,14 +18,14 @@ import {
   FastForward,
   Pause,
   Play,
-  VolumeX,
-  Volume1,
-  Volume2,
   Maximize,
   Minimize,
   RotateCcw,
+  type LucideProps,
 } from "lucide-react";
 import ProgressBar from "@/components/playback/ProgressBar";
+import { VolumeLevelIcon } from "@/components/playback/VolumeControl";
+import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import {
@@ -32,9 +40,12 @@ import { routeHead } from "@/lib/route-head";
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer";
 import { useSuspendMusicPlayback } from "@/hooks/useSuspendMusicPlayback";
 import { useShortcutHints } from "@/hooks/useShortcutHints";
+import { useVideoMediaSession } from "@/hooks/useVideoMediaSession";
+import { useVideoPlaybackKeyboard } from "@/hooks/useVideoPlaybackKeyboard";
 import { formatTimecode } from "@/lib/format";
 import {
   MOVIE_SEEK_STEP_SEC,
+  MOVIE_VOLUME_STEP,
   MOTION_MEDIA_OVERLAY_ENTER_CLASS,
   MOTION_PLAYER_CHROME_PANEL_CLASS,
   PLAYER_ICON_BUTTON_CLASS,
@@ -49,6 +60,7 @@ import {
 } from "@/lib/fullscreen";
 import { cn } from "@/lib/utils";
 import { showInfo } from "@/lib/toast-helpers";
+import { buildYouTubeThumbnailUrl } from "@/lib/youtube-thumb-url";
 
 const TRAILER_FALLBACK_HEAD = routeHead("Trailer");
 
@@ -88,12 +100,6 @@ export const Route = createFileRoute("/_auth/trailer")({
   component: TrailerPage,
 });
 
-function focusMainAfterNavigation() {
-  window.setTimeout(() => {
-    document.getElementById("main")?.focus({ preventScroll: true });
-  }, 0);
-}
-
 function handleDialogEscapeKeyDown(event: KeyboardEvent) {
   if (!getFullscreenElement()) {
     return;
@@ -102,6 +108,16 @@ function handleDialogEscapeKeyDown(event: KeyboardEvent) {
   event.preventDefault();
   void exitDocumentFullscreen();
 }
+
+/** The level an Unmute at volume 0 restores, on YouTube's 0–100 scale. */
+const UNMUTE_DEFAULT_VOLUME = 50;
+
+type DialogView =
+  | "playback-error"
+  | "loading"
+  | "load-error"
+  | "no-trailer"
+  | "player";
 
 function TrailerPage() {
   const { mediaType, tmdbId, videoKey, returnTo } = Route.useSearch();
@@ -136,14 +152,24 @@ function TrailerPage() {
 
   const title = media?.title ? `${media.title} - Trailer` : "Trailer";
 
-  const handleClose = () => {
-    void router.navigate({ to: returnTo ?? "/" }).catch(() => {
-      void navigate({ to: "/" });
-    });
-
-    focusMainAfterNavigation();
+  const handleClose = async () => {
+    try {
+      await router.navigate({ to: returnTo ?? "/" });
+    } catch {
+      await navigate({ to: "/" });
+    }
+    // After the navigation settles and the dialog (with its focus trap) has
+    // gone; focused any earlier, a slow destination loader left the trap in
+    // place to pull focus back, and focus then fell to the body.
+    window.setTimeout(() => {
+      document.getElementById("main")?.focus({ preventScroll: true });
+    }, 0);
   };
+  const close = () => void handleClose();
 
+  // YouTube's own controls stay off: Igloo's footer is the one set of
+  // controls, and the click catcher over the frame keeps focus (and so the
+  // shortcuts and Escape) in this document rather than in the iframe.
   const {
     containerRef: playerContainerRef,
     isReady,
@@ -153,6 +179,8 @@ function TrailerPage() {
     volume,
     isMuted,
     error,
+    play,
+    pause,
     togglePlay,
     seekTo,
     seekForward,
@@ -163,11 +191,19 @@ function TrailerPage() {
   } = useYouTubePlayer({
     videoId: trailerKey,
     autoplay: true,
-    controls: true,
-    onEnd: handleClose,
+    controls: false,
+    onEnd: close,
   });
 
-  const announcement = isPlaying ? `Playing: ${title}` : `Paused: ${title}`;
+  const dialogView: DialogView = error
+    ? "playback-error"
+    : !trailerKey && shouldFetchMovie && moviePending
+      ? "loading"
+      : !trailerKey && (movieIsError || data?.error)
+        ? "load-error"
+        : !trailerKey
+          ? "no-trailer"
+          : "player";
 
   useEffect(() => {
     const onFullscreenChange = () => {
@@ -184,6 +220,8 @@ function TrailerPage() {
     };
   }, []);
 
+  // The dialog already fills the window, so a browser without element
+  // fullscreen has no expanded view to fall back to, only this notice.
   const toggleFullscreen = () => {
     const el = containerRef.current;
     if (!el) return;
@@ -206,113 +244,48 @@ function TrailerPage() {
     });
   };
 
-  const handleKeyboardShortcut = useEffectEvent((e: KeyboardEvent) => {
-    if (e.defaultPrevented) {
+  // At volume 0 the mute flag alone brings nothing back, so unmuting there
+  // also restores a level.
+  const toggleAudio = () => {
+    if (volume === 0) {
+      setVolume(UNMUTE_DEFAULT_VOLUME);
       return;
     }
+    toggleMute();
+  };
 
-    const target = e.target;
-    if (!(target instanceof HTMLElement)) {
-      return;
-    }
+  const seekBack = () => seekBackward(MOVIE_SEEK_STEP_SEC);
+  const seekAhead = () => seekForward(MOVIE_SEEK_STEP_SEC);
 
-    // Text entry always owns the keyboard.
-    if (
-      target.isContentEditable ||
-      target.closest('textarea, select, input:not([type="range"])')
-    ) {
-      return;
-    }
-
-    // Interactive controls keep the keys they consume natively; every other
-    // key still works as a playback shortcut while dialog chrome is focused.
-    const sliderKeys = [
-      "ArrowLeft",
-      "ArrowRight",
-      "ArrowUp",
-      "ArrowDown",
-      "Home",
-      "End",
-      "PageUp",
-      "PageDown",
-    ];
-    if (
-      target.closest('input[type="range"], [role="slider"]') &&
-      sliderKeys.includes(e.key)
-    ) {
-      return;
-    }
-
-    if (
-      target.closest("button, a[href]") &&
-      (e.key === " " || e.key === "Enter")
-    ) {
-      return;
-    }
-
-    if (e.ctrlKey || e.metaKey || e.altKey) {
-      return;
-    }
-
-    switch (e.key) {
-      case " ":
-      case "k":
-      case "K":
-        e.preventDefault();
-        togglePlay();
-        break;
-      case "ArrowLeft":
-      case "j":
-      case "J":
-        e.preventDefault();
-        seekBackward(MOVIE_SEEK_STEP_SEC);
-        break;
-      case "ArrowRight":
-      case "l":
-      case "L":
-        e.preventDefault();
-        seekForward(MOVIE_SEEK_STEP_SEC);
-        break;
-      case "ArrowUp":
-        e.preventDefault();
-        setVolume(Math.min(100, volume + 10));
-        break;
-      case "ArrowDown":
-        e.preventDefault();
-        setVolume(Math.max(0, volume - 10));
-        break;
-      case "m":
-      case "M":
-        e.preventDefault();
-        toggleMute();
-        break;
-      case "f":
-      case "F":
-        e.preventDefault();
-        toggleFullscreen();
-        break;
-      case "Home":
-      case "0":
-        e.preventDefault();
-        seekTo(0);
-        break;
-    }
+  // Escape stays with the dialog, which closes it or leaves fullscreen.
+  useVideoPlaybackKeyboard({
+    containerRef,
+    playerReady: isReady,
+    enabled: dialogView === "player",
+    volumeStep: MOVIE_VOLUME_STEP,
+    onTogglePlay: togglePlay,
+    onSeekBackward: seekBack,
+    onSeekForward: seekAhead,
+    onSeekToStart: () => seekTo(0),
+    onAdjustVolume: (delta) => setVolume(volume + delta * 100),
+    onToggleMute: toggleAudio,
+    onToggleFullscreen: toggleFullscreen,
   });
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      handleKeyboardShortcut(e);
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
-
-  const handleDialogOpenChange = (open: boolean) => {
-    if (!open) {
-      handleClose();
-    }
-  };
+  // The trailer takes the OS media controls from the paused music, which a
+  // headset Play would otherwise resume over it.
+  useVideoMediaSession({
+    title,
+    artworkUrl: buildYouTubeThumbnailUrl(trailerKey) || null,
+    currentTime,
+    duration,
+    playing: isPlaying,
+    seekStepSec: MOVIE_SEEK_STEP_SEC,
+    onPlay: play,
+    onPause: pause,
+    onSeek: seekTo,
+    enabled: dialogView === "player",
+  });
 
   const closeLabel = withShortcut("Close trailer", "Escape");
 
@@ -326,19 +299,10 @@ function TrailerPage() {
     focusPrimaryControl();
   };
 
-  // Every view below renders into the same dialog, so Radix's open auto-focus
-  // runs for the first view only. A later swap (the player failing, a retry,
-  // the movie finishing loading) unmounts the focused control and would strand
+  // Every view renders into the same dialog, so Radix's open auto-focus runs
+  // for the first view only. A later swap (the player failing, a retry, the
+  // movie finishing loading) unmounts the focused control and would strand
   // focus on the dialog container, so each new view takes focus the same way.
-  const dialogView = error
-    ? "playback-error"
-    : !trailerKey && shouldFetchMovie && moviePending
-      ? "loading"
-      : !trailerKey && (movieIsError || data?.error)
-        ? "load-error"
-        : !trailerKey
-          ? "no-trailer"
-          : "player";
   const focusPrimaryControlOnViewChange = useEffectEvent(focusPrimaryControl);
   const previousDialogViewRef = useRef(dialogView);
   useEffect(() => {
@@ -347,82 +311,37 @@ function TrailerPage() {
     focusPrimaryControlOnViewChange();
   }, [dialogView]);
 
-  if (error) {
-    return (
-      <Dialog open onOpenChange={handleDialogOpenChange}>
-        <DialogFullscreenContent
-          ref={containerRef}
-          className={cn(
-            MOTION_MEDIA_OVERLAY_ENTER_CLASS,
-            "flex flex-col bg-linear-to-b from-card via-background to-card",
-          )}
-          onOpenAutoFocus={handleDialogOpenAutoFocus}
-          onEscapeKeyDown={handleDialogEscapeKeyDown}
-        >
-          <TrailerHeader
-            title={title}
-            titleIsDialogTitle={false}
-            closeLabel={closeLabel}
-            onClose={handleClose}
-          />
-          <div className="flex flex-1 items-center justify-center p-4">
-            <div className="max-w-md px-4 text-center">
-              <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-destructive/10">
-                <AlertCircle className="size-10 text-destructive" aria-hidden="true" />
-              </div>
-              <DialogTitle className="mb-2 text-xl">
-                Unable to Play Trailer
-              </DialogTitle>
-              <DialogDescription className="mb-6">
-                {error}
-              </DialogDescription>
-              <div className="flex flex-wrap items-center justify-center gap-3">
-                <Button
-                  ref={closeButtonRef}
-                  onClick={retry}
-                  size="xl"
-                  shape="pill"
-                  className="font-semibold shadow-glow"
-                >
-                  <RotateCcw className="size-4" aria-hidden="true" />
-                  Try Again
-                </Button>
-                <Button
-                  onClick={handleClose}
-                  variant="outline"
-                  size="xl"
-                  shape="pill"
-                  className="font-semibold"
-                >
-                  <ArrowLeft className="size-4" aria-hidden="true" />
-                  Go Back
-                </Button>
-              </div>
-            </div>
-          </div>
-        </DialogFullscreenContent>
-      </Dialog>
-    );
-  }
+  const dialogProps = {
+    containerRef,
+    title,
+    closeLabel,
+    onClose: close,
+    onOpenAutoFocus: handleDialogOpenAutoFocus,
+  };
+  const goBack = {
+    label: "Go Back",
+    icon: ArrowLeft,
+    onClick: close,
+  };
 
-  if (!trailerKey && shouldFetchMovie && moviePending) {
-    return (
-      <Dialog open onOpenChange={handleDialogOpenChange}>
-        <DialogFullscreenContent
-          ref={containerRef}
-          className={cn(
-            MOTION_MEDIA_OVERLAY_ENTER_CLASS,
-            "flex flex-col bg-linear-to-b from-card via-background to-card",
-          )}
-          onOpenAutoFocus={handleDialogOpenAutoFocus}
-          onEscapeKeyDown={handleDialogEscapeKeyDown}
-        >
-          <TrailerHeader
-            title={title}
-            titleIsDialogTitle={false}
-            closeLabel={closeLabel}
-            onClose={handleClose}
+  switch (dialogView) {
+    case "playback-error":
+      return (
+        <TrailerDialog {...dialogProps}>
+          <TrailerMessage
+            icon={AlertCircle}
+            tone="destructive"
+            heading="Unable to Play Trailer"
+            message={error}
+            primaryRef={closeButtonRef}
+            primary={{ label: "Try Again", icon: RotateCcw, onClick: retry }}
+            secondary={goBack}
           />
+        </TrailerDialog>
+      );
+    case "loading":
+      return (
+        <TrailerDialog {...dialogProps}>
           <div className="flex flex-1 items-center justify-center p-4">
             <DialogTitle className="sr-only">Loading trailer</DialogTitle>
             <DialogDescription className="sr-only">
@@ -437,165 +356,99 @@ function TrailerPage() {
               <p className="mt-2 text-sm text-muted-foreground">Please wait</p>
             </div>
           </div>
-        </DialogFullscreenContent>
-      </Dialog>
-    );
-  }
-
-  if (!trailerKey && (movieIsError || data?.error)) {
-    // The UI owns these words (design-system §3.4): the server answers a
-    // lowercase constant, which is not copy.
-    const loadErrorMessage =
-      data?.error && data.status === 404
-        ? "We couldn’t find that movie on TMDB."
-        : "Couldn’t load the trailer details from TMDB.";
-
-    return (
-      <Dialog open onOpenChange={handleDialogOpenChange}>
-        <DialogFullscreenContent
-          ref={containerRef}
-          className={cn(
-            MOTION_MEDIA_OVERLAY_ENTER_CLASS,
-            "flex flex-col bg-linear-to-b from-card via-background to-card",
-          )}
-          onOpenAutoFocus={handleDialogOpenAutoFocus}
-          onEscapeKeyDown={handleDialogEscapeKeyDown}
-        >
-          <TrailerHeader
-            title={title}
-            titleIsDialogTitle={false}
-            closeLabel={closeLabel}
-            onClose={handleClose}
+        </TrailerDialog>
+      );
+    case "load-error":
+      return (
+        <TrailerDialog {...dialogProps}>
+          <TrailerMessage
+            icon={AlertCircle}
+            tone="destructive"
+            heading="Unable to Load Trailer"
+            // The UI owns these words (design-system §3.4): the server
+            // answers a lowercase constant, which is not copy.
+            message={
+              data?.error && data.status === 404
+                ? "We couldn’t find that movie on TMDB."
+                : "Couldn’t load the trailer details from TMDB."
+            }
+            primaryRef={closeButtonRef}
+            primary={{
+              label: "Try Again",
+              icon: RotateCcw,
+              onClick: () => void refetchMovie(),
+            }}
+            secondary={goBack}
           />
-          <div className="flex flex-1 items-center justify-center p-4">
-            <div className="max-w-md px-4 text-center">
-              <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-destructive/10">
-                <AlertCircle className="size-10 text-destructive" aria-hidden="true" />
-              </div>
-              <DialogTitle className="mb-2 text-xl">
-                Unable to Load Trailer
-              </DialogTitle>
-              <DialogDescription className="mb-6">
-                {loadErrorMessage}
-              </DialogDescription>
-              <div className="flex flex-wrap items-center justify-center gap-3">
-                <Button
-                  ref={closeButtonRef}
-                  onClick={() => void refetchMovie()}
-                  size="xl"
-                  shape="pill"
-                  className="font-semibold shadow-glow"
-                >
-                  <RotateCcw className="size-4" aria-hidden="true" />
-                  Try Again
-                </Button>
-                <Button
-                  onClick={handleClose}
-                  variant="outline"
-                  size="xl"
-                  shape="pill"
-                  className="font-semibold"
-                >
-                  <ArrowLeft className="size-4" aria-hidden="true" />
-                  Go Back
-                </Button>
-              </div>
-            </div>
-          </div>
-        </DialogFullscreenContent>
-      </Dialog>
-    );
-  }
-
-  if (!trailerKey) {
-    return (
-      <Dialog open onOpenChange={handleDialogOpenChange}>
-        <DialogFullscreenContent
-          ref={containerRef}
-          className={cn(
-            MOTION_MEDIA_OVERLAY_ENTER_CLASS,
-            "flex flex-col bg-linear-to-b from-card via-background to-card",
-          )}
-          onOpenAutoFocus={handleDialogOpenAutoFocus}
-          onEscapeKeyDown={handleDialogEscapeKeyDown}
-        >
-          <TrailerHeader
-            title={title}
-            titleIsDialogTitle={false}
-            closeLabel={closeLabel}
-            onClose={handleClose}
+        </TrailerDialog>
+      );
+    case "no-trailer":
+      return (
+        <TrailerDialog {...dialogProps}>
+          <TrailerMessage
+            icon={Film}
+            tone="muted"
+            heading="No Trailer Available"
+            message="This movie doesn't have a trailer yet."
+            primaryRef={closeButtonRef}
+            primary={goBack}
           />
-          <div className="flex flex-1 items-center justify-center p-4">
-            <div className="max-w-md px-4 text-center">
-              <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-muted">
-                <Film className="size-10 text-muted-foreground" aria-hidden="true" />
-              </div>
-              <DialogTitle className="mb-2 text-xl">
-                No Trailer Available
-              </DialogTitle>
-              <DialogDescription className="mb-6">
-                This movie doesn't have a trailer yet.
-              </DialogDescription>
-              <Button
-                ref={closeButtonRef}
-                onClick={handleClose}
-                size="xl"
-                shape="pill"
-                className="font-semibold shadow-glow"
-              >
-                <ArrowLeft className="size-4" aria-hidden="true" />
-                Go Back
-              </Button>
-            </div>
-          </div>
-        </DialogFullscreenContent>
-      </Dialog>
-    );
+        </TrailerDialog>
+      );
+    case "player":
+      break;
   }
 
-  const isLoading = trailerKey && !isReady;
   const isEffectivelyMuted = isMuted || volume === 0;
 
   return (
-    <Dialog open onOpenChange={handleDialogOpenChange}>
-      <DialogFullscreenContent
-        ref={containerRef}
-        className={cn(
-          MOTION_MEDIA_OVERLAY_ENTER_CLASS,
-          "flex flex-col bg-linear-to-b from-card via-background to-card",
-        )}
-        onOpenAutoFocus={handleDialogOpenAutoFocus}
-        onEscapeKeyDown={handleDialogEscapeKeyDown}
-      >
-      <div className="sr-only" aria-live="polite" aria-atomic="true">
-        {announcement}
-      </div>
-
-      {showShortcutHints && (
-        <DialogDescription className="sr-only">
-          Keyboard shortcuts: Space or K to play/pause, J or left arrow to
-          rewind {MOVIE_SEEK_STEP_SEC} seconds, L or right arrow to forward{" "}
-          {MOVIE_SEEK_STEP_SEC} seconds, up/down arrows for volume, M to mute, F
-          for fullscreen, Escape to exit fullscreen or close.
-        </DialogDescription>
-      )}
-
-      <TrailerHeader
-        title={title}
-        titleIsDialogTitle
-        subtitle="Now Playing"
-        closeLabel={closeLabel}
-        closeRef={closeButtonRef}
-        onClose={handleClose}
-      />
-
-      <div className="relative flex flex-1 items-center justify-center p-4">
-        <div className="aspect-video w-full max-w-6xl">
-          <div ref={playerContainerRef} className="size-full" />
+    <TrailerDialog
+      {...dialogProps}
+      titleIsDialogTitle
+      subtitle="Now Playing"
+      closeRef={closeButtonRef}
+      // Without the shortcut list there is nothing to describe; saying so
+      // keeps Radix from warning about a missing description.
+      describedByShortcuts={showShortcutHints}
+      before={
+        <>
+          <LiveAnnouncer
+            message={isPlaying ? `Playing: ${title}` : `Paused: ${title}`}
+          />
+          {showShortcutHints && (
+            <DialogDescription className="sr-only">
+              Keyboard shortcuts: Space or K to play/pause, J or left arrow to
+              rewind {MOVIE_SEEK_STEP_SEC} seconds, L or right arrow to forward{" "}
+              {MOVIE_SEEK_STEP_SEC} seconds, up/down arrows for volume, M to
+              mute, F for fullscreen, Escape to exit fullscreen or close.
+            </DialogDescription>
+          )}
+        </>
+      }
+    >
+      <div className="relative flex min-h-0 flex-1 items-center justify-center p-4">
+        {/* Bounded by the height as well, so the controls below stay on a
+            short window instead of being pushed off its bottom. */}
+        <div className="relative aspect-video max-h-full w-full max-w-6xl bg-black">
+          {/* Inert: the embed's iframe is not a Tab stop, so focus, the
+              shortcuts and Escape never leave this document for it. */}
+          <div ref={playerContainerRef} className="size-full" inert />
+          {/*
+            A pointer convenience over the embedded player: toggling here keeps
+            focus and the keyboard in this document instead of the YouTube
+            iframe. The footer play button is the keyboard route.
+          */}
+          {/* react-doctor-disable-next-line react-doctor/click-events-have-key-events, react-doctor/no-static-element-interactions */}
+          <div
+            aria-hidden="true"
+            className="absolute inset-0"
+            onClick={togglePlay}
+          />
         </div>
 
-        {isLoading && (
+        {!isReady && (
           <div
+            role="status"
             className={cn(
               MOTION_MEDIA_OVERLAY_ENTER_CLASS,
               "absolute inset-0 flex items-center justify-center bg-background/90 backdrop-blur-sm",
@@ -646,7 +499,7 @@ function TrailerPage() {
             >
               <button
                 type="button"
-                onClick={() => seekBackward(MOVIE_SEEK_STEP_SEC)}
+                onClick={seekBack}
                 className={cn(
                   PLAYER_ICON_BUTTON_CLASS,
                   "size-10 hover:bg-muted",
@@ -680,7 +533,7 @@ function TrailerPage() {
 
               <button
                 type="button"
-                onClick={() => seekForward(MOVIE_SEEK_STEP_SEC)}
+                onClick={seekAhead}
                 className={cn(
                   PLAYER_ICON_BUTTON_CLASS,
                   "size-10 hover:bg-muted",
@@ -697,7 +550,7 @@ function TrailerPage() {
             <div className="flex min-w-[100px] items-center justify-end gap-2">
               <button
                 type="button"
-                onClick={toggleMute}
+                onClick={toggleAudio}
                 className={cn(
                   PLAYER_ICON_BUTTON_CLASS,
                   "size-10 hover:bg-muted",
@@ -708,13 +561,11 @@ function TrailerPage() {
                 )}
                 aria-pressed={isEffectivelyMuted}
               >
-                {isEffectivelyMuted ? (
-                  <VolumeX className="size-5" aria-hidden="true" />
-                ) : volume < 50 ? (
-                  <Volume1 className="size-5" aria-hidden="true" />
-                ) : (
-                  <Volume2 className="size-5" aria-hidden="true" />
-                )}
+                <VolumeLevelIcon
+                  level={volume / 100}
+                  muted={isMuted}
+                  className="size-5"
+                />
               </button>
 
               <button
@@ -740,11 +591,149 @@ function TrailerPage() {
           </div>
         </div>
       </footer>
+    </TrailerDialog>
+  );
+}
+
+type TrailerDialogProps = {
+  containerRef: RefObject<HTMLDivElement | null>;
+  title: string;
+  closeLabel: string;
+  onClose: () => void;
+  onOpenAutoFocus: (event: Event) => void;
+  titleIsDialogTitle?: boolean;
+  subtitle?: string;
+  closeRef?: RefObject<HTMLButtonElement | null>;
+  /** False when the view has no description at all (see the player view). */
+  describedByShortcuts?: boolean;
+  /** Rendered ahead of the header: announcers and the sr-only description. */
+  before?: ReactNode;
+  children: ReactNode;
+};
+
+// The one dialog every view renders into, so the way out never moves between
+// loading, an error, a missing trailer and the player itself.
+function TrailerDialog({
+  containerRef,
+  title,
+  closeLabel,
+  onClose,
+  onOpenAutoFocus,
+  titleIsDialogTitle = false,
+  subtitle,
+  closeRef,
+  describedByShortcuts = true,
+  before,
+  children,
+}: TrailerDialogProps) {
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogFullscreenContent
+        ref={containerRef}
+        className={cn(
+          MOTION_MEDIA_OVERLAY_ENTER_CLASS,
+          "flex flex-col bg-linear-to-b from-card via-background to-card",
+        )}
+        onOpenAutoFocus={onOpenAutoFocus}
+        onEscapeKeyDown={handleDialogEscapeKeyDown}
+        {...(describedByShortcuts ? {} : { "aria-describedby": undefined })}
+      >
+        {before}
+        <TrailerHeader
+          title={title}
+          titleIsDialogTitle={titleIsDialogTitle}
+          subtitle={subtitle}
+          closeLabel={closeLabel}
+          closeRef={closeRef}
+          onClose={onClose}
+        />
+        {children}
       </DialogFullscreenContent>
     </Dialog>
   );
 }
 
+type TrailerAction = {
+  label: string;
+  icon: ComponentType<LucideProps>;
+  onClick: () => void;
+};
+
+type TrailerMessageProps = {
+  icon: ComponentType<LucideProps>;
+  tone: "destructive" | "muted";
+  heading: string;
+  message: string | null;
+  /** The view's first control, which takes focus when the view appears. */
+  primaryRef: RefObject<HTMLButtonElement | null>;
+  primary: TrailerAction;
+  secondary?: TrailerAction;
+};
+
+const MESSAGE_TONE_CLASSES = {
+  destructive: { badge: "bg-destructive/10", icon: "text-destructive" },
+  muted: { badge: "bg-muted", icon: "text-muted-foreground" },
+} as const;
+
+// A view that explains why there is no trailer and offers the ways on.
+function TrailerMessage({
+  icon: Icon,
+  tone,
+  heading,
+  message,
+  primaryRef,
+  primary,
+  secondary,
+}: TrailerMessageProps) {
+  const toneClasses = MESSAGE_TONE_CLASSES[tone];
+  const PrimaryIcon = primary.icon;
+
+  return (
+    <div className="flex flex-1 items-center justify-center p-4">
+      <div className="max-w-md px-4 text-center">
+        <div
+          className={cn(
+            "mx-auto mb-6 flex size-20 items-center justify-center rounded-full",
+            toneClasses.badge,
+          )}
+        >
+          <Icon className={cn("size-10", toneClasses.icon)} aria-hidden="true" />
+        </div>
+        <DialogTitle className="mb-2 text-xl">{heading}</DialogTitle>
+        <DialogDescription className="mb-6">{message}</DialogDescription>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <Button
+            ref={primaryRef}
+            onClick={primary.onClick}
+            size="xl"
+            shape="pill"
+            className="font-semibold shadow-glow"
+          >
+            <PrimaryIcon className="size-4" aria-hidden="true" />
+            {primary.label}
+          </Button>
+          {secondary && (
+            <Button
+              onClick={secondary.onClick}
+              variant="outline"
+              size="xl"
+              shape="pill"
+              className="font-semibold"
+            >
+              <secondary.icon className="size-4" aria-hidden="true" />
+              {secondary.label}
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 type TrailerHeaderProps = {
   title: string;
