@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { preloadHlsLight } from "@/lib/hls-loader";
 import { watchRoomQueryOpts } from "@/lib/query-opts";
 import { parseRouteId } from "@/lib/route-id";
 import { routeHead } from "@/lib/route-head";
@@ -30,6 +31,8 @@ export const Route = createFileRoute("/_auth/watch-rooms/$id")({
     const res = await context.queryClient.ensureQueryData(
       watchRoomQueryOpts(id),
     );
+    const playbackMode = res.error ? undefined : res.data.room?.playback_mode;
+    if (playbackMode && playbackMode !== "direct") preloadHlsLight();
 
     return {
       movieTitle: res.error ? null : res.data.room?.movie_title || null,

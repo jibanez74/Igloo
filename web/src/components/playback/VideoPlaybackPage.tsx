@@ -862,8 +862,16 @@ export default function VideoPlaybackPage({
       subtitleTrack={subtitleInfo}
       startSec={isHlsPlayback ? hlsPlaybackOffset : playbackStartSec}
       requestedStartSec={requestedHlsStartSec}
+      startTargetSec={isHlsPlayback ? playbackStartSec : undefined}
+      // An HLS start lands on the target by construction (offset = target −
+      // actual start); the timing may not have taken the measured start yet
+      // when the player reports it, so the target is used as is.
       onStartApplied={(time) =>
-        setPlayhead(toAbsolutePlaybackTime(time, playbackTiming))
+        setPlayhead(
+          isHlsPlayback
+            ? playbackStartSec
+            : toAbsolutePlaybackTime(time, playbackTiming),
+        )
       }
       onSessionLost={(time) =>
         handleSessionLost(toAbsolutePlaybackTime(time, playbackTiming))

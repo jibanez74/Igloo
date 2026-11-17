@@ -636,6 +636,85 @@ describe("VideoPlayer hls.js error routing", () => {
     return fakeHlsInstances[0];
   }
 
+  // hls.js stops loading on a fatal error before our listener runs, and with
+  // autoStartLoad off the media recovery's reattach restarts nothing.
+  it("restarts loading after recovering from a fatal media error", async () => {
+    const hls = await renderHlsPlayer({ startSec: 10 });
+    act(() => {
+      hls.trigger("hlsManifestLoaded", {});
+      hls.trigger("hlsManifestParsed", {});
+    });
+    expect(hls.startLoadPositions).toEqual([10]);
+
+    act(() => {
+      hls.trigger("hlsError", {
+        type: "mediaError",
+        details: "bufferAppendError",
+        fatal: true,
+      });
+    });
+
+    expect(hls.recoverMediaErrorCalls).toBe(1);
+    expect(hls.startLoadPositions).toEqual([10, 10]);
+  });
+
+  it("resumes at the playhead after a media-error recovery mid-film", async () => {
+    const hls = await renderHlsPlayer({ startSec: 10 });
+    act(() => {
+      hls.trigger("hlsManifestLoaded", {});
+      hls.trigger("hlsManifestParsed", {});
+    });
+    const video = screen.getByLabelText("Video player for Test Movie") as HTMLVideoElement;
+    Object.defineProperty(video, "currentTime", { configurable: true, value: 42.5 });
+
+    act(() => {
+      hls.trigger("hlsError", {
+        type: "mediaError",
+        details: "bufferAppendError",
+        fatal: true,
+      });
+    });
+
+    expect(hls.startLoadPositions).toEqual([10, 42.5]);
+  });
+
+  it("leaves a media-error recovery before the first manifest to the gate", async () => {
+    const hls = await renderHlsPlayer({ startSec: 10 });
+
+    act(() => {
+      hls.trigger("hlsError", {
+        type: "mediaError",
+        details: "bufferAppendError",
+        fatal: true,
+      });
+    });
+    expect(hls.recoverMediaErrorCalls).toBe(1);
+    expect(hls.startLoadCalls).toBe(0);
+
+    act(() => {
+      hls.trigger("hlsManifestLoaded", {});
+      hls.trigger("hlsManifestParsed", {});
+    });
+    expect(hls.startLoadPositions).toEqual([10]);
+  });
+
+  it("starts loading once per manifest, and again for a manifest fetched anew", async () => {
+    const hls = await renderHlsPlayer({ startSec: 10 });
+    act(() => {
+      hls.trigger("hlsManifestLoaded", {});
+      hls.trigger("hlsManifestParsed", {});
+      hls.trigger("hlsManifestParsed", {});
+    });
+    expect(hls.startLoadCalls).toBe(1);
+
+    // Network recovery's loadSource: a new manifest, a new start.
+    act(() => {
+      hls.trigger("hlsManifestLoaded", {});
+      hls.trigger("hlsManifestParsed", {});
+    });
+    expect(hls.startLoadCalls).toBe(2);
+  });
+
   it("reports 503 manifest errors as capacity-busy with the Retry-After delay", async () => {
     const onCapacityBusy = vi.fn();
     const onError = vi.fn();
@@ -1287,6 +1366,71 @@ describe("VideoPlayer HLS capability and effective profile", () => {
     expect(onEffectiveProfile).toHaveBeenCalledWith("remux");
     expect(onActualStart).toHaveBeenCalledWith(581);
   });
+
+  // Every copy-video resume past 0:00 gets its measured start on the first
+  // manifest. Keyed on the local offset, that tore the instance down mid-way
+  // through its first segment and fetched everything again.
+  it.each([
+    ["the measured actual start", "581", 19, false],
+    ["the requested start when the manifest names none", null, 10, false],
+    // hls.js's own MANIFEST_LOADED listener fires MANIFEST_PARSED before
+    // ours runs, which is the order a real stream sees.
+    ["the measured actual start, parsed before it is read", "581", 19, true],
+  ])(
+    "starts loading from %s without rebuilding for it",
+    async (_case, header, expectedStart, parsedFirst) => {
+      const onStartApplied = vi.fn();
+      function TargetHarness() {
+        const videoRef = useRef<HTMLVideoElement>(null);
+        const [actualStartSec, setActualStartSec] = useState(590);
+        return (
+          <VideoPlayer
+            videoRef={videoRef}
+            src={hlsSrc}
+            isHlsSource
+            title="Test Movie"
+            onError={vi.fn()}
+            startSec={600 - actualStartSec}
+            startTargetSec={600}
+            requestedStartSec={590}
+            onStartApplied={onStartApplied}
+            onActualStart={setActualStartSec}
+          />
+        );
+      }
+
+      render(<TargetHarness />);
+      await waitFor(() => {
+        expect(fakeHlsInstances).toHaveLength(1);
+      });
+      const hls = fakeHlsInstances[0];
+      expect(hls.startLoadCalls).toBe(0);
+
+      const loaded = () =>
+        hls.trigger("hlsManifestLoaded", {
+          networkDetails: {
+            getResponseHeader: (name: string) =>
+              name === "X-Igloo-Actual-Start" ? header : null,
+          },
+        });
+      const parsed = () => hls.trigger("hlsManifestParsed", {});
+      act(() => {
+        if (parsedFirst) {
+          parsed();
+          loaded();
+        } else {
+          loaded();
+          parsed();
+        }
+      });
+      await act(async () => {});
+
+      expect(fakeHlsInstances).toHaveLength(1);
+      expect(hls.destroyed).toBe(false);
+      expect(hls.startLoadPositions).toEqual([expectedStart]);
+      expect(onStartApplied).toHaveBeenCalledWith(expectedStart);
+    },
+  );
 
   it("rebuilds at most once when an earlier actual start changes the local offset", async () => {
     function ActualStartHarness() {
