@@ -493,7 +493,27 @@ describe("WatchRoomPageContent", () => {
     });
   });
 
-  it("ignores playback keyboard shortcuts until the media is playable", async () => {
+  it("holds seek shortcuts until the media has a timeline", async () => {
+    mockVideoController.readyState = 0;
+    renderRoomPage(buildRoom({ is_owner: false }));
+
+    await waitFor(() => {
+      expect(joinWatchRoomMock).toHaveBeenCalledWith(7);
+    });
+
+    const event = new KeyboardEvent("keydown", {
+      key: "l",
+      bubbles: true,
+      cancelable: true,
+    });
+    document.body.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  // The Play button works before the stream loads (the press takes over the
+  // join snapshot), so the shortcut does too.
+  it("plays from the keyboard before the media has loaded, as the button does", async () => {
     mockVideoController.readyState = 0;
     renderRoomPage(buildRoom({ is_owner: false }));
 
@@ -508,8 +528,10 @@ describe("WatchRoomPageContent", () => {
     });
     document.body.dispatchEvent(event);
 
-    expect(event.defaultPrevented).toBe(false);
-    expect(mockVideoController.playCalls).toBe(0);
+    expect(event.defaultPrevented).toBe(true);
+    await waitFor(() => {
+      expect(mockVideoController.playCalls).toBe(1);
+    });
   });
 
   it("allows playback keyboard shortcuts once the media can play", async () => {

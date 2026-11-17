@@ -1,6 +1,6 @@
 import { useEffect, useEffectEvent } from "react";
 import type { RefObject } from "react";
-import { isEditableTarget } from "@/lib/utils";
+import { shouldIgnorePlayerShortcut } from "@/lib/player-shortcuts";
 
 type VideoPlaybackKeyboardOptions = {
   containerRef: RefObject<HTMLElement | null>;
@@ -20,19 +20,32 @@ type VideoPlaybackKeyboardOptions = {
 };
 
 const DEFAULT_VOLUME_STEP = 0.05;
-const MIN_PLAYABLE_READY_STATE =
-  typeof HTMLMediaElement === "undefined"
-    ? 3
-    : HTMLMediaElement.HAVE_FUTURE_DATA;
+const HAVE_METADATA =
+  typeof HTMLMediaElement === "undefined" ? 1 : HTMLMediaElement.HAVE_METADATA;
+const SEEK_KEYS: ReadonlySet<string> = new Set([
+  "ArrowLeft",
+  "ArrowRight",
+  "j",
+  "J",
+  "l",
+  "L",
+  "Home",
+  "0",
+]);
 
-function isVideoReadyForShortcuts(
+/**
+ * Which shortcuts the element can take. A seek needs a timeline, so it waits
+ * for metadata; everything else only needs an element that has not failed.
+ * Play, pause, mute and fullscreen therefore keep working through a
+ * mid-playback stall, a rebase or a recovery reload, exactly as the on-screen
+ * buttons do.
+ */
+function acceptsShortcut(
   video: HTMLVideoElement | null,
+  key: string,
 ): video is HTMLVideoElement {
-  return (
-    !!video &&
-    !video.error &&
-    video.readyState >= MIN_PLAYABLE_READY_STATE
-  );
+  if (!video || video.error) return false;
+  return !SEEK_KEYS.has(key) || video.readyState >= HAVE_METADATA;
 }
 
 export function useVideoPlaybackKeyboard({
@@ -60,12 +73,11 @@ export function useVideoPlaybackKeyboard({
     const targetIsPageBody =
       target === document.body || target === document.documentElement;
 
-    if (isEditableTarget(target)) return;
+    if (shouldIgnorePlayerShortcut(e)) return;
     if (!targetInsidePlayer && !targetIsPageBody) return;
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
 
     const video = videoRef.current;
-    if (!isVideoReadyForShortcuts(video)) {
+    if (!acceptsShortcut(video, e.key)) {
       if (e.key === "Escape" && fullscreenActive && onEscape) {
         onEscape();
       }
