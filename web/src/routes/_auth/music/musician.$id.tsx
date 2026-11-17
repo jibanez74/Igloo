@@ -5,7 +5,7 @@ import {
   Music,
   ListOrdered,
 } from "lucide-react";
-import { musicianDetailsQueryOpts } from "@/lib/query-opts";
+import { musicianDetailsQueryOpts, warmLikedTrackIds } from "@/lib/query-opts";
 import { unwrapString, unwrapInt } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
 import { parseRouteId } from "@/lib/route-id";
@@ -70,6 +70,7 @@ export const Route = createFileRoute("/_auth/music/musician/$id")({
     const musicianId = parseRouteId(params.id);
     if (musicianId == null) return { musician: null };
 
+    warmLikedTrackIds(context.queryClient);
     const res = await context.queryClient.ensureQueryData(
       musicianDetailsQueryOpts(musicianId),
     );

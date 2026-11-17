@@ -657,6 +657,15 @@ export function likedTrackIdsQueryOpts() {
   });
 }
 
+/**
+ * Starts the liked-ids query beside a page that lists tracks, so each row's
+ * heart is ready when the page paints instead of a round trip later. Nothing
+ * waits on it: a failure leaves the hearts disabled, as before.
+ */
+export function warmLikedTrackIds(queryClient: QueryClient) {
+  void queryClient.prefetchQuery(likedTrackIdsQueryOpts());
+}
+
 export function likedTracksQueryOpts(
   page: number,
   perPage: number = LIKED_TRACKS_PER_PAGE,

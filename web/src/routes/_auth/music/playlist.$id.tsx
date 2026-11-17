@@ -33,6 +33,7 @@ const DraggableTrackList = lazy(() => import("@/components/music/DraggableTrackL
 import {
   playlistDetailsQueryOpts,
   playlistTracksInfiniteQueryOpts,
+  warmLikedTrackIds,
 } from "@/lib/query-opts";
 import { trackRowProps } from "@/lib/track-row-props";
 import { getMediaImageUrl } from "@/lib/media-image-url";
@@ -136,6 +137,7 @@ export const Route = createFileRoute("/_auth/music/playlist/$id")({
     void context.queryClient.prefetchInfiniteQuery(
       playlistTracksInfiniteQueryOpts(id),
     );
+    warmLikedTrackIds(context.queryClient);
     const res = await context.queryClient.ensureQueryData(
       playlistDetailsQueryOpts(id),
     );

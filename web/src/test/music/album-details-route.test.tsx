@@ -1,8 +1,10 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { describe, expect, it, vi } from "vitest";
 import { DETAIL_PAGE_CONTENT_ENTER_CLASS } from "@/lib/constants";
-import { albumDetailsQueryOpts } from "@/lib/query-opts";
+import { albumDetailsQueryOpts, likedTrackIdsQueryOpts } from "@/lib/query-opts";
+import { routeTree } from "@/routeTree.gen";
 import type { AlbumDetailsResponseType } from "@/types";
 import { countFetchRequests, jsonResponse, requestURL } from "../helpers/api";
 import { nullableInt64, nullableString } from "../helpers/fixtures";
@@ -142,6 +144,28 @@ describe("album details route prefetch", () => {
     ).toBeInTheDocument();
     expect(countFetchRequests(fetchMock, detailsUrl)).toBe(1);
     expect(countFetchRequests(fetchMock, likedIdsUrl)).toBe(1);
+  });
+
+  it("asks for the liked tracks while the page loads, before any row mounts", async () => {
+    const fetchMock = mockAlbumDetailsFetch();
+    const queryClient = createTestQueryClient();
+    const router = createRouter({
+      routeTree,
+      context: { queryClient },
+      history: createMemoryHistory({ initialEntries: ["/music/album/42"] }),
+    });
+
+    // Nothing renders: only the loaders run.
+    await router.load();
+
+    expect(
+      countFetchRequests(fetchMock, "/api/music/tracks/liked-ids"),
+    ).toBe(1);
+    await waitFor(() => {
+      expect(
+        queryClient.getQueryData(likedTrackIdsQueryOpts().queryKey),
+      ).toMatchObject({ error: false });
+    });
   });
 });
 
