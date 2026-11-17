@@ -6,7 +6,10 @@ import {
   WATCH_ROOM_ECHO_POSITION_TOLERANCE_SEC,
   WATCH_ROOM_ECHO_TIMEOUT_MS,
   WATCH_ROOM_EVENT_TYPES,
+  WATCH_ROOM_HEARTBEAT_INTERVAL_MS,
+  WATCH_ROOM_PAUSED_SYNC_TOLERANCE_SEC,
   WATCH_ROOM_SEEK_COALESCE_MS,
+  WATCH_ROOM_STABLE_CONNECTION_MS,
   WATCH_ROOM_SYNC_ANNOUNCE_DEBOUNCE_MS,
   WATCH_ROOM_SYNC_DRIFT_THRESHOLD_SEC,
 } from "@/lib/constants";
@@ -63,7 +66,7 @@ export type WatchRoomConnectionState = "connecting" | "live" | "reconnecting";
  * Why the room ended for this viewer: the owner closed it, or this viewer is
  * no longer a member (removed, left on another device, or gone while away).
  */
-export type WatchRoomEndReason = "deleted" | "revoked";
+type WatchRoomEndReason = "deleted" | "revoked";
 
 type UseWatchRoomConnectionOptions = {
   currentRoomId: number | null;
@@ -82,6 +85,17 @@ type UseWatchRoomConnectionOptions = {
   onReconnected: () => void;
   onRoomEnded: (reason: WatchRoomEndReason) => void;
 };
+
+/** Where a snapshot puts the room now: a playing room moved on since it came. */
+function projectedPosition({ state, receivedAt }: RoomPlaybackSnapshot) {
+  return state.paused
+    ? state.position_sec
+    : state.position_sec + (Date.now() - receivedAt) / 1000;
+}
+
+function sameIds(a: number[], b: number[]) {
+  return a.length === b.length && a.every((id, index) => id === b[index]);
+}
 
 function isEchoOf(echo: PendingEcho, playback: WatchRoomPlaybackStateType) {
   const pausedMatches =
@@ -112,12 +126,12 @@ export function useWatchRoomConnection({
   const socketRef = useRef<WebSocket | null>(null);
   const heartbeatRef = useRef<number | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
+  const stableConnectionTimeoutRef = useRef<number | null>(null);
   const seekTimeoutRef = useRef<number | null>(null);
   const pendingSeekRef = useRef<number | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const intentionalCloseRef = useRef(false);
   const socketInstanceIdRef = useRef(0);
-  const prevRoomIdRef = useRef<number | null>(null);
   const roomEndHandledRef = useRef(false);
   // Whether a socket has opened for this room yet: the next one is a reconnect.
   const openedOnceRef = useRef(false);
@@ -138,6 +152,9 @@ export function useWatchRoomConnection({
   const [reconnectKey, setReconnectKey] = useState(0);
 
   const syncAnnouncement = syncAnnouncementState?.text;
+  // Keys the announcer, so the same words twice (two members pressing Play)
+  // are spoken twice.
+  const syncAnnouncementKey = syncAnnouncementState?.token;
 
   const announce = (text: string) => {
     setSyncAnnouncementState(currentAnnouncement => ({
@@ -158,15 +175,17 @@ export function useWatchRoomConnection({
     pendingSeekRef.current = null;
   };
 
-  const closeRoomConnection = () => {
-    intentionalCloseRef.current = true;
-
+  // Stops everything a socket keeps going and closes it; the caller has
+  // already marked the close intentional.
+  const stopSocket = (socket: WebSocket | null) => {
     clearTimeoutRef(reconnectTimeoutRef);
+    clearTimeoutRef(stableConnectionTimeoutRef);
     clearPendingSeek();
     clearHeartbeat();
 
-    const socket = socketRef.current;
-    socketRef.current = null;
+    if (socketRef.current === socket) {
+      socketRef.current = null;
+    }
 
     if (
       socket &&
@@ -176,6 +195,13 @@ export function useWatchRoomConnection({
       socket.close();
     }
   };
+
+  const closeRoomConnection = () => {
+    intentionalCloseRef.current = true;
+    stopSocket(socketRef.current);
+  };
+
+  const stopSocketOnCleanup = useEffectEvent(stopSocket);
 
   const endRoom = useEffectEvent((reason: WatchRoomEndReason) => {
     if (roomEndHandledRef.current) return;
@@ -193,7 +219,10 @@ export function useWatchRoomConnection({
 
       const targetTime = playback.position_sec;
       const drift = Math.abs(video.currentTime - targetTime);
-      if (drift > WATCH_ROOM_SYNC_DRIFT_THRESHOLD_SEC) {
+      const tolerance = playback.paused
+        ? WATCH_ROOM_PAUSED_SYNC_TOLERANCE_SEC
+        : WATCH_ROOM_SYNC_DRIFT_THRESHOLD_SEC;
+      if (drift > tolerance) {
         video.currentTime = targetTime;
       }
 
@@ -241,12 +270,9 @@ export function useWatchRoomConnection({
     const pending = pendingPlaybackRef.current;
     if (!pending) return;
 
-    const elapsed = !pending.state.paused
-      ? (Date.now() - pending.receivedAt) / 1000
-      : 0;
     const adjustedPlayback: WatchRoomPlaybackStateType = {
       ...pending.state,
-      position_sec: pending.state.position_sec + elapsed,
+      position_sec: projectedPosition(pending),
     };
 
     const applied = await applyPlaybackState(
@@ -267,6 +293,12 @@ export function useWatchRoomConnection({
     },
   );
 
+  // The echoes that can still come back.
+  const liveEchoes = (now: number) =>
+    pendingEchoesRef.current.filter(
+      echo => now - echo.sentAt < WATCH_ROOM_ECHO_TIMEOUT_MS,
+    );
+
   const sendCommand = (type: WatchRoomPlaybackEventType, positionSec: number) => {
     const socket = socketRef.current;
     if (!socket || socket.readyState !== WebSocket.OPEN) return;
@@ -274,9 +306,7 @@ export function useWatchRoomConnection({
 
     const now = Date.now();
     pendingEchoesRef.current = [
-      ...pendingEchoesRef.current.filter(
-        echo => now - echo.sentAt < WATCH_ROOM_ECHO_TIMEOUT_MS,
-      ),
+      ...liveEchoes(now),
       { type, positionSec, sentAt: now },
     ].slice(-MAX_PENDING_ECHOES);
   };
@@ -286,10 +316,7 @@ export function useWatchRoomConnection({
    * back, or another member's. Returns whether it was an echo.
    */
   const takeEcho = (playback: WatchRoomPlaybackStateType) => {
-    const now = Date.now();
-    const echoes = pendingEchoesRef.current.filter(
-      echo => now - echo.sentAt < WATCH_ROOM_ECHO_TIMEOUT_MS,
-    );
+    const echoes = liveEchoes(Date.now());
     const head = echoes[0];
     if (head && isEchoOf(head, playback)) {
       pendingEchoesRef.current = echoes.slice(1);
@@ -301,7 +328,8 @@ export function useWatchRoomConnection({
 
   const handleSnapshot = useEffectEvent(async (
     playback: WatchRoomPlaybackStateType,
-    connected: number[],
+    /** Undefined when the snapshot did not say who is here. */
+    connected: number[] | undefined,
   ) => {
     pendingEchoesRef.current = [];
 
@@ -315,8 +343,12 @@ export function useWatchRoomConnection({
       video && video.readyState >= 1 ? video.currentTime : null;
     const forgotten =
       playback.paused && playback.position_sec === 0 && (ownPosition ?? 0) > 0;
+    // Only a snapshot that names who is here can say this viewer is alone;
+    // without the list, overwriting the room could undo others' playback.
     const alone =
-      selfUserId !== null && connected.every(id => id === selfUserId);
+      connected !== undefined &&
+      selfUserId !== null &&
+      connected.every(id => id === selfUserId);
     if (known && forgotten && alone && ownPosition !== null) {
       const type = video?.paused
         ? WATCH_ROOM_CLIENT_EVENT_TYPES.PAUSE
@@ -363,13 +395,16 @@ export function useWatchRoomConnection({
         break;
     }
 
-    if (event.connected_user_ids) {
-      setConnectedUserIds(event.connected_user_ids);
+    const connectedIds = event.connected_user_ids;
+    if (connectedIds) {
+      setConnectedUserIds(previous =>
+        sameIds(previous, connectedIds) ? previous : connectedIds,
+      );
     }
 
     if (event.type === WATCH_ROOM_EVENT_TYPES.ROOM_SNAPSHOT) {
       if (event.playback) {
-        await handleSnapshot(event.playback, event.connected_user_ids ?? []);
+        await handleSnapshot(event.playback, connectedIds);
       }
       return;
     }
@@ -397,7 +432,14 @@ export function useWatchRoomConnection({
   const handleSocketOpen = useEffectEvent(() => {
     // The server sends the room's snapshot first thing, right behind this.
     setConnectionState("live");
-    reconnectAttemptsRef.current = 0;
+    // The backoff resets only once the link has held: a server that accepts
+    // the upgrade and drops it at once used to be retried, with a join, every
+    // second for as long as it did.
+    clearTimeoutRef(stableConnectionTimeoutRef);
+    stableConnectionTimeoutRef.current = window.setTimeout(() => {
+      stableConnectionTimeoutRef.current = null;
+      reconnectAttemptsRef.current = 0;
+    }, WATCH_ROOM_STABLE_CONNECTION_MS);
     if (openedOnceRef.current) onReconnected();
     openedOnceRef.current = true;
     const ws = socketRef.current;
@@ -408,7 +450,7 @@ export function useWatchRoomConnection({
           JSON.stringify({ type: WATCH_ROOM_CLIENT_EVENT_TYPES.PING }),
         );
       }
-    }, 25_000);
+    }, WATCH_ROOM_HEARTBEAT_INTERVAL_MS);
   });
 
   const scheduleReconnect = () => {
@@ -430,6 +472,7 @@ export function useWatchRoomConnection({
     // connection until the server dropped it.
     if (closedInstanceId !== socketInstanceIdRef.current) return;
     clearHeartbeat();
+    clearTimeoutRef(stableConnectionTimeoutRef);
     clearPendingSeek();
     // Nothing sent on this socket will come back.
     pendingEchoesRef.current = [];
@@ -443,20 +486,10 @@ export function useWatchRoomConnection({
   // The cleanup closes the socket, which releases its listeners, and clears
   // the heartbeat interval and the reconnect and seek timeouts.
   // react-doctor-disable-next-line react-doctor/effect-needs-cleanup
+  // One room per mount: the route keys the page on the room id, so nothing
+  // here carries over from another room.
   useEffect(() => {
     intentionalCloseRef.current = false;
-    if (prevRoomIdRef.current !== currentRoomId) {
-      prevRoomIdRef.current = currentRoomId;
-      // Only a new room clears it: a reconnect while this viewer's own close
-      // or leave is out must not let the socket end the room a second time.
-      roomEndHandledRef.current = false;
-      openedOnceRef.current = false;
-      reconnectAttemptsRef.current = 0;
-      pendingPlaybackRef.current = null;
-      roomPlaybackRef.current = null;
-      pendingEchoesRef.current = [];
-      setConnectionState("connecting");
-    }
     if (!currentRoomId) return;
 
     let cancelled = false;
@@ -504,22 +537,7 @@ export function useWatchRoomConnection({
     return () => {
       cancelled = true;
       intentionalCloseRef.current = true;
-
-      clearTimeoutRef(reconnectTimeoutRef);
-      clearPendingSeek();
-      clearHeartbeat();
-
-      if (socketRef.current === socket) {
-        socketRef.current = null;
-      }
-
-      if (
-        socket &&
-        socket.readyState !== WebSocket.CLOSING &&
-        socket.readyState !== WebSocket.CLOSED
-      ) {
-        socket.close();
-      }
+      stopSocketOnCleanup(socket);
     };
   }, [currentRoomId, reconnectKey]);
 
@@ -551,11 +569,8 @@ export function useWatchRoomConnection({
       pendingPlaybackRef.current = roomPlaybackRef.current;
     }
 
-    const roomIdAtEffectTime = currentRoomId;
     const handleReady = () => {
-      if (prevRoomIdRef.current === roomIdAtEffectTime) {
-        void flushPendingPlayback();
-      }
+      void flushPendingPlayback();
     };
 
     video.addEventListener("loadedmetadata", handleReady);
@@ -564,7 +579,7 @@ export function useWatchRoomConnection({
       video.removeEventListener("loadedmetadata", handleReady);
       video.removeEventListener("canplay", handleReady);
     };
-  }, [streamUrl, currentRoomId, videoRef]);
+  }, [streamUrl, videoRef]);
 
   const rememberPress = (
     type: WatchRoomPlaybackEventType,
@@ -631,10 +646,7 @@ export function useWatchRoomConnection({
       return;
     }
 
-    const elapsed = pending.state.paused
-      ? 0
-      : (Date.now() - pending.receivedAt) / 1000;
-    const adjustedPos = pending.state.position_sec + elapsed;
+    const adjustedPos = projectedPosition(pending);
     const drift = Math.abs(video.currentTime - adjustedPos);
     if (drift > WATCH_ROOM_SYNC_DRIFT_THRESHOLD_SEC) {
       video.currentTime = adjustedPos;
@@ -666,6 +678,7 @@ export function useWatchRoomConnection({
     playbackError,
     setPlaybackError,
     syncAnnouncement,
+    syncAnnouncementKey,
     connectedUserIds,
     connectionState,
     closeRoomConnection,

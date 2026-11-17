@@ -49,6 +49,7 @@ import {
   MOVIE_CONTROLS_IDLE_MS,
   MOVIE_SEEK_STEP_SEC,
   MOVIE_VOLUME_STEP,
+  PLAYBACK_FAILED_MESSAGE,
   PLAYER_FRAME_CLASS,
   PLAYER_FRAME_SHELL_CLASS,
   PLAYER_ICON_BUTTON_CLASS,
@@ -485,9 +486,7 @@ export default function VideoPlaybackPage({
       // the direct-play fallback consumed it and is switching to remux, when
       // a report from here would raise the error screen over the fallback.
       if (isSourceFailurePlayError(error)) return;
-      setPlaybackError(
-        "Playback failed — the browser could not play this stream.",
-      );
+      setPlaybackError(PLAYBACK_FAILED_MESSAGE);
     }
   };
 

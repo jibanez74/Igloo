@@ -1,6 +1,6 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
 
-import { WATCH_ROOM_SEEK_STEP_SEC } from "../src/lib/constants";
+import { MOVIE_SEEK_STEP_SEC } from "../src/lib/constants";
 import { loginViaApi } from "./e2e-auth";
 import { trackBrowserIssues } from "./e2e-browser-issues";
 import { readE2EEnv, requireMockApi, type Credentials } from "./e2e-env";
@@ -90,11 +90,11 @@ test.describe("Watch rooms", () => {
     await playButton(owner.page).click();
     await expect(pauseButton(guestPage)).toBeVisible();
     await owner.page
-      .getByRole("button", { name: `Fast-forward ${WATCH_ROOM_SEEK_STEP_SEC} seconds` })
+      .getByRole("button", { name: `Fast-forward ${MOVIE_SEEK_STEP_SEC} seconds` })
       .click();
     await expect
       .poll(() => videoCurrentTime(guestPage))
-      .toBeGreaterThanOrEqual(WATCH_ROOM_SEEK_STEP_SEC - 0.5);
+      .toBeGreaterThanOrEqual(MOVIE_SEEK_STEP_SEC - 0.5);
     await pauseButton(guestPage).click();
     await expect(playButton(owner.page)).toBeVisible();
     const pausedAt = await videoCurrentTime(owner.page);

@@ -31,7 +31,9 @@ export function WatchRoomUnavailable({
 }: WatchRoomUnavailableProps) {
   return (
     <div className="flex min-h-[60vh] items-center justify-center px-4">
-      <div className="max-w-md text-center">
+      {/* Mounts in place of the room or its loading screen, so it says
+          itself, as the movie player's status screen does. */}
+      <div role="alert" className="max-w-md text-center">
         <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-destructive/10">
           <AlertCircle
             className="size-10 text-destructive"

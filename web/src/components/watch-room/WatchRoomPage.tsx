@@ -17,9 +17,10 @@ import {
   Users,
 } from "lucide-react";
 import {
+  MOVIE_SEEK_STEP_SEC,
+  PLAYBACK_FAILED_MESSAGE,
   TMDB_POSTER_SIZE,
   WATCH_ROOM_CLIENT_EVENT_TYPES,
-  WATCH_ROOM_SEEK_STEP_SEC,
 } from "@/lib/constants";
 import { formatTimecode } from "@/lib/format";
 import { apiErrorMessage } from "@/lib/is-api-failure";
@@ -35,6 +36,7 @@ import {
 import { movieMediaRef } from "@/lib/media-ref";
 import {
   buildSubtitleTrackInfo,
+  clampPlaybackTime,
   isInterruptedPlayError,
   isSourceFailurePlayError,
 } from "@/lib/video-playback";
@@ -48,6 +50,7 @@ import { sessionEndedSince, sessionStamp } from "@/lib/session";
 import { useHlsCapacityRetry } from "@/hooks/useHlsCapacityRetry";
 import { useHlsSessionKeepalive } from "@/hooks/useHlsSessionKeepalive";
 import { useHlsSessionRecovery } from "@/hooks/useHlsSessionRecovery";
+import { useLastSuccess } from "@/hooks/useLastSuccess";
 import { cn } from "@/lib/utils";
 import DeleteWatchRoomDialog from "@/components/watch-room/DeleteWatchRoomDialog";
 import EditWatchRoomMembersDialog from "@/components/watch-room/EditWatchRoomMembersDialog";
@@ -60,7 +63,9 @@ import {
 import ProgressBar from "@/components/playback/ProgressBar";
 import VolumeControl from "@/components/playback/VolumeControl";
 import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
-import VideoPlayer from "@/components/playback/VideoPlayer";
+import VideoPlayer, {
+  type SubtitleTrackInfo,
+} from "@/components/playback/VideoPlayer";
 import { useVideoMediaSession } from "@/hooks/useVideoMediaSession";
 import { useVideoFullscreen } from "@/hooks/useVideoFullscreen";
 import { useVideoPlaybackKeyboard } from "@/hooks/useVideoPlaybackKeyboard";
@@ -115,7 +120,16 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
     void toggleFullscreen({ videoFallback: false });
 
   const queryClient = useQueryClient();
-  const { data, isPending, isError } = useQuery(watchRoomQueryOpts(roomId));
+  const roomQuery = useQuery(watchRoomQueryOpts(roomId));
+  const { isPending, isError } = roomQuery;
+  // A refetch that failed (a window focus during a server restart) must not
+  // tear down a room in progress: the last loaded room stands. One the server
+  // refuses (403) or no longer has (404) is gone, and the page says so.
+  const keptRoomData = useLastSuccess(roomQuery.data, roomId);
+  const roomGone =
+    roomQuery.data?.error === true &&
+    (roomQuery.data.status === 403 || roomQuery.data.status === 404);
+  const data = roomGone ? roomQuery.data : keptRoomData;
   const { data: authUserData } = useQuery(authUserQueryOpts());
   const selfUserId = authUserFrom(authUserData)?.id ?? null;
   const room = data?.error === false ? data.data.room : null;
@@ -137,6 +151,7 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
     playbackError,
     setPlaybackError,
     syncAnnouncement,
+    syncAnnouncementKey,
     connectedUserIds,
     connectionState,
     closeRoomConnection,
@@ -184,9 +199,9 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
   // The player only says the stream failed. A room whose tracks no longer
   // match its file answers 409, which only reloading the room will not fix,
   // so the page asks the stream route itself.
-  const handlePlayerError = (message: string | null) => {
+  const handlePlayerError = (message: string) => {
     setPlaybackError(message);
-    if (message === null || !room) return;
+    if (!room) return;
     void watchRoomStreamConflicted(streamUrl, room.playback_mode).then(
       conflicted => {
         if (conflicted) setPlaybackError(WATCH_ROOM_TRACKS_CHANGED_MESSAGE);
@@ -220,10 +235,7 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
     useHlsCapacityRetry({
       streamWindowKey,
       onRetry: () => setStreamReloadKey((prev) => prev + 1),
-      onMaxAttempts: () =>
-        setPlaybackError(
-          "The server is running at its transcoding limit. Try again shortly.",
-        ),
+      onMaxAttempts: setPlaybackError,
     });
 
   const { handleSessionLost, recoveryAttempt } = useHlsSessionRecovery({
@@ -260,9 +272,7 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
       if (isInterruptedPlayError(error) || isSourceFailurePlayError(error)) {
         return;
       }
-      setPlaybackError(
-        "Playback failed - the browser could not play this stream.",
-      );
+      setPlaybackError(PLAYBACK_FAILED_MESSAGE);
     }
   };
 
@@ -270,40 +280,46 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
     const video = videoRef.current;
     if (!video) return;
 
+    // A stream reload (recovery, capacity retry) leaves the element paused
+    // without a `pause` event, so the controls would keep showing Pause.
+    if (video.paused) setPlaying(false);
     video.pause();
     clearPendingPlayback();
     sendPlaybackEvent(WATCH_ROOM_CLIENT_EVENT_TYPES.PAUSE, video.currentTime);
   };
 
+  // The viewer's intent, not just the element: a stream reload leaves the
+  // element paused while the controls still show Pause, and a press there
+  // must pause the room, not play it again.
   const togglePlay = async () => {
     const video = videoRef.current;
     if (!video) return;
 
-    if (video.paused) {
-      await playVideo();
+    if (playing || !video.paused) {
+      pauseVideo();
       return;
     }
 
-    pauseVideo();
+    await playVideo();
   };
 
   const seek = (newTime: number) => {
     const video = videoRef.current;
     if (!video) return;
 
-    const safeDuration =
-      Number.isFinite(video.duration) && video.duration > 0
-        ? video.duration
-        : duration;
-    const nextTime = Math.max(0, Math.min(newTime, safeDuration || newTime));
+    const nextTime = clampPlaybackTime(
+      newTime,
+      Number.isFinite(video.duration) ? video.duration : 0,
+      duration,
+    );
     video.currentTime = nextTime;
     setCurrentTime(nextTime);
     clearPendingPlayback();
     sendPlaybackEvent(WATCH_ROOM_CLIENT_EVENT_TYPES.SEEK, nextTime);
   };
 
-  const seekBackward = () => seek(currentTime - WATCH_ROOM_SEEK_STEP_SEC);
-  const seekForward = () => seek(currentTime + WATCH_ROOM_SEEK_STEP_SEC);
+  const seekBackward = () => seek(currentTime - MOVIE_SEEK_STEP_SEC);
+  const seekForward = () => seek(currentTime + MOVIE_SEEK_STEP_SEC);
 
   useVideoMediaSession({
     videoRef,
@@ -312,7 +328,7 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
     currentTime,
     duration,
     playing,
-    seekStepSec: WATCH_ROOM_SEEK_STEP_SEC,
+    seekStepSec: MOVIE_SEEK_STEP_SEC,
     onPlay: playVideo,
     onPause: pauseVideo,
     onSeek: seek,
@@ -323,6 +339,9 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
     containerRef,
     videoRef,
     enabled: !!room,
+    // Escape leaves fullscreen or the expanded view even while the stream is
+    // still loading or has failed, when the other shortcuts stand down.
+    fullscreenActive: playerFullscreenMode,
     onTogglePlay: () => void togglePlay(),
     onSeekBackward: seekBackward,
     onSeekForward: seekForward,
@@ -334,11 +353,10 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
 
   // Returned so the delete dialog waits for the page to go before it drops
   // the room's cache entry.
-  const handleOwnerDeleteSuccess = () => {
+  const handleRoomExit = () => {
     closeRoomConnection();
     return navigate({ to: "/", replace: true });
   };
-  const handleLeft = handleOwnerDeleteSuccess;
 
   if (isPending) {
     return <WatchRoomLoading />;
@@ -372,7 +390,10 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
 
   return (
     <div ref={containerRef} className="bg-background text-foreground">
-      <LiveAnnouncer message={syncAnnouncement} />
+      <LiveAnnouncer
+        message={syncAnnouncement}
+        announcementKey={syncAnnouncementKey}
+      />
       <LiveAnnouncer
         message={
           recoveryAttempt > 0
@@ -415,6 +436,7 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
             room={room}
             posterUrl={posterUrl}
             streamUrl={streamUrl}
+            isHlsRoom={isHlsRoom}
             subtitleTrack={subtitleTrack}
             waitingForCapacity={waitingForCapacity}
             reconnecting={connectionState === "reconnecting"}
@@ -434,7 +456,7 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
             onTimeUpdate={setCurrentTime}
             onDurationChange={setDuration}
             onEnded={() => {
-              setPlaying(false);
+              // `ended` follows a `pause`, which already cleared `playing`.
               const video = videoRef.current;
               sendPlaybackEvent(
                 WATCH_ROOM_CLIENT_EVENT_TYPES.PAUSE,
@@ -466,13 +488,9 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
             movieTitle={room.movie_title}
             open={deleteDialogOpen}
             onOpenChange={setDeleteDialogOpen}
-            onDeleteStart={() => {
-              markRoomEndHandled(true);
-            }}
-            onDeleteError={() => {
-              markRoomEndHandled(false);
-            }}
-            onDeleted={handleOwnerDeleteSuccess}
+            onDeleteStart={() => markRoomEndHandled(true)}
+            onDeleteError={() => markRoomEndHandled(false)}
+            onDeleted={handleRoomExit}
             restoreFocusRef={deleteButtonRef}
           />
           <EditWatchRoomMembersDialog
@@ -493,13 +511,9 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
           hostName={room.owner.name}
           open={leaveDialogOpen}
           onOpenChange={setLeaveDialogOpen}
-          onLeaveStart={() => {
-            markRoomEndHandled(true);
-          }}
-          onLeaveError={() => {
-            markRoomEndHandled(false);
-          }}
-          onLeft={handleLeft}
+          onLeaveStart={() => markRoomEndHandled(true)}
+          onLeaveError={() => markRoomEndHandled(false)}
+          onLeft={handleRoomExit}
           restoreFocusRef={leaveButtonRef}
         />
       )}
@@ -637,11 +651,8 @@ type WatchRoomPlayerPanelProps = {
   room: WatchRoomDetailType;
   posterUrl: string | null;
   streamUrl: string;
-  subtitleTrack: {
-    url: string;
-    label: string;
-    srclang: string;
-  } | null;
+  isHlsRoom: boolean;
+  subtitleTrack: SubtitleTrackInfo | null;
   videoRef: RefObject<HTMLVideoElement | null>;
   playing: boolean;
   currentTime: number;
@@ -656,7 +667,7 @@ type WatchRoomPlayerPanelProps = {
   onSessionLost: (currentTime: number) => void;
   onCapacityBusy: (retryAfterSec: number) => void;
   onManifestLoaded: () => void;
-  onError: (error: string | null) => void;
+  onError: (error: string) => void;
   onPlayingChange: (playing: boolean) => void;
   onTimeUpdate: (time: number) => void;
   onDurationChange: (duration: number) => void;
@@ -673,6 +684,7 @@ function WatchRoomPlayerPanel({
   room,
   posterUrl,
   streamUrl,
+  isHlsRoom,
   subtitleTrack,
   videoRef,
   playing,
@@ -723,7 +735,7 @@ function WatchRoomPlayerPanel({
         <VideoPlayer
           videoRef={videoRef}
           src={streamUrl}
-          isHlsSource={room.playback_mode !== "direct"}
+          isHlsSource={isHlsRoom}
           title={room.movie_title}
           posterUrl={posterUrl}
           isFullscreen={playerFullscreenMode}
@@ -771,7 +783,7 @@ function WatchRoomPlayerPanel({
             <div className="flex items-center gap-2">
               <PlayerIconButton
                 onClick={onSeekBackward}
-                aria-label={`Rewind ${WATCH_ROOM_SEEK_STEP_SEC} seconds`}
+                aria-label={`Rewind ${MOVIE_SEEK_STEP_SEC} seconds`}
               >
                 <Rewind className="size-5" aria-hidden="true" />
               </PlayerIconButton>
@@ -789,7 +801,7 @@ function WatchRoomPlayerPanel({
 
               <PlayerIconButton
                 onClick={onSeekForward}
-                aria-label={`Fast-forward ${WATCH_ROOM_SEEK_STEP_SEC} seconds`}
+                aria-label={`Fast-forward ${MOVIE_SEEK_STEP_SEC} seconds`}
               >
                 <FastForward className="size-5" aria-hidden="true" />
               </PlayerIconButton>

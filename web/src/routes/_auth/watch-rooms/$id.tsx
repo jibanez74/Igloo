@@ -78,7 +78,10 @@ function WatchRoomRoute() {
 
   return (
     <RoomFrame>
-      <WatchRoomPage roomId={id} />
+      {/* Keyed on the room: its connection, recovery budget and player state
+          belong to one room, and the router reuses the component when only
+          the param changes. */}
+      <WatchRoomPage key={id} roomId={id} />
     </RoomFrame>
   );
 }
