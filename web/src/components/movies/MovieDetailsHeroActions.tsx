@@ -1,6 +1,7 @@
 import { lazy, Suspense, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSessionMutation } from "@/hooks/useSessionMutation";
+import { restoreOptimistic, writeOptimistically } from "@/lib/optimistic";
 import { Link } from "@tanstack/react-router";
 import {
   Play,
@@ -30,7 +31,7 @@ import { playbackSettingsToPlaySearch } from "@/lib/route-search";
 import { showActionFailed } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
 import { refreshWatchQueries } from "@/lib/video-playback-exit";
-import type { WatchProgressType } from "@/types";
+import type { ApiResponseType, WatchProgressType } from "@/types";
 import type { LibraryMovieDetailsMovieType } from "@/types/movies";
 import type { PlaybackSettings } from "@/types/playback";
 import type { AuthUser } from "@/types/user";
@@ -72,6 +73,23 @@ const emptyWatchProgress = (): WatchProgressType => ({
   watched: false,
   updated_at: null,
 });
+
+/** The cached progress with `watched` set; marking watched clears the position, as the server does. */
+function withWatched(
+  previous: ApiResponseType<WatchProgressType> | undefined,
+  watched: boolean,
+): ApiResponseType<WatchProgressType> {
+  const progress =
+    previous?.error === false ? previous.data : emptyWatchProgress();
+  return {
+    error: false,
+    data: {
+      ...progress,
+      progress_sec: watched ? 0 : progress.progress_sec,
+      watched,
+    },
+  };
+}
 
 export default function MovieDetailsHeroActions({
   movieId,
@@ -122,63 +140,30 @@ export default function MovieDetailsHeroActions({
       ? Boolean(watchProgressData.data.watched)
       : false;
 
-  // Undoes the optimistic write. With nothing cached before it, the real
-  // progress is unknown, so it refetches rather than claiming "unwatched".
-  const rollbackWatched = (previous: typeof watchProgressData) => {
-    if (previous === undefined) {
-      void queryClient.invalidateQueries({ queryKey: watchProgressKey });
-      return;
-    }
-    queryClient.setQueryData(watchProgressKey, previous);
-  };
-
   const watchedMutation = useSessionMutation({
     mutationFn: (nextWatched: boolean) => setMovieWatched(movieId, nextWatched),
-    onMutate: async (nextWatched: boolean, _context, session) => {
-      await queryClient.cancelQueries({ queryKey: watchProgressKey });
-      if (session.ended()) return undefined;
-      const previous = queryClient.getQueryData(watchProgressKey);
-      const currentProgress = previous?.error === false
-        ? previous.data
-        : emptyWatchProgress();
-
-      queryClient.setQueryData(watchProgressKey, {
-        error: false,
-        data: {
-          ...currentProgress,
-          progress_sec: nextWatched ? 0 : currentProgress.progress_sec,
-          watched: nextWatched,
-        },
-      });
-
-      return { previous };
-    },
-    onError: (_err, _nextWatched, context) => {
-      rollbackWatched(context?.previous);
+    onMutate: (nextWatched: boolean, _context, session) =>
+      writeOptimistically(queryClient, watchProgressKey, session, previous =>
+        withWatched(previous, nextWatched),
+      ),
+    onError: (_err, _nextWatched, snapshot) => {
+      restoreOptimistic(queryClient, watchProgressKey, snapshot);
       showActionFailed(
         "update watched status",
         "Unable to update watched status. Please try again.",
       );
     },
-    onSuccess: (res, nextWatched, context) => {
+    onSuccess: (res, _nextWatched, snapshot) => {
       if (res.error) {
-        rollbackWatched(context?.previous);
+        restoreOptimistic(queryClient, watchProgressKey, snapshot);
         showActionFailed("update watched status", res);
         return;
       }
 
-      const previous = queryClient.getQueryData(watchProgressKey);
-      const currentProgress = previous?.error === false
-        ? previous.data
-        : emptyWatchProgress();
-      queryClient.setQueryData(watchProgressKey, {
-        error: false,
-        data: {
-          ...currentProgress,
-          progress_sec: nextWatched ? 0 : currentProgress.progress_sec,
-          watched: res.data.watched,
-        },
-      });
+      // The server's answer is the state that holds.
+      queryClient.setQueryData(watchProgressKey, previous =>
+        withWatched(previous, res.data.watched),
+      );
 
       void refreshWatchQueries(queryClient, movieMediaRef(movieId), {
         refetchType: "active",

@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSessionMutation } from "@/hooks/useSessionMutation";
+import { restoreOptimistic, writeOptimistically } from "@/lib/optimistic";
 import { Heart } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
@@ -35,38 +36,24 @@ export default function MovieLikeButton({
   const isLiked =
     data?.error === false ? Boolean(data.data.is_liked) : false;
 
-  // Undoes the optimistic flip. With nothing cached before it, the real state
-  // is unknown, so it refetches rather than claiming "not liked".
-  const rollback = (previous: typeof data) => {
-    if (previous === undefined) {
-      void queryClient.invalidateQueries({ queryKey: likeKey });
-      return;
-    }
-    queryClient.setQueryData(likeKey, previous);
-  };
-
   const mutation = useSessionMutation({
     mutationFn: () => toggleLikeMovie(movieId),
-    onMutate: async (_variables, _context, session) => {
-      await queryClient.cancelQueries({ queryKey: likeKey });
-      if (session.ended()) return undefined;
-      const previous = queryClient.getQueryData(likeKey);
-      const nextLiked = previous?.error === false
-        ? !previous.data.is_liked
-        : true;
-      queryClient.setQueryData(likeKey, likeStatusResponse(nextLiked));
-      return { previous };
-    },
-    onError: (_err, _vars, context) => {
-      rollback(context?.previous);
+    onMutate: (_variables, _context, session) =>
+      writeOptimistically(queryClient, likeKey, session, previous =>
+        likeStatusResponse(
+          previous?.error === false ? !previous.data.is_liked : true,
+        ),
+      ),
+    onError: (_err, _vars, snapshot) => {
+      restoreOptimistic(queryClient, likeKey, snapshot);
       showActionFailed(
         "update like",
         "Unable to update liked status. Please try again.",
       );
     },
-    onSuccess: (res, _vars, context) => {
+    onSuccess: (res, _vars, snapshot) => {
       if (res.error) {
-        rollback(context?.previous);
+        restoreOptimistic(queryClient, likeKey, snapshot);
         showActionFailed("update like", res);
         return;
       }
