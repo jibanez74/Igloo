@@ -83,6 +83,9 @@ type WatchRoomPageProps = {
 export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
   const navigate = useNavigate();
   const containerRef = useRef<HTMLDivElement>(null);
+  // The player card, not the page, is what goes fullscreen: the header and
+  // the members column are page chrome a viewer leaves behind.
+  const playerRef = useRef<HTMLElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const deleteButtonRef = useRef<HTMLButtonElement>(null);
   const editButtonRef = useRef<HTMLButtonElement>(null);
@@ -104,7 +107,12 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
     chromeFullscreenMode: playerFullscreenMode,
     toggleFullscreen,
     exitFullscreenIfActive,
-  } = useVideoFullscreen({ containerRef, videoRef });
+  } = useVideoFullscreen({ containerRef: playerRef, videoRef });
+  // Never the video's own WebKit fullscreen: it would hide the room's
+  // transport row and its reconnecting warning, so a browser without element
+  // fullscreen gets the expanded player card instead.
+  const togglePlayerFullscreen = () =>
+    void toggleFullscreen({ videoFallback: false });
 
   const queryClient = useQueryClient();
   const { data, isPending, isError } = useQuery(watchRoomQueryOpts(roomId));
@@ -319,7 +327,7 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
     onSeekBackward: seekBackward,
     onSeekForward: seekForward,
     onSeekToStart: () => seek(0),
-    onToggleFullscreen: () => void toggleFullscreen(),
+    onToggleFullscreen: togglePlayerFullscreen,
     onEscape: exitFullscreenIfActive,
   });
   const { showShortcutHints } = useShortcutHints();
@@ -363,14 +371,7 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
   );
 
   return (
-    <div
-      ref={containerRef}
-      className={cn(
-        "bg-background text-foreground [&:-webkit-full-screen]:fixed [&:-webkit-full-screen]:inset-0 [&:-webkit-full-screen]:h-screen [&:-webkit-full-screen]:w-screen [&:fullscreen]:fixed [&:fullscreen]:inset-0 [&:fullscreen]:h-screen [&:fullscreen]:w-screen",
-        isImmersiveViewport &&
-          "fixed inset-0 z-modal min-h-dvh w-full overflow-auto bg-background",
-      )}
-    >
+    <div ref={containerRef} className="bg-background text-foreground">
       <LiveAnnouncer message={syncAnnouncement} />
       <LiveAnnouncer
         message={
@@ -390,16 +391,12 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
         </p>
       )}
 
-      <div
-        className={cn(
-          "mx-auto flex w-full max-w-7xl flex-col gap-6",
-          // Inside the shell its content padding already frames the room;
-          // fullscreen and the immersive phone view leave the shell, so the
-          // room supplies its own.
-          playerFullscreenMode && "max-w-none px-4 py-6 sm:px-6 lg:px-8",
-        )}
-      >
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
+        {/* Fullscreen and the expanded view cover the page without leaving
+            it, so the header's buttons must not take focus (or open a dialog)
+            behind the player. */}
         <WatchRoomHeader
+          inert={playerFullscreenMode}
           room={room}
           connectedCount={connectedMembers.length}
           connectionState={connectionState}
@@ -412,18 +409,15 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
           onBackHome={() => navigate({ to: "/" })}
         />
 
-        <div
-          className={cn(
-            "grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]",
-            playerFullscreenMode && "grid-cols-1",
-          )}
-        >
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
           <WatchRoomPlayerPanel
+            playerRef={playerRef}
             room={room}
             posterUrl={posterUrl}
             streamUrl={streamUrl}
             subtitleTrack={subtitleTrack}
             waitingForCapacity={waitingForCapacity}
+            reconnecting={connectionState === "reconnecting"}
             onSessionLost={handleSessionLost}
             onCapacityBusy={handleCapacityBusy}
             onManifestLoaded={notifyManifestLoaded}
@@ -451,7 +445,7 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
             onSeekBackward={seekBackward}
             onSeekForward={seekForward}
             onTogglePlay={() => void togglePlay()}
-            onToggleFullscreen={() => void toggleFullscreen()}
+            onToggleFullscreen={togglePlayerFullscreen}
           />
 
           {!playerFullscreenMode ? (
@@ -514,6 +508,8 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
 }
 
 type WatchRoomHeaderProps = {
+  /** True while the player card is fullscreen or expanded over the page. */
+  inert: boolean;
   room: WatchRoomDetailType;
   connectedCount: number;
   connectionState: WatchRoomConnectionState;
@@ -533,6 +529,7 @@ const CONNECTION_STATE_LABELS: Record<WatchRoomConnectionState, string> = {
 };
 
 function WatchRoomHeader({
+  inert,
   room,
   connectedCount,
   connectionState,
@@ -545,7 +542,10 @@ function WatchRoomHeader({
   onBackHome,
 }: WatchRoomHeaderProps) {
   return (
-    <header className="flex flex-col gap-4 rounded-2xl border border-border bg-card/90 p-4">
+    <header
+      inert={inert}
+      className="flex flex-col gap-4 rounded-2xl border border-border bg-card/90 p-4"
+    >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <p className="flex items-center gap-2 text-xs font-semibold tracking-[0.2em] text-primary uppercase">
@@ -632,6 +632,8 @@ function WatchRoomHeader({
 }
 
 type WatchRoomPlayerPanelProps = {
+  /** The element that goes fullscreen or expands. */
+  playerRef: RefObject<HTMLElement | null>;
   room: WatchRoomDetailType;
   posterUrl: string | null;
   streamUrl: string;
@@ -649,6 +651,8 @@ type WatchRoomPlayerPanelProps = {
   isFullscreen: boolean;
   isImmersiveViewport: boolean;
   waitingForCapacity: boolean;
+  /** The room's socket is reconnecting: local controls won't reach it. */
+  reconnecting: boolean;
   onSessionLost: (currentTime: number) => void;
   onCapacityBusy: (retryAfterSec: number) => void;
   onManifestLoaded: () => void;
@@ -665,6 +669,7 @@ type WatchRoomPlayerPanelProps = {
 };
 
 function WatchRoomPlayerPanel({
+  playerRef,
   room,
   posterUrl,
   streamUrl,
@@ -678,6 +683,7 @@ function WatchRoomPlayerPanel({
   isFullscreen,
   isImmersiveViewport,
   waitingForCapacity,
+  reconnecting,
   onSessionLost,
   onCapacityBusy,
   onManifestLoaded,
@@ -693,11 +699,25 @@ function WatchRoomPlayerPanel({
   onToggleFullscreen,
 }: WatchRoomPlayerPanelProps) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-border bg-card/90">
+    <section
+      ref={playerRef}
+      className={cn(
+        // Fullscreen, the card fills the screen exactly: a definite height
+        // lets the video take what the transport row leaves, and keeps that
+        // row (and its Exit button) on screen.
+        "flex flex-col overflow-hidden rounded-2xl border border-border bg-card/90 [&:-webkit-full-screen]:fixed [&:-webkit-full-screen]:inset-0 [&:-webkit-full-screen]:h-screen [&:-webkit-full-screen]:w-screen [&:fullscreen]:fixed [&:fullscreen]:inset-0 [&:fullscreen]:h-screen [&:fullscreen]:w-screen",
+        // Opaque, on the theme like the movie player's chrome; the video
+        // area brings its own black.
+        playerFullscreenMode && "rounded-none border-0 bg-background",
+        // Where the browser has no element fullscreen, the card covers the
+        // window instead (the hook locks the page's scroll).
+        isImmersiveViewport && "fixed inset-0 z-modal h-dvh w-full",
+      )}
+    >
       <div
         className={cn(
-          "flex min-h-[50vh] flex-col",
-          playerFullscreenMode && "min-h-dvh",
+          "flex flex-col",
+          playerFullscreenMode ? "min-h-0 flex-1" : "min-h-[50vh]",
         )}
       >
         <VideoPlayer
@@ -725,6 +745,17 @@ function WatchRoomPlayerPanel({
             role="status"
           >
             Waiting for server capacity…
+          </p>
+        )}
+
+        {/* The header's sync chip says this, but the header is behind the
+            player while it is fullscreen. */}
+        {playerFullscreenMode && reconnecting && (
+          <p
+            className="border-t border-border px-4 py-3 text-sm text-destructive sm:px-5"
+            role="status"
+          >
+            {CONNECTION_STATE_LABELS.reconnecting}
           </p>
         )}
 
