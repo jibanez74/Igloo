@@ -198,17 +198,21 @@ const getPlayerMuted = (player: YT.Player | null) =>
   readPlayer(player, (p) => p.isMuted(), false);
 
 /**
- * Whether the viewer has the trailer going: playing, or buffering towards
- * it (every start and every seek passes through BUFFERING). Treating a
- * buffering player as paused announced "Paused" on each seek, flickered the
- * Play button, and made Space play rather than pause.
+ * Whether the viewer has the trailer going. BUFFERING says nothing either
+ * way (every seek passes through it, paused or playing), so it keeps what
+ * the player was doing: read as paused, a seek while playing announced
+ * "Paused", flickered the button and made Space play; read as playing, a
+ * seek while paused did the same the other way.
  */
-function isPlayingIntent(state: YT.PlayerState | null) {
-  return (
-    state === window.YT.PlayerState.PLAYING ||
-    state === window.YT.PlayerState.BUFFERING
-  );
+function isPlayingIntent(state: YT.PlayerState | null, wasPlaying: boolean) {
+  if (state === window.YT.PlayerState.BUFFERING) return wasPlaying;
+  return state === window.YT.PlayerState.PLAYING;
 }
+
+// The embed's getters answer from the last state its iframe posted, so for
+// a moment after a write they still report the old volume or mute; the tick
+// leaves those to the write until the iframe has caught up.
+const LOCAL_AUDIO_WRITE_SETTLE_MS = 1000;
 
 type YouTubePlayerState = {
   playerIdentity: string;
@@ -260,6 +264,7 @@ export function useYouTubePlayer(
   const playerRef = useRef<YT.Player | null>(null);
   const playerId = `yt-player-${useId().replace(/:/g, "")}`;
   const progressIntervalRef = useRef<number | null>(null);
+  const lastAudioWriteAtRef = useRef(0);
   const [reloadKey, setReloadKey] = useState(0);
   const playerIdentity = getYouTubePlayerIdentity(
     videoId,
@@ -302,7 +307,8 @@ export function useYouTubePlayer(
 
     const nextTime = getCurrentPlayerTime(player);
     const reportedDuration = getCurrentPlayerDuration(player);
-    const nextMuted = getPlayerMuted(player);
+    const adoptAudio =
+      Date.now() - lastAudioWriteAtRef.current >= LOCAL_AUDIO_WRITE_SETTLE_MS;
 
     // Bails out when nothing moved (paused, or a stalled tick), so the
     // surface does not re-render four times a second for nothing. Volume and
@@ -310,7 +316,10 @@ export function useYouTubePlayer(
     setPlayerState(previous => {
       const nextDuration =
         reportedDuration > 0 ? reportedDuration : previous.duration;
-      const nextVolume = getPlayerVolume(player, previous.volume);
+      const nextVolume = adoptAudio
+        ? getPlayerVolume(player, previous.volume)
+        : previous.volume;
+      const nextMuted = adoptAudio ? getPlayerMuted(player) : previous.isMuted;
       if (
         previous.currentTime === nextTime &&
         previous.duration === nextDuration &&
@@ -358,14 +367,19 @@ export function useYouTubePlayer(
     (event: YT.OnStateChangeEvent) => {
       const state = event.data;
 
-      const playing = isPlayingIntent(state);
-      setPlayerState(previous =>
-        previous.isPlaying === playing
+      setPlayerState(previous => {
+        const playing = isPlayingIntent(state, previous.isPlaying);
+        return previous.isPlaying === playing
           ? previous
-          : { ...previous, isPlaying: playing },
-      );
+          : { ...previous, isPlaying: playing };
+      });
 
-      if (playing) {
+      // Tracking runs through a buffering spell too: the position still moves
+      // when a seek lands.
+      if (
+        state === window.YT.PlayerState.PLAYING ||
+        state === window.YT.PlayerState.BUFFERING
+      ) {
         startProgressTracking();
         syncProgressState();
       } else {
@@ -566,7 +580,7 @@ export function useYouTubePlayer(
     const playerState = readPlayer(player, (p) => p.getPlayerState(), null);
     if (playerState === null) return;
 
-    if (isPlayingIntent(playerState)) {
+    if (isPlayingIntent(playerState, isPlaying)) {
       player.pauseVideo();
       return;
     }
@@ -603,6 +617,7 @@ export function useYouTubePlayer(
       return;
     }
 
+    lastAudioWriteAtRef.current = Date.now();
     player.setVolume(clampedVol);
     let nextIsMuted = currentPlayerState.isMuted;
 
@@ -624,6 +639,7 @@ export function useYouTubePlayer(
       return;
     }
 
+    lastAudioWriteAtRef.current = Date.now();
     player.mute();
     setPlayerState(previous => ({
       ...previous,
@@ -637,6 +653,7 @@ export function useYouTubePlayer(
       return;
     }
 
+    lastAudioWriteAtRef.current = Date.now();
     player.unMute();
     setPlayerState(previous => ({
       ...previous,
@@ -645,7 +662,7 @@ export function useYouTubePlayer(
   };
 
   const toggleMute = () => {
-    if (getPlayerMuted(playerRef.current)) {
+    if (isMuted) {
       unmute();
     } else {
       mute();

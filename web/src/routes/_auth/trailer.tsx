@@ -109,6 +109,9 @@ function handleDialogEscapeKeyDown(event: KeyboardEvent) {
   void exitDocumentFullscreen();
 }
 
+/** The level an Unmute at volume 0 restores, on YouTube's 0–100 scale. */
+const UNMUTE_DEFAULT_VOLUME = 50;
+
 type DialogView =
   | "playback-error"
   | "loading"
@@ -241,6 +244,16 @@ function TrailerPage() {
     });
   };
 
+  // At volume 0 the mute flag alone brings nothing back, so unmuting there
+  // also restores a level.
+  const toggleAudio = () => {
+    if (volume === 0) {
+      setVolume(UNMUTE_DEFAULT_VOLUME);
+      return;
+    }
+    toggleMute();
+  };
+
   const seekBack = () => seekBackward(MOVIE_SEEK_STEP_SEC);
   const seekAhead = () => seekForward(MOVIE_SEEK_STEP_SEC);
 
@@ -255,7 +268,7 @@ function TrailerPage() {
     onSeekForward: seekAhead,
     onSeekToStart: () => seekTo(0),
     onAdjustVolume: (delta) => setVolume(volume + delta * 100),
-    onToggleMute: toggleMute,
+    onToggleMute: toggleAudio,
     onToggleFullscreen: toggleFullscreen,
   });
 
@@ -417,7 +430,9 @@ function TrailerPage() {
         {/* Bounded by the height as well, so the controls below stay on a
             short window instead of being pushed off its bottom. */}
         <div className="relative aspect-video max-h-full w-full max-w-6xl bg-black">
-          <div ref={playerContainerRef} className="size-full" />
+          {/* Inert: the embed's iframe is not a Tab stop, so focus, the
+              shortcuts and Escape never leave this document for it. */}
+          <div ref={playerContainerRef} className="size-full" inert />
           {/*
             A pointer convenience over the embedded player: toggling here keeps
             focus and the keyboard in this document instead of the YouTube
@@ -535,7 +550,7 @@ function TrailerPage() {
             <div className="flex min-w-[100px] items-center justify-end gap-2">
               <button
                 type="button"
-                onClick={toggleMute}
+                onClick={toggleAudio}
                 className={cn(
                   PLAYER_ICON_BUTTON_CLASS,
                   "size-10 hover:bg-muted",

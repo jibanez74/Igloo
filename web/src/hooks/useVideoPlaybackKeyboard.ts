@@ -39,13 +39,6 @@ const SEEK_KEYS: ReadonlySet<string> = new Set([
   "0",
 ]);
 
-/**
- * Which shortcuts the element can take. A seek needs a timeline, so it waits
- * for metadata; everything else only needs an element that has not failed.
- * Play, pause, mute and fullscreen therefore keep working through a
- * mid-playback stall, a rebase or a recovery reload, exactly as the on-screen
- * buttons do.
- */
 // The element's own volume, for a surface that passes no volume callbacks.
 function nudgeVolume(video: HTMLVideoElement, delta: number) {
   video.volume = Math.min(1, Math.max(0, video.volume + delta));
@@ -56,6 +49,13 @@ function toggleMuted(video: HTMLVideoElement) {
   video.muted = !video.muted;
 }
 
+/**
+ * Which shortcuts the element can take. A seek needs a timeline, so it waits
+ * for metadata; everything else only needs an element that has not failed.
+ * Play, pause, mute and fullscreen therefore keep working through a
+ * mid-playback stall, a rebase or a recovery reload, exactly as the on-screen
+ * buttons do.
+ */
 function acceptsShortcut(video: HTMLVideoElement | null, key: string) {
   if (!video || video.error) return false;
   return !SEEK_KEYS.has(key) || video.readyState >= HAVE_METADATA;

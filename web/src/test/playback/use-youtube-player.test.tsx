@@ -190,19 +190,32 @@ describe("useYouTubePlayer controls", () => {
     expect(player.mute).toHaveBeenCalledTimes(1);
   });
 
-  it("counts a buffering trailer as playing, so a toggle pauses it", async () => {
+  it("keeps the play state through a seek's buffering, playing or paused", async () => {
     const { player, target } = await renderControlsProbe();
     act(() => player.events.onReady?.({ target }));
+    const enter = (state: number) => {
+      player.state = state;
+      act(() =>
+        player.events.onStateChange?.({ target, data: state } as YT.OnStateChangeEvent),
+      );
+    };
 
-    player.state = 3; // BUFFERING, as after every seek
-    act(() =>
-      player.events.onStateChange?.({ target, data: 3 } as YT.OnStateChangeEvent),
-    );
+    // Playing, then a seek: BUFFERING still reads as playing, and a toggle
+    // there pauses.
+    enter(1);
+    enter(3);
     expect(screen.getByText("playing:sound")).toBeInTheDocument();
-
     fireEvent.click(screen.getByRole("button", { name: "toggle" }));
     expect(player.pauseVideo).toHaveBeenCalledTimes(1);
     expect(player.playVideo).not.toHaveBeenCalled();
+
+    // Paused, then a seek: BUFFERING still reads as paused, and a toggle
+    // there plays.
+    enter(2);
+    enter(3);
+    expect(screen.getByText("paused:sound")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "toggle" }));
+    expect(player.playVideo).toHaveBeenCalledTimes(1);
   });
 
   it("picks up a mute made outside its own controls", async () => {

@@ -254,7 +254,8 @@ export default function PrerollPlayer({
         ) : null}
         {current ? (
           <div className="relative aspect-video max-h-full w-full max-w-6xl bg-black">
-            <div ref={containerRef} className="size-full" />
+            {/* Inert: the embed's iframe is not a Tab stop (see trailer.tsx). */}
+            <div ref={containerRef} className="size-full" inert />
             {!isReady ? (
               <div
                 role="status"

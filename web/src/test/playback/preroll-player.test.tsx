@@ -128,6 +128,8 @@ describe("PrerollPlayer", () => {
     expect(region).toHaveTextContent("Trailer 1 of 2");
     expect(region).toHaveTextContent("Signal Fire");
     expect(fake.options?.videoId).toBe("one");
+    // The embed is no Tab stop: focus and the shortcuts stay in the page.
+    expect(region.querySelector("[inert]")).not.toBeNull();
     expect(
       screen.getByRole("button", { name: "Skip trailer (N)" }),
     ).toHaveFocus();
