@@ -48,9 +48,9 @@ const SETTINGS_HEAD = routeHead(
 export const Route = createFileRoute("/_auth/settings")({
   head: () => SETTINGS_HEAD,
   beforeLoad: async ({ context, location }) => {
-    // The shell's guard has just revalidated this entry and stops on any
-    // failure, so an error cannot reach here.
-    const authData = await context.queryClient.fetchQuery(
+    // The shell's guard has just read this entry and stops on any failure,
+    // so an error cannot reach here.
+    const authData = await context.queryClient.ensureQueryData(
       authUserQueryOpts(),
     );
     if (authData.error) return;

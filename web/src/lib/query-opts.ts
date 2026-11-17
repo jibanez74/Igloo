@@ -171,9 +171,10 @@ import {
  * Current authenticated user. Both route guards and components read this from
  * the shared AUTH_USER_KEY cache entry.
  *
- * Pass `{ revalidate: true }` in router `beforeLoad` guards so the auth check
- * always hits the network (staleTime 0). Component reads use the default (no
- * arg) and reuse that warmed entry for 60s.
+ * Pass `{ revalidate: true }` where the answer must come from the network
+ * (staleTime 0): the login page, and the shell's guard when it holds no
+ * signed-in user. Everything else, the guard's later navigations included,
+ * reuses the entry while it is fresh (60 s).
  */
 export function authUserQueryOpts(options?: { revalidate?: boolean }) {
   return queryOptions({

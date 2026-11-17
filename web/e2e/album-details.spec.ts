@@ -200,17 +200,28 @@ test("a slow detail load shows the page's skeleton inside the app shell", async 
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
+// The shell's guard answers from a session checked within the last minute,
+// and waits for a fresh check after that. Moves the page's clock past it
+// without firing the timers in between.
+async function ageSessionCheck(page: Page, start: Date) {
+  await page.clock.setSystemTime(new Date(start.getTime() + 61_000));
+}
+
 test("a slow auth re-check on navigation keeps the shell and the current page", async ({ page }) => {
   const browserIssues = trackBrowserIssues(page);
   const unexpectedApiRequests = await mockAlbumDetailsApi(page);
+  const start = new Date();
+  await page.clock.install({ time: start });
 
   await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto(`/music/album/${GLACIER_SESSIONS_ID}`);
   await expect(page.getByRole("heading", { level: 1, name: "Glacier Sessions" })).toBeVisible();
 
-  // _auth's beforeLoad re-checks the session on every navigation. Its
-  // pendingComponent is the boot splash, which must stay a boot-only view: a
-  // retained _auth match keeps rendering while the check is in flight.
+  // Once the session check is a minute old, _auth's beforeLoad checks again
+  // before the navigation. Its pendingComponent is the boot splash, which
+  // must stay a boot-only view: a retained _auth match keeps rendering while
+  // the check is in flight.
+  await ageSessionCheck(page, start);
   const authCheck = await gateRoute(page, "**/api/auth/user");
   await page.getByRole("link", { name: "Aurora Pines" }).first().click();
   await expect.poll(authCheck.requested).toBe(true);
@@ -233,10 +244,16 @@ test("a slow auth re-check on navigation keeps the shell and the current page", 
 // browser's offline screen).
 test("an unreachable server on navigation shows the shell's load error, and Try again recovers", async ({ page }) => {
   await mockAlbumDetailsApi(page);
+  const start = new Date();
+  await page.clock.install({ time: start });
 
   await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto(`/music/album/${GLACIER_SESSIONS_ID}`);
   await expect(page.getByRole("heading", { level: 1, name: "Glacier Sessions" })).toBeVisible();
+
+  // The session check that fails first is the one the guard waits for once
+  // the last check is a minute old.
+  await ageSessionCheck(page, start);
 
   // Registered last, so it answers before the API mock.
   await page.route("**/*", route => route.abort("connectionrefused"));
