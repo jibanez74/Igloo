@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useEffect, useEffectEvent, useRef } from "react";
 import type { RefObject } from "react";
 import {
   createPlaybackSessionId,
@@ -69,130 +69,131 @@ export function useWatchProgressSaver({
     if (playing && enabled) playedRef.current = true;
   }, [playing, enabled]);
 
-  const effectiveDurationSec = useCallback(() => {
+  const effectiveDurationSec = () => {
     if (durationRef.current > 0) return durationRef.current;
     return fallbackDurationRef.current;
-  }, [durationRef]);
+  };
 
-  const hasNewProgress = useCallback((progressSec: number) => {
+  const hasNewProgress = (progressSec: number) => {
     const report = lastReportRef.current;
     if (report === null) return playedRef.current;
     return Math.abs(progressSec - report.sec) >= 1;
-  }, []);
+  };
 
   // A failed save leaves its position unreported, so the next chance retries,
   // unless a later save has reported a position since.
-  const forgetFailedReport = useCallback((saveSequence: number) => {
+  const forgetFailedReport = (saveSequence: number) => {
     if (lastReportRef.current?.seq === saveSequence) {
       lastReportRef.current = null;
     }
-  }, []);
+  };
 
   // A save that would not be sent (no duration yet, or a position below the
   // floor) reports nothing, so the same position is saved once it can be.
-  const queueProgressSave = useCallback(
-    (progressSec: number, durationSec: number) => {
-      if (!shouldPersistWatchProgress(progressSec, durationSec)) {
-        return Promise.resolve();
+  const queueProgressSave = (progressSec: number, durationSec: number) => {
+    if (!shouldPersistWatchProgress(progressSec, durationSec)) {
+      return Promise.resolve();
+    }
+    const saveSequence = ++saveSequenceRef.current;
+    const previous = pendingSaveRef.current;
+    lastReportRef.current = {
+      sec: progressSec,
+      seq: saveSequence,
+      settled: false,
+    };
+    const save = (async () => {
+      await previous;
+      try {
+        await persistWatchProgress(
+          { kind, id },
+          progressSec,
+          durationSec,
+          saveSessionIdRef.current!,
+          saveSequence,
+        );
+      } catch (error) {
+        forgetFailedReport(saveSequence);
+        throw error;
       }
-      const saveSequence = ++saveSequenceRef.current;
-      const previous = pendingSaveRef.current;
-      lastReportRef.current = {
-        sec: progressSec,
-        seq: saveSequence,
-        settled: false,
-      };
-      const save = (async () => {
-        await previous;
-        try {
-          await persistWatchProgress(
-            { kind, id },
-            progressSec,
-            durationSec,
-            saveSessionIdRef.current!,
-            saveSequence,
-          );
-        } catch (error) {
-          forgetFailedReport(saveSequence);
-          throw error;
-        }
-        const report = lastReportRef.current;
-        if (report?.seq === saveSequence) report.settled = true;
-      })();
-      pendingSaveRef.current = (async () => {
-        try {
-          await save;
-        } catch {
-          // The chain only orders saves; each caller handles its own failure.
-        }
-      })();
-      return save;
-    },
-    [kind, id, forgetFailedReport],
-  );
+      const report = lastReportRef.current;
+      if (report?.seq === saveSequence) report.settled = true;
+    })();
+    pendingSaveRef.current = (async () => {
+      try {
+        await save;
+      } catch {
+        // The chain only orders saves; each caller handles its own failure.
+      }
+    })();
+    return save;
+  };
 
   // A position already reported may still be on its way: the exit refreshes
   // the watch queries once this resolves, so wait for the pending save, and
   // retry the position if that save failed.
-  const saveIfNewProgress = useCallback(async () => {
+  const saveIfNewProgress = async () => {
     const progressSec = currentTimeRef.current;
     if (!hasNewProgress(progressSec)) {
       await pendingSaveRef.current;
       if (!hasNewProgress(progressSec)) return;
     }
     await queueProgressSave(progressSec, effectiveDurationSec());
-  }, [currentTimeRef, hasNewProgress, queueProgressSave, effectiveDurationSec]);
+  };
+
+  const saveOnInterval = useEffectEvent(async () => {
+    try {
+      await saveIfNewProgress();
+    } catch {
+      // Silent background save failure; pause/end handlers surface failures when needed.
+    }
+  });
 
   useEffect(() => {
     if (!playing || !enabled) return;
-    const interval = window.setInterval(async () => {
-      try {
-        await saveIfNewProgress();
-      } catch {
-        // Silent background save failure; pause/end handlers surface failures when needed.
-      }
+    const interval = window.setInterval(() => {
+      void saveOnInterval();
     }, WATCH_PROGRESS_SAVE_INTERVAL_MS);
     return () => {
       window.clearInterval(interval);
     };
-  }, [playing, enabled, saveIfNewProgress]);
+  }, [playing, enabled]);
+
+  // On a real page close, visibilitychange (hidden) usually fires and then
+  // pagehide follows; the second finds its position already reported, while
+  // browsers/platforms that only deliver one of the two are still covered.
+  // An ordinary save still in flight does not count: unload can cancel it.
+  const flushKeepalive = useEffectEvent(async () => {
+    const progressSec = currentTimeRef.current;
+    const report = lastReportRef.current;
+    if (
+      report === null
+        ? !playedRef.current
+        : report.settled && Math.abs(progressSec - report.sec) < 1
+    ) {
+      return;
+    }
+    const durationSec = effectiveDurationSec();
+    if (!shouldPersistWatchProgress(progressSec, durationSec)) return;
+
+    const saveSequence = ++saveSequenceRef.current;
+    lastReportRef.current = {
+      sec: progressSec,
+      seq: saveSequence,
+      settled: true,
+    };
+    const sent = await persistWatchProgress(
+      { kind, id },
+      progressSec,
+      durationSec,
+      saveSessionIdRef.current!,
+      saveSequence,
+      { keepalive: true },
+    );
+    if (!sent) forgetFailedReport(saveSequence);
+  });
 
   useEffect(() => {
     if (!enabled) return;
-
-    // On a real page close, visibilitychange (hidden) usually fires and then
-    // pagehide follows; the second finds its position already reported, while
-    // browsers/platforms that only deliver one of the two are still covered.
-    // An ordinary save still in flight does not count: unload can cancel it.
-    const flushKeepalive = async () => {
-      const progressSec = currentTimeRef.current;
-      const report = lastReportRef.current;
-      if (
-        report === null
-          ? !playedRef.current
-          : report.settled && Math.abs(progressSec - report.sec) < 1
-      ) {
-        return;
-      }
-      const durationSec = effectiveDurationSec();
-      if (!shouldPersistWatchProgress(progressSec, durationSec)) return;
-
-      const saveSequence = ++saveSequenceRef.current;
-      lastReportRef.current = {
-        sec: progressSec,
-        seq: saveSequence,
-        settled: true,
-      };
-      const sent = await persistWatchProgress(
-        { kind, id },
-        progressSec,
-        durationSec,
-        saveSessionIdRef.current!,
-        saveSequence,
-        { keepalive: true },
-      );
-      if (!sent) forgetFailedReport(saveSequence);
-    };
 
     const handleVisibilityChange = () => {
       if (document.visibilityState !== "hidden") return;
@@ -208,14 +209,7 @@ export function useWatchProgressSaver({
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("pagehide", handlePageHide);
     };
-  }, [
-    enabled,
-    currentTimeRef,
-    effectiveDurationSec,
-    forgetFailedReport,
-    kind,
-    id,
-  ]);
+  }, [enabled]);
 
   const handlePauseSave = async () => {
     if (!enabled) return;

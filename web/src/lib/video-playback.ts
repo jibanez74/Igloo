@@ -110,18 +110,22 @@ export async function stopHlsPlaybackSession(
   }
 }
 
+function errorNamed(error: unknown, name: string): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    error.name === name
+  );
+}
+
 /**
  * Whether a rejected `play()` was cut short rather than refused. A new load
  * (the player replacing the element's source) or a `pause()` rejects a
  * pending play with AbortError, which says nothing about the stream itself.
  */
 export function isInterruptedPlayError(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "name" in error &&
-    error.name === "AbortError"
-  );
+  return errorNamed(error, "AbortError");
 }
 
 /**
@@ -131,12 +135,7 @@ export function isInterruptedPlayError(error: unknown): boolean {
  * is already switching streams, so the rejection needs no report of its own.
  */
 export function isSourceFailurePlayError(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "name" in error &&
-    error.name === "NotSupportedError"
-  );
+  return errorNamed(error, "NotSupportedError");
 }
 
 export function derivePlaybackStatus(args: PlaybackStatusArgs): PlaybackStatus {
@@ -167,19 +166,18 @@ export function derivePlaybackStatus(args: PlaybackStatusArgs): PlaybackStatus {
   return { kind: "ready" };
 }
 
+/**
+ * A version 4 UUID. `randomUUID` exists only in a secure context, and Igloo is
+ * often opened over plain HTTP on a LAN address, so the id is built from
+ * `getRandomValues` (available everywhere) when it is missing.
+ */
 export function createPlaybackSessionId(): string {
-  if (globalThis.crypto?.randomUUID) {
+  if (globalThis.crypto.randomUUID) {
     return globalThis.crypto.randomUUID();
   }
 
   const bytes = new Uint8Array(16);
-  if (globalThis.crypto?.getRandomValues) {
-    globalThis.crypto.getRandomValues(bytes);
-  } else {
-    for (let i = 0; i < bytes.length; i += 1) {
-      bytes[i] = Math.floor(Math.random() * 256);
-    }
-  }
+  globalThis.crypto.getRandomValues(bytes);
   bytes[6] = (bytes[6] & 0x0f) | 0x40;
   bytes[8] = (bytes[8] & 0x3f) | 0x80;
   const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, "0"));
@@ -349,10 +347,6 @@ let hlsSeekInputOrder = 0;
 export function nextHlsSeekInputOrder(): number {
   hlsSeekInputOrder += 1;
   return hlsSeekInputOrder;
-}
-
-export function currentPlaybackTimestampMs() {
-  return Date.now();
 }
 
 /** What set off a direct-play fallback check: a MediaError code, or the stall guard. */

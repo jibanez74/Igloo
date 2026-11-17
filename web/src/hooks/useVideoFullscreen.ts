@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { showInfo } from "@/lib/toast-helpers";
 import {
@@ -28,22 +28,18 @@ type ToggleFullscreenOptions = {
   videoFallback?: boolean;
 };
 
-function fullscreenModeReducer(
-  mode: FullscreenMode,
-  nextMode: FullscreenMode,
-): FullscreenMode {
-  return mode === nextMode ? mode : nextMode;
-}
-
 export function useVideoFullscreen({
   containerRef,
   videoRef,
 }: VideoFullscreenOptions) {
-  const [fullscreenMode, setFullscreenMode] = useReducer(
-    fullscreenModeReducer,
-    "none",
-  );
+  const [fullscreenMode, setFullscreenModeState] =
+    useState<FullscreenMode>("none");
+  // Read by the event handlers and toggles, which run between renders.
   const fullscreenModeRef = useRef<FullscreenMode>("none");
+  const setFullscreenMode = (mode: FullscreenMode) => {
+    fullscreenModeRef.current = mode;
+    setFullscreenModeState(mode);
+  };
 
   const isFullscreen =
     fullscreenMode === "document" || fullscreenMode === "webkitVideo";
@@ -54,11 +50,9 @@ export function useVideoFullscreen({
     const onFullscreenChange = () => {
       const entering = !!getFullscreenElement();
       if (entering) {
-        fullscreenModeRef.current = "document";
         setFullscreenMode("document");
       } else {
         if (fullscreenModeRef.current === "document") {
-          fullscreenModeRef.current = "none";
           setFullscreenMode("none");
         }
       }
@@ -85,12 +79,10 @@ export function useVideoFullscreen({
 
     const onWebKitBegin = (event: Event) => {
       if (!isOurVideo(event)) return;
-      fullscreenModeRef.current = "webkitVideo";
       setFullscreenMode("webkitVideo");
     };
     const onWebKitEnd = (event: Event) => {
       if (!isOurVideo(event)) return;
-      fullscreenModeRef.current = "none";
       setFullscreenMode("none");
     };
 
@@ -121,7 +113,6 @@ export function useVideoFullscreen({
     const video = videoRef.current;
     // Gone before this effect ran: nothing would wake an observer.
     if (!video?.isConnected) {
-      fullscreenModeRef.current = "none";
       setFullscreenMode("none");
       return;
     }
@@ -129,7 +120,6 @@ export function useVideoFullscreen({
       if (video.isConnected || fullscreenModeRef.current !== "webkitVideo") {
         return;
       }
-      fullscreenModeRef.current = "none";
       setFullscreenMode("none");
     });
     observer.observe(document.body, { childList: true, subtree: true });
@@ -143,7 +133,6 @@ export function useVideoFullscreen({
     if (fullscreenModeRef.current !== "webkitVideo") return false;
     const video = videoRef.current;
     if (video && isWebKitVideoFullscreen(video)) return false;
-    fullscreenModeRef.current = "none";
     setFullscreenMode("none");
     return true;
   };
@@ -168,7 +157,6 @@ export function useVideoFullscreen({
       return;
     }
     if (fullscreenModeRef.current === "immersiveViewport") {
-      fullscreenModeRef.current = "none";
       setFullscreenMode("none");
       return;
     }
@@ -177,7 +165,6 @@ export function useVideoFullscreen({
       if (videoFallback && video && tryWebKitVideoEnterFullscreen(video)) {
         return;
       }
-      fullscreenModeRef.current = "immersiveViewport";
       setFullscreenMode("immersiveViewport");
       showInfo(
         "Full screen isn't available in this browser. Using expanded view instead.",
@@ -214,7 +201,6 @@ export function useVideoFullscreen({
       return true;
     }
     if (fullscreenModeRef.current === "immersiveViewport") {
-      fullscreenModeRef.current = "none";
       setFullscreenMode("none");
       return true;
     }
