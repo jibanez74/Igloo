@@ -7,7 +7,6 @@ import {
   AUDIO_TRACK_DEFAULT_LABEL,
   PLAYBACK_SETTINGS_SUMMARY_LOADING,
   SUBTITLES_NONE_LABEL,
-  WATCH_ROOMS_KEY,
 } from "@/lib/constants";
 import {
   formatPlaybackAudioLabel,
@@ -23,6 +22,7 @@ import {
   playbackSettingsFromResponse,
   playbackSettingsQueryOpts,
   watchRoomInviteUsersQueryOpts,
+  watchRoomsQueryOpts,
 } from "@/lib/query-opts";
 import {
   showActionFailed,
@@ -136,7 +136,9 @@ export default function CreateWatchRoomDialog({
       // a sign-out during this refetch must still stop the toast and the
       // navigation away from the login page.
       const session = sessionStamp();
-      await queryClient.invalidateQueries({ queryKey: [WATCH_ROOMS_KEY] });
+      await queryClient.invalidateQueries({
+        queryKey: watchRoomsQueryOpts().queryKey,
+      });
       if (sessionEndedSince(session)) return;
       showCreated(
         "Watch room",

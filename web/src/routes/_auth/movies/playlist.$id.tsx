@@ -22,14 +22,12 @@ import {
   FOCUS_VISIBLE_RING_CLASS,
   MOTION_LOADING_STATE_CLASS,
   MOVIE_PLAYLIST_DEFAULT_SEARCH,
-  MOVIE_PLAYLIST_DETAILS_KEY,
-  MOVIE_PLAYLIST_MOVIES_KEY,
-  MOVIE_PLAYLISTS_KEY,
   MOVIES_PER_PAGE,
   MOVIES_PLAYLISTS_TAB_SEARCH,
   LIBRARY_NOUNS,
 } from "@/lib/constants";
 import { pluralize } from "@/lib/format";
+import { invalidatePlaylistContents } from "@/lib/playlist-kinds";
 import { showActionFailed, showRemoved } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
 import { unwrapString } from "@/lib/nullable";
@@ -133,15 +131,7 @@ function MoviePlaylistContent({ playlistId, data }: MoviePlaylistContentProps) {
         return;
       }
       showRemoved("Movie", "from playlist");
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: [MOVIE_PLAYLIST_MOVIES_KEY, playlistId],
-        }),
-        queryClient.invalidateQueries({
-          queryKey: [MOVIE_PLAYLIST_DETAILS_KEY, playlistId],
-        }),
-        queryClient.invalidateQueries({ queryKey: [MOVIE_PLAYLISTS_KEY] }),
-      ]);
+      await invalidatePlaylistContents(queryClient, "movie", [playlistId]);
       // When the menu closed before the card left, focus went back to its
       // trigger and has now gone with it (the menu itself covers the other
       // order). Keep a keyboard user on the page rather than at the top of

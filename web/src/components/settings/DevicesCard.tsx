@@ -12,7 +12,7 @@ import ConfirmDialog from "@/components/shared/ConfirmDialog";
 import SettingsCardHeader from "@/components/settings/SettingsCardHeader";
 import { useFocusHandoff } from "@/hooks/useFocusHandoff";
 import { renameDevice, revokeDevice } from "@/lib/api";
-import { DEVICES_KEY, MOTION_SETTINGS_SURFACE_CLASS } from "@/lib/constants";
+import { MOTION_SETTINGS_SURFACE_CLASS } from "@/lib/constants";
 import { parseServerTimestamp } from "@/lib/format";
 import { devicesQueryOpts } from "@/lib/query-opts";
 import { showSuccess, showActionFailed } from "@/lib/toast-helpers";
@@ -97,7 +97,7 @@ export default function DevicesCard() {
             }
           : current,
       );
-      queryClient.invalidateQueries({ queryKey: [DEVICES_KEY] });
+      queryClient.invalidateQueries({ queryKey: devicesQueryOpts().queryKey });
     },
     onError: () => {
       showActionFailed("revoke device", "An unexpected error occurred");
@@ -117,7 +117,7 @@ export default function DevicesCard() {
       }
       showSuccess("Device renamed");
       closeRename();
-      queryClient.invalidateQueries({ queryKey: [DEVICES_KEY] });
+      queryClient.invalidateQueries({ queryKey: devicesQueryOpts().queryKey });
     },
     onError: () => {
       showActionFailed("rename device", "An unexpected error occurred");

@@ -1,3 +1,4 @@
+import type { QueryClient } from "@tanstack/react-query";
 import {
   addMoviesToMoviePlaylist,
   addTracksToPlaylist,
@@ -113,3 +114,24 @@ export const PLAYLIST_KINDS: Record<PlaylistKind, PlaylistKindConfig> = {
       "Create a playlist for movies. Track playlists stay on the Music page.",
   },
 };
+
+/**
+ * Marks stale what shows the contents of the given playlists after items were
+ * added or removed: each one's items and its details (the header's count and
+ * duration), and once the library's playlists list, whose cards carry the
+ * count too. Active queries refetch; the promise settles when they have.
+ */
+export function invalidatePlaylistContents(
+  queryClient: QueryClient,
+  kind: PlaylistKind,
+  playlistIds: number[],
+) {
+  const { listKey, detailsKey, itemsKey } = PLAYLIST_KINDS[kind];
+  return Promise.all([
+    ...playlistIds.flatMap(id => [
+      queryClient.invalidateQueries({ queryKey: [itemsKey, id] }),
+      queryClient.invalidateQueries({ queryKey: [detailsKey, id] }),
+    ]),
+    queryClient.invalidateQueries({ queryKey: [listKey] }),
+  ]);
+}

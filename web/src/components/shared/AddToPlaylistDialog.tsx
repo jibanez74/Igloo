@@ -15,7 +15,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { playlistPickerQueryOpts } from "@/lib/query-opts";
-import { PLAYLIST_KINDS, type PlaylistKind } from "@/lib/playlist-kinds";
+import {
+  invalidatePlaylistContents,
+  PLAYLIST_KINDS,
+  type PlaylistKind,
+} from "@/lib/playlist-kinds";
 import { capitalize, pluralize } from "@/lib/format";
 import {
   FOCUS_VISIBLE_RING_CLASS,
@@ -61,8 +65,7 @@ export default function AddToPlaylistDialog({
   );
   const [announcement, setAnnouncement] = useState("");
   const queryClient = useQueryClient();
-  const { addItems, listKey, detailsKey, itemsKey, itemNoun } =
-    PLAYLIST_KINDS[kind];
+  const { addItems, itemNoun } = PLAYLIST_KINDS[kind];
   const itemLabel = capitalize(itemNoun.singular);
   const EmptyIcon = PICKER_EMPTY_ICONS[kind];
 
@@ -88,18 +91,14 @@ export default function AddToPlaylistDialog({
       // playlist's outcome is judged here. Refresh whatever grew before
       // reporting: a batch can add to one playlist and be refused by another.
       let totalAdded = 0;
+      const grown: number[] = [];
       results.forEach((result, index) => {
         if (result.error || result.data.added === 0) return;
         totalAdded += result.data.added;
-        queryClient.invalidateQueries({
-          queryKey: [itemsKey, playlistIds[index]],
-        });
-        queryClient.invalidateQueries({
-          queryKey: [detailsKey, playlistIds[index]],
-        });
+        grown.push(playlistIds[index]);
       });
-      if (totalAdded > 0) {
-        queryClient.invalidateQueries({ queryKey: [listKey] });
+      if (grown.length > 0) {
+        void invalidatePlaylistContents(queryClient, kind, grown);
       }
 
       const failure = results.find(
