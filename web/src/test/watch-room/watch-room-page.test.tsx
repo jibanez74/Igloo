@@ -26,6 +26,7 @@ let routeParamId: number | null = 7;
 const useQueryMock = vi.fn();
 const joinWatchRoomMock = vi.fn();
 const deleteWatchRoomMock = vi.fn();
+const getWatchRoomMock = vi.fn();
 const showActionFailedMock = vi.fn();
 const showInfoMock = vi.fn();
 const showSuccessMock = vi.fn();
@@ -188,6 +189,7 @@ vi.mock("@tanstack/react-query", async () => {
 vi.mock("@/lib/api", async () => ({
   ...(await vi.importActual<typeof import("@/lib/api")>("@/lib/api")),
   deleteWatchRoom: (...args: unknown[]) => deleteWatchRoomMock(...args),
+  getWatchRoom: (...args: unknown[]) => getWatchRoomMock(...args),
   joinWatchRoom: (...args: unknown[]) => joinWatchRoomMock(...args),
 }));
 
@@ -373,6 +375,7 @@ describe("WatchRoomPageContent", () => {
     useQueryMock.mockReset();
     joinWatchRoomMock.mockReset();
     deleteWatchRoomMock.mockReset();
+    getWatchRoomMock.mockReset();
     showActionFailedMock.mockReset();
     showInfoMock.mockReset();
     showSuccessMock.mockReset();
@@ -2084,28 +2087,63 @@ describe("WatchRoomPageContent", () => {
     // A member change while the socket was down never reached this viewer: the
     // room is re-read once the socket is back, so the roster (and the owner's
     // next edit) works from the server's list.
-    it("re-reads the room when the socket reconnects", async () => {
+    it("re-reads the room's members when the socket reconnects", async () => {
       vi.useFakeTimers({ shouldAdvanceTime: true });
+      const members = [
+        { id: 1, name: "Room Owner", avatar: null },
+        { id: 3, name: "New Guest", avatar: null },
+      ];
+      getWatchRoomMock.mockResolvedValue({
+        error: false,
+        data: { room: buildRoom({ is_owner: false, members }) },
+      });
       const { queryClient, socket } = await openRoom();
       queryClient.setQueryData([WATCH_ROOM_KEY, 7], {
         error: false,
         data: { room: buildRoom({ is_owner: false }) },
       });
-      expect(queryClient.getQueryState([WATCH_ROOM_KEY, 7])?.isInvalidated).toBe(false);
+      expect(getWatchRoomMock).not.toHaveBeenCalled();
 
       await act(async () => {
         socket.serverClose();
       });
-      expect(queryClient.getQueryState([WATCH_ROOM_KEY, 7])?.isInvalidated).toBe(false);
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1000);
       });
       await waitFor(() => {
         expect(FakeWebSocket.instances).toHaveLength(2);
       });
+
       await waitFor(() => {
-        expect(queryClient.getQueryState([WATCH_ROOM_KEY, 7])?.isInvalidated).toBe(true);
+        expect(
+          (queryClient.getQueryData([WATCH_ROOM_KEY, 7]) as { data: { room: WatchRoomDetailType } })
+            .data.room.members,
+        ).toEqual(members);
       });
+      expect(getWatchRoomMock).toHaveBeenCalledWith(7);
+    });
+
+    // A re-read that fails for a moment must not replace the loaded room with
+    // its error envelope, which would empty the page and drop the socket.
+    it("keeps the loaded room when the reconnect's re-read fails", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      getWatchRoomMock.mockResolvedValue({ error: true, status: 502, message: "Bad Gateway" });
+      const { queryClient, socket } = await openRoom();
+      const loaded = { error: false, data: { room: buildRoom({ is_owner: false }) } };
+      queryClient.setQueryData([WATCH_ROOM_KEY, 7], loaded);
+
+      await act(async () => {
+        socket.serverClose();
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+      await waitFor(() => {
+        expect(getWatchRoomMock).toHaveBeenCalledWith(7);
+      });
+
+      expect(queryClient.getQueryData([WATCH_ROOM_KEY, 7])).toEqual(loaded);
+      expect(screen.getByText("Realtime sync connected")).toBeInTheDocument();
     });
 
     // The owner's own close: the server's room_deleted and hang-up land

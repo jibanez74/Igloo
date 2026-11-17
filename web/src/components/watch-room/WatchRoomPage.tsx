@@ -43,6 +43,8 @@ import {
   watchRoomStreamUrl,
 } from "@/lib/watch-room";
 import { showInfo } from "@/lib/toast-helpers";
+import { getWatchRoom } from "@/lib/api";
+import { sessionEndedSince, sessionStamp } from "@/lib/session";
 import { useHlsCapacityRetry } from "@/hooks/useHlsCapacityRetry";
 import { useHlsSessionKeepalive } from "@/hooks/useHlsSessionKeepalive";
 import { useHlsSessionRecovery } from "@/hooks/useHlsSessionRecovery";
@@ -144,11 +146,15 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
     onPlayingChange: setPlaying,
     onMembersChanged: members =>
       setWatchRoomMembers(queryClient, roomId, members),
-    onReconnected: () =>
-      void queryClient.invalidateQueries({
-        queryKey: watchRoomQueryOpts(roomId).queryKey,
-        exact: true,
-      }),
+    // Only a room that loads replaces the members: a refetch that failed for
+    // a moment would cache its error envelope and empty the page.
+    onReconnected: () => {
+      const session = sessionStamp();
+      void getWatchRoom(roomId).then(res => {
+        if (sessionEndedSince(session) || res.error) return;
+        setWatchRoomMembers(queryClient, roomId, res.data.room.members);
+      });
+    },
     // The owner closed the room, or this viewer is no longer in it: leave,
     // and drop it from this viewer's cache so Home's list and the room's
     // loader cannot offer it again.
