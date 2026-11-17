@@ -15,7 +15,8 @@ import {
 } from "@/lib/media-session";
 
 type VideoMediaSessionOptions = {
-  videoRef: RefObject<HTMLVideoElement | null>;
+  /** Read for its playback rate; a YouTube surface has none and plays at 1×. */
+  videoRef?: RefObject<HTMLVideoElement | null>;
   title: string;
   artist?: string;
   artworkUrl?: string | null;
@@ -200,7 +201,7 @@ export function useVideoMediaSession({
       return;
     }
 
-    const video = videoRef.current;
+    const video = videoRef?.current;
     const state = safePositionState(
       duration,
       currentTime,

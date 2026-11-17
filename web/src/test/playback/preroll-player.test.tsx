@@ -306,3 +306,40 @@ describe("PrerollPlayer muted fallback", () => {
     expect(fake.unmute).not.toHaveBeenCalled();
   });
 });
+
+describe("PrerollPlayer media session", () => {
+  const original = Object.getOwnPropertyDescriptor(navigator, "mediaSession");
+
+  afterEach(() => {
+    if (original) Object.defineProperty(navigator, "mediaSession", original);
+    else Reflect.deleteProperty(navigator, "mediaSession");
+  });
+
+  it("takes the OS media controls for the trailer and gives them back", () => {
+    const handlers = new Map<string, ((details: MediaSessionActionDetails) => void) | null>();
+    Object.defineProperty(navigator, "mediaSession", {
+      configurable: true,
+      value: {
+        metadata: null,
+        playbackState: "none",
+        setActionHandler: (
+          action: string,
+          handler: ((details: MediaSessionActionDetails) => void) | null,
+        ) => handlers.set(action, handler),
+        setPositionState: vi.fn(),
+      },
+    });
+    fake.seekTo.mockClear();
+
+    const { unmount } = renderPreroll();
+
+    // A headset's Play must reach the trailer, not the paused music.
+    expect(handlers.get("play")).toBeTypeOf("function");
+    expect(handlers.get("pause")).toBeTypeOf("function");
+    handlers.get("seekto")?.({ action: "seekto", seekTime: 42 });
+    expect(fake.seekTo).toHaveBeenCalledWith(42);
+
+    unmount();
+    expect(handlers.get("play")).toBeNull();
+  });
+});

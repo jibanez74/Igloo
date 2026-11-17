@@ -44,13 +44,13 @@ describe("usePrerollQueue", () => {
   it("skips to the next trailer and finishes after the last one", () => {
     const { result } = renderQueue({ trailers: queue, loadFailed: false });
 
-    act(() => result.current.skip());
+    act(() => result.current.advance());
     expect(result.current.current?.title).toBe("Two");
     expect(result.current.position).toBe(2);
     expect(result.current.isLast).toBe(true);
     expect(result.current.done).toBe(false);
 
-    act(() => result.current.skip());
+    act(() => result.current.advance());
     expect(result.current.done).toBe(true);
     expect(result.current.current).toBeNull();
   });
@@ -67,10 +67,10 @@ describe("usePrerollQueue", () => {
   it("treats an embed error like a finished trailer", () => {
     const { result } = renderQueue({ trailers: queue, loadFailed: false });
 
-    act(() => result.current.handleTrailerError());
+    act(() => result.current.advance());
     expect(result.current.current?.title).toBe("Two");
 
-    act(() => result.current.handleTrailerEnded());
+    act(() => result.current.advance());
     expect(result.current.done).toBe(true);
   });
 

@@ -111,3 +111,24 @@ export function tryWebKitVideoExitFullscreen(video: HTMLVideoElement): boolean {
     return false;
   }
 }
+
+type FullscreenToggleState = {
+  /** Any fullscreen chrome is showing: document, WebKit video or expanded view. */
+  chromeFullscreenMode: boolean;
+  /** The browser's own fullscreen (document or WebKit video). */
+  isFullscreen: boolean;
+  /** The in-page expanded view a browser without element fullscreen gets. */
+  isImmersiveViewport: boolean;
+};
+
+/** The fullscreen toggle's name, which says which of the two ways out it is. */
+export function fullscreenToggleLabel({
+  chromeFullscreenMode,
+  isFullscreen,
+  isImmersiveViewport,
+}: FullscreenToggleState): string {
+  if (!chromeFullscreenMode) return "Fullscreen";
+  return isImmersiveViewport && !isFullscreen
+    ? "Exit expanded view"
+    : "Exit fullscreen";
+}

@@ -34,9 +34,8 @@ export function usePrerollQueue({ trailers, loadFailed }: PrerollQueueOptions) {
     position: index + 1,
     total,
     isLast: !loading && index === total - 1,
-    skip: advance,
+    /** The next trailer: a skip, the current one ending, or failing to embed. */
+    advance,
     skipAll,
-    handleTrailerEnded: advance,
-    handleTrailerError: advance,
   };
 }
