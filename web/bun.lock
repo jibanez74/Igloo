@@ -39,7 +39,6 @@
         "@vitejs/plugin-react": "^5.2.0",
         "@vitest/coverage-v8": "4.1.12",
         "babel-plugin-react-compiler": "^1.0.0",
-        "browserslist": "^4.29.5",
         "eslint": "^9.39.5",
         "eslint-plugin-better-tailwindcss": "^4.10.0",
         "eslint-plugin-react-hooks": "^7.1.1",
