@@ -22,6 +22,7 @@ import {
   PLAYER_FRAME_CLASS,
   PLAYER_FRAME_SHELL_CLASS,
 } from "@/lib/constants";
+import { loadHlsLight } from "@/lib/hls-loader";
 import { prefersNativeHLS } from "@/lib/playback";
 import {
   nextHlsSeekInputOrder,
@@ -97,10 +98,6 @@ type VideoPlayerProps = {
    */
   pendingHlsSeekOrderRef?: RefObject<number | null>;
 };
-
-function loadHlsLight() {
-  return import("hls.js/light");
-}
 
 const HLS_NETWORK_ERROR = "networkError" as ErrorData["type"];
 const HLS_MEDIA_ERROR = "mediaError" as ErrorData["type"];

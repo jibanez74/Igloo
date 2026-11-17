@@ -1,4 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
+import { preloadHlsLight } from "@/lib/hls-loader";
 import {
   getAvailableModes,
   getDefaultPlaybackSettings,
@@ -42,6 +43,7 @@ export async function loadPlayRoute({
   deps,
 }: PlayRouteLoaderArgs): Promise<PlaySearchParams | null> {
   if (deps.mode !== undefined) {
+    if (deps.mode !== "direct") preloadHlsLight();
     // The player waits for technical details before requesting media
     // (audit D16), so warm the caches for URLs that already carry a mode —
     // but without blocking navigation, or the player skeleton would not
@@ -94,6 +96,7 @@ export async function loadPlayRoute({
     audioStreams,
     subtitleStreams,
   );
+  if (resolved.mode !== "direct") preloadHlsLight();
 
   return {
     ...playbackSettingsToPlaySearch(resolved),
