@@ -7,6 +7,7 @@ import {
   HLS_FORWARD_REBASE_THRESHOLD_SEC,
   WATCH_PROGRESS_COMPLETION_THRESHOLD,
   WATCH_PROGRESS_MIN_SECONDS,
+  WATCH_PROGRESS_SAVE_TIMEOUT_MS,
 } from "@/lib/constants";
 import { mediaApiBasePath } from "@/lib/media-ref";
 import {
@@ -442,12 +443,15 @@ export async function persistWatchProgress(
     }
   }
 
+  // Bounded: saves are chained, so one that never settled would hold back
+  // every later save (a timeout fails it like any other error).
   const res = await updateMediaWatchProgress(
     media,
     clampedProgress,
     durationSec,
     saveSessionId,
     saveSequence,
+    AbortSignal.timeout(WATCH_PROGRESS_SAVE_TIMEOUT_MS),
   );
   if (res.error) {
     throw new Error(res.message);
