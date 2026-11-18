@@ -60,6 +60,14 @@ export default defineConfig({
     baseURL,
     viewport: { width: 1280, height: 800 },
     deviceScaleFactor: 1,
+    // Chromium normally repaints only the part of a raster tile that changed,
+    // and the anti-aliased pixels along that part's edge then depend on what
+    // was painted before it: the same page came out in two or three pictures
+    // a shade apart on a rounded corner, by whether a transition had ended
+    // when its neighbours were painted (measured on the movie genres page:
+    // 15 loads in 60, none in 200 with this flag). Repainting whole tiles
+    // makes the picture a function of the page alone.
+    launchOptions: { args: ["--disable-partial-raster"] },
     trace: "retain-on-failure",
   },
   webServer: [
