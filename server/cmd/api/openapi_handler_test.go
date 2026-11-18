@@ -2,10 +2,13 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"testing"
 )
 
@@ -51,7 +54,8 @@ func TestServeOpenAPIDocument(t *testing.T) {
 				assertOpenAPIExchange(t, "getOpenAPIDocument", req, w)
 				for header, value := range map[string]string{
 					"Content-Type": "application/json", "Cache-Control": "no-cache",
-					"X-Content-Type-Options": "nosniff", "Set-Cookie": "", "Vary": "",
+					"X-Content-Type-Options": "nosniff", "Set-Cookie": "", "Vary": "Accept-Encoding",
+					"Content-Encoding": "",
 				} {
 					if w.Header().Get(header) != value {
 						t.Errorf("%s = %q, want %q", header, w.Header().Get(header), value)
@@ -62,5 +66,63 @@ func TestServeOpenAPIDocument(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// The route sits outside the session group, so it compresses on its own; a
+// client that accepts gzip gets the same document compressed.
+func TestServeOpenAPIDocumentGzip(t *testing.T) {
+	app := setupSessionTestApp(t)
+	app.InitRouter()
+
+	documentPath, err := openAPIDocumentPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := os.ReadFile(documentPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, acceptEncoding := range []string{"gzip", "br, gzip;q=0.5"} {
+		req := httptest.NewRequest(http.MethodGet, "/api/openapi.json", nil)
+		req.Header.Set("Accept-Encoding", acceptEncoding)
+		w := httptest.NewRecorder()
+		app.Router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("%q: status = %d", acceptEncoding, w.Code)
+		}
+		for header, value := range map[string]string{
+			"Content-Type": "application/json", "Content-Encoding": "gzip", "Vary": "Accept-Encoding",
+			"Content-Length": strconv.Itoa(w.Body.Len()),
+		} {
+			if w.Header().Get(header) != value {
+				t.Errorf("%q: %s = %q, want %q", acceptEncoding, header, w.Header().Get(header), value)
+			}
+		}
+		if w.Body.Len() >= len(want)/2 {
+			t.Errorf("%q: compressed body is %d bytes of %d", acceptEncoding, w.Body.Len(), len(want))
+		}
+
+		reader, err := gzip.NewReader(w.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := io.ReadAll(reader)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(got, want) {
+			t.Fatalf("%q: decompressed document differs from docs/openapi.json", acceptEncoding)
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/openapi.json", nil)
+	req.Header.Set("Accept-Encoding", "gzip;q=0")
+	w := httptest.NewRecorder()
+	app.Router.ServeHTTP(w, req)
+	if w.Header().Get("Content-Encoding") != "" || !bytes.Equal(w.Body.Bytes(), want) {
+		t.Fatalf("gzip;q=0: Content-Encoding %q, want the plain document", w.Header().Get("Content-Encoding"))
 	}
 }
