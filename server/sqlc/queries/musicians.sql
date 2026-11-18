@@ -103,10 +103,13 @@ FROM albums AS a
 INNER JOIN musician_albums AS ma
   ON a.id = ma.album_id
 WHERE ma.musician_id = ?
+-- Undated albums sort last (NULL is smallest); the id orders albums that
+-- share a date, year and sort title.
 ORDER BY
   a.release_date DESC,
   a.year DESC,
-  a.sort_title ASC;
+  a.sort_title ASC,
+  a.id ASC;
 
 -- name: GetTracksByMusicianID :many
 -- Reads the credits from track_musicians alone, like GetMusiciansAlphabetical's

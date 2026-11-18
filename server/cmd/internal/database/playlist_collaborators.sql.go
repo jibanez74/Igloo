@@ -49,7 +49,7 @@ FROM playlist_collaborators AS pc
 INNER JOIN users AS u
   ON pc.user_id = u.id
 WHERE pc.playlist_id = ?
-ORDER BY pc.created_at ASC
+ORDER BY pc.created_at ASC, pc.id ASC
 `
 
 type GetPlaylistCollaboratorsRow struct {
@@ -63,6 +63,7 @@ type GetPlaylistCollaboratorsRow struct {
 	Email      string `json:"email"`
 }
 
+// Oldest first; the id orders collaborators added in the same second.
 func (q *Queries) GetPlaylistCollaborators(ctx context.Context, playlistID int64) ([]GetPlaylistCollaboratorsRow, error) {
 	rows, err := q.query(ctx, q.getPlaylistCollaboratorsStmt, getPlaylistCollaborators, playlistID)
 	if err != nil {

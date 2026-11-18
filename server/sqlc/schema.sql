@@ -166,7 +166,9 @@ CREATE INDEX IF NOT EXISTS idx_albums_alpha ON albums (
   UPPER(title)
 );
 
-CREATE INDEX IF NOT EXISTS idx_albums_created_at ON albums (created_at DESC);
+-- Ascending on purpose: GetLatestAlbums reads it backwards, which yields
+-- created_at DESC, id DESC - exactly its ORDER BY.
+CREATE INDEX IF NOT EXISTS idx_albums_created_at ON albums (created_at);
 
 CREATE TABLE IF NOT EXISTS tracks (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -595,7 +597,7 @@ CREATE TABLE IF NOT EXISTS movie_watch_progress (
   FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_movie_watch_progress_user_updated_at ON movie_watch_progress (user_id, updated_at DESC)
+CREATE INDEX IF NOT EXISTS idx_movie_watch_progress_user_updated_at ON movie_watch_progress (user_id, updated_at DESC, movie_id)
 WHERE watched = false;
 
 CREATE INDEX IF NOT EXISTS idx_movie_watch_progress_movie ON movie_watch_progress (movie_id);
@@ -611,7 +613,9 @@ CREATE TABLE IF NOT EXISTS user_liked_tracks (
 
 CREATE INDEX IF NOT EXISTS idx_user_liked_tracks_track ON user_liked_tracks (track_id);
 
-CREATE INDEX IF NOT EXISTS idx_user_liked_tracks_user_created ON user_liked_tracks (user_id, created_at DESC);
+-- Ascending on purpose: the liked list orders created_at DESC, rowid DESC,
+-- and a backward scan of (user_id, created_at, rowid) yields exactly that.
+CREATE INDEX IF NOT EXISTS idx_user_liked_tracks_user_created ON user_liked_tracks (user_id, created_at);
 
 CREATE TABLE IF NOT EXISTS user_liked_movies (
   user_id INTEGER NOT NULL,
@@ -636,7 +640,9 @@ CREATE TABLE IF NOT EXISTS user_play_history (
 
 CREATE INDEX IF NOT EXISTS idx_user_play_history_track ON user_play_history (track_id);
 
-CREATE INDEX IF NOT EXISTS idx_user_play_history_played_at ON user_play_history (user_id, played_at DESC);
+-- Ascending on purpose: recently played orders played_at DESC, id DESC, and a
+-- backward scan of (user_id, played_at, rowid) yields exactly that.
+CREATE INDEX IF NOT EXISTS idx_user_play_history_played_at ON user_play_history (user_id, played_at);
 
 CREATE TABLE IF NOT EXISTS user_track_stats (
   user_id INTEGER NOT NULL,
@@ -649,7 +655,7 @@ CREATE TABLE IF NOT EXISTS user_track_stats (
   FOREIGN KEY (track_id) REFERENCES tracks (id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_user_track_stats_play_count ON user_track_stats (user_id, play_count DESC);
+CREATE INDEX IF NOT EXISTS idx_user_track_stats_play_count ON user_track_stats (user_id, play_count DESC, track_id);
 
 CREATE INDEX IF NOT EXISTS idx_user_track_stats_track ON user_track_stats (track_id);
 

@@ -403,7 +403,8 @@ FROM tracks
 WHERE album_id = ?
 ORDER BY
   disc ASC,
-  track_index ASC
+  track_index ASC,
+  id ASC
 `
 
 type GetTracksByAlbumIDRow struct {
@@ -421,6 +422,8 @@ type GetTracksByAlbumIDRow struct {
 	MusicianID    sql.NullInt64 `json:"musician_id"`
 }
 
+// Untagged tracks share track_index 0, so the id keeps their order stable;
+// idx_track_album ends in the rowid, which serves the third term.
 func (q *Queries) GetTracksByAlbumID(ctx context.Context, albumID sql.NullInt64) ([]GetTracksByAlbumIDRow, error) {
 	rows, err := q.query(ctx, q.getTracksByAlbumIDStmt, getTracksByAlbumID, albumID)
 	if err != nil {

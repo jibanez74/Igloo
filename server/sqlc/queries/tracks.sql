@@ -160,9 +160,12 @@ SELECT
   musician_id
 FROM tracks
 WHERE album_id = ?
+-- Untagged tracks share track_index 0, so the id keeps their order stable;
+-- idx_track_album ends in the rowid, which serves the third term.
 ORDER BY
   disc ASC,
-  track_index ASC;
+  track_index ASC,
+  id ASC;
 
 -- name: GetTracksAlphabetical :many
 -- The page is chosen from idx_track_alpha alone, so the rows OFFSET skips cost

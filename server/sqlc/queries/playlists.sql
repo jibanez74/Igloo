@@ -28,7 +28,7 @@ WHERE p.id = sqlc.arg(playlist_id);
 
 -- name: GetPlaylistsWithCollaboratorAccess :many
 -- Playlists the user owns or collaborates on, newest-updated first. The two
--- access paths are separate indexed lookups (idx_playlist_user, then
+-- access paths are separate indexed lookups (idx_playlist_user_content, then
 -- idx_playlist_collaborators_user) glued with UNION ALL -- an OR would force a
 -- scan of every user's playlists -- and they are disjoint because the
 -- collaborator branch excludes playlists the user owns.
@@ -113,7 +113,8 @@ FROM (
 ) AS accessible
 INNER JOIN users AS owner
   ON owner.id = accessible.user_id
-ORDER BY accessible.updated_at DESC;
+-- updated_at has one-second resolution; the id keeps same-second ties stable.
+ORDER BY accessible.updated_at DESC, accessible.id DESC;
 
 -- name: UpdatePlaylist :one
 UPDATE playlists
@@ -223,4 +224,5 @@ FROM (
 ) AS accessible
 INNER JOIN users AS owner
   ON owner.id = accessible.user_id
-ORDER BY accessible.updated_at DESC;
+-- updated_at has one-second resolution; the id keeps same-second ties stable.
+ORDER BY accessible.updated_at DESC, accessible.id DESC;

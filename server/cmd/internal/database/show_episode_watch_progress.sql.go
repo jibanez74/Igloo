@@ -57,7 +57,7 @@ WHERE wp.user_id = ?
     WHERE f.episode_id = e.id
   )
 GROUP BY sh.id
-ORDER BY updated_at DESC
+ORDER BY updated_at DESC, e.id ASC
 LIMIT ?
 `
 
@@ -93,6 +93,8 @@ type GetContinueWatchingEpisodesRow struct {
 // so each show returns its most recently watched in-progress episode. The CAST
 // is for sqlc, which types a bare MAX() as interface{}. The limit comes from
 // the caller, as GetContinueWatchingMovies' does.
+// The episode id orders saves in the same second as the handler's merge does,
+// so the limit keeps the rows the merged row would.
 func (q *Queries) GetContinueWatchingEpisodes(ctx context.Context, arg GetContinueWatchingEpisodesParams) ([]GetContinueWatchingEpisodesRow, error) {
 	rows, err := q.query(ctx, q.getContinueWatchingEpisodesStmt, getContinueWatchingEpisodes, arg.UserID, arg.Limit)
 	if err != nil {

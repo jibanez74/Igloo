@@ -177,7 +177,7 @@ FROM (
 ) AS accessible
 INNER JOIN users AS owner
   ON owner.id = accessible.user_id
-ORDER BY accessible.updated_at DESC
+ORDER BY accessible.updated_at DESC, accessible.id DESC
 `
 
 type GetMoviePlaylistsWithCollaboratorAccessRow struct {
@@ -202,6 +202,7 @@ type GetMoviePlaylistsWithCollaboratorAccessRow struct {
 // The movie twin of GetPlaylistsWithCollaboratorAccess; see the notes there.
 // artwork holds the posters of the first 24 movies in the order they were
 // added; the handler keeps the first four distinct ones.
+// updated_at has one-second resolution; the id keeps same-second ties stable.
 func (q *Queries) GetMoviePlaylistsWithCollaboratorAccess(ctx context.Context, requestingUserID int64) ([]GetMoviePlaylistsWithCollaboratorAccessRow, error) {
 	rows, err := q.query(ctx, q.getMoviePlaylistsWithCollaboratorAccessStmt, getMoviePlaylistsWithCollaboratorAccess, requestingUserID)
 	if err != nil {
@@ -361,7 +362,7 @@ FROM (
 ) AS accessible
 INNER JOIN users AS owner
   ON owner.id = accessible.user_id
-ORDER BY accessible.updated_at DESC
+ORDER BY accessible.updated_at DESC, accessible.id DESC
 `
 
 type GetPlaylistsWithCollaboratorAccessRow struct {
@@ -385,7 +386,7 @@ type GetPlaylistsWithCollaboratorAccessRow struct {
 }
 
 // Playlists the user owns or collaborates on, newest-updated first. The two
-// access paths are separate indexed lookups (idx_playlist_user, then
+// access paths are separate indexed lookups (idx_playlist_user_content, then
 // idx_playlist_collaborators_user) glued with UNION ALL -- an OR would force a
 // scan of every user's playlists -- and they are disjoint because the
 // collaborator branch excludes playlists the user owns.
@@ -406,6 +407,7 @@ type GetPlaylistsWithCollaboratorAccessRow struct {
 // first four distinct ones. The 24 are taken before the covers are looked at,
 // so a long playlist without covers is still a short walk of
 // idx_playlist_tracks_position.
+// updated_at has one-second resolution; the id keeps same-second ties stable.
 func (q *Queries) GetPlaylistsWithCollaboratorAccess(ctx context.Context, requestingUserID int64) ([]GetPlaylistsWithCollaboratorAccessRow, error) {
 	rows, err := q.query(ctx, q.getPlaylistsWithCollaboratorAccessStmt, getPlaylistsWithCollaboratorAccess, requestingUserID)
 	if err != nil {

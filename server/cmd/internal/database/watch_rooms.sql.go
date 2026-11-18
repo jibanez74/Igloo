@@ -251,7 +251,7 @@ FROM watch_room_members AS wrm
 INNER JOIN users AS u
   ON wrm.user_id = u.id
 WHERE wrm.room_id = ?
-ORDER BY wrm.created_at ASC
+ORDER BY wrm.created_at ASC, wrm.id ASC
 `
 
 type GetWatchRoomMembersRow struct {
@@ -260,6 +260,8 @@ type GetWatchRoomMembersRow struct {
 	Avatar sql.NullString `json:"avatar"`
 }
 
+// Join order. The owner and the first invitees are inserted in the same
+// second, owner first, so the id breaks the tie.
 func (q *Queries) GetWatchRoomMembers(ctx context.Context, roomID int64) ([]GetWatchRoomMembersRow, error) {
 	rows, err := q.query(ctx, q.getWatchRoomMembersStmt, getWatchRoomMembers, roomID)
 	if err != nil {
@@ -293,7 +295,7 @@ FROM watch_room_members AS wrm
 INNER JOIN users AS u
   ON wrm.user_id = u.id
 WHERE wrm.room_id IN (/*SLICE:room_ids*/?)
-ORDER BY wrm.room_id ASC, wrm.created_at ASC
+ORDER BY wrm.room_id ASC, wrm.created_at ASC, wrm.id ASC
 `
 
 type GetWatchRoomMembersByRoomIDsRow struct {
@@ -352,7 +354,7 @@ INNER JOIN watch_room_members AS wrm
 INNER JOIN movies AS m
   ON m.id = wr.movie_id
 WHERE wrm.user_id = ?
-ORDER BY wr.created_at DESC
+ORDER BY wr.created_at DESC, wr.id DESC
 `
 
 type GetWatchRoomsForUserRow struct {
@@ -367,6 +369,8 @@ type GetWatchRoomsForUserRow struct {
 
 // The movie's card fields ride along, so the listing needs no second lookup;
 // the movie_id foreign key cascades, so the inner join drops no room.
+// created_at has one-second resolution; the id orders rooms created in the
+// same second.
 func (q *Queries) GetWatchRoomsForUser(ctx context.Context, userID int64) ([]GetWatchRoomsForUserRow, error) {
 	rows, err := q.query(ctx, q.getWatchRoomsForUserStmt, getWatchRoomsForUser, userID)
 	if err != nil {

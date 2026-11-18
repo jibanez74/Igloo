@@ -43,7 +43,9 @@ SELECT
   musician,
   year
 FROM albums
-ORDER BY created_at DESC
+-- A scan imports many albums in one second, so the id orders them; read
+-- backwards, the ascending idx_albums_created_at yields both terms.
+ORDER BY created_at DESC, id DESC
 LIMIT 12;
 
 -- name: GetAlbumsAlphabetical :many

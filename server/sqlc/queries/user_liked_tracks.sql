@@ -35,7 +35,10 @@ INNER JOIN tracks AS t ON t.id = ult.track_id
 LEFT JOIN albums AS a ON t.album_id = a.id
 LEFT JOIN musicians AS m ON t.musician_id = m.id
 WHERE ult.user_id = ?
-ORDER BY ult.created_at DESC
+-- created_at has one-second resolution, so the rowid (insertion order) orders
+-- likes made in the same second; idx_user_liked_tracks_user_created is
+-- ascending so a backward scan of it serves both terms.
+ORDER BY ult.created_at DESC, ult.rowid DESC
 LIMIT ?
 OFFSET ?;
 

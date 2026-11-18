@@ -233,7 +233,7 @@ SELECT
   musician,
   year
 FROM albums
-ORDER BY created_at DESC
+ORDER BY created_at DESC, id DESC
 LIMIT 12
 `
 
@@ -245,6 +245,8 @@ type GetLatestAlbumsRow struct {
 	Year     sql.NullInt64  `json:"year"`
 }
 
+// A scan imports many albums in one second, so the id orders them; read
+// backwards, the ascending idx_albums_created_at yields both terms.
 func (q *Queries) GetLatestAlbums(ctx context.Context) ([]GetLatestAlbumsRow, error) {
 	rows, err := q.query(ctx, q.getLatestAlbumsStmt, getLatestAlbums)
 	if err != nil {

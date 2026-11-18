@@ -144,5 +144,7 @@ WHERE wp.user_id = ?
     WHERE f.episode_id = e.id
   )
 GROUP BY sh.id
-ORDER BY updated_at DESC
+-- The episode id orders saves in the same second as the handler's merge does,
+-- so the limit keeps the rows the merged row would.
+ORDER BY updated_at DESC, e.id ASC
 LIMIT ?;

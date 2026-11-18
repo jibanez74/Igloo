@@ -42,7 +42,9 @@ INNER JOIN watch_room_members AS wrm
 INNER JOIN movies AS m
   ON m.id = wr.movie_id
 WHERE wrm.user_id = ?
-ORDER BY wr.created_at DESC;
+-- created_at has one-second resolution; the id orders rooms created in the
+-- same second.
+ORDER BY wr.created_at DESC, wr.id DESC;
 
 -- name: GetWatchRoomMembers :many
 SELECT
@@ -53,7 +55,9 @@ FROM watch_room_members AS wrm
 INNER JOIN users AS u
   ON wrm.user_id = u.id
 WHERE wrm.room_id = ?
-ORDER BY wrm.created_at ASC;
+-- Join order. The owner and the first invitees are inserted in the same
+-- second, owner first, so the id breaks the tie.
+ORDER BY wrm.created_at ASC, wrm.id ASC;
 
 -- name: GetWatchRoomMembersByRoomIDs :many
 SELECT
@@ -65,7 +69,7 @@ FROM watch_room_members AS wrm
 INNER JOIN users AS u
   ON wrm.user_id = u.id
 WHERE wrm.room_id IN (sqlc.slice(room_ids))
-ORDER BY wrm.room_id ASC, wrm.created_at ASC;
+ORDER BY wrm.room_id ASC, wrm.created_at ASC, wrm.id ASC;
 
 -- name: GetWatchRoomForMember :one
 -- The room row, but only when the user is a member: the auth check every

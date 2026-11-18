@@ -66,7 +66,7 @@ LEFT JOIN albums AS a
 LEFT JOIN musicians AS m
   ON t.musician_id = m.id
 WHERE uph.user_id = ?
-ORDER BY uph.played_at DESC
+ORDER BY uph.played_at DESC, uph.id DESC
 LIMIT ?
 OFFSET ?
 `
@@ -91,6 +91,9 @@ type GetUserRecentlyPlayedRow struct {
 }
 
 // Returns the user's recently played tracks
+// played_at has one-second resolution, so the id orders plays logged in the
+// same second; idx_user_play_history_played_at is ascending so a backward
+// scan of it serves both terms.
 func (q *Queries) GetUserRecentlyPlayed(ctx context.Context, arg GetUserRecentlyPlayedParams) ([]GetUserRecentlyPlayedRow, error) {
 	rows, err := q.query(ctx, q.getUserRecentlyPlayedStmt, getUserRecentlyPlayed, arg.UserID, arg.Limit, arg.Offset)
 	if err != nil {
@@ -148,7 +151,7 @@ GROUP BY
   a.cover,
   a.musician,
   a.year
-ORDER BY total_play_count DESC
+ORDER BY total_play_count DESC, a.id ASC
 LIMIT ?
 OFFSET ?
 `
@@ -171,6 +174,7 @@ type GetUserTopAlbumsRow struct {
 }
 
 // Returns the user's most listened albums
+// The id orders equal totals, so offset pages neither repeat nor skip one.
 func (q *Queries) GetUserTopAlbums(ctx context.Context, arg GetUserTopAlbumsParams) ([]GetUserTopAlbumsRow, error) {
 	rows, err := q.query(ctx, q.getUserTopAlbumsStmt, getUserTopAlbums, arg.UserID, arg.Limit, arg.Offset)
 	if err != nil {
@@ -223,7 +227,7 @@ WHERE uts.user_id = ?
 GROUP BY
   g.id,
   g.tag
-ORDER BY total_play_count DESC
+ORDER BY total_play_count DESC, g.id ASC
 LIMIT ?
 `
 
@@ -241,6 +245,7 @@ type GetUserTopGenresRow struct {
 }
 
 // Returns the user's most listened genres
+// The id orders equal totals, so the list does not reshuffle between reads.
 func (q *Queries) GetUserTopGenres(ctx context.Context, arg GetUserTopGenresParams) ([]GetUserTopGenresRow, error) {
 	rows, err := q.query(ctx, q.getUserTopGenresStmt, getUserTopGenres, arg.UserID, arg.Limit)
 	if err != nil {
@@ -291,7 +296,7 @@ GROUP BY
   m.id,
   m.name,
   m.thumb
-ORDER BY total_play_count DESC
+ORDER BY total_play_count DESC, m.id ASC
 LIMIT ?
 OFFSET ?
 `
@@ -312,6 +317,7 @@ type GetUserTopMusiciansRow struct {
 }
 
 // Returns the user's most listened musicians by total play count
+// The id orders equal totals, so offset pages neither repeat nor skip one.
 func (q *Queries) GetUserTopMusicians(ctx context.Context, arg GetUserTopMusiciansParams) ([]GetUserTopMusiciansRow, error) {
 	rows, err := q.query(ctx, q.getUserTopMusiciansStmt, getUserTopMusicians, arg.UserID, arg.Limit, arg.Offset)
 	if err != nil {
@@ -364,7 +370,7 @@ LEFT JOIN albums AS a
 LEFT JOIN musicians AS m
   ON t.musician_id = m.id
 WHERE uts.user_id = ?
-ORDER BY uts.play_count DESC
+ORDER BY uts.play_count DESC, uts.track_id ASC
 LIMIT ?
 OFFSET ?
 `
@@ -393,6 +399,9 @@ type GetUserTopTracksRow struct {
 // USER STATISTICS QUERIES
 // ============================================================================
 // Returns the user's most played tracks
+// The track id orders tracks with the same play count, so offset pages
+// neither repeat nor skip one; idx_user_track_stats_play_count ends in
+// track_id so its forward scan serves both terms.
 func (q *Queries) GetUserTopTracks(ctx context.Context, arg GetUserTopTracksParams) ([]GetUserTopTracksRow, error) {
 	rows, err := q.query(ctx, q.getUserTopTracksStmt, getUserTopTracks, arg.UserID, arg.Limit, arg.Offset)
 	if err != nil {
