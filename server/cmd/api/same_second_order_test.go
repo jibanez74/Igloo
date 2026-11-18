@@ -396,7 +396,7 @@ func TestContinueWatchingHalves_KeepLowestIDsWithinOneSecond(t *testing.T) {
 	assertOrder(t, "continue watching movies", got, movies[:continueWatchingLimit])
 
 	// Shows are created first and their episodes in reverse, so show-id order
-	// (the GROUP BY's) is the opposite of episode-id order.
+	// (the partition's) is the opposite of episode-id order.
 	var seasons []int64
 	for i := range count {
 		showID := execOrFatal(t, app, "INSERT INTO shows (directory_path, local_name, name) VALUES (?, ?, ?)",
@@ -454,8 +454,12 @@ func TestContinueWatchingEpisodes_OneShowTieKeepsLowestEpisodeID(t *testing.T) {
 			episodeID, fileID, seasonID)
 		episodes = append(episodes, episodeID)
 	}
-	// Saved in reverse, so the table's order is the opposite of episode-id
-	// order, and all in one second: only the id can choose the show's card.
+	// All in one second, saved in reverse so save order is the opposite of
+	// episode-id order. This pins the lowest-id rule: the primary-key scan
+	// reaches the lowest id first anyway, so the old GROUP BY with a bare MAX()
+	// also passed here, and picked the highest id only under a plan through
+	// idx_show_episode_watch_progress_user_updated_at, which returns tied rows
+	// in save order.
 	for _, episodeID := range slices.Backward(episodes) {
 		execOrFatal(t, app,
 			"INSERT INTO show_episode_watch_progress (user_id, episode_id, progress_sec, duration_sec, updated_at) VALUES (?, ?, 600, 5400, ?)",
