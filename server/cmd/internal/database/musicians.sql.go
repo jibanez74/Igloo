@@ -29,7 +29,8 @@ WHERE ma.musician_id = ?
 ORDER BY
   a.release_date DESC,
   a.year DESC,
-  a.sort_title ASC
+  a.sort_title ASC,
+  a.id ASC
 `
 
 type GetAlbumsByMusicianIDRow struct {
@@ -46,6 +47,8 @@ type GetAlbumsByMusicianIDRow struct {
 // discography, which is tens of rows. The grouped-pass form that lived here
 // was uncorrelated, so SQLite materialized it by scanning every track in the
 // library on each artist-detail request.
+// Undated albums sort last (NULL is smallest); the id orders albums that
+// share a date, year and sort title.
 func (q *Queries) GetAlbumsByMusicianID(ctx context.Context, musicianID int64) ([]GetAlbumsByMusicianIDRow, error) {
 	rows, err := q.query(ctx, q.getAlbumsByMusicianIDStmt, getAlbumsByMusicianID, musicianID)
 	if err != nil {

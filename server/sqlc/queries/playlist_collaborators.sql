@@ -22,5 +22,6 @@ FROM playlist_collaborators AS pc
 INNER JOIN users AS u
   ON pc.user_id = u.id
 WHERE pc.playlist_id = ?
-ORDER BY pc.created_at ASC;
+-- Oldest first; the id orders collaborators added in the same second.
+ORDER BY pc.created_at ASC, pc.id ASC;
 

@@ -56,7 +56,10 @@ LEFT JOIN albums AS a
 LEFT JOIN musicians AS m
   ON t.musician_id = m.id
 WHERE uts.user_id = ?
-ORDER BY uts.play_count DESC
+-- The track id orders tracks with the same play count, so offset pages
+-- neither repeat nor skip one; idx_user_track_stats_play_count ends in
+-- track_id so its forward scan serves both terms.
+ORDER BY uts.play_count DESC, uts.track_id ASC
 LIMIT ?
 OFFSET ?;
 
@@ -82,7 +85,8 @@ GROUP BY
   m.id,
   m.name,
   m.thumb
-ORDER BY total_play_count DESC
+-- The id orders equal totals, so offset pages neither repeat nor skip one.
+ORDER BY total_play_count DESC, m.id ASC
 LIMIT ?
 OFFSET ?;
 
@@ -107,7 +111,8 @@ WHERE uts.user_id = ?
 GROUP BY
   g.id,
   g.tag
-ORDER BY total_play_count DESC
+-- The id orders equal totals, so the list does not reshuffle between reads.
+ORDER BY total_play_count DESC, g.id ASC
 LIMIT ?;
 
 -- name: GetUserListeningStats :one
@@ -147,7 +152,10 @@ LEFT JOIN albums AS a
 LEFT JOIN musicians AS m
   ON t.musician_id = m.id
 WHERE uph.user_id = ?
-ORDER BY uph.played_at DESC
+-- played_at has one-second resolution, so the id orders plays logged in the
+-- same second; idx_user_play_history_played_at is ascending so a backward
+-- scan of it serves both terms.
+ORDER BY uph.played_at DESC, uph.id DESC
 LIMIT ?
 OFFSET ?;
 
@@ -175,6 +183,7 @@ GROUP BY
   a.cover,
   a.musician,
   a.year
-ORDER BY total_play_count DESC
+-- The id orders equal totals, so offset pages neither repeat nor skip one.
+ORDER BY total_play_count DESC, a.id ASC
 LIMIT ?
 OFFSET ?;

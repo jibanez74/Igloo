@@ -157,6 +157,8 @@ type Querier interface {
 	// discography, which is tens of rows. The grouped-pass form that lived here
 	// was uncorrelated, so SQLite materialized it by scanning every track in the
 	// library on each artist-detail request.
+	// Undated albums sort last (NULL is smallest); the id orders albums that
+	// share a date, year and sort title.
 	GetAlbumsByMusicianID(ctx context.Context, musicianID int64) ([]GetAlbumsByMusicianIDRow, error)
 	// Batch form of GetAlbumBySpotifyID for the Spotify album search results
 	// mapper: it only needs the library id per match, not the whole album row.
@@ -209,6 +211,8 @@ type Querier interface {
 	// so each show returns its most recently watched in-progress episode. The CAST
 	// is for sqlc, which types a bare MAX() as interface{}. The limit comes from
 	// the caller, as GetContinueWatchingMovies' does.
+	// The episode id orders saves in the same second as the handler's merge does,
+	// so the limit keeps the rows the merged row would.
 	GetContinueWatchingEpisodes(ctx context.Context, arg GetContinueWatchingEpisodesParams) ([]GetContinueWatchingEpisodesRow, error)
 	// The 30-second floor must match the web client's
 	// WATCH_PROGRESS_MIN_SECONDS resume-eligibility floor. The caller passes the
@@ -217,6 +221,10 @@ type Querier interface {
 	//
 	// backdrop_path and overview are for the home billboard, which features the
 	// first item of the merged row.
+	// updated_at has one-second resolution; the movie id orders saves in the same
+	// second as the handler's merge does, so the limit keeps the rows the merged
+	// row would. idx_movie_watch_progress_user_updated_at ends in movie_id so its
+	// forward scan serves both terms.
 	GetContinueWatchingMovies(ctx context.Context, arg GetContinueWatchingMoviesParams) ([]GetContinueWatchingMoviesRow, error)
 	// Series creators, billed ahead of the aggregate crew on the details page.
 	GetCreatorsByShowID(ctx context.Context, showID int64) ([]GetCreatorsByShowIDRow, error)
@@ -234,6 +242,8 @@ type Querier interface {
 	GetGenresByMusicianID(ctx context.Context, musicianID int64) ([]string, error)
 	// Genres linked to a show (for details view).
 	GetGenresByShowID(ctx context.Context, showID int64) ([]GetGenresByShowIDRow, error)
+	// A scan imports many albums in one second, so the id orders them; read
+	// backwards, the ascending idx_albums_created_at yields both terms.
 	GetLatestAlbums(ctx context.Context) ([]GetLatestAlbumsRow, error)
 	// The home rail renders title, poster and year; backdrop_path and overview
 	// are for the billboard, which features the newest movie when nothing is in
@@ -250,6 +260,9 @@ type Querier interface {
 	// id tie-breaker so LIMIT/OFFSET is stable when titles match.
 	GetLikedMoviesForUserDesc(ctx context.Context, arg GetLikedMoviesForUserDescParams) ([]GetLikedMoviesForUserDescRow, error)
 	GetLikedTrackIDsByUserID(ctx context.Context, userID int64) ([]int64, error)
+	// created_at has one-second resolution, so the rowid (insertion order) orders
+	// likes made in the same second; idx_user_liked_tracks_user_created is
+	// ascending so a backward scan of it serves both terms.
 	GetLikedTracksForUser(ctx context.Context, arg GetLikedTracksForUserParams) ([]GetLikedTracksForUserRow, error)
 	GetMovieByID(ctx context.Context, id int64) (Movie, error)
 	GetMovieByPath(ctx context.Context, filePath string) (GetMovieByPathRow, error)
@@ -269,6 +282,7 @@ type Querier interface {
 	// The movie twin of GetPlaylistsWithCollaboratorAccess; see the notes there.
 	// artwork holds the posters of the first 24 movies in the order they were
 	// added; the handler keeps the first four distinct ones.
+	// updated_at has one-second resolution; the id keeps same-second ties stable.
 	GetMoviePlaylistsWithCollaboratorAccess(ctx context.Context, requestingUserID int64) ([]GetMoviePlaylistsWithCollaboratorAccessRow, error)
 	GetMovieScanIndex(ctx context.Context) ([]GetMovieScanIndexRow, error)
 	// GetMovieScanIndex for one path a run of watcher-detected changes covers:
@@ -321,6 +335,7 @@ type Querier interface {
 	// every show. The OR only builds them when a show has no show-level retry row.
 	GetPendingShows(ctx context.Context, afterID int64) ([]GetPendingShowsRow, error)
 	GetPersonLocalCredits(ctx context.Context, artistID int64) ([]GetPersonLocalCreditsRow, error)
+	// Oldest first; the id orders collaborators added in the same second.
 	GetPlaylistCollaborators(ctx context.Context, playlistID int64) ([]GetPlaylistCollaboratorsRow, error)
 	// Title order matches GET /api/movies/library sort=asc.
 	GetPlaylistMoviesPaginatedAsc(ctx context.Context, arg GetPlaylistMoviesPaginatedAscParams) ([]GetPlaylistMoviesPaginatedAscRow, error)
@@ -337,7 +352,7 @@ type Querier interface {
 	// and p.user_id/p.is_public.
 	GetPlaylistWithAccess(ctx context.Context, arg GetPlaylistWithAccessParams) (GetPlaylistWithAccessRow, error)
 	// Playlists the user owns or collaborates on, newest-updated first. The two
-	// access paths are separate indexed lookups (idx_playlist_user, then
+	// access paths are separate indexed lookups (idx_playlist_user_content, then
 	// idx_playlist_collaborators_user) glued with UNION ALL -- an OR would force a
 	// scan of every user's playlists -- and they are disjoint because the
 	// collaborator branch excludes playlists the user owns.
@@ -358,6 +373,7 @@ type Querier interface {
 	// first four distinct ones. The 24 are taken before the covers are looked at,
 	// so a long playlist without covers is still a short walk of
 	// idx_playlist_tracks_position.
+	// updated_at has one-second resolution; the id keeps same-second ties stable.
 	GetPlaylistsWithCollaboratorAccess(ctx context.Context, requestingUserID int64) ([]GetPlaylistsWithCollaboratorAccessRow, error)
 	// Production companies linked to a movie (for details view).
 	GetProductionCompaniesByMovieID(ctx context.Context, movieID int64) ([]GetProductionCompaniesByMovieIDRow, error)
@@ -488,6 +504,8 @@ type Querier interface {
 	// track in index order and probes the page instead. id breaks title ties so
 	// pages stay stable.
 	GetTracksAlphabetical(ctx context.Context, arg GetTracksAlphabeticalParams) ([]GetTracksAlphabeticalRow, error)
+	// Untagged tracks share track_index 0, so the id keeps their order stable;
+	// idx_track_album ends in the rowid, which serves the third term.
 	GetTracksByAlbumID(ctx context.Context, albumID sql.NullInt64) ([]GetTracksByAlbumIDRow, error)
 	// Reads the credits from track_musicians alone, like GetMusiciansAlphabetical's
 	// track_count, so the list and the count on the artist's card agree.
@@ -503,21 +521,30 @@ type Querier interface {
 	GetUserPin(ctx context.Context, id int64) (sql.NullString, error)
 	GetUserPreferences(ctx context.Context, userID int64) (GetUserPreferencesRow, error)
 	// Returns the user's recently played tracks
+	// played_at has one-second resolution, so the id orders plays logged in the
+	// same second; idx_user_play_history_played_at is ascending so a backward
+	// scan of it serves both terms.
 	GetUserRecentlyPlayed(ctx context.Context, arg GetUserRecentlyPlayedParams) ([]GetUserRecentlyPlayedRow, error)
 	GetUserSessionVersion(ctx context.Context, id int64) (int64, error)
 	// The public face of a user shown on resources other users can open (playlist
 	// owner, watch-room members): no email, password hash, admin flag or PIN.
 	GetUserSummary(ctx context.Context, id int64) (GetUserSummaryRow, error)
 	// Returns the user's most listened albums
+	// The id orders equal totals, so offset pages neither repeat nor skip one.
 	GetUserTopAlbums(ctx context.Context, arg GetUserTopAlbumsParams) ([]GetUserTopAlbumsRow, error)
 	// Returns the user's most listened genres
+	// The id orders equal totals, so the list does not reshuffle between reads.
 	GetUserTopGenres(ctx context.Context, arg GetUserTopGenresParams) ([]GetUserTopGenresRow, error)
 	// Returns the user's most listened musicians by total play count
+	// The id orders equal totals, so offset pages neither repeat nor skip one.
 	GetUserTopMusicians(ctx context.Context, arg GetUserTopMusiciansParams) ([]GetUserTopMusiciansRow, error)
 	// ============================================================================
 	// USER STATISTICS QUERIES
 	// ============================================================================
 	// Returns the user's most played tracks
+	// The track id orders tracks with the same play count, so offset pages
+	// neither repeat nor skip one; idx_user_track_stats_play_count ends in
+	// track_id so its forward scan serves both terms.
 	GetUserTopTracks(ctx context.Context, arg GetUserTopTracksParams) ([]GetUserTopTracksRow, error)
 	GetUsersExcluding(ctx context.Context, arg GetUsersExcludingParams) ([]GetUsersExcludingRow, error)
 	// Video streams for a movie (for technical details display).
@@ -534,10 +561,14 @@ type Querier interface {
 	// it needs all three and runs once per socket. HTTP media requests keep the
 	// leaner GetWatchRoomForMember.
 	GetWatchRoomForMemberWithSummary(ctx context.Context, arg GetWatchRoomForMemberWithSummaryParams) (GetWatchRoomForMemberWithSummaryRow, error)
+	// Join order. The owner and the first invitees are inserted in the same
+	// second, owner first, so the id breaks the tie.
 	GetWatchRoomMembers(ctx context.Context, roomID int64) ([]GetWatchRoomMembersRow, error)
 	GetWatchRoomMembersByRoomIDs(ctx context.Context, roomIds []int64) ([]GetWatchRoomMembersByRoomIDsRow, error)
 	// The movie's card fields ride along, so the listing needs no second lookup;
 	// the movie_id foreign key cascades, so the inner join drops no room.
+	// created_at has one-second resolution; the id orders rooms created in the
+	// same second.
 	GetWatchRoomsForUser(ctx context.Context, userID int64) ([]GetWatchRoomsForUserRow, error)
 	HasMovieTmdbRetry(ctx context.Context, movieID int64) (bool, error)
 	InsertAudioStream(ctx context.Context, arg InsertAudioStreamParams) error

@@ -44,7 +44,7 @@ WHERE mwp.user_id = ?
   AND mwp.progress_sec >= 30
   AND mwp.duration_sec > 0
   AND mwp.progress_sec < mwp.duration_sec
-ORDER BY mwp.updated_at DESC
+ORDER BY mwp.updated_at DESC, mwp.movie_id ASC
 LIMIT ?
 `
 
@@ -72,6 +72,10 @@ type GetContinueWatchingMoviesRow struct {
 //
 // backdrop_path and overview are for the home billboard, which features the
 // first item of the merged row.
+// updated_at has one-second resolution; the movie id orders saves in the same
+// second as the handler's merge does, so the limit keeps the rows the merged
+// row would. idx_movie_watch_progress_user_updated_at ends in movie_id so its
+// forward scan serves both terms.
 func (q *Queries) GetContinueWatchingMovies(ctx context.Context, arg GetContinueWatchingMoviesParams) ([]GetContinueWatchingMoviesRow, error) {
 	rows, err := q.query(ctx, q.getContinueWatchingMoviesStmt, getContinueWatchingMovies, arg.UserID, arg.Limit)
 	if err != nil {

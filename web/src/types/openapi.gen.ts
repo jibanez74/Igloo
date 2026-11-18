@@ -52,7 +52,7 @@ export interface paths {
         put?: never;
         /**
          * Log in with email and password
-         * @description The email is matched exactly as sent: it is not trimmed and the match is case-sensitive. Passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401. Rate limited to 10 requests per 5 minutes per client IP: the TCP peer address, or, when the peer is a proxy listed in the TRUSTED_PROXIES startup setting, the right-most X-Forwarded-For address that is not a trusted proxy. Shared with device login.
+         * @description The email is matched exactly as sent: it is not trimmed and the match is case-sensitive. Passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401. Rate limited to 10 requests per 5 minutes per client IP: the TCP peer address, or, when the peer is a proxy listed in the TRUSTED_PROXIES startup setting, the right-most X-Forwarded-For address that is not a trusted proxy, or the proxy's own address when X-Forwarded-For, read from the right, names none or reaches an entry that is not a bare IP address (one with a port, or unknown) first (one bucket shared by every client behind it). Shared with device login.
          */
         post: operations["authenticateUser"];
         delete?: never;
@@ -109,7 +109,7 @@ export interface paths {
         put?: never;
         /**
          * Log in with email and password from a TV or mobile client and receive a device token
-         * @description The email is matched exactly as sent: it is not trimmed and the match is case-sensitive. Passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401. Rate limited to 10 requests per 5 minutes per client IP: the TCP peer address, or, when the peer is a proxy listed in the TRUSTED_PROXIES startup setting, the right-most X-Forwarded-For address that is not a trusted proxy. Shared with browser login.
+         * @description The email is matched exactly as sent: it is not trimmed and the match is case-sensitive. Passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401. Rate limited to 10 requests per 5 minutes per client IP: the TCP peer address, or, when the peer is a proxy listed in the TRUSTED_PROXIES startup setting, the right-most X-Forwarded-For address that is not a trusted proxy, or the proxy's own address when X-Forwarded-For, read from the right, names none or reaches an entry that is not a bare IP address (one with a port, or unknown) first (one bucket shared by every client behind it). Shared with browser login.
          */
         post: operations["authenticateDevice"];
         delete?: never;
@@ -129,7 +129,7 @@ export interface paths {
         put?: never;
         /**
          * Request a quick-connect code to display on a device
-         * @description Starts a pairing. The code expires 5 minutes after this request; approval does not extend it. Rate limited to 10 requests per minute per client IP: the TCP peer address, or, when the peer is a proxy listed in the TRUSTED_PROXIES startup setting, the right-most X-Forwarded-For address that is not a trusted proxy. Returns 503 while 1,000 codes are already pending.
+         * @description Starts a pairing. The code expires 5 minutes after this request; approval does not extend it. Rate limited to 10 requests per minute per client IP: the TCP peer address, or, when the peer is a proxy listed in the TRUSTED_PROXIES startup setting, the right-most X-Forwarded-For address that is not a trusted proxy, or the proxy's own address when X-Forwarded-For, read from the right, names none or reaches an entry that is not a bare IP address (one with a port, or unknown) first (one bucket shared by every client behind it). Returns 503 while 1,000 codes are already pending.
          */
         post: operations["initiateQuickConnect"];
         delete?: never;
@@ -149,7 +149,7 @@ export interface paths {
         put?: never;
         /**
          * Poll a quick-connect code and receive a device token once approved
-         * @description Devices poll this endpoint at the advertised interval. Pending codes live only in this server process's memory, so a restart discards them. A 404 means the code or secret is missing, unknown, expired, or mismatched; the device should request a new code and start over. 400 is returned only for a malformed body. The approved response consumes the code; it is issued at most once per approval. A redeem that arrives while another request is still issuing the token for the same code answers pending, and a failed issuance leaves the code redeemable on the next poll. Rate limited to 60 requests per minute per client IP: the TCP peer address, or, when the peer is a proxy listed in the TRUSTED_PROXIES startup setting, the right-most X-Forwarded-For address that is not a trusted proxy.
+         * @description Devices poll this endpoint at the advertised interval. Pending codes live only in this server process's memory, so a restart discards them. A 404 means the code or secret is missing, unknown, expired, or mismatched; the device should request a new code and start over. 400 is returned only for a malformed body. The approved response consumes the code; it is issued at most once per approval. A redeem that arrives while another request is still issuing the token for the same code answers pending, and a failed issuance leaves the code redeemable on the next poll. Rate limited to 60 requests per minute per client IP: the TCP peer address, or, when the peer is a proxy listed in the TRUSTED_PROXIES startup setting, the right-most X-Forwarded-For address that is not a trusted proxy, or the proxy's own address when X-Forwarded-For, read from the right, names none or reaches an entry that is not a bare IP address (one with a port, or unknown) first (one bucket shared by every client behind it).
          */
         post: operations["redeemQuickConnect"];
         delete?: never;
@@ -207,7 +207,7 @@ export interface paths {
         };
         /**
          * List the current user's devices
-         * @description Session-authenticated users only: requests carrying a device bearer token are rejected with 401 so a stolen device token cannot enumerate devices.
+         * @description Session-authenticated users only: requests carrying a device bearer token are rejected with 401 so a stolen device token cannot enumerate devices. Most recently used first, then newest id.
          */
         get: operations["getDevices"];
         put?: never;
@@ -337,7 +337,7 @@ export interface paths {
         put?: never;
         /**
          * Verify the current user's profile PIN
-         * @description Used by TV clients when switching profiles. A wrong PIN returns 200 with valid=false. Returns 400 when the account has no PIN. Every verification, correct or not, counts toward a 5-per-minute per-user rate limit shared with PIN changes.
+         * @description Used by TV clients when switching profiles. A wrong PIN returns 200 with valid=false. Returns 400 when the account has no PIN. Every well-formed verification against an account with a PIN, correct or not, counts toward a 5-per-minute per-user rate limit shared with PIN changes.
          */
         post: operations["verifyUserPin"];
         delete?: never;
@@ -594,7 +594,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Search Spotify albums */
+        /**
+         * Search Spotify albums
+         * @description Returns at most 10 results. The Spotify call, token request and retries included, has 15 seconds. A Spotify rate limit with a Retry-After of 5 seconds or less is waited out, up to twice, when the wait ends inside that time, so a search can take several seconds longer; any other rate limit, including one reporting the account's quota spent, fails the request with 502.
+         */
         post: operations["searchSpotifyAlbums"];
         delete?: never;
         options?: never;
@@ -611,7 +614,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Search Spotify tracks */
+        /**
+         * Search Spotify tracks
+         * @description Returns at most 10 results. The Spotify call, token request and retries included, has 15 seconds. A Spotify rate limit with a Retry-After of 5 seconds or less is waited out, up to twice, when the wait ends inside that time, so a search can take several seconds longer; any other rate limit, including one reporting the account's quota spent, fails the request with 502.
+         */
         post: operations["searchSpotifyTracks"];
         delete?: never;
         options?: never;
@@ -728,7 +734,7 @@ export interface paths {
         };
         /**
          * Search all library media
-         * @description Backs the search-bar dropdown: returns the top 8 rows of each of the five categories together with each category's full match count, and takes no pagination. q is lowercased and reduced to letter, digit and whitespace tokens, so FTS5 operators cannot be injected; a blank or punctuation-only q returns no results rather than an error. Matching runs in up to three stages: every token as a prefix joined by AND; if that finds nothing, tokens are expanded with vocabulary-derived spelling corrections (edit distance 1 for 3-5 rune tokens and 2 for longer ones, while tokens shorter than 3 runes or longer than 64 are never corrected and at most 8 tokens are corrected per query) and retried; then a final OR pass. Zero results is a normal response, not an error. Within each category rows are ordered by exact title or name match, then prefix match, then bm25 with the name and title columns weighted highest, then title and id so ties stay stable. A section's total is its full match count, not the number of rows returned.
+         * @description Backs the search-bar dropdown: returns the top 8 rows of each of the five categories together with each category's full match count, and takes no pagination. q is lowercased and split into letter and digit tokens, every other character acting as a separator (AC/DC searches for ac and dc), so FTS5 operators cannot be injected; a blank or punctuation-only q returns no results rather than an error. Matching runs in up to three stages: every token as a prefix joined by AND; if that finds nothing, tokens are expanded with vocabulary-derived spelling corrections (edit distance 1 for 3-5 rune tokens and 2 for longer ones, while tokens shorter than 3 runes or longer than 64 are never corrected and at most 8 tokens are corrected per query; an adjacent transposition counts as one edit, and each token gains at most 3 corrections, each also matched as a prefix) and retried; then a final OR pass. Zero results is a normal response, not an error. Within each category rows are ordered as on that category's search endpoint: broadly an exact title or name match, then a prefix match, then bm25 with the name and title columns weighted highest, then a name or title and the id so ties stay stable. A section's total is its full match count, not the number of rows returned.
          */
         get: operations["searchAll"];
         put?: never;
@@ -748,7 +754,7 @@ export interface paths {
         };
         /**
          * Search movies
-         * @description Paginated movie search. q is lowercased and reduced to letter, digit and whitespace tokens, so FTS5 operators cannot be injected; a blank or punctuation-only q returns no results rather than an error. Matching runs in up to three stages: every token as a prefix joined by AND; if that finds nothing, tokens are expanded with vocabulary-derived spelling corrections (edit distance 1 for 3-5 rune tokens and 2 for longer ones, while tokens shorter than 3 runes or longer than 64 are never corrected and at most 8 tokens are corrected per query) and retried; then a final OR pass. Zero results is a normal response, not an error. Rows are ordered by exact title match, then title prefix, then bm25 weighted toward the title, then title and id so ties stay stable across pages. total is the full match count and results is one page of it. A page past the last page is clamped to the last page, so the page in the response can differ from the request. When nothing matches, total and total_pages are 0 and page is 1, except when q held no usable tokens, in which case the requested page is echoed back. per_page reports the effective value after clamping.
+         * @description Paginated movie search. q is lowercased and split into letter and digit tokens, every other character acting as a separator (AC/DC searches for ac and dc), so FTS5 operators cannot be injected; a blank or punctuation-only q returns no results rather than an error. Matching runs in up to three stages: every token as a prefix joined by AND; if that finds nothing, tokens are expanded with vocabulary-derived spelling corrections (edit distance 1 for 3-5 rune tokens and 2 for longer ones, while tokens shorter than 3 runes or longer than 64 are never corrected and at most 8 tokens are corrected per query; an adjacent transposition counts as one edit, and each token gains at most 3 corrections, each also matched as a prefix) and retried; then a final OR pass. Zero results is a normal response, not an error. Rows are ordered by exact title match, then title prefix, then bm25 weighted toward the title, then title and id so ties stay stable across pages. total is the full match count and results is one page of it. A page past the last page is clamped to the last page, so the page in the response can differ from the request. When nothing matches, total and total_pages are 0 and page is 1, except when q held no usable tokens, in which case the requested page is echoed back. per_page reports the effective value after clamping.
          */
         get: operations["searchMovies"];
         put?: never;
@@ -768,7 +774,7 @@ export interface paths {
         };
         /**
          * Search TV shows
-         * @description Paginated TV show search. q is lowercased and reduced to letter, digit and whitespace tokens, so FTS5 operators cannot be injected; a blank or punctuation-only q returns no results rather than an error. Matching runs in up to three stages: every token as a prefix joined by AND; if that finds nothing, tokens are expanded with vocabulary-derived spelling corrections (edit distance 1 for 3-5 rune tokens and 2 for longer ones, while tokens shorter than 3 runes or longer than 64 are never corrected and at most 8 tokens are corrected per query) and retried; then a final OR pass. Zero results is a normal response, not an error. Rows are ordered by exact name match, then name prefix, then bm25 weighted toward the name, then name and id so ties stay stable across pages. total is the full match count and results is one page of it. A page past the last page is clamped to the last page, so the page in the response can differ from the request. When nothing matches, total and total_pages are 0 and page is 1, except when q held no usable tokens, in which case the requested page is echoed back. per_page reports the effective value after clamping.
+         * @description Paginated TV show search. q is lowercased and split into letter and digit tokens, every other character acting as a separator (AC/DC searches for ac and dc), so FTS5 operators cannot be injected; a blank or punctuation-only q returns no results rather than an error. Matching runs in up to three stages: every token as a prefix joined by AND; if that finds nothing, tokens are expanded with vocabulary-derived spelling corrections (edit distance 1 for 3-5 rune tokens and 2 for longer ones, while tokens shorter than 3 runes or longer than 64 are never corrected and at most 8 tokens are corrected per query; an adjacent transposition counts as one edit, and each token gains at most 3 corrections, each also matched as a prefix) and retried; then a final OR pass. Zero results is a normal response, not an error. Rows are ordered by exact name match, then name prefix, then bm25 weighted toward the name, then name and id so ties stay stable across pages. total is the full match count and results is one page of it. A page past the last page is clamped to the last page, so the page in the response can differ from the request. When nothing matches, total and total_pages are 0 and page is 1, except when q held no usable tokens, in which case the requested page is echoed back. per_page reports the effective value after clamping.
          */
         get: operations["searchShows"];
         put?: never;
@@ -788,7 +794,7 @@ export interface paths {
         };
         /**
          * Search albums
-         * @description Paginated album search. q is lowercased and reduced to letter, digit and whitespace tokens, so FTS5 operators cannot be injected; a blank or punctuation-only q returns no results rather than an error. Matching runs in up to three stages: every token as a prefix joined by AND; if that finds nothing, tokens are expanded with vocabulary-derived spelling corrections (edit distance 1 for 3-5 rune tokens and 2 for longer ones, while tokens shorter than 3 runes or longer than 64 are never corrected and at most 8 tokens are corrected per query) and retried; then a final OR pass. Zero results is a normal response, not an error. Rows are ordered by exact title match, then title prefix, then exact album-artist match, then album-artist prefix, then bm25 weighted toward the title, then title and id so ties stay stable across pages. total is the full match count and results is one page of it. A page past the last page is clamped to the last page, so the page in the response can differ from the request. When nothing matches, total and total_pages are 0 and page is 1, except when q held no usable tokens, in which case the requested page is echoed back. per_page reports the effective value after clamping.
+         * @description Paginated album search. q is lowercased and split into letter and digit tokens, every other character acting as a separator (AC/DC searches for ac and dc), so FTS5 operators cannot be injected; a blank or punctuation-only q returns no results rather than an error. Matching runs in up to three stages: every token as a prefix joined by AND; if that finds nothing, tokens are expanded with vocabulary-derived spelling corrections (edit distance 1 for 3-5 rune tokens and 2 for longer ones, while tokens shorter than 3 runes or longer than 64 are never corrected and at most 8 tokens are corrected per query; an adjacent transposition counts as one edit, and each token gains at most 3 corrections, each also matched as a prefix) and retried; then a final OR pass. Zero results is a normal response, not an error. Rows are ordered by exact title match, then title prefix, then exact album-artist match, then album-artist prefix, then bm25 weighted toward the title, then title and id so ties stay stable across pages. total is the full match count and results is one page of it. A page past the last page is clamped to the last page, so the page in the response can differ from the request. When nothing matches, total and total_pages are 0 and page is 1, except when q held no usable tokens, in which case the requested page is echoed back. per_page reports the effective value after clamping.
          */
         get: operations["searchAlbums"];
         put?: never;
@@ -808,7 +814,7 @@ export interface paths {
         };
         /**
          * Search musicians
-         * @description Paginated musician search. q is lowercased and reduced to letter, digit and whitespace tokens, so FTS5 operators cannot be injected; a blank or punctuation-only q returns no results rather than an error. Matching runs in up to three stages: every token as a prefix joined by AND; if that finds nothing, tokens are expanded with vocabulary-derived spelling corrections (edit distance 1 for 3-5 rune tokens and 2 for longer ones, while tokens shorter than 3 runes or longer than 64 are never corrected and at most 8 tokens are corrected per query) and retried; then a final OR pass. Zero results is a normal response, not an error. Rows are ordered by an exact match on either the name or the sort name, then a prefix match on either, then bm25 weighted toward the name, then sort name and id so ties stay stable across pages. total is the full match count and results is one page of it. A page past the last page is clamped to the last page, so the page in the response can differ from the request. When nothing matches, total and total_pages are 0 and page is 1, except when q held no usable tokens, in which case the requested page is echoed back. per_page reports the effective value after clamping.
+         * @description Paginated musician search. q is lowercased and split into letter and digit tokens, every other character acting as a separator (AC/DC searches for ac and dc), so FTS5 operators cannot be injected; a blank or punctuation-only q returns no results rather than an error. Matching runs in up to three stages: every token as a prefix joined by AND; if that finds nothing, tokens are expanded with vocabulary-derived spelling corrections (edit distance 1 for 3-5 rune tokens and 2 for longer ones, while tokens shorter than 3 runes or longer than 64 are never corrected and at most 8 tokens are corrected per query; an adjacent transposition counts as one edit, and each token gains at most 3 corrections, each also matched as a prefix) and retried; then a final OR pass. Zero results is a normal response, not an error. Rows are ordered by an exact match on either the name or the sort name, then a prefix match on either, then bm25 weighted toward the name, then sort name and id so ties stay stable across pages. total is the full match count and results is one page of it. A page past the last page is clamped to the last page, so the page in the response can differ from the request. When nothing matches, total and total_pages are 0 and page is 1, except when q held no usable tokens, in which case the requested page is echoed back. per_page reports the effective value after clamping.
          */
         get: operations["searchMusicians"];
         put?: never;
@@ -828,7 +834,7 @@ export interface paths {
         };
         /**
          * Search tracks
-         * @description Paginated track search. q is lowercased and reduced to letter, digit and whitespace tokens, so FTS5 operators cannot be injected; a blank or punctuation-only q returns no results rather than an error. Matching runs in up to three stages: every token as a prefix joined by AND; if that finds nothing, tokens are expanded with vocabulary-derived spelling corrections (edit distance 1 for 3-5 rune tokens and 2 for longer ones, while tokens shorter than 3 runes or longer than 64 are never corrected and at most 8 tokens are corrected per query) and retried; then a final OR pass. Zero results is a normal response, not an error. Rows are ordered by exact title match, then title prefix, then an exact match on the album title or either artist name, then a prefix match on those, then bm25 weighted toward the title, then title and id so ties stay stable across pages. total is the full match count and results is one page of it. A page past the last page is clamped to the last page, so the page in the response can differ from the request. When nothing matches, total and total_pages are 0 and page is 1, except when q held no usable tokens, in which case the requested page is echoed back. per_page reports the effective value after clamping.
+         * @description Paginated track search. q is lowercased and split into letter and digit tokens, every other character acting as a separator (AC/DC searches for ac and dc), so FTS5 operators cannot be injected; a blank or punctuation-only q returns no results rather than an error. Matching runs in up to three stages: every token as a prefix joined by AND; if that finds nothing, tokens are expanded with vocabulary-derived spelling corrections (edit distance 1 for 3-5 rune tokens and 2 for longer ones, while tokens shorter than 3 runes or longer than 64 are never corrected and at most 8 tokens are corrected per query; an adjacent transposition counts as one edit, and each token gains at most 3 corrections, each also matched as a prefix) and retried; then a final OR pass. Zero results is a normal response, not an error. Rows are ordered by exact title match, then title prefix, then an exact match on the album title or either artist name, then a prefix match on those, then bm25 weighted toward the title, then title and id so ties stay stable across pages. total is the full match count and results is one page of it. A page past the last page is clamped to the last page, so the page in the response can differ from the request. When nothing matches, total and total_pages are 0 and page is 1, except when q held no usable tokens, in which case the requested page is echoed back. per_page reports the effective value after clamping.
          */
         get: operations["searchTracks"];
         put?: never;
@@ -1019,7 +1025,7 @@ export interface paths {
         };
         /**
          * Get technical stream details for a TV episode
-         * @description The playback-relevant subset of the file behind the episode and its probed streams, in stream_index order. A file that backs several episodes answers identically for each of them; playback always covers the whole file.
+         * @description The playback-relevant subset of the file behind the episode and its probed streams, in stream_index order, and chapters, by start time. A file that backs several episodes answers identically for each of them; playback always covers the whole file.
          */
         get: operations["getShowEpisodeTechnicalDetails"];
         put?: never;
@@ -1101,7 +1107,7 @@ export interface paths {
         };
         /**
          * Get an HLS playlist for a TV episode
-         * @description Creates or reuses the authenticated user's HLS session, then returns its media playlist. The same cookie or bearer authentication is required again on every rewritten manifest and asset request; credentials are not embedded in playlist URLs. Asset URLs propagate audio_track, the explicit audio profile pair, video_codecs, the normalized start, playback_session, and reload so they resolve the same session. Each user holds at most HLS_MAX_SESSIONS_PER_USER sessions (3 by default): at the cap the user's least recently used sessions are evicted, and 503 is returned only when every slot is still being created. Sessions expire after 5 minutes without a manifest or asset request. Creating a session ends the user's other sessions for the same media and playback_session (an earlier seek window, profile, or audio track), whose assets then return 404. They end as soon as the new session is admitted, before it is planned, so a creation that then fails (400, 422, 503, or 500) has still ended them. A session whose FFmpeg process failed is replaced on the next manifest request without keepalive=1. A cold manifest request can wait up to 30 seconds for a remux preflight (remux requests without a stored verdict), up to 15 seconds for transcode capacity, and up to 30 seconds for the first published output (init.mp4 for transcodes, the first segment for copy-video), so one creation can take about 75 seconds before a retryable 503; a request that joined a creation whose own client went away runs it again, up to three times, and returns 500 if each attempt is cancelled that way. 404 also covers a start position with no playable media, a session stopped or replaced while the request waited (request the manifest again), and a keepalive=1 request whose session no longer exists or failed. Responses generated by this handler carry Cache-Control: no-store, including handler errors. Authentication or session middleware failures (401 or 500) can omit this header.
+         * @description Creates or reuses the authenticated user's HLS session, then returns its media playlist. The same cookie or bearer authentication is required again on every rewritten manifest and asset request; credentials are not embedded in playlist URLs. Asset URLs propagate audio_track, the explicit audio profile pair, video_codecs, the normalized start, playback_session, and reload so they resolve the same session. Each user holds at most HLS_MAX_SESSIONS_PER_USER sessions (3 by default): at the cap the user's least recently used sessions are evicted, and 503 is returned only when every slot is still being created. That eviction happens when the request is admitted, before its plan is checked, so a request that then fails (400, 422 or 500) may already have ended one of the user's other sessions. Windows a creation supersedes (below) do not count against the cap while it is in flight, so the user can briefly hold more. Sessions expire after 5 minutes without a manifest or asset request. Creating a session ends the user's other sessions for the same media and playback_session (an earlier seek window, profile, or audio track), whose assets then return 404. They keep serving until the new session's plan succeeds, just before its FFmpeg starts: a creation that fails before then (400 for an invalid audio selection, 422, 500 for an unavailable AC-3/E-AC-3 encoder, the per-user-cap 503, or a cancelled request) leaves them playing, while one that fails afterwards (the transcode-capacity, storage or shutdown 503, an FFmpeg failure, or no first output, including during a remux preflight) has already ended them. A session whose FFmpeg process failed is replaced on the next manifest request without keepalive=1. A cold manifest request can wait up to 30 seconds for a remux preflight (remux requests without a stored verdict), up to 15 seconds for transcode capacity, and up to 30 seconds for the first published output (init.mp4 for transcodes, the first segment for copy-video), so one creation can take about 75 seconds before a retryable 503. A copy-video session that starts past 0 can then hold its manifest up to 5 seconds more while its actual start (X-Igloo-Actual-Start) is measured; a request that joined a creation whose own client went away runs it again under its own request, for at most three attempts counting the join, and returns 500 if each attempt is cancelled that way. 404 also covers a start position with no playable media, a session stopped or replaced while the request waited (request the manifest again), and a keepalive=1 request whose session no longer exists or failed. Responses generated by this handler carry Cache-Control: no-store, including handler errors. Authentication or session middleware failures (401 or 500) can omit this header.
          */
         get: operations["episodeHlsManifest"];
         put?: never;
@@ -1185,7 +1191,7 @@ export interface paths {
         };
         /**
          * Stream a subtitle track as Matroska
-         * @description Streams the subtitle track at trackIndex, a zero-based position in the media's subtitle list (not the raw stream index), as a single-track Matroska stream for players that render subtitles themselves, such as the Android TV client while it plays an HLS session. Matroska carries SubRip, ASS/SSA, PGS, DVB and VobSub tracks as they are; mov_text, EIA-608 and other text tracks are converted to SubRip. Packet timestamps are the source's minus start, and packets before start are left out, so the track lines up with the session that start names. The stream is not seekable: a player that seeks inside the session requests it again from its beginning. A track this server has already copied is read from its copy; otherwise the media file is read from start onward, and once such a stream has stayed open for 30 seconds the track is copied in the background for later requests. Every error is a JSON response sent before the stream begins; a failure afterwards closes the connection without the final chunk, so a player can tell a broken stream from a complete one.
+         * @description Streams the subtitle track at trackIndex, a zero-based position in the media's subtitle list (not the raw stream index), as a single-track Matroska stream for players that render subtitles themselves, such as the Android TV client while it plays an HLS session. Matroska carries SubRip, ASS/SSA, PGS, DVB and VobSub tracks as they are; mov_text, EIA-608 and other text tracks are converted to SubRip. VobSub is copied only from Matroska sources: VobSub in another container, XSUB, DVB teletext, ARIB captions, and a track with no stored codec return 415. Packet timestamps are the source's minus start, and packets before start are left out, so the track lines up with the session that start names. The stream is not seekable: a player that seeks inside the session requests it again from its beginning. A track this server has already copied is read from its copy; otherwise the media file is read from start onward, and once such a stream has stayed open for 30 seconds the track is copied in the background for later requests. Every error is a JSON response sent before the stream begins; a failure afterwards closes the connection without the final chunk, so a player can tell a broken stream from a complete one.
          */
         get: operations["episodeSubtitleStream"];
         put?: never;
@@ -1205,7 +1211,7 @@ export interface paths {
         };
         /**
          * List what the current user is watching
-         * @description Returns up to 12 movies and TV episodes the current user has a saved position of at least 30 seconds in, without having finished them or marked them watched, most recently watched first. Episodes without a media file are left out. A show contributes at most one entry: its most recently watched in-progress episode.
+         * @description Returns up to 12 movies and TV episodes the current user has a saved position of at least 30 seconds in, without having finished them or marked them watched, most recently watched first; entries saved in the same second list episodes before movies, then by id. Episodes without a media file are left out. A show contributes at most one entry: its most recently watched in-progress episode.
          */
         get: operations["getContinueWatching"];
         put?: never;
@@ -1583,7 +1589,7 @@ export interface paths {
         };
         /**
          * Get an HLS playlist for a movie
-         * @description Creates or reuses the authenticated user's HLS session, then returns its media playlist. The same cookie or bearer authentication is required again on every rewritten manifest and asset request; credentials are not embedded in playlist URLs. Asset URLs propagate audio_track, the explicit audio profile pair, video_codecs, the normalized start, playback_session, and reload so they resolve the same session. Each user holds at most HLS_MAX_SESSIONS_PER_USER sessions (3 by default): at the cap the user's least recently used sessions are evicted, and 503 is returned only when every slot is still being created. Sessions expire after 5 minutes without a manifest or asset request. Creating a session ends the user's other sessions for the same media and playback_session (an earlier seek window, profile, or audio track), whose assets then return 404. They end as soon as the new session is admitted, before it is planned, so a creation that then fails (400, 422, 503, or 500) has still ended them. A session whose FFmpeg process failed is replaced on the next manifest request without keepalive=1. A cold manifest request can wait up to 30 seconds for a remux preflight (remux requests without a stored verdict), up to 15 seconds for transcode capacity, and up to 30 seconds for the first published output (init.mp4 for transcodes, the first segment for copy-video), so one creation can take about 75 seconds before a retryable 503; a request that joined a creation whose own client went away runs it again, up to three times, and returns 500 if each attempt is cancelled that way. 404 also covers a start position with no playable media, a session stopped or replaced while the request waited (request the manifest again), and a keepalive=1 request whose session no longer exists or failed. Responses generated by this handler carry Cache-Control: no-store, including handler errors. Authentication or session middleware failures (401 or 500) can omit this header.
+         * @description Creates or reuses the authenticated user's HLS session, then returns its media playlist. The same cookie or bearer authentication is required again on every rewritten manifest and asset request; credentials are not embedded in playlist URLs. Asset URLs propagate audio_track, the explicit audio profile pair, video_codecs, the normalized start, playback_session, and reload so they resolve the same session. Each user holds at most HLS_MAX_SESSIONS_PER_USER sessions (3 by default): at the cap the user's least recently used sessions are evicted, and 503 is returned only when every slot is still being created. That eviction happens when the request is admitted, before its plan is checked, so a request that then fails (400, 422 or 500) may already have ended one of the user's other sessions. Windows a creation supersedes (below) do not count against the cap while it is in flight, so the user can briefly hold more. Sessions expire after 5 minutes without a manifest or asset request. Creating a session ends the user's other sessions for the same media and playback_session (an earlier seek window, profile, or audio track), whose assets then return 404. They keep serving until the new session's plan succeeds, just before its FFmpeg starts: a creation that fails before then (400 for an invalid audio selection, 422, 500 for an unavailable AC-3/E-AC-3 encoder, the per-user-cap 503, or a cancelled request) leaves them playing, while one that fails afterwards (the transcode-capacity, storage or shutdown 503, an FFmpeg failure, or no first output, including during a remux preflight) has already ended them. A session whose FFmpeg process failed is replaced on the next manifest request without keepalive=1. A cold manifest request can wait up to 30 seconds for a remux preflight (remux requests without a stored verdict), up to 15 seconds for transcode capacity, and up to 30 seconds for the first published output (init.mp4 for transcodes, the first segment for copy-video), so one creation can take about 75 seconds before a retryable 503. A copy-video session that starts past 0 can then hold its manifest up to 5 seconds more while its actual start (X-Igloo-Actual-Start) is measured; a request that joined a creation whose own client went away runs it again under its own request, for at most three attempts counting the join, and returns 500 if each attempt is cancelled that way. 404 also covers a start position with no playable media, a session stopped or replaced while the request waited (request the manifest again), and a keepalive=1 request whose session no longer exists or failed. Responses generated by this handler carry Cache-Control: no-store, including handler errors. Authentication or session middleware failures (401 or 500) can omit this header.
          */
         get: operations["hlsManifest"];
         put?: never;
@@ -1667,7 +1673,7 @@ export interface paths {
         };
         /**
          * Stream a subtitle track as Matroska
-         * @description Streams the subtitle track at trackIndex, a zero-based position in the media's subtitle list (not the raw stream index), as a single-track Matroska stream for players that render subtitles themselves, such as the Android TV client while it plays an HLS session. Matroska carries SubRip, ASS/SSA, PGS, DVB and VobSub tracks as they are; mov_text, EIA-608 and other text tracks are converted to SubRip. Packet timestamps are the source's minus start, and packets before start are left out, so the track lines up with the session that start names. The stream is not seekable: a player that seeks inside the session requests it again from its beginning. A track this server has already copied is read from its copy; otherwise the media file is read from start onward, and once such a stream has stayed open for 30 seconds the track is copied in the background for later requests. Every error is a JSON response sent before the stream begins; a failure afterwards closes the connection without the final chunk, so a player can tell a broken stream from a complete one.
+         * @description Streams the subtitle track at trackIndex, a zero-based position in the media's subtitle list (not the raw stream index), as a single-track Matroska stream for players that render subtitles themselves, such as the Android TV client while it plays an HLS session. Matroska carries SubRip, ASS/SSA, PGS, DVB and VobSub tracks as they are; mov_text, EIA-608 and other text tracks are converted to SubRip. VobSub is copied only from Matroska sources: VobSub in another container, XSUB, DVB teletext, ARIB captions, and a track with no stored codec return 415. Packet timestamps are the source's minus start, and packets before start are left out, so the track lines up with the session that start names. The stream is not seekable: a player that seeks inside the session requests it again from its beginning. A track this server has already copied is read from its copy; otherwise the media file is read from start onward, and once such a stream has stayed open for 30 seconds the track is copied in the background for later requests. Every error is a JSON response sent before the stream begins; a failure afterwards closes the connection without the final chunk, so a player can tell a broken stream from a complete one.
          */
         get: operations["subtitleStream"];
         put?: never;
@@ -1710,7 +1716,7 @@ export interface paths {
         post?: never;
         /**
          * Delete a movie from the library
-         * @description Admin-only endpoint for session-authenticated admins: requests carrying a device bearer token are rejected with 401, even alongside a session cookie. The request body is optional and is never rejected. The file is deleted only when the body is a JSON object that sets delete_file to true; unknown fields or trailing content beside it do not prevent that, but a syntax error inside the object does. Deleting the movie also deletes its watch rooms: their members receive room_deleted and their connections close. With delete_file true the file is removed from disk; a failure to remove it is logged and the response is still 200.
+         * @description Admin-only endpoint for session-authenticated admins: requests carrying a device bearer token are rejected with 401, even alongside a session cookie. The request body is optional and is never rejected. The file is deleted only when the body is a JSON object that sets delete_file to true; unknown fields or trailing content beside it do not prevent that, but a syntax error inside the object does. Deleting the movie also deletes its watch rooms: their members receive room_deleted and their connections close. Its HLS sessions are stopped, so their manifests and assets then return 404 (those of its watch rooms return 403, as for any room the caller is not a member of), and its cached subtitles are dropped. With delete_file true the file is removed from disk; a failure to remove it is logged and the response is still 200.
          */
         delete: operations["deleteMovie"];
         options?: never;
@@ -1731,7 +1737,7 @@ export interface paths {
         };
         /**
          * List users available for watch-room invites
-         * @description Every user except the caller, ordered by name, without pagination.
+         * @description Every user except the caller, ordered by name (case-sensitively, so uppercase letters sort before lowercase), without pagination.
          */
         get: operations["getUsers"];
         put?: never;
@@ -1751,7 +1757,7 @@ export interface paths {
         };
         /**
          * List all users
-         * @description Admin-only endpoint for session-authenticated admins: requests carrying a device bearer token are rejected with 401, even alongside a session cookie.
+         * @description Admin-only endpoint for session-authenticated admins: requests carrying a device bearer token are rejected with 401, even alongside a session cookie. Ordered by name.
          */
         get: operations["adminGetUsers"];
         put?: never;
@@ -1843,7 +1849,7 @@ export interface paths {
         };
         /**
          * Get watch-room details
-         * @description Authenticates the requester and authorizes current room membership. Successful membership lookups may be cached for up to 30 seconds. An unknown room returns 403, the same as a room the caller is not a member of.
+         * @description Authenticates the requester and authorizes current room membership. Successful membership lookups may be cached for up to 30 seconds and are dropped at once when the owner changes the members or a member leaves. An unknown room returns 403, the same as a room the caller is not a member of.
          */
         get: operations["getWatchRoom"];
         put?: never;
@@ -1947,7 +1953,7 @@ export interface paths {
         };
         /**
          * Direct-stream a watch-room movie
-         * @description Authenticates the requester and authorizes current room membership on every request, including range requests. Successful membership lookups may be cached for up to 30 seconds. An unknown room returns 403, the same as a room the caller is not a member of. A room that does not use direct playback returns 400. 404 means the movie or its file no longer exists. Serves the original file with its media MIME type, a strong ETag, Last-Modified, byte ranges, and conditional request support. A matching If-None-Match returns 304; failed If-Match or If-Unmodified-Since returns empty 412. Range errors use text/plain. Returns 409 when a pinned selected subtitle ordinal is out of range after rescanning, selects a different stream_index, or its pinned non-null language changes. Recreate the room to select current tracks. The check is skipped when subtitle_track is null.
+         * @description Authenticates the requester and authorizes current room membership on every request, including range requests. Successful membership lookups may be cached for up to 30 seconds and are dropped at once when the owner changes the members or a member leaves. An unknown room returns 403, the same as a room the caller is not a member of. A room that does not use direct playback returns 400. 404 means the movie or its file no longer exists. Serves the original file with its media MIME type, a strong ETag, Last-Modified, byte ranges, and conditional request support. A matching If-None-Match returns 304; failed If-Match or If-Unmodified-Since returns empty 412. Range errors use text/plain. Returns 409 when a pinned selected subtitle ordinal is out of range after rescanning, selects a different stream_index, or its pinned non-null language changes. Recreate the room to select current tracks. The check is skipped when subtitle_track is null.
          */
         get: operations["streamWatchRoomMovie"];
         put?: never;
@@ -1956,7 +1962,7 @@ export interface paths {
         options?: never;
         /**
          * Headers for a direct watch-room movie stream
-         * @description Identical to GET but returns headers only, with no response body. The requester is authenticated and current room membership is authorized on every request; successful membership lookups may be cached for up to 30 seconds. An unknown room returns 403, the same as a room the caller is not a member of. A room that does not use direct playback returns 400. 404 means the movie or its file no longer exists. Serves the original file with its media MIME type, a strong ETag, Last-Modified, byte ranges, and conditional request support. A matching If-None-Match returns 304; failed If-Match or If-Unmodified-Since returns empty 412. Range errors use text/plain. Content-Type describes the corresponding GET response, including application/json for handler/middleware errors or text/plain for range errors. Returns 409 when a pinned selected subtitle ordinal is out of range after rescanning, selects a different stream_index, or its pinned non-null language changes. Recreate the room to select current tracks. The check is skipped when subtitle_track is null.
+         * @description Identical to GET but returns headers only, with no response body. The requester is authenticated and current room membership is authorized on every request; successful membership lookups may be cached for up to 30 seconds and are dropped at once when the owner changes the members or a member leaves. An unknown room returns 403, the same as a room the caller is not a member of. A room that does not use direct playback returns 400. 404 means the movie or its file no longer exists. Serves the original file with its media MIME type, a strong ETag, Last-Modified, byte ranges, and conditional request support. A matching If-None-Match returns 304; failed If-Match or If-Unmodified-Since returns empty 412. Range errors use text/plain. Content-Type describes the corresponding GET response, including application/json for handler/middleware errors or text/plain for range errors. Returns 409 when a pinned selected subtitle ordinal is out of range after rescanning, selects a different stream_index, or its pinned non-null language changes. Recreate the room to select current tracks. The check is skipped when subtitle_track is null.
          */
         head: operations["streamWatchRoomMovieHead"];
         patch?: never;
@@ -2053,7 +2059,7 @@ export interface paths {
         get?: never;
         /**
          * Update configured library paths
-         * @description Admin-only endpoint for session-authenticated admins: requests carrying a device bearer token are rejected with 401, even alongside a session cookie. Paths are trimmed and must name an existing, readable directory (400 otherwise). null, a blank string, or an omitted field clears that library path; a null body is rejected with 400 rather than clearing all three. At startup, a configured path that is not accessible is treated as unset and reported as null without changing the stored value, until the next settings save reloads the stored path. With the library watcher on, a changed path is watched from then on and walked once.
+         * @description Admin-only endpoint for session-authenticated admins: requests carrying a device bearer token are rejected with 401, even alongside a session cookie. Paths are trimmed and must name an existing, readable directory (400 otherwise). null, a blank string, or an omitted field clears that library path; a null body is rejected with 400 rather than clearing all three. At startup, a configured path that is not accessible is treated as unset and reported as null without changing the stored value, until the next settings save reloads the stored path. With the library watcher on, a changed path is watched from then on and walked once. Every save also starts a background artwork pass.
          */
         put: operations["updateLibrarySettings"];
         post?: never;
@@ -2123,7 +2129,7 @@ export interface paths {
         put?: never;
         /**
          * Trigger a movie library scan
-         * @description Admin-only endpoint for session-authenticated admins: requests carrying a device bearer token are rejected with 401, even alongside a session cookie. The scan runs asynchronously; returns 200 when started, or when queued behind a run of changes the library watcher is applying, 409 when a library scan is already running, and 500 when no movies directory is configured. Discovery establishes eligible file totals before two bounded probe workers process new or changed files. Movie scans read no content for change detection: size, nanosecond modification/change times, device and inode form the baseline. Unchanged files skip probing. Changed filesystem metadata triggers a reprobe and playback-cache invalidation even when bytes are identical; scans do not prove byte equality. Files must be quiet for 60 seconds. Deferred paths receive at most two retries within 120 seconds after initial processing; unresolved paths remain deferred. Technical metadata, streams, chapters, baselines and pending enrichment commit atomically before TMDB requests. Imports require accepted video; moving MJPEG is supported, while attached artwork alone is rejected. TMDB failures preserve existing descriptions and relationships; new movies use filename-derived defaults. Later startup or manual scans retry eligible unchanged movies with pending enrichment or no TMDB identity at most once per movie per scan, without probing again, rebuilding streams or chapters, or invalidating playback caches and keyframe/remux data. Unavailable TMDB leaves a movie eligible for the next scan. A definitive no-match is retried once on the next scan; from the second consecutive miss the movie backs off, doubling from one day up to seven days, until Identify resets it; a technical rescan of the same file keeps the backoff. Identified movies fetch details by stored TMDB ID and never automatically rematch. Successful enrichment replaces descriptive metadata, including manual edits, while preserving audience rating and file-derived duration/runtime; it clears the internal retry state. Persistence discards stale enrichment after a concurrent identity change and discards work for deleted or replaced catalog rows. After local processing and cleanup, two workers enrich movies with serialized persistence. Complete TMDB resolution is limited to 30 seconds including HTTP retries. Three consecutive transient provider failures or an authentication failure stop further dispatch; already active requests may finish. No-match responses are distinguished from outages. Catalog identity, pending state and filesystem baseline are checked before applying enrichment. GET returns the current/latest in-memory report; POST duplicate protection lasts for the entire run. Completion logs include successful and outstanding enrichment counts. Startup and manual scans remove confirmed missing catalog files, including broken symlink targets and rows without fingerprints, only within the directory captured at scan start. A startup scan, like a library watcher catch-up, keeps missing files that look unmounted rather than deleted: every file when its walk finds none while the catalog holds some, otherwise those beneath a mount point an earlier run recorded by path that is not mounted now, such as a disk mounted inside the library that has not come up; it reports an issue per mount point. A manual scan removes them and records only the mount points mounted then; a manual scan queued behind a run of changes keeps that cleanup when a watcher catch-up joins it. Cleanup follows successful discovery and local processing, including bounded deferred retries; files seen during the scan remain protected even if processing fails or is deferred. Cancellation, fatal walk failures, and unavailable or replaced roots prevent cleanup. Permission and I/O failures and symlink loops preserve records. Root accessibility and identity and file absence are rechecked before each deletion commits; runtime caches are invalidated after commit. Unreferenced shared metadata remains. A file renamed or moved within the library keeps its catalog row, paired with it by inode, size and modification time once its old path is confirmed missing, so watch progress, likes, playlist entries and its match survive; a copy that leaves the original in place is imported on its own. No forced refresh is performed.
+         * @description Admin-only endpoint for session-authenticated admins: requests carrying a device bearer token are rejected with 401, even alongside a session cookie. The scan runs asynchronously; returns 200 when started, or when queued behind a run of changes the library watcher is applying, 409 when a library scan is already running, and 500 when no movies directory is configured. Discovery establishes eligible file totals before two bounded probe workers process new or changed files. Movie scans read no content for change detection: size, nanosecond modification/change times, device and inode form the baseline. Unchanged files skip probing. Changed filesystem metadata triggers a reprobe and playback-cache invalidation even when bytes are identical; scans do not prove byte equality. Files must be quiet for 60 seconds. Deferred paths receive at most two retries within 120 seconds after initial processing; unresolved paths remain deferred. Technical metadata, streams, chapters, baselines and pending enrichment commit atomically before TMDB requests. Imports require accepted video; moving MJPEG is supported, while attached artwork alone is rejected. TMDB failures preserve existing descriptions and relationships; new movies use filename-derived defaults. Later startup or manual scans retry eligible unchanged movies with pending enrichment or no TMDB identity at most once per movie per scan, without probing again, rebuilding streams or chapters, or invalidating playback caches and remux verdicts. Unavailable TMDB leaves a movie eligible for the next scan. A definitive no-match is retried once on the next scan; from the second consecutive miss the movie backs off, doubling from one day up to seven days, until Identify resets it; a technical rescan of the same file keeps the backoff. Identified movies fetch details by stored TMDB ID and never automatically rematch. Successful enrichment replaces descriptive metadata, including manual edits, while preserving audience rating and file-derived duration/runtime; it clears the internal retry state. Persistence discards stale enrichment after a concurrent identity change and discards work for deleted or replaced catalog rows. After local processing and cleanup, two workers enrich movies with serialized persistence. Complete TMDB resolution is limited to 30 seconds including HTTP retries. Three consecutive transient provider failures or an authentication failure stop further dispatch; already active requests may finish. No-match responses are distinguished from outages. Catalog identity, pending state and filesystem baseline are checked before applying enrichment. GET returns the current/latest in-memory report; POST duplicate protection lasts for the entire run. Completion logs include successful and outstanding enrichment counts. Startup and manual scans remove confirmed missing catalog files, including broken symlink targets and rows without fingerprints, only within the directory captured at scan start. A startup scan, like a library watcher catch-up, keeps missing files that look unmounted rather than deleted: every file when its walk finds none while the catalog holds some, otherwise those beneath a mount point an earlier run recorded by path that is not mounted now, such as a disk mounted inside the library that has not come up; it reports an issue per mount point. A manual scan removes them and records only the mount points mounted then; a manual scan queued behind a run of changes keeps that cleanup when a watcher catch-up joins it. Cleanup follows successful discovery and local processing, including bounded deferred retries; files seen during the scan remain protected even if processing fails or is deferred. Cancellation, fatal walk failures, and unavailable or replaced roots prevent cleanup. Permission and I/O failures and symlink loops preserve records. Root accessibility and identity and file absence are rechecked before each deletion commits; runtime caches are invalidated after commit. Unreferenced shared metadata remains. A file renamed or moved within the library keeps its catalog row, paired with it by inode, size and modification time once its old path is confirmed missing, so watch progress, likes, playlist entries and its match survive; a copy that leaves the original in place is imported on its own. No forced refresh is performed.
          */
         post: operations["triggerMovieScan"];
         delete?: never;
@@ -2625,7 +2631,7 @@ export interface paths {
         };
         /**
          * Get current user's top tracks
-         * @description Limit defaults to 20 and is capped at 100; invalid limits use the default. Offset defaults to 0 for missing, invalid, negative, or int64-overflow values.
+         * @description Most played first; equal play counts in ascending track id order. Limit defaults to 20 and is capped at 100; invalid limits use the default. Offset defaults to 0 for missing, invalid, negative, or int64-overflow values.
          */
         get: operations["getUserTopTracks"];
         put?: never;
@@ -2645,7 +2651,7 @@ export interface paths {
         };
         /**
          * Get current user's top musicians
-         * @description Limit defaults to 10 and is capped at 50; invalid limits use the default. Offset defaults to 0 for missing, invalid, negative, or int64-overflow values.
+         * @description Most played first; equal play counts in ascending musician id order. A track counts toward its primary artist only, unlike the artist pages, which count every credited track. Limit defaults to 10 and is capped at 50; invalid limits use the default. Offset defaults to 0 for missing, invalid, negative, or int64-overflow values.
          */
         get: operations["getUserTopMusicians"];
         put?: never;
@@ -2665,7 +2671,7 @@ export interface paths {
         };
         /**
          * Get current user's top genres
-         * @description Limit defaults to 10 and is capped at 20; invalid limits use the default. offset is ignored.
+         * @description Most played first; equal play counts in ascending genre id order. Limit defaults to 10 and is capped at 20; invalid limits use the default. offset is ignored.
          */
         get: operations["getUserTopGenres"];
         put?: never;
@@ -2685,7 +2691,7 @@ export interface paths {
         };
         /**
          * Get current user's top albums
-         * @description Limit defaults to 10 and is capped at 50; invalid limits use the default. Offset defaults to 0 for missing, invalid, negative, or int64-overflow values.
+         * @description Most played first; equal play counts in ascending album id order. Limit defaults to 10 and is capped at 50; invalid limits use the default. Offset defaults to 0 for missing, invalid, negative, or int64-overflow values.
          */
         get: operations["getUserTopAlbums"];
         put?: never;
@@ -2745,7 +2751,7 @@ export interface paths {
         };
         /**
          * Get a person profile by TMDB person ID
-         * @description Fetches English TMDB person details, combined credits, external IDs and images on demand. Successful provider metadata is cached for 15 minutes. Credits are grouped by media type and TMDB title ID, with distinct acting and crew roles retained. Stored season/episode credits collapse to their show. Library matching selects the lowest local ID. Stored names, portraits and library credits yield a partial 200 response when enrichment is unconfigured, unavailable or not_found. Unavailable is recoverable by retry. Without a stored person, a provider 404 returns 404; missing configuration or other provider failures return 503. Database failures return 500.
+         * @description Fetches English TMDB person details, combined credits, external IDs and images on demand. Successful provider metadata is kept in a small shared TMDB cache until 15 minutes pass without a read of it (each read renews it), or until the full cache is emptied to make room. Credits are grouped by media type and TMDB title ID, with distinct acting and crew roles retained. Stored season/episode credits collapse to their show. Library matching selects the lowest local ID. Stored names, portraits and library credits yield a partial 200 response when enrichment is unconfigured, unavailable or not_found. Unavailable is recoverable by retry. Without a stored person, a provider 404 returns 404; missing configuration or other provider failures return 503. Database failures return 500.
          */
         get: operations["getPerson"];
         put?: never;
@@ -2967,7 +2973,7 @@ export interface components {
             enable_watcher: boolean;
             /** @description While true, the server downloads movie, show, season and episode images, cast and crew photos, network logos, album covers, and musician photos into static_dir and returns the downloaded copies in place of the TMDB paths and Spotify or Apple URLs, as the API description explains; images not downloaded yet keep those. Turning it off returns them before the response is sent and deletes the downloaded copies in the background; turning it on downloads them in the background. Changing static_dir while it is on also returns them before the response, then downloads the copies again into the new directory. */
             download_images: boolean;
-            /** @description Directory /api/static serves files from, where avatar uploads and, while download_images is on, downloaded library artwork are written. Read on each request. */
+            /** @description Directory /api/static serves files from, where avatar uploads and, while download_images is on, downloaded library artwork are written. Read on each request. Changing it moves nothing: downloaded artwork is fetched again into the new directory (see download_images), but uploaded avatars stay behind, so their URLs return 404 until each user uploads again. */
             static_dir: string;
             /** @description Directory new HLS sessions write their output to. */
             transcode_dir: string;
@@ -3183,7 +3189,7 @@ export interface components {
             genre_tag: string;
             /** Format: int64 */
             show_count: number;
-            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. The backdrop of one of the genre's newest shows, for the genre's tile, chosen so that the genres in the list show different shows where the library allows. Null when no show in the genre has a backdrop. */
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. The backdrop of one of the genre's newest shows, for the genre's tile, chosen so that the genres in the list show different shows where the library allows; once every candidate is taken, the least used one is chosen. Null when no show in the genre has a backdrop. */
             backdrop_path: components["schemas"]["SqlNullString"];
         };
         ShowGenresData: {
@@ -3378,7 +3384,7 @@ export interface components {
             genre_tag: string;
             /** Format: int64 */
             movie_count: number;
-            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. The backdrop of one of the genre's newest movies, for the genre's tile, chosen so that the genres in the list show different movies where the library allows. Null when no movie in the genre has a backdrop. */
+            /** @description TMDB image path, or the /api/static/ URL of the server's downloaded copy; see the API description. The backdrop of one of the genre's newest movies, for the genre's tile, chosen so that the genres in the list show different movies where the library allows; once every candidate is taken, the least used one is chosen. Null when no movie in the genre has a backdrop. */
             backdrop_path: components["schemas"]["SqlNullString"];
         };
         MovieGenresData: {
@@ -3524,6 +3530,7 @@ export interface components {
             codec: string;
             language: components["schemas"]["SqlNullString"];
             title: components["schemas"]["SqlNullString"];
+            /** @description True when the stream's forced disposition is set, or when its title contains the whole word "forced" not preceded by "non", "not" or "no". */
             is_forced: boolean;
             is_default: boolean;
         };
@@ -3874,7 +3881,7 @@ export interface components {
             already_in_library: boolean;
             /**
              * Format: int64
-             * @description Local movie id; present only when already_in_library is true.
+             * @description Local movie id; present only when already_in_library is true. When several library files share the TMDB id, the lowest local id, the same movie the person page links.
              */
             library_movie_id?: number;
         };
@@ -3887,7 +3894,7 @@ export interface components {
             total_tracks: number;
             cover_url: string;
             spotify_url: string;
-            /** @description True when a library album has this Spotify id, or, for a library album matched on Apple Music or not at all, the same normalized title and an album artist matching the result's artists joined with ", " or " & ", or any one of them. */
+            /** @description True when a library album has this Spotify id, or, for a library album matched on Apple Music or not at all, the same normalized title and an album artist matching the result's artists joined with ", " or " & ", or, for three or more, as "A, B & C", or any one of them. */
             already_in_library: boolean;
             /**
              * Format: int64
@@ -4205,9 +4212,15 @@ export interface components {
             name: string;
             /** @description Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description. */
             thumb: components["schemas"]["SqlNullString"];
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Albums with at least one track crediting the musician, featured credits included.
+             */
             album_count: number;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Tracks credited to the musician, featured credits included.
+             */
             track_count: number;
         };
         MusicStats: {
@@ -4253,6 +4266,7 @@ export interface components {
         };
         AlbumDetailsData: {
             album: components["schemas"]["Album"];
+            /** @description By disc, then track number, then id. */
             tracks: components["schemas"]["AlbumTrack"][];
             artists: components["schemas"]["AlbumArtist"][];
             track_genres: components["schemas"]["AlbumTrackGenre"][];
@@ -4303,7 +4317,10 @@ export interface components {
             cover: components["schemas"]["SqlNullString"];
             year: components["schemas"]["SqlNullInt64"];
             release_date: components["schemas"]["SqlNullString"];
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Every track on the album, not only the musician's.
+             */
             track_count: number;
         };
         /** @description A track of this musician. It carries no musician columns, unlike TrackListItem, because the musician is the resource being read. */
@@ -4326,7 +4343,9 @@ export interface components {
         };
         MusicianDetailsData: {
             musician: components["schemas"]["Musician"];
+            /** @description Every album with at least one track crediting the musician, featured credits included. Newest first by release_date, albums without one after those with one, then by year, newest first, then by sort title and id. */
             albums: components["schemas"]["MusicianAlbum"][];
+            /** @description Every track crediting the musician, featured credits included, by sort title, then id. */
             tracks: components["schemas"]["MusicianTrack"][];
             genres: string[];
             /**
@@ -4841,7 +4860,9 @@ export interface components {
             code: string;
             /** @description Device-held secret required to redeem the code. Never shown to the user: keep it in memory and send it back in the redeem request body. */
             secret: string;
+            /** @description Seconds until the code expires: always 300. */
             expires_in_seconds: number;
+            /** @description Seconds to wait between redeem polls: always 2. */
             poll_interval_seconds: number;
         };
         QuickConnectInitiateEnvelope: components["schemas"]["JsonSuccess"] & {
@@ -4859,6 +4880,7 @@ export interface components {
             platform: string;
             app_version: string | null;
             created_at: string;
+            /** @description Updated at most once every 5 minutes while the token is in use. */
             last_used_at: string;
         };
         QuickConnectRedeemData: {
@@ -5236,6 +5258,7 @@ export interface components {
             codec: string;
             language: components["schemas"]["SqlNullString"];
             title: components["schemas"]["SqlNullString"];
+            /** @description True when the stream's forced disposition is set, or when its title contains the whole word "forced" not preceded by "non", "not" or "no". */
             is_forced: boolean;
             is_default: boolean;
         };
@@ -5372,6 +5395,11 @@ export interface components {
             headers: {
                 "Cache-Control"?: "no-cache";
                 "X-Content-Type-Options"?: "nosniff";
+                /** @description gzip when the request's Accept-Encoding accepts it; the body is then the gzip-compressed document. */
+                "Content-Encoding"?: "gzip";
+                Vary?: "Accept-Encoding";
+                /** @description Length of the body as sent, after any compression. */
+                "Content-Length"?: number;
                 [name: string]: unknown;
             };
             content: {
@@ -5814,7 +5842,7 @@ export interface components {
                 "Content-Length"?: number;
                 /** @description Profile FFmpeg actually ran. This differs from the requested profile in the path when the remux safety gate forces a transcode (it copies H.264 for every client and HEVC only for a request with video_codecs=hevc), so a `remux` request can be answered with a transcode profile here, and when a requested transcode profile is taller than the effective encoder supports (software encoding runs 2160p_16mbps as 1080p_8mbps). */
                 "X-Igloo-Effective-Profile": components["schemas"]["HLSProfile"];
-                /** @description Seconds into the source file where the session's media really begins, at or before the requested start. Stream copy cannot cut mid-GOP, so a copy-video session starts on the source keyframe FFmpeg's input seek lands on, which the server measures; that can be more than one keyframe before the requested start. The value is the time of that first copied video packet: in an MP4 source the session's first audio packet can precede it by up to about 0.1 s. Omitted when it has not been measured. */
+                /** @description Seconds into the source file where the session's media really begins, at or before the requested start. Stream copy cannot cut mid-GOP, so a copy-video session starts on the source keyframe FFmpeg's input seek lands on, which the server measures; that can be more than one keyframe before the requested start. The value is the time of that first copied video packet: in an MP4 source the session's first audio packet can precede it by up to about 0.1 s. Transcodes and sessions starting at 0 always carry the normalized start, which is exact. A copy-video session starting past 0 omits the header when the measurement failed or was still running after the manifest's 5-second wait; a later manifest carries it once it is known. */
                 "X-Igloo-Actual-Start"?: number;
                 /** @description Codec of the audio the session actually produces: the resolved explicit ac3/eac3 encode, or aac in the default audio mode (a copied AAC-LC track or the stereo AAC encode). Diagnostic only; the media stream stays the playback authority. Omitted for video-only sessions. */
                 "X-Igloo-Effective-Audio-Codec"?: components["schemas"]["HLSEffectiveAudioCodec"];
@@ -5982,7 +6010,7 @@ export interface components {
                 "video/x-matroska": string;
             };
         };
-        /** @description Every subtitle stream slot on the server is in use, or the server is shutting down. Retryable. */
+        /** @description Every subtitle stream slot on the server (8) stayed in use for the 3 seconds the request waits for one, or the server is shutting down. Retryable; Retry-After is 2. */
         SubtitleStreamUnavailable: {
             headers: {
                 /** @description Seconds to wait before retrying. */
@@ -6338,6 +6366,8 @@ export interface components {
         /** @description Missing or invalid credentials, or credentials not permitted for this operation. */
         Unauthorized: {
             headers: {
+                /** @description Expires the session cookie when the cookie's session was revoked (its user was deleted or the password changed through another session). */
+                "Set-Cookie"?: string;
                 [name: string]: unknown;
             };
             content: {
@@ -6449,7 +6479,7 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
-        /** @description Rate limit exceeded. Limits are fixed windows held in this server process's memory, and no Retry-After header is sent. Each operation's description states its limit. */
+        /** @description Rate limit exceeded. Limits are fixed windows held in this server process's memory, and no Retry-After header is sent. They are best effort: past 1,024 tracked keys, windows that started more than 5 minutes ago are pruned and then arbitrary others are forgotten, restarting their count. Each operation's description states its limit. */
         TooManyRequests: {
             headers: {
                 [name: string]: unknown;
