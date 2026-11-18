@@ -977,6 +977,16 @@ not part of `make check`.
      (`e2e/visual/png.ts`), with no such allowance. Its failure names the
      pixel count and the box that holds them. `comparator.visual.ts` checks
      the decoder against the browser's own decoding.
+- **The browser repaints whole raster tiles** (`--disable-partial-raster`, in
+  the visual config's launch options). Chromium normally repaints only the
+  part of a tile that changed, and the anti-aliased pixels along that part's
+  edge then depend on what was painted before it. The movie Genres page, where
+  a pressed tile's transition is still running when its results paint, came
+  out in two or three pictures a shade apart on the sort pill's curve and the
+  first card's corners (measured without the flag: 15 loads in 60, and that
+  test failing 5 of 10 comparing runs; with it: one picture in 200 loads, and
+  no failure or retried shot in 570 runs of the whole suite). The flag changed
+  no other picture: 54 of the 56 images drew the same with and without it.
 - **A mismatch is retried before it fails.** Chromium does not always
   rasterise one page to the same pixels: about one test in a hundred comes
   out with a few anti-aliased pixels of a rounded corner one shade apart. The
