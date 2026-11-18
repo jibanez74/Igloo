@@ -1211,7 +1211,7 @@ export interface paths {
         };
         /**
          * List what the current user is watching
-         * @description Returns up to 12 movies and TV episodes the current user has a saved position of at least 30 seconds in, without having finished them or marked them watched, most recently watched first; entries saved in the same second list episodes before movies, then by id. Episodes without a media file are left out. A show contributes at most one entry: its most recently watched in-progress episode.
+         * @description Returns up to 12 movies and TV episodes the current user has a saved position of at least 30 seconds in, without having finished them or marked them watched, most recently watched first; entries saved in the same second list episodes before movies, then by id. Episodes without a media file are left out. A show contributes at most one entry: its most recently watched in-progress episode, the lowest id when several were saved in the same second.
          */
         get: operations["getContinueWatching"];
         put?: never;

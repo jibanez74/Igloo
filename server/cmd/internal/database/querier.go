@@ -206,11 +206,11 @@ type Querier interface {
 	// web client's WATCH_PROGRESS_MIN_SECONDS, with two differences. An episode the
 	// scanner knows but has no file for cannot be resumed, so the same EXISTS guard
 	// GetShowNextEpisode uses skips it. And a show contributes one card rather than
-	// one per episode: the GROUP BY relies on SQLite's bare-column rule, where a
-	// single MAX() aggregate makes every other column come from the row it picked,
-	// so each show returns its most recently watched in-progress episode. The CAST
-	// is for sqlc, which types a bare MAX() as interface{}. The limit comes from
-	// the caller, as GetContinueWatchingMovies' does.
+	// one per episode: its most recently watched in-progress episode. updated_at
+	// has one-second resolution, so the window breaks a tie on the episode id, as
+	// the outer order and the movie half do; a GROUP BY with a bare MAX() took
+	// whichever tied row the plan reached first. The limit comes from the caller,
+	// as GetContinueWatchingMovies' does.
 	// The episode id orders saves in the same second as the handler's merge does,
 	// so the limit keeps the rows the merged row would.
 	GetContinueWatchingEpisodes(ctx context.Context, arg GetContinueWatchingEpisodesParams) ([]GetContinueWatchingEpisodesRow, error)
