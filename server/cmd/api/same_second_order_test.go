@@ -396,7 +396,7 @@ func TestContinueWatchingHalves_KeepLowestIDsWithinOneSecond(t *testing.T) {
 	assertOrder(t, "continue watching movies", got, movies[:continueWatchingLimit])
 
 	// Shows are created first and their episodes in reverse, so show-id order
-	// (the GROUP BY's) is the opposite of episode-id order.
+	// (the partition's) is the opposite of episode-id order.
 	var seasons []int64
 	for i := range count {
 		showID := execOrFatal(t, app, "INSERT INTO shows (directory_path, local_name, name) VALUES (?, ?, ?)",
@@ -431,4 +431,50 @@ func TestContinueWatchingHalves_KeepLowestIDsWithinOneSecond(t *testing.T) {
 		got = append(got, row.ID)
 	}
 	assertOrder(t, "continue watching episodes", got, episodes[:continueWatchingLimit])
+}
+
+func TestContinueWatchingEpisodes_OneShowTieKeepsLowestEpisodeID(t *testing.T) {
+	app := setupTestApp(t)
+	user := createTestUser(t, app, "Viewer", "viewer@example.com", false)
+
+	showID := execOrFatal(t, app, "INSERT INTO shows (directory_path, local_name, name) VALUES (?, ?, ?)",
+		"/shows/Show", "Show", "Show")
+	seasonID := execOrFatal(t, app,
+		"INSERT INTO show_seasons (show_id, season_number, name) VALUES (?, 1, 'Season 1')", showID)
+	var episodes []int64
+	for i := range 3 {
+		fileID := execOrFatal(t, app,
+			"INSERT INTO show_files (season_id, file_path, file_name, size, container, mime_type) VALUES (?, ?, ?, 1, 'mkv', 'video/x-matroska')",
+			seasonID, fmt.Sprintf("/shows/Show/S01E%02d.mkv", i+1), fmt.Sprintf("S01E%02d.mkv", i+1))
+		episodeID := execOrFatal(t, app,
+			"INSERT INTO show_episodes (season_id, episode_number, name) VALUES (?, ?, ?)",
+			seasonID, i+1, fmt.Sprintf("Episode %d", i+1))
+		execOrFatal(t, app,
+			"INSERT INTO show_episode_files (episode_id, file_id, season_id, episode_order) VALUES (?, ?, ?, 0)",
+			episodeID, fileID, seasonID)
+		episodes = append(episodes, episodeID)
+	}
+	// All in one second, saved in reverse so save order is the opposite of
+	// episode-id order. This pins the lowest-id rule: the primary-key scan
+	// reaches the lowest id first anyway, so the old GROUP BY with a bare MAX()
+	// also passed here, and picked the highest id only under a plan through
+	// idx_show_episode_watch_progress_user_updated_at, which returns tied rows
+	// in save order.
+	for _, episodeID := range slices.Backward(episodes) {
+		execOrFatal(t, app,
+			"INSERT INTO show_episode_watch_progress (user_id, episode_id, progress_sec, duration_sec, updated_at) VALUES (?, ?, 600, 5400, ?)",
+			user.ID, episodeID, sameSecond)
+	}
+
+	rows, err := app.Queries.GetContinueWatchingEpisodes(t.Context(), database.GetContinueWatchingEpisodesParams{
+		UserID: user.ID, Limit: continueWatchingLimit,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []int64
+	for _, row := range rows {
+		got = append(got, row.ID)
+	}
+	assertOrder(t, "continue watching episodes of one show", got, episodes[:1])
 }
