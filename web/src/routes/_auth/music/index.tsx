@@ -36,6 +36,7 @@ import {
   playlistsQueryOpts,
   spotifyStatusQueryOpts,
   tracksInfiniteQueryOpts,
+  warmLikedTrackIds,
 } from "@/lib/query-opts";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useTrackPlaybackMatcher } from "@/hooks/useTrackPlaybackMatcher";
@@ -133,8 +134,10 @@ export const Route = createFileRoute("/_auth/music/")({
         // the first page without waiting on it: the tab's skeleton and alert
         // cover the load, and a failure never reaches the route's boundary.
         void queryClient.prefetchInfiniteQuery(tracksInfiniteQueryOpts());
+        warmLikedTrackIds(queryClient);
         break;
       case "playlists":
+        if (deps.playlistsView === "liked") warmLikedTrackIds(queryClient);
         loads.push(
           deps.playlistsView === "liked"
             ? queryClient.ensureQueryData(

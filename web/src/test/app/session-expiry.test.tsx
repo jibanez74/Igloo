@@ -1,13 +1,17 @@
 import type { ReactNode } from "react";
+import type { QueryClient } from "@tanstack/react-query";
 import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { AudioPlayerActionsContext } from "@/context/audio-player-contexts";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { getNotifications } from "@/lib/api";
+import { authUserQueryOpts } from "@/lib/query-opts";
+import { beginEndingSession, forgetEndedSession } from "@/lib/session";
 import type { AudioPlayerActions } from "@/types/audio-player";
 import { deferredResponse, jsonResponse, requestURL } from "../helpers/api";
 import { stubMediaElement } from "../helpers/dom";
+import { authUser } from "../helpers/fixtures";
 import { homeShellResponse } from "../helpers/home";
 import { renderRoute } from "../helpers/render-route";
 
@@ -239,5 +243,135 @@ describe("the shell's auth check", () => {
     expect(router.state.location.search).toEqual({ redirect: "/" });
     // Nobody was signed in, so there is no sign-out to announce.
     expect(toastMocks.showInfo).not.toHaveBeenCalled();
+  });
+});
+
+// The shell's guard runs before every navigation and hover preload under
+// /_auth. A signed-in user checked within the last minute is answered from
+// the cache, so those navigations do not wait on the session.
+describe("the shell's guard once someone is signed in", () => {
+  function countingServer() {
+    const server = {
+      authRequests: 0,
+      auth: undefined as ReturnType<typeof deferredResponse> | undefined,
+      unauthorized: false,
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        if (requestURL(input) === "/api/auth/user") {
+          server.authRequests += 1;
+          if (server.unauthorized) {
+            return jsonResponse({ error: true, message: "not authorized" }, 401);
+          }
+          if (server.auth) return server.auth.promise;
+        }
+        return homeShellResponse(input);
+      }),
+    );
+    return server;
+  }
+
+  function ageAuthEntry(queryClient: QueryClient) {
+    queryClient
+      .getQueryCache()
+      .find({ queryKey: authUserQueryOpts().queryKey, exact: true })
+      ?.setState({ dataUpdatedAt: Date.now() - 2 * 60_000 });
+  }
+
+  it("does not ask the server again while the user is fresh", async () => {
+    const server = countingServer();
+    const { router } = await renderShell().view;
+    await screen.findByRole("button", { name: /^Account: / });
+    expect(server.authRequests).toBe(1);
+
+    await act(async () => {
+      await router.invalidate();
+      await router.preloadRoute({ to: "/" });
+    });
+
+    expect(server.authRequests).toBe(1);
+  });
+
+  it("waits for a fresh check once the user is a minute old", async () => {
+    const server = countingServer();
+    const { router, queryClient } = await renderShell().view;
+    await screen.findByRole("button", { name: /^Account: / });
+
+    ageAuthEntry(queryClient);
+    server.auth = deferredResponse();
+    let settled = false;
+    let navigation: Promise<void> | undefined;
+    act(() => {
+      navigation = router.invalidate().then(() => {
+        settled = true;
+      });
+    });
+    await waitFor(() => {
+      expect(server.authRequests).toBe(2);
+    });
+    expect(settled).toBe(false);
+
+    server.auth.resolve(jsonResponse(authUser()));
+    await act(async () => {
+      await navigation;
+    });
+    expect(settled).toBe(true);
+    expect(router.state.location.pathname).toBe("/");
+  });
+
+  it("checks again, rather than reuse, a session check that failed", async () => {
+    const server = countingServer();
+    const { router, queryClient } = await renderShell().view;
+    await screen.findByRole("button", { name: /^Account: / });
+
+    queryClient.setQueryData(authUserQueryOpts().queryKey, {
+      error: true,
+      message: "500 - internal error",
+    });
+    await act(async () => {
+      await router.invalidate();
+    });
+
+    expect(server.authRequests).toBe(2);
+    expect(router.state.location.pathname).toBe("/");
+  });
+
+  it("asks the server, rather than reuse a fresh user, while the session is ending, and leaves on its 401", async () => {
+    const server = countingServer();
+    const { router } = await renderShell().view;
+    await screen.findByRole("button", { name: /^Account: / });
+    expect(server.authRequests).toBe(1);
+
+    beginEndingSession();
+    server.unauthorized = true;
+    try {
+      await act(async () => {
+        await router.invalidate();
+      });
+      expect(server.authRequests).toBe(2);
+      await waitFor(() => {
+        expect(router.state.location.pathname).toBe("/login");
+      });
+    } finally {
+      forgetEndedSession();
+    }
+  });
+
+  it("signs out when the check finds the session gone", async () => {
+    const server = countingServer();
+    const { router, queryClient } = await renderShell().view;
+    await screen.findByRole("button", { name: /^Account: / });
+
+    ageAuthEntry(queryClient);
+    server.unauthorized = true;
+    await act(async () => {
+      await router.invalidate();
+    });
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe("/login");
+    });
+    expect(toastMocks.showInfo).toHaveBeenCalledExactlyOnceWith("You've been signed out.");
   });
 });

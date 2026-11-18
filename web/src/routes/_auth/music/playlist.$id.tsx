@@ -33,6 +33,7 @@ const DraggableTrackList = lazy(() => import("@/components/music/DraggableTrackL
 import {
   playlistDetailsQueryOpts,
   playlistTracksInfiniteQueryOpts,
+  warmLikedTrackIds,
 } from "@/lib/query-opts";
 import { trackRowProps } from "@/lib/track-row-props";
 import { getMediaImageUrl } from "@/lib/media-image-url";
@@ -54,8 +55,8 @@ import {
   MUSIC_DETAIL_ACTIONS_CLASS,
   MUSIC_DETAIL_HERO_ROW_CLASS,
   PLAYLIST_TRACKS_KEY,
-  PLAYLISTS_KEY,
 } from "@/lib/constants";
+import { invalidatePlaylistContents } from "@/lib/playlist-kinds";
 import { cn } from "@/lib/utils";
 import { apiErrorMessage } from "@/lib/is-api-failure";
 import { parseRouteId } from "@/lib/route-id";
@@ -136,6 +137,7 @@ export const Route = createFileRoute("/_auth/music/playlist/$id")({
     void context.queryClient.prefetchInfiniteQuery(
       playlistTracksInfiniteQueryOpts(id),
     );
+    warmLikedTrackIds(context.queryClient);
     const res = await context.queryClient.ensureQueryData(
       playlistDetailsQueryOpts(id),
     );
@@ -234,15 +236,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
         return;
       }
       showRemoved("Track", "from playlist");
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: [PLAYLIST_TRACKS_KEY, playlistId],
-        }),
-        queryClient.invalidateQueries({
-          queryKey: playlistDetailsQueryOpts(playlistId).queryKey,
-        }),
-        queryClient.invalidateQueries({ queryKey: [PLAYLISTS_KEY] }),
-      ]);
+      await invalidatePlaylistContents(queryClient, "music", [playlistId]);
     },
     onError: () => {
       showActionFailed("remove track");

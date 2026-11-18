@@ -23,16 +23,15 @@ export function unwrapApiData<T extends Record<string, unknown>>(
   return res.data;
 }
 
-/** Type guard for API responses shaped as `{ error: true, message: string }`. */
-
-export function isApiFailure(data: unknown): data is { error: true; message: string } {
+/** Type guard for a failure envelope: `{ error: true, message: string }`, with the status apiRequest stamps on it. */
+export function isApiFailure(data: unknown): data is ApiFailureType {
   return (
     typeof data === "object" &&
     data !== null &&
     "error" in data &&
-    (data).error === true &&
+    data.error === true &&
     "message" in data &&
-    typeof (data as { message: string }).message === "string"
+    typeof data.message === "string"
   );
 }
 
@@ -49,7 +48,7 @@ export function isApiFailure(data: unknown): data is { error: true; message: str
 export function apiErrorMessage(error: unknown, fallback: string): string {
   const data = error instanceof ApiFailureError ? error.failure : error;
   if (!isApiFailure(data)) return fallback;
-  const status = (data as { status?: unknown }).status;
+  const { status } = data;
   if (typeof status === "number" && (status === 404 || status >= 500)) {
     return fallback;
   }

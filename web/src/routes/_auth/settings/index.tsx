@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSessionMutation } from "@/hooks/useSessionMutation";
+import { restoreOptimistic, writeOptimistically } from "@/lib/optimistic";
 import { useId, useRef, useState, useTransition } from "react";
 import type { FormEvent, ReactNode } from "react";
 import {
@@ -41,8 +42,6 @@ import {
   showSuccess,
 } from "@/lib/toast-helpers";
 import type {
-  ApiResponseType,
-  GeneralSettingsResponseType,
   GeneralSettingsType,
   UpdateGeneralSettingsRequest,
 } from "@/types";
@@ -162,47 +161,37 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   }
 
   const settingsKey = generalSettingsQueryOpts().queryKey;
-  // Undoes the optimistic write when the save is refused or fails.
-  const restoreSettings = (
-    previousData: ApiResponseType<GeneralSettingsResponseType> | undefined,
-  ) => {
-    if (previousData) queryClient.setQueryData(settingsKey, previousData);
-  };
   const updateMutation = useSessionMutation({
     mutationFn: updateGeneralSettings,
-    onMutate: async (nextSettings, _context, session) => {
-      await queryClient.cancelQueries({ queryKey: settingsKey });
-      if (session.ended()) return undefined;
-
-      const previousData = queryClient.getQueryData(settingsKey);
-
-      if (previousData?.error === false) {
-        queryClient.setQueryData(settingsKey, {
-          ...previousData,
-          data: {
-            ...previousData.data,
-            settings: {
-              ...previousData.data.settings,
-              tmdb_key: trimmedOrNull(nextSettings.tmdb_key),
-              spotify_client_id: trimmedOrNull(nextSettings.spotify_client_id),
-              spotify_client_secret: trimmedOrNull(
-                nextSettings.spotify_client_secret,
-              ),
-              enable_apple_lookups: nextSettings.enable_apple_lookups,
-              enable_watcher: nextSettings.enable_watcher,
-              download_images: nextSettings.download_images,
-              static_dir: nextSettings.static_dir,
-              transcode_dir: nextSettings.transcode_dir,
-            },
-          },
-        });
-      }
-
-      return { previousData };
-    },
-    onSuccess: (res, _nextSettings, context) => {
+    onMutate: (nextSettings, _context, session) =>
+      writeOptimistically(queryClient, settingsKey, session, previous =>
+        previous?.error === false
+          ? {
+              ...previous,
+              data: {
+                ...previous.data,
+                settings: {
+                  ...previous.data.settings,
+                  tmdb_key: trimmedOrNull(nextSettings.tmdb_key),
+                  spotify_client_id: trimmedOrNull(
+                    nextSettings.spotify_client_id,
+                  ),
+                  spotify_client_secret: trimmedOrNull(
+                    nextSettings.spotify_client_secret,
+                  ),
+                  enable_apple_lookups: nextSettings.enable_apple_lookups,
+                  enable_watcher: nextSettings.enable_watcher,
+                  download_images: nextSettings.download_images,
+                  static_dir: nextSettings.static_dir,
+                  transcode_dir: nextSettings.transcode_dir,
+                },
+              },
+            }
+          : previous,
+      ),
+    onSuccess: (res, _nextSettings, snapshot) => {
       if (res.error) {
-        restoreSettings(context?.previousData);
+        restoreOptimistic(queryClient, settingsKey, snapshot);
         showActionFailed("save settings", res);
         return;
       }
@@ -221,8 +210,8 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
       // answers a save that stops serving its downloaded copies, so the
       // cached library pages refetch them.
       const previous =
-        context?.previousData?.error === false
-          ? context.previousData.data.settings
+        snapshot?.previous?.error === false
+          ? snapshot.previous.data.settings
           : null;
       const saved = res.data.settings;
       const dropsCopies =
@@ -242,8 +231,8 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
 
       showSuccess("Settings saved");
     },
-    onError: (_error, _nextSettings, context) => {
-      restoreSettings(context?.previousData);
+    onError: (_error, _nextSettings, snapshot) => {
+      restoreOptimistic(queryClient, settingsKey, snapshot);
       showActionFailed("save settings", "An unexpected error occurred");
     },
   });

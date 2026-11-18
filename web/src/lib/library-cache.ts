@@ -111,13 +111,20 @@ const REFRESH_TOAST_NOUNS: Record<Library, string> = {
   shows: "Show",
 };
 
-/** Marks every query under the library's keys stale; active ones refetch on their own. */
+/**
+ * Marks every query under the library's keys stale; active ones refetch on
+ * their own, unless `refetchType` is "none", which leaves each to refetch at
+ * its next mount or window focus.
+ */
 export function invalidateLibraryQueries(
   queryClient: QueryClient,
   library: Library,
+  { refetchType }: { refetchType?: "none" } = {},
 ) {
   for (const key of LIBRARY_QUERY_KEYS[library]) {
-    void queryClient.invalidateQueries({ queryKey: [key] });
+    void queryClient.invalidateQueries(
+      refetchType ? { queryKey: [key], refetchType } : { queryKey: [key] },
+    );
   }
 }
 

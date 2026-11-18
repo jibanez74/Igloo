@@ -48,6 +48,15 @@ export const Route = createFileRoute("/_auth/tv-shows/$id/")({
     const showId = parseRouteId(params.id);
     if (showId == null) return { show: null };
 
+    // A URL naming its season (a reload, a shared link, the trailer's return
+    // link) starts that season's episodes beside the details instead of after
+    // them; the ensureQueryData below joins the request already in flight.
+    // A cached season is used as it is, as below.
+    if (season != null) {
+      void context.queryClient.ensureQueryData(
+        showSeasonEpisodesQueryOpts(showId, season),
+      );
+    }
     const details = await context.queryClient.ensureQueryData(
       showDetailsQueryOpts(showId),
     );

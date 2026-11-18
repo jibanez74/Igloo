@@ -1,9 +1,11 @@
 import { act, render, screen } from "@testing-library/react";
+import { useQuery } from "@tanstack/react-query";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import ScanProgress from "@/components/settings/ScanProgress";
 import { useMovieScanStatus, useMusicScanStatus, useShowScanStatus } from "@/hooks/useScanStatus";
 import { ALBUMS_PAGINATED_KEY, MOVIES_STATS_KEY, MOVIES_LIBRARY_KEY, MUSIC_STATS_KEY } from "@/lib/constants";
+import { moviesLibraryQueryOpts, moviesStatsQueryOpts } from "@/lib/query-opts";
 import { createTestQueryClient, renderWithQueryClient } from "../helpers/render";
 import {
   movieScanStatus,
@@ -15,6 +17,13 @@ import { jsonResponse, requestURL } from "../helpers/api";
 function ScanView() {
   const query = useMovieScanStatus();
   return <ScanProgress library="movies" status={query.data} unavailable={query.isError} />;
+}
+
+// What a movie library page and its statistics keep mounted while a scan runs.
+function MovieLibraryObservers() {
+  useQuery(moviesLibraryQueryOpts(1));
+  useQuery(moviesStatsQueryOpts());
+  return null;
 }
 
 function BackgroundScanView() {
@@ -201,7 +210,11 @@ describe("music scan progress", () => {
     renderWithQueryClient(<MusicScanView />, { queryClient: client });
     await act(async () => { await vi.advanceTimersByTimeAsync(1); });
     expect(screen.getByRole("status")).toHaveTextContent("Discovering and importing tracks");
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: [ALBUMS_PAGINATED_KEY] });
+    // The report seen first is the baseline: it marks the library stale but
+    // refetches nothing the pages just loaded.
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: [ALBUMS_PAGINATED_KEY], refetchType: "none" });
+    expect(invalidate).not.toHaveBeenCalledWith({ queryKey: [ALBUMS_PAGINATED_KEY] });
+    invalidate.mockClear();
     status = musicScanStatus({ processed: 54, imported: 54, active_files: ["01 Intro.m4a"], catalog_revision: 54 });
     await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
     expect(screen.getByText(/54 of 2267 files processed/)).toBeInTheDocument();
@@ -210,6 +223,7 @@ describe("music scan progress", () => {
     status = musicScanStatus({ state: "completed", phase: "enrichment", processed: 2267, imported: 2267, enriched: 300, catalog_revision: 2567 });
     await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
     expect(screen.getByRole("status")).toHaveTextContent("Music scan completed");
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: [ALBUMS_PAGINATED_KEY] });
     client.clear();
   });
 });
@@ -311,6 +325,47 @@ describe("runs of watcher-detected changes", () => {
     status = movieScanStatus({ run_id: "third-run", scope: "changes", state: "completed", phase: "enrichment", total: 1, processed: 1, unchanged: 1, enriched: 1, catalog_revision: 2 });
     await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: [MOVIES_LIBRARY_KEY] });
+    client.clear();
+  });
+
+  it("only marks stale, without refetching, what the finished scan it finds at load covers", async () => {
+    vi.useFakeTimers();
+    let status = movieScanStatus({ run_id: "startup-scan", state: "completed", phase: "enrichment", processed: 418, imported: 418, catalog_revision: 418 });
+    const library = { error: false, data: { movies: [], total: 0 } };
+    const stats = { error: false, data: { total_movies: 418 } };
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = requestURL(input);
+      if (url === "/api/settings/scan/movies") return jsonResponse({ error: false, data: status });
+      if (url === "/api/movies/stats") return jsonResponse(stats);
+      return jsonResponse(library);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const requests = (path: string) => fetchMock.mock.calls.filter(([input]) => requestURL(input).split("?")[0] === path).length;
+    const client = createTestQueryClient();
+    // A library page and the statistics the loaders filled, both on screen;
+    // the scan may have ended after they loaded.
+    client.setQueryData(moviesLibraryQueryOpts(1).queryKey, library as never);
+    client.setQueryData(moviesStatsQueryOpts().queryKey, stats as never);
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    renderWithQueryClient(<><ScanView /><MovieLibraryObservers /></>, { queryClient: client });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(screen.getByRole("status")).toHaveTextContent("Movie scan completed");
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+
+    // Stale, so its next mount or focus refetches it, but nothing refetched now.
+    expect(client.getQueryState(moviesLibraryQueryOpts(1).queryKey)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(moviesStatsQueryOpts().queryKey)?.isInvalidated).toBe(true);
+    expect(requests("/api/movies/library")).toBe(0);
+    expect(requests("/api/movies/stats")).toBe(0);
+    expect(invalidate).not.toHaveBeenCalledWith({ queryKey: [MOVIES_LIBRARY_KEY] });
+    expect(invalidate).not.toHaveBeenCalledWith({ queryKey: [MOVIES_STATS_KEY] });
+
+    // The next scan is news: what is on screen refetches at once.
+    status = movieScanStatus({ run_id: "next-scan", catalog_revision: 418 });
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: [MOVIES_LIBRARY_KEY] });
+    expect(requests("/api/movies/library")).toBe(1);
+    expect(requests("/api/movies/stats")).toBe(1);
     client.clear();
   });
 

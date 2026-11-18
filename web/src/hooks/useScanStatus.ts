@@ -66,28 +66,56 @@ function useScanStatus<T extends ScanStatusLike & Record<string, unknown>>(
   const status = query.data;
   const revision = status?.catalog_revision ?? 0;
   const statsKey = config.statsKey;
-
-  useEffect(() => {
-    if (revision > 0 && statsKey) {
-      void queryClient.invalidateQueries({ queryKey: [statsKey] });
-    }
-  }, [queryClient, statsKey, revision]);
-
   const phase = status?.phase;
   const state = status?.state;
   const runId = status?.run_id;
   const library = config.library;
   const watcherRun = status?.scope === "changes";
   const settledRevision = watcherRun && state !== "running" ? revision : undefined;
+
+  // The first report sets the baseline. The server keeps the last run's id,
+  // phase and revision after it ends, so refetching on that report would
+  // replay every library query right after the pages loaded them. The client
+  // cannot tell whether the run it describes ended before or after those
+  // loads, so the first report marks the library stale without refetching:
+  // what is on screen refetches at its next mount or window focus, and only
+  // work reported after the baseline refetches at once. A list still loading
+  // when that report lands keeps the answer it is given: its success clears
+  // the mark (as it always did), a window of milliseconds at boot.
+  const seenRevision = useRef<number | null>(null);
+  useEffect(() => {
+    if (status === undefined) return;
+    const previous = seenRevision.current;
+    seenRevision.current = revision;
+    if (revision > 0 && revision !== previous && statsKey) {
+      void queryClient.invalidateQueries(
+        previous === null
+          ? { queryKey: [statsKey], refetchType: "none" }
+          : { queryKey: [statsKey] },
+      );
+    }
+  }, [queryClient, statsKey, revision, status]);
+
+  const seenRun = useRef<string | null>(null);
   const listedRevision = useRef(0);
   useEffect(() => {
+    if (status === undefined) return;
+    const run = `${runId ?? ""}|${phase ?? ""}|${state ?? ""}|${settledRevision ?? ""}`;
+    const first = seenRun.current === null;
+    if (run === seenRun.current) return;
+    seenRun.current = run;
+    if (first) {
+      if (settledRevision !== undefined) listedRevision.current = settledRevision;
+      if (runId) invalidateLibraryQueries(queryClient, library, { refetchType: "none" });
+      return;
+    }
     if (!runId) return;
     if (watcherRun) {
       if (settledRevision === undefined || settledRevision === listedRevision.current) return;
       listedRevision.current = settledRevision;
     }
     invalidateLibraryQueries(queryClient, library);
-  }, [queryClient, library, phase, state, runId, watcherRun, settledRevision]);
+  }, [queryClient, library, phase, state, runId, watcherRun, settledRevision, status]);
 
   return query;
 }

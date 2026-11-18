@@ -16,6 +16,7 @@ import {
   albumDetailsQueryOpts,
   authUserFrom,
   authUserQueryOpts,
+  warmLikedTrackIds,
 } from "@/lib/query-opts";
 import { deleteAlbum } from "@/lib/api";
 import { invalidateLibraryQueries } from "@/lib/library-cache";
@@ -104,6 +105,7 @@ export const Route = createFileRoute("/_auth/music/album/$id")({
     const albumId = parseRouteId(params.id);
     if (albumId == null) return { album: null };
 
+    warmLikedTrackIds(context.queryClient);
     const res = await context.queryClient.ensureQueryData(
       albumDetailsQueryOpts(albumId),
     );

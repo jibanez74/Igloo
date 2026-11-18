@@ -171,9 +171,10 @@ import {
  * Current authenticated user. Both route guards and components read this from
  * the shared AUTH_USER_KEY cache entry.
  *
- * Pass `{ revalidate: true }` in router `beforeLoad` guards so the auth check
- * always hits the network (staleTime 0). Component reads use the default (no
- * arg) and reuse that warmed entry for 60s.
+ * Pass `{ revalidate: true }` where the answer must come from the network
+ * (staleTime 0): the login page, and the shell's guard when it holds no
+ * signed-in user. Everything else, the guard's later navigations included,
+ * reuses the entry while it is fresh (60 s).
  */
 export function authUserQueryOpts(options?: { revalidate?: boolean }) {
   return queryOptions({
@@ -656,6 +657,15 @@ export function likedTrackIdsQueryOpts() {
   });
 }
 
+/**
+ * Starts the liked-ids query beside a page that lists tracks, so each row's
+ * heart is ready when the page paints instead of a round trip later. Nothing
+ * waits on it: a failure leaves the hearts disabled, as before.
+ */
+export function warmLikedTrackIds(queryClient: QueryClient) {
+  void queryClient.prefetchQuery(likedTrackIdsQueryOpts());
+}
+
 export function likedTracksQueryOpts(
   page: number,
   perPage: number = LIKED_TRACKS_PER_PAGE,
@@ -796,6 +806,19 @@ export function moviePlaylistMoviesQueryOpts(
       getMoviePlaylistMovies(playlistId, page, perPage, sort, signal),
     enabled: playlistId > 0,
     staleTime: freshFor(STALE_LIST),
+  });
+}
+
+// ============================================================================
+// People (cast and crew, with their credits in the libraries)
+// ============================================================================
+
+export function personQueryOpts(id: number) {
+  return queryOptions({
+    queryKey: [PERSON_KEY, id],
+    queryFn: ({ signal }) => getPerson(id, signal),
+    enabled: id > 0,
+    staleTime: freshFor(STALE_CATALOG),
   });
 }
 
@@ -991,42 +1014,31 @@ export function watchRoomInviteUsersQueryOpts(enabled: boolean = true) {
 }
 
 // ============================================================================
-// Library scan status. Unlike the queries above these throw on a failure
-// envelope, so a failed poll is a query error rather than cached data.
+// Library scan status. Unlike the queries above these throw a failure envelope
+// (ApiFailureError), so a failed poll is a query error that keeps the last
+// report on screen rather than cached data that replaces it.
 // ============================================================================
 
-const scanStatusQueryOpts = <T extends Record<string, unknown>,>(
+function scanStatusQueryOpts<T extends Record<string, unknown>>(
   key: string,
   fetchStatus: (signal?: AbortSignal) => Promise<ApiResponseType<T>>,
-  unavailableMessage: string,
-) => queryOptions({
-  queryKey: [key],
-  queryFn: async ({ signal }) => {
-    const response = await fetchStatus(signal);
-    if (response.error) {
-      throw new Error(response.message || unavailableMessage);
-    }
-    return response.data;
-  },
-  retry: false,
-});
-
-export type ScanStatusQueryOpts<T extends Record<string, unknown>> = ReturnType<typeof scanStatusQueryOpts<T>>;
-
-export const movieScanStatusQueryOpts = () =>
-  scanStatusQueryOpts(MOVIE_SCAN_STATUS_KEY, getMovieScanStatus, "Movie scan status is unavailable.");
-
-export const musicScanStatusQueryOpts = () =>
-  scanStatusQueryOpts(MUSIC_SCAN_STATUS_KEY, getMusicScanStatus, "Music scan status is unavailable.");
-
-export const showScanStatusQueryOpts = () =>
-  scanStatusQueryOpts(SHOW_SCAN_STATUS_KEY, getShowScanStatus, "TV shows scan status is unavailable.");
-
-export function personQueryOpts(id: number) {
+) {
   return queryOptions({
-    queryKey: [PERSON_KEY, id],
-    queryFn: ({ signal }) => getPerson(id, signal),
-    enabled: id > 0,
-    staleTime: freshFor(STALE_CATALOG),
+    queryKey: [key],
+    queryFn: async ({ signal }) => unwrapApiData(await fetchStatus(signal)),
+    retry: false,
   });
 }
+
+export type ScanStatusQueryOpts<T extends Record<string, unknown>> = ReturnType<
+  typeof scanStatusQueryOpts<T>
+>;
+
+export const movieScanStatusQueryOpts = () =>
+  scanStatusQueryOpts(MOVIE_SCAN_STATUS_KEY, getMovieScanStatus);
+
+export const musicScanStatusQueryOpts = () =>
+  scanStatusQueryOpts(MUSIC_SCAN_STATUS_KEY, getMusicScanStatus);
+
+export const showScanStatusQueryOpts = () =>
+  scanStatusQueryOpts(SHOW_SCAN_STATUS_KEY, getShowScanStatus);

@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSessionMutation } from "@/hooks/useSessionMutation";
+import { restoreOptimistic, writeOptimistically } from "@/lib/optimistic";
 import { Clapperboard } from "lucide-react";
 import { useId, useState } from "react";
 
@@ -78,23 +79,16 @@ export default function TrailerPreferencesCard() {
   const sourceId = useId();
   const sourceHintId = useId();
 
-  // Undoes the optimistic write when the save is refused or fails.
-  const restorePrefs = (previousData: typeof data) => {
-    if (previousData) queryClient.setQueryData(prefsKey, previousData);
-  };
-
   const saveMutation = useSessionMutation({
     mutationFn: ({ prefs }: SaveVariables) => updateTrailerPreferences(prefs),
-    onMutate: async ({ prefs }, _context, session) => {
-      await queryClient.cancelQueries({ queryKey: prefsKey });
-      if (session.ended()) return undefined;
-      const previousData = queryClient.getQueryData(prefsKey);
-      queryClient.setQueryData(prefsKey, { error: false, data: prefs });
-      return { previousData };
-    },
-    onSuccess: (res, variables, context) => {
+    onMutate: ({ prefs }, _context, session) =>
+      writeOptimistically(queryClient, prefsKey, session, () => ({
+        error: false as const,
+        data: prefs,
+      })),
+    onSuccess: (res, variables, snapshot) => {
       if (res.error) {
-        restorePrefs(context?.previousData);
+        restoreOptimistic(queryClient, prefsKey, snapshot);
         showActionFailed("save trailer preferences", res);
         return;
       }
@@ -106,8 +100,8 @@ export default function TrailerPreferencesCard() {
       setAnnouncement(`${variables.announcement} ${ACCOUNT_SAVED_SUFFIX}`);
       setAnnouncementKey((current) => current + 1);
     },
-    onError: (_error, _variables, context) => {
-      restorePrefs(context?.previousData);
+    onError: (_error, _variables, snapshot) => {
+      restoreOptimistic(queryClient, prefsKey, snapshot);
       showActionFailed(
         "save trailer preferences",
         "An unexpected error occurred",

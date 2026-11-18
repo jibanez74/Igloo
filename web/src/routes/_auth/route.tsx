@@ -1,18 +1,20 @@
 import { useQuery } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import { useMovieScanStatus, useMusicScanStatus, useShowScanStatus } from "@/hooks/useScanStatus";
 import { redirect, Outlet, createFileRoute, useLocation } from "@tanstack/react-router";
 import { authUserQueryOpts } from "@/lib/query-opts";
+import { STALE_1M } from "@/lib/query-client";
+import type { ApiResponseType, AuthUser } from "@/types";
 import { ApiFailureError } from "@/lib/is-api-failure";
 import { useSignOutOnSessionExpiry } from "@/hooks/useEndSession";
+import { isSessionEnding } from "@/lib/session";
 import AppShell from "@/components/app/AppShell";
 import { AudioPlayerProvider } from "@/context/AudioPlayerContext";
 import AppLoadingScreen, { AppLoadError } from "@/components/app/AppLoadingScreen";
 
 export const Route = createFileRoute("/_auth")({
   beforeLoad: async ({ context, location }) => {
-    const res = await context.queryClient.fetchQuery(
-      authUserQueryOpts({ revalidate: true }),
-    );
+    const res = await signedInUser(context.queryClient);
 
     if (!res.error) return;
 
@@ -41,6 +43,33 @@ export const Route = createFileRoute("/_auth")({
   codeSplitGroupings: [["component"]],
   component: AuthLayout,
 });
+
+/**
+ * The user this navigation runs as. A signed-in user checked within the last
+ * minute (STALE_1M) is answered from the cache, so a navigation or hover
+ * preload does not wait on the session before its own loaders start. Past
+ * that, or with no signed-in entry (boot, a failure, an invalidated entry),
+ * the guard waits for the server: with the server down that check is what
+ * fails first and shows AppLoadError, before a route chunk that cannot load
+ * makes the router reload onto the browser's offline page. Within the minute
+ * that can still happen: a server lost then, and a section whose code has not
+ * loaded yet, reload onto the offline page. A session that ends within the
+ * minute is caught by the first request that hears its 401
+ * (onSessionExpired). A session that is ending always asks: if the way to
+ * /login is superseded, the guard must not keep the shell on the cached user
+ * while the expiry handler ignores 401s.
+ */
+async function signedInUser(queryClient: QueryClient) {
+  const options = authUserQueryOpts();
+  const query = queryClient
+    .getQueryCache()
+    .find<ApiResponseType<{ user: AuthUser }>>({ queryKey: options.queryKey, exact: true });
+  const cached = query?.state.data;
+  if (cached?.error === false && !query?.isStaleByTime(STALE_1M) && !isSessionEnding()) {
+    return cached;
+  }
+  return queryClient.fetchQuery(authUserQueryOpts({ revalidate: true }));
+}
 
 // The music player lives with the shell, not above the router: the login
 // page never loads it, and signing out (which leaves the shell) takes it down
