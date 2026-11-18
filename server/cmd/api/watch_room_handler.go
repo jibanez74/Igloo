@@ -186,6 +186,11 @@ func (app *Application) GetWatchRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	app.writeWatchRoomDetail(w, r, room, userID)
+}
+
+// writeWatchRoomDetail answers with the room as userID, a member, sees it.
+func (app *Application) writeWatchRoomDetail(w http.ResponseWriter, r *http.Request, room database.WatchRoom, userID int64) {
 	roomID := room.ID
 
 	movie, err := app.Queries.GetMovieByID(r.Context(), room.MovieID)
@@ -622,7 +627,30 @@ func (app *Application) UpdateWatchRoomMembers(w http.ResponseWriter, r *http.Re
 		app.announceWatchRoomMembers(r.Context(), roomID)
 	}
 
-	app.GetWatchRoom(w, r)
+	app.writeUpdatedWatchRoom(w, r, roomID, userID)
+}
+
+// writeUpdatedWatchRoom answers a member edit with the room as it now stands.
+// The room can be deleted between the edit's commit and this read; that is
+// the documented 404 for an unknown room, not the 403 GetWatchRoom gives a
+// room the caller cannot see. The read skips the membership cache: the owner
+// just wrote, and a cached entry could outlive a deletion by a moment.
+func (app *Application) writeUpdatedWatchRoom(w http.ResponseWriter, r *http.Request, roomID, userID int64) {
+	room, err := app.Queries.GetWatchRoomForMember(r.Context(), database.GetWatchRoomForMemberParams{
+		ID:     roomID,
+		UserID: userID,
+	})
+	if errors.Is(err, sql.ErrNoRows) {
+		helpers.ErrorJSON(w, errors.New("room not found"), http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		app.serverError(w, err, "failed to reload watch room after member update", internalServerErrorMessage,
+			"room_id", roomID)
+		return
+	}
+
+	app.writeWatchRoomDetail(w, r, room, userID)
 }
 
 // replaceWatchRoomInvitees makes the room's members exactly the owner plus

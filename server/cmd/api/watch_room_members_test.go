@@ -690,6 +690,32 @@ func TestReplaceWatchRoomInvitees_RoomDeletedAnswersDeleted(t *testing.T) {
 	}
 }
 
+// A room deleted after the member edit commits, before the response reads it
+// back, also answers 404 rather than the 403 of a room the caller cannot see.
+func TestWriteUpdatedWatchRoom_RoomDeletedAfterCommitAnswers404(t *testing.T) {
+	app := setupSessionTestApp(t)
+	ownerID, movieID := createTestUserAndMovie(t, app)
+	room := createTestRoom(t, app, ownerID, movieID)
+	addMembersToRoom(t, app, room.ID, ownerID)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/", nil)
+	app.writeUpdatedWatchRoom(w, req, room.ID, ownerID)
+	if w.Code != http.StatusOK {
+		t.Fatalf("live room status = %d, want 200: %s", w.Code, w.Body)
+	}
+
+	err := app.deleteWatchRoom(context.Background(), room.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w = httptest.NewRecorder()
+	app.writeUpdatedWatchRoom(w, req, room.ID, ownerID)
+	if w.Code != http.StatusNotFound || !strings.Contains(w.Body.String(), "room not found") {
+		t.Fatalf("deleted room = %d %s, want 404 room not found", w.Code, w.Body)
+	}
+}
+
 // A revoked socket's last word is room_access_revoked: the member list that
 // follows goes only to the sockets still open.
 func TestWatchRoomHub_RevokedClientsMissLaterBroadcasts(t *testing.T) {
