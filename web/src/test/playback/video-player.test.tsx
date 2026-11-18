@@ -68,6 +68,7 @@ vi.mock("hls.js/light", () => {
     static ErrorDetails = {
       FRAG_LOAD_ERROR: "fragLoadError",
       MANIFEST_LOAD_ERROR: "manifestLoadError",
+      MANIFEST_LOAD_TIMEOUT: "manifestLoadTimeOut",
       LEVEL_LOAD_ERROR: "levelLoadError",
     };
 
@@ -1144,6 +1145,31 @@ describe("VideoPlayer hls.js error routing", () => {
 
     expect(hls.loadSourceCalls).toBe(initialLoads + 1);
     expect(hls.startLoadCalls).toBe(0);
+  });
+
+  // A timeout carries no response, like a dropped connection, but has its
+  // own detail. startLoad() without a manifest loads nothing, so retrying
+  // that way ran the backoff out and showed the error screen.
+  it("fetches the manifest again when the manifest request timed out", async () => {
+    vi.useFakeTimers();
+    const onError = vi.fn();
+    const hls = await renderHlsPlayer({ onError });
+    const initialLoads = hls.loadSourceCalls;
+
+    act(() => {
+      hls.trigger("hlsError", {
+        type: "networkError",
+        details: "manifestLoadTimeOut",
+        fatal: true,
+      });
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(HLS_NETWORK_RECOVERY_DELAYS_MS[0]);
+    });
+
+    expect(hls.loadSourceCalls).toBe(initialLoads + 1);
+    expect(hls.startLoadCalls).toBe(0);
+    expect(onError).not.toHaveBeenCalled();
   });
 
   it("cancels a scheduled network retry when the instance is replaced", async () => {

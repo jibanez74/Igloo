@@ -654,6 +654,12 @@ export default function VideoPlayer({
           Hls.ErrorDetails.MANIFEST_LOAD_ERROR,
           Hls.ErrorDetails.LEVEL_LOAD_ERROR,
         ];
+        // Failures that leave no manifest at all. A level playlist that
+        // fails can be retried by startLoad(), which reloads it; these cannot.
+        const manifestDetails: ErrorData["details"][] = [
+          Hls.ErrorDetails.MANIFEST_LOAD_ERROR,
+          Hls.ErrorDetails.MANIFEST_LOAD_TIMEOUT,
+        ];
 
         let mediaRecoveryAttempted = false;
         let networkRecoveryAttempts = 0;
@@ -802,8 +808,9 @@ export default function VideoPlayer({
             window.clearTimeout(networkRecoveryTimer);
             networkRecoveryTimer = window.setTimeout(() => {
               // Nothing is loaded without a manifest, so startLoad() has
-              // nothing to resume; fetching the source again does.
-              if (data.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR) {
+              // nothing to resume; fetching the source again does. A timed
+              // out manifest is no different from a dropped one.
+              if (manifestDetails.includes(data.details)) {
                 hls.loadSource(src);
               } else {
                 restartLoad();
