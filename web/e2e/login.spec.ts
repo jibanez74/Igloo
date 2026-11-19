@@ -87,6 +87,10 @@ async function expectLoginControls(page: Page) {
 }
 
 async function submitLogin(page: Page, email: string, password: string) {
+  // After a sign-out the address changes a moment before the page does:
+  // until the sign-in form is up, the account page's own email fields still
+  // answer to "Email".
+  await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password", { exact: true }).fill(password);
 
@@ -104,11 +108,14 @@ async function submitLogin(page: Page, email: string, password: string) {
 test.describe("Login screen", () => {
   test.use({ browserIssueOptions: loginIssueRules });
 
-  test("renders accessibly and blocks empty submissions before the API call", async ({
+  // What needs a real browser: where focus lands on load, the tab order, and
+  // that the browser's own validation stays out of the way. The messages,
+  // the password toggle and the field attributes are unit tests
+  // (src/test/app/login-route.test.tsx).
+  test("focuses the email, tabs through the form, and validates an empty one itself", async ({
     page,
     context,
   }) => {
-    const env = readE2EEnv();
     let loginRequests = 0;
 
     page.on("request", request => {
@@ -121,31 +128,12 @@ test.describe("Login screen", () => {
     });
 
     await page.goto("/login");
-    await expect(page).toHaveTitle("Sign In - Igloo");
-    await expect(page.getByText("Welcome to Igloo")).toBeVisible();
-    await expect(
-      page.getByText("Sign in to access your private media library."),
-    ).toBeVisible();
     await expectLoginControls(page);
 
     const email = page.getByLabel("Email");
     const password = page.getByLabel("Password", { exact: true });
 
     await expect(email).toBeFocused();
-    await expect(email).toHaveAttribute("autocomplete", "username");
-    await expect(password).toHaveAttribute("type", "password");
-
-    await password.fill(env.password);
-    await page.getByRole("button", { name: "Show password" }).click();
-    await expect(password).toHaveAttribute("type", "text");
-    await expect(
-      page.getByRole("button", { name: "Hide password" }),
-    ).toBeVisible();
-
-    await page.getByRole("button", { name: "Hide password" }).click();
-    await expect(password).toHaveAttribute("type", "password");
-
-    await email.focus();
     await page.keyboard.press("Tab");
     await expect(password).toBeFocused();
     await page.keyboard.press("Tab");
@@ -155,29 +143,14 @@ test.describe("Login screen", () => {
     await page.keyboard.press("Tab");
     await expect(page.getByRole("button", { name: "Sign in" })).toBeFocused();
 
-    await email.fill("");
-    await password.fill("");
-    await page.getByRole("button", { name: "Sign in" }).click();
+    await page.keyboard.press("Enter");
 
-    await expect(page).toHaveURL(appPath("/login"));
-    // Inline, app-styled validation rather than the browser's bubble (§3.7).
+    // Inline, app-styled validation rather than the browser's bubble (§3.7):
+    // a form the browser validated would never reach the app's handler.
     await expect(page.getByText("Email is required.")).toBeVisible();
     await expect(page.getByText("Password is required.")).toBeVisible();
-    await expect(email).toHaveAttribute("aria-invalid", "true");
-    await expect(email).toHaveAttribute("aria-describedby", "email-error");
-    await expect(password).toHaveAttribute("aria-invalid", "true");
     await expect(email).toBeFocused();
-
-    await email.fill("not-an-email");
-    await password.fill("x");
-    await page.getByRole("button", { name: "Sign in" }).click();
-    await expect(page.getByText("Enter a valid email address.")).toBeVisible();
-    await expect(page.getByText("Password is required.")).toHaveCount(0);
-
-    // Typing clears the field's error.
-    await email.fill("someone@example.com");
-    await expect(email).not.toHaveAttribute("aria-invalid", "true");
-    await expect(page.getByText("Enter a valid email address.")).toHaveCount(0);
+    await expect(page).toHaveURL(appPath("/login"));
 
     await expectUnauthenticated(context);
     expect(loginRequests, "an invalid form should not submit").toBe(0);
@@ -264,7 +237,14 @@ test.describe("Login screen", () => {
     const logoutBody = await readJSON<unknown>(logoutResponse);
     expect(logoutBody.error, logoutBody.message).toBe(false);
 
+    // Logout itself leaves for the sign-in page, which then leads Home (the
+    // search's default). A shell that stayed put would get there anyway,
+    // through the 401s of its next requests, but as an expired session: back
+    // to this page, with a notice.
     await expect(page).toHaveURL(appPath("/login"));
+    await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
+    expect(new URL(page.url()).searchParams.get("redirect")).toBe("/");
+    await expect(page.getByText("You've been signed out.")).toHaveCount(0);
     await expectUnauthenticated(context);
 
     await page.goto("/settings/account");
@@ -322,10 +302,6 @@ test.describe("Login screen", () => {
     await expect
       .poll(() => new URL(page.url()).searchParams.get("redirect"))
       .toBe("/settings/account");
-    // The address changes a moment before the page does: until the sign-in
-    // form is up, the account page's own email fields still answer to "Email".
-    await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
-
     await submitLogin(page, env.email, env.password);
     await expect(page).toHaveURL(appPath("/settings/account"));
     await expect(page.getByText("Profile information")).toBeVisible();
