@@ -1,5 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  notifyManager,
+  queryOptions,
+  skipToken,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useSessionMutation } from "@/hooks/useSessionMutation";
 import { restoreOptimistic, writeOptimistically } from "@/lib/optimistic";
 import { useId, useRef, useState, useTransition } from "react";
@@ -75,9 +81,32 @@ function formFromSettings(
   };
 }
 
-function fieldFromSettingsError(
-  message: string,
-): "static_dir" | "transcode_dir" | null {
+type DirectoryField = "static_dir" | "transcode_dir";
+
+/**
+ * A save the server refused. The form that sent it may have unmounted while
+ * it was pending (a tab round trip), and a form mounted since holds the
+ * optimistic copy as its saved state, so the refusal is recorded where
+ * whichever form is mounted when it lands can see it.
+ */
+type RefusedSave = {
+  id: number;
+  message: string;
+  field: DirectoryField | null;
+  /** Whether the rollback changed the cached settings at all. */
+  rollsBack: boolean;
+};
+
+let refusedSaves = 0;
+
+const refusedSaveQueryOpts = () =>
+  queryOptions<RefusedSave>({
+    queryKey: ["general-settings-refused-save"],
+    queryFn: skipToken,
+    staleTime: Infinity,
+  });
+
+function fieldFromSettingsError(message: string): DirectoryField | null {
   const normalized = message.toLowerCase();
   if (normalized.includes("static directory")) return "static_dir";
   if (normalized.includes("transcode directory")) return "transcode_dir";
@@ -152,8 +181,13 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   const [validationField, setValidationField] = useState<string | null>(null);
   const [confirmingImageRemoval, setConfirmingImageRemoval] = useState(false);
   // A refused save rolls the cache back to what it held before. The form
-  // then matches the optimistic copy it was synced to, so it would read as
-  // clean and follow the rollback, losing the edits the server refused.
+  // matches the optimistic copy it is synced to, so it would read as clean
+  // and follow the rollback, losing the edits the server refused. A refusal
+  // recorded before this form mounted is not this form's to handle.
+  const { data: refusedSave } = useQuery(refusedSaveQueryOpts());
+  const [handledRefusal, setHandledRefusal] = useState(
+    () => refusedSave?.id ?? 0,
+  );
   const [keepEditsThroughRollback, setKeepEditsThroughRollback] =
     useState(false);
   // Closing the confirmation returns focus to what submitted the form, or,
@@ -164,7 +198,19 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
 
   const isDirty = !formsMatchSettings(form, syncedSettings);
 
-  if (settings !== syncedSettings) {
+  if (refusedSave && refusedSave.id !== handledRefusal) {
+    setHandledRefusal(refusedSave.id);
+    // The server names the directory it refused; that field is marked as
+    // the form's own validation would mark it.
+    if (refusedSave.field) {
+      setValidationMessage(refusedSave.message);
+      setValidationField(refusedSave.field);
+    }
+    // The rollback lands with the refusal or after it, never before (they
+    // are written in one notification), and the sync below adopts it
+    // without following it.
+    if (refusedSave.rollsBack) setKeepEditsThroughRollback(true);
+  } else if (settings !== syncedSettings) {
     const formIsClean = !isDirty;
     setSyncedSettings(settings);
     if (keepEditsThroughRollback) {
@@ -177,6 +223,24 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   }
 
   const settingsKey = generalSettingsQueryOpts().queryKey;
+  // Rolls the optimistic copy back and records the refusal, both in one
+  // notification so the mounted form sees them in the same render.
+  const refuse = (
+    message: string,
+    snapshot: Parameters<typeof restoreOptimistic>[2],
+  ) => {
+    notifyManager.batch(() => {
+      const before = queryClient.getQueryData(settingsKey);
+      restoreOptimistic(queryClient, settingsKey, snapshot);
+      refusedSaves += 1;
+      queryClient.setQueryData(refusedSaveQueryOpts().queryKey, {
+        id: refusedSaves,
+        message,
+        field: fieldFromSettingsError(message),
+        rollsBack: queryClient.getQueryData(settingsKey) !== before,
+      });
+    });
+  };
   const updateMutation = useSessionMutation({
     mutationFn: updateGeneralSettings,
     onMutate: (nextSettings, _context, session) =>
@@ -207,16 +271,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
       ),
     onSuccess: (res, _nextSettings, snapshot) => {
       if (res.error) {
-        setKeepEditsThroughRollback(true);
-        restoreOptimistic(queryClient, settingsKey, snapshot);
-        // The server names the directory it refused; that field is marked
-        // as the form's own validation would mark it.
-        const message = apiErrorMessage(res, "Failed to save settings.");
-        const field = fieldFromSettingsError(message);
-        if (field) {
-          setValidationMessage(message);
-          setValidationField(field);
-        }
+        refuse(apiErrorMessage(res, "Failed to save settings."), snapshot);
         showActionFailed("save settings", res);
         return;
       }
@@ -257,7 +312,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
       showSuccess("Settings saved");
     },
     onError: (_error, _nextSettings, snapshot) => {
-      restoreOptimistic(queryClient, settingsKey, snapshot);
+      refuse("An unexpected error occurred.", snapshot);
       showActionFailed("save settings", "An unexpected error occurred");
     },
   });

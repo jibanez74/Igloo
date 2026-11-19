@@ -359,16 +359,19 @@ async function isReadableDirectory(path: string) {
   }
 }
 
-// helpers.GetOrCreateDir creates a missing directory. The mock creates
-// nothing, so it accepts a path whose nearest existing ancestor is a
-// directory, the case where creating it would succeed short of permissions.
+// helpers.GetOrCreateDir creates a directory that does not exist and checks
+// any other path with ValidateDir. The mock creates nothing, so a missing
+// path passes when its nearest existing ancestor is a directory, the case
+// where creating it would succeed short of permissions.
 async function isCreatableDirectory(path: string): Promise<boolean> {
   try {
-    return (await stat(path)).isDirectory();
-  } catch {
+    await stat(path);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") return false;
     const parent = dirname(path);
     return parent !== path && isCreatableDirectory(parent);
   }
+  return isReadableDirectory(path);
 }
 
 function sendPlaceholderImage(response: ServerResponse) {
@@ -988,15 +991,16 @@ async function handleSettingsRoutes(
       enable_apple_lookups: booleanField(body, "enable_apple_lookups", current.enable_apple_lookups),
       enable_watcher: booleanField(body, "enable_watcher", current.enable_watcher),
       download_images: booleanField(body, "download_images", current.download_images),
-      static_dir: stringField(body, "static_dir", current.static_dir),
-      transcode_dir: stringField(body, "transcode_dir", current.transcode_dir),
+      // Trimmed, as the Go request's values() does.
+      static_dir: stringField(body, "static_dir", current.static_dir).trim(),
+      transcode_dir: stringField(body, "transcode_dir", current.transcode_dir).trim(),
     };
     // UpdateGeneralSettings' directory rules, in its order.
     for (const [field, name] of [
       ["static_dir", "static"],
       ["transcode_dir", "transcode"],
     ] as const) {
-      if (next[field].trim() === "") {
+      if (next[field] === "") {
         sendFailure(response, 400, `${name} directory is required`);
         return true;
       }
@@ -1005,7 +1009,7 @@ async function handleSettingsRoutes(
       ["static_dir", "static"],
       ["transcode_dir", "transcode"],
     ] as const) {
-      if (!(await isCreatableDirectory(next[field].trim()))) {
+      if (!(await isCreatableDirectory(next[field]))) {
         sendFailure(response, 400, `${name} directory is not accessible`);
         return true;
       }

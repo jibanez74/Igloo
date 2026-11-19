@@ -77,8 +77,10 @@ export const signedOutIssueRules: TrackBrowserIssuesOptions = {
 export type ExpectedRefusal = { method: string; path: string; status: number };
 
 /**
- * Drops each refusal a test drives on purpose, and the browser's console
- * echo of it, and nothing else: another status or route still fails.
+ * Drops the refusals a test drives on purpose, and the browser's console
+ * echo of them, and nothing else: another status, method or route still
+ * fails. It does not count them; a test that cares how many were sent
+ * asserts that itself.
  */
 export function expectedRefusalRules(
   ...refusals: ExpectedRefusal[]
