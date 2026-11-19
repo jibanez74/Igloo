@@ -89,7 +89,9 @@ test.describe("Notifications", () => {
         await fileRequest(requester, "movie_request", movieMessage);
         await fileRequest(requester, "album_request", albumMessage);
 
-        await page.goto("/");
+        // Any signed-in page has the bell; Home would also ask for theaters
+        // data, which a real instance without a TMDB key refuses.
+        await page.goto("/settings/account");
         const bell = page.getByRole("button", { name: /^Notifications/ });
         await expect(bell).toHaveAccessibleName(bellLabel(before + 2));
 
@@ -148,7 +150,7 @@ test.describe("Notifications", () => {
         await fileRequest(requester, "track_request", "Please add Low Light");
         await fileRequest(requester, "other", "The subtitles on Frost Harbor are off");
 
-        await page.goto("/");
+        await page.goto("/settings/account");
         const bell = page.getByRole("button", { name: /^Notifications/ });
         await expect(bell).toHaveAccessibleName(bellLabel(2));
 
