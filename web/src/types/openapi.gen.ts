@@ -436,7 +436,7 @@ export interface paths {
         };
         /**
          * Serve a static asset
-         * @description Serves files from the configured static directory: uploaded avatars, and the library artwork downloaded while download_images is on (movies/, people/, shows/, networks/, albums/ and musicians/). A downloaded image's URL carries a ?v= version, a hash of the image's source and size, since responses are cached for a year; a copy downloaded again from the same source at the same size keeps its URL, so a cache may serve the earlier bytes. Content-Type comes from the file extension using the host MIME registry, falling back to application/octet-stream. Successful responses set Cache-Control: public, max-age=31536000 and X-Content-Type-Options: nosniff. Last-Modified supports date revalidation; this endpoint does not emit ETag.
+         * @description Serves files from the configured static directory: uploaded avatars, and the library artwork downloaded while download_images is on (movies/, people/, shows/, networks/, albums/ and musicians/). A downloaded image's URL carries a ?v= version, a hash of the image's source and size, since responses are cached for a year; a copy downloaded again from the same source at the same size keeps its URL, so a cache may serve the earlier bytes. Content-Type comes from the file extension using the host MIME registry, falling back to application/octet-stream. Successful responses set Cache-Control: private, max-age=31536000, immutable (the route needs authentication, so shared caches must not store it) and X-Content-Type-Options: nosniff, and carry no Vary header: the bytes are the same for every reader, so they do not vary on the session cookie as other API responses do. Last-Modified supports date revalidation; this endpoint does not emit ETag.
          */
         get: operations["serveStaticFiles"];
         put?: never;
@@ -7328,7 +7328,7 @@ export interface operations {
                     /** @description Representation length in bytes (including multipart framing for multiple ranges). */
                     "Content-Length"?: number;
                     /** @description Static asset cache policy. */
-                    "Cache-Control"?: "public, max-age=31536000";
+                    "Cache-Control"?: "private, max-age=31536000, immutable";
                     /** @description Disable MIME sniffing. */
                     "X-Content-Type-Options"?: "nosniff";
                     [name: string]: unknown;
@@ -7349,7 +7349,7 @@ export interface operations {
                     /** @description Representation length in bytes (including multipart framing for multiple ranges). */
                     "Content-Length"?: number;
                     /** @description Static asset cache policy. */
-                    "Cache-Control"?: "public, max-age=31536000";
+                    "Cache-Control"?: "private, max-age=31536000, immutable";
                     /** @description Disable MIME sniffing. */
                     "X-Content-Type-Options"?: "nosniff";
                     /** @description Present only for a single range. */

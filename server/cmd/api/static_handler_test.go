@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -359,6 +360,75 @@ func TestServeStaticFiles_RejectsTraversalDirectoriesAndMissingFiles(t *testing.
 			}
 			if !strings.Contains(recorder.Body.String(), tt.wantBody) {
 				t.Fatalf("body = %q, want it to contain %q", recorder.Body.String(), tt.wantBody)
+			}
+		})
+	}
+}
+
+// Static files are the same for every reader, so they cache privately for a
+// year without revalidation and without the session's Vary: Cookie, which made
+// a browser drop every cached image at each sign-in. Ranges answer the same.
+func TestServeStaticFiles_CachesPrivatelyWithoutVaryingOnTheCookie(t *testing.T) {
+	app := setupTestApp(t)
+	viewer := createTestUser(t, app, "Viewer", "viewer@example.com", false)
+	handler := authenticatedRouter(t, app, viewer.ID)
+
+	staticDir := app.CurrentSettings().StaticDir
+	if err := os.MkdirAll(filepath.Join(staticDir, "posters"), 0o755); err != nil {
+		t.Fatalf("create static subdirectory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(staticDir, "posters", "one.png"), []byte("png bytes"), 0o644); err != nil {
+		t.Fatalf("write static file: %v", err)
+	}
+
+	for _, tt := range []struct {
+		name       string
+		rangeValue string
+		wantStatus int
+	}{
+		{"whole file", "", http.StatusOK},
+		{"range", "bytes=0-2", http.StatusPartialContent},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/api/static/posters/one.png?v=ab12", nil)
+			if tt.rangeValue != "" {
+				req.Header.Set("Range", tt.rangeValue)
+			}
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, req)
+			if recorder.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d: %s", recorder.Code, tt.wantStatus, recorder.Body.String())
+			}
+			if got := recorder.Header().Values("Cache-Control"); len(got) != 1 || got[0] != "private, max-age=31536000, immutable" {
+				t.Fatalf("Cache-Control = %q, want private, max-age=31536000, immutable", got)
+			}
+			if got := recorder.Header().Values("Vary"); len(got) != 0 {
+				t.Fatalf("Vary = %q, want none", got)
+			}
+		})
+	}
+}
+
+func TestRemoveVaryToken(t *testing.T) {
+	tests := []struct {
+		name string
+		vary []string
+		want []string
+	}{
+		{"only the token", []string{"Cookie"}, nil},
+		{"keeps the others", []string{"Cookie", "Accept-Encoding"}, []string{"Accept-Encoding"}},
+		{"one comma list", []string{"Accept-Encoding, cookie, Origin"}, []string{"Accept-Encoding, Origin"}},
+		{"absent", nil, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			header := http.Header{}
+			for _, value := range tt.vary {
+				header.Add("Vary", value)
+			}
+			removeVaryToken(header, "Cookie")
+			if got := header.Values("Vary"); !slices.Equal(got, tt.want) {
+				t.Fatalf("Vary = %q, want %q", got, tt.want)
 			}
 		})
 	}
