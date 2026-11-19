@@ -1,6 +1,5 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./e2e-test";
 
-import { trackBrowserIssues } from "./e2e-browser-issues";
 import { loginPageViaApi, logoutViaApi } from "./e2e-auth";
 import { expectPageHasNoHorizontalScroll, VIEWPORTS } from "./e2e-layout";
 import { deleteUsersByEmailPrefix, fetchAdminUsers } from "./e2e-users";
@@ -17,7 +16,6 @@ test.describe("Users settings", () => {
     const editedName = `Playwright Users Settings Edited ${stamp}`;
     const editedEmail = `${prefix}-edited@example.com`;
     const resetPassword = `ResetPass${stamp}!`;
-    const tracker = trackBrowserIssues(page);
     const userList = page.getByRole("list", { name: "User list" });
     let createPostCount = 0;
     let resetPasswordPutCount = 0;
@@ -151,7 +149,5 @@ test.describe("Users settings", () => {
       await loginPageViaApi(page);
       await deleteUsersByEmailPrefix(page.context().request, prefix);
     }
-
-    tracker.assertClean();
   });
 });

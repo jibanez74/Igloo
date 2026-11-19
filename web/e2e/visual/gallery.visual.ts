@@ -1,5 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
-import { trackBrowserIssues } from "../e2e-browser-issues";
+import { expect, test } from "../e2e-test";
+import type { Page } from "@playwright/test";
 import {
   expectScreenshot,
   settle,
@@ -72,14 +72,11 @@ for (const theme of THEMES) {
     // section that grew would redraw every baseline below it.
     for (const section of SECTIONS) {
       test(`${section} section`, async ({ page }) => {
-        const tracker = trackBrowserIssues(page);
         await openGallery(page, theme, `?section=${section}`);
 
         const sections = page.locator("[data-gallery]");
         await expect(sections).toHaveCount(1);
         await expectScreenshot(sections, `${section}-${theme}.png`);
-
-        tracker.assertClean();
       });
     }
 
@@ -138,13 +135,10 @@ for (const theme of THEMES) {
 
     for (const [name, role] of OVERLAYS) {
       test(`${name} open`, async ({ page }) => {
-        const tracker = trackBrowserIssues(page);
         await openGallery(page, theme, `?open=${name}`);
 
         await expect(page.getByRole(role)).toBeVisible();
         await expectScreenshot(page, `overlay-${name}-${theme}.png`);
-
-        tracker.assertClean();
       });
     }
   });

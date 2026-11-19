@@ -108,16 +108,16 @@ export async function fakeWatchRoomMedia(page: Page) {
     });
     Object.defineProperty(HTMLMediaElement.prototype, "duration", {
       configurable: true,
-      get() {
+      get(this: HTMLMediaElement) {
         return stateFor(this).duration;
       },
     });
     Object.defineProperty(HTMLMediaElement.prototype, "currentTime", {
       configurable: true,
-      get() {
+      get(this: HTMLMediaElement) {
         return stateFor(this).currentTime;
       },
-      set(value: number) {
+      set(this: HTMLMediaElement, value: number) {
         const state = stateFor(this);
         state.currentTime = Math.max(0, Number(value) || 0);
         this.dispatchEvent(new Event("timeupdate"));
@@ -125,25 +125,26 @@ export async function fakeWatchRoomMedia(page: Page) {
     });
     Object.defineProperty(HTMLMediaElement.prototype, "paused", {
       configurable: true,
-      get() {
+      get(this: HTMLMediaElement) {
         return stateFor(this).paused;
       },
     });
     Object.defineProperty(HTMLMediaElement.prototype, "src", {
       configurable: true,
-      get() {
+      get(this: HTMLMediaElement) {
         return stateFor(this).src;
       },
-      set(value: string) {
+      set(this: HTMLMediaElement, value: string) {
         stateFor(this).src = String(value);
         dispatchMediaReady(this);
       },
     });
 
-    HTMLMediaElement.prototype.play = async function play() {
+    HTMLMediaElement.prototype.play = function play() {
       const state = stateFor(this);
       state.paused = false;
       this.dispatchEvent(new Event("play"));
+      return Promise.resolve();
     };
     HTMLMediaElement.prototype.pause = function pause() {
       const state = stateFor(this);
@@ -164,11 +165,25 @@ export async function fakeWatchRoomMedia(page: Page) {
   });
 }
 
-
 export async function videoCurrentTime(page: Page) {
   return page.locator("video").evaluate(video => {
     return video instanceof HTMLVideoElement ? video.currentTime : 0;
   });
+}
+
+/** The room's own transport controls, named apart from the movie player's. */
+export function roomPlayButton(page: Page) {
+  return page.getByRole("button", { name: "Play playback" });
+}
+
+export function roomPauseButton(page: Page) {
+  return page.getByRole("button", { name: "Pause playback" });
+}
+
+/** The room socket is connected and counts `connected` viewers. */
+export async function expectLive(page: Page, connected: number, timeout?: number) {
+  await expect(page.getByText("Realtime sync connected")).toBeVisible({ timeout });
+  await expect(page.getByText(`${connected} connected now`)).toBeVisible({ timeout });
 }
 
 export async function expectWatchRoomChrome(page: Page) {
@@ -177,7 +192,7 @@ export async function expectWatchRoomChrome(page: Page) {
       name: `Rewind ${MOVIE_SEEK_STEP_SEC} seconds`,
     }),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Play playback" })).toBeVisible();
+  await expect(roomPlayButton(page)).toBeVisible();
   await expect(
     page.getByRole("button", {
       name: `Fast-forward ${MOVIE_SEEK_STEP_SEC} seconds`,

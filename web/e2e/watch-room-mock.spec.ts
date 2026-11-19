@@ -1,14 +1,18 @@
-import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
+import { expect, test, type BrowserIssues } from "./e2e-test";
+import type { TrackBrowserIssuesOptions } from "./e2e-browser-issues";
+import type { Browser, BrowserContext, Page } from "@playwright/test";
 
 import { MOVIE_SEEK_STEP_SEC } from "../src/lib/constants";
 import { loginViaApi } from "./e2e-auth";
-import { trackBrowserIssues } from "./e2e-browser-issues";
 import { readE2EEnv, requireMockApi, type Credentials } from "./e2e-env";
 import { MOCK_MOVIE_ID } from "./fixtures/movies";
 import {
   createGuest,
   createWatchRoom,
+  expectLive,
   fakeWatchRoomMedia,
+  roomPauseButton,
+  roomPlayButton,
   videoCurrentTime,
   type E2EGuest,
 } from "./watch-room-e2e";
@@ -35,20 +39,26 @@ async function openViewer(
   return { context, page };
 }
 
-async function expectLive(page: Page, connected: number) {
-  await expect(page.getByText("Realtime sync connected")).toBeVisible();
-  await expect(page.getByText(`${connected} connected now`)).toBeVisible();
+/** The 403 a viewer outside the room hears, and its console echo. */
+function roomRefused(roomId: number): TrackBrowserIssuesOptions {
+  return {
+    ignoreResponse: response =>
+      response.status() === 403 && response.url().includes(`/api/watch-rooms/${roomId}`),
+    ignoreConsole: (_type, text) => text.includes("status of 403"),
+  };
 }
-
-const playButton = (page: Page) => page.getByRole("button", { name: "Play playback" });
-const pauseButton = (page: Page) => page.getByRole("button", { name: "Pause playback" });
 
 test.describe("Watch rooms", () => {
   let owner: Viewer;
   const others: Viewer[] = [];
+  // The running test's tracker: every viewer's page is watched too (the
+  // default page stays blank in these tests).
+  let tracked: BrowserIssues;
 
-  test.beforeEach(async ({ browser }) => {
+  test.beforeEach(async ({ browser, browserIssues }) => {
+    tracked = browserIssues;
     owner = await openViewer(browser);
+    tracked.track(owner.page);
   });
 
   test.afterEach(async () => {
@@ -57,17 +67,21 @@ test.describe("Watch rooms", () => {
     }
   });
 
-  async function guestViewer(browser: Browser, guest: E2EGuest) {
+  async function guestViewer(
+    browser: Browser,
+    guest: E2EGuest,
+    issueOptions?: TrackBrowserIssuesOptions,
+  ) {
     const viewer = await openViewer(browser, guest);
+    const issues = tracked.track(viewer.page, issueOptions);
     others.push(viewer);
-    return viewer;
+    return { ...viewer, issues };
   }
 
   test("an owner opens a room from the movie, a guest joins from Home, and both share playback", async ({
     browser,
   }) => {
     const guest = await createGuest(owner.context.request, "Couch Guest");
-    const ownerIssues = trackBrowserIssues(owner.page);
 
     await owner.page.goto(`/movies/${MOCK_MOVIE_ID}`);
     await owner.page.getByRole("button", { name: "More options" }).click();
@@ -79,7 +93,6 @@ test.describe("Watch rooms", () => {
     await expectLive(owner.page, 1);
 
     const { page: guestPage } = await guestViewer(browser, guest);
-    const guestIssues = trackBrowserIssues(guestPage);
     await guestPage.goto("/");
     const card = guestPage.getByRole("article", { name: `Watch room: ${MOVIE_TITLE}` });
     await card.getByRole("link", { name: `Join watch room for ${MOVIE_TITLE}` }).click();
@@ -87,16 +100,16 @@ test.describe("Watch rooms", () => {
     await expectLive(owner.page, 2);
 
     // Play and seek from the owner, pause from the guest.
-    await playButton(owner.page).click();
-    await expect(pauseButton(guestPage)).toBeVisible();
+    await roomPlayButton(owner.page).click();
+    await expect(roomPauseButton(guestPage)).toBeVisible();
     await owner.page
       .getByRole("button", { name: `Fast-forward ${MOVIE_SEEK_STEP_SEC} seconds` })
       .click();
     await expect
       .poll(() => videoCurrentTime(guestPage))
       .toBeGreaterThanOrEqual(MOVIE_SEEK_STEP_SEC - 0.5);
-    await pauseButton(guestPage).click();
-    await expect(playButton(owner.page)).toBeVisible();
+    await roomPauseButton(guestPage).click();
+    await expect(roomPlayButton(owner.page)).toBeVisible();
     const pausedAt = await videoCurrentTime(owner.page);
 
     // A network blip: both pages say so, come back, and keep the room's place.
@@ -110,7 +123,7 @@ test.describe("Watch rooms", () => {
     }
     await expectLive(owner.page, 2);
     await expectLive(guestPage, 2);
-    await expect(playButton(guestPage)).toBeVisible();
+    await expect(roomPlayButton(guestPage)).toBeVisible();
     expect(Math.abs((await videoCurrentTime(guestPage)) - pausedAt)).toBeLessThan(1.5);
 
     // The owner closes the room; the guest is sent home.
@@ -119,9 +132,6 @@ test.describe("Watch rooms", () => {
     await expect(owner.page).toHaveURL(/\/$/);
     await expect(guestPage).toHaveURL(/\/$/);
     await expect(guestPage.getByText("Watch room closed")).toBeVisible();
-
-    await ownerIssues.assertClean();
-    await guestIssues.assertClean();
   });
 
   test("the owner swaps one invitee for another", async ({ browser }) => {
@@ -169,7 +179,7 @@ test.describe("Watch rooms", () => {
     const guest = await createGuest(owner.context.request, "Leaving Guest");
     const roomId = await createWatchRoom(owner.context.request, MOCK_MOVIE_ID, [guest.id]);
 
-    const { page: guestPage } = await guestViewer(browser, guest);
+    const { page: guestPage, issues: guestIssues } = await guestViewer(browser, guest);
     await owner.page.goto(`/watch-rooms/${roomId}`);
     await guestPage.goto(`/watch-rooms/${roomId}`);
     await expectLive(guestPage, 2);
@@ -186,7 +196,8 @@ test.describe("Watch rooms", () => {
     await expect(roster.getByText(guest.name)).toBeHidden();
     await expect(owner.page.getByText("1 connected now")).toBeVisible();
 
-    // Opening the old link again finds nothing to join.
+    // Opening the old link again finds nothing to join: the server refuses it.
+    guestIssues.ignore(roomRefused(roomId));
     await guestPage.goto(`/watch-rooms/${roomId}`);
     await expect(
       guestPage.getByText("This room no longer exists or you were not invited."),
@@ -198,26 +209,19 @@ test.describe("Watch rooms", () => {
     const outsider = await createGuest(owner.context.request, "Outsider");
     const roomId = await createWatchRoom(owner.context.request, MOCK_MOVIE_ID, [guest.id]);
 
-    const { page } = await guestViewer(browser, outsider);
-    const issues = trackBrowserIssues(page, {
-      ignoreResponse: response =>
-        response.status() === 403 && response.url().includes(`/api/watch-rooms/${roomId}`),
-      ignoreConsole: (_type, text) => text.includes("status of 403"),
-    });
+    const { page } = await guestViewer(browser, outsider, roomRefused(roomId));
     await page.goto(`/watch-rooms/${roomId}`);
 
     await expect(page.getByText("Watch room unavailable")).toBeVisible();
     await expect(
       page.getByText("This room no longer exists or you were not invited."),
     ).toBeVisible();
-    await issues.assertClean();
   });
 
   // Fullscreen used to take the whole room page: the header stayed on top,
   // the video kept its card's width and the Exit button fell off the screen.
   test("fullscreen fills the screen with the player and keeps its controls on screen", async () => {
     const page = owner.page;
-    const issues = trackBrowserIssues(page);
     const roomId = await createWatchRoom(owner.context.request, MOCK_MOVIE_ID, []);
     await page.goto(`/watch-rooms/${roomId}`);
     await expectLive(page, 1);
@@ -269,6 +273,5 @@ test.describe("Watch rooms", () => {
     );
     expect(await page.evaluate(() => document.fullscreenElement)).toBeNull();
     await expect(page.getByRole("heading", { name: "People in this room" })).toBeVisible();
-    await issues.assertClean();
   });
 });

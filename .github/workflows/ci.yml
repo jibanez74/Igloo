@@ -56,9 +56,9 @@ jobs:
   # Runs in the pinned Playwright image the screenshot baselines are drawn in
   # (`make test-visual-docker`, docs/design-system.md §2.5), pinned by digest.
   # Its Chromium and system libraries come with it, so nothing is installed
-  # with apt, and its Node (26) is past the release that defines its own
+  # with apt, and its Node must be 25 or later, which defines its own
   # localStorage global: the unit tests below prove the execArgv opt-out in
-  # web/vite.config.ts leaves jsdom's in place.
+  # web/vite.config.ts leaves jsdom's in place (checked below).
   test-frontend:
     runs-on: ubuntu-24.04
     container:
@@ -74,11 +74,15 @@ jobs:
       - name: Install Bun
         run: npm install --global --no-fund --no-audit bun
 
-      - name: Show Node version
-        run: node --version
+      - name: Check Node defines its own localStorage (25+)
+        run: |
+          node --version
+          node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 25 ? 0 : 1)' \
+            || { echo "::error::The image's Node is older than 25; the localStorage opt-out goes untested"; exit 1; }
 
-      # The image tag must match the locked @playwright/test and the
-      # Makefile's VISUAL_IMAGE, or local baselines drift from this browser.
+      # The image tag must match the locked @playwright/test, whose browser
+      # build it must ship, and the Makefile's VISUAL_IMAGE, so CI's e2e
+      # browser is the one the local baselines are drawn with.
       - name: Check the image matches the locked Playwright
         run: cd web && bun run check:playwright-image
 

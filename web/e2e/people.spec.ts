@@ -1,11 +1,11 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "./e2e-test";
+import type { Page } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 import { personProfile, personTitle } from "../src/test/helpers/people";
 import { seasonEpisodes, showDetails } from "../src/test/helpers/show-details";
 import { playbackSettings } from "../src/test/helpers/fixtures";
 import { apiResponse, fulfillJSON, pagedList, nullableFloat64, nullableInt64, nullableString } from "./e2e-api";
 import { mockApi } from "./e2e-mock-api";
-import { assertMockSuiteClean, trackBrowserIssues } from "./e2e-browser-issues";
 import { expectPageHasNoHorizontalScroll, tabTo, VIEWPORTS } from "./e2e-layout";
 import type { PersonData } from "../src/types/people";
 import type { LibraryMovieDetailsResponse } from "../src/types";
@@ -42,8 +42,7 @@ async function mockPeople(page: Page, profile: PersonData | (() => PersonData) =
 }
 
 test("movie to person by keyboard, then to a library title", async ({ page }) => {
-  const issues = trackBrowserIssues(page);
-  const { unexpectedApiRequests } = await mockPeople(page);
+  await mockPeople(page);
   await page.goto("/movies/711");
   const actor = page.getByRole("link", { name: "Alex Vega as Hero" });
   await tabTo(page, actor);
@@ -55,25 +54,21 @@ test("movie to person by keyboard, then to a library title", async ({ page }) =>
   await page.getByRole("region", { name: "Filmography" }).getByRole("link", { name: /Library Show/ }).click();
   await expect(page).toHaveURL(/\/tv-shows\/401$/);
   await expect(page.getByRole("heading", { level: 1, name: /Frost Harbor/ })).toBeVisible();
-  assertMockSuiteClean(issues, unexpectedApiRequests);
 });
 
 test("show to person preserves season return navigation", async ({ page }) => {
-  const issues = trackBrowserIssues(page);
-  const { unexpectedApiRequests } = await mockPeople(page);
+  await mockPeople(page);
   await page.goto("/tv-shows/401?season=2");
   await page.getByRole("link", { name: /Ada Contract as Captain, 10 episodes/ }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Alex Vega" })).toBeVisible();
   await page.getByRole("link", { name: "Back", exact: true }).click();
   await expect(page).toHaveURL(/\/tv-shows\/401\?season=2$/);
   await expect(page.getByRole("tab", { name: "Season 2" })).toHaveAttribute("aria-selected", "true");
-  assertMockSuiteClean(issues, unexpectedApiRequests);
 });
 
 test("partial profile keeps local credits usable and retries enrichment", async ({ page }) => {
-  const issues = trackBrowserIssues(page);
   let available = false;
-  const { unexpectedApiRequests } = await mockPeople(page, () => personProfile({ enrichment_status: available ? "available" : "unavailable" }));
+  await mockPeople(page, () => personProfile({ enrichment_status: available ? "available" : "unavailable" }));
   await page.goto("/people/9001");
   await expect(page.getByText(/TMDB is temporarily unavailable/)).toBeVisible();
   await expect(page.getByRole("region", { name: "Filmography" }).getByRole("link", { name: /Library Movie/ })).toBeVisible();
@@ -82,13 +77,11 @@ test("partial profile keeps local credits usable and retries enrichment", async 
   await expect(page.getByText(/TMDB is temporarily unavailable/)).toHaveCount(0);
   await page.getByRole("region", { name: "Filmography" }).getByRole("link", { name: /Library Movie/ }).click();
   await expect(page.getByRole("heading", { level: 1, name: /Library Movie/ })).toBeVisible();
-  assertMockSuiteClean(issues, unexpectedApiRequests);
 });
 
 for (const theme of ["light", "dark"]) {
   for (const [viewportName, viewport] of Object.entries({ phone: VIEWPORTS.phone, desktop: VIEWPORTS.desktop })) {
     test(`person layout and keyboard disclosure at ${viewportName} in ${theme}`, async ({ page }) => {
-      const issues = trackBrowserIssues(page);
       await page.addInitScript(value => localStorage.setItem("igloo-theme", value), theme);
       await page.setViewportSize(viewport);
       await page.emulateMedia({ reducedMotion: "reduce" });
@@ -96,7 +89,7 @@ for (const theme of ["light", "dark"]) {
       profile.person.name = "Alexandra Vega With An Exceptionally Long Professional Name";
       profile.person.biography = `${"A long career biography with many details. ".repeat(40)}\n\nFinal biography paragraph.`;
       if (viewportName === "phone") profile.person.profile_path = "";
-      const { unexpectedApiRequests } = await mockPeople(page, profile);
+      await mockPeople(page, profile);
       await page.goto("/people/9001");
       await expect(page.getByRole("heading", { level: 1, name: profile.person.name })).toBeVisible();
       await expectPageHasNoHorizontalScroll(page);
@@ -122,7 +115,6 @@ for (const theme of ["light", "dark"]) {
       await page.screenshot({ path: `../output/playwright/person-${viewportName}-${theme}-hero.png` });
       await page.getByRole("heading", { name: "Filmography", exact: true }).scrollIntoViewIfNeeded();
       await page.screenshot({ path: `../output/playwright/person-${viewportName}-${theme}-credits.png` });
-      assertMockSuiteClean(issues, unexpectedApiRequests);
     });
   }
 }

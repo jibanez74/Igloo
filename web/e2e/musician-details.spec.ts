@@ -1,8 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
-import {
-  assertMockSuiteClean,
-  trackBrowserIssues,
-} from "./e2e-browser-issues";
+import { expect, test } from "./e2e-test";
+import type { Page } from "@playwright/test";
 import {
   BREAKPOINTS,
   VIEWPORTS,
@@ -20,7 +17,7 @@ import {
 } from "./fixtures/music";
 
 async function mockMusicianDetailsApi(page: Page) {
-  const { unexpectedApiRequests } = await mockApi(page, {
+  await mockApi(page, {
     handle: async ({ route, url, method }) => {
       if (url.pathname === `/api/music/musicians/${AURORA_PINES_ID}` && method === "GET") {
         await fulfillJSON(route, apiResponse(auroraPines));
@@ -40,13 +37,10 @@ async function mockMusicianDetailsApi(page: Page) {
       return false;
     },
   });
-
-  return unexpectedApiRequests;
 }
 
 test("skip links surface on keyboard focus and target the page sections", async ({ page }) => {
-  const browserIssues = trackBrowserIssues(page);
-  const unexpectedApiRequests = await mockMusicianDetailsApi(page);
+  await mockMusicianDetailsApi(page);
 
   await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto(`/music/musician/${AURORA_PINES_ID}`);
@@ -71,13 +65,10 @@ test("skip links surface on keyboard focus and target the page sections", async 
     new RegExp(`/music/musician/${AURORA_PINES_ID}#discography-heading$`),
   );
   await expect(page.getByRole("heading", { name: "Discography" })).toBeInViewport();
-
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 test("discography cards navigate to the album details page", async ({ page }) => {
-  const browserIssues = trackBrowserIssues(page);
-  const unexpectedApiRequests = await mockMusicianDetailsApi(page);
+  await mockMusicianDetailsApi(page);
 
   await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto(`/music/musician/${AURORA_PINES_ID}`);
@@ -89,13 +80,10 @@ test("discography cards navigate to the album details page", async ({ page }) =>
   await albumLink.getByRole("heading", { name: "Glacier Sessions" }).click();
   await expect(page).toHaveURL(`/music/album/${GLACIER_SESSIONS_ID}`);
   await expect(page.getByRole("heading", { level: 1, name: "Glacier Sessions" })).toBeVisible();
-
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 test("musician details holds its layout at every breakpoint", async ({ page }) => {
-  const browserIssues = trackBrowserIssues(page);
-  const unexpectedApiRequests = await mockMusicianDetailsApi(page);
+  await mockMusicianDetailsApi(page);
 
   await page.goto(`/music/musician/${AURORA_PINES_ID}`);
   const title = page.getByRole("heading", { level: 1, name: "Aurora Pines" });
@@ -120,6 +108,4 @@ test("musician details holds its layout at every breakpoint", async ({ page }) =
       );
     });
   }
-
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });

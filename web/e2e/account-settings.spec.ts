@@ -1,23 +1,12 @@
-import {
-  expect,
-  test,
-  type APIRequestContext,
-  type Page,
-  type Response,
-} from "@playwright/test";
+import { expect, test } from "./e2e-test";
+import type { APIRequestContext, Page, Response } from "@playwright/test";
 
 import type { AuthUser } from "../src/types";
 import { readE2EEnv, requireRealInstance, type Credentials } from "./e2e-env";
-import {
-  isExpectedUnauthorizedResourceMessage,
-  trackBrowserIssues,
-} from "./e2e-browser-issues";
+import { isApiResourceEcho } from "./e2e-browser-issues";
 import { getApiData } from "./e2e-api";
 import { loginPageViaApi, loginViaApi } from "./e2e-auth";
-import {
-  expectPageHasNoHorizontalScroll,
-  VIEWPORTS,
-} from "./e2e-layout";
+import { auditResponsiveControls } from "./e2e-layout";
 import {
   createUser,
   deleteUsersByEmailPrefix,
@@ -42,14 +31,6 @@ const requiredAccountControlNames = [
   "Delete account",
 ];
 
-const responsiveViewports = [
-  { name: "small phone", width: 360, height: 800 },
-  { name: "phone", ...VIEWPORTS.phone },
-  { name: "tablet portrait", ...VIEWPORTS.tablet },
-  { name: "tablet landscape", width: 1024, height: 768 },
-  { name: "desktop", ...VIEWPORTS.desktop },
-];
-
 function isResponseTo(
   response: Response,
   method: string,
@@ -61,138 +42,6 @@ function isResponseTo(
     response.request().method() === method &&
     new URL(response.url()).pathname === pathname
   );
-}
-
-async function auditResponsiveAccountPage(page: Page) {
-  for (const viewport of responsiveViewports) {
-    await page.setViewportSize({
-      width: viewport.width,
-      height: viewport.height,
-    });
-    await expect(page.getByRole("tabpanel", { name: "Account" })).toBeVisible();
-
-    await expectPageHasNoHorizontalScroll(page);
-
-    const audit = await page.evaluate(requiredNames => {
-      const isVisible = (element: Element) => {
-        const style = window.getComputedStyle(element);
-        const box = element.getBoundingClientRect();
-        return (
-          style.visibility !== "hidden" &&
-          style.display !== "none" &&
-          box.width > 0 &&
-          box.height > 0
-        );
-      };
-
-      const accessibleName = (element: Element) => {
-        const labelledBy = (element.getAttribute("aria-labelledby") ?? "")
-          .split(/\s+/)
-          .filter(Boolean)
-          .map(id => document.getElementById(id)?.textContent?.trim() ?? "")
-          .filter(Boolean)
-          .join(" ");
-
-        if (labelledBy) {
-          return labelledBy;
-        }
-
-        const ariaLabel = element.getAttribute("aria-label");
-        if (ariaLabel) {
-          return ariaLabel;
-        }
-
-        if (element.id) {
-          const label = document.querySelector(
-            `label[for="${CSS.escape(element.id)}"]`,
-          );
-          const labelText = label?.textContent?.trim();
-          if (labelText) {
-            return labelText;
-          }
-        }
-
-        const wrappingLabel = element.closest("label")?.textContent?.trim();
-        if (wrappingLabel) {
-          return wrappingLabel;
-        }
-
-        if (element instanceof HTMLInputElement && element.placeholder) {
-          return element.placeholder;
-        }
-
-        return element.textContent?.trim() ?? element.getAttribute("title") ?? "";
-      };
-
-      const interactiveElements = Array.from(
-        document.querySelectorAll(
-          [
-            "a[href]",
-            "button",
-            'input:not([type="hidden"])',
-            "select",
-            "textarea",
-            '[role="button"]',
-            '[role="tab"]',
-            '[role="textbox"]',
-          ].join(", "),
-        ),
-      ).filter(isVisible);
-
-      const unlabeled = interactiveElements
-        .map(element => ({
-          tag: element.tagName.toLowerCase(),
-          role: element.getAttribute("role"),
-          name: accessibleName(element),
-        }))
-        .filter(element => !element.name);
-
-      const clippedInteractive = interactiveElements
-        .map(element => {
-          const box = element.getBoundingClientRect();
-          return {
-            name: accessibleName(element),
-            left: box.left,
-            right: box.right,
-            width: box.width,
-            height: box.height,
-          };
-        })
-        .filter(
-          box =>
-            box.left < -1 ||
-            box.right > window.innerWidth + 1 ||
-            box.width < 1 ||
-            box.height < 1,
-        );
-
-      return {
-        requiredNames: Object.fromEntries(
-          requiredNames.map(name => [
-            name,
-            interactiveElements.some(
-              element => accessibleName(element) === name,
-            ),
-          ]),
-        ),
-        unlabeled,
-        clippedInteractive,
-      };
-    }, requiredAccountControlNames);
-
-    expect(audit.unlabeled, `${viewport.name} unlabeled controls`).toEqual([]);
-    expect(
-      audit.clippedInteractive,
-      `${viewport.name} clipped controls`,
-    ).toEqual([]);
-
-    for (const controlName of requiredAccountControlNames) {
-      expect(
-        audit.requiredNames[controlName],
-        `${viewport.name} missing accessible control: ${controlName}`,
-      ).toBe(true);
-    }
-  }
 }
 
 async function activeElementName(page: Page) {
@@ -293,29 +142,27 @@ test.describe("Account settings", () => {
     page,
     request,
   }) => {
-    const tracker = trackBrowserIssues(page);
-
     await withDisposableUser(page, request, "account-audit", async () => {
       await page.goto("/settings/account");
       await expect(page.getByText("Profile information")).toBeVisible();
 
-      await auditResponsiveAccountPage(page);
+      await auditResponsiveControls(page, {
+        ready: () => expect(page.getByRole("tabpanel", { name: "Account" })).toBeVisible(),
+        requiredNames: requiredAccountControlNames,
+      });
       await auditMobileTabOrder(page);
-
-      tracker.assertClean();
     });
   });
 
   test("updates and deletes a disposable account without browser noise", async ({
     page,
     request,
+    browserIssues,
   }) => {
     const env = readE2EEnv();
-    const tracker = trackBrowserIssues(page, {
-      ignoreConsole: (_type, text) =>
-        isExpectedUnauthorizedResourceMessage(text) ||
-        text ===
-          "Failed to load resource: the server responded with a status of 409 (Conflict)",
+    browserIssues.ignore({
+      // Their echoes are judged with the responses below.
+      ignoreConsole: (_type, text, message) => isApiResourceEcho(text, message),
       // The duplicate email is refused on purpose, and the deleted account's
       // session no longer authenticates.
       ignoreResponse: response =>
@@ -461,18 +308,17 @@ test.describe("Account settings", () => {
         user => user.email === editedEmail || user.email === email,
       );
       expect(userStillExists).toBe(false);
-
-      tracker.assertClean();
     });
   });
 
   test("manages the profile PIN accessibly without browser noise", async ({
     page,
     request,
+    browserIssues,
   }) => {
     requireRealInstance("the mock server does not serve PIN routes");
-    const tracker = trackBrowserIssues(page, {
-      ignoreConsole: (_type, text) => isExpectedUnauthorizedResourceMessage(text),
+    browserIssues.ignore({
+      ignoreConsole: (_type, text, message) => isApiResourceEcho(text, message),
       // The wrong current PIN is refused on purpose.
       ignoreResponse: response =>
         isResponseTo(response, "PUT", "/api/user/pin", 401),
@@ -574,8 +420,6 @@ test.describe("Account settings", () => {
       await expect(
         page.getByText("You have not set a profile PIN."),
       ).toBeVisible();
-
-      tracker.assertClean();
     });
   });
 });

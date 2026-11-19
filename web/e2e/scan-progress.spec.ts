@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./e2e-test";
 import { ALBUMS_PER_PAGE, MUSICIANS_PER_PAGE } from "../src/lib/constants";
 import {
   movieScanStatus,
@@ -9,7 +9,6 @@ import {
 import { apiResponse, fulfillJSON, SCAN_STATUS_PATH } from "./e2e-api";
 import type { ScanStatuses } from "../src/types/settings";
 import { loginPageViaApi } from "./e2e-auth";
-import { trackBrowserIssues } from "./e2e-browser-issues";
 import { requireMockApi } from "./e2e-env";
 
 // A scan started from Settings → Libraries and followed to its completion.
@@ -99,8 +98,8 @@ test.describe("Library scan progress", () => {
   requireMockApi();
 
   for (const kind of SCAN_KINDS) {
-    test(`${kind.name} scan progress survives navigation and reports completion with issues`, async ({ page }) => {
-      const browserIssues = trackBrowserIssues(page, {
+    test(`${kind.name} scan progress survives navigation and reports completion with issues`, async ({ page, browserIssues }) => {
+      browserIssues.ignore({
         // The status endpoint goes down once on purpose, below.
         ignoreResponse: response =>
           response.status() === 503 && new URL(response.url()).pathname === SCAN_STATUS_PATH,
@@ -197,8 +196,6 @@ test.describe("Library scan progress", () => {
       await page.keyboard.press("Enter");
       await expect(page.getByText(kind.issue)).toBeVisible();
       expect(starts).toBe(1);
-
-      browserIssues.assertClean();
     });
   }
 });

@@ -1,18 +1,11 @@
-import {
-  expect,
-  test,
-  type BrowserContext,
-  type Page,
-  type Response,
-} from "@playwright/test";
+import { expect, test, type BrowserIssueOptions } from "./e2e-test";
+import type { BrowserContext, Page, Response } from "@playwright/test";
 
 import { readE2EEnv, requireRealInstance } from "./e2e-env";
-import { trackBrowserIssues } from "./e2e-browser-issues";
-import {
-  readJSON,
-} from "./e2e-api";
+import { isApiResourceEcho } from "./e2e-browser-issues";
+import { readJSON } from "./e2e-api";
 import { loginPageViaApi } from "./e2e-auth";
-import { expectPageHasNoHorizontalScroll, VIEWPORTS } from "./e2e-layout";
+import { auditResponsiveControls } from "./e2e-layout";
 
 function isExpectedLoggedOutAuthResponse(response: Response) {
   return response.status() === 401 && response.url().includes("/api/auth/user");
@@ -46,20 +39,15 @@ function isExpectedInTheatersUnavailableResponse(response: Response) {
   );
 }
 
-function trackLoginBrowserIssues(
-  page: Page,
-  isExpectedResponse: (response: Response) => boolean =
-    isExpectedLoggedOutAuthResponse,
-) {
-  return trackBrowserIssues(page, {
-    // ignoreResponse judges every failed response; the browser's console echo
-    // of each one adds nothing.
-    ignoreConsole: (_type, text) => text.startsWith("Failed to load resource:"),
-    ignoreResponse: response =>
-      isExpectedResponse(response) ||
-      isExpectedInTheatersUnavailableResponse(response),
-  });
-}
+/** What every login test drives on purpose; a test adds its own with `browserIssues.ignore`. */
+const loginIssueRules: BrowserIssueOptions = {
+  // ignoreResponse judges every failed /api/ response; the browser's console
+  // echo of each one adds nothing.
+  ignoreConsole: (_type, text, message) => isApiResourceEcho(text, message),
+  ignoreResponse: response =>
+    isExpectedLoggedOutAuthResponse(response) ||
+    isExpectedInTheatersUnavailableResponse(response),
+};
 
 /** The URL is `pathname` on the app's own origin, whatever its query. */
 function appPath(pathname: string) {
@@ -113,115 +101,14 @@ async function submitLogin(page: Page, email: string, password: string) {
   return loginResponsePromise;
 }
 
-async function expectLoginLayout(page: Page) {
-  const layout = await page.evaluate(() => {
-    const visible = (element: Element) => {
-      const style = getComputedStyle(element);
-      const rect = element.getBoundingClientRect();
-
-      return (
-        style.display !== "none" &&
-        style.visibility !== "hidden" &&
-        rect.width > 0 &&
-        rect.height > 0
-      );
-    };
-
-    const accessibleName = (element: Element) => {
-      const ariaLabel = element.getAttribute("aria-label");
-      if (ariaLabel) {
-        return ariaLabel.trim();
-      }
-
-      const labelledBy = element.getAttribute("aria-labelledby");
-      if (labelledBy) {
-        return labelledBy
-          .split(/\s+/)
-          .map(id => document.getElementById(id)?.textContent?.trim() ?? "")
-          .join(" ")
-          .trim();
-      }
-
-      if (element.id) {
-        const label = document.querySelector(
-          `label[for="${CSS.escape(element.id)}"]`,
-        );
-        if (label?.textContent) {
-          return label.textContent.trim();
-        }
-      }
-
-      const text = element.textContent?.trim();
-      if (text) {
-        return text;
-      }
-
-      const placeholder = element.getAttribute("placeholder");
-      if (placeholder) {
-        return placeholder.trim();
-      }
-
-      return "";
-    };
-
-    const interactive = Array.from(
-      document.querySelectorAll(
-        'button, a[href], input, select, textarea, [role="button"], [tabindex]:not([tabindex="-1"])',
-      ),
-    ).filter(visible);
-
-    const overflowX = Array.from(document.querySelectorAll("body, body *"))
-      .filter(visible)
-      .filter(element => {
-        const rect = element.getBoundingClientRect();
-        return rect.left < -1 || rect.right > window.innerWidth + 1;
-      })
-      .map(element => ({
-        tag: element.tagName.toLowerCase(),
-        text: element.textContent?.trim().slice(0, 60) ?? "",
-      }));
-
-    const unlabeled = interactive
-      .filter(element => !accessibleName(element))
-      .map(element => ({
-        tag: element.tagName.toLowerCase(),
-        id: element.id,
-        role: element.getAttribute("role"),
-      }));
-
-    const smallText = Array.from(
-      document.querySelectorAll("label, p, span, button, a, input"),
-    )
-      .filter(visible)
-      .map(element => ({
-        text:
-          element.textContent?.trim() ||
-          element.getAttribute("placeholder") ||
-          "",
-        fontSize: Number.parseFloat(getComputedStyle(element).fontSize),
-      }))
-      .filter(item => item.text && item.fontSize < 12);
-
-    return {
-      overflowX,
-      unlabeled,
-      smallText,
-    };
-  });
-
-  await expectPageHasNoHorizontalScroll(page);
-  expect(layout.overflowX).toEqual([]);
-  expect(layout.unlabeled).toEqual([]);
-  expect(layout.smallText).toEqual([]);
-}
-
 test.describe("Login screen", () => {
+  test.use({ browserIssueOptions: loginIssueRules });
+
   test("renders accessibly and blocks empty submissions before the API call", async ({
     page,
     context,
   }) => {
     const env = readE2EEnv();
-    const tracker = trackLoginBrowserIssues(page);
     let loginRequests = 0;
 
     page.on("request", request => {
@@ -294,22 +181,16 @@ test.describe("Login screen", () => {
 
     await expectUnauthenticated(context);
     expect(loginRequests, "an invalid form should not submit").toBe(0);
-
-    tracker.assertClean();
   });
 
   test("shows login failure without creating a session", async ({
     page,
     context,
+    browserIssues,
   }) => {
     requireRealInstance("the mock server's credential check is its own code");
     const env = readE2EEnv();
-    const tracker = trackLoginBrowserIssues(
-      page,
-      response =>
-        isExpectedLoggedOutAuthResponse(response) ||
-        isExpectedInvalidLoginResponse(response),
-    );
+    browserIssues.ignore({ ignoreResponse: isExpectedInvalidLoginResponse });
 
     await page.goto("/login");
     await expectLoginControls(page);
@@ -334,8 +215,6 @@ test.describe("Login screen", () => {
     await expect(page.getByLabel("Password", { exact: true })).toBeEnabled();
     await expect(page.getByRole("button", { name: "Sign in" })).toBeEnabled();
     await expectUnauthenticated(context);
-
-    tracker.assertClean();
   });
 
   test("signs in through the UI, follows a safe redirect, and skips the form once signed in", async ({
@@ -343,8 +222,6 @@ test.describe("Login screen", () => {
     context,
   }) => {
     const env = readE2EEnv();
-    const tracker = trackLoginBrowserIssues(page);
-
     await page.goto("/login?redirect=/settings/account");
     await expectLoginControls(page);
 
@@ -361,16 +238,12 @@ test.describe("Login screen", () => {
     await page.goto("/login?redirect=/settings/account");
     await expect(page).toHaveURL(appPath("/settings/account"));
     await expect(page.getByText("Profile information")).toBeVisible();
-
-    tracker.assertClean();
   });
 
   test("logs out through the sidebar and blocks protected routes", async ({
     page,
     context,
   }) => {
-    const tracker = trackLoginBrowserIssues(page);
-
     await loginPageViaApi(page);
     await page.goto("/settings/account");
     await expect(page.getByText("Profile information")).toBeVisible();
@@ -399,8 +272,6 @@ test.describe("Login screen", () => {
     await expect
       .poll(() => new URL(page.url()).searchParams.get("redirect"))
       .toBe("/settings/account");
-
-    tracker.assertClean();
   });
 
   // Clearing the cookie stands in for the server ending the session (expiry,
@@ -408,9 +279,10 @@ test.describe("Login screen", () => {
   test("sends a reader whose session ended on a navigation to log in, then back", async ({
     page,
     context,
+    browserIssues,
   }) => {
     const env = readE2EEnv();
-    const tracker = trackLoginBrowserIssues(page, isSessionEndedResponse);
+    browserIssues.ignore({ ignoreResponse: isSessionEndedResponse });
 
     await loginPageViaApi(page);
     await page.goto("/settings/account");
@@ -428,16 +300,15 @@ test.describe("Login screen", () => {
     const loginResponse = await submitLogin(page, env.email, env.password);
     expect(loginResponse.status()).toBe(200);
     await expect(page).toHaveURL(appPath("/movies"));
-
-    tracker.assertClean();
   });
 
   test("signs out when a request on the open page hears the session ended", async ({
     page,
     context,
+    browserIssues,
   }) => {
     const env = readE2EEnv();
-    const tracker = trackLoginBrowserIssues(page, isSessionEndedResponse);
+    browserIssues.ignore({ ignoreResponse: isSessionEndedResponse });
 
     await loginPageViaApi(page);
     await page.goto("/settings/account");
@@ -458,22 +329,17 @@ test.describe("Login screen", () => {
     await submitLogin(page, env.email, env.password);
     await expect(page).toHaveURL(appPath("/settings/account"));
     await expect(page.getByText("Profile information")).toBeVisible();
-
-    tracker.assertClean();
   });
 
   test("is responsive and keeps screen reader support at each viewport", async ({
     page,
   }) => {
-    const tracker = trackLoginBrowserIssues(page);
-
-    for (const viewport of Object.values(VIEWPORTS)) {
-      await page.setViewportSize(viewport);
-      await page.goto("/login");
-      await expectLoginControls(page);
-      await expectLoginLayout(page);
-    }
-
-    tracker.assertClean();
+    await auditResponsiveControls(page, {
+      ready: async () => {
+        await page.goto("/login");
+        await expectLoginControls(page);
+      },
+      minFontPx: 12,
+    });
   });
 });

@@ -1,8 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
-import {
-  assertMockSuiteClean,
-  trackBrowserIssues,
-} from "./e2e-browser-issues";
+import { expect, test } from "./e2e-test";
+import type { Page } from "@playwright/test";
 import {
   expectNoHorizontalOverflow,
   expectPageHasNoHorizontalScroll,
@@ -113,7 +110,7 @@ async function mockSearchApi(page: Page) {
     "/api/search/tracks": apiResponse<SearchTracksResponseType>(searchPage([trackResult])),
   };
 
-  const { unexpectedApiRequests } = await mockApi(page, {
+  await mockApi(page, {
     user: { is_admin: true },
     handle: async ({ route, url, method }) => {
       if (method !== "GET") {
@@ -146,15 +143,13 @@ async function mockSearchApi(page: Page) {
 
   return {
     requestedSearchRequests,
-    unexpectedApiRequests,
   };
 }
 
 test("search supports keyboard submission, tabs, and responsive layout", async ({
   page,
 }) => {
-  const browserIssues = trackBrowserIssues(page);
-  const { requestedSearchRequests, unexpectedApiRequests } =
+  const { requestedSearchRequests } =
     await mockSearchApi(page);
 
   await page.setViewportSize(VIEWPORTS.desktop);
@@ -238,5 +233,4 @@ test("search supports keyboard submission, tabs, and responsive layout", async (
     `/api/search/musicians?q=Casino&page=1&per_page=${SEARCH_PER_PAGE}`,
     `/api/search/tracks?q=Casino&page=1&per_page=${SEARCH_PER_PAGE}`,
   ]);
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });

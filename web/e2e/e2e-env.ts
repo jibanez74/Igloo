@@ -8,7 +8,8 @@ export type E2EEnv = {
 
 export type Credentials = Pick<E2EEnv, "email" | "password">;
 
-const isRealInstance = Boolean(process.env.E2E_BASE_URL);
+/** True when the run targets a real Igloo instance through E2E_BASE_URL. */
+export const isRealInstance = Boolean(process.env.E2E_BASE_URL);
 
 /**
  * An integer environment variable of at least `min`. Unset or invalid values

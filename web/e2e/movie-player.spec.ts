@@ -1,9 +1,9 @@
-import { expect, test, type Page, type Route } from "@playwright/test";
+import { expect, test } from "./e2e-test";
+import type { Page, Route } from "@playwright/test";
 import { PLAYBACK_PREFERENCES_STORAGE_PREFIX } from "../src/lib/playback-preferences";
 import type { MovieTechnicalDetailsResponse } from "../src/types";
 import { gateRoute, nullableString, readJSON } from "./e2e-api";
 import { loginPageViaApi } from "./e2e-auth";
-import { trackBrowserIssues } from "./e2e-browser-issues";
 import { requireMockApi } from "./e2e-env";
 import {
   expectURLParams,
@@ -74,8 +74,6 @@ for (const { label, mode, expectedRequestPath } of [
   test(`${label} playback waits for the server catalog when device speed needs it`, async ({
     page,
   }) => {
-    const browserIssues = trackBrowserIssues(page);
-
     // Device language/profile preferences are synchronous. A configured speed
     // with no stored profile is the path that needs the asynchronous catalog.
     await page.addInitScript(key => {
@@ -97,7 +95,6 @@ for (const { label, mode, expectedRequestPath } of [
 
     await expect.poll(() => mediaRequests.length).toBe(1);
     expect(new URL(mediaRequests[0]).pathname).toBe(expectedRequestPath);
-    browserIssues.assertClean();
   });
 }
 
@@ -106,8 +103,6 @@ for (const { label, search } of [
   { label: "the loader's default-settings redirect", search: "start=0" },
 ]) {
   test(`${label} settles on the canonical subtitle-off URL`, async ({ page }) => {
-    const browserIssues = trackBrowserIssues(page);
-
     await openMoviePlayer(page, search);
 
     await expect(playButton(page)).toBeVisible();
@@ -116,15 +111,12 @@ for (const { label, search } of [
       audio_track: "0",
       subtitle_track: "off",
     });
-    browserIssues.assertClean();
   });
 }
 
 test("cold non-first audio waits for metadata and never requests the raw stream", async ({
   page,
 }) => {
-  const browserIssues = trackBrowserIssues(page);
-
   const technicalDetails = await gateTechnicalDetails(page, details => {
     details.audio_streams.push({
       ...details.audio_streams[0],
@@ -150,14 +142,11 @@ test("cold non-first audio waits for metadata and never requests the raw stream"
   const requestUrl = new URL(mediaRequests[0]);
   expect(requestUrl.pathname).toBe(`${movieApiPath}/hls/remux/playlist.m3u8`);
   expect(requestUrl.searchParams.get("audio_track")).toBe("1");
-  browserIssues.assertClean();
 });
 
 test("cold direct deep link to an ineligible file never requests the raw stream", async ({
   page,
 }) => {
-  const browserIssues = trackBrowserIssues(page);
-
   // A bookmarked ?mode=direct link to an MKV must wait for the technical
   // details to learn the browser cannot play it, rather than optimistically
   // asking for the raw file.
@@ -183,14 +172,11 @@ test("cold direct deep link to an ineligible file never requests the raw stream"
   // The pre-emptive mode resolution is silent: it must not read as an
   // error-driven fallback announcement.
   await expect(page.getByText(/can't be played directly/)).toHaveCount(0);
-  browserIssues.assertClean();
 });
 
 test("failed direct play falls back to remux once at the preserved position", async ({
   page,
 }) => {
-  const browserIssues = trackBrowserIssues(page);
-
   // The mock movie is direct-play eligible (MP4, H.264 High 4.1, AAC LC —
   // Chromium's canPlayType approves it), but the bytes are not a video, so the
   // media element raises a source or decode error and the player must switch
@@ -225,12 +211,9 @@ test("failed direct play falls back to remux once at the preserved position", as
     hlsRequests.every(url => new URL(url).pathname.endsWith("/hls/remux/playlist.m3u8")),
   ).toBe(true);
   await expectURLParams(page, { mode: "remux" });
-  browserIssues.assertClean();
 });
 
 test("HLS seek navigation preserves canonical subtitle-off", async ({ page }) => {
-  const browserIssues = trackBrowserIssues(page);
-
   await openMoviePlayer(page, "mode=720p_3mbps&audio_track=0&subtitle_track=off&start=0");
   await expect(playButton(page)).toBeVisible();
 
@@ -238,14 +221,11 @@ test("HLS seek navigation preserves canonical subtitle-off", async ({ page }) =>
   await page.getByRole("menuitem", { name: /The Journey/ }).click();
 
   await expectURLParams(page, { start: "372", subtitle_track: "off" });
-  browserIssues.assertClean();
 });
 
 test("selecting a chapter seeks to its start and announces the jump", async ({
   page,
 }) => {
-  const browserIssues = trackBrowserIssues(page);
-
   await openMoviePlayer(page, "mode=direct&audio_track=0&subtitle_track=off&start=0");
   await expect(playButton(page)).toBeVisible();
 
@@ -278,5 +258,4 @@ test("selecting a chapter seeks to its start and announces the jump", async ({
   ).not.toHaveAttribute("aria-current", "true");
 
   await page.keyboard.press("Escape");
-  browserIssues.assertClean();
 });

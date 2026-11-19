@@ -26,7 +26,8 @@ export default defineConfig({
   testDir: "./e2e/visual",
   testMatch: "**/*.visual.ts",
   timeout: 60_000,
-  forbidOnly: Boolean(process.env.CI),
+  // A committed test.only would shrink the local gate to one passing test.
+  forbidOnly: comparesPixels,
   fullyParallel: false,
   // The mock API server is stateful, as in playwright.config.ts.
   workers: 1,

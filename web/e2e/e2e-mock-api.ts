@@ -6,7 +6,8 @@ import { apiResponse, fulfillIdleScanStatus, fulfillJSON } from "./e2e-api";
 // One catch-all `**/api/**` route for the specs that stub every request
 // themselves rather than reaching mock-api-server.ts. It answers what the
 // authenticated shell asks for on every page, hands the rest to the spec, and
-// records anything the spec did not expect so `assertMockSuiteClean` fails.
+// records anything the spec did not expect; the shared `test` (e2e-test.ts)
+// fails the test at teardown if anything was recorded.
 
 type MockApiRequest = {
   route: Route;
@@ -29,9 +30,16 @@ const PLACEHOLDER_IMAGE_PREFIXES = [
 
 const PLACEHOLDER_IMAGE = `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="240" viewBox="0 0 160 240"><rect width="160" height="240" fill="#f59e0b"/><rect x="14" y="14" width="132" height="212" rx="12" fill="#0f172a"/><circle cx="80" cy="78" r="26" fill="#f8fafc"/><rect x="34" y="146" width="92" height="14" rx="7" fill="#f8fafc"/><rect x="42" y="170" width="76" height="10" rx="5" fill="#fbbf24"/></svg>`;
 
-export async function mockApi(page: Page, { user = {}, handle }: MockApiOptions = {}) {
-  const unexpectedApiRequests: string[] = [];
+// One list for the running test: specs run one at a time (workers: 1), and
+// the shared `test` drains it before and after each test.
+const unexpectedApiRequests: string[] = [];
 
+/** Returns the requests no catch-all expected since the last call, and forgets them. */
+export function takeUnexpectedApiRequests() {
+  return unexpectedApiRequests.splice(0);
+}
+
+export async function mockApi(page: Page, { user = {}, handle }: MockApiOptions = {}) {
   await page.route("**/api/**", async route => {
     const url = new URL(route.request().url());
     const method = route.request().method();
@@ -69,6 +77,4 @@ export async function mockApi(page: Page, { user = {}, handle }: MockApiOptions 
     unexpectedApiRequests.push(message);
     await fulfillJSON(route, { error: true, message }, 500);
   });
-
-  return { unexpectedApiRequests };
 }

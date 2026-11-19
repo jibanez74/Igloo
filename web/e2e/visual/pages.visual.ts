@@ -1,6 +1,7 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "../e2e-test";
+import type { Page } from "@playwright/test";
 import { loginPageViaApi } from "../e2e-auth";
-import { trackBrowserIssues } from "../e2e-browser-issues";
+import { signedOutIssueRules } from "../e2e-browser-issues";
 import { VIEWPORTS } from "../e2e-layout";
 import { expectScreenshot, settle, THEMES, useTheme } from "./visual-helpers";
 
@@ -24,7 +25,8 @@ for (const theme of THEMES) {
       await useTheme(page, theme);
     });
 
-    test("login", async ({ page }) => {
+    test("login", async ({ page, browserIssues }) => {
+      browserIssues.ignore(signedOutIssueRules);
       await openPage(page, "/login");
       await expectScreenshot(page, `login-${theme}.png`);
     });
@@ -35,14 +37,11 @@ for (const theme of THEMES) {
       });
 
       test("movie library", async ({ page }) => {
-        const tracker = trackBrowserIssues(page);
         await openPage(page, "/movies");
         await expectScreenshot(page, `movies-${theme}.png`);
-        tracker.assertClean();
       });
 
       test("movie genres, with one selected", async ({ page }) => {
-        const tracker = trackBrowserIssues(page);
         await openPage(page, "/movies?tab=genres");
         await expect(page.getByRole("list", { name: "Movie genres" })).toBeVisible();
 
@@ -57,15 +56,12 @@ for (const theme of THEMES) {
         await page.mouse.move(0, 0);
         await settle(page);
         await expectScreenshot(page, `movies-genres-${theme}.png`);
-        tracker.assertClean();
       });
 
       test("movie playlists", async ({ page }) => {
-        const tracker = trackBrowserIssues(page);
         await openPage(page, "/movies?tab=playlists");
         await expect(page.getByText("3 playlists")).toBeVisible();
         await expectScreenshot(page, `movies-playlists-${theme}.png`);
-        tracker.assertClean();
       });
 
       test("movie library on a phone, with the navigation sheet", async ({
@@ -83,16 +79,13 @@ for (const theme of THEMES) {
       });
 
       test("general settings", async ({ page }) => {
-        const tracker = trackBrowserIssues(page);
         await openPage(page, "/settings");
         await expectScreenshot(page, `settings-general-${theme}.png`, {
           fullPage: true,
         });
-        tracker.assertClean();
       });
 
       test("playback settings, with a select open", async ({ page }) => {
-        const tracker = trackBrowserIssues(page);
         await openPage(page, "/settings/playback");
         await expectScreenshot(page, `settings-playback-${theme}.png`, {
           fullPage: true,
@@ -101,11 +94,9 @@ for (const theme of THEMES) {
         await page.getByRole("combobox", { name: "Profile" }).click();
         await expect(page.getByRole("listbox")).toBeVisible();
         await expectScreenshot(page, `settings-playback-select-${theme}.png`);
-        tracker.assertClean();
       });
 
       test("account settings", async ({ page }) => {
-        const tracker = trackBrowserIssues(page);
         await openPage(page, "/settings/account");
         await expect(
           page.getByRole("heading", { name: "Profile information" }),
@@ -113,11 +104,9 @@ for (const theme of THEMES) {
         await expectScreenshot(page, `settings-account-${theme}.png`, {
           fullPage: true,
         });
-        tracker.assertClean();
       });
 
       test("library settings", async ({ page }) => {
-        const tracker = trackBrowserIssues(page);
         await openPage(page, "/settings/libraries");
         await expect(
           page.getByRole("heading", { name: "Library management" }),
@@ -125,18 +114,15 @@ for (const theme of THEMES) {
         await expectScreenshot(page, `settings-libraries-${theme}.png`, {
           fullPage: true,
         });
-        tracker.assertClean();
       });
 
       test("users settings, with the Add user dialog", async ({ page }) => {
-        const tracker = trackBrowserIssues(page);
         await openPage(page, "/settings/users");
         await expectScreenshot(page, `settings-users-${theme}.png`);
 
         await page.getByRole("button", { name: "Add user" }).click();
         await expect(page.getByRole("dialog", { name: "Add user" })).toBeVisible();
         await expectScreenshot(page, `settings-users-dialog-${theme}.png`);
-        tracker.assertClean();
       });
     });
   });

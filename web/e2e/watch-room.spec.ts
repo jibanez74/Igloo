@@ -1,4 +1,5 @@
-import { expect, test, type Browser, type Page } from "@playwright/test";
+import { expect, test } from "./e2e-test";
+import type { Browser } from "@playwright/test";
 
 import {
   intEnv,
@@ -17,8 +18,11 @@ import {
   cleanupWatchRoom,
   createGuest,
   createWatchRoom,
+  expectLive,
   expectWatchRoomChrome,
   fakeWatchRoomMedia,
+  roomPauseButton,
+  roomPlayButton,
   videoCurrentTime,
   type E2EGuest,
 } from "./watch-room-e2e";
@@ -46,6 +50,12 @@ const env = readWatchRoomEnv();
 // A guest's player starts from another member's command, without a click of
 // its own; real media needs the browser to allow that.
 test.use({ launchOptions: { args: ["--autoplay-policy=no-user-gesture-required"] } });
+
+// Real media only: this suite's browser noise (media aborts, codec warnings)
+// has not been triaged against a real instance yet, so it is not tracked.
+test.use({
+  browserIssueOptions: { skip: "real-media suite, browser noise not triaged yet" },
+});
 
 /** An owner (the configured admin) and invitees, each in their own browser. */
 async function openRoomParty(browser: Browser, guestCount: number) {
@@ -78,15 +88,6 @@ async function openRoomParty(browser: Browser, guestCount: number) {
   };
 }
 
-async function expectLive(page: Page, connected: number) {
-  await expect(page.getByText("Realtime sync connected")).toBeVisible({
-    timeout: env.responseTimeoutMs,
-  });
-  await expect(page.getByText(`${connected} connected now`)).toBeVisible({
-    timeout: env.responseTimeoutMs,
-  });
-}
-
 test.describe("Watch room realtime playback", () => {
   requireRealInstance("watch rooms need a real websocket and media");
   test.describe.configure({ timeout: realMediaTimeouts().test });
@@ -111,14 +112,14 @@ test.describe("Watch room realtime playback", () => {
         ownerPage.goto(`/watch-rooms/${roomId}`),
         guestPage.goto(`/watch-rooms/${roomId}`),
       ]);
-      await expectLive(ownerPage, 2);
-      await expectLive(guestPage, 2);
+      await expectLive(ownerPage, 2, env.responseTimeoutMs);
+      await expectLive(guestPage, 2, env.responseTimeoutMs);
       await expectWatchRoomChrome(ownerPage);
       await expectWatchRoomChrome(guestPage);
 
-      await ownerPage.getByRole("button", { name: "Play playback" }).click();
+      await roomPlayButton(ownerPage).click();
       await expect(
-        guestPage.getByRole("button", { name: "Pause playback" }),
+        roomPauseButton(guestPage),
       ).toBeVisible({ timeout: env.responseTimeoutMs });
 
       await ownerPage
@@ -132,9 +133,9 @@ test.describe("Watch room realtime playback", () => {
         })
         .toBeGreaterThanOrEqual(MOVIE_SEEK_STEP_SEC - 0.5);
 
-      await guestPage.getByRole("button", { name: "Pause playback" }).click();
+      await roomPauseButton(guestPage).click();
       await expect(
-        ownerPage.getByRole("button", { name: "Play playback" }),
+        roomPlayButton(ownerPage),
       ).toBeVisible({ timeout: env.responseTimeoutMs });
 
       await ownerPage
@@ -169,8 +170,8 @@ test.describe("Watch room realtime playback", () => {
         ownerPage.goto(`/watch-rooms/${roomId}`),
         removedPage.goto(`/watch-rooms/${roomId}`),
       ]);
-      await expectLive(ownerPage, 2);
-      await expectLive(removedPage, 2);
+      await expectLive(ownerPage, 2, env.responseTimeoutMs);
+      await expectLive(removedPage, 2, env.responseTimeoutMs);
 
       // The owner swaps the first guest for the second.
       await ownerPage.getByRole("button", { name: /^Edit invitees for/ }).click();
@@ -190,7 +191,7 @@ test.describe("Watch room realtime playback", () => {
 
       // The added guest joins, then leaves for good.
       await addedPage.goto(`/watch-rooms/${roomId}`);
-      await expectLive(addedPage, 2);
+      await expectLive(addedPage, 2, env.responseTimeoutMs);
       await addedPage.getByRole("button", { name: /^Leave watch room for/ }).click();
       await addedPage.getByRole("button", { name: "Leave room" }).click();
       await expect(addedPage).toHaveURL(/\/$/, { timeout: env.responseTimeoutMs });
@@ -228,10 +229,10 @@ test.describe("Watch room HLS playback with real media", () => {
         ownerPage.goto(`/watch-rooms/${roomId}`),
         guestPage.goto(`/watch-rooms/${roomId}`),
       ]);
-      await expectLive(ownerPage, 2);
-      await expectLive(guestPage, 2);
+      await expectLive(ownerPage, 2, env.responseTimeoutMs);
+      await expectLive(guestPage, 2, env.responseTimeoutMs);
 
-      await ownerPage.getByRole("button", { name: "Play playback" }).click();
+      await roomPlayButton(ownerPage).click();
       await expect
         .poll(() => videoCurrentTime(guestPage), { timeout: env.responseTimeoutMs })
         .toBeGreaterThan(2);
@@ -252,8 +253,8 @@ test.describe("Watch room HLS playback with real media", () => {
         )
         .toBeLessThan(WATCH_ROOM_SYNC_DRIFT_THRESHOLD_SEC);
 
-      await guestPage.getByRole("button", { name: "Pause playback" }).click();
-      await expect(ownerPage.getByRole("button", { name: "Play playback" })).toBeVisible({
+      await roomPauseButton(guestPage).click();
+      await expect(roomPlayButton(ownerPage)).toBeVisible({
         timeout: env.responseTimeoutMs,
       });
     } finally {

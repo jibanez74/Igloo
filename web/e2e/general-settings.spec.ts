@@ -1,14 +1,14 @@
-import { expect, test, type Page, type Route } from "@playwright/test";
+import { expect, test } from "./e2e-test";
+import type { Page, Route } from "@playwright/test";
 
 import type {
   GeneralSettingsResponseType,
   GeneralSettingsType,
   UpdateGeneralSettingsRequest,
 } from "../src/types";
-import { trackBrowserIssues } from "./e2e-browser-issues";
-import { getApiData, readJSON } from "./e2e-api";
+import { getApiData, putApiData, readJSON } from "./e2e-api";
 import { loginPageViaApi } from "./e2e-auth";
-import { requireMockApi } from "./e2e-env";
+import { isRealInstance, requireMockApi } from "./e2e-env";
 
 function requestFromSettings(
   settings: GeneralSettingsType,
@@ -31,20 +31,6 @@ async function fetchGeneralSettings(page: Page) {
     "/api/settings/general",
   );
   return data.settings;
-}
-
-async function restoreGeneralSettings(
-  page: Page,
-  settings: UpdateGeneralSettingsRequest,
-) {
-  const response = await page.context().request.put("/api/settings/general", {
-    data: settings,
-    failOnStatusCode: false,
-  });
-  expect(response.status()).toBe(200);
-
-  const body = await readJSON<unknown>(response);
-  expect(body.error, body.message).toBe(false);
 }
 
 async function serviceFieldValues(page: Page) {
@@ -156,7 +142,6 @@ test.describe("General settings", () => {
   test("updates service settings accessibly and optimistically", async ({
     page,
   }) => {
-    const tracker = trackBrowserIssues(page);
     let settingsPutCount = 0;
 
     page.on("request", request => {
@@ -265,15 +250,17 @@ test.describe("General settings", () => {
         await routeToContinue.continue().catch(() => undefined);
       }
       await page.unroute("**/api/settings/general").catch(() => undefined);
-      await restoreGeneralSettings(page, baselineRequest);
+      // Only a real instance keeps what the test saved; the mock resets before
+      // each test, and a restore failing here would hide the test's own error.
+      if (isRealInstance) {
+        await putApiData(page.context().request, "/api/settings/general", baselineRequest);
+      }
     }
-
-    tracker.assertClean();
   });
+
   test("asks before turning image downloads off", async ({ page }) => {
     // On a real instance the save would delete its downloaded artwork.
     requireMockApi();
-    const tracker = trackBrowserIssues(page);
     const puts: UpdateGeneralSettingsRequest[] = [];
     page.on("request", request => {
       if (
@@ -285,35 +272,28 @@ test.describe("General settings", () => {
     });
 
     await loginPageViaApi(page);
-    const baselineRequest = requestFromSettings(await fetchGeneralSettings(page));
-    expect(baselineRequest.download_images).toBe(true);
+    expect((await fetchGeneralSettings(page)).download_images).toBe(true);
 
-    try {
-      await page.goto("/settings");
-      const downloads = page.getByRole("switch", { name: "Download images" });
-      await downloads.click();
-      await expect(downloads).toHaveAttribute("aria-checked", "false");
+    await page.goto("/settings");
+    const downloads = page.getByRole("switch", { name: "Download images" });
+    await downloads.click();
+    await expect(downloads).toHaveAttribute("aria-checked", "false");
 
-      await page.getByRole("button", { name: "Save settings" }).click();
-      const dialog = page.getByRole("alertdialog", {
-        name: "Delete downloaded images?",
-      });
-      await expect(dialog).toBeVisible();
-      await dialog.getByRole("button", { name: "Cancel" }).click();
-      await expect(dialog).toBeHidden();
-      expect(puts).toHaveLength(0);
+    await page.getByRole("button", { name: "Save settings" }).click();
+    const dialog = page.getByRole("alertdialog", {
+      name: "Delete downloaded images?",
+    });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+    await expect(dialog).toBeHidden();
+    expect(puts).toHaveLength(0);
 
-      await page.getByRole("button", { name: "Save settings" }).click();
-      await dialog.getByRole("button", { name: "Delete images" }).click();
-      await expect(dialog).toBeHidden();
-      await expect(page.getByText("Settings saved")).toBeVisible();
-      expect(puts).toHaveLength(1);
-      expect(puts[0].download_images).toBe(false);
-      expect((await fetchGeneralSettings(page)).download_images).toBe(false);
-    } finally {
-      await restoreGeneralSettings(page, baselineRequest);
-    }
-
-    tracker.assertClean();
+    await page.getByRole("button", { name: "Save settings" }).click();
+    await dialog.getByRole("button", { name: "Delete images" }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.getByText("Settings saved")).toBeVisible();
+    expect(puts).toHaveLength(1);
+    expect(puts[0].download_images).toBe(false);
+    expect((await fetchGeneralSettings(page)).download_images).toBe(false);
   });
 });

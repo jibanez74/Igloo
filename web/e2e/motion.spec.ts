@@ -1,6 +1,6 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./e2e-test";
+import { signedOutIssueRules } from "./e2e-browser-issues";
 
-import { trackBrowserIssues } from "./e2e-browser-issues";
 import { expectPageHasNoHorizontalScroll } from "./e2e-layout";
 import { loginPageViaApi } from "./e2e-auth";
 
@@ -8,8 +8,6 @@ test.describe("Reduced motion", () => {
   test("Home keeps its content visible without section entrance animations", async ({
     page,
   }) => {
-    const browserIssues = trackBrowserIssues(page);
-
     await loginPageViaApi(page);
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.setViewportSize({ width: 1280, height: 900 });
@@ -32,8 +30,6 @@ test.describe("Reduced motion", () => {
       await expect(section).toHaveCSS("opacity", "1");
       await expect(section).toHaveCSS("translate", "none");
     }
-
-    browserIssues.assertClean();
   });
 });
 
@@ -92,7 +88,9 @@ test.describe("Enter animations", () => {
 
   test("the enter and exit keyframes are compiled, with every offset they animate", async ({
     page,
+    browserIssues,
   }) => {
+    browserIssues.ignore(signedOutIssueRules);
     await page.goto("/login");
     await expect(page.locator("[data-slot='card']").first()).toBeVisible();
 
@@ -114,8 +112,6 @@ test.describe("Enter animations", () => {
   });
 
   test("a section fades in, and a delayed one starts after it", async ({ page }) => {
-    const browserIssues = trackBrowserIssues(page);
-
     await loginPageViaApi(page);
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto("/");
@@ -152,13 +148,9 @@ test.describe("Enter animations", () => {
       fillMode: "both",
       enterOpacity: "0",
     });
-
-    browserIssues.assertClean();
   });
 
   test("a select list and a dialog zoom in from 95%, at their own durations", async ({ page }) => {
-    const browserIssues = trackBrowserIssues(page);
-
     await loginPageViaApi(page);
     await page.setViewportSize({ width: 1280, height: 900 });
 
@@ -189,11 +181,13 @@ test.describe("Enter animations", () => {
       enterOpacity: "0",
       enterScale: "0.95",
     });
-
-    browserIssues.assertClean();
   });
 
-  test("the sign-in card rises in over the page duration", async ({ page }) => {
+  test("the sign-in card rises in over the page duration", async ({
+    page,
+    browserIssues,
+  }) => {
+    browserIssues.ignore(signedOutIssueRules);
     await page.goto("/login");
 
     const card = page.locator("[data-slot='card']").first();

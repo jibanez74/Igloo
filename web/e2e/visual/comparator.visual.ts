@@ -1,4 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "../e2e-test";
+import type { Page } from "@playwright/test";
 import { comparePngs, decodePng } from "./png";
 
 // The exact comparison behind expectScreenshot (visual-helpers.ts) is only as

@@ -1,15 +1,13 @@
-import { expect, test, type Page } from "@playwright/test";
-import {
-  assertMockSuiteClean,
-  trackBrowserIssues,
-} from "./e2e-browser-issues";
+import { expect, test } from "./e2e-test";
+import type { Page } from "@playwright/test";
 import {
   BREAKPOINTS,
   VIEWPORTS,
   expectFlushUnderAppHeader,
   expectNoOverflowingElements,
 } from "./e2e-layout";
-import { apiResponse, fulfillJSON, gateRoute } from "./e2e-api";
+import { apiResponse, fulfillJSON, gateRoute, pagedList } from "./e2e-api";
+import { SHOWS_PER_PAGE } from "../src/lib/constants";
 import { mockApi } from "./e2e-mock-api";
 import {
   AURORA_PINES_ID,
@@ -21,7 +19,7 @@ import {
 async function mockAlbumDetailsApi(page: Page) {
   const likedTrackIds = new Set([101]);
 
-  const { unexpectedApiRequests } = await mockApi(page, {
+  await mockApi(page, {
     handle: async ({ route, url, method }) => {
       if (url.pathname === `/api/music/albums/details/${GLACIER_SESSIONS_ID}` && method === "GET") {
         await fulfillJSON(route, apiResponse(glacierSessions));
@@ -67,13 +65,10 @@ async function mockAlbumDetailsApi(page: Page) {
       return false;
     },
   });
-
-  return unexpectedApiRequests;
 }
 
 test("audio player like button toggles the current track's liked state", async ({ page }) => {
-  const browserIssues = trackBrowserIssues(page);
-  const unexpectedApiRequests = await mockAlbumDetailsApi(page);
+  await mockAlbumDetailsApi(page);
 
   await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto(`/music/album/${GLACIER_SESSIONS_ID}`);
@@ -120,16 +115,13 @@ test("audio player like button toggles the current track's liked state", async (
     page.getByRole("main").getByRole("button", { name: "Remove Northern Drift from liked" }),
   ).toBeVisible();
   await expectNoOverflowingElements(page);
-
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 // The mini bar spans the full width over the fixed sidebar, whose footer
 // holds the account block (and Logout inside it); a pointer must still reach
 // it while music plays.
 test("the sidebar's account block stays clickable above the mini bar", async ({ page }) => {
-  const browserIssues = trackBrowserIssues(page);
-  const unexpectedApiRequests = await mockAlbumDetailsApi(page);
+  await mockAlbumDetailsApi(page);
 
   await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto(`/music/album/${GLACIER_SESSIONS_ID}`);
@@ -154,13 +146,10 @@ test("the sidebar's account block stays clickable above the mini bar", async ({ 
   const logoutBox = await logout.boundingBox();
   expect(logoutBox && barBox && logoutBox.y + logoutBox.height <= barBox.y).toBe(true);
   await page.keyboard.press("Escape");
-
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 test("artist links navigate to the musician details page", async ({ page }) => {
-  const browserIssues = trackBrowserIssues(page);
-  const unexpectedApiRequests = await mockAlbumDetailsApi(page);
+  await mockAlbumDetailsApi(page);
 
   await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto(`/music/album/${GLACIER_SESSIONS_ID}`);
@@ -171,13 +160,10 @@ test("artist links navigate to the musician details page", async ({ page }) => {
   await page.getByRole("link", { name: "Aurora Pines" }).first().click();
   await expect(page).toHaveURL(`/music/musician/${AURORA_PINES_ID}`);
   await expect(page.getByRole("heading", { level: 1, name: "Aurora Pines" })).toBeVisible();
-
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 test("a slow detail load shows the page's skeleton inside the app shell", async ({ page }) => {
-  const browserIssues = trackBrowserIssues(page);
-  const unexpectedApiRequests = await mockAlbumDetailsApi(page);
+  await mockAlbumDetailsApi(page);
 
   await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto(`/music/album/${GLACIER_SESSIONS_ID}`);
@@ -196,8 +182,6 @@ test("a slow detail load shows the page's skeleton inside the app shell", async 
 
   musician.release();
   await expect(page.getByRole("heading", { level: 1, name: "Aurora Pines" })).toBeVisible();
-
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 // The shell's guard answers from a session checked within the last minute,
@@ -208,8 +192,7 @@ async function ageSessionCheck(page: Page, start: Date) {
 }
 
 test("a slow auth re-check on navigation keeps the shell and the current page", async ({ page }) => {
-  const browserIssues = trackBrowserIssues(page);
-  const unexpectedApiRequests = await mockAlbumDetailsApi(page);
+  await mockAlbumDetailsApi(page);
   const start = new Date();
   await page.clock.install({ time: start });
 
@@ -226,23 +209,37 @@ test("a slow auth re-check on navigation keeps the shell and the current page", 
   await page.getByRole("link", { name: "Aurora Pines" }).first().click();
   await expect.poll(authCheck.requested).toBe(true);
 
-  // Held well past the router's 1 s pendingMs.
-  await page.waitForTimeout(2_000);
+  // Held well past the router's 1 s pendingMs: the page's fake clock fires
+  // every timer due in the next 2 s, the router's pending timer among them.
+  await page.clock.runFor(2_000);
   await expect(page.getByText("Starting Igloo...")).toHaveCount(0);
   await expect(page.getByRole("search")).toBeVisible();
   await expect(page.getByRole("heading", { level: 1, name: "Glacier Sessions" })).toBeVisible();
 
   authCheck.release();
   await expect(page.getByRole("heading", { level: 1, name: "Aurora Pines" })).toBeVisible();
-
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 // With the server gone, nothing it serves can load: neither the auth check
 // nor a route chunk. The shell's error card must not depend on one (in the
 // production build a failed chunk makes the router reload the page onto the
 // browser's offline screen).
-test("an unreachable server on navigation shows the shell's load error, and Try again recovers", async ({ page }) => {
+test("an unreachable server on navigation shows the shell's load error, and Try again recovers", async ({
+  page,
+  browserIssues,
+}) => {
+  // While the server is down, refused requests and the app's reports of them
+  // are what the test causes; nothing else is allowed, then or after.
+  let serverDown = false;
+  browserIssues.ignore({
+    ignoreRequestFailure: request =>
+      serverDown && request.failure()?.errorText === "net::ERR_CONNECTION_REFUSED",
+    ignoreConsole: (_type, text) =>
+      serverDown &&
+      (text === "Failed to load resource: net::ERR_CONNECTION_REFUSED" ||
+        text.startsWith("apiRequest failed: ") ||
+        text.startsWith("ApiFailureError: ")),
+  });
   await mockAlbumDetailsApi(page);
   const start = new Date();
   await page.clock.install({ time: start });
@@ -256,6 +253,7 @@ test("an unreachable server on navigation shows the shell's load error, and Try 
   await ageSessionCheck(page, start);
 
   // Registered last, so it answers before the API mock.
+  serverDown = true;
   await page.route("**/*", route => route.abort("connectionrefused"));
   // A route this visit has not loaded, so its chunk is missing too.
   await page.getByRole("link", { name: "TV Shows" }).first().click();
@@ -264,15 +262,28 @@ test("an unreachable server on navigation shows the shell's load error, and Try 
   await expect(page).toHaveURL(/\/tv-shows/);
 
   await page.unroute("**/*");
+  serverDown = false;
+  // The retry loads the TV Shows page for real, from an empty library.
+  await page.route(/\/api\/shows\/(stats|library)(\?|$)/, async route => {
+    const url = new URL(route.request().url());
+    await fulfillJSON(
+      route,
+      apiResponse(
+        url.pathname.endsWith("/stats")
+          ? { total_shows: 0, total_seasons: 0, total_episodes: 0 }
+          : pagedList(url, "shows", [], { total: 0, perPage: SHOWS_PER_PAGE }),
+      ),
+    );
+  });
   await page.getByRole("button", { name: "Try again" }).click();
 
   await expect(page.getByRole("button", { name: /^Account: / })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "TV Show Library" })).toBeVisible();
   await expect(page.getByText("Couldn’t load Igloo.")).toHaveCount(0);
 });
 
 test("album details holds its layout at every breakpoint", async ({ page }) => {
-  const browserIssues = trackBrowserIssues(page);
-  const unexpectedApiRequests = await mockAlbumDetailsApi(page);
+  await mockAlbumDetailsApi(page);
 
   await page.goto(`/music/album/${GLACIER_SESSIONS_ID}`);
   const title = page.getByRole("heading", { level: 1, name: "Glacier Sessions" });
@@ -293,6 +304,4 @@ test("album details holds its layout at every breakpoint", async ({ page }) => {
       );
     });
   }
-
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });

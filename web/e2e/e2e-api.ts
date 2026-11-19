@@ -45,6 +45,23 @@ export async function getApiData<T>(request: APIRequestContext, path: string) {
   return body.data!;
 }
 
+/**
+ * PUTs `data` to `path` the same way, asserts a 200 success envelope, and
+ * returns whatever data it carries. Specs restore settings through it.
+ */
+export async function putApiData<T = unknown>(
+  request: APIRequestContext,
+  path: string,
+  data: unknown,
+) {
+  const response = await request.put(path, { data, failOnStatusCode: false });
+  expect(response.status(), `PUT ${path}`).toBe(200);
+
+  const body = await readJSON<T>(response);
+  expect(body.error, body.message).toBe(false);
+  return body.data;
+}
+
 /** Wraps data in the success envelope. */
 export function apiResponse<T>(data: T): ApiResponse<T> {
   return {
