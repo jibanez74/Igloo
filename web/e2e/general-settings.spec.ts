@@ -1,3 +1,6 @@
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { expect, test } from "./e2e-test";
 import type { Page, Route } from "@playwright/test";
 
@@ -8,6 +11,7 @@ import type {
 } from "../src/types";
 import { getApiData, putApiData, readJSON } from "./e2e-api";
 import { loginPageViaApi } from "./e2e-auth";
+import { expectedRefusalRules } from "./e2e-browser-issues";
 import { isRealInstance, requireMockApi } from "./e2e-env";
 
 function requestFromSettings(
@@ -206,7 +210,11 @@ test.describe("General settings", () => {
         enable_apple_lookups: nextSettings.enable_apple_lookups,
       });
 
+      // Each tab fades out before it navigates: a second click during the
+      // fade is ignored and the form never unmounts. Arriving on Account
+      // proves it did, so General below mounts from the optimistic cache.
       await page.getByRole("tab", { name: "Account" }).click();
+      await expect(page.getByText("Profile information")).toBeVisible();
       await page.getByRole("tab", { name: "General" }).click();
       await expect(
         page.getByRole("textbox", { name: "Spotify client ID" }),
@@ -295,5 +303,63 @@ test.describe("General settings", () => {
     expect(puts).toHaveLength(1);
     expect(puts[0].download_images).toBe(false);
     expect((await fetchGeneralSettings(page)).download_images).toBe(false);
+  });
+
+  test("keeps the edits and marks the directory the server refuses", async ({
+    page,
+    browserIssues,
+  }) => {
+    browserIssues.ignore(
+      expectedRefusalRules({ method: "PUT", path: "/api/settings/general", status: 400 }),
+    );
+    await loginPageViaApi(page);
+    const baseline = await fetchGeneralSettings(page);
+    const clientId = `playwright-refused-${Date.now()}`;
+    const root = await mkdtemp(join(tmpdir(), "igloo-general-refused-"));
+
+    try {
+      // A directory inside a regular file can never be created.
+      const file = join(root, "file");
+      await writeFile(file, "");
+      const uncreatable = join(file, "static");
+
+      await page.goto("/settings");
+      const staticDir = page.getByRole("textbox", { name: "Static directory" });
+      const clientIdField = page.getByRole("textbox", { name: "Spotify client ID" });
+      const save = page.getByRole("button", { name: "Save settings" });
+      await clientIdField.fill(clientId);
+      await staticDir.fill(uncreatable);
+      await save.click();
+
+      await expect(page.getByText("Failed to save settings")).toBeVisible();
+      await expect(
+        page
+          .getByRole("tabpanel", { name: "General" })
+          .getByText("static directory is not accessible", { exact: true }),
+      ).toBeVisible();
+      await expect(staticDir).toHaveAttribute("aria-invalid", "true");
+      // The optimistic copy is rolled back, the edits are not.
+      await expect(staticDir).toHaveValue(uncreatable);
+      await expect(clientIdField).toHaveValue(clientId);
+      // Still unsaved against the rolled-back copy, so Save stays available.
+      await expect(save).toBeEnabled();
+      expect(await fetchGeneralSettings(page)).toEqual(baseline);
+
+      await staticDir.fill(baseline.static_dir);
+      await expect(staticDir).not.toHaveAttribute("aria-invalid", "true");
+      await save.click();
+      await expect(page.getByText("Settings saved")).toBeVisible();
+      expect((await fetchGeneralSettings(page)).spotify_client_id).toBe(clientId);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+      // Only a real instance keeps what the test saved.
+      if (isRealInstance) {
+        await putApiData(
+          page.context().request,
+          "/api/settings/general",
+          requestFromSettings(baseline),
+        );
+      }
+    }
   });
 });
