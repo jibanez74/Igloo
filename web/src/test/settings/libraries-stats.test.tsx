@@ -149,3 +149,26 @@ describe("where focus stays in the library form", () => {
     expect(scan).toHaveFocus();
   });
 });
+
+describe("starting a scan", () => {
+  it.each([
+    ["Music library scan started", "Music library scan started."],
+    [
+      "Music library scan queued",
+      "Music library scan queued. It starts once the library watcher has applied its changes.",
+    ],
+  ])("reports the server's %j as %j", async (serverMessage, shown) => {
+    mockLibrariesFetch({
+      musicScanStart: jsonResponse({ error: false, message: serverMessage }),
+    });
+    const user = userEvent.setup();
+
+    await renderRoute("/settings/libraries");
+
+    const scan = await screen.findByRole("button", { name: "Scan music library" });
+    await waitFor(() => expect(scan).toBeEnabled());
+    await user.click(scan);
+
+    expect(await screen.findByText(shown)).toBeInTheDocument();
+  });
+});
