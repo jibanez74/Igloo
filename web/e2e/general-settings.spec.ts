@@ -356,7 +356,13 @@ test.describe("General settings", () => {
       await save.click();
       await expectRefusalKeepsEdits(page, baseline, clientId);
 
+      // Editing clears the mark; a second refusal marks the field again.
       const staticDir = page.getByRole("textbox", { name: "Static directory" });
+      await staticDir.fill(`${UNCREATABLE_DIR}-again`);
+      await expect(staticDir).not.toHaveAttribute("aria-invalid", "true");
+      await save.click();
+      await expect(staticDir).toHaveAttribute("aria-invalid", "true");
+
       await staticDir.fill(baseline.static_dir);
       await expect(staticDir).not.toHaveAttribute("aria-invalid", "true");
       await save.click();
@@ -402,9 +408,11 @@ test.describe("General settings", () => {
       await page.getByRole("tab", { name: "Account" }).click();
       await expect(page.getByText("Profile information")).toBeVisible();
       await page.getByRole("tab", { name: "General" }).click();
-      await expect(
-        page.getByRole("textbox", { name: "Static directory" }),
-      ).toHaveValue(UNCREATABLE_DIR);
+      const staticDirField = page.getByRole("textbox", { name: "Static directory" });
+      await expect(staticDirField).toHaveValue(UNCREATABLE_DIR);
+      // The save is still in flight, so this form cannot send another that
+      // the refusal would then land on.
+      await expect(staticDirField).toHaveAttribute("readonly");
 
       const refusal = page.waitForResponse(
         response =>
@@ -415,15 +423,15 @@ test.describe("General settings", () => {
       await route.continue();
       expect((await refusal).status()).toBe(400);
       await expectRefusalKeepsEdits(page, baseline, clientId);
+      await expect(staticDirField).not.toHaveAttribute("readonly");
 
       // A refusal from before a form mounted is not that form's: the next
       // visit shows the saved settings, unmarked.
       await page.getByRole("tab", { name: "Account" }).click();
       await expect(page.getByText("Profile information")).toBeVisible();
       await page.getByRole("tab", { name: "General" }).click();
-      const staticDir = page.getByRole("textbox", { name: "Static directory" });
-      await expect(staticDir).toHaveValue(baseline.static_dir);
-      await expect(staticDir).not.toHaveAttribute("aria-invalid", "true");
+      await expect(staticDirField).toHaveValue(baseline.static_dir);
+      await expect(staticDirField).not.toHaveAttribute("aria-invalid", "true");
     } finally {
       await page.unroute("**/api/settings/general").catch(() => undefined);
     }

@@ -948,10 +948,11 @@ async function handleSettingsRoutes(
   if (url.pathname === "/api/settings/libraries" && method === "PUT") {
     if (!requireAdmin(user, response)) return true;
     const body = await readJSONBody(request);
+    // An absent field clears the library, as Go's validatedOptionalMediaDir(nil).
     const next: SettingsType = {
-      movies_dir: nullableStringField(body, "movies_dir", librarySettings.movies_dir),
-      shows_dir: nullableStringField(body, "shows_dir", librarySettings.shows_dir),
-      music_dir: nullableStringField(body, "music_dir", librarySettings.music_dir),
+      movies_dir: nullableStringField(body, "movies_dir", null),
+      shows_dir: nullableStringField(body, "shows_dir", null),
+      music_dir: nullableStringField(body, "music_dir", null),
     };
     // UpdateLibrarySettings checks each path in this order.
     for (const [field, name] of [

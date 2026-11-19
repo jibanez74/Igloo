@@ -3,6 +3,7 @@ import {
   notifyManager,
   queryOptions,
   skipToken,
+  useIsMutating,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
@@ -97,7 +98,10 @@ type RefusedSave = {
   rollsBack: boolean;
 };
 
-let refusedSaves = 0;
+// Every mounted form sees a save in flight, including one mounted after it
+// started (a tab round trip): its fields stay read-only until it lands, so
+// no second save can overlap the first.
+const SAVE_GENERAL_SETTINGS_KEY = ["save-general-settings"] as const;
 
 const refusedSaveQueryOpts = () =>
   queryOptions<RefusedSave>({
@@ -201,7 +205,8 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   if (refusedSave && refusedSave.id !== handledRefusal) {
     setHandledRefusal(refusedSave.id);
     // The server names the directory it refused; that field is marked as
-    // the form's own validation would mark it.
+    // the form's own validation would mark it. Every form is read-only while
+    // the save is in flight, so the refused value is still the one shown.
     if (refusedSave.field) {
       setValidationMessage(refusedSave.message);
       setValidationField(refusedSave.field);
@@ -232,16 +237,19 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
     notifyManager.batch(() => {
       const before = queryClient.getQueryData(settingsKey);
       restoreOptimistic(queryClient, settingsKey, snapshot);
-      refusedSaves += 1;
-      queryClient.setQueryData(refusedSaveQueryOpts().queryKey, {
-        id: refusedSaves,
+      const refusedKey = refusedSaveQueryOpts().queryKey;
+      queryClient.setQueryData(refusedKey, {
+        id: (queryClient.getQueryData(refusedKey)?.id ?? 0) + 1,
         message,
         field: fieldFromSettingsError(message),
         rollsBack: queryClient.getQueryData(settingsKey) !== before,
       });
     });
   };
+  const savePending =
+    useIsMutating({ mutationKey: SAVE_GENERAL_SETTINGS_KEY, exact: true }) > 0;
   const updateMutation = useSessionMutation({
+    mutationKey: SAVE_GENERAL_SETTINGS_KEY,
     mutationFn: updateGeneralSettings,
     onMutate: (nextSettings, _context, session) =>
       writeOptimistically(queryClient, settingsKey, session, previous =>
@@ -383,6 +391,8 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    // Enter in a read-only field still submits.
+    if (savePending) return;
     const { field, message } = validateForm();
     if (message) {
       setValidationMessage(message);
@@ -438,7 +448,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
                 aria-hidden="true"
               />
             }
-            disabled={updateMutation.isPending}
+            disabled={savePending}
           />
           <SwitchField
             ref={downloadImagesSwitchRef}
@@ -452,7 +462,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
             icon={
               <Download className="size-5 text-primary" aria-hidden="true" />
             }
-            disabled={updateMutation.isPending}
+            disabled={savePending}
           />
         </CardContent>
       </Card>
@@ -472,7 +482,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
             label="Static directory"
             value={form.static_dir}
             onChange={value => handleTextChange("static_dir", value)}
-            disabled={updateMutation.isPending}
+            disabled={savePending}
             icon={<FolderCog className="size-4" aria-hidden="true" />}
             required
             invalid={validationField === "static_dir"}
@@ -484,7 +494,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
             label="Transcode directory"
             value={form.transcode_dir}
             onChange={value => handleTextChange("transcode_dir", value)}
-            disabled={updateMutation.isPending}
+            disabled={savePending}
             icon={<HardDrive className="size-4" aria-hidden="true" />}
             required
             invalid={validationField === "transcode_dir"}
@@ -509,7 +519,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
               label="TMDB API key"
               value={form.tmdb_key}
               onChange={value => handleSecretChange("tmdb_key", value)}
-              disabled={updateMutation.isPending}
+              disabled={savePending}
             />
           </ServiceSection>
           <ServiceSection title="Apple Music">
@@ -522,7 +532,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
                 handleToggleChange("enable_apple_lookups", checked)
               }
               icon={<Disc3 className="size-5 text-primary" aria-hidden="true" />}
-              disabled={updateMutation.isPending}
+              disabled={savePending}
             />
           </ServiceSection>
           <ServiceSection title="Spotify">
@@ -532,7 +542,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
               label="Spotify client ID"
               value={form.spotify_client_id}
               onChange={value => handleSecretChange("spotify_client_id", value)}
-              disabled={updateMutation.isPending}
+              disabled={savePending}
             />
             <SecretInput
               id={spotifyClientSecretId}
@@ -542,7 +552,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
               onChange={value =>
                 handleSecretChange("spotify_client_secret", value)
               }
-              disabled={updateMutation.isPending}
+              disabled={savePending}
             />
           </ServiceSection>
         </CardContent>
@@ -558,7 +568,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
         }
         statusTone={validationMessage ? "error" : "neutral"}
         onReset={resetForm}
-        isPending={updateMutation.isPending}
+        isPending={savePending}
         stickyClassName={
           isMiniPlayerVisible ? MINI_PLAYER_CLEARANCE_BOTTOM_CLASS : "bottom-4"
         }
@@ -572,7 +582,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
         description="Turning off image downloads deletes the artwork saved in the static directory. Images load from their online sources again."
         confirmLabel="Delete images"
         pendingLabel="Deleting images..."
-        pending={updateMutation.isPending}
+        pending={savePending}
         restoreFocusRef={imageRemovalReturnRef}
         fallbackFocusRef={downloadImagesSwitchRef}
         onConfirm={saveForm}
