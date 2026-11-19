@@ -475,8 +475,12 @@ export function showDetailsQueryOpts(id: number) {
 
 // Season episodes are fetched per selection rather than embedded in the details
 // payload: a long-running show holds hundreds of episodes with overview text,
-// and the page renders one season at a time. Specials are season zero, so the
-// guard is >= 0.
+// and the page renders one season at a time. Embedding only the default season
+// was considered and declined: episodes carry the reader's watch progress, so
+// the details would turn per-user and go stale on every watch change, and the
+// round trip it saves happens only on a cold load, since intent preloading
+// runs both requests before the click. Specials are season zero, so the guard
+// is >= 0.
 export function showSeasonEpisodesQueryOpts(
   showId: number,
   seasonNumber: number,
