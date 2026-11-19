@@ -811,6 +811,4 @@ export const WATCH_ROOM_ECHO_TIMEOUT_MS = 5_000;
 // the DOM first. Tests advance past it to prove a message was never spoken.
 export const LIVE_ANNOUNCE_DELAY_MS = 100;
 
-export const MOVIE_SCAN_STATUS_KEY = "movie-scan-status";
-export const MUSIC_SCAN_STATUS_KEY = "music-scan-status";
-export const SHOW_SCAN_STATUS_KEY = "show-scan-status";
+export const SCAN_STATUS_KEY = "scan-status";

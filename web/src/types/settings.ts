@@ -18,3 +18,4 @@ export type PlaybackSettingsResponseType = Schema["PlaybackSettingsData"];
 export type MovieScanStatus = Schema["MovieScanStatusData"];
 export type MusicScanStatus = Schema["MusicScanStatusData"];
 export type ShowScanStatus = Schema["ShowScanStatusData"];
+export type ScanStatuses = Schema["ScanStatusData"];

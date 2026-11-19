@@ -1,5 +1,5 @@
 import type { PersonData } from "@/types/people";
-import type { MovieScanStatus, MusicScanStatus, ShowScanStatus } from "@/types/settings";
+import type { ScanStatuses } from "@/types/settings";
 import { mediaApiBasePath, movieMediaRef } from "@/lib/media-ref";
 import { sessionEndedSince, sessionStamp, type SessionStamp } from "@/lib/session";
 import type {
@@ -1020,11 +1020,9 @@ export const triggerMusicScan = () =>
     method: "POST",
   });
 
-export const getMusicScanStatus = (signal?: AbortSignal) =>
-  apiRequest<MusicScanStatus>("/api/settings/scan/music", { signal });
-
-export const getMovieScanStatus = (signal?: AbortSignal) =>
-  apiRequest<MovieScanStatus>("/api/settings/scan/movies", { signal });
+// Every library's scan report in one response, so one poll covers all three.
+export const getScanStatus = (signal?: AbortSignal) =>
+  apiRequest<ScanStatuses>("/api/settings/scan", { signal });
 
 export const triggerMovieScan = () =>
   apiRequest<{ message: string }>("/api/settings/scan/movies", {
@@ -1035,9 +1033,6 @@ export const triggerShowScan = () =>
   apiRequest<{ message: string }>("/api/settings/scan/shows", {
     method: "POST",
   });
-
-export const getShowScanStatus = (signal?: AbortSignal) =>
-  apiRequest<ShowScanStatus>("/api/settings/scan/shows", { signal });
 
 // ============================================================================
 // Admin user management

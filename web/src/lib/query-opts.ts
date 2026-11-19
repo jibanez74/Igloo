@@ -46,9 +46,7 @@ import {
   getLikedTracks,
   getLikedTrackIds,
   getMovieDetails,
-  getMovieScanStatus,
-  getMusicScanStatus,
-  getShowScanStatus,
+  getScanStatus,
   getMovieInTheaterDetails,
   getMoviePlaylistDetails,
   getMoviePlaylistMovies,
@@ -125,9 +123,7 @@ import {
   SHOWS_PER_PAGE,
   MOVIES_STATS_KEY,
   PERSON_KEY,
-  MOVIE_SCAN_STATUS_KEY,
-  MUSIC_SCAN_STATUS_KEY,
-  SHOW_SCAN_STATUS_KEY,
+  SCAN_STATUS_KEY,
   MUSICIAN_DETAILS_KEY,
   MUSICIANS_PAGINATED_KEY,
   MUSIC_STATS_KEY,
@@ -1018,31 +1014,15 @@ export function watchRoomInviteUsersQueryOpts(enabled: boolean = true) {
 }
 
 // ============================================================================
-// Library scan status. Unlike the queries above these throw a failure envelope
-// (ApiFailureError), so a failed poll is a query error that keeps the last
-// report on screen rather than cached data that replaces it.
+// Library scan status: one report per library in one response. Unlike the
+// queries above this throws a failure envelope (ApiFailureError), so a failed
+// poll is a query error that keeps the last reports on screen rather than
+// cached data that replaces them.
 // ============================================================================
 
-function scanStatusQueryOpts<T extends Record<string, unknown>>(
-  key: string,
-  fetchStatus: (signal?: AbortSignal) => Promise<ApiResponseType<T>>,
-) {
-  return queryOptions({
-    queryKey: [key],
-    queryFn: async ({ signal }) => unwrapApiData(await fetchStatus(signal)),
+export const scanStatusQueryOpts = () =>
+  queryOptions({
+    queryKey: [SCAN_STATUS_KEY],
+    queryFn: async ({ signal }) => unwrapApiData(await getScanStatus(signal)),
     retry: false,
   });
-}
-
-export type ScanStatusQueryOpts<T extends Record<string, unknown>> = ReturnType<
-  typeof scanStatusQueryOpts<T>
->;
-
-export const movieScanStatusQueryOpts = () =>
-  scanStatusQueryOpts(MOVIE_SCAN_STATUS_KEY, getMovieScanStatus);
-
-export const musicScanStatusQueryOpts = () =>
-  scanStatusQueryOpts(MUSIC_SCAN_STATUS_KEY, getMusicScanStatus);
-
-export const showScanStatusQueryOpts = () =>
-  scanStatusQueryOpts(SHOW_SCAN_STATUS_KEY, getShowScanStatus);

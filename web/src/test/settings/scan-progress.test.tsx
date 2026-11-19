@@ -3,20 +3,22 @@ import { useQuery } from "@tanstack/react-query";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import ScanProgress from "@/components/settings/ScanProgress";
-import { useMovieScanStatus, useMusicScanStatus, useShowScanStatus } from "@/hooks/useScanStatus";
-import { ALBUMS_PAGINATED_KEY, MOVIES_STATS_KEY, MOVIES_LIBRARY_KEY, MUSIC_STATS_KEY } from "@/lib/constants";
+import { useScanStatus } from "@/hooks/useScanStatus";
+import { ALBUMS_PAGINATED_KEY, MOVIES_STATS_KEY, MOVIES_LIBRARY_KEY, MUSIC_STATS_KEY, SHOWS_LIBRARY_KEY, SHOWS_STATS_KEY } from "@/lib/constants";
 import { moviesLibraryQueryOpts, moviesStatsQueryOpts } from "@/lib/query-opts";
 import { createTestQueryClient, renderWithQueryClient } from "../helpers/render";
 import {
   movieScanStatus,
   musicScanStatus,
+  IDLE_SCAN,
+  scanStatuses,
   showScanStatus,
 } from "../helpers/scan-status";
 import { jsonResponse, requestURL } from "../helpers/api";
 
 function ScanView() {
-  const query = useMovieScanStatus();
-  return <ScanProgress library="movies" status={query.data} unavailable={query.isError} />;
+  const query = useScanStatus();
+  return <ScanProgress library="movies" status={query.data?.movies} unavailable={query.isError} />;
 }
 
 // What a movie library page and its statistics keep mounted while a scan runs.
@@ -27,18 +29,31 @@ function MovieLibraryObservers() {
 }
 
 function BackgroundScanView() {
-  const query = useMovieScanStatus({ background: true });
-  return <ScanProgress library="movies" status={query.data} unavailable={query.isError} />;
+  const query = useScanStatus({ background: true });
+  return <ScanProgress library="movies" status={query.data?.movies} unavailable={query.isError} />;
 }
 
 function MusicScanView() {
-  const query = useMusicScanStatus();
-  return <ScanProgress library="music" status={query.data} unavailable={query.isError} />;
+  const query = useScanStatus();
+  return <ScanProgress library="music" status={query.data?.music} unavailable={query.isError} />;
 }
 
 function ShowScanView() {
-  const query = useShowScanStatus();
-  return <ScanProgress library="shows" status={query.data} unavailable={query.isError} />;
+  const query = useScanStatus();
+  return <ScanProgress library="shows" status={query.data?.shows} unavailable={query.isError} />;
+}
+
+// What the authenticated shell and Settings → Libraries show: one poll, every
+// library's report.
+function AllScansView() {
+  const query = useScanStatus();
+  return (
+    <>
+      <ScanProgress library="movies" status={query.data?.movies} unavailable={query.isError} />
+      <ScanProgress library="music" status={query.data?.music} unavailable={query.isError} />
+      <ScanProgress library="shows" status={query.data?.shows} unavailable={query.isError} />
+    </>
+  );
 }
 
 afterEach(() => {
@@ -83,7 +98,7 @@ describe("movie scan progress", () => {
     let failed = false;
     const fetchMock = vi.fn(() => jsonResponse(failed
       ? { error: true, message: "Status temporarily unavailable" }
-      : { error: false, data: status }));
+      : { error: false, data: scanStatuses({ movies: status }) }));
     vi.stubGlobal("fetch", fetchMock);
     const client = createTestQueryClient();
     const invalidate = vi.spyOn(client, "invalidateQueries");
@@ -131,7 +146,7 @@ describe("movie scan progress", () => {
     let failed = false;
     const fetchMock = vi.fn(() => jsonResponse(failed
       ? { error: true, message: "Status temporarily unavailable", status: 503 }
-      : { error: false, data: movieScanStatus() }));
+      : { error: false, data: scanStatuses({ movies: movieScanStatus() }) }));
     vi.stubGlobal("fetch", fetchMock);
     const client = createTestQueryClient();
     renderWithQueryClient(<ScanView />, { queryClient: client });
@@ -153,7 +168,7 @@ describe("movie scan progress", () => {
   it("polls in the background at a minute's pace while idle and every two seconds while a scan runs", async () => {
     vi.useFakeTimers();
     let status = movieScanStatus();
-    const fetchMock = vi.fn(() => jsonResponse({ error: false, data: status }));
+    const fetchMock = vi.fn(() => jsonResponse({ error: false, data: scanStatuses({ movies: status }) }));
     vi.stubGlobal("fetch", fetchMock);
     const client = createTestQueryClient();
     renderWithQueryClient(<BackgroundScanView />, { queryClient: client });
@@ -201,8 +216,8 @@ describe("music scan progress", () => {
   it("polls the music report and refreshes music statistics and lists", async () => {
     vi.useFakeTimers();
     let status = musicScanStatus();
-    const fetchMock = vi.fn((input: RequestInfo | URL) => jsonResponse(requestURL(input) === "/api/settings/scan/music"
-      ? { error: false, data: status }
+    const fetchMock = vi.fn((input: RequestInfo | URL) => jsonResponse(requestURL(input) === "/api/settings/scan"
+      ? { error: false, data: scanStatuses({ music: status }) }
       : { error: true, message: `unexpected request ${requestURL(input)}` }));
     vi.stubGlobal("fetch", fetchMock);
     const client = createTestQueryClient();
@@ -253,8 +268,8 @@ describe("TV shows scan progress", () => {
   it("polls the TV report until the scan completes", async () => {
     vi.useFakeTimers();
     let status = showScanStatus();
-    const fetchMock = vi.fn((input: RequestInfo | URL) => jsonResponse(requestURL(input) === "/api/settings/scan/shows"
-      ? { error: false, data: status }
+    const fetchMock = vi.fn((input: RequestInfo | URL) => jsonResponse(requestURL(input) === "/api/settings/scan"
+      ? { error: false, data: scanStatuses({ shows: status }) }
       : { error: true, message: `unexpected request ${requestURL(input)}` }));
     vi.stubGlobal("fetch", fetchMock);
     const client = createTestQueryClient();
@@ -302,7 +317,7 @@ describe("runs of watcher-detected changes", () => {
   it("refreshes the library lists once a watcher run commits something, and not for one that changed nothing", async () => {
     vi.useFakeTimers();
     let status = movieScanStatus({ scope: "changes", total: 1 });
-    const fetchMock = vi.fn(() => jsonResponse({ error: false, data: status }));
+    const fetchMock = vi.fn(() => jsonResponse({ error: false, data: scanStatuses({ movies: status }) }));
     vi.stubGlobal("fetch", fetchMock);
     const client = createTestQueryClient();
     const invalidate = vi.spyOn(client, "invalidateQueries");
@@ -335,7 +350,7 @@ describe("runs of watcher-detected changes", () => {
     const stats = { error: false, data: { total_movies: 418 } };
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const url = requestURL(input);
-      if (url === "/api/settings/scan/movies") return jsonResponse({ error: false, data: status });
+      if (url === "/api/settings/scan") return jsonResponse({ error: false, data: scanStatuses({ movies: status }) });
       if (url === "/api/movies/stats") return jsonResponse(stats);
       return jsonResponse(library);
     });
@@ -375,7 +390,7 @@ describe("runs of watcher-detected changes", () => {
       run_id, scope: "changes", state: "completed", phase: "enrichment", total: 1, processed: 1, unchanged: 1, ...overrides,
     });
     let status = run("idle-run", { catalog_revision: 4 });
-    vi.stubGlobal("fetch", vi.fn(() => jsonResponse({ error: false, data: status })));
+    vi.stubGlobal("fetch", vi.fn(() => jsonResponse({ error: false, data: scanStatuses({ movies: status }) })));
     const client = createTestQueryClient();
     const invalidate = vi.spyOn(client, "invalidateQueries");
     renderWithQueryClient(<ScanView />, { queryClient: client });
@@ -407,6 +422,97 @@ describe("runs of watcher-detected changes", () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
     expect(invalidate).not.toHaveBeenCalledWith({ queryKey: [MOVIES_LIBRARY_KEY] });
     expect(invalidate).not.toHaveBeenCalledWith({ queryKey: [MOVIES_STATS_KEY] });
+    client.clear();
+  });
+});
+
+describe("one poll for every library", () => {
+  it("asks for all three reports in one request per poll", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn<(input: RequestInfo | URL) => ReturnType<typeof jsonResponse>>(() => jsonResponse({
+      error: false,
+      data: scanStatuses({ movies: movieScanStatus({ state: "completed" }) }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createTestQueryClient();
+    renderWithQueryClient(<AllScansView />, { queryClient: client });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(requestURL(fetchMock.mock.calls[0][0])).toBe("/api/settings/scan");
+    expect(screen.getByText("Movie scan completed")).toBeInTheDocument();
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    client.clear();
+  });
+
+  it("polls every two seconds while any library runs, and at the idle pace once none does", async () => {
+    vi.useFakeTimers();
+    let music = musicScanStatus();
+    const fetchMock = vi.fn(() => jsonResponse({ error: false, data: scanStatuses({ music }) }));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createTestQueryClient();
+    renderWithQueryClient(<AllScansView />, { queryClient: client });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    music = musicScanStatus({ state: "completed", processed: 2267, imported: 2267 });
+    await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
+    const completedCalls = fetchMock.mock.calls.length;
+    await act(async () => { await vi.advanceTimersByTimeAsync(9_000); });
+    expect(fetchMock).toHaveBeenCalledTimes(completedCalls);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
+    expect(fetchMock).toHaveBeenCalledTimes(completedCalls + 1);
+    client.clear();
+  });
+
+  it("sets each library's baseline from its own first report", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn(() => jsonResponse({
+      error: false,
+      data: scanStatuses({
+        movies: movieScanStatus({ run_id: "movie-run", state: "completed", catalog_revision: 5 }),
+        shows: showScanStatus({ run_id: "show-run", state: "completed", catalog_revision: 3 }),
+      }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createTestQueryClient();
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    renderWithQueryClient(<AllScansView />, { queryClient: client });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: [MOVIES_STATS_KEY], refetchType: "none" });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: [MOVIES_LIBRARY_KEY], refetchType: "none" });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: [SHOWS_STATS_KEY], refetchType: "none" });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: [SHOWS_LIBRARY_KEY], refetchType: "none" });
+    // The idle music report has no run and no revision: nothing to mark.
+    expect(invalidate).not.toHaveBeenCalledWith(expect.objectContaining({ queryKey: [MUSIC_STATS_KEY] }));
+    expect(invalidate).not.toHaveBeenCalledWith(expect.objectContaining({ queryKey: [ALBUMS_PAGINATED_KEY] }));
+    for (const [filters] of invalidate.mock.calls) {
+      expect(filters).toHaveProperty("refetchType", "none");
+    }
+    client.clear();
+  });
+
+  it("refreshes only the library whose report moved", async () => {
+    vi.useFakeTimers();
+    const movies = movieScanStatus({ run_id: "movie-run", state: "completed", catalog_revision: 5 });
+    let music = musicScanStatus({ ...IDLE_SCAN });
+    const fetchMock = vi.fn(() => jsonResponse({ error: false, data: scanStatuses({ movies, music }) }));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createTestQueryClient();
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    renderWithQueryClient(<AllScansView />, { queryClient: client });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    invalidate.mockClear();
+
+    music = musicScanStatus({ run_id: "music-run", processed: 54, imported: 54, catalog_revision: 54 });
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: [MUSIC_STATS_KEY] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: [ALBUMS_PAGINATED_KEY] });
+    expect(invalidate).not.toHaveBeenCalledWith(expect.objectContaining({ queryKey: [MOVIES_STATS_KEY] }));
+    expect(invalidate).not.toHaveBeenCalledWith(expect.objectContaining({ queryKey: [MOVIES_LIBRARY_KEY] }));
+    expect(invalidate).not.toHaveBeenCalledWith(expect.objectContaining({ queryKey: [SHOWS_LIBRARY_KEY] }));
     client.clear();
   });
 });

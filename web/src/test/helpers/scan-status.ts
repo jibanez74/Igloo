@@ -1,6 +1,7 @@
 import type {
   MovieScanStatus,
   MusicScanStatus,
+  ScanStatuses,
   ShowScanStatus,
 } from "@/types/settings";
 
@@ -28,4 +29,26 @@ export function musicScanStatus(overrides: Partial<MusicScanStatus> = {}): Music
 
 export function showScanStatus(overrides: Partial<ShowScanStatus> = {}): ShowScanStatus {
   return { ...runningScan(316), episodes: 0, pending_enrichment: 0, ...overrides };
+}
+
+/** Overrides that turn a scan-status builder's report into an idle one. */
+export const IDLE_SCAN = {
+  run_id: "",
+  state: "idle",
+  phase: "idle",
+  total: 0,
+  started_at: null,
+  updated_at: null,
+} as const;
+
+/**
+ * The combined scan-status payload: every library idle unless given a report.
+ */
+export function scanStatuses(reports: Partial<ScanStatuses> = {}): ScanStatuses {
+  return {
+    movies: movieScanStatus(IDLE_SCAN),
+    shows: showScanStatus(IDLE_SCAN),
+    music: musicScanStatus(IDLE_SCAN),
+    ...reports,
+  };
 }

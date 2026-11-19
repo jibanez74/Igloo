@@ -1,10 +1,9 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { movieScanStatusQueryOpts, musicScanStatusQueryOpts, showScanStatusQueryOpts } from "@/lib/query-opts";
-import type { ScanStatusQueryOpts } from "@/lib/query-opts";
+import { scanStatusQueryOpts } from "@/lib/query-opts";
 import { MOVIES_STATS_KEY, MUSIC_STATS_KEY, SHOWS_STATS_KEY } from "@/lib/constants";
 import { invalidateLibraryQueries, type Library } from "@/lib/library-cache";
-import type { MovieScanStatus, MusicScanStatus, ShowScanStatus } from "@/types/settings";
+import type { MovieScanStatus, ScanStatuses } from "@/types/settings";
 
 const subscribeVisibility = (onChange: () => void) => {
   document.addEventListener("visibilitychange", onChange);
@@ -22,33 +21,17 @@ type ScanStatusOptions = {
   background?: boolean;
 };
 
-type ScanStatusConfig<T extends ScanStatusLike & Record<string, unknown>> = {
-  queryOptions: () => ScanStatusQueryOpts<T>;
-  // statsKey is the library statistics query committed work refreshes; a
-  // library without statistics leaves it unset.
-  statsKey?: string;
-  library: Library;
-};
-
-// Polls a scan report every two seconds while it runs and every ten seconds
-// otherwise (or while the report keeps failing), pausing in hidden tabs. In the
-// background, off the libraries page, an idle report is polled once a minute,
-// so a scan started elsewhere or a run of watcher-detected changes is still
-// noticed on any route. A new catalog revision refreshes the
-// library statistics; a new run, phase or terminal state of a library scan
-// refreshes the library lists. A run of watcher-detected changes is often one
-// file and over within a poll, and several can finish between two polls, so
-// the report seen may not be the run that changed anything. Such runs refresh
-// the lists once one has ended and the revision, which counts every change
-// across runs, moved since the last refresh.
-function useScanStatus<T extends ScanStatusLike & Record<string, unknown>>(
-  config: ScanStatusConfig<T>,
-  { enabled = true, background = false }: ScanStatusOptions,
-) {
+// Polls every library's scan report, in one request, every two seconds while
+// any of them runs and every ten seconds otherwise (or while the report keeps
+// failing), pausing in hidden tabs. In the background, off the libraries page,
+// idle reports are polled once a minute, so a scan started elsewhere or a run
+// of watcher-detected changes is still noticed on any route. Each library's
+// report then refreshes that library's queries on its own; see
+// useLibraryScanRefresh.
+export function useScanStatus({ enabled = true, background = false }: ScanStatusOptions = {}) {
   const visible = useSyncExternalStore(subscribeVisibility, isVisible);
-  const queryClient = useQueryClient();
   const query = useQuery({
-    ...config.queryOptions(),
+    ...scanStatusQueryOpts(),
     enabled: enabled && visible,
     refetchOnMount: "always",
     refetchInterval: query => {
@@ -58,18 +41,34 @@ function useScanStatus<T extends ScanStatusLike & Record<string, unknown>>(
       // the failure lasts helps nobody, so it backs off to ten seconds, also
       // in the background, where a scan it shows running may finish.
       if (query.state.status === "error") return 10_000;
-      if (query.state.data?.state === "running") return 2_000;
+      if (anyRunning(query.state.data)) return 2_000;
       return background ? 60_000 : 10_000;
     },
     refetchIntervalInBackground: false,
   });
-  const status = query.data;
+  useLibraryScanRefresh(query.data?.movies, "movies", MOVIES_STATS_KEY);
+  useLibraryScanRefresh(query.data?.music, "music", MUSIC_STATS_KEY);
+  useLibraryScanRefresh(query.data?.shows, "shows", SHOWS_STATS_KEY);
+  return query;
+}
+
+function anyRunning(statuses: ScanStatuses | undefined) {
+  return statuses !== undefined && Object.values(statuses).some(status => status.state === "running");
+}
+
+// A new catalog revision refreshes the library's statistics; a new run, phase
+// or terminal state of a library scan refreshes its lists. A run of
+// watcher-detected changes is often one file and over within a poll, and
+// several can finish between two polls, so the report seen may not be the run
+// that changed anything. Such runs refresh the lists once one has ended and the
+// revision, which counts every change across runs, moved since the last
+// refresh. Each library keeps its own baselines.
+function useLibraryScanRefresh(status: ScanStatusLike | undefined, library: Library, statsKey: string) {
+  const queryClient = useQueryClient();
   const revision = status?.catalog_revision ?? 0;
-  const statsKey = config.statsKey;
   const phase = status?.phase;
   const state = status?.state;
   const runId = status?.run_id;
-  const library = config.library;
   const watcherRun = status?.scope === "changes";
   const settledRevision = watcherRun && state !== "running" ? revision : undefined;
 
@@ -87,7 +86,7 @@ function useScanStatus<T extends ScanStatusLike & Record<string, unknown>>(
     if (status === undefined) return;
     const previous = seenRevision.current;
     seenRevision.current = revision;
-    if (revision > 0 && revision !== previous && statsKey) {
+    if (revision > 0 && revision !== previous) {
       void queryClient.invalidateQueries(
         previous === null
           ? { queryKey: [statsKey], refetchType: "none" }
@@ -116,36 +115,4 @@ function useScanStatus<T extends ScanStatusLike & Record<string, unknown>>(
     }
     invalidateLibraryQueries(queryClient, library);
   }, [queryClient, library, phase, state, runId, watcherRun, settledRevision, status]);
-
-  return query;
-}
-
-const MOVIE_SCAN: ScanStatusConfig<MovieScanStatus> = {
-  queryOptions: movieScanStatusQueryOpts,
-  statsKey: MOVIES_STATS_KEY,
-  library: "movies",
-};
-
-const MUSIC_SCAN: ScanStatusConfig<MusicScanStatus> = {
-  queryOptions: musicScanStatusQueryOpts,
-  statsKey: MUSIC_STATS_KEY,
-  library: "music",
-};
-
-const SHOW_SCAN: ScanStatusConfig<ShowScanStatus> = {
-  queryOptions: showScanStatusQueryOpts,
-  statsKey: SHOWS_STATS_KEY,
-  library: "shows",
-};
-
-export function useMovieScanStatus(options: ScanStatusOptions = {}) {
-  return useScanStatus(MOVIE_SCAN, options);
-}
-
-export function useMusicScanStatus(options: ScanStatusOptions = {}) {
-  return useScanStatus(MUSIC_SCAN, options);
-}
-
-export function useShowScanStatus(options: ScanStatusOptions = {}) {
-  return useScanStatus(SHOW_SCAN, options);
 }
