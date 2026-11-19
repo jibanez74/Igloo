@@ -78,6 +78,9 @@ test.describe("Side navigation", () => {
   test("a phone opens the same navigation in a sheet", async ({ page }) => {
     // The clock runs the tooltip's hover delay (500 ms) out below.
     await page.clock.install();
+    // Left collapsed on a desktop, where the links do name themselves in
+    // tooltips: the sheet must still show none.
+    await page.addInitScript(() => window.localStorage.setItem("igloo-sidebar", "collapsed"));
     await loginPageViaApi(page);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/");

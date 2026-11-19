@@ -3,7 +3,7 @@ import type { APIRequestContext, Page } from "@playwright/test";
 
 import type { NotificationTitle } from "../src/types";
 import type { components } from "../src/types/openapi.gen";
-import { getApiData } from "./e2e-api";
+import { getApiData, readJSON } from "./e2e-api";
 import { loginPageViaApi, loginViaApi } from "./e2e-auth";
 import { readE2EEnv, requireMockApi } from "./e2e-env";
 import { createUser, deleteUsersByEmailPrefix } from "./e2e-users";
@@ -161,8 +161,18 @@ test.describe("Notifications", () => {
         await expect(page.getByRole("button", { name: /^Read notification/ })).toHaveCount(2);
         await expect(page.getByRole("button", { name: "Mark all read" })).toHaveCount(0);
 
+        // The bell also reads "Notifications" until its count loads, so the
+        // server's own count is what shows the requests stayed read.
+        const countAfterReload = page.waitForResponse(
+          response =>
+            new URL(response.url()).pathname === "/api/notifications/unread-count",
+        );
         await page.reload();
-        await expect(page.getByRole("button", { name: "Notifications", exact: true })).toBeVisible();
+        const count = await readJSON<{ unread_count: number }>(await countAfterReload);
+        expect(count.data?.unread_count).toBe(0);
+        await expect(page.getByRole("button", { name: /^Notifications/ })).toHaveAccessibleName(
+          bellLabel(0),
+        );
       },
     );
   });
