@@ -965,8 +965,21 @@ full page a section that grew would move every baseline below it.
 (`bun run test:visual`, `make test-visual`), and are a CI job (`test-visual`),
 not part of `make check`.
 
-- **The committed set is drawn by CI's pinned image**, and the comparison is
-  exact: a single pixel that differs in any channel fails. It runs in two
+- **The committed set is drawn in one pinned image**,
+  `mcr.microsoft.com/playwright:v<version>-noble`, pinned by digest in the
+  `test-visual` job's `container:` and in the Makefile's `VISUAL_IMAGE`. Its
+  Chromium, system libraries and fonts decide the pixels, not the host: a set
+  drawn in it on a laptop and one drawn in CI were identical on all 56 images
+  (measured with `e2e/visual/png.ts`), and both matched the set CI had drawn
+  on the bare runner before. `make test-visual-docker` compares a checkout
+  with the committed set in that image, and `make test-visual-docker-update`
+  redraws it (Docker only; dependencies install into a Docker volume, so the
+  host's `node_modules` is never used). `bun run check:playwright-image`
+  (`web/scripts/check-playwright-image.ts`, run by both targets and the CI
+  job) fails when the two pins disagree or the tag is not the locked
+  `@playwright/test`: upgrading Playwright means moving the tag and digest in
+  both places and redrawing.
+- **The comparison is exact**: a single pixel that differs in any channel fails. It runs in two
   passes, both inside `expectScreenshot` (`e2e/visual/visual-helpers.ts`),
   which every visual spec uses instead of `toHaveScreenshot`:
   1. Playwright's `toHaveScreenshot` with `threshold: 0`, `maxDiffPixels: 0`.
@@ -993,19 +1006,34 @@ not part of `make check`.
   exact pass shoots up to three times, and a comparing run retries a failed
   test twice on a fresh page, reporting it as flaky. A real change differs
   every time, so it still fails.
-- A laptop renders text differently from CI, so a local run executes the
-  specs without comparing pixels.
-- **To prove a change is invisible locally**, draw a set on the base commit and
-  compare the branch against it on the same machine:
+- **Near misses are listed.** The visual config also writes a JSON report
+  (`test-results/visual-results.json`), and the job summary
+  (`e2e/visual/flake-summary.ts`) lists every test that passed only on a
+  retry and every shot whose exact comparison matched only on a later
+  attempt. Both still pass the job; the list is how a new source of unstable
+  pixels shows up before it starts failing. A retried shot's annotation
+  names the first shot's difference, and a test that failed outright is
+  listed too.
+- **Measured in the pinned image**, with retries off: 20 runs of the whole
+  suite (1,140 tests), 30 of the pages spec (600) and 100 per theme of the
+  library settings test (200) failed nothing. One shot in all of them,
+  `settings-libraries-dark` in the whole-suite runs, matched only on its
+  second attempt. It did not come back in the 800 targeted runs, so its
+  cause is unknown; the retry absorbs it.
+- Outside the image (bare `bun run test:visual` or `make test-visual`) a
+  laptop renders text differently, so that run executes the specs without
+  comparing pixels. To compare there anyway, draw a set on the base commit
+  and compare the branch against it on the same machine:
   `VISUAL_STRICT=1 VISUAL_SNAPSHOT_DIR=/some/dir bun run test:visual:update`
   on the base, then the same without `:update` on the branch.
-- **When a change is meant to be seen**, the `test-visual` job fails and
-  uploads two artifacts: `playwright-report-visual` (expected, actual and
-  diff images of what failed) and `visual-baselines` (the redrawn set). Review the
-  images, then commit them over `web/e2e/visual/__screenshots__/` in a commit
-  of their own, naming what moved and why.
-- A Playwright upgrade or a new runner image can move pixels; regenerate the
-  baselines the same way, in a commit that changes nothing else.
+- **When a change is meant to be seen**, run `make test-visual-docker-update`,
+  review the moved images, and commit them in a commit of their own, naming
+  what moved and why. A failing `test-visual` job also uploads
+  `playwright-report-visual` (expected, actual and diff images of what failed)
+  and `visual-baselines` (the set redrawn in the same image), which are the
+  same pictures.
+- A Playwright upgrade moves the image; redraw the baselines the same way, in
+  a commit that changes nothing else.
 
 ---
 
