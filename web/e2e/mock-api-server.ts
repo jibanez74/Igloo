@@ -7,6 +7,7 @@ import type {
   MoviePlaylistsListResponseType,
   MovieTechnicalDetailsResponse,
   MusicStatsType,
+  NotificationTitle,
   PlaybackSettingsType,
   SettingsType,
   ShowEpisodePlaybackDataType,
@@ -42,11 +43,17 @@ import {
   type IncomingMessage,
   type ServerResponse,
 } from "node:http";
-import { MOVIES_PER_PAGE, STREAM_MODES } from "../src/lib/constants";
+import {
+  MOVIES_PER_PAGE,
+  NOTIFICATION_TITLES,
+  STREAM_MODES,
+} from "../src/lib/constants";
+import type { components } from "../src/types/openapi.gen";
 import { createMockWatchRooms } from "./mock-watch-rooms";
 
 // The stateful API behind the specs that do not call mockApi (settings, auth,
-// devices, the players, trailer, scan progress, head metadata and motion). It
+// devices, notifications, the players, trailer, scan progress, head metadata
+// and motion). It
 // serves only what those specs reach; anything else answers a 404 that the
 // specs' browser-issue checks report.
 
@@ -182,6 +189,21 @@ const DEFAULT_TRAILER_PREFERENCES: TrailerPreferencesData = {
 };
 const TRAILER_SOURCES = ["library", "theaters", "both"];
 const trailerPreferences = new Map<number, TrailerPreferencesData>();
+
+// The administrators' request queue. Starts empty, so the bell carries no
+// badge unless a spec files a request. Each entry records who has read it,
+// as notification_reads does.
+type MockNotification = {
+  id: number;
+  title: NotificationTitle;
+  message: string;
+  created_by_user_id: number;
+  created_at: string;
+  read_by: Set<number>;
+};
+const NOTIFICATION_TITLE_VALUES: readonly string[] = Object.values(NOTIFICATION_TITLES);
+let nextNotificationId = 1;
+const notifications: MockNotification[] = [];
 
 // The server's transcode catalog, labelled the way the Go handler labels it.
 const playbackProfiles = STREAM_MODES.filter(mode => mode.type === "transcode").map(
@@ -450,6 +472,12 @@ function removeUser(userId: number) {
   for (const [sessionId, sessionUserId] of sessions) {
     if (sessionUserId === userId) {
       sessions.delete(sessionId);
+    }
+  }
+  // The schema cascades: a deleted account's requests go with it.
+  for (let index = notifications.length - 1; index >= 0; index -= 1) {
+    if (notifications[index].created_by_user_id === userId) {
+      notifications.splice(index, 1);
     }
   }
 }
@@ -1323,6 +1351,95 @@ async function handleDeviceRoutes(
   return false;
 }
 
+// The Go handlers' rules: anyone files a request, only administrators see
+// the queue (everyone else gets an empty one), read state is per viewer, and
+// a dismissal clears it for every administrator.
+async function handleNotificationRoutes(
+  request: IncomingMessage,
+  response: ServerResponse,
+  url: URL,
+  user: User,
+) {
+  const method = request.method ?? "GET";
+
+  if (url.pathname === "/api/notifications" && method === "POST") {
+    const body = await readJSONBody(request);
+    const title = stringField(body, "title").trim();
+    const message = stringField(body, "message").trim();
+    if (!NOTIFICATION_TITLE_VALUES.includes(title)) {
+      sendFailure(response, 400, "invalid notification title");
+      return true;
+    }
+    if (!message) {
+      sendFailure(response, 400, "message is required");
+      return true;
+    }
+    notifications.push({
+      id: nextNotificationId++,
+      title: title as NotificationTitle,
+      message,
+      created_by_user_id: user.id,
+      // SQLite's CURRENT_TIMESTAMP, as the server stores it.
+      created_at: new Date().toISOString().slice(0, 19).replace("T", " "),
+      read_by: new Set(),
+    });
+    sendJSON(response, 201, { error: false });
+    return true;
+  }
+
+  const unread = () =>
+    user.is_admin ? notifications.filter(item => !item.read_by.has(user.id)).length : 0;
+
+  if (url.pathname === "/api/notifications" && method === "GET") {
+    const visible = user.is_admin ? [...notifications].reverse() : [];
+    sendSuccess(response, {
+      notifications: visible.map(item => ({
+        id: item.id,
+        title: item.title,
+        message: item.message,
+        is_read: item.read_by.has(user.id),
+        created_by_name: users.find(creator => creator.id === item.created_by_user_id)?.name ?? "",
+        created_at: item.created_at,
+      })),
+      unread_count: unread(),
+    } satisfies components["schemas"]["NotificationsListData"]);
+    return true;
+  }
+
+  if (url.pathname === "/api/notifications/unread-count" && method === "GET") {
+    sendSuccess(response, { unread_count: unread() });
+    return true;
+  }
+
+  if (url.pathname === "/api/notifications/read-all" && method === "POST") {
+    if (user.is_admin) notifications.forEach(item => item.read_by.add(user.id));
+    sendSuccess(response, {}, 200, "All notifications marked as read");
+    return true;
+  }
+
+  const readMatch = url.pathname.match(/^\/api\/notifications\/(\d+)\/read$/);
+  if (readMatch && method === "POST") {
+    const item = notifications.find(entry => entry.id === Number(readMatch[1]));
+    if (user.is_admin) item?.read_by.add(user.id);
+    sendSuccess(response, {}, 200, "Notification marked as read");
+    return true;
+  }
+
+  const deleteMatch = url.pathname.match(/^\/api\/notifications\/(\d+)$/);
+  if (deleteMatch && method === "DELETE") {
+    const index = notifications.findIndex(entry => entry.id === Number(deleteMatch[1]));
+    if (!user.is_admin || index === -1) {
+      sendFailure(response, 404, "notification not found");
+      return true;
+    }
+    notifications.splice(index, 1);
+    sendSuccess(response, {}, 200, "Notification deleted");
+    return true;
+  }
+
+  return false;
+}
+
 function handleSharedRoutes(
   request: IncomingMessage,
   response: ServerResponse,
@@ -1333,9 +1450,6 @@ function handleSharedRoutes(
   }
 
   switch (url.pathname) {
-    case "/api/notifications/unread-count":
-      sendSuccess(response, { unread_count: 0 });
-      return true;
     case "/api/music/stats":
       sendSuccess(response, musicStats);
       return true;
@@ -1369,6 +1483,8 @@ function resetState() {
   devices.splice(0);
   pendingPairings.clear();
   users.splice(0, users.length, initialAdmin());
+  nextNotificationId = 1;
+  notifications.splice(0);
   librarySettings = initialLibrarySettings();
   generalSettings = initialGeneralSettings();
   serverPlaybackSettings = initialPlaybackSettings();
@@ -1420,6 +1536,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     if (handleShowsRoutes(request, response, url)) return;
     if (await watchRooms.handleRoute(request, response, url, user.id)) return;
     if (handleHomeRoutes(request, response, url)) return;
+    if (await handleNotificationRoutes(request, response, url, user)) return;
     if (handleSharedRoutes(request, response, url)) return;
     if (await handleDeviceRoutes(request, response, url)) return;
 
