@@ -12,9 +12,9 @@ const mockApiPort = intEnv("E2E_MOCK_API_PORT", 8080);
 const baseURL = `http://127.0.0.1:${webPort}`;
 
 // Pixels compare only against baselines the same renderer drew. The committed
-// set is drawn in a pinned Playwright image: CI's test-visual job (where CI
-// is set) and `make test-visual-docker` locally (which sets VISUAL_STRICT=1).
-// Anywhere else the specs run without comparing unless asked to
+// set is drawn in a pinned Playwright image by `make test-visual-docker`
+// (which sets VISUAL_STRICT=1; CI no longer runs this config, but a run where
+// CI is set still compares). Anywhere else the specs run without comparing unless asked to
 // (VISUAL_STRICT=1), normally together with VISUAL_SNAPSHOT_DIR pointing at a
 // set that machine drew.
 const comparesPixels =
@@ -36,8 +36,8 @@ export default defineConfig({
   // every load, so a comparing run gets two more tries, on fresh pages, and
   // a test that needed one is reported as flaky rather than hidden.
   retries: comparesPixels ? 2 : 0,
-  // The JSON report feeds CI's job summary of tests that needed a retry
-  // (e2e/visual/flake-summary.ts). test-results/ is emptied when a run
+  // The JSON report feeds the near-miss list `make test-visual-docker`
+  // prints (e2e/visual/flake-summary.ts). test-results/ is emptied when a run
   // starts and the report is written when it ends.
   reporter: [
     ["list"],

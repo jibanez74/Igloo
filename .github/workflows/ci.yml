@@ -5,7 +5,6 @@ on:
     branches: ['**']
   pull_request:
     branches: [main]
-  workflow_call:
 
 # No job publishes anything; read access is all the checkout needs.
 permissions:
@@ -44,46 +43,50 @@ jobs:
           cp ../docs/openapi.json cmd/api/openapi/openapi.json
           go test -count=1 -v -tags "externalbin sqlite_fts5" ./...
 
-  test-openapi:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          persist-credentials: false
-
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
-        with:
-          go-version: '1.27.3'
-          cache-dependency-path: server/go.sum
-
+      # The OpenAPI checks need Go and the media tools above, plus the web
+      # dependencies for Redocly and the generated-type drift check.
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
 
-      - name: Install media tools and web dependencies
-        run: |
-          make media-bin
-          echo "$PWD/server/dist/media-bin" >> "$GITHUB_PATH"
-          cd web && bun install --frozen-lockfile
+      - name: Install web dependencies
+        run: cd web && bun install --frozen-lockfile
 
       - name: Lint contract, detect generated-type drift, and verify router coverage
         run: make test-openapi check-openapi
 
+  # Runs in the pinned Playwright image the screenshot baselines are drawn in
+  # (`make test-visual-docker`, docs/design-system.md §2.5), pinned by digest.
+  # Its Chromium and system libraries come with it, so nothing is installed
+  # with apt, and its Node (26) is past the release that defines its own
+  # localStorage global: the unit tests below prove the execArgv opt-out in
+  # web/vite.config.ts leaves jsdom's in place.
   test-frontend:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:2f05f8a734509a7b3f26a912639488ee08f58a7b292d14d62271bcff9038768f
+      options: --ipc=host --init
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
 
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      # setup-bun needs unzip, which the image does not ship; npm installs
+      # the same release binary.
+      - name: Install Bun
+        run: npm install --global --no-fund --no-audit bun
+
+      - name: Show Node version
+        run: node --version
+
+      # The image tag must match the locked @playwright/test and the
+      # Makefile's VISUAL_IMAGE, or local baselines drift from this browser.
+      - name: Check the image matches the locked Playwright
+        run: cd web && bun run check:playwright-image
 
       - name: Install dependencies
         run: cd web && bun install --frozen-lockfile
 
       - name: Lint
         run: cd web && bun run lint
-
-      - name: Verify generated OpenAPI types
-        run: cd web && bun run check:openapi
 
       - name: Test
         run: cd web && bun run test
@@ -100,25 +103,6 @@ jobs:
             exit 1
           fi
 
-      # --with-deps installs system packages with apt, and the runner's
-      # package mirror sometimes fails to resolve for minutes at a time. Try
-      # again before failing the job: five attempts over about seven minutes.
-      - name: Install Playwright Chromium
-        run: |
-          cd web
-          for attempt in 1 2 3 4 5; do
-            if bun x playwright install --with-deps chromium; then
-              exit 0
-            fi
-            if [ "$attempt" -lt 5 ]; then
-              wait_seconds=$((attempt * 45))
-              echo "::warning::Browser install failed (attempt $attempt of 5); retrying in ${wait_seconds}s."
-              sleep "$wait_seconds"
-            fi
-          done
-          echo "::error::Browser install failed five times."
-          exit 1
-
       # The whole mocked suite, boot.spec included, against the bundle built
       # above. Specs that need real media skip without E2E_BASE_URL.
       - name: Test e2e (mocked API, production build)
@@ -133,97 +117,3 @@ jobs:
             web/playwright-report
             web/test-results
           retention-days: 7
-
-  # Screenshot baselines of the component gallery and a few pages
-  # (web/e2e/visual). The committed baselines were drawn by this job, so the
-  # image is pinned: a new runner image or Playwright version can move pixels
-  # and then needs the baselines regenerated here.
-  test-visual:
-    runs-on: ubuntu-24.04
-    # The committed baselines are drawn in this image, and `make
-    # test-visual-docker` runs the same one: its Chromium, system libraries
-    # and fonts are what decide the pixels, so a laptop and CI draw the same
-    # set (docs/design-system.md §2.5). Pinned by digest; the tag must match
-    # the locked @playwright/test and the Makefile's VISUAL_IMAGE (checked
-    # below). Nothing is installed with apt.
-    container:
-      image: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:2f05f8a734509a7b3f26a912639488ee08f58a7b292d14d62271bcff9038768f
-      options: --ipc=host --init
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          persist-credentials: false
-
-      # setup-bun needs unzip, which the image does not ship; npm installs
-      # the same release binary.
-      - name: Install Bun
-        run: npm install --global --no-fund --no-audit bun
-
-      - name: Check the image matches the locked Playwright
-        run: cd web && bun run check:playwright-image
-
-      - name: Install dependencies
-        run: cd web && bun install --frozen-lockfile
-
-      - name: Compare screenshots with the committed baselines
-        id: compare
-        run: cd web && bun run test:visual
-
-      # A test that passed only on a retry, or a shot that matched only on a
-      # later attempt, still passes the job; list them so they are seen.
-      - name: Summarize near misses
-        if: always() && steps.compare.conclusion != 'skipped'
-        run: cd web && bun e2e/visual/flake-summary.ts >> "$GITHUB_STEP_SUMMARY"
-
-      # Uploaded before the redraw below, which writes over the same folders:
-      # this one holds the expected, actual and diff images of what failed.
-      - name: Upload the comparison report
-        if: failure() && steps.compare.conclusion == 'failure'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: playwright-report-visual
-          path: |
-            web/playwright-report
-            web/test-results
-          retention-days: 7
-
-      # A difference is either a regression or an intended change. For an
-      # intended one, download this artifact, review the images and commit
-      # them over web/e2e/visual/__screenshots__. Only a failed comparison
-      # redraws: after a failed install or setup there is nothing to draw from.
-      - name: Redraw the baselines for review
-        if: failure() && steps.compare.conclusion == 'failure'
-        run: cd web && bun run test:visual:update
-
-      - name: Upload redrawn baselines
-        if: failure() && steps.compare.conclusion == 'failure'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: visual-baselines
-          path: web/e2e/visual/__screenshots__
-          retention-days: 7
-
-  # test-frontend runs on whatever Node the runner image ships. Node 25+
-  # defines its own localStorage global, so this job pins Node 26 to prove
-  # the execArgv opt-out in web/vite.config.ts leaves jsdom's in place.
-  test-frontend-node26:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          persist-credentials: false
-
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: '26'
-
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-
-      - name: Show Node version
-        run: node --version
-
-      - name: Install dependencies
-        run: cd web && bun install --frozen-lockfile
-
-      - name: Test
-        run: cd web && bun run test
