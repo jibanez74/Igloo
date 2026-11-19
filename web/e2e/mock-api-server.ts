@@ -38,6 +38,8 @@ import {
   MOCK_SHOW_ID,
 } from "./fixtures/shows";
 import { randomUUID } from "node:crypto";
+import { opendir, stat } from "node:fs/promises";
+import { dirname } from "node:path";
 import {
   createServer,
   type IncomingMessage,
@@ -344,6 +346,29 @@ function sendSuccess(
 
 function sendFailure(response: ServerResponse, status: number, message: string) {
   sendJSON(response, status, { error: true, message });
+}
+
+// helpers.ValidateDir: an existing directory the server can open.
+async function isReadableDirectory(path: string) {
+  try {
+    if (!(await stat(path)).isDirectory()) return false;
+    await (await opendir(path)).close();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// helpers.GetOrCreateDir creates a missing directory. The mock creates
+// nothing, so it accepts a path whose nearest existing ancestor is a
+// directory, the case where creating it would succeed short of permissions.
+async function isCreatableDirectory(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isDirectory();
+  } catch {
+    const parent = dirname(path);
+    return parent !== path && isCreatableDirectory(parent);
+  }
 }
 
 function sendPlaceholderImage(response: ServerResponse) {
@@ -920,11 +945,24 @@ async function handleSettingsRoutes(
   if (url.pathname === "/api/settings/libraries" && method === "PUT") {
     if (!requireAdmin(user, response)) return true;
     const body = await readJSONBody(request);
-    librarySettings = {
+    const next: SettingsType = {
       movies_dir: nullableStringField(body, "movies_dir", librarySettings.movies_dir),
       shows_dir: nullableStringField(body, "shows_dir", librarySettings.shows_dir),
       music_dir: nullableStringField(body, "music_dir", librarySettings.music_dir),
     };
+    // UpdateLibrarySettings checks each path in this order.
+    for (const [field, name] of [
+      ["movies_dir", "movies"],
+      ["shows_dir", "shows"],
+      ["music_dir", "music"],
+    ] as const) {
+      const dir = next[field];
+      if (dir !== null && !(await isReadableDirectory(dir))) {
+        sendFailure(response, 400, `${name} directory is not accessible`);
+        return true;
+      }
+    }
+    librarySettings = next;
     sendSuccess(response, { settings: librarySettings });
     return true;
   }
@@ -939,7 +977,7 @@ async function handleSettingsRoutes(
     if (!requireAdmin(user, response)) return true;
     const body = await readJSONBody(request);
     const current = generalSettings;
-    generalSettings = {
+    const next: GeneralSettingsType = {
       tmdb_key: nullableStringField(body, "tmdb_key", current.tmdb_key),
       spotify_client_id: nullableStringField(body, "spotify_client_id", current.spotify_client_id),
       spotify_client_secret: nullableStringField(
@@ -953,6 +991,26 @@ async function handleSettingsRoutes(
       static_dir: stringField(body, "static_dir", current.static_dir),
       transcode_dir: stringField(body, "transcode_dir", current.transcode_dir),
     };
+    // UpdateGeneralSettings' directory rules, in its order.
+    for (const [field, name] of [
+      ["static_dir", "static"],
+      ["transcode_dir", "transcode"],
+    ] as const) {
+      if (next[field].trim() === "") {
+        sendFailure(response, 400, `${name} directory is required`);
+        return true;
+      }
+    }
+    for (const [field, name] of [
+      ["static_dir", "static"],
+      ["transcode_dir", "transcode"],
+    ] as const) {
+      if (!(await isCreatableDirectory(next[field].trim()))) {
+        sendFailure(response, 400, `${name} directory is not accessible`);
+        return true;
+      }
+    }
+    generalSettings = next;
     sendSuccess(response, { settings: generalSettings, restart_required: false });
     return true;
   }
