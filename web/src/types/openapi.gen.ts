@@ -436,7 +436,7 @@ export interface paths {
         };
         /**
          * Serve a static asset
-         * @description Serves files from the configured static directory: uploaded avatars, and the library artwork downloaded while download_images is on (movies/, people/, shows/, networks/, albums/ and musicians/). A downloaded image's URL carries a ?v= version, a hash of the image's source and size, since responses are cached for a year; a copy downloaded again from the same source at the same size keeps its URL, so a cache may serve the earlier bytes. Content-Type comes from the file extension using the host MIME registry, falling back to application/octet-stream. Successful responses set Cache-Control: public, max-age=31536000 and X-Content-Type-Options: nosniff. Last-Modified supports date revalidation; this endpoint does not emit ETag.
+         * @description Serves files from the configured static directory: uploaded avatars, and the library artwork downloaded while download_images is on (movies/, people/, shows/, networks/, albums/ and musicians/). A downloaded image's URL carries a ?v= version, a hash of the image's source and size, since responses are cached for a year; a copy downloaded again from the same source at the same size keeps its URL, so a cache may serve the earlier bytes. Content-Type comes from the file extension using the host MIME registry, falling back to application/octet-stream. Successful responses set Cache-Control: private, max-age=31536000, immutable (the route needs authentication, so shared caches must not store it) and X-Content-Type-Options: nosniff, and carry no Vary header: the bytes are the same for every reader, so they do not vary on the session cookie as other API responses do. Last-Modified supports date revalidation; this endpoint does not emit ETag.
          */
         get: operations["serveStaticFiles"];
         put?: never;
@@ -2090,7 +2090,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/settings/scan/music": {
+    "/api/settings/scan": {
         parameters: {
             query?: never;
             header?: never;
@@ -2098,14 +2098,30 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get music scan progress
-         * @description Admin-only endpoint for session-authenticated admins: requests carrying a device bearer token are rejected with 401, even alongside a session cookie. Returns the current/latest in-memory report. No persistent history. Discovery and processing are interleaved, so total grows while the local phase runs. Enrichment tallies count unique artists and albums, one outcome each, across Apple Music and Spotify. Interrupted scans retain committed work and report canceled or failed, never successful completion.
+         * Get library scan progress
+         * @description Admin-only endpoint for session-authenticated admins: requests carrying a device bearer token are rejected with 401, even alongside a session cookie. Returns the current/latest in-memory report of each library scanner (movies, shows, music) in one response, so a client polls one route for all three. No persistent history. Each report is read under its own scanner's lock, one after another, so the three are not one atomic snapshot. Interrupted scans retain committed work and report canceled or failed, never successful completion. Movie reports keep local and enrichment counts separate. TV show reports count physical files locally and entities (shows, seasons, and episodes) during enrichment, so the two do not add up. Music discovery and processing are interleaved, so total grows while the local phase runs, and music enrichment tallies count unique artists and albums, one outcome each, across Apple Music and Spotify.
          */
-        get: operations["getMusicScanStatus"];
+        get: operations["getScanStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/scan/music": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
         put?: never;
         /**
          * Trigger a music library scan
-         * @description Admin-only endpoint for session-authenticated admins: requests carrying a device bearer token are rejected with 401, even alongside a session cookie. The scan runs asynchronously; returns 200 when started, or when queued behind a run of changes the library watcher is applying, 409 when a library scan is already running, and 500 when no music directory is configured. Files are inspected by cleaned catalog path using persisted filesystem fingerprints and full-file SHA-256. Matching filesystem metadata skips hashing and probing; identical bytes with changed metadata update only the fingerprint. New or changed bytes are processed after a 60-second quiet period from the later of modification and status-change time. Recent, future-dated, or unstable files preserve their previous records and retry on the next startup or manual scan; deferred totals are logged separately from failures. New and changed m4a files have the Apple catalog ids of an iTunes purchase read and kept. When Apple lookups are enabled, albums whose files carry an Apple collection id are looked up on Apple Music after the walk, in batches, and their tracks paired by catalog id; an album Apple no longer lists falls back to Spotify in the same scan. When Spotify is available, other missing or failed artist and album enrichment is retried from catalog metadata even for unchanged files, without probing them again; confirmed matches and non-matches are retained. Local sort tags and album dates are reconciled from current track contributions, with Spotify dates used only when no valid local date remains. Music identities normalize surrounding whitespace and case; Apple Music and Spotify id collisions retain the existing owner and preserve track IDs. Track changes and deletions reconcile local artist, album, and genre relationships and derived sorting and dates. Missing-file cleanup runs before the Apple Music and Spotify passes. Startup and manual scans remove confirmed missing catalog files, including broken symlink targets and rows without fingerprints, only within the directory captured at scan start. A startup scan, like a library watcher catch-up, keeps missing files that look unmounted rather than deleted: every file when its walk finds none while the catalog holds some, otherwise those beneath a mount point an earlier run recorded by path that is not mounted now, such as a disk mounted inside the library that has not come up; it reports an issue per mount point. A manual scan removes them and records only the mount points mounted then; a manual scan queued behind a run of changes keeps that cleanup when a watcher catch-up joins it. Cleanup follows a successful walk and final batch; files seen during the scan remain protected even if processing fails or is deferred. Cancellation, fatal walk failures, and unavailable or replaced roots prevent cleanup. Permission and I/O failures and symlink loops preserve records. Root accessibility and identity and file absence are rechecked before each deletion commits; runtime caches are invalidated after commit. Unreferenced shared metadata remains. A file renamed or moved within the library keeps its catalog row, paired with it by inode, size and modification time once its old path is confirmed missing, so watch progress, likes, playlist entries and its match survive; a copy that leaves the original in place is imported on its own. No forced refresh is performed. GET returns the current/latest in-memory report; POST duplicate protection lasts for the entire run. Completion logs include local, cleanup and enrichment counts.
+         * @description Admin-only endpoint for session-authenticated admins: requests carrying a device bearer token are rejected with 401, even alongside a session cookie. The scan runs asynchronously; returns 200 when started, or when queued behind a run of changes the library watcher is applying, 409 when a library scan is already running, and 500 when no music directory is configured. Files are inspected by cleaned catalog path using persisted filesystem fingerprints and full-file SHA-256. Matching filesystem metadata skips hashing and probing; identical bytes with changed metadata update only the fingerprint. New or changed bytes are processed after a 60-second quiet period from the later of modification and status-change time. Recent, future-dated, or unstable files preserve their previous records and retry on the next startup or manual scan; deferred totals are logged separately from failures. New and changed m4a files have the Apple catalog ids of an iTunes purchase read and kept. When Apple lookups are enabled, albums whose files carry an Apple collection id are looked up on Apple Music after the walk, in batches, and their tracks paired by catalog id; an album Apple no longer lists falls back to Spotify in the same scan. When Spotify is available, other missing or failed artist and album enrichment is retried from catalog metadata even for unchanged files, without probing them again; confirmed matches and non-matches are retained. Local sort tags and album dates are reconciled from current track contributions, with Spotify dates used only when no valid local date remains. Music identities normalize surrounding whitespace and case; Apple Music and Spotify id collisions retain the existing owner and preserve track IDs. Track changes and deletions reconcile local artist, album, and genre relationships and derived sorting and dates. Missing-file cleanup runs before the Apple Music and Spotify passes. Startup and manual scans remove confirmed missing catalog files, including broken symlink targets and rows without fingerprints, only within the directory captured at scan start. A startup scan, like a library watcher catch-up, keeps missing files that look unmounted rather than deleted: every file when its walk finds none while the catalog holds some, otherwise those beneath a mount point an earlier run recorded by path that is not mounted now, such as a disk mounted inside the library that has not come up; it reports an issue per mount point. A manual scan removes them and records only the mount points mounted then; a manual scan queued behind a run of changes keeps that cleanup when a watcher catch-up joins it. Cleanup follows a successful walk and final batch; files seen during the scan remain protected even if processing fails or is deferred. Cancellation, fatal walk failures, and unavailable or replaced roots prevent cleanup. Permission and I/O failures and symlink loops preserve records. Root accessibility and identity and file absence are rechecked before each deletion commits; runtime caches are invalidated after commit. Unreferenced shared metadata remains. A file renamed or moved within the library keeps its catalog row, paired with it by inode, size and modification time once its old path is confirmed missing, so watch progress, likes, playlist entries and its match survive; a copy that leaves the original in place is imported on its own. No forced refresh is performed. GET /api/settings/scan returns the current/latest in-memory report; duplicate protection lasts for the entire run. Completion logs include local, cleanup and enrichment counts.
          */
         post: operations["triggerMusicScan"];
         delete?: never;
@@ -2121,15 +2137,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get movie scan progress
-         * @description Admin-only endpoint for session-authenticated admins: requests carrying a device bearer token are rejected with 401, even alongside a session cookie. Returns the current/latest in-memory report. No persistent history. Local and enrichment counts are separate. Interrupted scans retain committed work and report canceled or failed, never successful completion.
-         */
-        get: operations["getMovieScanStatus"];
+        get?: never;
         put?: never;
         /**
          * Trigger a movie library scan
-         * @description Admin-only endpoint for session-authenticated admins: requests carrying a device bearer token are rejected with 401, even alongside a session cookie. The scan runs asynchronously; returns 200 when started, or when queued behind a run of changes the library watcher is applying, 409 when a library scan is already running, and 500 when no movies directory is configured. Discovery establishes eligible file totals before two bounded probe workers process new or changed files. Movie scans read no content for change detection: size, nanosecond modification/change times, device and inode form the baseline. Unchanged files skip probing. Changed filesystem metadata triggers a reprobe and playback-cache invalidation even when bytes are identical; scans do not prove byte equality. Files must be quiet for 60 seconds. Deferred paths receive at most two retries within 120 seconds after initial processing; unresolved paths remain deferred. Technical metadata, streams, chapters, baselines and pending enrichment commit atomically before TMDB requests. Imports require accepted video; moving MJPEG is supported, while attached artwork alone is rejected. TMDB failures preserve existing descriptions and relationships; new movies use filename-derived defaults. Later startup or manual scans retry eligible unchanged movies with pending enrichment or no TMDB identity at most once per movie per scan, without probing again, rebuilding streams or chapters, or invalidating playback caches and remux verdicts. Unavailable TMDB leaves a movie eligible for the next scan. A definitive no-match is retried once on the next scan; from the second consecutive miss the movie backs off, doubling from one day up to seven days, until Identify resets it; a technical rescan of the same file keeps the backoff. Identified movies fetch details by stored TMDB ID and never automatically rematch. Successful enrichment replaces descriptive metadata, including manual edits, while preserving audience rating and file-derived duration/runtime; it clears the internal retry state. Persistence discards stale enrichment after a concurrent identity change and discards work for deleted or replaced catalog rows. After local processing and cleanup, two workers enrich movies with serialized persistence. Complete TMDB resolution is limited to 30 seconds including HTTP retries. Three consecutive transient provider failures or an authentication failure stop further dispatch; already active requests may finish. No-match responses are distinguished from outages. Catalog identity, pending state and filesystem baseline are checked before applying enrichment. GET returns the current/latest in-memory report; POST duplicate protection lasts for the entire run. Completion logs include successful and outstanding enrichment counts. Startup and manual scans remove confirmed missing catalog files, including broken symlink targets and rows without fingerprints, only within the directory captured at scan start. A startup scan, like a library watcher catch-up, keeps missing files that look unmounted rather than deleted: every file when its walk finds none while the catalog holds some, otherwise those beneath a mount point an earlier run recorded by path that is not mounted now, such as a disk mounted inside the library that has not come up; it reports an issue per mount point. A manual scan removes them and records only the mount points mounted then; a manual scan queued behind a run of changes keeps that cleanup when a watcher catch-up joins it. Cleanup follows successful discovery and local processing, including bounded deferred retries; files seen during the scan remain protected even if processing fails or is deferred. Cancellation, fatal walk failures, and unavailable or replaced roots prevent cleanup. Permission and I/O failures and symlink loops preserve records. Root accessibility and identity and file absence are rechecked before each deletion commits; runtime caches are invalidated after commit. Unreferenced shared metadata remains. A file renamed or moved within the library keeps its catalog row, paired with it by inode, size and modification time once its old path is confirmed missing, so watch progress, likes, playlist entries and its match survive; a copy that leaves the original in place is imported on its own. No forced refresh is performed.
+         * @description Admin-only endpoint for session-authenticated admins: requests carrying a device bearer token are rejected with 401, even alongside a session cookie. The scan runs asynchronously; returns 200 when started, or when queued behind a run of changes the library watcher is applying, 409 when a library scan is already running, and 500 when no movies directory is configured. Discovery establishes eligible file totals before two bounded probe workers process new or changed files. Movie scans read no content for change detection: size, nanosecond modification/change times, device and inode form the baseline. Unchanged files skip probing. Changed filesystem metadata triggers a reprobe and playback-cache invalidation even when bytes are identical; scans do not prove byte equality. Files must be quiet for 60 seconds. Deferred paths receive at most two retries within 120 seconds after initial processing; unresolved paths remain deferred. Technical metadata, streams, chapters, baselines and pending enrichment commit atomically before TMDB requests. Imports require accepted video; moving MJPEG is supported, while attached artwork alone is rejected. TMDB failures preserve existing descriptions and relationships; new movies use filename-derived defaults. Later startup or manual scans retry eligible unchanged movies with pending enrichment or no TMDB identity at most once per movie per scan, without probing again, rebuilding streams or chapters, or invalidating playback caches and remux verdicts. Unavailable TMDB leaves a movie eligible for the next scan. A definitive no-match is retried once on the next scan; from the second consecutive miss the movie backs off, doubling from one day up to seven days, until Identify resets it; a technical rescan of the same file keeps the backoff. Identified movies fetch details by stored TMDB ID and never automatically rematch. Successful enrichment replaces descriptive metadata, including manual edits, while preserving audience rating and file-derived duration/runtime; it clears the internal retry state. Persistence discards stale enrichment after a concurrent identity change and discards work for deleted or replaced catalog rows. After local processing and cleanup, two workers enrich movies with serialized persistence. Complete TMDB resolution is limited to 30 seconds including HTTP retries. Three consecutive transient provider failures or an authentication failure stop further dispatch; already active requests may finish. No-match responses are distinguished from outages. Catalog identity, pending state and filesystem baseline are checked before applying enrichment. GET /api/settings/scan returns the current/latest in-memory report; duplicate protection lasts for the entire run. Completion logs include successful and outstanding enrichment counts. Startup and manual scans remove confirmed missing catalog files, including broken symlink targets and rows without fingerprints, only within the directory captured at scan start. A startup scan, like a library watcher catch-up, keeps missing files that look unmounted rather than deleted: every file when its walk finds none while the catalog holds some, otherwise those beneath a mount point an earlier run recorded by path that is not mounted now, such as a disk mounted inside the library that has not come up; it reports an issue per mount point. A manual scan removes them and records only the mount points mounted then; a manual scan queued behind a run of changes keeps that cleanup when a watcher catch-up joins it. Cleanup follows successful discovery and local processing, including bounded deferred retries; files seen during the scan remain protected even if processing fails or is deferred. Cancellation, fatal walk failures, and unavailable or replaced roots prevent cleanup. Permission and I/O failures and symlink loops preserve records. Root accessibility and identity and file absence are rechecked before each deletion commits; runtime caches are invalidated after commit. Unreferenced shared metadata remains. A file renamed or moved within the library keeps its catalog row, paired with it by inode, size and modification time once its old path is confirmed missing, so watch progress, likes, playlist entries and its match survive; a copy that leaves the original in place is imported on its own. No forced refresh is performed.
          */
         post: operations["triggerMovieScan"];
         delete?: never;
@@ -2145,11 +2157,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get TV show scan progress
-         * @description Admin-only endpoint for session-authenticated admins: requests carrying a device bearer token are rejected with 401, even alongside a session cookie. Returns the current/latest in-memory report. No persistent history. Local counts are physical files; enrichment counts are entities (shows, seasons, and episodes), so the two do not add up. Interrupted scans retain committed work and report canceled or failed, never successful completion.
-         */
-        get: operations["getShowScanStatus"];
+        get?: never;
         put?: never;
         /**
          * Trigger a TV show library scan
@@ -5018,8 +5026,13 @@ export interface components {
              */
             catalog_revision: number;
         };
-        MovieScanStatusResponse: components["schemas"]["JsonSuccess"] & {
-            data: components["schemas"]["MovieScanStatusData"];
+        ScanStatusData: {
+            movies: components["schemas"]["MovieScanStatusData"];
+            shows: components["schemas"]["ShowScanStatusData"];
+            music: components["schemas"]["MusicScanStatusData"];
+        };
+        ScanStatusResponse: components["schemas"]["JsonSuccess"] & {
+            data: components["schemas"]["ScanStatusData"];
         };
         ShowScanStatusData: {
             /** @description Opaque run identity; empty while idle. Latest report is retained in memory only. */
@@ -5072,9 +5085,6 @@ export interface components {
              * @description Running count of the catalog changes this scanner has made since the server started: files imported, updated or deleted, and entries enriched, summed across runs. It changes even when the run that made the change finished between two reads of this report, so a client compares it to tell whether the catalog changed. Compare it for change only; it restarts from 0 with the server.
              */
             catalog_revision: number;
-        };
-        ShowScanStatusResponse: components["schemas"]["JsonSuccess"] & {
-            data: components["schemas"]["ShowScanStatusData"];
         };
         MusicScanStatusData: {
             /** @description Opaque run identity; empty while idle. Latest report is retained in memory only. */
@@ -5132,9 +5142,6 @@ export interface components {
              * @description Running count of the catalog changes this scanner has made since the server started: files imported, updated or deleted, artists and albums enriched, committed Apple Music or Spotify track pairings, and album matches dropped because their tracks contradicted them, summed across runs. Track pairings count even for unchanged files or fingerprint-only updates; they do not increase enriched. A dropped match counts even though it lowers enriched. Rolled-back pairings and repeated publication of the same committed changes add nothing. It changes even when the run that made the change finished between two reads of this report, so a client compares it to tell whether the catalog changed. Compare it for change only; it restarts from 0 with the server.
              */
             catalog_revision: number;
-        };
-        MusicScanStatusResponse: components["schemas"]["JsonSuccess"] & {
-            data: components["schemas"]["MusicScanStatusData"];
         };
         /** @description One episode's catalog metadata (TMDB fields only). */
         ShowEpisodeSummary: {
@@ -6544,31 +6551,13 @@ export interface components {
             };
             content?: never;
         };
-        /** @description Current or latest movie scan report. Safe issue summaries are capped at 100; issue_count includes all outstanding issues. Idle means no run has started since this process launched. */
-        MovieScanStatusResponse: {
+        /** @description Current or latest scan report of each library. Safe issue summaries are capped at 100 per library; issue_count includes all outstanding issues. A library reports idle when no run has started since this process launched. */
+        ScanStatusResponse: {
             headers: {
                 [name: string]: unknown;
             };
             content: {
-                "application/json": components["schemas"]["MovieScanStatusResponse"];
-            };
-        };
-        /** @description Current or latest TV show scan report. Safe issue summaries are capped at 100; issue_count includes all outstanding issues. Idle means no run has started since this process launched. */
-        ShowScanStatusResponse: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ShowScanStatusResponse"];
-            };
-        };
-        /** @description Current or latest music scan report. Safe issue summaries are capped at 100; issue_count includes all outstanding issues. Idle means no run has started since this process launched. */
-        MusicScanStatusResponse: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["MusicScanStatusResponse"];
+                "application/json": components["schemas"]["ScanStatusResponse"];
             };
         };
         /** @description TV episode playback header response. */
@@ -7328,7 +7317,7 @@ export interface operations {
                     /** @description Representation length in bytes (including multipart framing for multiple ranges). */
                     "Content-Length"?: number;
                     /** @description Static asset cache policy. */
-                    "Cache-Control"?: "public, max-age=31536000";
+                    "Cache-Control"?: "private, max-age=31536000, immutable";
                     /** @description Disable MIME sniffing. */
                     "X-Content-Type-Options"?: "nosniff";
                     [name: string]: unknown;
@@ -7349,7 +7338,7 @@ export interface operations {
                     /** @description Representation length in bytes (including multipart framing for multiple ranges). */
                     "Content-Length"?: number;
                     /** @description Static asset cache policy. */
-                    "Cache-Control"?: "public, max-age=31536000";
+                    "Cache-Control"?: "private, max-age=31536000, immutable";
                     /** @description Disable MIME sniffing. */
                     "X-Content-Type-Options"?: "nosniff";
                     /** @description Present only for a single range. */
@@ -9793,7 +9782,7 @@ export interface operations {
             500: components["responses"]["InternalServerError"];
         };
     };
-    getMusicScanStatus: {
+    getScanStatus: {
         parameters: {
             query?: never;
             header?: never;
@@ -9802,7 +9791,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["MusicScanStatusResponse"];
+            200: components["responses"]["ScanStatusResponse"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             500: components["responses"]["InternalServerError"];
@@ -9824,21 +9813,6 @@ export interface operations {
             500: components["responses"]["InternalServerError"];
         };
     };
-    getMovieScanStatus: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["MovieScanStatusResponse"];
-            401: components["responses"]["Unauthorized"];
-            403: components["responses"]["Forbidden"];
-            500: components["responses"]["InternalServerError"];
-        };
-    };
     triggerMovieScan: {
         parameters: {
             query?: never;
@@ -9852,21 +9826,6 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
-            500: components["responses"]["InternalServerError"];
-        };
-    };
-    getShowScanStatus: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["ShowScanStatusResponse"];
-            401: components["responses"]["Unauthorized"];
-            403: components["responses"]["Forbidden"];
             500: components["responses"]["InternalServerError"];
         };
     };

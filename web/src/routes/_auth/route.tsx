@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { useMovieScanStatus, useMusicScanStatus, useShowScanStatus } from "@/hooks/useScanStatus";
+import { useScanStatus } from "@/hooks/useScanStatus";
 import { redirect, Outlet, createFileRoute, useLocation } from "@tanstack/react-router";
 import { authUserQueryOpts } from "@/lib/query-opts";
 import { STALE_1M } from "@/lib/query-client";
@@ -87,13 +87,10 @@ function AuthShell() {
   useSignOutOnSessionExpiry();
   const { data } = useQuery(authUserQueryOpts());
   const librariesVisible = useLocation({ select: location => location.pathname.replace(/\/+$/, "") === "/settings/libraries" });
-  const scanOptions = {
+  useScanStatus({
     enabled: data?.error === false && data.data.user.is_admin,
     background: !librariesVisible,
-  };
-  useMovieScanStatus(scanOptions);
-  useMusicScanStatus(scanOptions);
-  useShowScanStatus(scanOptions);
+  });
   return (
     <AppShell>
       <Outlet />

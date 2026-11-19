@@ -6,8 +6,8 @@ import {
   authUserQueryOpts,
   libraryMovieDetailsQueryOpts,
   likedTrackIdsQueryOpts,
-  movieScanStatusQueryOpts,
   moviesLibraryQueryOpts,
+  scanStatusQueryOpts,
   tracksInfiniteQueryOpts,
 } from "@/lib/query-opts";
 import { jsonResponse } from "../helpers/api";
@@ -87,7 +87,7 @@ describe("abort signals", () => {
     ["a movie's details", (client: QueryClient) => client.fetchQuery(libraryMovieDetailsQueryOpts(7))],
     ["a library page", (client: QueryClient) => client.fetchQuery(moviesLibraryQueryOpts(2))],
     ["an infinite list", (client: QueryClient) => client.fetchInfiniteQuery(tracksInfiniteQueryOpts())],
-    ["a scan status poll", (client: QueryClient) => client.fetchQuery(movieScanStatusQueryOpts())],
+    ["a scan status poll", (client: QueryClient) => client.fetchQuery(scanStatusQueryOpts())],
   ])("aborts the request for %s when its query is cancelled", async (_name, start) => {
     const signals: (AbortSignal | null | undefined)[] = [];
     vi.stubGlobal(

@@ -16,11 +16,12 @@ import type {
 } from "../src/types";
 import {
   apiResponse,
-  IDLE_SCAN_STATUS_BY_PATH,
   nullableFloat64,
   nullableInt64,
   nullableString,
+  SCAN_STATUS_PATH,
 } from "./e2e-api";
+import { scanStatuses } from "../src/test/helpers/scan-status";
 import { intEnv, readE2EEnv } from "./e2e-env";
 import {
   libraryMovie,
@@ -870,9 +871,8 @@ async function handleSettingsRoutes(
 
   // No spec starts a scan through the mock (scan-progress stubs its own status
   // route), so the admin shell's polls always see an idle scanner.
-  const scanStatus = IDLE_SCAN_STATUS_BY_PATH[url.pathname];
-  if (scanStatus && method === "GET") {
-    sendSuccess(response, scanStatus());
+  if (url.pathname === SCAN_STATUS_PATH && method === "GET") {
+    sendSuccess(response, scanStatuses());
     return true;
   }
 

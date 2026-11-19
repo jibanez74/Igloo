@@ -86,11 +86,38 @@ func (app *Application) ServeStaticFiles(w http.ResponseWriter, r *http.Request)
 		contentType = "application/octet-stream"
 	}
 
+	// A file's URL changes whenever its bytes are meant to: an avatar upload
+	// gets a new name and an artwork copy carries a ?v= version, so the
+	// response never needs revalidating. It is private because the route needs
+	// a session or a device token; a shared cache must not hand it to anyone
+	// else.
 	w.Header().Set("Content-Type", contentType)
-	w.Header().Set("Cache-Control", "public, max-age=31536000")
+	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
+	removeVaryToken(w.Header(), "Cookie")
 
 	http.ServeContent(w, r, info.Name(), info.ModTime(), file)
+}
+
+// removeVaryToken drops token from the Vary header, keeping any others. The
+// static route needs the session for cookie auth, so it stays inside the
+// session middleware, which adds Vary: Cookie to every response. The bytes are
+// the same for every reader, though, and a browser caching on the cookie
+// threw every image away whenever the cookie changed, at each sign-in.
+func removeVaryToken(header http.Header, token string) {
+	var kept []string
+	for _, value := range header.Values("Vary") {
+		for _, part := range strings.Split(value, ",") {
+			part = strings.TrimSpace(part)
+			if part != "" && !strings.EqualFold(part, token) {
+				kept = append(kept, part)
+			}
+		}
+	}
+	header.Del("Vary")
+	if len(kept) > 0 {
+		header.Set("Vary", strings.Join(kept, ", "))
+	}
 }
 
 // frontendAsset is one embedded SPA file, read and fingerprinted once so the

@@ -26,6 +26,10 @@ func (app *Application) GetLatestShows(w http.ResponseWriter, r *http.Request) {
 // only their episode counts; the episodes themselves are fetched per selection
 // by GetShowSeasonEpisodes, because a long-running show holds hundreds of
 // episodes with overview text and the page renders one season at a time.
+// Embedding only the default season would save the web client one round trip
+// on a cold load (its intent preloading already runs both requests before a
+// click) at the cost of making this response per-user, because episodes carry
+// the reader's watch progress; it was declined for that reason.
 func (app *Application) GetShowDetails(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseIDParam(w, r, "id", "invalid show id")
 	if !ok {

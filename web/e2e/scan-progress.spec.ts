@@ -3,9 +3,11 @@ import { ALBUMS_PER_PAGE, MUSICIANS_PER_PAGE } from "../src/lib/constants";
 import {
   movieScanStatus,
   musicScanStatus,
+  scanStatuses,
   showScanStatus,
 } from "../src/test/helpers/scan-status";
-import { apiResponse, fulfillJSON, IDLE_SCAN } from "./e2e-api";
+import { apiResponse, fulfillJSON, SCAN_STATUS_PATH } from "./e2e-api";
+import type { ScanStatuses } from "../src/types/settings";
 import { loginPageViaApi } from "./e2e-auth";
 import { trackBrowserIssues } from "./e2e-browser-issues";
 import { requireMockApi } from "./e2e-env";
@@ -19,13 +21,13 @@ import { requireMockApi } from "./e2e-env";
 
 type ScanKind = {
   name: string;
-  scanPath: string;
+  triggerPath: string;
   settings: Record<"movies_dir" | "shows_dir" | "music_dir", string | null>;
-  idle: unknown;
-  running: unknown;
+  running: ScanStatuses;
   runningText: string;
-  completed: unknown;
+  completed: ScanStatuses;
   completedText: string;
+  unavailableText: string;
   issue: string;
   navLink: string;
   libraryHeading: string;
@@ -36,16 +38,16 @@ type ScanKind = {
 const SCAN_KINDS: ScanKind[] = [
   {
     name: "movies",
-    scanPath: "/api/settings/scan/movies",
+    triggerPath: "/api/settings/scan/movies",
     settings: { movies_dir: "/media/movies", shows_dir: null, music_dir: null },
-    idle: movieScanStatus(IDLE_SCAN),
-    running: movieScanStatus(),
+    running: scanStatuses({ movies: movieScanStatus() }),
     runningText: "Inspecting and importing movies",
-    completed: movieScanStatus({
+    completed: scanStatuses({ movies: movieScanStatus({
       state: "completed-with-issues", phase: "enrichment", processed: 418, imported: 417, failed: 1,
       issue_count: 1, issues: [{ filename: "copying.mkv", phase: "local", reason: "The file is still changing." }],
-    }),
+    }) }),
     completedText: "Movie scan completed with issues",
+    unavailableText: "Movie scan status is unavailable",
     issue: "copying.mkv: The file is still changing.",
     navLink: "Movies",
     libraryHeading: "Movie Library",
@@ -53,16 +55,16 @@ const SCAN_KINDS: ScanKind[] = [
   },
   {
     name: "music",
-    scanPath: "/api/settings/scan/music",
+    triggerPath: "/api/settings/scan/music",
     settings: { movies_dir: null, shows_dir: null, music_dir: "/media/music" },
-    idle: musicScanStatus(IDLE_SCAN),
-    running: musicScanStatus(),
+    running: scanStatuses({ music: musicScanStatus() }),
     runningText: "Discovering and importing tracks",
-    completed: musicScanStatus({
+    completed: scanStatuses({ music: musicScanStatus({
       state: "completed-with-issues", phase: "enrichment", processed: 2267, imported: 2266, failed: 1,
       issue_count: 1, issues: [{ filename: "broken.flac", phase: "local", reason: "Unable to inspect, probe, or save this track." }],
-    }),
+    }) }),
     completedText: "Music scan completed with issues",
+    unavailableText: "Music scan status is unavailable",
     issue: "broken.flac: Unable to inspect, probe, or save this track.",
     navLink: "Music",
     libraryHeading: "Music Library",
@@ -76,16 +78,16 @@ const SCAN_KINDS: ScanKind[] = [
   },
   {
     name: "TV shows",
-    scanPath: "/api/settings/scan/shows",
+    triggerPath: "/api/settings/scan/shows",
     settings: { movies_dir: null, shows_dir: "/media/shows", music_dir: null },
-    idle: showScanStatus(IDLE_SCAN),
-    running: showScanStatus(),
+    running: scanStatuses({ shows: showScanStatus() }),
     runningText: "Inspecting and importing episodes",
-    completed: showScanStatus({
+    completed: scanStatuses({ shows: showScanStatus({
       state: "completed-with-issues", phase: "enrichment", processed: 316, imported: 315, failed: 1,
       issue_count: 1, issues: [{ filename: "Unknown (2001)", phase: "enrichment", reason: "TMDB returned no matching show." }],
-    }),
+    }) }),
     completedText: "TV shows scan completed with issues",
+    unavailableText: "TV shows scan status is unavailable",
     issue: "Unknown (2001): TMDB returned no matching show.",
     navLink: "TV Shows",
     libraryHeading: "TV Show Library",
@@ -101,11 +103,11 @@ test.describe("Library scan progress", () => {
       const browserIssues = trackBrowserIssues(page, {
         // The status endpoint goes down once on purpose, below.
         ignoreResponse: response =>
-          response.status() === 503 && new URL(response.url()).pathname === kind.scanPath,
+          response.status() === 503 && new URL(response.url()).pathname === SCAN_STATUS_PATH,
         ignoreConsole: (_type, text) =>
           text === "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
       });
-      let status: unknown = kind.idle;
+      let status = scanStatuses();
       let starts = 0;
       let unavailable = false;
       let completedServed = false;
@@ -114,13 +116,17 @@ test.describe("Library scan progress", () => {
 
       await loginPageViaApi(page);
       await page.route("**/api/settings", route => fulfillJSON(route, apiResponse(kind.settings)));
-      await page.route(`**${kind.scanPath}`, async route => {
-        if (route.request().method() === "POST") {
-          starts++;
-          status = kind.running;
-          await fulfillJSON(route, { error: false, message: "Library scan started" });
+      await page.route(`**${kind.triggerPath}`, async route => {
+        if (route.request().method() !== "POST") {
+          await route.fallback();
           return;
         }
+        starts++;
+        status = kind.running;
+        await fulfillJSON(route, { error: false, message: "Library scan started" });
+      });
+      // The report of the other two libraries stays idle.
+      await page.route(`**${SCAN_STATUS_PATH}`, async route => {
         if (unavailable) {
           await fulfillJSON(route, { error: true, message: "Status temporarily unavailable" }, 503);
           return;
@@ -157,8 +163,13 @@ test.describe("Library scan progress", () => {
       await page.getByRole("tab", { name: "Libraries", exact: true }).click();
       await expect(busy).toBeDisabled();
 
+      // One request reports every library, so its failure leaves each
+      // library on its last known report.
       unavailable = true;
-      await expect(page.getByRole("alert")).toContainText("Showing the last known progress");
+      await expect(page.getByRole("alert").filter({ hasText: kind.unavailableText })).toContainText(
+        "Showing the last known progress",
+      );
+      await expect(page.getByRole("alert").filter({ hasText: "Showing the last known progress" })).toHaveCount(3);
       await expect(busy).toBeDisabled();
       unavailable = false;
 

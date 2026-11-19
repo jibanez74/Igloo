@@ -410,14 +410,14 @@ func (app *Application) triggerScan(w http.ResponseWriter, library scanLibrary, 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Message: library.title + " library scan started"})
 }
 
-func (app *Application) GetMovieScanStatus(w http.ResponseWriter, r *http.Request) {
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: app.MovieScanner.Status()})
-}
-
-func (app *Application) GetShowScanStatus(w http.ResponseWriter, r *http.Request) {
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: app.ShowScanner.Status()})
-}
-
-func (app *Application) GetMusicScanStatus(w http.ResponseWriter, r *http.Request) {
-	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: app.MusicScanner.Status()})
+// GetScanStatus reports every library scanner in one response, so the admin
+// client polls one route for all three. Each Status copies its scanner's
+// report under that scanner's lock, one after another: the three are not one
+// snapshot, which a progress poll does not need.
+func (app *Application) GetScanStatus(w http.ResponseWriter, r *http.Request) {
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Data: map[string]any{
+		"movies": app.MovieScanner.Status(),
+		"shows":  app.ShowScanner.Status(),
+		"music":  app.MusicScanner.Status(),
+	}})
 }

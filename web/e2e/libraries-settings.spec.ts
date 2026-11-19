@@ -10,7 +10,6 @@ import {
 import type { SettingsType } from "../src/types";
 import { trackBrowserIssues } from "./e2e-browser-issues";
 import {
-  fulfillIdleScanStatus,
   fulfillJSON,
   getApiData,
   readJSON,
@@ -155,14 +154,10 @@ test.describe("Libraries settings", () => {
     const tracker = trackBrowserIssues(page);
 
     let movieScanRequests = 0;
+    // Scan triggers only: the status poll (GET /api/settings/scan) is not
+    // under scan/ and reaches the mock server, which reports idle.
     await page.route("**/api/settings/scan/**", async route => {
       const url = new URL(route.request().url());
-      if (
-        route.request().method() === "GET" &&
-        (await fulfillIdleScanStatus(route, url.pathname))
-      ) {
-        return;
-      }
       if (url.pathname === "/api/settings/scan/movies") {
         movieScanRequests += 1;
       }

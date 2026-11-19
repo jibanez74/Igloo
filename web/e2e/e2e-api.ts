@@ -4,11 +4,7 @@ import {
   type Page,
   type Route,
 } from "@playwright/test";
-import {
-  movieScanStatus,
-  musicScanStatus,
-  showScanStatus,
-} from "../src/test/helpers/scan-status";
+import { scanStatuses } from "../src/test/helpers/scan-status";
 
 export {
   nullableFloat64,
@@ -141,36 +137,22 @@ export async function gateRoute(
   return { release, requested: () => requested };
 }
 
-// The authenticated app shell polls all three scan-status endpoints on every
+// The authenticated app shell polls the scan status of every library on every
 // route for admins (it discovers a scan already in flight), so every spec that
 // serves an admin session sees them regardless of the page under test.
 
-/** Overrides that turn a scan-status builder's report into an idle one. */
-export const IDLE_SCAN = {
-  run_id: "",
-  state: "idle",
-  phase: "idle",
-  total: 0,
-  started_at: null,
-  updated_at: null,
-} as const;
-
-export const IDLE_SCAN_STATUS_BY_PATH: Record<string, () => unknown> = {
-  "/api/settings/scan/movies": () => movieScanStatus(IDLE_SCAN),
-  "/api/settings/scan/music": () => musicScanStatus(IDLE_SCAN),
-  "/api/settings/scan/shows": () => showScanStatus(IDLE_SCAN),
-};
+/** The one route that reports every library's scan. */
+export const SCAN_STATUS_PATH = "/api/settings/scan";
 
 /**
  * Fulfills the app shell's scan-status polling with an idle report.
  * Returns true when it handled the route, so callers can `return` immediately.
  */
 export async function fulfillIdleScanStatus(route: Route, pathname: string) {
-  const status = IDLE_SCAN_STATUS_BY_PATH[pathname];
-  if (!status) {
+  if (pathname !== SCAN_STATUS_PATH || route.request().method() !== "GET") {
     return false;
   }
 
-  await fulfillJSON(route, apiResponse(status()));
+  await fulfillJSON(route, apiResponse(scanStatuses()));
   return true;
 }

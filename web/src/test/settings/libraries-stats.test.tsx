@@ -4,11 +4,11 @@ import { describe, expect, it, vi } from "vitest";
 import { authUserData } from "../helpers/fixtures";
 import { deferredResponse, jsonResponse, requestURL } from "../helpers/api";
 import { renderRoute } from "../helpers/render-route";
-import { musicScanStatus } from "../helpers/scan-status";
+import { musicScanStatus, scanStatuses } from "../helpers/scan-status";
 
 // Only the music counts answer; the shows counts fail, and the movie path is
-// blank so its tile never renders. The scan status calls fall through to the
-// 500 and show their own unavailable notice.
+// blank so its tile never renders. The scan status call falls through to the
+// 500 and shows its own unavailable notice.
 function mockLibrariesFetch({
   musicScanStart,
 }: {
@@ -25,11 +25,14 @@ function mockLibrariesFetch({
       return new Promise<Response>(() => {});
     }
 
-    if (url === "/api/settings/scan/music" && musicScanStart) {
-      if (method === "POST") return musicScanStart;
+    if (url === "/api/settings/scan/music" && method === "POST" && musicScanStart) {
+      return musicScanStart;
+    }
+
+    if (url === "/api/settings/scan" && musicScanStart) {
       return jsonResponse({
         error: false,
-        data: musicScanStatus({ state: "completed" }),
+        data: scanStatuses({ music: musicScanStatus({ state: "completed" }) }),
       });
     }
 

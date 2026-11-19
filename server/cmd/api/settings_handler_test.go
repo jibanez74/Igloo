@@ -180,12 +180,12 @@ func TestSettingsHandlers_ConformToOpenAPI(t *testing.T) {
 	libraryReq := newOpenAPIJSONRequest(http.MethodPut, "/api/settings/libraries", libraryBody)
 	serveOpenAPIExchange(t, handler, "updateLibrarySettings", libraryReq, http.StatusOK)
 
+	serveOpenAPIExchange(t, handler, "getScanStatus", httptest.NewRequest(http.MethodGet, "/api/settings/scan", nil), http.StatusOK)
 	serveOpenAPIExchange(t, handler, "triggerMusicScan", httptest.NewRequest(http.MethodPost, "/api/settings/scan/music", nil), http.StatusOK)
-	serveOpenAPIExchange(t, handler, "getMusicScanStatus", httptest.NewRequest(http.MethodGet, "/api/settings/scan/music", nil), http.StatusOK)
-	serveOpenAPIExchange(t, handler, "getMovieScanStatus", httptest.NewRequest(http.MethodGet, "/api/settings/scan/movies", nil), http.StatusOK)
 	serveOpenAPIExchange(t, handler, "triggerMovieScan", httptest.NewRequest(http.MethodPost, "/api/settings/scan/movies", nil), http.StatusOK)
 	serveOpenAPIExchange(t, handler, "triggerShowScan", httptest.NewRequest(http.MethodPost, "/api/settings/scan/shows", nil), http.StatusOK)
-	serveOpenAPIExchange(t, handler, "getShowScanStatus", httptest.NewRequest(http.MethodGet, "/api/settings/scan/shows", nil), http.StatusOK)
+	// The scans just started: the combined report holds running reports.
+	serveOpenAPIExchange(t, handler, "getScanStatus", httptest.NewRequest(http.MethodGet, "/api/settings/scan", nil), http.StatusOK)
 	app.Wait.Wait()
 }
 
@@ -401,35 +401,39 @@ func TestUpdateGeneralSettings_RejectsNonAdminUser(t *testing.T) {
 	}
 }
 
+// The combined report is admin-only and needs a session cookie: an admin's
+// device token is refused like an anonymous request.
 func TestScanStatusAuthorization(t *testing.T) {
-	for _, path := range []string{"/api/settings/scan/movies", "/api/settings/scan/music", "/api/settings/scan/shows"} {
-		for _, role := range []string{"anonymous", "user", "admin", "admin device"} {
-			t.Run(path+"/"+role, func(t *testing.T) {
-				app := setupSessionTestApp(t)
-				app.InitRouter()
-				request := httptest.NewRequest(http.MethodGet, path, nil)
-				expected := http.StatusUnauthorized
-				switch role {
-				case "user":
-					user := createTestUser(t, app, "Viewer", "user@example.com", false)
-					request.AddCookie(newAuthSessionCookie(t, app, user.ID))
-					expected = http.StatusForbidden
-				case "admin":
-					admin := createTestUser(t, app, "Admin", "admin@example.com", true)
-					request.AddCookie(newAuthSessionCookie(t, app, admin.ID))
-					expected = http.StatusOK
-				case "admin device":
-					admin := createTestUser(t, app, "Admin", "admin@example.com", true)
-					token := createTestDevice(t, app, admin.ID, "TV", "android_tv")
-					request.Header.Set("Authorization", "Bearer "+token)
-				}
-				response := httptest.NewRecorder()
-				app.Router.ServeHTTP(response, request)
-				if response.Code != expected {
-					t.Fatalf("status=%d want=%d body=%s", response.Code, expected, response.Body.String())
-				}
-			})
-		}
+	for _, role := range []string{"anonymous", "user", "admin", "admin device"} {
+		t.Run(role, func(t *testing.T) {
+			app := setupSessionTestApp(t)
+			app.InitRouter()
+			request := httptest.NewRequest(http.MethodGet, "/api/settings/scan", nil)
+			expected := http.StatusUnauthorized
+			switch role {
+			case "user":
+				user := createTestUser(t, app, "Viewer", "user@example.com", false)
+				request.AddCookie(newAuthSessionCookie(t, app, user.ID))
+				expected = http.StatusForbidden
+			case "admin":
+				admin := createTestUser(t, app, "Admin", "admin@example.com", true)
+				request.AddCookie(newAuthSessionCookie(t, app, admin.ID))
+				expected = http.StatusOK
+			case "admin device":
+				admin := createTestUser(t, app, "Admin", "admin@example.com", true)
+				token := createTestDevice(t, app, admin.ID, "TV", "android_tv")
+				request.Header.Set("Authorization", "Bearer "+token)
+			}
+			response := httptest.NewRecorder()
+			app.Router.ServeHTTP(response, request)
+			if response.Code != expected {
+				t.Fatalf("status=%d want=%d body=%s", response.Code, expected, response.Body.String())
+			}
+			// Only the response is checked: the anonymous and device requests
+			// lack the session cookie the contract requires, which is what
+			// their 401 documents.
+			assertOpenAPIResponse(t, "getScanStatus", request, response)
+		})
 	}
 }
 

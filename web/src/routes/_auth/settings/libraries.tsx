@@ -31,7 +31,7 @@ import SettingsErrorCard from "@/components/settings/SettingsErrorCard";
 import SettingsLoadingCard from "@/components/settings/SettingsLoadingCard";
 import SettingsPage from "@/components/settings/SettingsPage";
 import SettingsSaveBar from "@/components/settings/SettingsSaveBar";
-import { musicStatsQueryOpts, moviesStatsQueryOpts, movieScanStatusQueryOpts, musicScanStatusQueryOpts, showScanStatusQueryOpts, showsStatsQueryOpts, settingsQueryOpts } from "@/lib/query-opts";
+import { musicStatsQueryOpts, moviesStatsQueryOpts, scanStatusQueryOpts, showsStatsQueryOpts, settingsQueryOpts } from "@/lib/query-opts";
 import { showActionFailed, showSuccess } from "@/lib/toast-helpers";
 import { triggerMusicScan, triggerMovieScan, triggerShowScan, updateLibrarySettings } from "@/lib/api";
 import { useFocusHandoff } from "@/hooks/useFocusHandoff";
@@ -39,9 +39,7 @@ import { useIsMiniPlayerVisible } from "@/hooks/useIsMiniPlayerVisible";
 import {
   MINI_PLAYER_CLEARANCE_BOTTOM_CLASS,
   MOTION_SETTINGS_SURFACE_CLASS,
-  MOVIE_SCAN_STATUS_KEY,
-  MUSIC_SCAN_STATUS_KEY,
-  SHOW_SCAN_STATUS_KEY,
+  SCAN_STATUS_KEY,
 } from "@/lib/constants";
 import { trimmedOrNull } from "@/lib/nullable";
 import { cn } from "@/lib/utils";
@@ -63,7 +61,6 @@ type ScanLibrary = {
   field: LibraryPathField;
   label: string;
   title: string;
-  statusKey: string;
   trigger: () => Promise<ApiResponseType<{ message: string }>>;
 };
 
@@ -74,21 +71,18 @@ const SCAN_LIBRARIES: Record<ImplementedScan, ScanLibrary> = {
     field: "movies_dir",
     label: "movies",
     title: "Movies",
-    statusKey: MOVIE_SCAN_STATUS_KEY,
     trigger: triggerMovieScan,
   },
   music: {
     field: "music_dir",
     label: "music",
     title: "Music",
-    statusKey: MUSIC_SCAN_STATUS_KEY,
     trigger: triggerMusicScan,
   },
   shows: {
     field: "shows_dir",
     label: "TV shows",
     title: "TV Shows",
-    statusKey: SHOW_SCAN_STATUS_KEY,
     trigger: triggerShowScan,
   },
 };
@@ -228,10 +222,8 @@ type LibrariesSettingsFormProps = {
 function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
   const queryClient = useQueryClient();
   // The authenticated layout keeps running scans observed across navigation.
-  const movieScan = useQuery({ ...movieScanStatusQueryOpts(), enabled: false });
-  const musicScan = useQuery({ ...musicScanStatusQueryOpts(), enabled: false });
-  const showScan = useQuery({ ...showScanStatusQueryOpts(), enabled: false });
-  const scanQueries = { movies: movieScan, music: musicScan, shows: showScan };
+  const scanQuery = useQuery({ ...scanStatusQueryOpts(), enabled: false });
+  const scanStatusUnavailable = scanQuery.isPending || scanQuery.isError;
   const [syncedSettings, setSyncedSettings] = useState(settings);
   const [form, setForm] = useState<LibrariesForm>(() =>
     formFromSettings(settings),
@@ -352,9 +344,9 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
         "Scan started",
         `${library.title} library scan has been initiated`,
       );
-      // The scan hooks refresh the library's lists once the status shows
+      // The scan poll refreshes the library's lists once the status shows
       // the new run.
-      await queryClient.invalidateQueries({ queryKey: [library.statusKey] });
+      await queryClient.invalidateQueries({ queryKey: [SCAN_STATUS_KEY] });
       setActiveScan(current => (current === scan ? null : current));
     } catch {
       const message = `Failed to start ${label} scan.`;
@@ -374,9 +366,7 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
         />
         <CardContent className="space-y-6">
           {LIBRARY_SECTIONS.map((section, index) => {
-            const scanQuery = section.scan ? scanQueries[section.scan] : null;
-            const scanRunning = scanQuery?.data?.state === "running";
-            const scanStatusUnavailable = scanQuery !== null && (scanQuery.isPending || scanQuery.isError);
+            const scanRunning = section.scan !== null && scanQuery.data?.[section.scan].state === "running";
             return (
             <Fragment key={section.field}>
               {index > 0 && <Separator className="bg-accent/50" />}
@@ -390,7 +380,7 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
                 scanDisabled={
                   updateMutation.isPending ||
                   scanRunning ||
-                  scanStatusUnavailable ||
+                  (section.scan !== null && scanStatusUnavailable) ||
                   activeScan !== null ||
                   form[section.field] !==
                     formFromSettings(syncedSettings)[section.field]
@@ -412,13 +402,13 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
                   <MusicLibraryStats hasLibrary={Boolean(syncedSettings.music_dir)} />
                 )}
                 {section.scan === "movies" && (
-                  <ScanProgress library="movies" status={movieScan.data} unavailable={movieScan.isError} />
+                  <ScanProgress library="movies" status={scanQuery.data?.movies} unavailable={scanQuery.isError} />
                 )}
                 {section.scan === "music" && (
-                  <ScanProgress library="music" status={musicScan.data} unavailable={musicScan.isError} />
+                  <ScanProgress library="music" status={scanQuery.data?.music} unavailable={scanQuery.isError} />
                 )}
                 {section.scan === "shows" && (
-                  <ScanProgress library="shows" status={showScan.data} unavailable={showScan.isError} />
+                  <ScanProgress library="shows" status={scanQuery.data?.shows} unavailable={scanQuery.isError} />
                 )}
               </LibraryPathSection>
             </Fragment>
