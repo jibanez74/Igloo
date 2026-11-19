@@ -1,4 +1,5 @@
-import { expect, test, type APIRequestContext } from "@playwright/test";
+import { expect, test } from "./e2e-test";
+import type { APIRequestContext } from "@playwright/test";
 
 import type { DevicesListResponseType } from "../src/types";
 import type { components } from "../src/types/openapi.gen";

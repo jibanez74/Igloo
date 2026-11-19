@@ -1,9 +1,5 @@
-import {
-  expect,
-  test,
-  type Locator,
-  type Page,
-} from "@playwright/test";
+import { expect, test } from "./e2e-test";
+import type { Locator, Page } from "@playwright/test";
 
 import type {
   AdminUserType,
@@ -14,12 +10,9 @@ import type {
   UpdatePlaybackSettingsRequest,
 } from "../src/types";
 import { PLAYBACK_PREFERENCES_STORAGE_PREFIX } from "../src/lib/playback-preferences";
-import { trackBrowserIssues } from "./e2e-browser-issues";
-import {
-  readJSON,
-} from "./e2e-api";
+import { getApiData, putApiData } from "./e2e-api";
 import { loginPageViaApi, logoutViaApi } from "./e2e-auth";
-import { requireRealInstance } from "./e2e-env";
+import { isRealInstance, requireRealInstance } from "./e2e-env";
 import { expectPageHasNoHorizontalScroll, VIEWPORTS } from "./e2e-layout";
 import { createUser, deleteUser } from "./e2e-users";
 
@@ -40,44 +33,27 @@ const DOWNLOAD_SPEED_VALIDATION_MESSAGE =
   /Download speed must be between 0 and 10000 Mbps\./;
 
 async function fetchPlaybackSettings(page: Page) {
-  const response = await page.context().request.get("/api/settings/playback", {
-    failOnStatusCode: false,
-  });
-  expect(response.status()).toBe(200);
-
-  const body = await readJSON<PlaybackSettingsResponseType>(response);
-  expect(body.error, body.message).toBe(false);
-  expect(body.data?.settings).toBeTruthy();
-  return body.data!.settings;
+  const data = await getApiData<PlaybackSettingsResponseType>(
+    page.context().request,
+    "/api/settings/playback",
+  );
+  return data.settings;
 }
 
-async function restorePlaybackSettings(
-  page: Page,
-  settings: PlaybackSettingsType,
-) {
-  const response = await page.context().request.put("/api/settings/playback", {
-    data: {
-      server_upload_mbps: settings.server_upload_mbps,
-      hardware_acceleration_device: settings.hardware_acceleration_device,
-    } satisfies UpdatePlaybackSettingsRequest,
-    failOnStatusCode: false,
-  });
-  expect(response.status()).toBe(200);
-
-  const body = await readJSON<unknown>(response);
-  expect(body.error, body.message).toBe(false);
+function restorePlaybackSettings(page: Page, settings: PlaybackSettingsType) {
+  return putApiData(page.context().request, "/api/settings/playback", {
+    server_upload_mbps: settings.server_upload_mbps,
+    hardware_acceleration_device: settings.hardware_acceleration_device,
+  } satisfies UpdatePlaybackSettingsRequest);
 }
 
 const TRAILER_PREFERENCES_PATH = "/api/user/preferences/trailers";
 
-async function fetchTrailerPreferences(page: Page) {
-  const response = await page.context().request.get(TRAILER_PREFERENCES_PATH, {
-    failOnStatusCode: false,
-  });
-  expect(response.status()).toBe(200);
-  const body = await readJSON<TrailerPreferencesData>(response);
-  expect(body.error, body.message).toBe(false);
-  return body.data!;
+function fetchTrailerPreferences(page: Page) {
+  return getApiData<TrailerPreferencesData>(
+    page.context().request,
+    TRAILER_PREFERENCES_PATH,
+  );
 }
 
 type RegularUser = AdminUserType & { password: string };
@@ -111,8 +87,6 @@ test.describe("Playback settings", () => {
   test("saves server playback settings and applies device preferences instantly", async ({
     page,
   }) => {
-    const tracker = trackBrowserIssues(page);
-
     await loginPageViaApi(page);
     const baselineSettings = await fetchPlaybackSettings(page);
 
@@ -260,16 +234,15 @@ test.describe("Playback settings", () => {
         page.getByRole("combobox", { name: "Subtitle language" }),
       ).toHaveText("Always off");
     } finally {
-      await restorePlaybackSettings(page, baselineSettings);
+      // Only a real instance keeps what the test saved; the mock resets before
+      // each test, and a restore failing here would hide the test's own error.
+      if (isRealInstance) await restorePlaybackSettings(page, baselineSettings);
     }
-
-    tracker.assertClean();
   });
 
   test("saves trailer pre-roll preferences to the account as they change", async ({
     page,
   }) => {
-    const tracker = trackBrowserIssues(page);
     let regularUser: RegularUser | null = null;
 
     await loginPageViaApi(page);
@@ -337,14 +310,11 @@ test.describe("Playback settings", () => {
     } finally {
       await signBackInAsAdmin(page, regularUser);
     }
-
-    tracker.assertClean();
   });
 
   test("rejects an out-of-range download speed without storing it", async ({
     page,
   }) => {
-    const tracker = trackBrowserIssues(page);
     let playbackPutCount = 0;
 
     page.on("request", request => {
@@ -388,20 +358,16 @@ test.describe("Playback settings", () => {
     await expect(downloadInput).toHaveAttribute("aria-invalid", "true");
     expect((await readDevicePreferences(page))?.downloadMbps).toBe(5);
     expect(playbackPutCount).toBe(0);
-
-    tracker.assertClean();
   });
 
   // Regression for the cross-tab clobbering in docs/ls-review.md: each tab
   // caches its own snapshot, so a merge against a stale one used to write the
   // other tab's field away.
-  test("keeps preferences set in another tab", async ({ page, context }) => {
-    const tracker = trackBrowserIssues(page);
-
+  test("keeps preferences set in another tab", async ({ page, context, browserIssues }) => {
     await loginPageViaApi(page);
 
     const second = await context.newPage();
-    const secondTracker = trackBrowserIssues(second);
+    browserIssues.track(second);
 
     try {
       await page.goto("/settings/playback");
@@ -437,15 +403,11 @@ test.describe("Playback settings", () => {
     } finally {
       await second.close();
     }
-
-    secondTracker.assertClean();
-    tracker.assertClean();
   });
 
   test("gives regular users device-only settings with no save bar", async ({
     page,
   }) => {
-    const tracker = trackBrowserIssues(page);
     let regularUser: RegularUser | null = null;
     let playbackPutSent = false;
 
@@ -499,8 +461,6 @@ test.describe("Playback settings", () => {
     } finally {
       await signBackInAsAdmin(page, regularUser);
     }
-
-    tracker.assertClean();
   });
 
   test("rejects a regular user's direct write to the server settings", async ({

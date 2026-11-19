@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "./e2e-test";
+import type { Page } from "@playwright/test";
 import { loginPageViaApi } from "./e2e-auth";
 import { intEnv, requireRealInstance } from "./e2e-env";
 import {
@@ -134,6 +135,12 @@ const refusedDirectPlayCases = [
       ).toBe(true),
   },
 ];
+
+// Real media only: this suite's browser noise (media aborts, codec warnings)
+// has not been triaged against a real instance yet, so it is not tracked.
+test.use({
+  browserIssueOptions: { skip: "real-media suite, browser noise not triaged yet" },
+});
 
 test.describe("Direct-play eligibility with real media", () => {
   requireRealInstance("direct-play eligibility needs real media files");

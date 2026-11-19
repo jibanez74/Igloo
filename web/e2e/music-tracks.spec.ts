@@ -1,14 +1,11 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "./e2e-test";
+import type { Page } from "@playwright/test";
 import {
   ALBUMS_PER_PAGE,
   MUSICIANS_PER_PAGE,
   TRACKS_INFINITE_PAGE_SIZE,
   VIRTUAL_LIST_TRACK_HEIGHT,
 } from "../src/lib/constants";
-import {
-  assertMockSuiteClean,
-  trackBrowserIssues,
-} from "./e2e-browser-issues";
 import { VIEWPORTS, expectNoOverflowingElements } from "./e2e-layout";
 import {
   apiResponse,
@@ -77,7 +74,7 @@ async function mockMusicApi(page: Page) {
   const trackOffsets: number[] = [];
   const albumRequests: URL[] = [];
 
-  const { unexpectedApiRequests } = await mockApi(page, {
+  await mockApi(page, {
     user: { is_admin: true },
     handle: async ({ route, url }) => {
       if (url.pathname === "/api/music/stats") {
@@ -157,12 +154,11 @@ async function mockMusicApi(page: Page) {
     },
   });
 
-  return { unexpectedApiRequests, trackOffsets, albumRequests };
+  return { trackOffsets, albumRequests };
 }
 
 test("music library shell and URL-backed tabs render accessibly", async ({ page }) => {
-  const browserIssues = trackBrowserIssues(page);
-  const { unexpectedApiRequests } = await mockMusicApi(page);
+  await mockMusicApi(page);
   await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto("/music");
 
@@ -207,12 +203,10 @@ test("music library shell and URL-backed tabs render accessibly", async ({ page 
   await expect(page).toHaveURL(/tab=playlists/);
   await expect(playlistsTab).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("link", { name: "Mock Playlist, 2 tracks, 6m 0s" })).toBeVisible();
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 test("albums tab renders accessible album cards and URL-backed pagination", async ({ page }) => {
-  const browserIssues = trackBrowserIssues(page);
-  const { unexpectedApiRequests, albumRequests } = await mockMusicApi(page);
+  const { albumRequests } = await mockMusicApi(page);
   await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto("/music");
 
@@ -238,12 +232,10 @@ test("albums tab renders accessible album cards and URL-backed pagination", asyn
     per_page: String(ALBUMS_PER_PAGE),
   });
   await expect(page.getByRole("link", { name: "Page Two Album by Second Page Artist" })).toBeVisible();
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 test("tracks tab keeps fetching pages while the virtualized list grows", async ({ page }) => {
-  const browserIssues = trackBrowserIssues(page);
-  const { unexpectedApiRequests, trackOffsets } = await mockMusicApi(page);
+  const { trackOffsets } = await mockMusicApi(page);
   await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto("/music?tab=tracks");
 
@@ -299,6 +291,4 @@ test("tracks tab keeps fetching pages while the virtualized list grows", async (
   for (const size of rowSizes) {
     expect(size).toEqual({ cover: [40, 40], row: VIRTUAL_LIST_TRACK_HEIGHT });
   }
-
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });

@@ -1,13 +1,11 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./e2e-test";
 
 import { loginPageViaApi } from "./e2e-auth";
-import { trackBrowserIssues } from "./e2e-browser-issues";
 
 test.describe("Side navigation", () => {
   test("collapses to icons, names them in tooltips, and stays collapsed after a reload", async ({
     page,
   }) => {
-    const browserIssues = trackBrowserIssues(page);
     await loginPageViaApi(page);
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto("/");
@@ -39,12 +37,9 @@ test.describe("Side navigation", () => {
     await page.getByRole("button", { name: "Expand sidebar" }).click();
     await expect.poll(async () => (await column.boundingBox())?.width).toBe(256);
     await expect(navigation.getByText("Library")).toBeVisible();
-
-    browserIssues.assertClean();
   });
 
   test("the account block opens a menu that leads to Account settings", async ({ page }) => {
-    const browserIssues = trackBrowserIssues(page);
     await loginPageViaApi(page);
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto("/");
@@ -78,12 +73,9 @@ test.describe("Side navigation", () => {
 
     await menu.getByRole("menuitem", { name: "Account settings" }).click();
     await expect(page).toHaveURL(/\/settings\/account$/);
-
-    browserIssues.assertClean();
   });
 
   test("a phone opens the same navigation in a sheet", async ({ page }) => {
-    const browserIssues = trackBrowserIssues(page);
     await loginPageViaApi(page);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/");
@@ -99,7 +91,5 @@ test.describe("Side navigation", () => {
     // No tooltips in the sheet: the labels are on screen.
     await sheet.getByRole("link", { name: "Music" }).hover();
     await expect(page.getByRole("tooltip")).toHaveCount(0);
-
-    browserIssues.assertClean();
   });
 });

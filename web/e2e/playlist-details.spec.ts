@@ -1,6 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "./e2e-test";
+import type { Page } from "@playwright/test";
 import { PLAYLIST_TRACKS_PAGE_SIZE } from "../src/lib/constants";
-import { assertMockSuiteClean, trackBrowserIssues } from "./e2e-browser-issues";
 import { apiResponse, fulfillJSON, gateRoute, nullableInt64, nullableString } from "./e2e-api";
 import { VIEWPORTS } from "./e2e-layout";
 import { mockApi } from "./e2e-mock-api";
@@ -56,7 +56,7 @@ async function mockPlaylistApi(page: Page, options: MockOptions = {}) {
   // Per test: a rename edits it, and the next details fetch must see the edit.
   const details = structuredClone(playlistDetails);
 
-  const { unexpectedApiRequests } = await mockApi(page, {
+  await mockApi(page, {
     handle: async ({ route, url, method }) => {
       if (url.pathname === `/api/music/playlists/${PLAYLIST_ID}` && method === "GET") {
         await fulfillJSON(route, apiResponse(details));
@@ -115,7 +115,7 @@ async function mockPlaylistApi(page: Page, options: MockOptions = {}) {
     },
   });
 
-  return { unexpectedApiRequests, trackPageRequests };
+  return { trackPageRequests };
 }
 
 function trackCounter(page: Page) {
@@ -128,8 +128,7 @@ async function openPlaylist(page: Page) {
 }
 
 test("shuffle queues every track in a multi-page playlist and starts off the first one", async ({ page }) => {
-  const browserIssues = trackBrowserIssues(page);
-  const { unexpectedApiRequests, trackPageRequests } = await mockPlaylistApi(page);
+  const { trackPageRequests } = await mockPlaylistApi(page);
 
   await openPlaylist(page);
 
@@ -164,13 +163,10 @@ test("shuffle queues every track in a multi-page playlist and starts off the fir
 
   // Getting there required draining the remaining pages.
   expect(trackPageRequests).toEqual(PAGE_OFFSETS);
-
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 test("play all queues every track too", async ({ page }) => {
-  const browserIssues = trackBrowserIssues(page);
-  const { unexpectedApiRequests, trackPageRequests } = await mockPlaylistApi(page);
+  const { trackPageRequests } = await mockPlaylistApi(page);
 
   await openPlaylist(page);
 
@@ -179,15 +175,12 @@ test("play all queues every track too", async ({ page }) => {
   await expect(trackCounter(page)).toHaveText(`Track 1 of ${TOTAL_TRACKS}`);
   await expect(page.getByRole("heading", { level: 1, name: "Track 1" })).toBeVisible();
   expect(trackPageRequests).toEqual(PAGE_OFFSETS);
-
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 test("playback starts on the loaded page while the rest downloads behind it", async ({
   page,
 }) => {
-  const browserIssues = trackBrowserIssues(page);
-  const { unexpectedApiRequests, trackPageRequests } = await mockPlaylistApi(page);
+  const { trackPageRequests } = await mockPlaylistApi(page);
   // Hold the second page, so the test can watch playback start on what is
   // already loaded while the drain is still waiting on the network.
   const secondPage = await gateRoute(
@@ -211,15 +204,14 @@ test("playback starts on the loaded page while the rest downloads behind it", as
   secondPage.release();
   await expect(trackCounter(page)).toHaveText(`Track 1 of ${TOTAL_TRACKS}`);
   expect(trackPageRequests).toEqual(PAGE_OFFSETS);
-
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 test("says so when a page of the drain fails instead of quietly playing a short queue", async ({
   page,
+  browserIssues,
 }) => {
   // The failed page is the point of the test, so its 500 is expected.
-  const browserIssues = trackBrowserIssues(page, {
+  browserIssues.ignore({
     ignoreConsole: (_type, text) =>
       text ===
       "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
@@ -231,7 +223,7 @@ test("says so when a page of the drain fails instead of quietly playing a short 
       );
     },
   });
-  const { unexpectedApiRequests } = await mockPlaylistApi(page, {
+  await mockPlaylistApi(page, {
     failAtOffset: PLAYLIST_TRACKS_PAGE_SIZE,
   });
 
@@ -246,13 +238,10 @@ test("says so when a page of the drain fails instead of quietly playing a short 
     page.getByText(`Only ${PLAYLIST_TRACKS_PAGE_SIZE} of ${TOTAL_TRACKS} tracks could be loaded.`),
   ).toBeVisible();
   await expect(trackCounter(page)).toHaveText(`Track 1 of ${PLAYLIST_TRACKS_PAGE_SIZE}`);
-
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 test("renaming the playlist retitles the tab", async ({ page }) => {
-  const browserIssues = trackBrowserIssues(page);
-  const { unexpectedApiRequests } = await mockPlaylistApi(page);
+  await mockPlaylistApi(page);
 
   await openPlaylist(page);
 
@@ -273,8 +262,6 @@ test("renaming the playlist retitles the tab", async ({ page }) => {
   // The head only reruns on a router load: the dialog has to refetch the
   // details and then reload the route, or the tab keeps the old name.
   await expect(page).toHaveTitle("Night Drive - Igloo");
-
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 test.describe("dragging a track", () => {
@@ -290,7 +277,7 @@ test.describe("dragging a track", () => {
   async function mockShortPlaylistApi(page: Page) {
     const reorders: number[][] = [];
 
-    const { unexpectedApiRequests } = await mockApi(page, {
+    await mockApi(page, {
       handle: async ({ route, url, method }) => {
         const base = `/api/music/playlists/${SHORT_PLAYLIST_ID}`;
 
@@ -325,7 +312,7 @@ test.describe("dragging a track", () => {
       },
     });
 
-    return { unexpectedApiRequests, reorders };
+    return { reorders };
   }
 
   // Presses a row's handle and lets go over another row, the way a mouse
@@ -346,8 +333,7 @@ test.describe("dragging a track", () => {
   }
 
   test("a track dropped further down lands on the row under the pointer", async ({ page }) => {
-    const browserIssues = trackBrowserIssues(page);
-    const { unexpectedApiRequests, reorders } = await mockShortPlaylistApi(page);
+    const { reorders } = await mockShortPlaylistApi(page);
 
     // Tall enough that every row's handle is on screen without scrolling.
     await page.setViewportSize(VIEWPORTS.desktop);
@@ -358,13 +344,10 @@ test.describe("dragging a track", () => {
     await dragRow(page, 0, 2);
 
     await expect.poll(() => reorders).toEqual([[1002, 1003, 1001, 1004, 1005, 1006]]);
-
-    assertMockSuiteClean(browserIssues, unexpectedApiRequests);
   });
 
   test("a track dropped further up lands on the row under the pointer", async ({ page }) => {
-    const browserIssues = trackBrowserIssues(page);
-    const { unexpectedApiRequests, reorders } = await mockShortPlaylistApi(page);
+    const { reorders } = await mockShortPlaylistApi(page);
 
     // Tall enough that every row's handle is on screen without scrolling.
     await page.setViewportSize(VIEWPORTS.desktop);
@@ -375,7 +358,5 @@ test.describe("dragging a track", () => {
     await dragRow(page, 4, 1);
 
     await expect.poll(() => reorders).toEqual([[1001, 1005, 1002, 1003, 1004, 1006]]);
-
-    assertMockSuiteClean(browserIssues, unexpectedApiRequests);
   });
 });

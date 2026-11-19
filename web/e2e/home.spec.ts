@@ -1,8 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
-import {
-  assertMockSuiteClean,
-  trackBrowserIssues,
-} from "./e2e-browser-issues";
+import { expect, test } from "./e2e-test";
+import type { Page } from "@playwright/test";
 import {
   BREAKPOINTS,
   expectNoHorizontalOverflow,
@@ -98,7 +95,7 @@ function theaterMovie(
 }
 
 async function mockHomeApi(page: Page) {
-  const { unexpectedApiRequests } = await mockApi(page, {
+  await mockApi(page, {
     user: { is_admin: true },
     handle: async ({ route, url }) => {
       const { pathname } = url;
@@ -240,13 +237,10 @@ async function mockHomeApi(page: Page) {
       return false;
     },
   });
-
-  return unexpectedApiRequests;
 }
 
 test("home page is clean, responsive, and keyboard reachable", async ({ page }) => {
-  const browserIssues = trackBrowserIssues(page);
-  const unexpectedApiRequests = await mockHomeApi(page);
+  await mockHomeApi(page);
 
   await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto("/");
@@ -337,15 +331,12 @@ test("home page is clean, responsive, and keyboard reachable", async ({ page }) 
   await expect(
     page.getByRole("dialog", { name: "Navigation" }),
   ).toBeHidden();
-
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 test("continue watching reveals the same resume action on movies and episodes", async ({
   page,
 }) => {
-  const browserIssues = trackBrowserIssues(page);
-  const unexpectedApiRequests = await mockHomeApi(page);
+  await mockHomeApi(page);
   // Hovering a card warms its details page (design-system §PosterCard), the
   // movie page's playback settings included; registered after the catch-all,
   // this route answers those requests first.
@@ -388,6 +379,4 @@ test("continue watching reveals the same resume action on movies and episodes", 
         "/api/shows/details/301",
       ]),
     );
-
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });

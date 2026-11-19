@@ -287,13 +287,47 @@ export default defineConfig([
     },
   },
 
+  // Every Playwright assertion and action returns a promise: one missing
+  // `await` lets the test end before the check runs, so it can never fail.
   {
     files: ["e2e/**/*.ts"],
+    extends: [tseslint.configs.recommendedTypeChecked],
     languageOptions: {
       globals: {
         ...globals.browser,
         ...globals.node,
       },
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    rules: {
+      "@typescript-eslint/no-floating-promises": "error",
+      "@typescript-eslint/no-misused-promises": [
+        "error",
+        { checksVoidReturn: false },
+      ],
+    },
+  },
+
+  // Specs take test/expect from the shared fixture, which resets the mock and
+  // tracks browser issues (e2e/e2e-test.ts); the base ones skip both.
+  {
+    files: ["e2e/**/*.spec.ts", "e2e/**/*.visual.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "@playwright/test",
+              importNames: ["test", "expect"],
+              message: "Import test and expect from e2e/e2e-test.ts.",
+            },
+          ],
+        },
+      ],
     },
   },
 

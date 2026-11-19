@@ -1,8 +1,13 @@
-import { expect, test } from "@playwright/test";
-import { isExpectedUnauthorizedResourceMessage } from "./e2e-browser-issues";
+import { expect, test } from "./e2e-test";
+import {
+  isExpectedUnauthorizedResourceMessage,
+  signedOutIssueRules,
+} from "./e2e-browser-issues";
 
 test.describe("production startup", () => {
   test.skip(process.env.E2E_PRODUCTION !== "1", "Requires built production assets");
+  // Every test here starts signed out.
+  test.use({ browserIssueOptions: signedOutIssueRules });
 
   for (const pathname of ["/", "/login"]) {
     test(`boots from ${pathname} and survives a reload`, async ({ page }) => {
@@ -33,6 +38,8 @@ test.describe("production startup", () => {
         issues.push(message.text());
       });
 
+      // networkidle on purpose: the issue list is read once every startup
+      // request has finished, so a late chunk or asset failure is in it.
       try {
         await page.goto(pathname, { waitUntil: "networkidle" });
         for (const reload of [false, true]) {
@@ -65,6 +72,8 @@ test.describe("production startup", () => {
       if (path.endsWith(".js")) scripts.push(response.text());
     });
 
+    // networkidle on purpose: the font and script lists are complete only
+    // once the page has stopped loading.
     await page.goto("/login", { waitUntil: "networkidle" });
     await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
     expect(await page.evaluate(async () => {
@@ -83,7 +92,7 @@ test.describe("production startup", () => {
   // route stays in the build so the route tree is the same in every mode, but
   // it must send a visitor home, here on to the sign-in page, and never render.
   test("does not serve the component gallery", async ({ page }) => {
-    await page.goto("/gallery", { waitUntil: "networkidle" });
+    await page.goto("/gallery");
 
     await expect(page).toHaveURL(/\/login(?:\?|$)/);
     await expect(page.getByLabel("Email")).toBeVisible();

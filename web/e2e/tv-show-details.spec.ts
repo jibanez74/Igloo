@@ -1,13 +1,10 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "./e2e-test";
+import type { Page } from "@playwright/test";
 import {
   SHOW_ID,
   seasonEpisodes,
   showDetails,
 } from "../src/test/helpers/show-details";
-import {
-  assertMockSuiteClean,
-  trackBrowserIssues,
-} from "./e2e-browser-issues";
 import { expectPageHasNoHorizontalScroll, tabTo, VIEWPORTS } from "./e2e-layout";
 import { apiResponse, fulfillJSON, gateRoute } from "./e2e-api";
 import { mockApi } from "./e2e-mock-api";
@@ -18,7 +15,7 @@ import { mockApi } from "./e2e-mock-api";
 // tabs under a real keyboard.
 
 async function mockShowDetailsApi(page: Page) {
-  const { unexpectedApiRequests } = await mockApi(page, {
+  await mockApi(page, {
     handle: async ({ route, url, method }) => {
       if (method !== "GET") {
         return false;
@@ -47,8 +44,6 @@ async function mockShowDetailsApi(page: Page) {
       return false;
     },
   });
-
-  return unexpectedApiRequests;
 }
 
 for (const { label, viewport } of [
@@ -56,8 +51,7 @@ for (const { label, viewport } of [
   { label: "phone", viewport: VIEWPORTS.phone },
 ]) {
   test(`show details holds its layout at ${label} width`, async ({ page }) => {
-    const browserIssues = trackBrowserIssues(page);
-    const unexpectedApiRequests = await mockShowDetailsApi(page);
+    await mockShowDetailsApi(page);
 
     await page.setViewportSize(viewport);
     await page.goto(`/tv-shows/${SHOW_ID}`);
@@ -70,15 +64,13 @@ for (const { label, viewport } of [
     ).toBeVisible();
 
     await expectPageHasNoHorizontalScroll(page);
-    assertMockSuiteClean(browserIssues, unexpectedApiRequests);
   });
 }
 
 test("season tabs are reachable and operable from the keyboard", async ({
   page,
 }) => {
-  const browserIssues = trackBrowserIssues(page);
-  const unexpectedApiRequests = await mockShowDetailsApi(page);
+  await mockShowDetailsApi(page);
 
   await page.goto(`/tv-shows/${SHOW_ID}`);
 
@@ -112,15 +104,12 @@ test("season tabs are reachable and operable from the keyboard", async ({
     "aria-controls",
     (await panel.getAttribute("id")) ?? "",
   );
-
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 test("a season switch keeps the page while that season's episodes load", async ({
   page,
 }) => {
-  const browserIssues = trackBrowserIssues(page);
-  const unexpectedApiRequests = await mockShowDetailsApi(page);
+  await mockShowDetailsApi(page);
 
   // The page's entrance slide would move the tab strip on its own; without it
   // positions are final as soon as they render.
@@ -161,6 +150,4 @@ test("a season switch keeps the page while that season's episodes load", async (
   // Episode rows carry their own Play links; the hero's comes first.
   await expect(page.getByRole("link", { name: /^(Play|Resume) S2/ }).first()).toBeVisible();
   expect(await tabTop()).toBeCloseTo(settledTop, 0);
-
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });

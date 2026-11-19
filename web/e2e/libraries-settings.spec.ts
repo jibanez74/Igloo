@@ -1,28 +1,19 @@
 import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  expect,
-  test,
-  type Page,
-} from "@playwright/test";
+import { expect, test } from "./e2e-test";
+import type { Page } from "@playwright/test";
 
 import type { SettingsType } from "../src/types";
-import { trackBrowserIssues } from "./e2e-browser-issues";
 import {
   fulfillJSON,
   getApiData,
+  putApiData,
   readJSON,
 } from "./e2e-api";
 import { loginPageViaApi } from "./e2e-auth";
-import { expectPageHasNoHorizontalScroll, VIEWPORTS } from "./e2e-layout";
-
-const responsiveViewports = [
-  { name: "small phone", width: 360, height: 800 },
-  { name: "phone", ...VIEWPORTS.phone },
-  { name: "tablet portrait", ...VIEWPORTS.tablet },
-  { name: "desktop", ...VIEWPORTS.desktop },
-];
+import { isRealInstance } from "./e2e-env";
+import { auditResponsiveControls } from "./e2e-layout";
 
 const requiredControlNames = [
   "Movies library path",
@@ -42,117 +33,12 @@ function fetchLibrarySettings(page: Page) {
   return getApiData<SettingsType>(page.context().request, "/api/settings");
 }
 
-async function restoreLibrarySettings(page: Page, settings: SettingsType) {
-  const response = await page.context().request.put("/api/settings/libraries", {
-    data: settings,
-    failOnStatusCode: false,
-  });
-  expect(response.status()).toBe(200);
-
-  const body = await readJSON<unknown>(response);
-  expect(body.error, body.message).toBe(false);
-}
-
-async function auditResponsiveLibrariesPage(page: Page) {
-  for (const viewport of responsiveViewports) {
-    await page.setViewportSize({
-      width: viewport.width,
-      height: viewport.height,
-    });
-    await expect(page.getByRole("tabpanel", { name: "Libraries" })).toBeVisible();
-    await expectPageHasNoHorizontalScroll(page);
-
-    const audit = await page.evaluate(requiredNames => {
-      const isVisible = (element: Element) => {
-        const style = window.getComputedStyle(element);
-        const box = element.getBoundingClientRect();
-        return (
-          style.visibility !== "hidden" &&
-          style.display !== "none" &&
-          box.width > 0 &&
-          box.height > 0
-        );
-      };
-
-      const accessibleName = (element: Element) => {
-        const labelledBy = (element.getAttribute("aria-labelledby") ?? "")
-          .split(/\s+/)
-          .filter(Boolean)
-          .map(id => document.getElementById(id)?.textContent?.trim() ?? "")
-          .filter(Boolean)
-          .join(" ");
-
-        if (labelledBy) {
-          return labelledBy;
-        }
-
-        const ariaLabel = element.getAttribute("aria-label");
-        if (ariaLabel) {
-          return ariaLabel;
-        }
-
-        if (element.id) {
-          const label = document.querySelector(
-            `label[for="${CSS.escape(element.id)}"]`,
-          );
-          const labelText = label?.textContent?.trim();
-          if (labelText) {
-            return labelText;
-          }
-        }
-
-        return element.textContent?.trim() ?? "";
-      };
-
-      const interactive = Array.from(
-        document.querySelectorAll(
-          'button, a[href], input, select, textarea, [role="button"], [tabindex]:not([tabindex="-1"])',
-        ),
-      ).filter(isVisible);
-
-      const unlabeled = interactive
-        .filter(element => !accessibleName(element))
-        .map(element => ({
-          tag: element.tagName.toLowerCase(),
-          text: element.textContent?.trim().slice(0, 80) ?? "",
-        }));
-
-      const names = interactive.map(accessibleName);
-      const missing = requiredNames.filter(name => !names.includes(name));
-
-      const overflowX = Array.from(document.querySelectorAll("body, body *"))
-        .filter(isVisible)
-        .filter(element => {
-          const rect = element.getBoundingClientRect();
-          return rect.left < -1 || rect.right > window.innerWidth + 1;
-        })
-        .map(element => ({
-          tag: element.tagName.toLowerCase(),
-          text: element.textContent?.trim().slice(0, 80) ?? "",
-          right: Math.round(element.getBoundingClientRect().right),
-        }));
-
-      return {
-        missing,
-        unlabeled,
-        overflowX,
-      };
-    }, requiredControlNames);
-
-    expect(audit.missing, `${viewport.name} missing controls`).toEqual([]);
-    expect(audit.unlabeled, `${viewport.name} unlabeled controls`).toEqual([]);
-    expect(audit.overflowX, `${viewport.name} overflow elements`).toEqual([]);
-  }
-}
-
 test.describe("Libraries settings", () => {
   test("manages library paths accessibly without console noise", async ({
     page,
   }) => {
     await loginPageViaApi(page);
     const baseline = await fetchLibrarySettings(page);
-    const tracker = trackBrowserIssues(page);
-
     let movieScanRequests = 0;
     // Scan triggers only: the status poll (GET /api/settings/scan) is not
     // under scan/ and reaches the mock server, which reports idle.
@@ -364,15 +250,20 @@ test.describe("Libraries settings", () => {
       await expect(showsScanButton).toBeEnabled();
       await expect(showsScanButton).toHaveAttribute("aria-busy", "false");
 
-      await auditResponsiveLibrariesPage(page);
+      await auditResponsiveControls(page, {
+        ready: () => expect(page.getByRole("tabpanel", { name: "Libraries" })).toBeVisible(),
+        requiredNames: requiredControlNames,
+      });
     } finally {
       await page.unroute("**/api/settings/scan/**").catch(() => undefined);
-      await restoreLibrarySettings(page, baseline);
+      // Only a real instance keeps what the test saved; the mock resets before
+      // each test, and a restore failing here would hide the test's own error.
+      if (isRealInstance) {
+        await putApiData(page.context().request, "/api/settings/libraries", baseline);
+      }
       if (tempRoot) {
         await rm(tempRoot, { recursive: true, force: true });
       }
     }
-
-    tracker.assertClean();
   });
 });

@@ -1,8 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
-import {
-  assertMockSuiteClean,
-  trackBrowserIssues,
-} from "./e2e-browser-issues";
+import { expect, test } from "./e2e-test";
+import type { Page } from "@playwright/test";
 import { cardFor, expectNoOverflowingElements, VIEWPORTS } from "./e2e-layout";
 import { MOVIES_PER_PAGE } from "../src/lib/constants";
 import type {
@@ -99,7 +96,7 @@ async function mockMoviesApi(page: Page, { tmdbAvailable = true } = {}) {
   const deletedPlaylistIds: number[] = [];
   const removedMovieRequests: { playlistId: number; movieId: number }[] = [];
 
-  const { unexpectedApiRequests } = await mockApi(page, {
+  await mockApi(page, {
     user: { is_admin: true },
     handle: async ({ route, url, method }) => {
       if (url.pathname === "/api/movies/playlists" && method === "POST") {
@@ -232,13 +229,11 @@ async function mockMoviesApi(page: Page, { tmdbAvailable = true } = {}) {
     updatedPlaylistRequests,
     deletedPlaylistIds,
     removedMovieRequests,
-    unexpectedApiRequests,
   };
 }
 
 test("playlists tab lists playlists and creates a playlist from the toolbar dialog", async ({ page }) => {
-  const browserIssues = trackBrowserIssues(page);
-  const { createdPlaylistRequests, unexpectedApiRequests } = await mockMoviesApi(page);
+  const { createdPlaylistRequests } = await mockMoviesApi(page);
 
   await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto(moviesPlaylistsPath);
@@ -280,12 +275,10 @@ test("playlists tab lists playlists and creates a playlist from the toolbar dial
   await expect(dialog).toBeHidden();
   await expect(createPlaylistButton).toBeFocused();
   await expect(page.getByRole("link", { name: "Roadshow Queue, 0 movies" })).toBeVisible();
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 test("renaming a movie playlist from its page retitles the tab", async ({ page }) => {
-  const browserIssues = trackBrowserIssues(page);
-  const { updatedPlaylistRequests, unexpectedApiRequests } = await mockMoviesApi(page);
+  const { updatedPlaylistRequests } = await mockMoviesApi(page);
 
   await page.goto("/movies/playlist/501");
 
@@ -317,13 +310,10 @@ test("renaming a movie playlist from its page retitles the tab", async ({ page }
   // The head only reruns on a router load: the dialog refetches the details
   // and then reloads the route, or the tab keeps the old name.
   await expect(page).toHaveTitle("Friday Night Feature - Igloo");
-
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 test("deleting a movie playlist from its page returns to the playlists tab", async ({ page }) => {
-  const browserIssues = trackBrowserIssues(page);
-  const { deletedPlaylistIds, unexpectedApiRequests } = await mockMoviesApi(page);
+  const { deletedPlaylistIds } = await mockMoviesApi(page);
 
   await page.goto("/movies/playlist/501");
 
@@ -339,15 +329,12 @@ test("deleting a movie playlist from its page returns to the playlists tab", asy
   await expect(page.getByRole("link", { name: "Guest Picks, By Riley Collaborator, 4 movies" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Friday Feature, 7 movies" })).toHaveCount(0);
   await expect(page.getByText("1 playlist", { exact: true })).toBeVisible();
-
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 // Radix's own `disabled` took the item off the pointer and out of the arrow-key
 // order, so its reason (then a native `title`) never showed.
 test("an unavailable Request Movie is reachable and says why on focus and on hover", async ({ page }) => {
-  const browserIssues = trackBrowserIssues(page);
-  const { unexpectedApiRequests } = await mockMoviesApi(page, { tmdbAvailable: false });
+  await mockMoviesApi(page, { tmdbAvailable: false });
   const reason = "TMDB search is unavailable on this server.";
 
   await page.goto("/movies");
@@ -390,26 +377,20 @@ test("an unavailable Request Movie is reachable and says why on focus and on hov
   await page.getByRole("button", { name: "More options" }).click();
   await item.hover();
   await expect(tooltip).toHaveText(reason);
-
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 test("a viewer who does not own a movie playlist sees no Edit or Delete", async ({ page }) => {
-  const browserIssues = trackBrowserIssues(page);
-  const { unexpectedApiRequests } = await mockMoviesApi(page);
+  await mockMoviesApi(page);
 
   await page.goto("/movies/playlist/502");
 
   await expect(page.getByRole("heading", { level: 1, name: "Guest Picks" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Edit playlist" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Delete playlist" })).toHaveCount(0);
-
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 test("removing a movie from a playlist page drops its card and updates the count", async ({ page }) => {
-  const browserIssues = trackBrowserIssues(page);
-  const { removedMovieRequests, unexpectedApiRequests } = await mockMoviesApi(page);
+  const { removedMovieRequests } = await mockMoviesApi(page);
 
   await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto("/movies/playlist/501");
@@ -430,8 +411,6 @@ test("removing a movie from a playlist page drops its card and updates the count
   await expect(card).toHaveCount(0);
   await expect(cardFor(page, "Signal Fire 2024")).toBeVisible();
   await expect(page.getByText("6 movies")).toBeVisible();
-
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 test.describe("on a touch phone", () => {
@@ -439,22 +418,18 @@ test.describe("on a touch phone", () => {
 
   // Nothing hovers on a touch screen, so the card menu is always shown there.
   test("the playlist card menu is shown without hover", async ({ page }) => {
-    const browserIssues = trackBrowserIssues(page);
-    const { unexpectedApiRequests } = await mockMoviesApi(page);
+    await mockMoviesApi(page);
 
     await page.goto("/movies/playlist/501");
 
     const menuButton = page.getByRole("button", { name: "More actions for Signal Fire" });
     await expect(menuButton).toBeVisible();
     await expect(menuButton.locator("..")).toHaveCSS("opacity", "1");
-
-    assertMockSuiteClean(browserIssues, unexpectedApiRequests);
   });
 });
 
 test("switching to the playlists tab commits at once and shows its skeleton", async ({ page }) => {
-  const browserIssues = trackBrowserIssues(page);
-  const { unexpectedApiRequests } = await mockMoviesApi(page);
+  await mockMoviesApi(page);
 
   await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto("/movies");
@@ -472,13 +447,10 @@ test("switching to the playlists tab commits at once and shows its skeleton", as
 
   playlistsList.release();
   await expect(page.getByText("2 playlists")).toBeVisible();
-
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 test("playlists tab opens liked movies subview with URL-backed pagination", async ({ page }) => {
-  const browserIssues = trackBrowserIssues(page);
-  const { unexpectedApiRequests } = await mockMoviesApi(page);
+  await mockMoviesApi(page);
 
   await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto(moviesPlaylistsPath);
@@ -507,12 +479,10 @@ test("playlists tab opens liked movies subview with URL-backed pagination", asyn
   await expect(page).toHaveURL(/tab=playlists/);
   await expect(page.getByRole("button", { name: "Liked movies" })).toBeVisible();
   await expect(page.getByRole("button", { name: "New playlist" })).toBeVisible();
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 test("playlists and liked views avoid horizontal overflow on a phone", async ({ page }) => {
-  const browserIssues = trackBrowserIssues(page);
-  const { unexpectedApiRequests } = await mockMoviesApi(page);
+  await mockMoviesApi(page);
 
   await page.setViewportSize(VIEWPORTS.phone);
   await page.goto(moviesPlaylistsPath);
@@ -525,5 +495,4 @@ test("playlists and liked views avoid horizontal overflow on a phone", async ({ 
   await expect(page.getByRole("link", { name: "Signal Fire 2024", exact: true })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "pagination" })).toBeVisible();
   await expectNoOverflowingElements(page);
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });

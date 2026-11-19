@@ -1,4 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "./e2e-test";
+import type { Page } from "@playwright/test";
 import { MOVIES_PER_PAGE, SHOWS_PER_PAGE } from "../src/lib/constants";
 import type {
   MovieGenreWithCountType,
@@ -13,10 +14,6 @@ import {
   nullableString,
   pagedList,
 } from "./e2e-api";
-import {
-  assertMockSuiteClean,
-  trackBrowserIssues,
-} from "./e2e-browser-issues";
 import { cardFor, expectNoOverflowingElements, VIEWPORTS } from "./e2e-layout";
 import { mockApi } from "./e2e-mock-api";
 import {
@@ -243,7 +240,7 @@ function tabPath(kind: LibraryKind, tab: string) {
 async function mockLibraryApi(page: Page, kind: LibraryKind) {
   const apiRequests: URL[] = [];
 
-  const { unexpectedApiRequests } = await mockApi(page, {
+  await mockApi(page, {
     user: { is_admin: true },
     handle: async ({ route, url, method }) => {
       if (method !== "GET") {
@@ -279,7 +276,7 @@ async function mockLibraryApi(page: Page, kind: LibraryKind) {
     },
   });
 
-  return { apiRequests, unexpectedApiRequests };
+  return { apiRequests };
 }
 
 /** Waits for the page to have asked for `pathname` with `params` in its query. */
@@ -302,8 +299,7 @@ async function expectTabShown(page: Page, tab: LibraryTab) {
 for (const kind of [moviesKind(), showsKind()]) {
   test.describe(`${kind.name} library`, () => {
     test("shell and URL-backed tabs render accessibly", async ({ page }) => {
-      const browserIssues = trackBrowserIssues(page);
-      const { unexpectedApiRequests } = await mockLibraryApi(page, kind);
+      await mockLibraryApi(page, kind);
 
       await page.setViewportSize(VIEWPORTS.desktop);
       await page.goto(tabPath(kind, "all"));
@@ -319,13 +315,10 @@ for (const kind of [moviesKind(), showsKind()]) {
         await page.getByRole("tab", { name: tab.name }).click();
         await expectTabShown(page, tab);
       }
-
-      assertMockSuiteClean(browserIssues, unexpectedApiRequests);
     });
 
     test("all tab renders cards and URL-backed pagination and sort", async ({ page }) => {
-      const browserIssues = trackBrowserIssues(page);
-      const { apiRequests, unexpectedApiRequests } = await mockLibraryApi(page, kind);
+      const { apiRequests } = await mockLibraryApi(page, kind);
 
       await page.setViewportSize(VIEWPORTS.desktop);
       await page.goto(tabPath(kind, "all"));
@@ -366,13 +359,10 @@ for (const kind of [moviesKind(), showsKind()]) {
       await expect(
         page.getByRole("button", { name: "Sorted Z to A, click to sort A to Z" }),
       ).toBeVisible();
-
-      assertMockSuiteClean(browserIssues, unexpectedApiRequests);
     });
 
     test("genres tab filters, paginates, sorts and clears through the URL", async ({ page }) => {
-      const browserIssues = trackBrowserIssues(page);
-      const { apiRequests, unexpectedApiRequests } = await mockLibraryApi(page, kind);
+      const { apiRequests } = await mockLibraryApi(page, kind);
 
       await page.setViewportSize(VIEWPORTS.desktop);
       await page.goto(tabPath(kind, "genres"));
@@ -429,13 +419,10 @@ for (const kind of [moviesKind(), showsKind()]) {
       await expect(genresList).toBeVisible();
       await expect(genrePageTwoCard).toHaveCount(0);
       await expect(genreChip).toBeFocused();
-
-      assertMockSuiteClean(browserIssues, unexpectedApiRequests);
     });
 
     test("tabs avoid horizontal overflow on a phone", async ({ page }) => {
-      const browserIssues = trackBrowserIssues(page);
-      const { unexpectedApiRequests } = await mockLibraryApi(page, kind);
+      await mockLibraryApi(page, kind);
 
       await page.setViewportSize(VIEWPORTS.phone);
       await page.goto(tabPath(kind, "all"));
@@ -454,8 +441,6 @@ for (const kind of [moviesKind(), showsKind()]) {
       await expect(page.getByRole("link", { name: kind.cards.genrePageOne, exact: true })).toBeVisible();
       await expect(page.getByRole("navigation", { name: "pagination" })).toBeVisible();
       await expectNoOverflowingElements(page);
-
-      assertMockSuiteClean(browserIssues, unexpectedApiRequests);
     });
   });
 }

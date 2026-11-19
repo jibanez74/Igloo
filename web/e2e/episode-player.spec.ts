@@ -1,6 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "./e2e-test";
+import type { Page } from "@playwright/test";
 import { loginPageViaApi } from "./e2e-auth";
-import { trackBrowserIssues } from "./e2e-browser-issues";
 import { requireMockApi } from "./e2e-env";
 import {
   expectURLParams,
@@ -41,7 +41,6 @@ function openEpisodePlayer(page: Page, search: string) {
 test("direct play titles the player and streams from the episode route", async ({
   page,
 }) => {
-  const browserIssues = trackBrowserIssues(page);
   // An episode id sent down the movie route would still reach a server.
   const movieRouteRequests = trackStreamRequests(
     page,
@@ -68,14 +67,11 @@ test("direct play titles the player and streams from the episode route", async (
   await expect.poll(() => mediaRequests.length).toBeGreaterThan(0);
   expect(new URL(mediaRequests[0]).pathname).toBe(streamPath);
   expect(movieRouteRequests).toEqual([]);
-
-  browserIssues.assertClean();
 });
 
 test("HLS mode requests the episode manifest with the shared query contract", async ({
   page,
 }) => {
-  const browserIssues = trackBrowserIssues(page);
   const mediaRequests = await openEpisodePlayer(
     page,
     "mode=720p_3mbps&audio_track=0&subtitle_track=off&start=0",
@@ -95,8 +91,6 @@ test("HLS mode requests the episode manifest with the shared query contract", as
   expect(manifest.searchParams.get("audio_track")).toBe("0");
   // HLS never touches the raw stream route.
   expect(mediaRequests.filter(url => new URL(url).pathname === streamPath)).toEqual([]);
-
-  browserIssues.assertClean();
 });
 
 // Playback never really runs here, so the end of the episode is the media
@@ -114,7 +108,6 @@ async function endEpisode(page: Page) {
 test("a finished episode offers the next one and hands off with autoplay", async ({
   page,
 }) => {
-  const browserIssues = trackBrowserIssues(page);
   await holdMediaRequests(page, nextEpisode);
   await openEpisodePlayer(page, directSearch);
   await expect(playButton(page)).toBeVisible();
@@ -140,6 +133,4 @@ test("a finished episode offers the next one and hands off with autoplay", async
     }),
   ).toBeVisible();
   await expect(page.getByRole("region", { name: "Up next" })).toHaveCount(0);
-
-  browserIssues.assertClean();
 });

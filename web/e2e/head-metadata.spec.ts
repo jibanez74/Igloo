@@ -1,7 +1,7 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "./e2e-test";
+import type { Page } from "@playwright/test";
 
 import { loginPageViaApi } from "./e2e-auth";
-import { trackBrowserIssues } from "./e2e-browser-issues";
 import { requireMockApi } from "./e2e-env";
 
 const ROOT_DESCRIPTION =
@@ -31,8 +31,6 @@ test("applies each route's head over the root defaults", async ({ page }) => {
   // Head tags are client-side only; the mock's direct-play movie keeps the
   // player from starting a transcode.
   requireMockApi();
-  const tracker = trackBrowserIssues(page);
-
   await loginPageViaApi(page);
   await page.route("**/api/movies/*/stream*", () => {
     // Never fulfilled: the player stays ready without a media error.
@@ -82,6 +80,4 @@ test("applies each route's head over the root defaults", async ({ page }) => {
       robots: ["noindex, nofollow"],
       title: "General Settings - Igloo",
     });
-
-  tracker.assertClean();
 });

@@ -1,4 +1,5 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./e2e-test";
+import { signedOutIssueRules } from "./e2e-browser-issues";
 
 // Headless Chromium never fetches favicons on its own, so the boot spec's
 // "no failed request" net never sees these files. Fetch each linked icon
@@ -6,6 +7,9 @@ import { expect, test } from "@playwright/test";
 // manifest media type (the Go server sends nosniff, so a wrong type is a
 // broken icon, not a warning). Runs in every mode: Vite, the production
 // preview and a real instance all serve public/ verbatim.
+// It loads the signed-out sign-in page.
+test.use({ browserIssueOptions: signedOutIssueRules });
+
 test("serves every linked icon and the manifest with its media type", async ({
   page,
   request,

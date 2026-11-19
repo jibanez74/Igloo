@@ -1,4 +1,4 @@
-import { expect, type Page, type Request, type Response } from "@playwright/test";
+import type { ConsoleMessage, Page, Request, Response } from "@playwright/test";
 
 function isIgnorableFailedRequest(request: Request) {
   const failureText = request.failure()?.errorText ?? "";
@@ -42,30 +42,75 @@ export function isExpectedUnauthorizedResourceMessage(message: string) {
   );
 }
 
+/**
+ * The browser's "Failed to load resource" echo of an `/api/` response. The
+ * response itself is judged by `ignoreResponse`, so a spec can drop its echo;
+ * an echo for anything else (a chunk, a font, an icon) still counts.
+ */
+export function isApiResourceEcho(text: string, message: ConsoleMessage) {
+  return (
+    text.startsWith("Failed to load resource:") &&
+    new URL(message.location().url, "http://localhost").pathname.startsWith("/api/")
+  );
+}
+
+function isSignedOutAuthCheck(response: Response) {
+  return (
+    response.status() === 401 &&
+    response.request().method() === "GET" &&
+    new URL(response.url()).pathname === "/api/auth/user"
+  );
+}
+
+/**
+ * A signed-out page asks who is signed in and hears 401. That answer, and
+ * the browser's console echo of it, are the only errors such a page expects.
+ */
+export const signedOutIssueRules: TrackBrowserIssuesOptions = {
+  ignoreResponse: isSignedOutAuthCheck,
+  ignoreConsole: (_type, text, message) =>
+    isExpectedUnauthorizedResourceMessage(text) &&
+    new URL(message.location().url, "http://localhost").pathname === "/api/auth/user",
+};
+
 function isAppApiResponse(response: Response) {
   return new URL(response.url()).pathname.startsWith("/api/");
 }
 
-type TrackBrowserIssuesOptions = {
+export type TrackBrowserIssuesOptions = {
   /**
    * Console errors/warnings this spec expects. Returning true drops the
-   * message instead of failing `assertClean`.
+   * message instead of failing the test.
    */
-  ignoreConsole?: (type: string, text: string) => boolean;
+  ignoreConsole?: (type: string, text: string, message: ConsoleMessage) => boolean;
   /**
    * `/api/` error responses this spec drives on purpose, such as a 409 for a
    * duplicate email. Returning true drops the response instead of failing.
    */
   ignoreResponse?: (response: Response) => boolean;
+  /**
+   * Failed requests this spec causes on purpose, such as an outage it
+   * simulates. Returning true drops the request instead of failing.
+   */
+  ignoreRequestFailure?: (request: Request) => boolean;
   /** Set false for specs that drive flows React warns about. Defaults to true. */
   trackConsoleWarnings?: boolean;
 };
 
+export type BrowserIssueTracker = ReturnType<typeof trackBrowserIssues>;
+
+/**
+ * Watches one page. Specs do not call this: the shared `test` in e2e-test.ts
+ * tracks every page and asserts at teardown.
+ */
 export function trackBrowserIssues(
   page: Page,
   options: TrackBrowserIssuesOptions = {},
 ) {
-  const { ignoreConsole, ignoreResponse, trackConsoleWarnings = true } = options;
+  const ignoreConsoleRules = options.ignoreConsole ? [options.ignoreConsole] : [];
+  const ignoreResponseRules = options.ignoreResponse ? [options.ignoreResponse] : [];
+  const ignoreFailureRules = options.ignoreRequestFailure ? [options.ignoreRequestFailure] : [];
+  let trackConsoleWarnings = options.trackConsoleWarnings ?? true;
   const consoleIssues: string[] = [];
   const pageErrors: string[] = [];
   const failedRequests: string[] = [];
@@ -79,7 +124,7 @@ export function trackBrowserIssues(
       return;
     }
 
-    if (ignoreConsole?.(message.type(), message.text())) {
+    if (ignoreConsoleRules.some(rule => rule(message.type(), message.text(), message))) {
       return;
     }
 
@@ -87,7 +132,7 @@ export function trackBrowserIssues(
   });
   page.on("pageerror", error => pageErrors.push(error.message));
   page.on("requestfailed", request => {
-    if (isIgnorableFailedRequest(request)) {
+    if (isIgnorableFailedRequest(request) || ignoreFailureRules.some(rule => rule(request))) {
       return;
     }
 
@@ -99,7 +144,7 @@ export function trackBrowserIssues(
     if (
       isAppApiResponse(response) &&
       response.status() >= 400 &&
-      !ignoreResponse?.(response)
+      !ignoreResponseRules.some(rule => rule(response))
     ) {
       responseErrors.push(
         `${response.status()} ${response.request().method()} ${response.url()}`,
@@ -108,23 +153,17 @@ export function trackBrowserIssues(
   });
 
   return {
-    assertClean() {
-      expect(consoleIssues).toEqual([]);
-      expect(pageErrors).toEqual([]);
-      expect(failedRequests).toEqual([]);
-      expect(responseErrors).toEqual([]);
+    /** Adds rules to the ones the tracker started with. */
+    ignore(more: TrackBrowserIssuesOptions) {
+      if (more.ignoreConsole) ignoreConsoleRules.push(more.ignoreConsole);
+      if (more.ignoreResponse) ignoreResponseRules.push(more.ignoreResponse);
+      if (more.ignoreRequestFailure) ignoreFailureRules.push(more.ignoreRequestFailure);
+      if (more.trackConsoleWarnings !== undefined) {
+        trackConsoleWarnings = more.trackConsoleWarnings;
+      }
+    },
+    issues() {
+      return { consoleIssues, pageErrors, failedRequests, responseErrors };
     },
   };
-}
-
-/**
- * For the specs that stub every `/api/**` call themselves: the run is clean
- * only if the page also asked for nothing the stub did not anticipate.
- */
-export function assertMockSuiteClean(
-  browserIssues: ReturnType<typeof trackBrowserIssues>,
-  unexpectedApiRequests: string[],
-) {
-  expect(unexpectedApiRequests).toEqual([]);
-  browserIssues.assertClean();
 }

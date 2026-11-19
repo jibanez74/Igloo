@@ -1,5 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
-import { trackBrowserIssues } from "./e2e-browser-issues";
+import { expect, test } from "./e2e-test";
+import type { Page } from "@playwright/test";
 import { expectPageHasNoHorizontalScroll, VIEWPORTS } from "./e2e-layout";
 import { mockYouTubePlayer } from "./mock-youtube-player";
 import { MOVIE_SEEK_STEP_SEC } from "../src/lib/constants";
@@ -59,8 +59,6 @@ test.describe("Trailer playback chrome", () => {
     test("renders labelled trailer controls without keyboard hints", async ({
       page,
     }) => {
-      const browserIssues = trackBrowserIssues(page);
-
       await openTrailer(page);
 
       // The hints key off this query; fail loudly if emulation stops setting it.
@@ -70,15 +68,12 @@ test.describe("Trailer playback chrome", () => {
         ),
       ).toBe(true);
       await expectTrailerChrome(page, { touch: true });
-      browserIssues.assertClean();
     });
   });
 
   test("keeps keyboard focus in the trailer dialog and closes on Escape", async ({
     page,
   }) => {
-    const browserIssues = trackBrowserIssues(page);
-
     await page.setViewportSize(VIEWPORTS.desktop);
     await openTrailer(page);
 
@@ -97,14 +92,11 @@ test.describe("Trailer playback chrome", () => {
 
     await page.keyboard.press("Escape");
     await expect(page).toHaveURL(/\/$/);
-    browserIssues.assertClean();
   });
 
   test("focuses the retry button after a playback error and lets Space activate it", async ({
     page,
   }) => {
-    const browserIssues = trackBrowserIssues(page);
-
     await page.setViewportSize(VIEWPORTS.desktop);
     await openTrailer(page, { failFirstLoad: true });
 
@@ -118,14 +110,11 @@ test.describe("Trailer playback chrome", () => {
     await expect(
       page.getByRole("button", { name: "Close trailer (Escape)" }),
     ).toBeFocused();
-    browserIssues.assertClean();
   });
 
   test("keeps Space as a playback shortcut outside interactive controls", async ({
     page,
   }) => {
-    const browserIssues = trackBrowserIssues(page);
-
     await page.setViewportSize(VIEWPORTS.desktop);
     await openTrailer(page);
 
@@ -140,6 +129,5 @@ test.describe("Trailer playback chrome", () => {
     await expect(
       page.getByRole("button", { name: "Pause (Space or K)" }),
     ).toBeVisible();
-    browserIssues.assertClean();
   });
 });
