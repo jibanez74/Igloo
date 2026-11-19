@@ -1,13 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
 import { loginPageViaApi } from "../e2e-auth";
 import { trackBrowserIssues } from "../e2e-browser-issues";
+import { VIEWPORTS } from "../e2e-layout";
 import { expectScreenshot, settle, THEMES, useTheme } from "./visual-helpers";
 
 // Whole pages on the mock API server (mock-api-server.ts). The gallery proves
 // a primitive did not move; these prove the pages built from primitives did
 // not either, shell included.
-
-const PHONE = { width: 390, height: 844 };
 
 // The mock server stamps some rows with the time it started.
 const FROZEN_NOW = new Date("2026-01-15T12:00:00Z");
@@ -72,7 +71,7 @@ for (const theme of THEMES) {
       test("movie library on a phone, with the navigation sheet", async ({
         page,
       }) => {
-        await page.setViewportSize(PHONE);
+        await page.setViewportSize(VIEWPORTS.phone);
         await openPage(page, "/movies");
         await expectScreenshot(page, `movies-phone-${theme}.png`);
 

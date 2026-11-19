@@ -12,9 +12,11 @@ const mockApiPort = intEnv("E2E_MOCK_API_PORT", 8080);
 const baseURL = `http://127.0.0.1:${webPort}`;
 
 // Pixels compare only against baselines the same renderer drew. The committed
-// set is drawn by CI's pinned image, so a laptop runs the specs without
-// comparing unless it asks to (VISUAL_STRICT=1), normally together with
-// VISUAL_SNAPSHOT_DIR pointing at a set that laptop drew itself.
+// set is drawn in a pinned Playwright image by `make test-visual-docker`
+// (which sets VISUAL_STRICT=1; CI no longer runs this config, but a run where
+// CI is set still compares). Anywhere else the specs run without comparing unless asked to
+// (VISUAL_STRICT=1), normally together with VISUAL_SNAPSHOT_DIR pointing at a
+// set that machine drew.
 const comparesPixels =
   Boolean(process.env.CI) || process.env.VISUAL_STRICT === "1";
 const snapshotDir =
@@ -34,7 +36,14 @@ export default defineConfig({
   // every load, so a comparing run gets two more tries, on fresh pages, and
   // a test that needed one is reported as flaky rather than hidden.
   retries: comparesPixels ? 2 : 0,
-  reporter: [["list"], ["html", { open: "never" }]],
+  // The JSON report feeds the near-miss list `make test-visual-docker`
+  // prints (e2e/visual/flake-summary.ts). test-results/ is emptied when a run
+  // starts and the report is written when it ends.
+  reporter: [
+    ["list"],
+    ["html", { open: "never" }],
+    ["json", { outputFile: "test-results/visual-results.json" }],
+  ],
   // One canonical set: no platform or browser suffix in the file names.
   snapshotPathTemplate: `${snapshotDir}/{testFileName}/{arg}{ext}`,
   ignoreSnapshots: !comparesPixels,

@@ -32,7 +32,7 @@ this doc, prefer adding a guard too.
 | Fields share their looks; a dialog's surface, width, elevation and title tone are props; neither takes a colour or height in `className` (§1.6) | `web/src/test/ui/fields.test.tsx`, `web/src/test/ui/dialog.test.tsx`, ESLint `no-restricted-syntax` (**error**) |
 | App-wide layers and motion durations are written as tokens, not numbers (§1.4, §1.5) | ESLint `no-restricted-syntax` (**error**) |
 | Shared class-string constants keep their contracts | `web/src/test/lib/constants-contracts.test.ts` |
-| Primitives and the baseline pages render the same pixels as the committed baselines, pixel for pixel, both themes (§2.5) | `web/e2e/visual/*.visual.ts` (CI job `test-visual`) |
+| Primitives and the baseline pages render the same pixels as the committed baselines, pixel for pixel, both themes (§2.5) | `web/e2e/visual/*.visual.ts` (`make test-visual-docker`, local; required for UI changes) |
 | The component gallery renders, and stays out of the production bundle (§2.5) | `web/src/test/gallery/gallery.test.tsx`, CI marker grep, `web/e2e/boot.spec.ts` |
 | No raw Tailwind palette classes (all 22 color families) | ESLint `no-restricted-syntax` (**error**) in `web/eslint.config.js` |
 | Class order, duplicates, unknown and non-canonical classes — in `className`, inside `cn()`, and in every class constant and variant record (§2.3) | `eslint-plugin-better-tailwindcss` (**warn**; `bun run lint` runs `--max-warnings 0`, so warnings still fail CI) |
@@ -962,11 +962,27 @@ full page a section that grew would move every baseline below it.
 (`gallery.visual.ts`) and a few whole pages on the mock API server
 (`pages.visual.ts`), in both themes. They run from their own config,
 `web/playwright.visual.config.ts`, always against the dev server
-(`bun run test:visual`, `make test-visual`), and are a CI job (`test-visual`),
-not part of `make check`.
+(`bun run test:visual`, `make test-visual`). They are not part of `make check`
+or CI: **`make test-visual-docker` is the gate for every UI change**, run on the
+dev machine before the PR, beside the before/after screenshots.
 
-- **The committed set is drawn by CI's pinned image**, and the comparison is
-  exact: a single pixel that differs in any channel fails. It runs in two
+- **The committed set is drawn in one pinned image**,
+  `mcr.microsoft.com/playwright:v<version>-noble`, pinned by digest in the
+  Makefile's `VISUAL_IMAGE` and in CI's `test-frontend` `container:` (which
+  runs the unit and e2e suites in it, without comparing pixels). Its
+  Chromium, system libraries and fonts decide the pixels, not the host: a set
+  drawn in it on a laptop and one drawn in CI were identical on all 56 images
+  (measured with `e2e/visual/png.ts`), and both matched the set CI had drawn
+  on the bare runner before. `make test-visual-docker` compares a checkout
+  with the committed set in that image, and `make test-visual-docker-update`
+  redraws it (Docker only; dependencies install into a Docker volume of the
+  checkout's own, named from its path, so the host's `node_modules` is never
+  used and two worktrees never share one). `bun run check:playwright-image`
+  (`web/scripts/check-playwright-image.ts`, run by both targets and CI's
+  `test-frontend` job) fails when the two pins disagree or the tag is not the locked
+  `@playwright/test`: upgrading Playwright means moving the tag and digest in
+  both places and redrawing.
+- **The comparison is exact**: a single pixel that differs in any channel fails. It runs in two
   passes, both inside `expectScreenshot` (`e2e/visual/visual-helpers.ts`),
   which every visual spec uses instead of `toHaveScreenshot`:
   1. Playwright's `toHaveScreenshot` with `threshold: 0`, `maxDiffPixels: 0`.
@@ -993,19 +1009,34 @@ not part of `make check`.
   exact pass shoots up to three times, and a comparing run retries a failed
   test twice on a fresh page, reporting it as flaky. A real change differs
   every time, so it still fails.
-- A laptop renders text differently from CI, so a local run executes the
-  specs without comparing pixels.
-- **To prove a change is invisible locally**, draw a set on the base commit and
-  compare the branch against it on the same machine:
+- **Near misses are listed.** The visual config also writes a JSON report
+  (`test-results/visual-results.json`), and `make test-visual-docker` ends
+  by printing its near misses (`e2e/visual/flake-summary.ts`): every test
+  that passed only on a retry and every shot whose exact comparison matched
+  only on a later attempt. Both still pass the run; the list is how a new
+  source of unstable pixels shows up before it starts failing. A retried
+  shot's annotation names the first shot's difference, and a test that
+  failed outright is listed too. A run in which no test ran (all skipped, or
+  none loaded) is reported as incomplete, never as clean.
+- **Measured in the pinned image**, with retries off: 20 runs of the whole
+  suite (1,140 tests), 30 of the pages spec (600) and 100 per theme of the
+  library settings test (200) failed nothing. One shot in all of them,
+  `settings-libraries-dark` in the whole-suite runs, matched only on its
+  second attempt. It did not come back in the 800 targeted runs, so its
+  cause is unknown; the retry absorbs it.
+- Outside the image (bare `bun run test:visual` or `make test-visual`) a
+  laptop renders text differently, so that run executes the specs without
+  comparing pixels. To compare there anyway, draw a set on the base commit
+  and compare the branch against it on the same machine:
   `VISUAL_STRICT=1 VISUAL_SNAPSHOT_DIR=/some/dir bun run test:visual:update`
   on the base, then the same without `:update` on the branch.
-- **When a change is meant to be seen**, the `test-visual` job fails and
-  uploads two artifacts: `playwright-report-visual` (expected, actual and
-  diff images of what failed) and `visual-baselines` (the redrawn set). Review the
-  images, then commit them over `web/e2e/visual/__screenshots__/` in a commit
-  of their own, naming what moved and why.
-- A Playwright upgrade or a new runner image can move pixels; regenerate the
-  baselines the same way, in a commit that changes nothing else.
+- **When a change is meant to be seen**, run `make test-visual-docker-update`,
+  review the moved images, and commit them in a commit of their own, naming
+  what moved and why. A failing comparison leaves the expected, actual and
+  diff images in `web/test-results` and the HTML report in
+  `web/playwright-report`.
+- A Playwright upgrade moves the image; redraw the baselines the same way, in
+  a commit that changes nothing else.
 
 ---
 

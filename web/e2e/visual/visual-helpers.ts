@@ -92,6 +92,7 @@ export async function expectScreenshot(
   // often it is shot, so a mismatch is retried before it counts.
   let actual = await shoot();
   let difference = comparePngs(baseline, actual);
+  const firstDifference = difference;
   for (
     let attempt = 1;
     difference.kind !== "same" && attempt < EXACT_ATTEMPTS;
@@ -105,7 +106,7 @@ export async function expectScreenshot(
     if (difference.kind === "same") {
       info.annotations.push({
         type: "exact comparison retried",
-        description: `${name} matched on attempt ${attempt + 1}`,
+        description: `${name} matched on attempt ${attempt + 1}; the first shot had ${describeDifference(firstDifference)}`,
       });
     }
   }
