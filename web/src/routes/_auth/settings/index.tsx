@@ -75,6 +75,15 @@ function formFromSettings(
   };
 }
 
+function fieldFromSettingsError(
+  message: string,
+): "static_dir" | "transcode_dir" | null {
+  const normalized = message.toLowerCase();
+  if (normalized.includes("static directory")) return "static_dir";
+  if (normalized.includes("transcode directory")) return "transcode_dir";
+  return null;
+}
+
 function formsMatchSettings(
   form: UpdateGeneralSettingsRequest,
   settings: GeneralSettingsType,
@@ -142,6 +151,11 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   const [validationMessage, setValidationMessage] = useState("");
   const [validationField, setValidationField] = useState<string | null>(null);
   const [confirmingImageRemoval, setConfirmingImageRemoval] = useState(false);
+  // A refused save rolls the cache back to what it held before. The form
+  // then matches the optimistic copy it was synced to, so it would read as
+  // clean and follow the rollback, losing the edits the server refused.
+  const [keepEditsThroughRollback, setKeepEditsThroughRollback] =
+    useState(false);
   // Closing the confirmation returns focus to what submitted the form, or,
   // once a successful save has disabled Save, to the switch it was about.
   const imageRemovalReturnRef = useRef<HTMLElement | null>(null);
@@ -153,7 +167,9 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   if (settings !== syncedSettings) {
     const formIsClean = !isDirty;
     setSyncedSettings(settings);
-    if (formIsClean) {
+    if (keepEditsThroughRollback) {
+      setKeepEditsThroughRollback(false);
+    } else if (formIsClean) {
       setForm(formFromSettings(settings));
       setValidationMessage("");
       setValidationField(null);
@@ -191,7 +207,16 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
       ),
     onSuccess: (res, _nextSettings, snapshot) => {
       if (res.error) {
+        setKeepEditsThroughRollback(true);
         restoreOptimistic(queryClient, settingsKey, snapshot);
+        // The server names the directory it refused; that field is marked
+        // as the form's own validation would mark it.
+        const message = apiErrorMessage(res, "Failed to save settings.");
+        const field = fieldFromSettingsError(message);
+        if (field) {
+          setValidationMessage(message);
+          setValidationField(field);
+        }
         showActionFailed("save settings", res);
         return;
       }
