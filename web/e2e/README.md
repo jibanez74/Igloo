@@ -34,10 +34,10 @@ mock fixtures. A test with neither guard must pass in both modes.
 ## Two ways to mock
 
 - **The stateful mock** (`mock-api-server.ts`, with its watch rooms in
-  `mock-watch-rooms.ts`) serves auth, users, settings, devices, the players'
-  routes and watch rooms. A route it does not serve answers 404
-  `Unhandled mock API route`, which fails the test as an `/api/` error. Each
-  test starts from its initial state (see below).
+  `mock-watch-rooms.ts`) serves auth, users, settings, devices,
+  notifications, the players' routes and watch rooms. A route it does not
+  serve answers 404 `Unhandled mock API route`, which fails the test as an
+  `/api/` error. Each test starts from its initial state (see below).
 - **Per-test stubs.** `mockApi(page, { user, handle })` (`e2e-mock-api.ts`)
   installs one `**/api/**` catch-all. It answers what the signed-in shell
   always asks for and hands everything else to `handle`. Any request that

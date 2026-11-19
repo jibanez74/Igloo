@@ -195,6 +195,27 @@ describe("login route head", () => {
   });
 });
 
+describe("login fields", () => {
+  it("names the fields for password managers and shows the password on request", async () => {
+    const user = userEvent.setup();
+    await renderLoginRouteTree("/login");
+    await screen.findByRole("button", { name: "Sign in" });
+
+    const email = screen.getByLabelText("Email");
+    const password = screen.getByLabelText("Password", { exact: true });
+    expect(email).toHaveAttribute("autocomplete", "username");
+    expect(password).toHaveAttribute("autocomplete", "current-password");
+    expect(password).toHaveAttribute("type", "password");
+
+    await user.click(screen.getByRole("button", { name: "Show password" }));
+    expect(password).toHaveAttribute("type", "text");
+
+    await user.click(screen.getByRole("button", { name: "Hide password" }));
+    expect(password).toHaveAttribute("type", "password");
+    expect(screen.getByRole("button", { name: "Show password" })).toBeInTheDocument();
+  });
+});
+
 describe("login inline validation", () => {
   it("marks empty fields inline, focuses the first, and sends nothing", async () => {
     const user = userEvent.setup();

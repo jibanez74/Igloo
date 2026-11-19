@@ -4,6 +4,7 @@ import type { APIRequestContext } from "@playwright/test";
 import type { DevicesListResponseType } from "../src/types";
 import type { components } from "../src/types/openapi.gen";
 import { getApiData, readJSON } from "./e2e-api";
+import { isApiResourceEcho } from "./e2e-browser-issues";
 import { loginPageViaApi } from "./e2e-auth";
 import { requireRealInstance } from "./e2e-env";
 
@@ -16,6 +17,7 @@ const runId = Date.now().toString(36);
 const deviceName = `E2E Living Room TV ${runId}`;
 const renamedDeviceName = `E2E Bedroom TV ${runId}`;
 const tokenDeviceName = `E2E Token TV ${runId}`;
+const backedOutDeviceName = `E2E Kitchen TV ${runId}`;
 
 async function initiate(
   request: APIRequestContext,
@@ -178,6 +180,56 @@ test.describe("Device lifecycle", () => {
       ).toBe(false);
     } finally {
       await revokeDevicesNamed(page.request, deviceName, renamedDeviceName);
+    }
+  });
+
+  // The server's answers the card turns into messages: a code it never issued
+  // (or one that expired, which it cannot tell apart) is a 404, and a
+  // looked-up device stays unapproved until the reader approves it.
+  test("refuses a code no device issued, and backing out approves nothing", async ({
+    page,
+    request,
+    browserIssues,
+  }) => {
+    browserIssues.ignore({
+      ignoreConsole: (_type, text, message) => isApiResourceEcho(text, message),
+      ignoreResponse: response =>
+        response.status() === 404 &&
+        new URL(response.url()).pathname === "/api/quick-connect/lookup",
+    });
+    await loginPageViaApi(page);
+
+    try {
+      await page.goto("/settings/account");
+      const codeInput = page.getByRole("textbox", { name: "Quick Connect code" });
+
+      // Well formed, so only the server can refuse it.
+      await codeInput.fill("ZZZZZZ");
+      const refused = page.waitForResponse(
+        response =>
+          new URL(response.url()).pathname === "/api/quick-connect/lookup",
+      );
+      await page.getByRole("button", { name: "Continue" }).click();
+      expect((await refused).status()).toBe(404);
+      await expect(codeInput).toHaveAccessibleDescription(
+        /That code is invalid or has expired\./,
+      );
+
+      const { code, secret } = await initiate(request, backedOutDeviceName);
+      await codeInput.fill(code);
+      await page.getByRole("button", { name: "Continue" }).click();
+      await expect(page.getByText(backedOutDeviceName)).toBeVisible();
+      await page.getByRole("button", { name: "Back" }).click();
+      await expect(codeInput).toHaveValue(code);
+
+      expect((await redeem(request, code, secret)).status).toBe("pending");
+      expect(
+        (await fetchDevices(page.request)).some(
+          candidate => candidate.name === backedOutDeviceName,
+        ),
+      ).toBe(false);
+    } finally {
+      await revokeDevicesNamed(page.request, backedOutDeviceName);
     }
   });
 

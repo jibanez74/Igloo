@@ -76,6 +76,11 @@ test.describe("Side navigation", () => {
   });
 
   test("a phone opens the same navigation in a sheet", async ({ page }) => {
+    // The clock runs the tooltip's hover delay (500 ms) out below.
+    await page.clock.install();
+    // Left collapsed on a desktop, where the links do name themselves in
+    // tooltips: the sheet must still show none.
+    await page.addInitScript(() => window.localStorage.setItem("igloo-sidebar", "collapsed"));
     await loginPageViaApi(page);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/");
@@ -88,8 +93,11 @@ test.describe("Side navigation", () => {
     const sheet = page.getByRole("dialog", { name: "Navigation" });
     await expect(sheet.getByRole("link", { name: "Settings" })).toBeVisible();
     await expect(sheet.getByRole("button", { name: /^Account: / })).toBeVisible();
-    // No tooltips in the sheet: the labels are on screen.
-    await sheet.getByRole("link", { name: "Music" }).hover();
+    // No tooltips in the sheet: the labels are on screen. Checked once the
+    // hover delay has passed, when a tooltip would have opened. (Hovering
+    // that long also preloads the link's page; the mock serves Movies.)
+    await sheet.getByRole("link", { name: "Movies" }).hover();
+    await page.clock.runFor(1_000);
     await expect(page.getByRole("tooltip")).toHaveCount(0);
   });
 });

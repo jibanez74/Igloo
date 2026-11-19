@@ -3,11 +3,15 @@ import { signedOutIssueRules } from "./e2e-browser-issues";
 
 import { expectPageHasNoHorizontalScroll } from "./e2e-layout";
 import { loginPageViaApi } from "./e2e-auth";
+import { requireMockApi } from "./e2e-env";
 
 test.describe("Reduced motion", () => {
   test("Home keeps its content visible without section entrance animations", async ({
     page,
   }) => {
+    // The sections below are the mock's rows: its billboard, and theaters
+    // data that a real instance serves only with a TMDB key.
+    requireMockApi();
     await loginPageViaApi(page);
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.setViewportSize({ width: 1280, height: 900 });
@@ -92,6 +96,7 @@ test.describe("Enter animations", () => {
   }) => {
     browserIssues.ignore(signedOutIssueRules);
     await page.goto("/login");
+    // The sign-in card has no role or name; any card loads the stylesheet.
     await expect(page.locator("[data-slot='card']").first()).toBeVisible();
 
     const keyframes = await page.evaluate(readKeyframes);
@@ -157,6 +162,7 @@ test.describe("Enter animations", () => {
     // An anchored popup: the micro duration.
     await page.goto("/settings/playback");
     await page.getByRole("combobox", { name: "Profile" }).click();
+    // The animated surface wraps the listbox, so it is found by its slot.
     const list = page.locator("[data-slot='select-content']");
     await expect(list).toBeVisible();
     expect(await list.evaluate(readMotion)).toMatchObject({
@@ -190,6 +196,7 @@ test.describe("Enter animations", () => {
     browserIssues.ignore(signedOutIssueRules);
     await page.goto("/login");
 
+    // The sign-in card has no role or name of its own.
     const card = page.locator("[data-slot='card']").first();
     await expect(card).toBeVisible();
     expect(await card.evaluate(readMotion)).toMatchObject({
