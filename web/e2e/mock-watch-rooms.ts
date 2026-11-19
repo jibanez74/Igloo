@@ -436,10 +436,25 @@ export function createMockWatchRooms(deps: WatchRoomDeps) {
             socket,
           );
         }
-        ws.on("message", data => onSocketMessage(socket, data.toString()));
+        ws.on("message", data => {
+          const raw = Array.isArray(data)
+            ? Buffer.concat(data)
+            : Buffer.isBuffer(data)
+              ? data
+              : Buffer.from(data);
+          onSocketMessage(socket, raw.toString("utf8"));
+        });
         ws.on("close", () => onSocketClose(socket));
       });
     });
+  }
+
+  /** Back to no rooms: drops every socket, then forgets the rooms. */
+  function reset() {
+    for (const socket of [...sockets]) socket.ws.terminate();
+    sockets.clear();
+    rooms.clear();
+    nextRoomId = 1;
   }
 
   /**
@@ -461,5 +476,5 @@ export function createMockWatchRooms(deps: WatchRoomDeps) {
     }
   }
 
-  return { handleRoute, handleTestRoute, attach, forgetUser };
+  return { handleRoute, handleTestRoute, attach, forgetUser, reset };
 }

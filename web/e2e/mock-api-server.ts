@@ -118,6 +118,43 @@ const NO_PROGRESS = {
   updated_at: null,
 } satisfies WatchProgressType;
 
+// Everything below that a test can change. `resetState` puts each value
+// back, so every test starts from the same server (POST /api/e2e/reset, sent
+// by the shared `test` in e2e-test.ts before each test).
+
+const initialAdmin = (): User => ({
+  id: 1,
+  name: "Igloo Admin",
+  email: admin.email,
+  password: admin.password,
+  is_admin: true,
+  avatar: null,
+  created_at: startedAt,
+  updated_at: startedAt,
+});
+
+const initialLibrarySettings = (): SettingsType => ({
+  movies_dir: "/srv/media/movies",
+  shows_dir: null,
+  music_dir: "/srv/media/music",
+});
+
+const initialGeneralSettings = (): GeneralSettingsType => ({
+  tmdb_key: null,
+  spotify_client_id: null,
+  spotify_client_secret: null,
+  enable_apple_lookups: true,
+  enable_watcher: true,
+  download_images: true,
+  static_dir: "/tmp/igloo/static",
+  transcode_dir: "/tmp/igloo/transcodes",
+});
+
+const initialPlaybackSettings = (): ServerPlaybackSettings => ({
+  server_upload_mbps: null,
+  hardware_acceleration_device: "cpu",
+});
+
 let nextUserId = 2;
 let nextDeviceId = 1;
 
@@ -129,44 +166,15 @@ const sessions = new Map<string, number>();
 const devices: DeviceType[] = [];
 const pendingPairings = new Map<string, PendingPairing>();
 
-const users: User[] = [
-  {
-    id: 1,
-    name: "Igloo Admin",
-    email: admin.email,
-    password: admin.password,
-    is_admin: true,
-    avatar: null,
-    created_at: startedAt,
-    updated_at: startedAt,
-  },
-];
+const users: User[] = [initialAdmin()];
 
-let librarySettings: SettingsType = {
-  movies_dir: "/srv/media/movies",
-  shows_dir: null,
-  music_dir: "/srv/media/music",
-};
-
-let generalSettings: GeneralSettingsType = {
-  tmdb_key: null,
-  spotify_client_id: null,
-  spotify_client_secret: null,
-  enable_apple_lookups: true,
-  enable_watcher: true,
-  download_images: true,
-  static_dir: "/tmp/igloo/static",
-  transcode_dir: "/tmp/igloo/transcodes",
-};
-
-let serverPlaybackSettings: ServerPlaybackSettings = {
-  server_upload_mbps: null,
-  hardware_acceleration_device: "cpu",
-};
+let librarySettings = initialLibrarySettings();
+let generalSettings = initialGeneralSettings();
+let serverPlaybackSettings = initialPlaybackSettings();
 
 // Account-scoped trailer pre-roll preferences, per user id; a missing entry
 // is the server's default (off). The preroll route serves a fixed queue
-// while the feature is on, so specs restore the entry they changed.
+// while the feature is on; the reset clears every entry.
 const DEFAULT_TRAILER_PREFERENCES: TrailerPreferencesData = {
   enabled: false,
   count: 2,
@@ -347,7 +355,7 @@ function currentUser(request: IncomingMessage) {
 
 async function readJSONBody(request: IncomingMessage) {
   const chunks: Buffer[] = [];
-  for await (const chunk of request) {
+  for await (const chunk of request as AsyncIterable<Buffer | string>) {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
   }
   const raw = Buffer.concat(chunks).toString("utf8");
@@ -1354,6 +1362,20 @@ const watchRooms = createMockWatchRooms({
   readJSONBody,
 });
 
+function resetState() {
+  nextUserId = 2;
+  nextDeviceId = 1;
+  sessions.clear();
+  devices.splice(0);
+  pendingPairings.clear();
+  users.splice(0, users.length, initialAdmin());
+  librarySettings = initialLibrarySettings();
+  generalSettings = initialGeneralSettings();
+  serverPlaybackSettings = initialPlaybackSettings();
+  trailerPreferences.clear();
+  watchRooms.reset();
+}
+
 async function handleRequest(request: IncomingMessage, response: ServerResponse) {
   const method = request.method ?? "GET";
   const url = new URL(request.url ?? "/", `http://${HOST}:${PORT}`);
@@ -1368,6 +1390,12 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     url.pathname.startsWith("/api/static/")
   ) {
     sendPlaceholderImage(response);
+    return;
+  }
+
+  if (url.pathname === "/api/e2e/reset" && method === "POST") {
+    resetState();
+    sendSuccess(response, { reset: true });
     return;
   }
 
