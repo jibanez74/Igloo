@@ -145,9 +145,9 @@ help:
 	@echo "  make test-spotify-integration Run live Spotify API tests (requires SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET)"
 	@echo "  make test-itunes-integration  Run live iTunes Lookup API tests (no credentials needed)"
 	@echo "  make test-web      Run frontend unit tests"
-	@echo "  make test-visual   Run the gallery and page screenshot specs (pixels compared in CI; VISUAL_STRICT=1 to compare locally)"
-	@echo "  make test-visual-docker        Compare the screenshots with the committed baselines in CI's pinned image (needs Docker)"
-	@echo "  make test-visual-docker-update Redraw the committed baselines in CI's pinned image (needs Docker)"
+	@echo "  make test-visual   Run the gallery and page screenshot specs (compares no pixels outside the pinned image; use test-visual-docker)"
+	@echo "  make test-visual-docker        Compare the screenshots with the committed baselines in the pinned Playwright image (needs Docker)"
+	@echo "  make test-visual-docker-update Redraw the committed baselines in the pinned Playwright image (needs Docker)"
 	@echo "  make lint-web      Run frontend lint"
 	@echo "  make build-web     Build and type-check the frontend"
 	@echo "  make test-openapi  Lint the OpenAPI contract and run route coverage tests"
@@ -231,10 +231,13 @@ test-visual: check-web-tools
 # Docker would create web/node_modules as root.
 VISUAL_IMAGE := mcr.microsoft.com/playwright:v1.64.1-noble@sha256:2f05f8a734509a7b3f26a912639488ee08f58a7b292d14d62271bcff9038768f
 VISUAL_BUN_VERSION ?= $(shell bun --version 2>/dev/null)
-VISUAL_NODE_MODULES_VOLUME := igloo-visual-node-modules-$(shell printf %s "$(CURDIR)" | sha256sum | cut -c1-12)
+# Lazy (=), so only the docker targets hash. macOS ships shasum, not sha256sum.
+VISUAL_CHECKOUT_HASH = $(shell printf %s "$(CURDIR)" | { sha256sum 2>/dev/null || shasum -a 256; } | cut -c1-12)
+VISUAL_NODE_MODULES_VOLUME = igloo-visual-node-modules-$(or $(VISUAL_CHECKOUT_HASH),$(error could not hash the checkout path for the visual volume name))
 VISUAL_DOCKER_SCRIPT := set -e; \
 	npm install --global --silent --no-fund --no-audit bun@$(VISUAL_BUN_VERSION) >/dev/null; \
 	bun install --frozen-lockfile >/dev/null; \
+	if [ "$$0" = test:visual ]; then rm -f test-results/visual-results.json; fi; \
 	status=0; bun run "$$0" || status=$$?; \
 	if [ "$$0" = test:visual ]; then bun e2e/visual/flake-summary.ts || true; fi; \
 	if [ "$$(stat -c %u .)" != 0 ]; then \

@@ -1,8 +1,9 @@
 // The screenshot baselines are drawn in one pinned Playwright image
 // (`make test-visual-docker`), and CI's test-frontend job runs in the same
-// one. Its browser must be the one the locked @playwright/test drives, and
-// both places must name the same image, or CI's browser would drift from the
-// one the baselines were drawn with. Fails when they disagree.
+// one. Its browser must be the build the locked @playwright/test drives, or
+// CI's e2e run finds no browser, and both places must name the same image, so
+// CI tests with the browser the baselines are drawn with. Fails when they
+// disagree.
 //
 //   bun scripts/check-playwright-image.ts   (from web/)
 
