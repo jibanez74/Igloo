@@ -208,28 +208,35 @@ test-itunes-integration: check-go-tools
 test-web: check-web-tools
 	@cd $(WEB_DIR) && bun run test
 
-# Not part of `check`: the committed baselines are drawn in CI's pinned image,
-# so a bare run compares no pixels (web/playwright.visual.config.ts). The
-# docker targets below run that image locally and do compare.
+# Not part of `check` or CI: the committed baselines are drawn in a pinned
+# Playwright image, so a bare run compares no pixels
+# (web/playwright.visual.config.ts). The docker targets below run that image
+# and do compare; `make test-visual-docker` is the gate for UI changes.
 test-visual: check-web-tools
 	@cd $(WEB_DIR) && bun run test:visual
 
-# The image CI's test-visual job runs in. Keep the tag, digest and the locked
-# @playwright/test in step: web/scripts/check-playwright-image.ts fails when
-# they disagree. Dependencies install into a Docker volume, so the host's
-# node_modules (perhaps built for another OS) is never used; anything the run
-# writes into the checkout (reports, baselines, a regenerated route tree or
-# its .tanstack temp files) is handed back to the caller's user. Only under
-# rootful Docker, though: with rootless Docker or Podman the container's root
-# is the caller already, the whole checkout reads as root inside, and a chown
-# would give it away. The mount
-# point is made first, or Docker would create web/node_modules as root.
+# The image the baselines are drawn in, and the one CI's test-frontend job runs
+# in. Keep the tag, digest and the locked @playwright/test in step:
+# web/scripts/check-playwright-image.ts fails when they disagree. Dependencies
+# install into a Docker volume, so the host's node_modules (perhaps built for
+# another OS) is never used. Each checkout gets its own volume, named from its
+# path: two worktrees with different lockfiles would otherwise reinstall over
+# each other's dependencies mid-run. A comparing run ends by printing its near
+# misses (web/e2e/visual/flake-summary.ts) and keeps the run's status.
+# Anything the run writes into the checkout (reports, baselines, a regenerated
+# route tree or its .tanstack temp files) is handed back to the caller's user.
+# Only under rootful Docker, though: with rootless Docker or Podman the
+# container's root is the caller already, the whole checkout reads as root
+# inside, and a chown would give it away. The mount point is made first, or
+# Docker would create web/node_modules as root.
 VISUAL_IMAGE := mcr.microsoft.com/playwright:v1.64.1-noble@sha256:2f05f8a734509a7b3f26a912639488ee08f58a7b292d14d62271bcff9038768f
 VISUAL_BUN_VERSION ?= $(shell bun --version 2>/dev/null)
+VISUAL_NODE_MODULES_VOLUME := igloo-visual-node-modules-$(shell printf %s "$(CURDIR)" | sha256sum | cut -c1-12)
 VISUAL_DOCKER_SCRIPT := set -e; \
 	npm install --global --silent --no-fund --no-audit bun@$(VISUAL_BUN_VERSION) >/dev/null; \
 	bun install --frozen-lockfile >/dev/null; \
 	status=0; bun run "$$0" || status=$$?; \
+	if [ "$$0" = test:visual ]; then bun e2e/visual/flake-summary.ts || true; fi; \
 	if [ "$$(stat -c %u .)" != 0 ]; then \
 		find . -path ./node_modules -prune -o -user 0 -exec chown $(shell id -u):$(shell id -g) {} + 2>/dev/null || true; \
 	fi; \
@@ -241,7 +248,7 @@ test-visual-docker test-visual-docker-update: check-web-tools
 	@mkdir -p $(WEB_DIR)/node_modules
 	@docker run --rm --ipc=host --init \
 		-v "$(CURDIR)":/repo \
-		-v igloo-visual-node-modules:/repo/$(WEB_DIR)/node_modules \
+		-v $(VISUAL_NODE_MODULES_VOLUME):/repo/$(WEB_DIR)/node_modules \
 		-e VISUAL_STRICT=1 -e E2E_WEB_PORT=3210 -e E2E_MOCK_API_PORT=8210 \
 		-w /repo/$(WEB_DIR) $(VISUAL_IMAGE) \
 		bash -c '$(VISUAL_DOCKER_SCRIPT)' \
