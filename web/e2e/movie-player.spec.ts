@@ -1,12 +1,12 @@
 import { expect, test } from "./e2e-test";
 import type { Page, Route } from "@playwright/test";
-import { PLAYBACK_PREFERENCES_STORAGE_PREFIX } from "../src/lib/playback-preferences";
 import type { MovieTechnicalDetailsResponse } from "../src/types";
 import { gateRoute, nullableString, readJSON } from "./e2e-api";
 import { loginPageViaApi } from "./e2e-auth";
 import { requireMockApi } from "./e2e-env";
 import {
   expectURLParams,
+  holdMediaRequests,
   openHeldPlayer,
   playButton,
 } from "./media-e2e-helpers";
@@ -71,23 +71,18 @@ for (const { label, mode, expectedRequestPath } of [
     expectedRequestPath: `${movieApiPath}/hls/720p_3mbps/playlist.m3u8`,
   },
 ]) {
-  test(`${label} playback waits for the server catalog when device speed needs it`, async ({
+  test(`${label} playback waits for the server's playback settings`, async ({
     page,
   }) => {
-    // Device language/profile preferences are synchronous. A configured speed
-    // with no stored profile is the path that needs the asynchronous catalog.
-    await page.addInitScript(key => {
-      localStorage.setItem(key, JSON.stringify({
-        preferredProfile: null,
-        downloadMbps: 5,
-        preferredAudioLanguage: null,
-        preferredSubtitleLanguage: null,
-      }));
-    }, `${PLAYBACK_PREFERENCES_STORAGE_PREFIX}1`);
-
+    // The server's settings decide which modes the file offers, so the
+    // player waits for them whatever the device has stored.
     const playbackSettings = await gateRoute(page, "**/api/settings/playback");
+    const technicalDetails = page.waitForResponse(`**${movieApiPath}/technical-details`);
     const mediaRequests = await openMoviePlayer(page, `mode=${mode}&audio_track=0&start=0`);
 
+    // With the technical details in, only the settings can still hold
+    // playback back.
+    await technicalDetails;
     await expect.poll(playbackSettings.requested).toBe(true);
     await expectPreparingPlayback(page, mediaRequests);
 
@@ -97,6 +92,18 @@ for (const { label, mode, expectedRequestPath } of [
     expect(new URL(mediaRequests[0]).pathname).toBe(expectedRequestPath);
   });
 }
+
+test("Play on the movie's page opens the player on its stream", async ({ page }) => {
+  const mediaRequests = await holdMediaRequests(page, movie);
+  await page.goto(moviePath);
+
+  await page.getByRole("link", { name: "Play", exact: true }).click();
+
+  await expect(page).toHaveURL(url => url.pathname === `${moviePath}/play`);
+  await expect(playButton(page)).toBeVisible();
+  await expect.poll(() => mediaRequests.length).toBeGreaterThan(0);
+  expect(new URL(mediaRequests[0]).pathname).toBe(`${movieApiPath}/stream`);
+});
 
 for (const { label, search } of [
   { label: "an omitted subtitle track", search: "mode=direct&audio_track=0&start=0" },
@@ -201,16 +208,19 @@ test("failed direct play falls back to remux once at the preserved position", as
       .getByText(/can't be played directly by your browser/),
   ).toBeVisible();
 
-  // Exactly one direct attempt, then only remux manifests: no bounce back.
+  // One direct attempt (the browser may ask for more than one byte range of
+  // it), then only remux manifests: no bounce back to the raw stream.
   await expect
     .poll(() => mediaRequests.filter(url => url.includes("/hls/")).length)
     .toBeGreaterThan(0);
-  const [streamRequest, ...hlsRequests] = mediaRequests;
-  expect(new URL(streamRequest).pathname).toBe(`${movieApiPath}/stream`);
-  expect(
-    hlsRequests.every(url => new URL(url).pathname.endsWith("/hls/remux/playlist.m3u8")),
-  ).toBe(true);
   await expectURLParams(page, { mode: "remux" });
+  const paths = mediaRequests.map(url => new URL(url).pathname);
+  const switchedAt = paths.findIndex(path => path.includes("/hls/"));
+  expect(switchedAt).toBeGreaterThan(0);
+  expect(new Set(paths.slice(0, switchedAt))).toEqual(new Set([`${movieApiPath}/stream`]));
+  expect(new Set(paths.slice(switchedAt))).toEqual(
+    new Set([`${movieApiPath}/hls/remux/playlist.m3u8`]),
+  );
 });
 
 test("HLS seek navigation preserves canonical subtitle-off", async ({ page }) => {

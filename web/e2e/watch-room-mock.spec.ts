@@ -1,9 +1,14 @@
-import { expect, test, type BrowserIssues } from "./e2e-test";
-import type { TrackBrowserIssuesOptions } from "./e2e-browser-issues";
+import { expect, test, type BrowserIssues, type TrackedPage } from "./e2e-test";
+import {
+  isApiResourceEcho,
+  isSessionEndedResponse,
+  type TrackBrowserIssuesOptions,
+} from "./e2e-browser-issues";
 import type { Browser, BrowserContext, Page } from "@playwright/test";
 
 import { MOVIE_SEEK_STEP_SEC } from "../src/lib/constants";
-import { loginViaApi } from "./e2e-auth";
+import { gateRoute } from "./e2e-api";
+import { loginViaApi, submitLogin } from "./e2e-auth";
 import { readE2EEnv, requireMockApi, type Credentials } from "./e2e-env";
 import { MOCK_MOVIE_ID } from "./fixtures/movies";
 import {
@@ -25,6 +30,8 @@ requireMockApi();
 
 const MOVIE_TITLE = "Signal Fire";
 const admin = readE2EEnv();
+/** Home's rooms list (GET), not a single room's routes under it. */
+const ROOMS_LIST = /\/api\/watch-rooms$/;
 
 type Viewer = { context: BrowserContext; page: Page };
 
@@ -50,6 +57,7 @@ function roomRefused(roomId: number): TrackBrowserIssuesOptions {
 
 test.describe("Watch rooms", () => {
   let owner: Viewer;
+  let ownerIssues: TrackedPage;
   const others: Viewer[] = [];
   // The running test's tracker: every viewer's page is watched too (the
   // default page stays blank in these tests).
@@ -58,7 +66,7 @@ test.describe("Watch rooms", () => {
   test.beforeEach(async ({ browser, browserIssues }) => {
     tracked = browserIssues;
     owner = await openViewer(browser);
-    tracked.track(owner.page);
+    ownerIssues = tracked.track(owner.page);
   });
 
   test.afterEach(async () => {
@@ -92,7 +100,7 @@ test.describe("Watch rooms", () => {
     await expect(owner.page).toHaveURL(/\/watch-rooms\/\d+$/);
     await expectLive(owner.page, 1);
 
-    const { page: guestPage } = await guestViewer(browser, guest);
+    const { page: guestPage, issues: guestIssues } = await guestViewer(browser, guest);
     await guestPage.goto("/");
     const card = guestPage.getByRole("article", { name: `Watch room: ${MOVIE_TITLE}` });
     await card.getByRole("link", { name: `Join watch room for ${MOVIE_TITLE}` }).click();
@@ -116,15 +124,20 @@ test.describe("Watch rooms", () => {
     const roomId = Number(owner.page.url().split("/").at(-1));
     const drop = await owner.context.request.post(`/api/e2e/watch-rooms/${roomId}/drop`);
     expect(drop.ok()).toBe(true);
-    for (const page of [owner.page, guestPage]) {
-      await expect(
-        page.getByText("Reconnecting: your changes won't reach the room"),
-      ).toBeVisible();
-    }
+    // Both pages reconnect a second later, so both are watched at once.
+    await Promise.all(
+      [owner.page, guestPage].map(page =>
+        expect(
+          page.getByText("Reconnecting: your changes won't reach the room"),
+        ).toBeVisible(),
+      ),
+    );
     await expectLive(owner.page, 2);
     await expectLive(guestPage, 2);
     await expect(roomPlayButton(guestPage)).toBeVisible();
-    expect(Math.abs((await videoCurrentTime(guestPage)) - pausedAt)).toBeLessThan(1.5);
+    await expect
+      .poll(async () => Math.abs((await videoCurrentTime(guestPage)) - pausedAt))
+      .toBeLessThan(1.5);
 
     // The owner closes the room; the guest is sent home.
     await owner.page.getByRole("button", { name: `Close watch room for ${MOVIE_TITLE}` }).click();
@@ -132,6 +145,14 @@ test.describe("Watch rooms", () => {
     await expect(owner.page).toHaveURL(/\/$/);
     await expect(guestPage).toHaveURL(/\/$/);
     await expect(guestPage.getByText("Watch room closed")).toBeVisible();
+
+    // The old link now leads nowhere. The server answers an unknown room
+    // like one the viewer is not in, since room ids are guessable.
+    guestIssues.ignore(roomRefused(roomId));
+    await guestPage.goto(`/watch-rooms/${roomId}`);
+    await expect(
+      guestPage.getByText("This room no longer exists or you were not invited."),
+    ).toBeVisible();
   });
 
   test("the owner swaps one invitee for another", async ({ browser }) => {
@@ -142,9 +163,15 @@ test.describe("Watch rooms", () => {
     const { page: removedPage } = await guestViewer(browser, removed);
     const { page: addedPage } = await guestViewer(browser, added);
     await owner.page.goto(`/watch-rooms/${roomId}`);
-    await removedPage.goto(`/watch-rooms/${roomId}`);
+    // The removed guest arrives from Home, so its rooms list is cached with
+    // the room in it.
+    await removedPage.goto("/");
+    const removedCard = removedPage.getByRole("article", { name: `Watch room: ${MOVIE_TITLE}` });
+    await removedCard.getByRole("link", { name: `Join watch room for ${MOVIE_TITLE}` }).click();
     await expectLive(owner.page, 2);
     await expectLive(removedPage, 2);
+    const roster = owner.page.getByRole("complementary");
+    await expect(roster.getByText(removed.name)).toBeVisible();
 
     await owner.page.getByRole("button", { name: `Edit invitees for ${MOVIE_TITLE}` }).click();
     const dialog = owner.page.getByRole("dialog", { name: "Edit invitees" });
@@ -152,27 +179,28 @@ test.describe("Watch rooms", () => {
     await expect(save).toBeDisabled();
     await dialog.getByRole("checkbox", { name: `Invite ${removed.name}` }).click();
     await dialog.getByRole("checkbox", { name: `Invite ${added.name}` }).click();
+    // Home drops the room from the removed guest's cached list at once,
+    // before the list's refetch could.
+    const roomsRefetch = await gateRoute(removedPage, ROOMS_LIST);
     await save.click();
     await expect(dialog).toBeHidden();
 
     // The removed guest is put out at once; the owner's roster follows.
-    await expect(removedPage).toHaveURL(/\/$/);
+    await expect(removedPage).toHaveURL(url => url.pathname === "/");
     await expect(removedPage.getByText("No longer in this watch room")).toBeVisible();
-    const roster = owner.page.getByRole("complementary");
+    await expect.poll(roomsRefetch.requested).toBe(true);
+    await expect(removedPage.getByRole("heading", { name: /continue watching/i })).toBeVisible();
+    await expect(removedCard).toHaveCount(0);
+    roomsRefetch.release();
     await expect(roster.getByText(added.name)).toBeVisible();
     await expect(roster.getByText(removed.name)).toBeHidden();
     await expect(owner.page.getByText("1 connected now")).toBeVisible();
 
-    // The added guest finds the room on Home; the removed one does not.
+    // The added guest finds the room on Home.
     await addedPage.goto("/");
     await expect(
       addedPage.getByRole("article", { name: `Watch room: ${MOVIE_TITLE}` }),
     ).toBeVisible();
-    await removedPage.goto("/");
-    await expect(removedPage.getByRole("heading", { name: /continue watching/i })).toBeVisible();
-    await expect(
-      removedPage.getByRole("article", { name: `Watch room: ${MOVIE_TITLE}` }),
-    ).toHaveCount(0);
   });
 
   test("a guest leaves a room for good", async ({ browser }) => {
@@ -181,16 +209,35 @@ test.describe("Watch rooms", () => {
 
     const { page: guestPage, issues: guestIssues } = await guestViewer(browser, guest);
     await owner.page.goto(`/watch-rooms/${roomId}`);
-    await guestPage.goto(`/watch-rooms/${roomId}`);
+    // The guest arrives from Home, so its rooms list is cached with the room.
+    await guestPage.goto("/");
+    const card = guestPage.getByRole("article", { name: `Watch room: ${MOVIE_TITLE}` });
+    await card.getByRole("link", { name: `Join watch room for ${MOVIE_TITLE}` }).click();
     await expectLive(guestPage, 2);
+    await expectLive(owner.page, 2);
 
+    // Only the owner closes the room; only a guest can leave it.
+    await expect(
+      owner.page.getByRole("button", { name: `Close watch room for ${MOVIE_TITLE}` }),
+    ).toBeVisible();
+    await expect(
+      owner.page.getByRole("button", { name: `Leave watch room for ${MOVIE_TITLE}` }),
+    ).toHaveCount(0);
+    await expect(
+      guestPage.getByRole("button", { name: `Close watch room for ${MOVIE_TITLE}` }),
+    ).toHaveCount(0);
+
+    // Leaving drops the room from that cached list at once, before the
+    // list's refetch could.
+    const roomsRefetch = await gateRoute(guestPage, ROOMS_LIST);
     await guestPage.getByRole("button", { name: `Leave watch room for ${MOVIE_TITLE}` }).click();
     await guestPage.getByRole("button", { name: "Leave room" }).click();
-    await expect(guestPage).toHaveURL(/\/$/);
+    await expect(guestPage).toHaveURL(url => url.pathname === "/");
     await expect(guestPage.getByText("Left watch room")).toBeVisible();
-    await expect(
-      guestPage.getByRole("article", { name: `Watch room: ${MOVIE_TITLE}` }),
-    ).toHaveCount(0);
+    await expect.poll(roomsRefetch.requested).toBe(true);
+    await expect(guestPage.getByRole("heading", { name: /continue watching/i })).toBeVisible();
+    await expect(card).toHaveCount(0);
+    roomsRefetch.release();
 
     const roster = owner.page.getByRole("complementary");
     await expect(roster.getByText(guest.name)).toBeHidden();
@@ -218,6 +265,60 @@ test.describe("Watch rooms", () => {
     ).toBeVisible();
   });
 
+  // A handshake nobody answers fires neither open nor close: the page gives
+  // up on it and tries again rather than waiting forever.
+  test("a socket handshake that hangs is given up and tried again", async () => {
+    const page = owner.page;
+    const roomId = await createWatchRoom(owner.context.request, MOCK_MOVIE_ID, []);
+    await page.goto(`/watch-rooms/${roomId}`);
+    await expectLive(page, 1);
+
+    // Chromium says so when a socket is closed before it opened.
+    ownerIssues.ignore({
+      ignoreConsole: (type, text) =>
+        type === "warning" &&
+        text.includes("WebSocket is closed before the connection is established."),
+    });
+    const stall = await owner.context.request.post(`/api/e2e/watch-rooms/${roomId}/stall`);
+    expect(stall.ok()).toBe(true);
+    const drop = await owner.context.request.post(`/api/e2e/watch-rooms/${roomId}/drop`);
+    expect(drop.ok()).toBe(true);
+
+    await expect(
+      page.getByText("Reconnecting: your changes won't reach the room"),
+    ).toBeVisible();
+    // The connect timeout (10 s) plus the next reconnect's backoff.
+    await expectLive(page, 1, 30_000);
+  });
+
+  // The socket cannot say why it was refused, so a reconnect asks to join
+  // first, and that request hears the session ended.
+  test("a viewer whose session ends in a room signs in again and comes back to it", async () => {
+    const page = owner.page;
+    const roomId = await createWatchRoom(owner.context.request, MOCK_MOVIE_ID, []);
+    await page.goto(`/watch-rooms/${roomId}`);
+    await expectLive(page, 1);
+
+    ownerIssues.ignore({
+      ignoreResponse: isSessionEndedResponse,
+      ignoreConsole: (_type, text, message) => isApiResourceEcho(text, message),
+    });
+    await owner.context.clearCookies();
+    const drop = await owner.context.request.post(`/api/e2e/watch-rooms/${roomId}/drop`);
+    expect(drop.ok()).toBe(true);
+
+    await expect(page).toHaveURL(url => url.pathname === "/login");
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("redirect"))
+      .toBe(`/watch-rooms/${roomId}`);
+    await expect(page.getByText("You've been signed out.")).toBeVisible();
+
+    const login = await submitLogin(page, admin.email, admin.password);
+    expect(login.status()).toBe(200);
+    await expect(page).toHaveURL(url => url.pathname === `/watch-rooms/${roomId}`);
+    await expectLive(page, 1);
+  });
+
   // Fullscreen used to take the whole room page: the header stayed on top,
   // the video kept its card's width and the Exit button fell off the screen.
   test("fullscreen fills the screen with the player and keeps its controls on screen", async () => {
@@ -230,41 +331,44 @@ test.describe("Watch rooms", () => {
     const exit = page.getByRole("button", { name: "Exit fullscreen" });
     await expect(exit).toHaveAttribute("aria-pressed", "true");
 
-    const layout = await page.evaluate(() => {
-      const fullscreen = document.fullscreenElement;
-      const video = document.querySelector("video")!.getBoundingClientRect();
-      const exitButton = document.querySelector('button[aria-label="Exit fullscreen"]')!;
-      const button = exitButton.getBoundingClientRect();
-      // The transport row is the bordered block under the video that holds Exit.
-      const transport = exitButton.closest(".border-t")!.getBoundingClientRect();
+    // The player card is what went fullscreen: the video and its controls,
+    // not the page's heading.
+    const fullscreen = page.locator(":fullscreen");
+    await expect(fullscreen).toHaveCount(1);
+    expect(await fullscreen.evaluate(element => element.tagName)).toBe("SECTION");
+    const video = fullscreen.locator("video");
+    const transport = fullscreen.getByRole("group", { name: "Playback controls" });
+    await expect(video).toHaveCount(1);
+    await expect(transport.getByRole("button", { name: "Exit fullscreen" })).toBeVisible();
+    await expect(fullscreen.getByRole("heading", { level: 1 })).toHaveCount(0);
+
+    // The card fills the screen; the video takes all the height the
+    // transport row leaves it, and Exit stays on screen. Polled because the
+    // card resizes after the fullscreen change is announced.
+    const viewport = page.viewportSize()!;
+    const layout = async () => {
+      const [videoBox, transportBox, exitBox] = await Promise.all([
+        video.boundingBox(),
+        transport.boundingBox(),
+        exit.boundingBox(),
+      ]);
       return {
-        tag: fullscreen?.tagName ?? null,
-        holdsVideo: !!fullscreen?.querySelector("video"),
-        holdsExit: !!fullscreen?.querySelector('button[aria-label="Exit fullscreen"]'),
-        holdsHeading: !!fullscreen?.querySelector("h1"),
-        videoLeft: video.left,
-        videoWidth: video.width,
-        videoTop: video.top,
-        videoBottom: video.bottom,
-        transportTop: transport.top,
-        exitBottom: button.bottom,
-        innerWidth: window.innerWidth,
-        innerHeight: window.innerHeight,
+        videoLeft: videoBox!.x,
+        videoTop: videoBox!.y,
+        videoWidth: videoBox!.width,
+        fillsHeight:
+          videoBox!.y + videoBox!.height > viewport.height / 2 &&
+          Math.abs(transportBox!.y - (videoBox!.y + videoBox!.height)) <= 1,
+        exitOnScreen: exitBox!.y + exitBox!.height <= viewport.height,
       };
-    });
-    expect(layout).toMatchObject({
-      tag: "SECTION",
-      holdsVideo: true,
-      holdsExit: true,
-      holdsHeading: false,
+    };
+    await expect.poll(layout).toEqual({
       videoLeft: 0,
-      videoWidth: layout.innerWidth,
       videoTop: 0,
+      videoWidth: viewport.width,
+      fillsHeight: true,
+      exitOnScreen: true,
     });
-    // The video takes all the height the transport row leaves it.
-    expect(layout.videoBottom).toBeGreaterThan(layout.innerHeight / 2);
-    expect(Math.abs(layout.transportTop - layout.videoBottom)).toBeLessThanOrEqual(1);
-    expect(layout.exitBottom).toBeLessThanOrEqual(layout.innerHeight);
 
     await exit.click();
     await expect(page.getByRole("button", { name: "Fullscreen" })).toHaveAttribute(

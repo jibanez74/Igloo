@@ -90,8 +90,10 @@ test.describe("Trailer playback chrome", () => {
     await page.keyboard.press("Tab");
     await expect(closeButton).toBeFocused();
 
+    // The trailer's own URL also ends in "/" (returnTo=/), so check the path.
     await page.keyboard.press("Escape");
-    await expect(page).toHaveURL(/\/$/);
+    await expect(page).toHaveURL(url => url.pathname === "/");
+    await expect(page.getByRole("dialog", { name: "Trailer" })).toBeHidden();
   });
 
   test("focuses the retry button after a playback error and lets Space activate it", async ({

@@ -5,6 +5,7 @@ import { getApiData, putApiData } from "./e2e-api";
 import { loginPageViaApi } from "./e2e-auth";
 import { requireMockApi } from "./e2e-env";
 import { MOCK_MOVIE_ID } from "./fixtures/movies";
+import { MOCK_EPISODE_ID, MOCK_SHOW_ID } from "./fixtures/shows";
 import { openHeldPlayer, playButton } from "./media-e2e-helpers";
 import { mockYouTubePlayer } from "./mock-youtube-player";
 
@@ -16,6 +17,8 @@ import { mockYouTubePlayer } from "./mock-youtube-player";
 requireMockApi();
 
 const movie = { kind: "movie", id: MOCK_MOVIE_ID } as const;
+const episode = { kind: "episode", id: MOCK_EPISODE_ID } as const;
+const episodePlayUrl = `/tv-shows/${MOCK_SHOW_ID}/episodes/${MOCK_EPISODE_ID}/play?mode=720p_3mbps&audio_track=0&subtitle_track=off&start=0`;
 const playUrl = `/movies/${MOCK_MOVIE_ID}/play?mode=720p_3mbps&audio_track=0&subtitle_track=off&start=0`;
 const preferencesPath = "/api/user/preferences/trailers";
 
@@ -106,7 +109,11 @@ test.describe("Trailer pre-roll", () => {
     await expect(playButton(page)).toBeVisible();
   });
 
-  test("goes straight to the movie while the feature is off", async ({ page }) => {
+  // The server decides the queue (it is empty while the feature is off); an
+  // empty one must start the movie at once.
+  test("goes straight to the movie when the server queues no trailers", async ({
+    page,
+  }) => {
     expect(
       (await getApiData<TrailerPreferencesData>(page.context().request, preferencesPath))
         .enabled,
@@ -118,5 +125,24 @@ test.describe("Trailer pre-roll", () => {
     await expect(playButton(page)).toBeVisible();
     await expect(prerollRegion(page)).toHaveCount(0);
     await expect.poll(() => mediaRequests.length).toBe(1);
+  });
+
+  // Pre-roll is for movies: an episode never asks for trailers, whatever the
+  // preference says.
+  test("never runs before an episode", async ({ page }) => {
+    await saveTrailerPreferences(page, { enabled: true, count: 2, source: "both" });
+    await mockYouTubePlayer(page);
+    const prerollRequests: string[] = [];
+    page.on("request", request => {
+      if (new URL(request.url()).pathname.endsWith("/preroll")) {
+        prerollRequests.push(request.url());
+      }
+    });
+    const mediaRequests = await openHeldPlayer(page, episode, episodePlayUrl);
+
+    await expect(playButton(page)).toBeVisible();
+    await expect(prerollRegion(page)).toHaveCount(0);
+    await expect.poll(() => mediaRequests.length).toBe(1);
+    expect(prerollRequests).toEqual([]);
   });
 });

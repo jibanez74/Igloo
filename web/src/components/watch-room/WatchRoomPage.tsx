@@ -775,7 +775,11 @@ function WatchRoomPlayerPanel({
           </p>
         )}
 
-        <div className="border-t border-border p-4 sm:p-5">
+        <div
+          className="border-t border-border p-4 sm:p-5"
+          role="group"
+          aria-label="Playback controls"
+        >
           <ProgressBar
             currentTime={currentTime}
             duration={duration}

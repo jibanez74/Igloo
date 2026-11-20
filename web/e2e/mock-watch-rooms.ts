@@ -51,6 +51,10 @@ const ROOM_NOT_FOUND = "room not found";
 export function createMockWatchRooms(deps: WatchRoomDeps) {
   const rooms = new Map<number, Room>();
   const sockets = new Set<RoomSocket>();
+  // Rooms whose next socket upgrade is left unanswered, and the raw sockets
+  // held that way (closed on reset).
+  const stallNextUpgrade = new Set<number>();
+  const stalledSockets = new Set<Duplex>();
   let nextRoomId = 1;
   const wss = new WebSocketServer({ noServer: true });
 
@@ -303,12 +307,19 @@ export function createMockWatchRooms(deps: WatchRoomDeps) {
 
   /**
    * Test controls, outside the contract: `drop` closes every socket in a room
-   * the way a network blip does, so a spec can watch the page reconnect.
+   * the way a network blip does, so a spec can watch the page reconnect;
+   * `stall` leaves the room's next socket upgrade unanswered, the way a proxy
+   * that accepted the connection and then hung would.
    */
   function handleTestRoute(response: ServerResponse, url: URL): boolean {
-    const match = url.pathname.match(/^\/api\/e2e\/watch-rooms\/(\d+)\/drop$/);
+    const match = url.pathname.match(/^\/api\/e2e\/watch-rooms\/(\d+)\/(drop|stall)$/);
     if (!match) return false;
     const roomId = Number(match[1]);
+    if (match[2] === "stall") {
+      stallNextUpgrade.add(roomId);
+      deps.sendSuccess(response, { stalled: true });
+      return true;
+    }
     for (const socket of [...sockets]) {
       if (socket.roomId === roomId) socket.ws.terminate();
     }
@@ -413,6 +424,11 @@ export function createMockWatchRooms(deps: WatchRoomDeps) {
         refuseUpgrade(rawSocket, 403, ACCESS_DENIED);
         return;
       }
+      if (stallNextUpgrade.delete(room.id)) {
+        stalledSockets.add(rawSocket);
+        rawSocket.on("close", () => stalledSockets.delete(rawSocket));
+        return;
+      }
 
       wss.handleUpgrade(request, rawSocket, head, ws => {
         const firstConnection = !connectedIds(room.id).includes(userId);
@@ -453,6 +469,9 @@ export function createMockWatchRooms(deps: WatchRoomDeps) {
   function reset() {
     for (const socket of [...sockets]) socket.ws.terminate();
     sockets.clear();
+    for (const rawSocket of [...stalledSockets]) rawSocket.destroy();
+    stalledSockets.clear();
+    stallNextUpgrade.clear();
     rooms.clear();
     nextRoomId = 1;
   }
