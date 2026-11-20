@@ -12,6 +12,7 @@ import {
   PLAYER_ICON_BUTTON_CLASS,
   PLAYER_PRIMARY_BUTTON_CLASS,
   WATCH_ROOMS_KEY,
+  WATCH_ROOM_CONNECT_TIMEOUT_MS,
   WATCH_ROOM_KEY,
   WATCH_ROOM_SEEK_COALESCE_MS,
   MOVIE_SEEK_STEP_SEC,
@@ -254,6 +255,8 @@ class FakeWebSocket {
   static CLOSED = 3;
   static instances: FakeWebSocket[] = [];
   static autoOpen = true;
+  /** A handshake nobody answers: the socket stays CONNECTING. */
+  static hang = false;
 
   readyState = FakeWebSocket.CONNECTING;
   sentMessages: string[] = [];
@@ -263,6 +266,7 @@ class FakeWebSocket {
   constructor(url: string) {
     this.url = url;
     FakeWebSocket.instances.push(this);
+    if (FakeWebSocket.hang) return;
     this.readyState = FakeWebSocket.OPEN;
     queueMicrotask(() => {
       if (FakeWebSocket.autoOpen && this.readyState === FakeWebSocket.OPEN) {
@@ -375,6 +379,7 @@ describe("WatchRoomPageContent", () => {
   beforeEach(() => {
     FakeWebSocket.instances = [];
     FakeWebSocket.autoOpen = true;
+    FakeWebSocket.hang = false;
     mockVideoController.reset();
     lastVideoPlayerProps.current = null;
     navigateMock.mockReset();
@@ -859,6 +864,57 @@ describe("WatchRoomPageContent", () => {
       expect(FakeWebSocket.instances).toHaveLength(2);
     });
     expect(FakeWebSocket.instances[1].url).toContain("/api/watch-rooms/7/ws");
+  });
+
+  it("gives up on a socket whose handshake hangs and connects again", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    FakeWebSocket.hang = true;
+    renderRoomPage(buildRoom({ is_owner: false }));
+
+    await waitFor(() => {
+      expect(FakeWebSocket.instances).toHaveLength(1);
+    });
+    const hung = FakeWebSocket.instances[0];
+    expect(hung.readyState).toBe(FakeWebSocket.CONNECTING);
+
+    // Just short of the timeout, the page is still waiting on it.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(WATCH_ROOM_CONNECT_TIMEOUT_MS - 100);
+    });
+    expect(hung.readyState).toBe(FakeWebSocket.CONNECTING);
+    expect(FakeWebSocket.instances).toHaveLength(1);
+
+    FakeWebSocket.hang = false;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    expect(hung.readyState).toBe(FakeWebSocket.CLOSED);
+    expect(
+      screen.getByText(/reconnecting: your changes won't reach the room/i),
+    ).toBeInTheDocument();
+
+    // The first reconnect waits a second, then joins and opens a new socket.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    await waitFor(() => {
+      expect(joinWatchRoomMock).toHaveBeenCalledTimes(2);
+      expect(FakeWebSocket.instances).toHaveLength(2);
+    });
+    expect(await screen.findByText("Realtime sync connected")).toBeInTheDocument();
+  });
+
+  it("leaves a socket that opened in time alone", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    renderRoomPage(buildRoom({ is_owner: false }));
+    expect(await screen.findByText("Realtime sync connected")).toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(WATCH_ROOM_CONNECT_TIMEOUT_MS * 2);
+    });
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    expect(FakeWebSocket.instances[0].readyState).toBe(FakeWebSocket.OPEN);
+    expect(screen.getByText("Realtime sync connected")).toBeInTheDocument();
   });
 
   it("keeps reconnecting with capped backoff after more than five consecutive failures", async () => {

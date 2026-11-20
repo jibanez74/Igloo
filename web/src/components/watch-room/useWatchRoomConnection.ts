@@ -3,6 +3,7 @@ import type { RefObject } from "react";
 import { joinWatchRoom } from "@/lib/api";
 import {
   WATCH_ROOM_CLIENT_EVENT_TYPES,
+  WATCH_ROOM_CONNECT_TIMEOUT_MS,
   WATCH_ROOM_ECHO_POSITION_TOLERANCE_SEC,
   WATCH_ROOM_ECHO_TIMEOUT_MS,
   WATCH_ROOM_EVENT_TYPES,
@@ -127,6 +128,7 @@ export function useWatchRoomConnection({
   const heartbeatRef = useRef<number | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
   const stableConnectionTimeoutRef = useRef<number | null>(null);
+  const connectTimeoutRef = useRef<number | null>(null);
   const seekTimeoutRef = useRef<number | null>(null);
   const pendingSeekRef = useRef<number | null>(null);
   const reconnectAttemptsRef = useRef(0);
@@ -179,6 +181,7 @@ export function useWatchRoomConnection({
   // already marked the close intentional.
   const stopSocket = (socket: WebSocket | null) => {
     clearTimeoutRef(reconnectTimeoutRef);
+    clearTimeoutRef(connectTimeoutRef);
     clearTimeoutRef(stableConnectionTimeoutRef);
     clearPendingSeek();
     clearHeartbeat();
@@ -430,6 +433,7 @@ export function useWatchRoomConnection({
   });
 
   const handleSocketOpen = useEffectEvent(() => {
+    clearTimeoutRef(connectTimeoutRef);
     // The server sends the room's snapshot first thing, right behind this.
     setConnectionState("live");
     // The backoff resets only once the link has held: a server that accepts
@@ -471,6 +475,7 @@ export function useWatchRoomConnection({
     // has opened, and clearing the heartbeat here would silence the live
     // connection until the server dropped it.
     if (closedInstanceId !== socketInstanceIdRef.current) return;
+    clearTimeoutRef(connectTimeoutRef);
     clearHeartbeat();
     clearTimeoutRef(stableConnectionTimeoutRef);
     clearPendingSeek();
@@ -530,6 +535,15 @@ export function useWatchRoomConnection({
       });
       socket.addEventListener("close", () => handleSocketClose(instanceId));
       // An error is always followed by close, which reconnects.
+
+      // A handshake nobody answers (a proxy that took the connection and
+      // hung) fires neither open nor close, so the page would wait forever.
+      // Closing it fires close, which reconnects.
+      const connecting = socket;
+      connectTimeoutRef.current = window.setTimeout(() => {
+        connectTimeoutRef.current = null;
+        if (connecting.readyState === WebSocket.CONNECTING) connecting.close();
+      }, WATCH_ROOM_CONNECT_TIMEOUT_MS);
     };
 
     void initRoomConnection();
