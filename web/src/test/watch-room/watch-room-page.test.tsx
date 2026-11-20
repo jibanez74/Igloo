@@ -877,16 +877,17 @@ describe("WatchRoomPageContent", () => {
     const hung = FakeWebSocket.instances[0];
     expect(hung.readyState).toBe(FakeWebSocket.CONNECTING);
 
-    // Just short of the timeout, the page is still waiting on it.
+    // Short of the timeout, the page is still waiting on it. The margin is
+    // wide because shouldAdvanceTime also moves the clock in real time.
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(WATCH_ROOM_CONNECT_TIMEOUT_MS - 100);
+      await vi.advanceTimersByTimeAsync(WATCH_ROOM_CONNECT_TIMEOUT_MS - 2000);
     });
     expect(hung.readyState).toBe(FakeWebSocket.CONNECTING);
     expect(FakeWebSocket.instances).toHaveLength(1);
 
     FakeWebSocket.hang = false;
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(2000);
     });
     expect(hung.readyState).toBe(FakeWebSocket.CLOSED);
     expect(

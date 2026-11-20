@@ -6,7 +6,7 @@ import {
 } from "./e2e-browser-issues";
 import type { Browser, BrowserContext, Page } from "@playwright/test";
 
-import { MOVIE_SEEK_STEP_SEC } from "../src/lib/constants";
+import { MOVIE_SEEK_STEP_SEC, WATCH_ROOM_CONNECT_TIMEOUT_MS } from "../src/lib/constants";
 import { gateRoute } from "./e2e-api";
 import { loginViaApi, submitLogin } from "./e2e-auth";
 import { readE2EEnv, requireMockApi, type Credentials } from "./e2e-env";
@@ -287,8 +287,9 @@ test.describe("Watch rooms", () => {
     await expect(
       page.getByText("Reconnecting: your changes won't reach the room"),
     ).toBeVisible();
-    // The connect timeout (10 s) plus the next reconnect's backoff.
-    await expectLive(page, 1, 30_000);
+    // The connect timeout plus the next reconnect's backoff, in real time:
+    // the handshake itself is real, so page.clock cannot stand in for it.
+    await expectLive(page, 1, WATCH_ROOM_CONNECT_TIMEOUT_MS + 15_000);
   });
 
   // The socket cannot say why it was refused, so a reconnect asks to join
