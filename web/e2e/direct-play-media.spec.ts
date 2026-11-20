@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { expect, test } from "./e2e-test";
 import type { Page } from "@playwright/test";
-import { loginPageViaApi } from "./e2e-auth";
+import { loginPageViaApi, loginViaApi } from "./e2e-auth";
+import { createUser, deleteUser } from "./e2e-users";
 import { intEnv, requireRealInstance } from "./e2e-env";
 import {
   clearWatchProgress,
@@ -9,7 +10,6 @@ import {
   expectVideoAdvances,
   fetchTechnicalDetails,
   leavePlayer,
-  pausePlayerAndClearProgress,
   mediaPlayPath,
   playButton,
   realMediaTimeouts,
@@ -241,6 +241,7 @@ test.describe("Direct-play eligibility with real media", () => {
   // loaded source.
   test("subtitles stay showing across a resume start change in direct play", async ({
     page,
+    request,
   }) => {
     test.skip(
       !directEnv.subtitleMovieId,
@@ -266,9 +267,20 @@ test.describe("Direct-play eligibility with real media", () => {
     // minimum, well short of the completion threshold.
     const resumeTargetSec = Math.min(45, Math.floor(durationSec / 2));
     const openedAtSec = 5;
-    await clearWatchProgress(page, media);
-    // The seeded resume point outlives the test unless it is taken back.
+    // A viewer of its own, deleted at the end with everything it saved: the
+    // player may still be saving as it goes, so clearing the progress could
+    // race a late save, while a deleted account's save is refused.
+    const stamp = Date.now();
+    const credentials = {
+      email: `subtitle-viewer-${stamp}@example.com`,
+      password: `SubtitlePass${stamp}!`,
+    };
+    const viewer = await createUser(page.context().request, {
+      name: `Subtitle Viewer ${stamp}`,
+      ...credentials,
+    });
     try {
+      await loginPageViaApi(page, credentials);
       const saveResponse = await page
         .context()
         .request.put(`/api/movies/${movieId}/watch-progress`, {
@@ -344,7 +356,9 @@ test.describe("Direct-play eligibility with real media", () => {
         .poll(subtitleState)
         .toEqual({ mode: "showing", loadedCues: true });
     } finally {
-      await pausePlayerAndClearProgress(page, media);
+      await leavePlayer(page);
+      await loginViaApi(request);
+      await deleteUser(request, viewer.id);
     }
   });
 

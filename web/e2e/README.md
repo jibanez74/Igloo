@@ -152,10 +152,9 @@ Bundled Chromium decodes H.264 and AAC, so no other browser is needed.
   Reach for a CSS locator only when the element has no name, and say why.
 - Wait for a state, never for time: web-first assertions, `expect.poll`, or a
   route held with `gateRoute`. `waitForTimeout` is not used. When a test needs
-  time to pass, install `page.clock` and run it forward. The only waits on
-  the wall clock are against a real server's own: its sign-in window
-  (`e2e-auth.ts`) and a player's last progress save
-  (`closePlayerAndClearProgress`).
+  time to pass, install `page.clock` and run it forward. The only wait on
+  the wall clock is against a real server's own sign-in window
+  (`e2e-auth.ts`).
 - Register `waitForResponse` and request listeners before the action that
   triggers them.
 - Use `networkidle` only where "nothing else loads" is what the test checks,

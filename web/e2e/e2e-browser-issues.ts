@@ -29,6 +29,17 @@ function isIgnorableFailedRequest(request: Request) {
     return true;
   }
 
+  // Leaving a player cancels an ordinary progress save still in flight; the
+  // page's keepalive exit save reports the position instead
+  // (useWatchProgressSaver).
+  if (
+    request.method() === "PUT" &&
+    /\/watch-progress$/.test(url.pathname) &&
+    request.resourceType() === "fetch"
+  ) {
+    return true;
+  }
+
   // A media fetch is aborted whenever its element is torn down or reloaded,
   // e.g. the episode hand-off unmounting a player whose stream was pending.
   return ["font", "image", "media", "script", "stylesheet"].includes(
