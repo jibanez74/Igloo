@@ -315,11 +315,20 @@ test("renaming a movie playlist from its page retitles the tab", async ({ page }
 test("deleting a movie playlist from its page returns to the playlists tab", async ({ page }) => {
   const { deletedPlaylistIds } = await mockMoviesApi(page);
 
-  await page.goto("/movies/playlist/501");
+  // Arriving from the tab leaves its list cached, which the tab renders from
+  // on the way back.
+  await page.goto(moviesPlaylistsPath);
+  await page.getByRole("link", { name: "Friday Feature, 7 movies" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Friday Feature" })).toBeVisible();
 
   await page.getByRole("button", { name: "Delete playlist" }).click();
   const confirm = page.getByRole("alertdialog", { name: "Delete playlist" });
   await expect(confirm).toContainText("Are you sure you want to delete “Friday Feature”?");
+  // Hold the list's refetch: the deleted card must be gone before it lands.
+  // The refetch answers with a new count, so its arrival is visible.
+  const playlistsList = await gateRoute(page, /\/api\/movies\/playlists$/, route =>
+    fulfillJSON(route, apiResponse({ playlists: [{ ...initialPlaylists[1], movie_count: 5 }] })),
+  );
   await confirm.getByRole("button", { name: "Delete" }).click();
 
   await expect.poll(() => deletedPlaylistIds).toEqual([501]);
@@ -327,6 +336,12 @@ test("deleting a movie playlist from its page returns to the playlists tab", asy
   await expect(page.getByRole("tab", { name: "Playlists" })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByText("Playlist deleted")).toBeVisible();
   await expect(page.getByRole("link", { name: "Guest Picks, By Riley Collaborator, 4 movies" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Friday Feature, 7 movies" })).toHaveCount(0);
+  await expect(page.getByText("1 playlist", { exact: true })).toBeVisible();
+  // And the delete marked the list stale, so it is fetched again.
+  await expect.poll(playlistsList.requested).toBe(true);
+  playlistsList.release();
+  await expect(page.getByRole("link", { name: "Guest Picks, By Riley Collaborator, 5 movies" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Friday Feature, 7 movies" })).toHaveCount(0);
   await expect(page.getByText("1 playlist", { exact: true })).toBeVisible();
 });
@@ -477,7 +492,8 @@ test("playlists tab opens liked movies subview with URL-backed pagination", asyn
   await expect(page).not.toHaveURL(/playlistsView=liked/);
   await expect(page).not.toHaveURL(/playlistsPage=2/);
   await expect(page).toHaveURL(/tab=playlists/);
-  await expect(page.getByRole("button", { name: "Liked movies" })).toBeVisible();
+  // Focus returns to the button that opened the view.
+  await expect(page.getByRole("button", { name: "Liked movies" })).toBeFocused();
   await expect(page.getByRole("button", { name: "New playlist" })).toBeVisible();
 });
 

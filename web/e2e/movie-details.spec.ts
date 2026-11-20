@@ -199,6 +199,8 @@ async function mockMovieDetailsApi(
   // Per test: a metadata edit changes it, and the refetch must see the edit.
   const details = structuredClone(movieDetailsPayload);
   const playlistAddRequests: { playlistId: number; body: AddMoviesToPlaylistRequest }[] = [];
+  const likeRequests: number[] = [];
+  let liked = false;
 
   await mockApi(page, {
     // Only admins get the Edit action on the details page.
@@ -216,6 +218,13 @@ async function mockMovieDetailsApi(
         const body = route.request().postDataJSON() as AddMoviesToPlaylistRequest;
         playlistAddRequests.push({ playlistId: Number(playlistAdd[1]), body });
         await fulfillJSON(route, apiResponse({ added: body.movie_ids.length, skipped: 0 }));
+        return true;
+      }
+
+      if (url.pathname === `/api/movies/${movieId}/like` && method === "POST") {
+        likeRequests.push(movieId);
+        liked = !liked;
+        await fulfillJSON(route, apiResponse({ movie_id: movieId, is_liked: liked }));
         return true;
       }
 
@@ -238,7 +247,11 @@ async function mockMovieDetailsApi(
         }),
         [`/api/movies/details/${movieId}`]: details,
         [`/api/movies/${movieId}/technical-details`]: technicalDetailsPayload,
-        [`/api/movies/${movieId}/like-status`]: { is_liked: false },
+        "/api/movies/liked": pagedList(url, "movies", liked ? [signalFire] : [], {
+          total: liked ? 1 : 0,
+          perPage: MOVIES_PER_PAGE,
+        }),
+        [`/api/movies/${movieId}/like-status`]: { is_liked: liked },
         [`/api/movies/${movieId}/watch-progress`]: noWatchProgress,
         "/api/settings/playback": {
           settings: {
@@ -261,7 +274,7 @@ async function mockMovieDetailsApi(
     },
   });
 
-  return { playlistAddRequests };
+  return { playlistAddRequests, likeRequests };
 }
 
 async function openPlaybackSettings(page: Page) {
@@ -496,4 +509,37 @@ test("editing the title retitles the tab", async ({ page }) => {
   // The head only reruns on a router load: the dialog has to refetch the
   // details and then reload the route, or the tab keeps the old title.
   await expect(page).toHaveTitle("Signal Fire: Director's Cut (2024) - Igloo");
+});
+
+// The Liked view is cached from before the like, so this also proves the like
+// marks that list stale rather than leaving it to its stale time.
+test("liking a movie from its page adds it to the Liked view", async ({ page }) => {
+  const { likeRequests } = await mockMovieDetailsApi(page);
+
+  await page.setViewportSize(VIEWPORTS.desktop);
+  await page.goto("/movies?tab=playlists&playlistsView=liked");
+  await expect(page.getByRole("heading", { level: 2, name: "Liked Movies" })).toBeVisible();
+  await expect(page.getByText("0 movies", { exact: true })).toBeVisible();
+
+  await page.getByRole("tab", { name: "All Movies" }).click();
+  // The card's play control covers its centre, so open it by keyboard.
+  await page.getByRole("link", { name: "Signal Fire 2024", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { level: 1, name: /Signal Fire/ })).toBeVisible();
+
+  const like = page.getByRole("button", { name: "Like this movie" });
+  await expect(like).toHaveAttribute("aria-pressed", "false");
+  await like.click();
+
+  const unlike = page.getByRole("button", { name: "Unlike this movie" });
+  await expect(unlike).toHaveAttribute("aria-pressed", "true");
+  await expect(unlike).toHaveText("Liked");
+  await expect.poll(() => likeRequests).toEqual([movieId]);
+
+  await page.getByRole("list", { name: "Library" }).getByRole("link", { name: "Movies" }).click();
+  await page.getByRole("tab", { name: "Playlists" }).click();
+  await page.getByRole("button", { name: "Liked movies" }).click();
+  await expect(page).toHaveURL(/playlistsView=liked/);
+  await expect(page.getByText("1 movie", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Signal Fire 2024", exact: true })).toBeVisible();
 });

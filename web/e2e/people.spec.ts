@@ -1,6 +1,5 @@
 import { expect, test } from "./e2e-test";
 import type { Page } from "@playwright/test";
-import { mkdir } from "node:fs/promises";
 import { personProfile, personTitle } from "../src/test/helpers/people";
 import { seasonEpisodes, showDetails } from "../src/test/helpers/show-details";
 import { playbackSettings } from "../src/test/helpers/fixtures";
@@ -109,12 +108,7 @@ for (const theme of ["light", "dark"]) {
       await expect(page.getByText("No credits match these filters.")).toBeVisible();
       await expectPageHasNoHorizontalScroll(page);
       await page.getByLabel("Media type").selectOption("all");
-      await page.evaluate(() => window.scrollTo(0, 0));
-      await mkdir("../output/playwright", { recursive: true });
-      await page.screenshot({ path: `../output/playwright/person-${viewportName}-${theme}.png`, fullPage: true });
-      await page.screenshot({ path: `../output/playwright/person-${viewportName}-${theme}-hero.png` });
-      await page.getByRole("heading", { name: "Filmography", exact: true }).scrollIntoViewIfNeeded();
-      await page.screenshot({ path: `../output/playwright/person-${viewportName}-${theme}-credits.png` });
+      await expect(page.getByText("No credits match these filters.")).toHaveCount(0);
     });
   }
 }
