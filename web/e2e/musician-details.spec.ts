@@ -34,6 +34,12 @@ async function mockMusicianDetailsApi(page: Page) {
         return true;
       }
 
+      // Play all starts the queue; the audio itself is irrelevant here.
+      if (/^\/api\/music\/tracks\/\d+\/stream$/.test(url.pathname) && method === "GET") {
+        await route.fulfill({ status: 200, contentType: "audio/flac", body: Buffer.alloc(0) });
+        return true;
+      }
+
       return false;
     },
   });
@@ -108,4 +114,36 @@ test("musician details holds its layout at every breakpoint", async ({ page }) =
       );
     });
   }
+});
+
+test("Play all queues the artist's tracks in order and the player steps through them", async ({
+  page,
+}) => {
+  await mockMusicianDetailsApi(page);
+
+  await page.setViewportSize(VIEWPORTS.desktop);
+  await page.goto(`/music/musician/${AURORA_PINES_ID}`);
+  await expect(page.getByRole("heading", { level: 1, name: "Aurora Pines" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Play all 2 tracks by Aurora Pines", exact: true }).click();
+
+  const player = page.getByRole("dialog");
+  const counter = player.getByText(/^Track \d+ of \d+$/);
+  await expect(counter).toHaveText("Track 1 of 2");
+  await expect(player.getByRole("heading", { level: 1, name: "Northern Drift" })).toBeVisible();
+
+  await player.getByRole("button", { name: "Next track" }).click();
+  await expect(counter).toHaveText("Track 2 of 2");
+  await expect(player.getByRole("heading", { level: 1, name: "Cold Current" })).toBeVisible();
+  // The last track has nowhere further to go.
+  await expect(player.getByRole("button", { name: "No next track" })).toBeDisabled();
+
+  await player.getByRole("button", { name: "Previous track" }).click();
+  await expect(counter).toHaveText("Track 1 of 2");
+  await expect(player.getByRole("heading", { level: 1, name: "Northern Drift" })).toBeVisible();
+
+  // A track that plays to its end moves the queue on by itself.
+  await page.locator("audio").evaluate(audio => audio.dispatchEvent(new Event("ended")));
+  await expect(counter).toHaveText("Track 2 of 2");
+  await expect(player.getByRole("heading", { level: 1, name: "Cold Current" })).toBeVisible();
 });
