@@ -336,14 +336,27 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
         return;
       }
 
-      setFeedback({
-        message: `${library.title} library scan started.`,
-        tone: "success",
-      });
-      showSuccess(
-        "Scan started",
-        `${library.title} library scan has been initiated`,
-      );
+      // While the library watcher applies a run of changes, the server queues
+      // the scan behind it, and its message is the only sign of that.
+      if (/\bqueued\b/i.test(res.message ?? "")) {
+        setFeedback({
+          message: `${library.title} library scan queued. It starts once the library watcher has applied its changes.`,
+          tone: "success",
+        });
+        showSuccess(
+          "Scan queued",
+          `${library.title} library scan starts after the library watcher's changes`,
+        );
+      } else {
+        setFeedback({
+          message: `${library.title} library scan started.`,
+          tone: "success",
+        });
+        showSuccess(
+          "Scan started",
+          `${library.title} library scan has been initiated`,
+        );
+      }
       // The scan poll refreshes the library's lists once the status shows
       // the new run.
       await queryClient.invalidateQueries({ queryKey: [SCAN_STATUS_KEY] });

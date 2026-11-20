@@ -224,3 +224,37 @@ describe("general settings: download images", () => {
     );
   });
 });
+
+describe("general settings: a refused save", () => {
+  it("keeps the edits and marks the directory the server refused", async () => {
+    // Answered once the form shows the optimistic copy, as over a network.
+    const save = deferredResponse();
+    const saves = mockGeneralSettings(save.promise);
+    const user = userEvent.setup();
+    await renderRoute("/settings");
+
+    const staticDir = await screen.findByLabelText("Static directory");
+    const clientId = screen.getByLabelText("Spotify client ID");
+    await user.type(clientId, "new-client");
+    await user.type(staticDir, "/unreadable");
+    await user.click(screen.getByRole("button", { name: "Save settings" }));
+
+    await waitFor(() => expect(saves).toHaveLength(1));
+    await waitFor(() => expect(staticDir).toHaveAttribute("readonly"));
+    save.resolve(
+      jsonResponse({ error: true, message: "static directory is not accessible" }, 400),
+    );
+    await waitFor(() => expect(staticDir).not.toHaveAttribute("readonly"));
+    await waitFor(() => expect(staticDir).toHaveAttribute("aria-invalid", "true"));
+    expect(staticDir).toHaveAccessibleDescription(
+      "The server must be able to write to this directory. static directory is not accessible",
+    );
+    expect(staticDir).toHaveValue(`${savedSettings.static_dir}/unreadable`);
+    expect(clientId).toHaveValue("new-client");
+    expect(screen.getByRole("button", { name: "Save settings" })).toBeEnabled();
+
+    // Editing the field clears its mark, as with the form's own validation.
+    await user.type(staticDir, "x");
+    expect(staticDir).not.toHaveAttribute("aria-invalid", "true");
+  });
+});

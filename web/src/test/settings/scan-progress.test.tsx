@@ -445,7 +445,8 @@ describe("one poll for every library", () => {
     client.clear();
   });
 
-  it("polls every two seconds while any library runs, and at the idle pace once none does", async () => {
+  // A run that stopped (failed, canceled) is over too, so it slows the poll.
+  it.each(["completed", "failed", "canceled"] as const)("polls every two seconds while any library runs, and at the idle pace once none does (%s)", async state => {
     vi.useFakeTimers();
     let music = musicScanStatus();
     const fetchMock = vi.fn(() => jsonResponse({ error: false, data: scanStatuses({ music }) }));
@@ -456,7 +457,7 @@ describe("one poll for every library", () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
     expect(fetchMock).toHaveBeenCalledTimes(2);
 
-    music = musicScanStatus({ state: "completed", processed: 2267, imported: 2267 });
+    music = musicScanStatus({ state, processed: 2267, imported: 2267 });
     await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
     const completedCalls = fetchMock.mock.calls.length;
     await act(async () => { await vi.advanceTimersByTimeAsync(9_000); });

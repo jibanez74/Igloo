@@ -1,5 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  notifyManager,
+  queryOptions,
+  skipToken,
+  useIsMutating,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useSessionMutation } from "@/hooks/useSessionMutation";
 import { restoreOptimistic, writeOptimistically } from "@/lib/optimistic";
 import { useId, useRef, useState, useTransition } from "react";
@@ -75,6 +82,41 @@ function formFromSettings(
   };
 }
 
+type DirectoryField = "static_dir" | "transcode_dir";
+
+/**
+ * A save the server refused. The form that sent it may have unmounted while
+ * it was pending (a tab round trip), and a form mounted since holds the
+ * optimistic copy as its saved state, so the refusal is recorded where
+ * whichever form is mounted when it lands can see it.
+ */
+type RefusedSave = {
+  id: number;
+  message: string;
+  field: DirectoryField | null;
+  /** Whether the rollback changed the cached settings at all. */
+  rollsBack: boolean;
+};
+
+// Every mounted form sees a save in flight, including one mounted after it
+// started (a tab round trip): its fields stay read-only until it lands, so
+// no second save can overlap the first.
+const SAVE_GENERAL_SETTINGS_KEY = ["save-general-settings"] as const;
+
+const refusedSaveQueryOpts = () =>
+  queryOptions<RefusedSave>({
+    queryKey: ["general-settings-refused-save"],
+    queryFn: skipToken,
+    staleTime: Infinity,
+  });
+
+function fieldFromSettingsError(message: string): DirectoryField | null {
+  const normalized = message.toLowerCase();
+  if (normalized.includes("static directory")) return "static_dir";
+  if (normalized.includes("transcode directory")) return "transcode_dir";
+  return null;
+}
+
 function formsMatchSettings(
   form: UpdateGeneralSettingsRequest,
   settings: GeneralSettingsType,
@@ -142,6 +184,16 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   const [validationMessage, setValidationMessage] = useState("");
   const [validationField, setValidationField] = useState<string | null>(null);
   const [confirmingImageRemoval, setConfirmingImageRemoval] = useState(false);
+  // A refused save rolls the cache back to what it held before. The form
+  // matches the optimistic copy it is synced to, so it would read as clean
+  // and follow the rollback, losing the edits the server refused. A refusal
+  // recorded before this form mounted is not this form's to handle.
+  const { data: refusedSave } = useQuery(refusedSaveQueryOpts());
+  const [handledRefusal, setHandledRefusal] = useState(
+    () => refusedSave?.id ?? 0,
+  );
+  const [keepEditsThroughRollback, setKeepEditsThroughRollback] =
+    useState(false);
   // Closing the confirmation returns focus to what submitted the form, or,
   // once a successful save has disabled Save, to the switch it was about.
   const imageRemovalReturnRef = useRef<HTMLElement | null>(null);
@@ -150,10 +202,25 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
 
   const isDirty = !formsMatchSettings(form, syncedSettings);
 
-  if (settings !== syncedSettings) {
+  if (refusedSave && refusedSave.id !== handledRefusal) {
+    setHandledRefusal(refusedSave.id);
+    // The server names the directory it refused; that field is marked as
+    // the form's own validation would mark it. Every form is read-only while
+    // the save is in flight, so the refused value is still the one shown.
+    if (refusedSave.field) {
+      setValidationMessage(refusedSave.message);
+      setValidationField(refusedSave.field);
+    }
+    // The rollback lands with the refusal or after it, never before (they
+    // are written in one notification), and the sync below adopts it
+    // without following it.
+    if (refusedSave.rollsBack) setKeepEditsThroughRollback(true);
+  } else if (settings !== syncedSettings) {
     const formIsClean = !isDirty;
     setSyncedSettings(settings);
-    if (formIsClean) {
+    if (keepEditsThroughRollback) {
+      setKeepEditsThroughRollback(false);
+    } else if (formIsClean) {
       setForm(formFromSettings(settings));
       setValidationMessage("");
       setValidationField(null);
@@ -161,7 +228,28 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   }
 
   const settingsKey = generalSettingsQueryOpts().queryKey;
+  // Rolls the optimistic copy back and records the refusal, both in one
+  // notification so the mounted form sees them in the same render.
+  const refuse = (
+    message: string,
+    snapshot: Parameters<typeof restoreOptimistic>[2],
+  ) => {
+    notifyManager.batch(() => {
+      const before = queryClient.getQueryData(settingsKey);
+      restoreOptimistic(queryClient, settingsKey, snapshot);
+      const refusedKey = refusedSaveQueryOpts().queryKey;
+      queryClient.setQueryData(refusedKey, {
+        id: (queryClient.getQueryData(refusedKey)?.id ?? 0) + 1,
+        message,
+        field: fieldFromSettingsError(message),
+        rollsBack: queryClient.getQueryData(settingsKey) !== before,
+      });
+    });
+  };
+  const savePending =
+    useIsMutating({ mutationKey: SAVE_GENERAL_SETTINGS_KEY, exact: true }) > 0;
   const updateMutation = useSessionMutation({
+    mutationKey: SAVE_GENERAL_SETTINGS_KEY,
     mutationFn: updateGeneralSettings,
     onMutate: (nextSettings, _context, session) =>
       writeOptimistically(queryClient, settingsKey, session, previous =>
@@ -191,7 +279,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
       ),
     onSuccess: (res, _nextSettings, snapshot) => {
       if (res.error) {
-        restoreOptimistic(queryClient, settingsKey, snapshot);
+        refuse(apiErrorMessage(res, "Failed to save settings."), snapshot);
         showActionFailed("save settings", res);
         return;
       }
@@ -232,7 +320,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
       showSuccess("Settings saved");
     },
     onError: (_error, _nextSettings, snapshot) => {
-      restoreOptimistic(queryClient, settingsKey, snapshot);
+      refuse("An unexpected error occurred.", snapshot);
       showActionFailed("save settings", "An unexpected error occurred");
     },
   });
@@ -303,6 +391,8 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    // Enter in a read-only field still submits.
+    if (savePending) return;
     const { field, message } = validateForm();
     if (message) {
       setValidationMessage(message);
@@ -358,7 +448,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
                 aria-hidden="true"
               />
             }
-            disabled={updateMutation.isPending}
+            disabled={savePending}
           />
           <SwitchField
             ref={downloadImagesSwitchRef}
@@ -372,7 +462,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
             icon={
               <Download className="size-5 text-primary" aria-hidden="true" />
             }
-            disabled={updateMutation.isPending}
+            disabled={savePending}
           />
         </CardContent>
       </Card>
@@ -392,7 +482,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
             label="Static directory"
             value={form.static_dir}
             onChange={value => handleTextChange("static_dir", value)}
-            disabled={updateMutation.isPending}
+            disabled={savePending}
             icon={<FolderCog className="size-4" aria-hidden="true" />}
             required
             invalid={validationField === "static_dir"}
@@ -404,7 +494,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
             label="Transcode directory"
             value={form.transcode_dir}
             onChange={value => handleTextChange("transcode_dir", value)}
-            disabled={updateMutation.isPending}
+            disabled={savePending}
             icon={<HardDrive className="size-4" aria-hidden="true" />}
             required
             invalid={validationField === "transcode_dir"}
@@ -429,7 +519,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
               label="TMDB API key"
               value={form.tmdb_key}
               onChange={value => handleSecretChange("tmdb_key", value)}
-              disabled={updateMutation.isPending}
+              disabled={savePending}
             />
           </ServiceSection>
           <ServiceSection title="Apple Music">
@@ -442,7 +532,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
                 handleToggleChange("enable_apple_lookups", checked)
               }
               icon={<Disc3 className="size-5 text-primary" aria-hidden="true" />}
-              disabled={updateMutation.isPending}
+              disabled={savePending}
             />
           </ServiceSection>
           <ServiceSection title="Spotify">
@@ -452,7 +542,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
               label="Spotify client ID"
               value={form.spotify_client_id}
               onChange={value => handleSecretChange("spotify_client_id", value)}
-              disabled={updateMutation.isPending}
+              disabled={savePending}
             />
             <SecretInput
               id={spotifyClientSecretId}
@@ -462,7 +552,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
               onChange={value =>
                 handleSecretChange("spotify_client_secret", value)
               }
-              disabled={updateMutation.isPending}
+              disabled={savePending}
             />
           </ServiceSection>
         </CardContent>
@@ -478,7 +568,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
         }
         statusTone={validationMessage ? "error" : "neutral"}
         onReset={resetForm}
-        isPending={updateMutation.isPending}
+        isPending={savePending}
         stickyClassName={
           isMiniPlayerVisible ? MINI_PLAYER_CLEARANCE_BOTTOM_CLASS : "bottom-4"
         }
@@ -492,7 +582,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
         description="Turning off image downloads deletes the artwork saved in the static directory. Images load from their online sources again."
         confirmLabel="Delete images"
         pendingLabel="Deleting images..."
-        pending={updateMutation.isPending}
+        pending={savePending}
         restoreFocusRef={imageRemovalReturnRef}
         fallbackFocusRef={downloadImagesSwitchRef}
         onConfirm={saveForm}

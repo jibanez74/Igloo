@@ -8,6 +8,7 @@ import type {
 } from "../src/types";
 import { getApiData, putApiData, readJSON } from "./e2e-api";
 import { loginPageViaApi } from "./e2e-auth";
+import { expectedRefusalRules } from "./e2e-browser-issues";
 import { isRealInstance, requireMockApi } from "./e2e-env";
 
 function requestFromSettings(
@@ -138,6 +139,44 @@ async function fillServiceSettings(
     .fill(settings.spotify_client_secret);
 }
 
+// Refused on any host: /dev/null is not a directory, so the server's
+// GetOrCreateDir cannot create anything under it (nor will the mock).
+const UNCREATABLE_DIR = "/dev/null/static";
+
+const GENERAL_SAVE_REFUSAL = expectedRefusalRules({
+  method: "PUT",
+  path: "/api/settings/general",
+  status: 400,
+});
+
+async function fillRefusedSave(page: Page, clientId: string) {
+  await page.getByRole("textbox", { name: "Spotify client ID" }).fill(clientId);
+  await page.getByRole("textbox", { name: "Static directory" }).fill(UNCREATABLE_DIR);
+}
+
+async function expectRefusalKeepsEdits(
+  page: Page,
+  baseline: GeneralSettingsType,
+  clientId: string,
+) {
+  const staticDir = page.getByRole("textbox", { name: "Static directory" });
+  await expect(page.getByText("Failed to save settings")).toBeVisible();
+  await expect(
+    page
+      .getByRole("tabpanel", { name: "General" })
+      .getByText("static directory is not accessible", { exact: true }),
+  ).toBeVisible();
+  await expect(staticDir).toHaveAttribute("aria-invalid", "true");
+  // The optimistic copy is rolled back, the edits are not.
+  await expect(staticDir).toHaveValue(UNCREATABLE_DIR);
+  await expect(
+    page.getByRole("textbox", { name: "Spotify client ID" }),
+  ).toHaveValue(clientId);
+  // Still unsaved against the rolled-back copy, so Save stays available.
+  await expect(page.getByRole("button", { name: "Save settings" })).toBeEnabled();
+  expect(await fetchGeneralSettings(page)).toEqual(baseline);
+}
+
 test.describe("General settings", () => {
   test("updates service settings accessibly and optimistically", async ({
     page,
@@ -206,7 +245,11 @@ test.describe("General settings", () => {
         enable_apple_lookups: nextSettings.enable_apple_lookups,
       });
 
+      // Each tab fades out before it navigates: a second click during the
+      // fade is ignored and the form never unmounts. Arriving on Account
+      // proves it did, so General below mounts from the optimistic cache.
       await page.getByRole("tab", { name: "Account" }).click();
+      await expect(page.getByText("Profile information")).toBeVisible();
       await page.getByRole("tab", { name: "General" }).click();
       await expect(
         page.getByRole("textbox", { name: "Spotify client ID" }),
@@ -295,5 +338,102 @@ test.describe("General settings", () => {
     expect(puts).toHaveLength(1);
     expect(puts[0].download_images).toBe(false);
     expect((await fetchGeneralSettings(page)).download_images).toBe(false);
+  });
+
+  test("keeps the edits and marks the directory the server refuses", async ({
+    page,
+    browserIssues,
+  }) => {
+    browserIssues.ignore(GENERAL_SAVE_REFUSAL);
+    await loginPageViaApi(page);
+    const baseline = await fetchGeneralSettings(page);
+    const clientId = `playwright-refused-${Date.now()}`;
+
+    try {
+      await page.goto("/settings");
+      const save = page.getByRole("button", { name: "Save settings" });
+      await fillRefusedSave(page, clientId);
+      await save.click();
+      await expectRefusalKeepsEdits(page, baseline, clientId);
+
+      // Editing clears the mark; a second refusal marks the field again.
+      const staticDir = page.getByRole("textbox", { name: "Static directory" });
+      await staticDir.fill(`${UNCREATABLE_DIR}-again`);
+      await expect(staticDir).not.toHaveAttribute("aria-invalid", "true");
+      await save.click();
+      await expect(staticDir).toHaveAttribute("aria-invalid", "true");
+
+      await staticDir.fill(baseline.static_dir);
+      await expect(staticDir).not.toHaveAttribute("aria-invalid", "true");
+      await save.click();
+      await expect(page.getByText("Settings saved")).toBeVisible();
+      expect((await fetchGeneralSettings(page)).spotify_client_id).toBe(clientId);
+    } finally {
+      // Only a real instance keeps what the test saved.
+      if (isRealInstance) {
+        await putApiData(
+          page.context().request,
+          "/api/settings/general",
+          requestFromSettings(baseline),
+        );
+      }
+    }
+  });
+
+  // The form that sent the save unmounts; the one mounted on return holds
+  // the optimistic copy as its saved state when the refusal lands.
+  test("keeps the edits when the refusal lands after a tab round trip", async ({
+    page,
+    browserIssues,
+  }) => {
+    browserIssues.ignore(GENERAL_SAVE_REFUSAL);
+    await loginPageViaApi(page);
+    const baseline = await fetchGeneralSettings(page);
+    const clientId = `playwright-held-${Date.now()}`;
+    const held = { route: null as Route | null };
+    await page.route("**/api/settings/general", async route => {
+      if (route.request().method() === "PUT" && held.route === null) {
+        held.route = route;
+        return;
+      }
+      await route.fallback();
+    });
+
+    try {
+      await page.goto("/settings");
+      await fillRefusedSave(page, clientId);
+      await page.getByRole("button", { name: "Save settings" }).click();
+      await expect.poll(() => held.route !== null).toBe(true);
+
+      await page.getByRole("tab", { name: "Account" }).click();
+      await expect(page.getByText("Profile information")).toBeVisible();
+      await page.getByRole("tab", { name: "General" }).click();
+      const staticDirField = page.getByRole("textbox", { name: "Static directory" });
+      await expect(staticDirField).toHaveValue(UNCREATABLE_DIR);
+      // The save is still in flight, so this form cannot send another that
+      // the refusal would then land on.
+      await expect(staticDirField).toHaveAttribute("readonly");
+
+      const refusal = page.waitForResponse(
+        response =>
+          new URL(response.url()).pathname === "/api/settings/general" &&
+          response.request().method() === "PUT",
+      );
+      const route = held.route!;
+      await route.continue();
+      expect((await refusal).status()).toBe(400);
+      await expectRefusalKeepsEdits(page, baseline, clientId);
+      await expect(staticDirField).not.toHaveAttribute("readonly");
+
+      // A refusal from before a form mounted is not that form's: the next
+      // visit shows the saved settings, unmarked.
+      await page.getByRole("tab", { name: "Account" }).click();
+      await expect(page.getByText("Profile information")).toBeVisible();
+      await page.getByRole("tab", { name: "General" }).click();
+      await expect(staticDirField).toHaveValue(baseline.static_dir);
+      await expect(staticDirField).not.toHaveAttribute("aria-invalid", "true");
+    } finally {
+      await page.unroute("**/api/settings/general").catch(() => undefined);
+    }
   });
 });

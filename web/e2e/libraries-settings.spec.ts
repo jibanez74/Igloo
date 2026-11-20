@@ -12,6 +12,7 @@ import {
   readJSON,
 } from "./e2e-api";
 import { loginPageViaApi } from "./e2e-auth";
+import { expectedRefusalRules } from "./e2e-browser-issues";
 import { isRealInstance } from "./e2e-env";
 import { auditResponsiveControls } from "./e2e-layout";
 
@@ -33,33 +34,62 @@ function fetchLibrarySettings(page: Page) {
   return getApiData<SettingsType>(page.context().request, "/api/settings");
 }
 
+// The save bar's status line: a live region with no role, so it is found by
+// its exact text inside the tab, apart from the toasts outside it.
+function formStatus(page: Page, text: string) {
+  return page
+    .getByRole("tabpanel", { name: "Libraries" })
+    .getByText(text, { exact: true });
+}
+
+// Answers the scan triggers as the server does (settings_handler.go
+// triggerScan), so the page's own wording is what the test reads.
+const SCAN_ANSWERS: Record<string, { status: number; message: string }[]> = {
+  // Already running, then started.
+  "/api/settings/scan/movies": [
+    { status: 409, message: "movie library scan is already in progress" },
+    { status: 200, message: "Movie library scan started" },
+  ],
+  // A 5xx hides the server's message behind the page's fallback.
+  "/api/settings/scan/music": [
+    { status: 500, message: "music directory is not configured" },
+    { status: 200, message: "Music library scan started" },
+  ],
+  // Queued behind a run of the library watcher's changes.
+  "/api/settings/scan/shows": [{ status: 200, message: "Show library scan queued" }],
+};
+
 test.describe("Libraries settings", () => {
   test("manages library paths accessibly without console noise", async ({
     page,
+    browserIssues,
   }) => {
+    browserIssues.ignore(
+      expectedRefusalRules(
+        { method: "POST", path: "/api/settings/scan/movies", status: 409 },
+        { method: "POST", path: "/api/settings/scan/music", status: 500 },
+      ),
+    );
     await loginPageViaApi(page);
     const baseline = await fetchLibrarySettings(page);
-    let movieScanRequests = 0;
+    const scanRequests: Record<string, number> = {};
     // Scan triggers only: the status poll (GET /api/settings/scan) is not
-    // under scan/ and reaches the mock server, which reports idle.
+    // under scan/ and reaches the server, which reports idle. Stubbed on a
+    // real instance too, so no scan runs.
     await page.route("**/api/settings/scan/**", async route => {
-      const url = new URL(route.request().url());
-      if (url.pathname === "/api/settings/scan/movies") {
-        movieScanRequests += 1;
-      }
-
-      if (url.pathname === "/api/settings/scan/movies" && movieScanRequests === 1) {
-        await fulfillJSON(route, {
-          error: true,
-          message: "Failed to start movies scan.",
-        });
+      const { pathname } = new URL(route.request().url());
+      const answers = SCAN_ANSWERS[pathname];
+      if (!answers) {
+        await route.fallback();
         return;
       }
-
-      await fulfillJSON(route, {
-        error: false,
-        message: "Library scan started",
-      });
+      const count = (scanRequests[pathname] = (scanRequests[pathname] ?? 0) + 1);
+      const answer = answers[Math.min(count, answers.length) - 1];
+      await fulfillJSON(
+        route,
+        { error: answer.status !== 200, message: answer.message },
+        answer.status,
+      );
     });
 
     let tempRoot: string | undefined;
@@ -101,9 +131,7 @@ test.describe("Libraries settings", () => {
       await showsInput.fill(paths.shows);
       await musicInput.fill(paths.music);
       await expect(
-        page.locator('p[aria-live="polite"]').filter({
-          hasText: "Library path changes are ready to save.",
-        }),
+        formStatus(page, "Library path changes are ready to save."),
       ).toBeVisible();
       await expect(
         page.getByRole("button", { name: "Save library paths" }),
@@ -129,9 +157,7 @@ test.describe("Libraries settings", () => {
       expect(saveBody.error, saveBody.message).toBe(false);
 
       await expect(
-        page.locator('p[aria-live="polite"]').filter({
-          hasText: "Library paths saved.",
-        }),
+        formStatus(page, "Library paths saved."),
       ).toBeVisible();
 
       await page.reload();
@@ -172,9 +198,7 @@ test.describe("Libraries settings", () => {
       await page.getByRole("button", { name: "Clear music library path" }).click();
       await expect(musicInput).toHaveValue("");
       await expect(
-        page.locator('p[aria-live="polite"]').filter({
-          hasText: "Library path changes are ready to save.",
-        }),
+        formStatus(page, "Library path changes are ready to save."),
       ).toBeVisible();
       await page.getByRole("button", { name: "Reset library paths" }).click();
       await expect(musicInput).toHaveValue(paths.music);
@@ -191,9 +215,7 @@ test.describe("Libraries settings", () => {
         moviesScanButton.click(),
       ]);
       await expect(
-        page.locator('p[aria-live="polite"]').filter({
-          hasText: "Failed to start movies scan.",
-        }),
+        formStatus(page, "movie library scan is already in progress"),
       ).toBeVisible();
       await expect(moviesScanButton).toBeEnabled();
       await expect(moviesScanButton).toHaveAttribute("aria-busy", "false");
@@ -206,23 +228,20 @@ test.describe("Libraries settings", () => {
         moviesScanButton.click(),
       ]);
       await expect(
-        page.locator('p[aria-live="polite"]').filter({
-          hasText: "Movies library scan started.",
-        }),
+        formStatus(page, "Movies library scan started."),
       ).toBeVisible();
 
-      await Promise.all([
-        page.waitForResponse(response => {
-          const url = new URL(response.url());
-          return url.pathname === "/api/settings/scan/music" && response.request().method() === "POST";
-        }),
-        page.getByRole("button", { name: "Scan music library" }).click(),
-      ]);
-      await expect(
-        page.locator('p[aria-live="polite"]').filter({
-          hasText: "Music library scan started.",
-        }),
-      ).toBeVisible();
+      const musicScanButton = page.getByRole("button", { name: "Scan music library" });
+      for (const shown of ["Failed to start music scan.", "Music library scan started."]) {
+        await Promise.all([
+          page.waitForResponse(response => {
+            const url = new URL(response.url());
+            return url.pathname === "/api/settings/scan/music" && response.request().method() === "POST";
+          }),
+          musicScanButton.click(),
+        ]);
+        await expect(formStatus(page, shown)).toBeVisible();
+      }
 
       // The TV shows scan trigger is reachable by keyboard from its path input.
       const showsScanButton = page.getByRole("button", {
@@ -243,9 +262,10 @@ test.describe("Libraries settings", () => {
         page.keyboard.press("Enter"),
       ]);
       await expect(
-        page.locator('p[aria-live="polite"]').filter({
-          hasText: "TV Shows library scan started.",
-        }),
+        formStatus(
+          page,
+          "TV Shows library scan queued. It starts once the library watcher has applied its changes.",
+        ),
       ).toBeVisible();
       await expect(showsScanButton).toBeEnabled();
       await expect(showsScanButton).toHaveAttribute("aria-busy", "false");
@@ -258,6 +278,69 @@ test.describe("Libraries settings", () => {
       await page.unroute("**/api/settings/scan/**").catch(() => undefined);
       // Only a real instance keeps what the test saved; the mock resets before
       // each test, and a restore failing here would hide the test's own error.
+      if (isRealInstance) {
+        await putApiData(page.context().request, "/api/settings/libraries", baseline);
+      }
+      if (tempRoot) {
+        await rm(tempRoot, { recursive: true, force: true });
+      }
+    }
+  });
+
+  test("keeps the edits and marks the path the server cannot read", async ({
+    page,
+    browserIssues,
+  }) => {
+    browserIssues.ignore(
+      expectedRefusalRules({ method: "PUT", path: "/api/settings/libraries", status: 400 }),
+    );
+    await loginPageViaApi(page);
+    const baseline = await fetchLibrarySettings(page);
+    let tempRoot: string | undefined;
+
+    try {
+      tempRoot = await mkdtemp(join(tmpdir(), "igloo-libraries-rejected-"));
+      const paths = {
+        missing: join(tempRoot, "missing"),
+        movies: join(tempRoot, "movies"),
+        shows: join(tempRoot, "shows"),
+        music: join(tempRoot, "music"),
+      };
+      await Promise.all(
+        [paths.movies, paths.shows, paths.music].map(path => mkdir(path)),
+      );
+
+      await page.goto("/settings/libraries");
+      const moviesInput = page.getByRole("textbox", { name: "Movies library path" });
+      const showsInput = page.getByRole("textbox", { name: "TV shows library path" });
+      const musicInput = page.getByRole("textbox", { name: "Music library path" });
+      const save = page.getByRole("button", { name: "Save library paths" });
+      await moviesInput.fill(paths.missing);
+      await showsInput.fill(paths.shows);
+      await musicInput.fill(paths.music);
+      await save.click();
+
+      // The server checks movies first and names it; the page marks that
+      // field and keeps every edit for the correction.
+      await expect(formStatus(page, "movies directory is not accessible")).toBeVisible();
+      await expect(moviesInput).toHaveAttribute("aria-invalid", "true");
+      await expect(showsInput).not.toHaveAttribute("aria-invalid", "true");
+      await expect(moviesInput).toHaveValue(paths.missing);
+      await expect(showsInput).toHaveValue(paths.shows);
+      await expect(musicInput).toHaveValue(paths.music);
+      expect(await fetchLibrarySettings(page)).toEqual(baseline);
+
+      await moviesInput.fill(paths.movies);
+      await expect(moviesInput).not.toHaveAttribute("aria-invalid", "true");
+      await save.click();
+      await expect(formStatus(page, "Library paths saved.")).toBeVisible();
+      expect(await fetchLibrarySettings(page)).toEqual({
+        movies_dir: paths.movies,
+        shows_dir: paths.shows,
+        music_dir: paths.music,
+      });
+    } finally {
+      // Only a real instance keeps what the test saved.
       if (isRealInstance) {
         await putApiData(page.context().request, "/api/settings/libraries", baseline);
       }

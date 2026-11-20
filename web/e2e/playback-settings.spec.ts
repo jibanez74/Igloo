@@ -10,8 +10,9 @@ import type {
   UpdatePlaybackSettingsRequest,
 } from "../src/types";
 import { PLAYBACK_PREFERENCES_STORAGE_PREFIX } from "../src/lib/playback-preferences";
-import { getApiData, putApiData } from "./e2e-api";
+import { fulfillJSON, getApiData, putApiData } from "./e2e-api";
 import { loginPageViaApi, logoutViaApi } from "./e2e-auth";
+import { expectedRefusalRules } from "./e2e-browser-issues";
 import { isRealInstance, requireRealInstance } from "./e2e-env";
 import { expectPageHasNoHorizontalScroll, VIEWPORTS } from "./e2e-layout";
 import { createUser, deleteUser } from "./e2e-users";
@@ -312,6 +313,51 @@ test.describe("Playback settings", () => {
     }
   });
 
+  test("keeps the server form's edits when the server refuses them", async ({
+    page,
+    browserIssues,
+  }) => {
+    browserIssues.ignore(
+      expectedRefusalRules({ method: "PUT", path: "/api/settings/playback", status: 400 }),
+    );
+    await loginPageViaApi(page);
+    const baselineSettings = await fetchPlaybackSettings(page);
+    // The form blocks every value the server's own checks refuse, so the
+    // refusal is stubbed; nothing reaches a real instance either.
+    await page.route("**/api/settings/playback", async route => {
+      if (route.request().method() !== "PUT") {
+        await route.fallback();
+        return;
+      }
+      await fulfillJSON(
+        route,
+        { error: true, message: "invalid hardware acceleration device" },
+        400,
+      );
+    });
+
+    await page.goto("/settings/playback");
+    const serverInput = page.getByRole("spinbutton", {
+      name: "Server upload bandwidth (Mbps)",
+    });
+    await serverInput.fill("5");
+    await page.getByRole("combobox", { name: "Hardware acceleration" }).click();
+    await page.getByRole("option", { name: "NVIDIA NVENC" }).click();
+    const save = page.getByRole("button", { name: "Save settings" });
+    await save.click();
+
+    await expect(page.getByText("Failed to save playback settings")).toBeVisible();
+    await expect(page.getByText("invalid hardware acceleration device")).toBeVisible();
+    // Still dirty, so it can be corrected and saved again.
+    await expect(serverInput).toHaveValue("5");
+    await expect(
+      page.getByRole("combobox", { name: "Hardware acceleration" }),
+    ).toHaveText("NVIDIA NVENC");
+    await expect(save).toBeEnabled();
+    await expect(page.getByText("No unsaved changes")).toHaveCount(0);
+    expect(await fetchPlaybackSettings(page)).toEqual(baselineSettings);
+  });
+
   test("rejects an out-of-range download speed without storing it", async ({
     page,
   }) => {
@@ -368,6 +414,12 @@ test.describe("Playback settings", () => {
 
     const second = await context.newPage();
     browserIssues.track(second);
+    // Tab two never hears tab one's `storage` event, as when its write comes
+    // before the event is delivered: only a merge against storage itself,
+    // not tab two's cached snapshot, keeps tab one's field.
+    await second.addInitScript(() => {
+      window.addEventListener("storage", event => event.stopImmediatePropagation(), true);
+    });
 
     try {
       await page.goto("/settings/playback");

@@ -9,6 +9,7 @@ import {
 import { apiResponse, fulfillJSON, SCAN_STATUS_PATH } from "./e2e-api";
 import type { ScanStatuses } from "../src/types/settings";
 import { loginPageViaApi } from "./e2e-auth";
+import { expectedRefusalRules } from "./e2e-browser-issues";
 import { requireMockApi } from "./e2e-env";
 
 // A scan started from Settings → Libraries and followed to its completion.
@@ -99,13 +100,8 @@ test.describe("Library scan progress", () => {
 
   for (const kind of SCAN_KINDS) {
     test(`${kind.name} scan progress survives navigation and reports completion with issues`, async ({ page, browserIssues }) => {
-      browserIssues.ignore({
-        // The status endpoint goes down once on purpose, below.
-        ignoreResponse: response =>
-          response.status() === 503 && new URL(response.url()).pathname === SCAN_STATUS_PATH,
-        ignoreConsole: (_type, text) =>
-          text === "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
-      });
+      // The status endpoint goes down once on purpose, below.
+      browserIssues.ignore(expectedRefusalRules({ method: "GET", path: SCAN_STATUS_PATH, status: 503 }));
       let status = scanStatuses();
       let starts = 0;
       let unavailable = false;
@@ -192,10 +188,63 @@ test.describe("Library scan progress", () => {
       await page.getByRole("tab", { name: "Libraries", exact: true }).click();
       await expect(page.getByRole("status").filter({ hasText: kind.completedText })).toBeVisible();
       await expect(start).toBeEnabled();
+      // The issue list stays folded until its <summary> is opened.
+      await expect(page.getByText(kind.issue)).toBeHidden();
       await page.getByText("1 outstanding issue", { exact: true }).focus();
       await page.keyboard.press("Enter");
       await expect(page.getByText(kind.issue)).toBeVisible();
       expect(starts).toBe(1);
+    });
+  }
+
+  // How a run ends without completing. One library is enough: the loop above
+  // shows the three share the report's handling.
+  for (const outcome of [
+    {
+      state: "failed",
+      text: "Movie scan stopped after an error. Committed movies are available.",
+    },
+    {
+      state: "canceled",
+      text: "Movie scan canceled. Committed movies are available.",
+    },
+  ] as const) {
+    test(`a movies scan that ends ${outcome.state} frees the button and refreshes the library`, async ({ page }) => {
+      let status = scanStatuses();
+      let endedServed = false;
+      let statsRequestsAfterEnd = 0;
+      const ended = scanStatuses({
+        movies: movieScanStatus({ state: outcome.state, processed: 120, imported: 120 }),
+      });
+
+      await loginPageViaApi(page);
+      await page.route("**/api/settings", route =>
+        fulfillJSON(route, apiResponse({ movies_dir: "/media/movies", shows_dir: null, music_dir: null })),
+      );
+      await page.route("**/api/settings/scan/movies", async route => {
+        status = scanStatuses({ movies: movieScanStatus() });
+        await fulfillJSON(route, { error: false, message: "Movie library scan started" });
+      });
+      await page.route(`**${SCAN_STATUS_PATH}`, async route => {
+        if (status === ended) endedServed = true;
+        await fulfillJSON(route, apiResponse(status));
+      });
+      await page.route("**/api/movies/stats", async route => {
+        if (endedServed) statsRequestsAfterEnd++;
+        await route.fallback();
+      });
+
+      await page.goto("/settings/libraries");
+      const start = page.getByRole("button", { name: "Scan movies library", exact: true });
+      await start.click();
+      await expect(page.getByRole("button", { name: "Scanning movies library..." })).toBeDisabled();
+      await expect(page.getByRole("status").filter({ hasText: "Inspecting and importing movies" })).toBeVisible();
+
+      status = ended;
+      await expect(page.getByRole("status").filter({ hasText: outcome.text })).toBeVisible();
+      await expect(start).toBeEnabled();
+      // The run's end refreshes the library's queries, statistics included.
+      await expect.poll(() => statsRequestsAfterEnd).toBeGreaterThan(0);
     });
   }
 });

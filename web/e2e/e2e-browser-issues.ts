@@ -73,6 +73,35 @@ export const signedOutIssueRules: TrackBrowserIssuesOptions = {
     new URL(message.location().url, "http://localhost").pathname === "/api/auth/user",
 };
 
+/** A refusal a test asks the server (or its stub) for. */
+export type ExpectedRefusal = { method: string; path: string; status: number };
+
+/**
+ * Drops the refusals a test drives on purpose, and the browser's console
+ * echo of them, and nothing else: another status, method or route still
+ * fails. It does not count them; a test that cares how many were sent
+ * asserts that itself.
+ */
+export function expectedRefusalRules(
+  ...refusals: ExpectedRefusal[]
+): TrackBrowserIssuesOptions {
+  return {
+    ignoreResponse: response =>
+      refusals.some(
+        refusal =>
+          response.status() === refusal.status &&
+          response.request().method() === refusal.method &&
+          new URL(response.url()).pathname === refusal.path,
+      ),
+    ignoreConsole: (_type, text, message) =>
+      refusals.some(
+        refusal =>
+          text.startsWith(`Failed to load resource: the server responded with a status of ${refusal.status} `) &&
+          new URL(message.location().url, "http://localhost").pathname === refusal.path,
+      ),
+  };
+}
+
 function isAppApiResponse(response: Response) {
   return new URL(response.url()).pathname.startsWith("/api/");
 }
