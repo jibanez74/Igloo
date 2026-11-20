@@ -10,6 +10,7 @@ import {
   clearWatchProgress,
   expectVideoAdvances,
   fetchTechnicalDetails,
+  leavePlayer,
   mediaApiPath,
   mediaPlayPath,
   playButton,
@@ -311,13 +312,8 @@ async function runHlsCase(page: Page, hlsCase: HlsCase) {
 
   await expectVideoAdvances(page, timeouts.response);
   await expect(page.getByText(/playback failed|stream error/i)).toHaveCount(0);
+  await leavePlayer(page);
 }
-
-// Real media only: this suite's browser noise (media aborts, codec warnings)
-// has not been triaged against a real instance yet, so it is not tracked.
-test.use({
-  browserIssueOptions: { skip: "real-media suite, browser noise not triaged yet" },
-});
 
 test.describe("HLS transcoding playback", () => {
   requireRealInstance("HLS transcoding needs real media and ffmpeg");

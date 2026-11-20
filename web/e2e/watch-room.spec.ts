@@ -1,4 +1,4 @@
-import { expect, test } from "./e2e-test";
+import { expect, test, type BrowserIssues } from "./e2e-test";
 import type { Browser } from "@playwright/test";
 
 import {
@@ -51,15 +51,17 @@ const env = readWatchRoomEnv();
 // its own; real media needs the browser to allow that.
 test.use({ launchOptions: { args: ["--autoplay-policy=no-user-gesture-required"] } });
 
-// Real media only: this suite's browser noise (media aborts, codec warnings)
-// has not been triaged against a real instance yet, so it is not tracked.
-test.use({
-  browserIssueOptions: { skip: "real-media suite, browser noise not triaged yet" },
-});
-
-/** An owner (the configured admin) and invitees, each in their own browser. */
-async function openRoomParty(browser: Browser, guestCount: number) {
+/**
+ * An owner (the configured admin) and invitees, each in their own browser.
+ * Every page they open is watched for browser issues.
+ */
+async function openRoomParty(
+  browser: Browser,
+  guestCount: number,
+  browserIssues: BrowserIssues,
+) {
   const ownerContext = await browser.newContext({ baseURL: env.baseURL });
+  ownerContext.on("page", page => browserIssues.track(page));
   await loginViaApi(ownerContext.request, env);
   const guests: E2EGuest[] = [];
   for (let i = 0; i < guestCount; i += 1) {
@@ -68,6 +70,7 @@ async function openRoomParty(browser: Browser, guestCount: number) {
   const guestContexts = await Promise.all(
     guests.map(async guest => {
       const context = await browser.newContext({ baseURL: env.baseURL });
+      context.on("page", page => browserIssues.track(page));
       await loginViaApi(context.request, guest);
       return context;
     }),
@@ -78,6 +81,11 @@ async function openRoomParty(browser: Browser, guestCount: number) {
     guests,
     guestContexts,
     async close(roomId: number | null) {
+      // Pages first: a room page whose room closes, or whose guest is
+      // deleted, would go Home and be signed out, all of it after the test.
+      for (const context of [ownerContext, ...guestContexts]) {
+        await Promise.all(context.pages().map(page => page.close()));
+      }
       await cleanupWatchRoom(ownerContext.request, roomId);
       for (const guest of guests) {
         await deleteUser(ownerContext.request, guest.id, { allowMissing: true });
@@ -94,9 +102,10 @@ test.describe("Watch room realtime playback", () => {
 
   test("syncs direct-room playback controls across owner and guest browsers", async ({
     browser,
+    browserIssues,
   }) => {
     test.skip(!env.movieId, "Set E2E_WATCH_ROOM_MOVIE_ID to run the direct-room test.");
-    const party = await openRoomParty(browser, 1);
+    const party = await openRoomParty(browser, 1, browserIssues);
     let roomId: number | null = null;
 
     try {
@@ -152,9 +161,12 @@ test.describe("Watch room realtime playback", () => {
     }
   });
 
-  test("edits invitees and lets a guest leave", async ({ browser }) => {
+  test("edits invitees and lets a guest leave", async ({
+    browser,
+    browserIssues,
+  }) => {
     test.skip(!env.movieId, "Set E2E_WATCH_ROOM_MOVIE_ID to run the members test.");
-    const party = await openRoomParty(browser, 2);
+    const party = await openRoomParty(browser, 2, browserIssues);
     const [removed, added] = party.guests;
     let roomId: number | null = null;
 
@@ -211,9 +223,12 @@ test.describe("Watch room HLS playback with real media", () => {
   requireRealInstance("an HLS room needs a real transcode");
   test.describe.configure({ timeout: realMediaTimeouts().test });
 
-  test("keeps two viewers of an HLS room on the same position", async ({ browser }) => {
+  test("keeps two viewers of an HLS room on the same position", async ({
+    browser,
+    browserIssues,
+  }) => {
     test.skip(!env.hlsMovieId, "Set E2E_WATCH_ROOM_HLS_MOVIE_ID to run the HLS-room test.");
-    const party = await openRoomParty(browser, 1);
+    const party = await openRoomParty(browser, 1, browserIssues);
     let roomId: number | null = null;
 
     try {

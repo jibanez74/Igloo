@@ -146,6 +146,43 @@ export async function clearWatchProgress(page: Page, media: E2EMedia) {
 }
 
 /**
+ * Leaves a player the way closing its tab would. An HLS player stops its
+ * transcode session on `pagehide`, but a page Playwright closes never gets
+ * one, so the session would hold its transcode permit until the server's
+ * idle timeout reaps it minutes later, while the next test waits for a
+ * permit. Navigating away fires `pagehide`. The stop leaves as a keepalive
+ * request from the unloading page, which Playwright does not report, so this
+ * cannot wait for it: the server's log shows it land, and the page's side is
+ * held in vitest (movie-play-route.test.tsx, "movie play route HLS session").
+ */
+export async function leavePlayer(page: Page) {
+  await page.goto("about:blank");
+}
+
+/**
+ * Closes a player page, then clears its media's watch progress. Leaving the
+ * player sends one last progress save, so the delete repeats until a read a
+ * moment later still finds nothing saved.
+ */
+export async function closePlayerAndClearProgress(page: Page, media: E2EMedia) {
+  const request = page.context().request;
+  const path = `${mediaApiPath(media)}/watch-progress`;
+  await page.close();
+  await expect
+    .poll(
+      async () => {
+        const cleared = await request.delete(path, { failOnStatusCode: false });
+        expect(cleared.status(), `clear watch progress for ${path}`).toBe(200);
+        await new Promise(resolve => setTimeout(resolve, 1_000));
+        const progress = await getApiData<{ progress_sec: number | null }>(request, path);
+        return progress.progress_sec;
+      },
+      { message: `watch progress for ${path} stays cleared` },
+    )
+    .toBeNull();
+}
+
+/**
  * Budgets for the opt-in real-media suites, which wait on ffmpeg and real
  * decoding. `test` is applied per describe so the suites keep it whatever
  * the config default is; `response` bounds each manifest, segment and

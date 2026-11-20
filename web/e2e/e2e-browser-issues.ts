@@ -1,4 +1,5 @@
 import type { ConsoleMessage, Page, Request, Response } from "@playwright/test";
+import { isRealInstance } from "./e2e-env";
 
 function isIgnorableFailedRequest(request: Request) {
   const failureText = request.failure()?.errorText ?? "";
@@ -51,6 +52,45 @@ export function isApiResourceEcho(text: string, message: ConsoleMessage) {
   return (
     text.startsWith("Failed to load resource:") &&
     new URL(message.location().url, "http://localhost").pathname.startsWith("/api/")
+  );
+}
+
+/**
+ * What a real instance answers because of how it is set up rather than what
+ * the test did: its sign-in rate limit, which the auth helpers in
+ * e2e-auth.ts wait out and try again (a sign-in that stays refused fails the
+ * test that sent it through its own status check), and the 503 its TMDB
+ * routes answer when it has no TMDB key (ensureTmdbAvailable), which Home's
+ * in-theaters row asks for. An upstream TMDB failure answers 500 and still
+ * counts.
+ */
+function isRealInstanceSetupResponse(method: string, path: string, status: number) {
+  return (
+    isRealInstance &&
+    ((status === 429 && method === "POST" && path === "/api/auth/login") ||
+      (status === 503 && method === "GET" && path.startsWith("/api/tmdb/")))
+  );
+}
+
+function isRealInstanceSetupRefusal(response: Response) {
+  return isRealInstanceSetupResponse(
+    response.request().method(),
+    new URL(response.url()).pathname,
+    response.status(),
+  );
+}
+
+/** The browser's console echo of one of those answers. */
+function isRealInstanceSetupEcho(text: string, message: ConsoleMessage) {
+  const status = /^Failed to load resource: the server responded with a status of (\d+) /.exec(
+    text,
+  )?.[1];
+  if (!status) return false;
+  const path = new URL(message.location().url, "http://localhost").pathname;
+  // The echo does not carry the method; each route above has only one.
+  return (
+    isRealInstanceSetupResponse("POST", path, Number(status)) ||
+    isRealInstanceSetupResponse("GET", path, Number(status))
   );
 }
 
@@ -161,7 +201,10 @@ export function trackBrowserIssues(
       return;
     }
 
-    if (ignoreConsoleRules.some(rule => rule(message.type(), message.text(), message))) {
+    if (
+      isRealInstanceSetupEcho(message.text(), message) ||
+      ignoreConsoleRules.some(rule => rule(message.type(), message.text(), message))
+    ) {
       return;
     }
 
@@ -181,6 +224,7 @@ export function trackBrowserIssues(
     if (
       isAppApiResponse(response) &&
       response.status() >= 400 &&
+      !isRealInstanceSetupRefusal(response) &&
       !ignoreResponseRules.some(rule => rule(response))
     ) {
       responseErrors.push(
