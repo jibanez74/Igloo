@@ -5,11 +5,11 @@ import { loginPageViaApi } from "./e2e-auth";
 import { intEnv, requireRealInstance } from "./e2e-env";
 import {
   clearWatchProgress,
-  closePlayerAndClearProgress,
   expectURLParams,
   expectVideoAdvances,
   fetchTechnicalDetails,
   leavePlayer,
+  pausePlayerAndClearProgress,
   mediaPlayPath,
   playButton,
   realMediaTimeouts,
@@ -148,6 +148,11 @@ test.describe("Direct-play eligibility with real media", () => {
     await loginPageViaApi(page);
   });
 
+  // Every test, failed ones too, so an HLS session cannot outlive its test.
+  test.afterEach(async ({ page }) => {
+    await leavePlayer(page);
+  });
+
   for (const refused of refusedDirectPlayCases) {
     test(refused.title, async ({ page }) => {
       const movieId = refused.movieId();
@@ -166,7 +171,6 @@ test.describe("Direct-play eligibility with real media", () => {
       await playButton(page).click();
       await expectVideoAdvances(page, timeouts.response);
       expect(streamRequests).toEqual([]);
-      await leavePlayer(page);
     });
   }
 
@@ -224,18 +228,17 @@ test.describe("Direct-play eligibility with real media", () => {
     // A working non-direct mode must never have touched the raw stream, and a
     // direct mode must never bounce away from it mid-playback.
     await expectURLParams(page, { mode });
-    await leavePlayer(page);
   });
 
-  // Audit D11 — the browser test the audit could not run: a resume moves
-  // `start`, and the sideloaded subtitle track must still be showing, with its
-  // cues, once playback runs from there. Neither jsdom (stubbed load()/track)
-  // nor the mocked e2e stack (no decodable media, so the direct-play fallback
-  // navigates away) can decide this; only a real browser over real media can.
-  // The player now mounts only once the resume offer is decided (there is no
-  // <video> under the dialog), so the start change no longer reaches a loaded
-  // source; the single-load check keeps audit D10 (a start change reloading
-  // the direct source from byte 0) from coming back if it ever does again.
+  // Audit D11 — the deciding browser test the audit could not run: a resume
+  // navigation changes `start` while the player is mounted (the D10 trigger),
+  // and the sideloaded subtitle track must still be showing, with its cues,
+  // afterwards. Neither jsdom (stubbed load()/track) nor the mocked e2e stack
+  // (no decodable media, so the direct-play fallback navigates away) can
+  // decide this; only a real browser over real media can. The page opens
+  // mid-media on purpose: opened at 0 it plays the pre-roll phase first and
+  // mounts no <video> under the offer, so no start change would reach a
+  // loaded source.
   test("subtitles stay showing across a resume start change in direct play", async ({
     page,
   }) => {
@@ -262,6 +265,7 @@ test.describe("Direct-play eligibility with real media", () => {
     // Seed saved progress so the resume dialog opens: past the eligibility
     // minimum, well short of the completion threshold.
     const resumeTargetSec = Math.min(45, Math.floor(durationSec / 2));
+    const openedAtSec = 5;
     await clearWatchProgress(page, media);
     // The seeded resume point outlives the test unless it is taken back.
     try {
@@ -290,8 +294,10 @@ test.describe("Direct-play eligibility with real media", () => {
           true,
         );
       });
+      // Opened mid-media rather than at 0, the player mounts under the
+      // resume offer, so Resume moves `start` on a loaded direct source.
       await page.goto(
-        `/movies/${movieId}/play?mode=direct&audio_track=0&subtitle_track=0&start=0`,
+        `/movies/${movieId}/play?mode=direct&audio_track=0&subtitle_track=0&start=${openedAtSec}`,
       );
 
       const video = page.locator("video");
@@ -305,7 +311,8 @@ test.describe("Direct-play eligibility with real media", () => {
             : null;
         });
 
-      // The dialog only opens once watch progress resolves with start=0.
+      // The offer opens once watch progress resolves: resume at the seeded
+      // point, or play from the URL's start.
       await page.getByRole("button", { name: "Resume" }).click();
       await expect(page).toHaveURL(new RegExp(`start=${resumeTargetSec}(&|$)`), {
         timeout: timeouts.response,
@@ -337,7 +344,7 @@ test.describe("Direct-play eligibility with real media", () => {
         .poll(subtitleState)
         .toEqual({ mode: "showing", loadedCues: true });
     } finally {
-      await closePlayerAndClearProgress(page, media);
+      await pausePlayerAndClearProgress(page, media);
     }
   });
 
@@ -382,6 +389,5 @@ test.describe("Direct-play eligibility with real media", () => {
 
     await playButton(page).click();
     await expectVideoAdvances(page, timeouts.response);
-    await leavePlayer(page);
   });
 });

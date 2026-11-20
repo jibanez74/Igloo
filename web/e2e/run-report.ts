@@ -20,6 +20,8 @@ function* timedTests(
     const inner = suite.title ? [...path, suite.title] : path;
     for (const spec of suite.specs ?? []) {
       for (const test of spec.tests) {
+        // A test skipped from its body still spent its fixtures' setup.
+        if (test.status === "skipped") continue;
         // Every attempt counts: a retried test cost the run all of them.
         const durationMs = test.results.reduce(
           (total, result) => total + (result.duration ?? 0),

@@ -154,32 +154,49 @@ export async function clearWatchProgress(page: Page, media: E2EMedia) {
  * request from the unloading page, which Playwright does not report, so this
  * cannot wait for it: the server's log shows it land, and the page's side is
  * held in vitest (movie-play-route.test.tsx, "movie play route HLS session").
+ * Real-media describes call it after every test, failed ones included.
  */
 export async function leavePlayer(page: Page) {
+  if (page.isClosed() || !new URL(page.url()).pathname.endsWith("/play")) return;
   await page.goto("about:blank");
 }
 
 /**
- * Closes a player page, then clears its media's watch progress. Leaving the
- * player sends one last progress save, so the delete repeats until a read a
- * moment later still finds nothing saved.
+ * Pauses a player through its controls, then clears its media's watch
+ * progress so that no save can land after the delete. Pausing saves the
+ * position once; a paused player saves nothing on its interval, and its exit
+ * save skips a position already reported (useWatchProgressSaver), so once
+ * the server holds the paused position nothing more is written.
  */
-export async function closePlayerAndClearProgress(page: Page, media: E2EMedia) {
+export async function pausePlayerAndClearProgress(page: Page, media: E2EMedia) {
   const request = page.context().request;
   const path = `${mediaApiPath(media)}/watch-progress`;
-  await page.close();
-  await expect
-    .poll(
-      async () => {
-        const cleared = await request.delete(path, { failOnStatusCode: false });
-        expect(cleared.status(), `clear watch progress for ${path}`).toBe(200);
-        await new Promise(resolve => setTimeout(resolve, 1_000));
-        const progress = await getApiData<{ progress_sec: number | null }>(request, path);
-        return progress.progress_sec;
-      },
-      { message: `watch progress for ${path} stays cleared` },
-    )
-    .toBeNull();
+  const video = page.locator("video");
+
+  if (await video.count()) {
+    const pause = page.getByRole("button", { name: "Pause (Space or K)" });
+    if (await pause.isVisible()) await pause.click();
+    await expect
+      .poll(() => video.evaluate(element => (element as HTMLVideoElement).paused))
+      .toBe(true);
+    const pausedSec = await video.evaluate(
+      element => (element as HTMLVideoElement).currentTime,
+    );
+    await expect
+      .poll(
+        async () => {
+          const saved = await getApiData<{ progress_sec: number | null }>(request, path);
+          return Math.abs((saved.progress_sec ?? -Infinity) - pausedSec);
+        },
+        { message: `the paused position reached ${path}` },
+      )
+      .toBeLessThan(1);
+  }
+
+  const cleared = await request.delete(path, { failOnStatusCode: false });
+  expect(cleared.status(), `clear watch progress for ${path}`).toBe(200);
+  const progress = await getApiData<{ progress_sec: number | null }>(request, path);
+  expect(progress.progress_sec, `watch progress for ${path} after clearing`).toBeNull();
 }
 
 /**

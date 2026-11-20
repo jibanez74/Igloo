@@ -130,11 +130,15 @@ people use:
 5. **Run them**, from `web/`:
 
    ```bash
-   E2E_BASE_URL=http://127.0.0.1:18210 bunx playwright test \
-     e2e/account-settings.spec.ts:314 e2e/device-lifecycle.spec.ts:236 \
-     e2e/login.spec.ts:132 e2e/playback-settings.spec.ts:518 \
-     e2e/direct-play-media.spec.ts e2e/hls-transcode.spec.ts e2e/watch-room.spec.ts
+   REAL='real media|HLS transcoding playback|Watch room realtime|profile PIN'
+   REAL+="|paired device's token|login failure without|regular user's direct write"
+   E2E_BASE_URL=http://127.0.0.1:18210 bunx playwright test --grep "$REAL" \
+     e2e/account-settings.spec.ts e2e/device-lifecycle.spec.ts e2e/login.spec.ts \
+     e2e/playback-settings.spec.ts e2e/direct-play-media.spec.ts \
+     e2e/hls-transcode.spec.ts e2e/watch-room.spec.ts
    ```
+
+   `--list` should show 16 tests; the titles pick them out of their files.
 
 The server allows 10 sign-ins per 5 minutes from one IP, and one run signs in
 about two dozen times. The helpers in `e2e-auth.ts` wait a refused sign-in

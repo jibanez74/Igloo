@@ -1,5 +1,5 @@
 import { expect, test, type BrowserIssues } from "./e2e-test";
-import type { Browser } from "@playwright/test";
+import type { Browser, BrowserContext } from "@playwright/test";
 
 import {
   intEnv,
@@ -53,7 +53,8 @@ test.use({ launchOptions: { args: ["--autoplay-policy=no-user-gesture-required"]
 
 /**
  * An owner (the configured admin) and invitees, each in their own browser.
- * Every page they open is watched for browser issues.
+ * Every page they open is watched for browser issues. A setup that fails
+ * partway takes back what it had made before the error goes on.
  */
 async function openRoomParty(
   browser: Browser,
@@ -62,21 +63,10 @@ async function openRoomParty(
 ) {
   const ownerContext = await browser.newContext({ baseURL: env.baseURL });
   ownerContext.on("page", page => browserIssues.track(page));
-  await loginViaApi(ownerContext.request, env);
   const guests: E2EGuest[] = [];
-  for (let i = 0; i < guestCount; i += 1) {
-    guests.push(await createGuest(ownerContext.request, `Watch Room Guest ${i + 1}`));
-  }
-  const guestContexts = await Promise.all(
-    guests.map(async guest => {
-      const context = await browser.newContext({ baseURL: env.baseURL });
-      context.on("page", page => browserIssues.track(page));
-      await loginViaApi(context.request, guest);
-      return context;
-    }),
-  );
+  const guestContexts: BrowserContext[] = [];
 
-  return {
+  const party = {
     ownerContext,
     guests,
     guestContexts,
@@ -94,6 +84,25 @@ async function openRoomParty(
       await ownerContext.close();
     },
   };
+
+  try {
+    await loginViaApi(ownerContext.request, env);
+    for (let i = 0; i < guestCount; i += 1) {
+      guests.push(await createGuest(ownerContext.request, `Watch Room Guest ${i + 1}`));
+    }
+    for (const guest of guests) {
+      const context = await browser.newContext({ baseURL: env.baseURL });
+      context.on("page", page => browserIssues.track(page));
+      guestContexts.push(context);
+      await loginViaApi(context.request, guest);
+    }
+  } catch (error) {
+    // Best effort: the setup's own error is the one worth reporting.
+    await party.close(null).catch(() => undefined);
+    throw error;
+  }
+
+  return party;
 }
 
 test.describe("Watch room realtime playback", () => {

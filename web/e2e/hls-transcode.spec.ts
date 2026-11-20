@@ -312,7 +312,6 @@ async function runHlsCase(page: Page, hlsCase: HlsCase) {
 
   await expectVideoAdvances(page, timeouts.response);
   await expect(page.getByText(/playback failed|stream error/i)).toHaveCount(0);
-  await leavePlayer(page);
 }
 
 test.describe("HLS transcoding playback", () => {
@@ -321,6 +320,11 @@ test.describe("HLS transcoding playback", () => {
 
   test.beforeEach(async ({ page }) => {
     await loginPageViaApi(page);
+  });
+
+  // Every test, failed ones too, so an HLS session cannot outlive its test.
+  test.afterEach(async ({ page }) => {
+    await leavePlayer(page);
   });
 
   const movieCasesReason =

@@ -66,6 +66,19 @@ describe("e2e run summary", () => {
     );
   });
 
+  it("leaves out a test skipped from its body, whatever its setup took", () => {
+    const slowest = slowestTests(
+      report(
+        { status: "skipped", durations: [9_000] },
+        { status: "expected", durations: [1_000] },
+      ),
+    );
+
+    expect(slowest).toEqual([
+      { title: "movies.spec.ts › test 2", durationMs: 1_000 },
+    ]);
+  });
+
   it("calls a run clean only when nothing failed or retried", () => {
     const clean = runSummaryMarkdown(
       report(

@@ -12,11 +12,19 @@ import { runSummaryMarkdown } from "./run-report";
 import type { Report } from "./visual/near-misses";
 
 const path = process.argv[2] ?? "test-results/e2e-results.json";
-if (existsSync(path)) {
-  const report = JSON.parse(readFileSync(path, "utf8")) as Report;
-  process.stdout.write(runSummaryMarkdown(report));
-} else {
+if (!existsSync(path)) {
   process.stdout.write(
-    `## E2E run\n\nNo report at \`${path}\`: the run did not finish.\n`,
+    `## E2E run\n\nNo report at \`${path}\`: the e2e run did not start or did not finish.\n`,
   );
+} else {
+  let report: Report | null = null;
+  try {
+    report = JSON.parse(readFileSync(path, "utf8")) as Report;
+  } catch (error) {
+    // A run killed while writing leaves a partial file.
+    process.stdout.write(
+      `## E2E run\n\nThe report at \`${path}\` is unreadable: ${String(error)}\n`,
+    );
+  }
+  if (report) process.stdout.write(runSummaryMarkdown(report));
 }
