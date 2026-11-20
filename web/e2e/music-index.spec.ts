@@ -127,6 +127,8 @@ async function mockMusicIndexApi(
   { preloadTargets = false }: MockMusicIndexOptions = {},
 ) {
   const playlists = [...mockPlaylists];
+  const playlistTracks = new Map<number, Set<number>>();
+  const addedTracks: { playlistId: number; trackIds: number[] }[] = [];
   const musicianRequests: URL[] = [];
   const movieRequests: URL[] = [];
   const inTheatersRequests: URL[] = [];
@@ -207,6 +209,23 @@ async function mockMusicIndexApi(
 
       if (url.pathname === "/api/music/playlists" && method === "GET") {
         await fulfillJSON(route, apiResponse({ playlists }));
+        return true;
+      }
+
+      const addTracks = url.pathname.match(/^\/api\/music\/playlists\/(\d+)\/tracks$/);
+      if (addTracks && method === "POST") {
+        const playlistId = Number(addTracks[1]);
+        const { track_ids } = route.request().postDataJSON() as { track_ids: number[] };
+        addedTracks.push({ playlistId, trackIds: track_ids });
+        // Like the server, a track already in the playlist is skipped.
+        const held = playlistTracks.get(playlistId) ?? new Set<number>();
+        const fresh = track_ids.filter(id => !held.has(id));
+        fresh.forEach(id => held.add(id));
+        playlistTracks.set(playlistId, held);
+        await fulfillJSON(route, apiResponse({
+          added: fresh.length,
+          skipped: track_ids.length - fresh.length,
+        }));
         return true;
       }
 
@@ -293,6 +312,7 @@ async function mockMusicIndexApi(
     movieRequests,
     inTheatersRequests,
     createdPlaylists,
+    addedTracks,
   };
 }
 
@@ -349,18 +369,24 @@ test("musicians tab shows an inline error with a working retry", async ({ page }
 test("Home sidebar links do not preload in-theaters data from music", async ({ page }) => {
   const { movieRequests, inTheatersRequests } =
     await mockMusicIndexApi(page, { preloadTargets: true });
+  // The router preloads a link only after the pointer rests on it for its
+  // preload delay; the clock holds each hover well past it.
+  await page.clock.install();
   await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto("/music?tab=musicians");
   await expect(page.getByRole("link", { name: "Aurora Pines, 2 albums, 18 tracks" })).toBeVisible();
 
   const mainNavigation = page.getByRole("navigation", { name: "Main navigation" });
   await page.getByRole("link", { name: /Igloo.*Home/ }).hover();
+  await page.clock.runFor(500);
   await mainNavigation.getByRole("link", { name: "Home", exact: true }).hover();
+  await page.clock.runFor(500);
 
-  // Positive control: the other links preload on intent, so hovering Movies
-  // must reach its loader. Only then does an empty in-theaters log prove the
-  // Home links opted out rather than that preloading never ran.
+  // Positive control: the other links preload on intent, so resting on Movies
+  // the same way must reach its loader. Only then does an empty in-theaters
+  // log prove the Home links opted out rather than that preloading never ran.
   await mainNavigation.getByRole("link", { name: "Movies", exact: true }).hover();
+  await page.clock.runFor(500);
   await expectApiRequest(movieRequests, "/api/movies/stats", {});
   await expectApiRequest(movieRequests, "/api/movies/library", { page: "1" });
 
@@ -432,6 +458,39 @@ test("tracks tab opens a track's action menu with playlist, album and artist tar
   await page.keyboard.press("Escape");
   await expect(goToAlbum).toBeHidden();
   await expect(moreActions).toBeFocused();
+});
+
+test("a track's Add to Playlist adds it to an editable playlist, and says when it is already there", async ({
+  page,
+}) => {
+  const { addedTracks } = await mockMusicIndexApi(page);
+  await page.setViewportSize(VIEWPORTS.desktop);
+  await page.goto("/music?tab=tracks");
+
+  const moreActions = page.getByRole("button", { name: "More actions for Alabaster" });
+  const dialog = page.getByRole("dialog", { name: "Add to Playlist" });
+
+  const addToMorningRotation = async () => {
+    await moreActions.click();
+    await page.getByRole("menuitem", { name: "Add to Playlist" }).click();
+    await expect(dialog).toBeVisible();
+    // Only playlists the viewer may edit are offered.
+    await expect(dialog.getByRole("button", { name: /^Shared Discoveries/ })).toHaveCount(0);
+    await dialog.getByRole("button", { name: "Morning Rotation 3 tracks" }).click();
+    await dialog.getByRole("button", { name: "Add to 1 Playlist" }).click();
+  };
+
+  await addToMorningRotation();
+  await expect.poll(() => addedTracks).toEqual([{ playlistId: 30, trackIds: [1] }]);
+  await expect(page.getByText("Track added to 1 playlist")).toBeVisible();
+  await expect(dialog).toBeHidden();
+
+  // The same track again: the server skips it, and the dialog stays open on
+  // the choice rather than claiming it was added.
+  await addToMorningRotation();
+  await expect.poll(() => addedTracks).toHaveLength(2);
+  await expect(page.getByText("Track already in selected playlists")).toBeVisible();
+  await expect(dialog).toBeVisible();
 });
 
 test("playlists tab creates a playlist from the toolbar dialog", async ({ page }) => {
