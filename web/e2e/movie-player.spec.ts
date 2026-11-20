@@ -80,9 +80,9 @@ for (const { label, mode, expectedRequestPath } of [
     const technicalDetails = page.waitForResponse(`**${movieApiPath}/technical-details`);
     const mediaRequests = await openMoviePlayer(page, `mode=${mode}&audio_track=0&start=0`);
 
-    // With the technical details in, only the settings can still hold
-    // playback back.
-    await technicalDetails;
+    // With the technical details in (body and all), only the settings can
+    // still hold playback back.
+    await (await technicalDetails).finished();
     await expect.poll(playbackSettings.requested).toBe(true);
     await expectPreparingPlayback(page, mediaRequests);
 
