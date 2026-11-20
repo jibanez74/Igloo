@@ -5,14 +5,20 @@
 // src/test/e2e/near-misses.test.ts.
 
 type Annotation = { type: string; description?: string };
-type Result = { status: string; retry: number; annotations?: Annotation[] };
+type Result = {
+  status: string;
+  retry: number;
+  // Milliseconds; the functional run's summary (e2e/run-report.ts) reads it.
+  duration?: number;
+  annotations?: Annotation[];
+};
 type Test = {
   status: string;
   annotations?: Annotation[];
   results: Result[];
 };
 type Spec = { title: string; file: string; tests: Test[] };
-type Suite = { title: string; specs?: Spec[]; suites?: Suite[] };
+export type Suite = { title: string; specs?: Spec[]; suites?: Suite[] };
 export type Report = { suites: Suite[]; errors?: { message?: string }[] };
 
 const RETRIED_ANNOTATION = "exact comparison retried";
