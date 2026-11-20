@@ -22,6 +22,7 @@ import {
 } from "./e2e-api";
 import { mockApi } from "./e2e-mock-api";
 import { simpleAlbum, simpleMusician, trackListItem } from "./fixtures/music";
+import { seasonEpisodes, showDetails } from "../src/test/helpers/show-details";
 
 const movieResult = {
   id: 7,
@@ -87,6 +88,19 @@ const allResults = apiResponse<SearchAllResponseType>({
   },
 });
 
+const noResults = apiResponse<SearchAllResponseType>({
+  query: "Nowhere",
+  movies: { results: [], total: 0 },
+  shows: { results: [], total: 0 },
+  albums: { results: [], total: 0 },
+  musicians: { results: [], total: 0 },
+  tracks: { results: [], total: 0 },
+});
+
+// The show result's own page, where the top-bar search test starts and ends.
+const casinoNights = showDetails();
+casinoNights.show = { ...casinoNights.show, id: showResult.id, name: showResult.name };
+
 /** One page of results, as every per-kind search endpoint returns them. */
 function searchPage<T>(results: T[]) {
   return {
@@ -115,6 +129,24 @@ async function mockSearchApi(page: Page) {
     handle: async ({ route, url, method }) => {
       if (method !== "GET") {
         return false;
+      }
+
+      if (url.pathname === "/api/search" && url.searchParams.get("q") !== "Casino") {
+        await fulfillJSON(route, noResults);
+        return true;
+      }
+
+      if (url.pathname === `/api/shows/details/${showResult.id}`) {
+        await fulfillJSON(route, apiResponse(casinoNights));
+        return true;
+      }
+
+      const episodes = url.pathname.match(
+        new RegExp(`^/api/shows/${showResult.id}/seasons/(\\d+)/episodes$`),
+      );
+      if (episodes) {
+        await fulfillJSON(route, apiResponse(seasonEpisodes(Number(episodes[1]))));
+        return true;
       }
 
       const results = resultsByPath[url.pathname];
@@ -233,4 +265,45 @@ test("search supports keyboard submission, tabs, and responsive layout", async (
     `/api/search/musicians?q=Casino&page=1&per_page=${SEARCH_PER_PAGE}`,
     `/api/search/tracks?q=Casino&page=1&per_page=${SEARCH_PER_PAGE}`,
   ]);
+});
+
+test("the top bar searches from any page, says when nothing matches, and opens a result", async ({
+  page,
+}) => {
+  await mockSearchApi(page);
+
+  await page.setViewportSize(VIEWPORTS.desktop);
+  await page.goto(`/tv-shows/${showResult.id}`);
+  await expect(page.getByRole("heading", { level: 1, name: /Casino Nights/ })).toBeVisible();
+
+  const searchInput = page
+    .getByRole("search", { name: "Search library" })
+    .getByRole("searchbox", { name: "Search" });
+
+  await searchInput.fill("  Nowhere ");
+  await searchInput.press("Enter");
+
+  // The query is trimmed; the All tab and page one are the URL defaults.
+  await expect(page).toHaveURL("/search?q=Nowhere");
+  await expect(
+    page.getByText("No results found for ‘Nowhere’. Try a different search term."),
+  ).toBeVisible();
+  await expect(searchInput).toHaveValue("Nowhere");
+
+  await searchInput.fill("Casino");
+  await searchInput.press("Enter");
+  await expect(page).toHaveURL("/search?q=Casino");
+
+  // Going back restores the previous query into the box.
+  await page.goBack();
+  await expect(page).toHaveURL(/q=Nowhere/);
+  await expect(searchInput).toHaveValue("Nowhere");
+  await page.goForward();
+  await expect(searchInput).toHaveValue("Casino");
+
+  await page.getByRole("link", { name: "Casino Nights 2001", exact: true }).click();
+  await expect(page).toHaveURL(`/tv-shows/${showResult.id}`);
+  await expect(page.getByRole("heading", { level: 1, name: /Casino Nights/ })).toBeVisible();
+  // A page without a query leaves the box empty.
+  await expect(searchInput).toHaveValue("");
 });

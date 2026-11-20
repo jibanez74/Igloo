@@ -17,6 +17,7 @@ import type {
   ContinueWatchingItemType,
   LatestMovieType,
   LatestShowType,
+  MovieDetailsType,
   SimpleAlbumType,
   TheaterMovieType,
   WatchRoomType,
@@ -93,6 +94,24 @@ function theaterMovie(
     video: false,
   };
 }
+
+const northbound = theaterMovie(301, "Northbound", "/northbound.jpg", 7.6, "2026-06-01");
+
+const northboundDetails: MovieDetailsType = {
+  ...northbound,
+  runtime: 118,
+  status: "Released",
+  tagline: "Keep heading north.",
+  budget: 0,
+  revenue: 0,
+  homepage: "",
+  imdb_id: "",
+  production_companies: [],
+  genres: [{ id: 18, name: "Drama" }],
+  credits: { cast: [], crew: [] },
+  videos: { results: [] },
+  release_dates: { results: [] },
+};
 
 async function mockHomeApi(page: Page) {
   await mockApi(page, {
@@ -226,11 +245,17 @@ async function mockHomeApi(page: Page) {
       if (pathname === "/api/tmdb/movies/in-theaters") {
         await fulfillJSON(route, apiResponse({
           movies: [
-            theaterMovie(301, "Northbound", "/northbound.jpg", 7.6, "2026-06-01"),
+            northbound,
             theaterMovie(302, "Glass Harbor", "/glass-harbor.jpg", 6.2, "2026-05-16"),
             theaterMovie(303, "Red Echo", "", 4.8, "2026-04-08"),
           ],
         }));
+        return true;
+      }
+
+      // The in-theaters details page reads TMDB, not the library.
+      if (pathname === `/api/tmdb/movies/${northbound.id}`) {
+        await fulfillJSON(route, apiResponse({ movie: northboundDetails }));
         return true;
       }
 
@@ -379,4 +404,25 @@ test("continue watching reveals the same resume action on movies and episodes", 
         "/api/shows/details/301",
       ]),
     );
+});
+
+// A theater title is not in the library, so its card leads to the TMDB-backed
+// details page rather than to a library movie.
+test("a Now Playing card opens that movie's TMDB details", async ({ page }) => {
+  await mockHomeApi(page);
+
+  await page.setViewportSize(VIEWPORTS.desktop);
+  await page.goto("/");
+
+  await page
+    .getByRole("region", { name: "Now Playing in Theaters" })
+    .getByRole("link", { name: "Northbound, 2026, TMDB user score 7.6 out of 10" })
+    .click();
+
+  await expect(page).toHaveURL(`/movies/in-theaters/${northbound.id}`);
+  await expect(page.getByRole("heading", { level: 1, name: "Northbound" })).toBeVisible();
+  await expect(page).toHaveTitle("Northbound (2026) - Igloo");
+  await expect(page.getByText(northboundDetails.tagline)).toBeVisible();
+  // Nothing to play: the title is not in the library.
+  await expect(page.getByRole("link", { name: "Play", exact: true })).toHaveCount(0);
 });
