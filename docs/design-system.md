@@ -1776,7 +1776,10 @@ require the full playback test pass.
   or leave). While the room's socket reconnects, the header's sync chip takes
   the destructive tint and says changes won't reach the room, and presence
   (the "N connected now" chip and each member's Connected/Away) is hidden,
-  since it is stale. Its "Back home" on an unavailable room is the status
+  since it is stale. A socket still not open 10 s after it was created
+  (`WATCH_ROOM_CONNECT_TIMEOUT_MS`) is closed and retried like a dropped
+  one, so a handshake that hangs reads as reconnecting instead of connecting
+  forever. Its "Back home" on an unavailable room is the status
   screens' `xl` call to action. In a room the **player card** (video plus
   transport row), not the page, is what goes fullscreen or into the expanded
   view (where the browser lacks element fullscreen, never the video's own
@@ -1786,7 +1789,8 @@ require the full playback test pass.
   the header is `inert` meanwhile so focus cannot reach it under the card;
   while the socket reconnects, the card repeats the header's warning as a
   destructive status line. The room's transport row stays in flow (no idle
-  hiding).
+  hiding) and is a `group` named "Playback controls", as the movie player's
+  is.
   **One time readout per width**: from `sm` up it sits in the transport row
   and the progress bar's own labels are hidden; below `sm` the row cannot hold
   it beside seven controls, so the bar shows the labels and the row hides its

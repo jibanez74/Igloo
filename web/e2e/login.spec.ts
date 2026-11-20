@@ -2,9 +2,9 @@ import { expect, test, type BrowserIssueOptions } from "./e2e-test";
 import type { BrowserContext, Page, Response } from "@playwright/test";
 
 import { readE2EEnv, requireRealInstance } from "./e2e-env";
-import { isApiResourceEcho } from "./e2e-browser-issues";
+import { isApiResourceEcho, isSessionEndedResponse } from "./e2e-browser-issues";
 import { readJSON } from "./e2e-api";
-import { loginPageViaApi } from "./e2e-auth";
+import { loginPageViaApi, submitLogin } from "./e2e-auth";
 import { auditResponsiveControls } from "./e2e-layout";
 
 function isExpectedLoggedOutAuthResponse(response: Response) {
@@ -16,14 +16,6 @@ function isExpectedInvalidLoginResponse(response: Response) {
     response.status() === 401 &&
     response.url().includes("/api/auth/login") &&
     response.request().method() === "POST"
-  );
-}
-
-// Once the session ends, whatever the open page asks for is refused.
-function isSessionEndedResponse(response: Response) {
-  return (
-    response.status() === 401 &&
-    new URL(response.url()).pathname.startsWith("/api/")
   );
 }
 
@@ -84,25 +76,6 @@ async function expectLoginControls(page: Page) {
     page.getByRole("button", { name: "Show password" }),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
-}
-
-async function submitLogin(page: Page, email: string, password: string) {
-  // After a sign-out the address changes a moment before the page does:
-  // until the sign-in form is up, the account page's own email fields still
-  // answer to "Email".
-  await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password", { exact: true }).fill(password);
-
-  const loginResponsePromise = page.waitForResponse(
-    response =>
-      response.url().includes("/api/auth/login") &&
-      response.request().method() === "POST",
-  );
-
-  await page.getByRole("button", { name: "Sign in" }).click();
-
-  return loginResponsePromise;
 }
 
 test.describe("Login screen", () => {

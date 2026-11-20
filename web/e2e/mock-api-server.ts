@@ -23,6 +23,11 @@ import {
   SCAN_STATUS_PATH,
 } from "./e2e-api";
 import { scanStatuses } from "../src/test/helpers/scan-status";
+import {
+  episode as showEpisode,
+  seasonEpisodes,
+  showDetails,
+} from "../src/test/helpers/show-details";
 import { intEnv, readE2EEnv } from "./e2e-env";
 import {
   libraryMovie,
@@ -1161,6 +1166,34 @@ function handleShowsRoutes(
     return true;
   }
 
+  // The show page of the mocked episodes. Its first season lists the two
+  // episodes the player knows (S1 E3 and E4); other seasons come from the
+  // shared fixture.
+  if (url.pathname === `/api/shows/details/${MOCK_SHOW_ID}` && method === "GET") {
+    sendSuccess(response, showDetails());
+    return true;
+  }
+  const seasonMatch = url.pathname.match(
+    new RegExp(`^/api/shows/${MOCK_SHOW_ID}/seasons/(\\d+)/episodes$`),
+  );
+  if (seasonMatch && method === "GET") {
+    const seasonNumber = Number(seasonMatch[1]);
+    const season = seasonEpisodes(seasonNumber);
+    sendSuccess(
+      response,
+      seasonNumber === 1
+        ? {
+            ...season,
+            episodes: [
+              showEpisode(1, 3, { name: "The Thaw" }),
+              showEpisode(1, 4, { name: "The Long Night" }),
+            ],
+          }
+        : season,
+    );
+    return true;
+  }
+
   const episodeMatch = url.pathname.match(
     /^\/api\/shows\/episodes\/(\d+)(\/technical-details|\/watch-progress)?$/,
   );
@@ -1566,6 +1599,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
 
   if (
     url.pathname.startsWith("/api/tmdb/images/") ||
+    url.pathname.startsWith("/api/youtube/thumbnails/") ||
     url.pathname.startsWith("/api/static/")
   ) {
     sendPlaceholderImage(response);

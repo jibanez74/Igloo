@@ -93,6 +93,25 @@ test("HLS mode requests the episode manifest with the shared query contract", as
   expect(mediaRequests.filter(url => new URL(url).pathname === streamPath)).toEqual([]);
 });
 
+test("an episode row on the show page plays that episode", async ({ page }) => {
+  const mediaRequests = await holdMediaRequests(page, episode);
+  await page.goto(`/tv-shows/${MOCK_SHOW_ID}`);
+
+  // The hero offers the same episode; this is the row's own link.
+  await page
+    .getByRole("list", { name: /^Season 1 episodes/ })
+    .getByRole("link", { name: /^Play S1 ?E3 The Thaw$/ })
+    .click();
+
+  await expect(page).toHaveURL(url => url.pathname === playPath);
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Frost Harbor · S1 E3 · The Thaw" }),
+  ).toBeVisible();
+  await expect(playButton(page)).toBeVisible();
+  await expect.poll(() => mediaRequests.length).toBeGreaterThan(0);
+  expect(new URL(mediaRequests[0]).pathname).toBe(streamPath);
+});
+
 // Playback never really runs here, so the end of the episode is the media
 // element's own `ended` event, exactly the signal the player listens for.
 async function endEpisode(page: Page) {

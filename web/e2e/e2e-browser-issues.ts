@@ -73,6 +73,14 @@ export const signedOutIssueRules: TrackBrowserIssuesOptions = {
     new URL(message.location().url, "http://localhost").pathname === "/api/auth/user",
 };
 
+/** Once the session ends, whatever the open page asks for is refused. */
+export function isSessionEndedResponse(response: Response) {
+  return (
+    response.status() === 401 &&
+    new URL(response.url()).pathname.startsWith("/api/")
+  );
+}
+
 /** A refusal a test asks the server (or its stub) for. */
 export type ExpectedRefusal = { method: string; path: string; status: number };
 

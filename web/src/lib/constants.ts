@@ -796,6 +796,9 @@ export const WATCH_ROOM_HEARTBEAT_INTERVAL_MS = 25_000;
 // that opens and drops at once keeps backing off instead of retrying every
 // second.
 export const WATCH_ROOM_STABLE_CONNECTION_MS = 10_000;
+// A socket still not open this long after it was created is closed and
+// tried again: a hung handshake never ends on its own.
+export const WATCH_ROOM_CONNECT_TIMEOUT_MS = 10_000;
 export const WATCH_ROOM_SYNC_ANNOUNCE_DEBOUNCE_MS = 1200;
 // A run of seeks (scrubbing, held arrow keys) goes to the room as one, this
 // long after the last; the player itself moves at once. IglooTV coalesces
