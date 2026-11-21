@@ -112,6 +112,11 @@ jobs:
       - name: Test e2e (mocked API, production build)
         run: cd web && E2E_PRODUCTION=1 bun run test:e2e
 
+      # Failed and slowest tests, so a creeping timeout shows before it fails.
+      - name: Summarise the e2e run
+        if: always()
+        run: cd web && bun e2e/run-summary.ts >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

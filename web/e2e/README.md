@@ -86,8 +86,65 @@ browserIssues.track(otherPage, { /* its own rules */ });
 
 Never ignore something just to make a test pass. If it is a real bug, fix it
 in the app. If it is expected, write down why. A spec can opt out entirely
-with `test.use({ browserIssueOptions: { skip: "reason" } })`. Only the
-real-media specs do, and the reason shows as an annotation.
+with `test.use({ browserIssueOptions: { skip: "reason" } })`, and the reason
+shows as an annotation, but no spec does: the real-media specs are tracked
+too.
+
+## Running against a real instance
+
+The real-instance tests (`requireRealInstance`) need real media, ffmpeg and a
+server whose data does not matter. Run a throwaway server rather than one
+people use:
+
+1. **Build and start it** from a scratch directory, not the repo root: the
+   server reads `.env` from its working directory. A release binary
+   (`make build`) embeds the web bundle, so the watch-room socket stays
+   same-origin. Give it its own `PORT`, `DB_PATH`, `STATIC_DIR`, `LOGS_DIR`
+   and `TRANSCODE_DIR`, `SESSION_COOKIE_SECURE=false`, and
+   `DEFAULT_ADMIN_EMAIL` / `DEFAULT_ADMIN_PASSWORD` equal to the
+   `E2E_ADMIN_*` values (the defaults are `admin@example.com` /
+   `AdminPassword`). Leave `TMDB_API_KEY` empty, `ENABLE_WATCHER` and
+   `DOWNLOAD_IMAGES` off.
+2. **Give it a small library.** `MOVIES_DIR` can be a directory of symlinks to
+   files (the scanner follows a symlinked file, not a symlinked directory).
+   The movie IDs each spec needs are listed at the top of
+   `direct-play-media.spec.ts`, `hls-transcode.spec.ts` and
+   `watch-room.spec.ts`: an MKV with H.264 and AAC, a 10-bit H.264 MP4, an
+   MP4 with two or more audio streams (AAC first), an MP4 whose first
+   subtitle is text with real cues (some files carry an empty one), a plain
+   H.264 + AAC MP4, a source of 2160p or more, a second movie for another
+   profile, and an episode at least 720p tall (the HLS case transcodes it to
+   720p). A 10-bit H.264 MP4 is rare in a library; make one
+   with Igloo's ffmpeg (`-c:v libx264 -profile:v high10 -pix_fmt
+   yuv420p10le -c:a aac`).
+3. **Pick the IDs** once the scan is done (`GET /api/settings/scan`) from
+   `GET /api/movies/library` and each movie's `technical-details`, and export
+   them as `E2E_DIRECT_*`, `E2E_HLS_*`, `E2E_EPISODE_ID` and
+   `E2E_WATCH_ROOM_*`. The watch-room direct movie must pass the server's
+   direct checks (`watch_room_handler.go`): an MP4 with 8-bit H.264 and AAC
+   first.
+4. **Mind the transcoder.** The 4K case runs `2160p_16mbps` by default, which
+   only a hardware encoder offers. On a CPU-only server, whose largest
+   profile is 1080p, set `E2E_HLS_4K_PROFILE=1080p_8mbps` (the source must
+   still be 2160p or more).
+5. **Run them**, from `web/`:
+
+   ```bash
+   REAL='real media|HLS transcoding playback|Watch room realtime|profile PIN'
+   REAL+="|paired device's token|login failure without|regular user's direct write"
+   E2E_BASE_URL=http://127.0.0.1:18210 bunx playwright test --grep "$REAL" \
+     e2e/account-settings.spec.ts e2e/device-lifecycle.spec.ts e2e/login.spec.ts \
+     e2e/playback-settings.spec.ts e2e/direct-play-media.spec.ts \
+     e2e/hls-transcode.spec.ts e2e/watch-room.spec.ts
+   ```
+
+   `--list` should show 16 tests; the titles pick them out of their files.
+
+The server allows 10 sign-ins per 5 minutes from one IP, and one run signs in
+about two dozen times. The helpers in `e2e-auth.ts` wait a refused sign-in
+out and try again, stretching the test's timeout, so a whole run takes about
+ten minutes longer than its tests do; the limit itself is never loosened.
+Bundled Chromium decodes H.264 and AAC, so no other browser is needed.
 
 ## Writing a spec
 
@@ -95,7 +152,9 @@ real-media specs do, and the reason shows as an annotation.
   Reach for a CSS locator only when the element has no name, and say why.
 - Wait for a state, never for time: web-first assertions, `expect.poll`, or a
   route held with `gateRoute`. `waitForTimeout` is not used. When a test needs
-  time to pass, install `page.clock` and run it forward.
+  time to pass, install `page.clock` and run it forward. The only wait on
+  the wall clock is against a real server's own sign-in window
+  (`e2e-auth.ts`).
 - Register `waitForResponse` and request listeners before the action that
   triggers them.
 - Use `networkidle` only where "nothing else loads" is what the test checks,

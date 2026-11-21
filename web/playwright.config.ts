@@ -20,7 +20,14 @@ export default defineConfig({
   forbidOnly: Boolean(process.env.CI),
   fullyParallel: false,
   workers: 1,
-  reporter: [["list"], ["html", { open: "never" }]],
+  // The JSON report feeds the summary CI writes after the run
+  // (e2e/run-summary.ts). test-results/ is emptied when a run starts and the
+  // report is written when it ends.
+  reporter: [
+    ["list"],
+    ["html", { open: "never" }],
+    ["json", { outputFile: "test-results/e2e-results.json" }],
+  ],
   use: {
     baseURL: process.env.E2E_BASE_URL ?? defaultBaseURL,
     trace: "retain-on-failure",

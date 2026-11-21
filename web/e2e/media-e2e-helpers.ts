@@ -146,6 +146,22 @@ export async function clearWatchProgress(page: Page, media: E2EMedia) {
 }
 
 /**
+ * Leaves a player the way closing its tab would. An HLS player stops its
+ * transcode session on `pagehide`, but a page Playwright closes never gets
+ * one, so the session would hold its transcode permit until the server's
+ * idle timeout reaps it minutes later, while the next test waits for a
+ * permit. Navigating away fires `pagehide`. The stop leaves as a keepalive
+ * request from the unloading page, which Playwright does not report, so this
+ * cannot wait for it: the server's log shows it land, and the page's side is
+ * held in vitest (movie-play-route.test.tsx, "movie play route HLS session").
+ * Real-media describes call it after every test, failed ones included.
+ */
+export async function leavePlayer(page: Page) {
+  if (page.isClosed() || !new URL(page.url()).pathname.endsWith("/play")) return;
+  await page.goto("about:blank");
+}
+
+/**
  * Budgets for the opt-in real-media suites, which wait on ffmpeg and real
  * decoding. `test` is applied per describe so the suites keep it whatever
  * the config default is; `response` bounds each manifest, segment and

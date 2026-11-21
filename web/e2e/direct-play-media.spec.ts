@@ -1,13 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { expect, test } from "./e2e-test";
 import type { Page } from "@playwright/test";
-import { loginPageViaApi } from "./e2e-auth";
+import { loginPageViaApi, loginViaApi } from "./e2e-auth";
+import { createUser, deleteUser } from "./e2e-users";
 import { intEnv, requireRealInstance } from "./e2e-env";
 import {
   clearWatchProgress,
   expectURLParams,
   expectVideoAdvances,
   fetchTechnicalDetails,
+  leavePlayer,
   mediaPlayPath,
   playButton,
   realMediaTimeouts,
@@ -26,9 +28,11 @@ import {
 //                                  dispositions decide direct play
 //   E2E_DIRECT_MP4_MOVIE_ID        optional happy-path control: plain
 //                                  8-bit H.264 + AAC MP4
-//   E2E_DIRECT_SUBTITLE_MOVIE_ID   optional: direct-eligible MP4 with an
-//                                  embedded text subtitle stream at least
-//                                  90 seconds long (audit D11)
+//   E2E_DIRECT_SUBTITLE_MOVIE_ID   optional: direct-eligible MP4 at least
+//                                  90 seconds long whose first subtitle
+//                                  stream is text with real cues (some
+//                                  files carry an empty placeholder track)
+//                                  (audit D11)
 //   E2E_EPISODE_ID                 optional: any scanned TV episode; plays
 //                                  it through the episode routes, in
 //                                  whichever mode its file allows
@@ -136,18 +140,17 @@ const refusedDirectPlayCases = [
   },
 ];
 
-// Real media only: this suite's browser noise (media aborts, codec warnings)
-// has not been triaged against a real instance yet, so it is not tracked.
-test.use({
-  browserIssueOptions: { skip: "real-media suite, browser noise not triaged yet" },
-});
-
 test.describe("Direct-play eligibility with real media", () => {
   requireRealInstance("direct-play eligibility needs real media files");
   test.describe.configure({ timeout: timeouts.test });
 
   test.beforeEach(async ({ page }) => {
     await loginPageViaApi(page);
+  });
+
+  // Every test, failed ones too, so an HLS session cannot outlive its test.
+  test.afterEach(async ({ page }) => {
+    await leavePlayer(page);
   });
 
   for (const refused of refusedDirectPlayCases) {
@@ -229,12 +232,16 @@ test.describe("Direct-play eligibility with real media", () => {
 
   // Audit D11 — the deciding browser test the audit could not run: a resume
   // navigation changes `start` while the player is mounted (the D10 trigger),
-  // and the sideloaded subtitle track must still be showing afterwards.
-  // Neither jsdom (stubbed load()/track) nor the mocked e2e stack (no
-  // decodable media, so the direct-play fallback navigates away) can decide
-  // this; only a real browser over real media can.
+  // and the sideloaded subtitle track must still be showing, with its cues,
+  // afterwards. Neither jsdom (stubbed load()/track) nor the mocked e2e stack
+  // (no decodable media, so the direct-play fallback navigates away) can
+  // decide this; only a real browser over real media can. The page opens
+  // mid-media on purpose: opened at 0 it plays the pre-roll phase first and
+  // mounts no <video> under the offer, so no start change would reach a
+  // loaded source.
   test("subtitles stay showing across a resume start change in direct play", async ({
     page,
+    request,
   }) => {
     test.skip(
       !directEnv.subtitleMovieId,
@@ -259,52 +266,116 @@ test.describe("Direct-play eligibility with real media", () => {
     // Seed saved progress so the resume dialog opens: past the eligibility
     // minimum, well short of the completion threshold.
     const resumeTargetSec = Math.min(45, Math.floor(durationSec / 2));
-    await clearWatchProgress(page, media);
-    const saveResponse = await page
-      .context()
-      .request.put(`/api/movies/${movieId}/watch-progress`, {
-        data: {
-          progress_sec: resumeTargetSec,
-          duration_sec: durationSec,
-          save_session_id: randomUUID(),
-          save_sequence: 1,
-        },
-        failOnStatusCode: false,
-      });
-    expect(saveResponse.status()).toBe(200);
-
-    await page.goto(
-      `/movies/${movieId}/play?mode=direct&audio_track=0&subtitle_track=0&start=0`,
-    );
-
-    const video = page.locator("video");
-    const subtitleShowing = () =>
-      video.evaluate(element => {
-        const track = element.querySelector<HTMLTrackElement>("track[data-subtitle]");
-        return track?.track.mode ?? null;
-      });
-
-    // The dialog only opens once watch progress resolves with start=0.
-    await page.getByRole("button", { name: "Resume" }).click();
-    await expect(page).toHaveURL(new RegExp(`start=${resumeTargetSec}(&|$)`), {
-      timeout: timeouts.response,
+    const openedAtSec = 5;
+    // A viewer of its own, deleted at the end with everything it saved: the
+    // player may still be saving as it goes, so clearing the progress could
+    // race a late save, while a deleted account's save is refused.
+    const stamp = Date.now();
+    const credentials = {
+      email: `subtitle-viewer-${stamp}@example.com`,
+      password: `SubtitlePass${stamp}!`,
+    };
+    const viewer = await createUser(page.context().request, {
+      name: `Subtitle Viewer ${stamp}`,
+      ...credentials,
     });
+    try {
+      await loginPageViaApi(page, credentials);
+      const saveResponse = await page
+        .context()
+        .request.put(`/api/movies/${movieId}/watch-progress`, {
+          data: {
+            progress_sec: resumeTargetSec,
+            duration_sec: durationSec,
+            save_session_id: randomUUID(),
+            save_sequence: 1,
+          },
+          failOnStatusCode: false,
+        });
+      expect(saveResponse.status()).toBe(200);
 
-    await playButton(page).click();
-    await expectVideoAdvances(page, timeouts.response);
+      // Each source load the video starts, counted from before the page runs.
+      await page.addInitScript(() => {
+        const counter = window as unknown as { videoLoadStarts: number };
+        counter.videoLoadStarts = 0;
+        document.addEventListener(
+          "loadstart",
+          event => {
+            if (event.target instanceof HTMLVideoElement) counter.videoLoadStarts += 1;
+          },
+          true,
+        );
+      });
+      // Opened mid-media rather than at 0, the player mounts under the
+      // resume offer, so Resume moves `start` on a loaded direct source.
+      await page.goto(
+        `/movies/${movieId}/play?mode=direct&audio_track=0&subtitle_track=0&start=${openedAtSec}`,
+      );
 
-    // The seek landed instead of restarting from byte 0...
-    await expect
-      .poll(() =>
-        video.evaluate(element =>
-          element instanceof HTMLVideoElement ? element.currentTime : 0,
-        ),
-      )
-      .toBeGreaterThanOrEqual(resumeTargetSec - 15);
-    // ...the mode never fell back away from direct...
-    await expectURLParams(page, { mode: "direct" });
-    // ...and the subtitle track survived the start change (audit D11).
-    expect(await subtitleShowing()).toBe("showing");
+      const video = page.locator("video");
+      // The mode alone does not prove the track loaded: it reads "showing"
+      // as soon as it is set, whether or not its cues ever arrive.
+      const subtitleState = () =>
+        video.evaluate(element => {
+          const track = element.querySelector<HTMLTrackElement>("track[data-subtitle]");
+          return track
+            ? { mode: track.track.mode, loadedCues: (track.track.cues?.length ?? 0) > 0 }
+            : null;
+        });
+
+      const videoLoadStarts = () =>
+        page.evaluate(
+          () => (window as unknown as { videoLoadStarts: number }).videoLoadStarts,
+        );
+
+      // The offer opens once watch progress resolves: resume at the seeded
+      // point, or play from the URL's start. Under it the player has loaded
+      // its source and subtitle track already, so what follows the start
+      // change can be told from what preceded it.
+      await expect(page.getByRole("button", { name: "Resume" })).toBeVisible();
+      await expect
+        .poll(() => video.evaluate(element => (element as HTMLVideoElement).readyState), {
+          timeout: timeouts.response,
+        })
+        .toBeGreaterThanOrEqual(1);
+      expect(await videoLoadStarts(), "one source load before the resume").toBe(1);
+      await expect
+        .poll(subtitleState)
+        .toEqual({ mode: "showing", loadedCues: true });
+
+      await page.getByRole("button", { name: "Resume" }).click();
+      await expect(page).toHaveURL(new RegExp(`start=${resumeTargetSec}(&|$)`), {
+        timeout: timeouts.response,
+      });
+
+      await playButton(page).click();
+      await expectVideoAdvances(page, timeouts.response);
+
+      // The seek landed instead of restarting from byte 0...
+      await expect
+        .poll(() =>
+          video.evaluate(element =>
+            element instanceof HTMLVideoElement ? element.currentTime : 0,
+          ),
+        )
+        .toBeGreaterThanOrEqual(resumeTargetSec - 15);
+      // ...by seeking the source it had, not by loading it again (audit D10)...
+      expect(
+        await videoLoadStarts(),
+        "the resume reloaded the direct source instead of seeking it",
+      ).toBe(1);
+      // ...the mode never fell back away from direct...
+      await expectURLParams(page, { mode: "direct" });
+      // ...and the subtitle track survived the start change, cues and all
+      // (audit D11).
+      await expect
+        .poll(subtitleState)
+        .toEqual({ mode: "showing", loadedCues: true });
+    } finally {
+      await leavePlayer(page);
+      await loginViaApi(request);
+      await deleteUser(request, viewer.id);
+    }
   });
 
   // Matrix row 1 — happy-path control: an eligible MP4 direct-plays for real.

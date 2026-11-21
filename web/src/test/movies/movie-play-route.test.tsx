@@ -648,6 +648,79 @@ describe("movie play route HLS session", () => {
     expect(secondId).toBeTruthy();
     expect(secondId).not.toBe(firstId);
   });
+
+  /**
+   * Stops of this page's session: an earlier test's player, unmounted at its
+   * cleanup, sends its own stop a tick later, into whichever fetch is current.
+   */
+  function stopRequests(fetchMock: ReturnType<typeof mockMovieApi>) {
+    const [session] = manifestSessionIds(fetchMock);
+    return fetchMock.mock.calls
+      .filter(([input]) =>
+        requestURL(input).startsWith(`/api/movies/${MOVIE_ID}/hls/session/stop?`),
+      )
+      .map(([input, init]) => ({
+        session: new URL(requestURL(input), "http://igloo.test").searchParams.get(
+          "playback_session",
+        ),
+        method: init?.method,
+        keepalive: init?.keepalive,
+      }))
+      .filter((stop) => stop.session === session);
+  }
+
+  function pageHide(persisted: boolean) {
+    const event = new Event("pagehide");
+    Object.defineProperty(event, "persisted", { value: persisted });
+    return event;
+  }
+
+  // Closing the tab or navigating away is the only goodbye a session gets
+  // there; without it the transcode keeps its permit until the server's idle
+  // timeout reaps it. A real-browser e2e test cannot see the request (it
+  // leaves from an unloading page), so this is where it is held.
+  it("stops its session with a keepalive request when the page is left", async () => {
+    const fetchMock = mockMovieApi();
+    await renderMovieRoute("mode=remux&audio_track=0&subtitle_track=off&start=900");
+    await waitFor(() => expect(manifestSessionIds(fetchMock)).toHaveLength(1));
+
+    act(() => {
+      window.dispatchEvent(pageHide(false));
+    });
+
+    expect(stopRequests(fetchMock)).toEqual([
+      { session: manifestSessionIds(fetchMock)[0], method: "POST", keepalive: true },
+    ]);
+  });
+
+  it("keeps its session when the page only goes into the back/forward cache", async () => {
+    const fetchMock = mockMovieApi();
+    await renderMovieRoute("mode=remux&audio_track=0&subtitle_track=off&start=900");
+    await waitFor(() => expect(manifestSessionIds(fetchMock)).toHaveLength(1));
+
+    act(() => {
+      window.dispatchEvent(pageHide(true));
+    });
+
+    expect(stopRequests(fetchMock)).toEqual([]);
+  });
+
+  it("stops its session when the player goes away", async () => {
+    const fetchMock = mockMovieApi();
+    const route = await renderMovieRoute(
+      "mode=remux&audio_track=0&subtitle_track=off&start=900",
+    );
+    await waitFor(() => expect(manifestSessionIds(fetchMock)).toHaveLength(1));
+    const [session] = manifestSessionIds(fetchMock);
+
+    route.unmount();
+
+    await waitFor(() =>
+      expect(stopRequests(fetchMock)).toEqual([
+        { session, method: "POST", keepalive: false },
+      ]),
+    );
+  });
 });
 
 describe("movie play route pause during a source swap", () => {
