@@ -109,6 +109,36 @@ describe("e2e run summary", () => {
     );
   });
 
+  // Stopping a run marks the test it was in skipped, with an attempt left
+  // interrupted and no report error.
+  it("calls a stopped run incomplete even though a test passed", () => {
+    const stopped = report({ status: "expected", durations: [1_000] });
+    stopped.suites[0].specs!.push({
+      title: "test 2",
+      file: "movies.spec.ts",
+      tests: [
+        { status: "skipped", results: [{ status: "interrupted", retry: 0, duration: 500 }] },
+      ],
+    });
+    const summary = runSummaryMarkdown(stopped);
+
+    expect(summary).toContain("**The run did not complete its tests:**");
+    expect(summary).toContain("- interrupted: movies.spec.ts › test 2");
+    expect(summary).not.toContain("none failed");
+  });
+
+  it("still calls a run with only deliberate skips clean", () => {
+    const summary = runSummaryMarkdown(
+      report(
+        { status: "expected", durations: [1_000] },
+        { status: "skipped", durations: [200] },
+      ),
+    );
+
+    expect(summary).toContain("1 tests ran; none failed or needed a retry.");
+    expect(summary).not.toContain("did not complete");
+  });
+
   it("calls a run with no tests incomplete", () => {
     const summary = runSummaryMarkdown({ suites: [] });
 

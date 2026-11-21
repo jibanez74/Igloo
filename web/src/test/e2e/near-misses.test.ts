@@ -47,6 +47,21 @@ describe("visual near misses", () => {
     expect(summaryMarkdown(misses)).toContain("**Passed only on a retry:**");
   });
 
+  it("calls a stopped run incomplete, not clean", () => {
+    const stopped = report("expected");
+    stopped.suites[0].specs!.push({
+      title: "shot 2",
+      file: "gallery.visual.ts",
+      tests: [{ status: "skipped", results: [{ status: "interrupted", retry: 0 }] }],
+    });
+    const misses = nearMisses(stopped);
+    const summary = summaryMarkdown(misses);
+
+    expect(misses.interrupted).toEqual(["gallery.visual.ts › shot 2"]);
+    expect(summary).toContain("- interrupted: gallery.visual.ts › shot 2");
+    expect(summary).not.toContain("None:");
+  });
+
   it("calls an empty report incomplete", () => {
     expect(summaryMarkdown(nearMisses({ suites: [] }))).toContain(
       "no test ran",

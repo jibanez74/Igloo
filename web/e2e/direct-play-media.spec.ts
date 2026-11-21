@@ -323,8 +323,26 @@ test.describe("Direct-play eligibility with real media", () => {
             : null;
         });
 
+      const videoLoadStarts = () =>
+        page.evaluate(
+          () => (window as unknown as { videoLoadStarts: number }).videoLoadStarts,
+        );
+
       // The offer opens once watch progress resolves: resume at the seeded
-      // point, or play from the URL's start.
+      // point, or play from the URL's start. Under it the player has loaded
+      // its source and subtitle track already, so what follows the start
+      // change can be told from what preceded it.
+      await expect(page.getByRole("button", { name: "Resume" })).toBeVisible();
+      await expect
+        .poll(() => video.evaluate(element => (element as HTMLVideoElement).readyState), {
+          timeout: timeouts.response,
+        })
+        .toBeGreaterThanOrEqual(1);
+      expect(await videoLoadStarts(), "one source load before the resume").toBe(1);
+      await expect
+        .poll(subtitleState)
+        .toEqual({ mode: "showing", loadedCues: true });
+
       await page.getByRole("button", { name: "Resume" }).click();
       await expect(page).toHaveURL(new RegExp(`start=${resumeTargetSec}(&|$)`), {
         timeout: timeouts.response,
@@ -343,9 +361,7 @@ test.describe("Direct-play eligibility with real media", () => {
         .toBeGreaterThanOrEqual(resumeTargetSec - 15);
       // ...by seeking the source it had, not by loading it again (audit D10)...
       expect(
-        await page.evaluate(
-          () => (window as unknown as { videoLoadStarts: number }).videoLoadStarts,
-        ),
+        await videoLoadStarts(),
         "the resume reloaded the direct source instead of seeking it",
       ).toBe(1);
       // ...the mode never fell back away from direct...

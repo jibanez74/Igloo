@@ -48,12 +48,13 @@ function seconds(durationMs: number) {
 }
 
 export function runSummaryMarkdown(report: Report) {
-  const { errors, ran, failed, flaky } = nearMisses(report);
+  const { errors, ran, failed, flaky, interrupted } = nearMisses(report);
   const lines = ["## E2E run", ""];
 
-  if (errors.length > 0 || ran === 0) {
+  if (errors.length > 0 || ran === 0 || interrupted.length > 0) {
     lines.push("**The run did not complete its tests:**", "");
     lines.push(...errors.map(message => `- ${message}`));
+    lines.push(...interrupted.map(title => `- interrupted: ${title}`));
     if (ran === 0) {
       lines.push("- no test ran: the report holds no tests, or all were skipped");
     }
@@ -67,7 +68,7 @@ export function runSummaryMarkdown(report: Report) {
     lines.push("**Passed only on a retry:**", "");
     lines.push(...flaky.map(title => `- ${title}`), "");
   }
-  if (errors.length + failed.length + flaky.length === 0 && ran > 0) {
+  if (errors.length + failed.length + flaky.length + interrupted.length === 0 && ran > 0) {
     lines.push(`${ran} tests ran; none failed or needed a retry.`, "");
   }
 
