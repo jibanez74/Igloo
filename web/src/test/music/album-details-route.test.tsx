@@ -589,7 +589,7 @@ describe("album details deletion", () => {
     await waitFor(() => {
       expect(toastMocks.showActionFailed).toHaveBeenCalledWith(
         "delete album",
-        "Unable to delete album",
+        expect.objectContaining({ error: true, message: "Unable to delete album" }),
       );
     });
 

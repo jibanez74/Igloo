@@ -133,7 +133,7 @@ export default function AppSidebar({
     const res = await logout();
     // A 401 means the session had already ended, which is all logout wants.
     if (res.error && res.status !== 401) {
-      showError("Logout failed", apiErrorMessage(res, "Please try again."));
+      showError("Logout failed", apiErrorMessage(res, ""));
       setLoggingOut(false);
       return;
     }

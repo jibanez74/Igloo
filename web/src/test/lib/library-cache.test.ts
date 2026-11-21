@@ -131,8 +131,7 @@ describe("refreshLibraryWithToasts", () => {
 
     expect(showSuccessMock).not.toHaveBeenCalled();
     expect(showActionFailedMock).toHaveBeenCalledWith(
-      "refresh library",
-      "Unable to refresh the music library. Please try again.",
+      "refresh the music library",
     );
   });
 });

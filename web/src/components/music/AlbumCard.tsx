@@ -69,10 +69,7 @@ export default function AlbumCard({ album, subtitle }: AlbumCardProps) {
       console.error("Failed to load album:", error);
 
       if (isCurrent()) {
-        showActionFailed(
-          "play album",
-          "Something went wrong. Please try again.",
-        );
+        showActionFailed("play album");
       }
     }
 

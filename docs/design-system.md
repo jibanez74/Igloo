@@ -1734,7 +1734,11 @@ is unknown or empty.
     from a server that is down or a proxy that answered HTML, and the Try
     again control beside the sentence already carries the action. Fallbacks
     read "Couldn’t load movies.", "Couldn’t load watch rooms.", "Couldn’t run
-    that search.".
+    that search.". A failure toast whose title already names the action
+    ("Failed to update like") takes no description unless the server worded
+    one (`showActionFailed(action, envelope)`). `copy-contracts.test.ts`
+    fails on "Please try again" or "Check your connection" anywhere in
+    `src`.
 
   Because the erroring subtree often unmounts its own live region, error
   surfaces carry `role="alert"` and announce themselves — never repeat one

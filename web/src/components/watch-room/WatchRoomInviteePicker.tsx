@@ -130,7 +130,7 @@ export default function WatchRoomInviteePicker({
           <p className="px-4 py-6 text-sm text-destructive">
             {apiErrorMessage(
               inviteUsersData,
-              "Failed to load users. Please try again.",
+              "Couldn’t load users.",
             )}
           </p>
         ) : inviteUsers.length === 0 ? (

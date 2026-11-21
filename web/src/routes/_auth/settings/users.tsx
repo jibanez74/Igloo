@@ -53,8 +53,6 @@ import { routeHead } from "@/lib/route-head";
 import { apiErrorMessage } from "@/lib/is-api-failure";
 
 const USERS_SETTINGS_HEAD = routeHead("User Management");
-const USER_ACTION_FALLBACK_MESSAGE = "Something went wrong. Please try again.";
-
 export const Route = createFileRoute("/_auth/settings/users")({
   head: () => USERS_SETTINGS_HEAD,
   component: UsersSettings,
@@ -162,7 +160,7 @@ function UsersSettings() {
     mutationFn: adminCreateUser,
     onSuccess: res => {
       if (res.error) {
-        setDialogError(apiErrorMessage(res, USER_ACTION_FALLBACK_MESSAGE));
+        setDialogError(apiErrorMessage(res, "Couldn’t create the user."));
         showActionFailed("create user", res);
         return;
       }
@@ -182,7 +180,7 @@ function UsersSettings() {
       adminUpdateUser(id, data),
     onSuccess: res => {
       if (res.error) {
-        setDialogError(apiErrorMessage(res, USER_ACTION_FALLBACK_MESSAGE));
+        setDialogError(apiErrorMessage(res, "Couldn’t save the user."));
         showActionFailed("update user", res);
         return;
       }
@@ -201,7 +199,7 @@ function UsersSettings() {
     mutationFn: adminDeleteUser,
     onSuccess: (res, id) => {
       if (res.error) {
-        setDialogError(apiErrorMessage(res, USER_ACTION_FALLBACK_MESSAGE));
+        setDialogError(apiErrorMessage(res, "Couldn’t delete the user."));
         showActionFailed("delete user", res);
         return;
       }
@@ -237,7 +235,7 @@ function UsersSettings() {
       adminResetUserPassword(id, password),
     onSuccess: res => {
       if (res.error) {
-        setDialogError(apiErrorMessage(res, USER_ACTION_FALLBACK_MESSAGE));
+        setDialogError(apiErrorMessage(res, "Couldn’t reset the password."));
         showActionFailed("reset password", res);
         return;
       }
@@ -286,7 +284,7 @@ function UsersSettings() {
 
           {!isLoading && usersData?.error && (
             <Alert>
-              {apiErrorMessage(usersData, "Couldn’t load users. Please try again.")}
+              {apiErrorMessage(usersData, "Couldn’t load users.")}
             </Alert>
           )}
 

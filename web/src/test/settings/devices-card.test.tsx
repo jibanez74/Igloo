@@ -394,7 +394,7 @@ describe("DevicesCard", () => {
     renderCard();
 
     const error = await screen.findByRole("alert");
-    expect(error).toHaveTextContent("Couldn’t load your devices. Please try again.");
+    expect(error).toHaveTextContent("Couldn’t load your devices.");
     expect(error).not.toHaveTextContent(/network error/);
   });
 });

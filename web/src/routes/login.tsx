@@ -152,7 +152,7 @@ function LoginPage() {
       console.debug("login post-auth flow failed", err);
       showError(
         "Login failed",
-        "Something went wrong after sign-in. Please try again.",
+        "Couldn’t finish signing in.",
       );
       // This line is the catch-block reset. After a successful login the form stays
       // disabled on purpose while the router navigates away.

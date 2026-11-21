@@ -170,7 +170,6 @@ describe("audio player like button", () => {
     await waitFor(() => {
       expect(showActionFailed).toHaveBeenCalledWith(
         "update like",
-        "Unable to update liked status. Please try again.",
       );
     });
     expect(
