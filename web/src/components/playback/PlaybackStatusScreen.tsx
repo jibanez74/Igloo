@@ -26,10 +26,10 @@ const EMPTY_STATUS_ACTIONS: StatusAction[] = [];
 
 function StatusActionIcon({ icon }: { icon: StatusAction["icon"] }) {
   if (icon === "retry") {
-    return <RotateCcw className="size-5" aria-hidden="true" />;
+    return <RotateCcw className="size-4" aria-hidden="true" />;
   }
 
-  return <ArrowLeft className="size-5" aria-hidden="true" />;
+  return <ArrowLeft className="size-4" aria-hidden="true" />;
 }
 
 export default function PlaybackStatusScreen({

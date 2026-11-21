@@ -49,5 +49,10 @@ describe("PlaybackStatusScreen", () => {
     expect(back).toHaveAttribute("data-variant", "outline");
     expect(back).toHaveAttribute("data-size", "xl");
     expect(back).not.toHaveClass("shadow-glow");
+
+    // The same pair as the trailer's error screen, icons included.
+    for (const button of [retry, back]) {
+      expect(button.querySelector("svg")).toHaveClass("size-4");
+    }
   });
 });
