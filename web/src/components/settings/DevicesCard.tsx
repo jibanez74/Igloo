@@ -159,7 +159,7 @@ export default function DevicesCard() {
           </p>
         ) : data?.error ? (
           <p className="text-sm text-destructive" role="alert">
-            {apiErrorMessage(data, "Couldn’t load your devices. Please try again.")}
+            {apiErrorMessage(data, "Couldn’t load your devices.")}
           </p>
         ) : devices.length === 0 ? (
           <p className="text-sm text-muted-foreground">

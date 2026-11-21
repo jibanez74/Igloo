@@ -148,10 +148,7 @@ export default function MovieDetailsHeroActions({
       ),
     onError: (_err, _nextWatched, snapshot) => {
       restoreOptimistic(queryClient, watchProgressKey, snapshot);
-      showActionFailed(
-        "update watched status",
-        "Unable to update watched status. Please try again.",
-      );
+      showActionFailed("update watched status");
     },
     onSuccess: (res, _nextWatched, snapshot) => {
       if (res.error) {

@@ -151,10 +151,7 @@ export default function CreateWatchRoomDialog({
       });
     },
     onError: () => {
-      showActionFailed(
-        "create watch room",
-        "An unexpected error occurred. Please try again.",
-      );
+      showActionFailed("create watch room");
     },
   });
 
@@ -238,7 +235,7 @@ export default function CreateWatchRoomDialog({
                 <p className="mt-3 text-sm text-destructive">
                   {apiErrorMessage(
                     techData,
-                    "Failed to load playback options. Please try again.",
+                    "Couldn’t load playback options.",
                   )}
                 </p>
               ) : (

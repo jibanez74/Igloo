@@ -226,7 +226,7 @@ describe("Users settings", () => {
     await renderRoute("/settings/users");
 
     const error = await screen.findByRole("alert");
-    expect(error).toHaveTextContent("Couldn’t load users. Please try again.");
+    expect(error).toHaveTextContent("Couldn’t load users.");
     expect(error).not.toHaveTextContent("internal_error");
   });
 

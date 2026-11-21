@@ -72,7 +72,7 @@ export function showSuccess(message: string, description?: string) {
  * its message: only a server-worded 4xx reaches the description, never a 5xx
  * constant or the client's canned 404/network text (`apiErrorMessage`).
  * @example showActionFailed("create playlist", res)
- * @example showActionFailed("play album", "Something went wrong. Please try again.")
+ * @example showActionFailed("play album")
  */
 export function showActionFailed(action: string, failure?: string | ApiFailureType) {
   const description = typeof failure === "string" ? failure : apiErrorMessage(failure, "");

@@ -40,10 +40,10 @@ describe("showActionFailed", () => {
   });
 
   it("passes a caller-worded string through", () => {
-    showActionFailed("play album", "Something went wrong. Please try again.");
+    showActionFailed("play album", "Couldn’t reach the album.");
 
     expect(toastError).toHaveBeenCalledWith("Failed to play album", {
-      description: "Something went wrong. Please try again.",
+      description: "Couldn’t reach the album.",
     });
   });
 });

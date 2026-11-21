@@ -203,9 +203,6 @@ export async function refreshLibraryWithToasts(
     showSuccess("Library refreshed", `${noun} library data is up to date.`);
   } catch (error) {
     console.error(`Failed to refresh ${noun.toLowerCase()} library:`, error);
-    showActionFailed(
-      "refresh library",
-      `Unable to refresh the ${noun.toLowerCase()} library. Please try again.`,
-    );
+    showActionFailed(`refresh the ${noun.toLowerCase()} library`);
   }
 }

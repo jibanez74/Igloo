@@ -10,7 +10,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import AddToPlaylistDialog from "@/components/shared/AddToPlaylistDialog";
 import { Button } from "@/components/ui/button";
-import { MOTION_TRACK_MENU_TRIGGER_CLASS } from "@/lib/constants";
 
 type TrackActionsMenuProps = {
   // Required for add to playlist
@@ -48,7 +47,6 @@ export default function TrackActionsMenu({
             variant="ghost-muted"
             size="icon-sm"
             shape="pill"
-            className={MOTION_TRACK_MENU_TRIGGER_CLASS}
             aria-label={`More actions for ${trackTitle}`}
           >
             <MoreVertical className="size-4" aria-hidden="true" />

@@ -128,7 +128,7 @@ export default function QuickConnectApproveCard() {
     mutationFn: (deviceCode: string) => lookupQuickConnect(deviceCode),
     onSuccess: res => {
       if (res.error) {
-        setError(res.status === 404 ? INVALID_CODE_MESSAGE : apiErrorMessage(res, "Couldn’t check that code. Please try again."));
+        setError(res.status === 404 ? INVALID_CODE_MESSAGE : apiErrorMessage(res, "Couldn’t check that code."));
         return;
       }
 
@@ -180,7 +180,7 @@ export default function QuickConnectApproveCard() {
           setError(INVALID_CODE_MESSAGE);
           setStep("enter");
         } else {
-          setError(apiErrorMessage(res, "Couldn’t approve that device. Please try again."));
+          setError(apiErrorMessage(res, "Couldn’t approve that device."));
         }
         showActionFailed("approve device", res);
         return;

@@ -612,7 +612,7 @@ function PlayAllButton() {
       await audioPlayer.startPlayAllPlayback();
     } catch (error) {
       console.error("Failed to start playback:", error);
-      showActionFailed("start playback", "Unable to start playing all tracks. Please try again.");
+      showActionFailed("start playback");
     }
 
     setIsLoading(false);
@@ -649,7 +649,7 @@ function ShuffleButton() {
       await audioPlayer.startShufflePlayback();
     } catch (error) {
       console.error("Failed to start shuffle playback:", error);
-      showActionFailed("start shuffle", "Unable to start shuffle playback. Please try again.");
+      showActionFailed("start shuffle");
     }
 
     setIsLoading(false);

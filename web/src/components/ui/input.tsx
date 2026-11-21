@@ -6,12 +6,19 @@ import {
   type FieldSize,
   type FieldVariant,
 } from "@/components/ui/field-variants"
+import { BUSY_CONTROL_CLASS } from "@/lib/constants"
 import { cn } from "@/lib/utils"
 
 type InputProps = Omit<React.ComponentProps<"input">, "size"> & {
   variant?: FieldVariant
   /** The field's height. The native `size` attribute is not exposed. */
   size?: FieldSize
+  /**
+   * The form this field sits in is saving: the field is read-only, not
+   * disabled, so it keeps the focus that submitted the form, and it shows
+   * it is busy (design-system §3.7).
+   */
+  busy?: boolean
 }
 
 function Input({
@@ -19,11 +26,14 @@ function Input({
   type,
   variant = "filled",
   size = "default",
+  busy = false,
+  readOnly,
   ...props
 }: InputProps) {
   return (
     <input
       type={type}
+      readOnly={busy || readOnly}
       data-slot="input"
       data-variant={variant}
       className={cn(
@@ -32,6 +42,7 @@ function Input({
         "aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40",
         FIELD_VARIANTS[variant],
         FIELD_SIZES[size],
+        busy && BUSY_CONTROL_CLASS,
         className
       )}
       {...props}

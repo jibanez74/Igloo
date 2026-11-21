@@ -10,6 +10,7 @@ import {
 import { deferredResponse, jsonResponse, requestURL } from "../helpers/api";
 import { authUserData } from "../helpers/fixtures";
 import { renderRoute } from "../helpers/render-route";
+import { BUSY_CONTROL_CLASS } from "@/lib/constants";
 
 const savedSettings = {
   tmdb_key: null,
@@ -185,6 +186,7 @@ describe("general settings: download images", () => {
     await waitFor(() => expect(field).toHaveAttribute("readonly"));
     expect(field).toBeEnabled();
     expect(field).toHaveFocus();
+    expect(field).toHaveClass(...BUSY_CONTROL_CLASS.split(" "));
 
     save.resolve(
       jsonResponse({
@@ -198,6 +200,7 @@ describe("general settings: download images", () => {
     );
     await waitFor(() => expect(field).not.toHaveAttribute("readonly"));
     expect(field).toHaveFocus();
+    expect(field).not.toHaveClass(BUSY_CONTROL_CLASS.split(" ")[0]);
   });
 
   // The message is in the Save bar's status line; the field it is about has

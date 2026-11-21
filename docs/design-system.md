@@ -282,6 +282,11 @@ constant exists — and when you create a new recurring one, add it there so
 - **Transitions enumerate properties** — e.g.
   `transition-[background-color,border-color,color,box-shadow,opacity]` —
   never `transition-all`.
+- **A `Button` brings its own transition** (that list, at 150ms micro). Never
+  pass it another transition class or motion constant: `cn` keeps the last
+  `transition-*`, so the extra one replaces the base and the focus ring and
+  border stop animating. `motion-contracts.test.ts` fails on a `<Button
+  className>` that sets one, or on one added to `cn(buttonVariants(…), …)`.
 - **Enter/exit animations** are the app's own utilities, in
   `src/assets/animations.css`: `animate-in` / `animate-out` run one keyframe
   each (`enter`, `exit`) between the resting state and the offsets set by
@@ -618,6 +623,12 @@ of its own, as tall as its text: the size for the two link variants).
   - A text field is `readOnly`, not `disabled`, while the form it sits in
     saves (General, Libraries, Playback): Enter in the field is what
     submitted the form, so the field is what holds focus.
+  - Both show it: `Switch`, `SelectTrigger` and `Input` take `busy`, which
+    sets `aria-disabled` (or `readOnly` on the input) and
+    `BUSY_CONTROL_CLASS` — 70% opacity and a progress cursor, lighter than
+    the disabled dim, so a busy control never reads as unavailable. The
+    avatar upload's label uses the same class. A field that is read-only
+    for good (not busy) keeps its resting look.
   - A dialog returns focus to what opened it, and when that is gone to the
     card's heading or its own action: a revoked device's row to "Devices"
     (`SettingsCardHeader titleRef`, `ConfirmDialog fallbackFocusRef`), a
@@ -1734,7 +1745,11 @@ is unknown or empty.
     from a server that is down or a proxy that answered HTML, and the Try
     again control beside the sentence already carries the action. Fallbacks
     read "Couldn’t load movies.", "Couldn’t load watch rooms.", "Couldn’t run
-    that search.".
+    that search.". A failure toast whose title already names the action
+    ("Failed to update like") takes no description unless the server worded
+    one (`showActionFailed(action, envelope)`). `copy-contracts.test.ts`
+    fails on "Please try again" or "Check your connection" in any source
+    file outside `src/test`.
 
   Because the erroring subtree often unmounts its own live region, error
   surfaces carry `role="alert"` and announce themselves — never repeat one

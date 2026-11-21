@@ -65,10 +65,7 @@ export default function EditWatchRoomMembersDialog({
       onOpenChange(false);
     },
     onError: () => {
-      showActionFailed(
-        "update the invitees",
-        "An unexpected error occurred. Please try again.",
-      );
+      showActionFailed("update the invitees");
     },
   });
 

@@ -40,7 +40,7 @@ import {
   USER_EMAIL_MAX_LENGTH,
   USER_NAME_MAX_LENGTH,
   USER_PASSWORD_MIN_LENGTH,
-  MOTION_MICRO_COLORS_CLASS,
+  BUSY_CONTROL_CLASS,
   MOTION_SETTINGS_SURFACE_CLASS,
 } from "@/lib/constants";
 import {
@@ -726,7 +726,7 @@ function AccountSettings() {
                   className={cn(
                     "peer absolute inset-0 z-10 h-9 w-full opacity-0",
                     uploadAvatarMutation.isPending
-                      ? "cursor-not-allowed"
+                      ? "cursor-progress"
                       : "cursor-pointer",
                   )}
                   aria-invalid={!!errors.avatarUpload || undefined}
@@ -739,10 +739,9 @@ function AccountSettings() {
                   htmlFor={avatarUploadId}
                   className={cn(
                     buttonVariants({ variant: "outline" }),
-                    MOTION_MICRO_COLORS_CLASS,
                     "h-9 flex-1 peer-focus-visible:border-ring peer-focus-visible:ring-[3px] peer-focus-visible:ring-ring/50",
                     uploadAvatarMutation.isPending
-                      ? "cursor-not-allowed opacity-70"
+                      ? BUSY_CONTROL_CLASS
                       : "cursor-pointer",
                   )}
                   aria-disabled={uploadAvatarMutation.isPending}

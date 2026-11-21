@@ -178,7 +178,7 @@ export default function TrailerPreferencesCard() {
                 // Not `disabled`, for the reason the switch above is not:
                 // the list hands focus back to a trigger that could not
                 // take it while the save was still in flight.
-                aria-disabled={saving || undefined}
+                busy={saving}
               >
                 <SelectValue />
               </SelectTrigger>
@@ -211,7 +211,7 @@ export default function TrailerPreferencesCard() {
               <SelectTrigger
                 id={sourceId}
                 variant="inset" size="lg"
-                aria-disabled={saving || undefined}
+                busy={saving}
                 aria-describedby={tmdbUnavailable ? sourceHintId : undefined}
               >
                 <SelectValue />

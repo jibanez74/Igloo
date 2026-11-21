@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { RadioCard } from "@/components/ui/radio-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import { BUSY_CONTROL_CLASS } from "@/lib/constants";
 import { expectNoClass } from "../helpers/dom";
 
 describe("Switch", () => {
@@ -56,6 +57,44 @@ describe("Switch", () => {
     expect(toggle).toBeDisabled();
     fireEvent.click(toggle);
     expect(onCheckedChange).not.toHaveBeenCalled();
+  });
+
+  it("stays focusable while busy, and shows it", () => {
+    const { rerender } = render(
+      <Switch checked onCheckedChange={vi.fn()} busy aria-label="Autoplay" />,
+    );
+
+    const toggle = screen.getByRole("switch", { name: "Autoplay" });
+    expect(toggle).toBeEnabled();
+    expect(toggle).toHaveAttribute("aria-disabled", "true");
+    expect(toggle).toHaveClass(...BUSY_CONTROL_CLASS.split(" "));
+    toggle.focus();
+    expect(toggle).toHaveFocus();
+
+    rerender(<Switch checked onCheckedChange={vi.fn()} aria-label="Autoplay" />);
+    expect(toggle).not.toHaveAttribute("aria-disabled");
+    expectNoClass(toggle, ...BUSY_CONTROL_CLASS.split(" "));
+  });
+
+  it("keeps busy when a caller also passes aria-disabled", () => {
+    const { rerender } = render(
+      <Switch
+        checked
+        onCheckedChange={vi.fn()}
+        busy
+        aria-disabled={false}
+        aria-label="Autoplay"
+      />,
+    );
+
+    const toggle = screen.getByRole("switch", { name: "Autoplay" });
+    expect(toggle).toHaveAttribute("aria-disabled", "true");
+
+    rerender(
+      <Switch checked onCheckedChange={vi.fn()} aria-disabled aria-label="Autoplay" />,
+    );
+    expect(toggle).toHaveAttribute("aria-disabled", "true");
+    expectNoClass(toggle, ...BUSY_CONTROL_CLASS.split(" "));
   });
 
   it("takes layout classes and a ref's worth of button props", () => {

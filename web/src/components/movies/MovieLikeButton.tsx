@@ -46,10 +46,7 @@ export default function MovieLikeButton({
       ),
     onError: (_err, _vars, snapshot) => {
       restoreOptimistic(queryClient, likeKey, snapshot);
-      showActionFailed(
-        "update like",
-        "Unable to update liked status. Please try again.",
-      );
+      showActionFailed("update like");
     },
     onSuccess: (res, _vars, snapshot) => {
       if (res.error) {

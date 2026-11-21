@@ -552,10 +552,10 @@ function LibraryPathSection({
             value={pathValue}
             onChange={event => onPathChange(event.target.value)}
             placeholder={config.placeholder}
-            // Read-only rather than disabled while the form saves: Enter in
-            // this field is what submitted it, and a disabled field would
-            // drop the focus it holds.
-            readOnly={disabled}
+            // Busy (read-only) rather than disabled while the form saves:
+            // Enter in this field is what submitted it, and a disabled field
+            // would drop the focus it holds.
+            busy={disabled}
             aria-invalid={invalid || undefined}
             aria-describedby={`${descriptionId} ${pathStatusId} ${formStatusId}`}
             autoComplete="off"

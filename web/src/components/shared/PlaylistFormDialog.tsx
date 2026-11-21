@@ -147,7 +147,7 @@ function PlaylistForm({
       handleClose();
     },
     onError: () => {
-      showActionFailed("create playlist", "An unexpected error occurred. Please try again.");
+      showActionFailed("create playlist");
     },
   });
 

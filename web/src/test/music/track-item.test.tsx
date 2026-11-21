@@ -5,8 +5,6 @@ import TrackItem from "@/components/music/TrackItem";
 import { getLikedTrackIds, toggleLikeTrack } from "@/lib/api";
 import {
   LIKED_TRACK_IDS_KEY,
-  MOTION_TRACK_ICON_BUTTON_CLASS,
-  MOTION_TRACK_MENU_TRIGGER_CLASS,
   MOTION_TRACK_PLAY_BUTTON_CLASS,
   MOTION_TRACK_ROW_CLASS,
 } from "@/lib/constants";
@@ -32,6 +30,19 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
+// Button's own transition. A motion class on a Button would replace it
+// (`cn` keeps the last transition-*), and drop the box-shadow ring and the
+// border colour from the animation.
+const BUTTON_TRANSITION_CLASS =
+  "transition-[background-color,border-color,color,box-shadow,opacity]";
+
+function expectButtonTransition(button: HTMLElement) {
+  expect(button).toHaveClass(BUTTON_TRANSITION_CLASS, "duration-micro");
+  expect(
+    [...button.classList].filter(name => /^transition(-|$)/.test(name)),
+  ).toEqual([BUTTON_TRANSITION_CLASS]);
+}
+
 function likedIds(ids: number[]) {
   return { error: false as const, data: { liked_track_ids: ids } };
 }
@@ -53,11 +64,12 @@ describe("TrackItem motion", () => {
 
     const row = screen.getByText("Signal Fire").closest(".group");
     expect(row).toHaveClass(...MOTION_TRACK_ROW_CLASS.split(" "));
-    expect(screen.getByRole("button", { name: "Drag to reorder" })).toHaveClass(
-      ...MOTION_TRACK_MENU_TRIGGER_CLASS.split(" "),
+    expectButtonTransition(
+      screen.getByRole("button", { name: "Drag to reorder" }),
     );
-    expect(await screen.findByRole("button", { name: "Add Signal Fire to liked" }))
-      .toHaveClass(...MOTION_TRACK_ICON_BUTTON_CLASS.split(" "));
+    expectButtonTransition(
+      await screen.findByRole("button", { name: "Add Signal Fire to liked" }),
+    );
     expect(screen.getByRole("button", { name: "Play Signal Fire" })).toHaveClass(
       ...MOTION_TRACK_PLAY_BUTTON_CLASS.split(" "),
     );
@@ -71,7 +83,7 @@ describe("TrackItem motion", () => {
     const trigger = screen.getByRole("button", {
       name: "More actions for Signal Fire",
     });
-    expect(trigger).toHaveClass(...MOTION_TRACK_MENU_TRIGGER_CLASS.split(" "));
+    expectButtonTransition(trigger);
     // A Button (the menu trigger's slot wins over the Button's), so it carries
     // the shared focus ring the raw button lacked.
     expect(trigger).toHaveAttribute("data-variant", "ghost-muted");

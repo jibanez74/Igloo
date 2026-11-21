@@ -344,10 +344,10 @@ function ServerPlaybackForm({ settings }: ServerPlaybackFormProps) {
               onChange={event =>
                 handleServerUploadMbpsChange(event.target.value)
               }
-              // Read-only rather than disabled while the form saves: Enter
-              // in this field is what submitted it, and a disabled field
-              // would drop the focus it holds.
-              readOnly={updateMutation.isPending}
+              // Busy (read-only) rather than disabled while the form saves:
+              // Enter in this field is what submitted it, and a disabled
+              // field would drop the focus it holds.
+              busy={updateMutation.isPending}
               aria-invalid={serverUploadMbpsInvalid ? "true" : undefined}
               aria-describedby={
                 serverUploadMbpsInvalid

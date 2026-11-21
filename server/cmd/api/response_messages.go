@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
@@ -25,8 +26,16 @@ const (
 const beginTransactionLogMessage = "failed to begin transaction"
 
 // serverError logs err under logMessage, with any extra attrs, and answers 500
-// with clientMessage; the client never sees err itself.
+// with clientMessage; the client never sees err itself. A cancelled request
+// (the client went away, or the server is shutting down) is logged at Debug:
+// nothing failed, and nobody reads the answer. A deadline that ran out is
+// still an error.
 func (app *Application) serverError(w http.ResponseWriter, err error, logMessage, clientMessage string, attrs ...any) {
-	app.Logger.Error(logMessage, append([]any{"error", err}, attrs...)...)
+	args := append([]any{"error", err}, attrs...)
+	if errors.Is(err, context.Canceled) {
+		app.Logger.Debug(logMessage, args...)
+	} else {
+		app.Logger.Error(logMessage, args...)
+	}
 	helpers.ErrorJSON(w, errors.New(clientMessage))
 }

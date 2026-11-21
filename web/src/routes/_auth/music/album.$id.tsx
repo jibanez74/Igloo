@@ -73,7 +73,6 @@ import {
   MUSIC_DETAIL_SHELL_CLASS,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import { apiErrorMessage } from "@/lib/is-api-failure";
 
 // Catalog album types worth calling out; a plain album needs no label.
 const ALBUM_TYPE_LABELS = new Map([
@@ -205,10 +204,7 @@ function AlbumDetailsContent({
     mutationFn: () => deleteAlbum(album.id),
     onSuccess: async (result) => {
       if (result.error) {
-        showActionFailed(
-          "delete album",
-          apiErrorMessage(result, "Unable to delete album. Please try again."),
-        );
+        showActionFailed("delete album", result);
         return;
       }
 
@@ -227,10 +223,7 @@ function AlbumDetailsContent({
     },
     onError: (error) => {
       console.error("Failed to delete album:", error);
-      showActionFailed(
-        "delete album",
-        "An unexpected error occurred. Please try again.",
-      );
+      showActionFailed("delete album");
     },
   });
 

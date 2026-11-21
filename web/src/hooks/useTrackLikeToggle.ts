@@ -91,10 +91,7 @@ function useTrackLikeToggle(trackId: number) {
     },
     onError: (_err, _variables, context) => {
       rollback(context?.previousIsLiked);
-      showActionFailed(
-        "update like",
-        "Unable to update liked status. Please try again.",
-      );
+      showActionFailed("update like");
     },
     onSuccess: (res, _variables, context) => {
       if (res.error) {

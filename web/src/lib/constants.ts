@@ -445,6 +445,13 @@ export const PEER_FOCUS_VISIBLE_RING_CLASS =
   "peer-focus-visible:border-ring peer-focus-visible:ring-[3px] peer-focus-visible:ring-ring/50";
 
 /**
+ * A control whose save is in flight (design-system §3.7): it stays focusable
+ * (`aria-disabled` or `readOnly`, never `disabled`), so this is what shows it
+ * is busy. Lighter than the disabled dim, with a progress cursor.
+ */
+export const BUSY_CONTROL_CLASS = "cursor-progress opacity-70";
+
+/**
  * Radix Select content uses `data-slot="select-content"` in components/ui/select.tsx.
  * Used to avoid closing a dialog when interacting with a portaled select.
  */
@@ -570,9 +577,6 @@ export const MOTION_TRACK_ROW_CLASS =
   "transition-[background-color,opacity,box-shadow] duration-micro motion-reduce:transition-none";
 export const MOTION_TRACK_PLAY_BUTTON_CLASS =
   "transition-[background-color,color,opacity] duration-micro motion-reduce:transition-none";
-export const MOTION_TRACK_ICON_BUTTON_CLASS =
-  "transition-[color,opacity] duration-micro motion-reduce:transition-none";
-export const MOTION_TRACK_MENU_TRIGGER_CLASS = MOTION_MICRO_COLORS_CLASS;
 export const MOTION_PLAYER_CHROME_PANEL_CLASS =
   "transition-[opacity,transform] duration-standard ease-out motion-reduce:transform-none motion-reduce:transition-none";
 export const MOTION_MEDIA_OVERLAY_ENTER_CLASS =
@@ -750,9 +754,11 @@ export const SCROLL_RAIL_EDGE_CLASS =
   "pointer-events-none absolute top-0 z-10 flex w-12 items-center from-background to-transparent sm:w-14";
 /**
  * A rail arrow shows on hover and on focus-within (hover/focus parity, §1.7);
- * the exhausted side stays rendered and focusable but inert.
+ * the exhausted side stays rendered and focusable but inert. It is a Button,
+ * whose own transition already fades opacity; a transition here would replace
+ * it and stop the hover background and focus ring from animating.
  */
-export const SCROLL_RAIL_ARROW_CLASS = `${MOTION_MICRO_OPACITY_CLASS} pointer-events-auto rounded-full opacity-0 shadow-md group-focus-within/rail:opacity-100 group-hover/rail:opacity-100 aria-disabled:cursor-not-allowed aria-disabled:group-focus-within/rail:opacity-30 aria-disabled:group-hover/rail:opacity-30`;
+export const SCROLL_RAIL_ARROW_CLASS = `pointer-events-auto rounded-full opacity-0 shadow-md group-focus-within/rail:opacity-100 group-hover/rail:opacity-100 aria-disabled:cursor-not-allowed aria-disabled:group-focus-within/rail:opacity-30 aria-disabled:group-hover/rail:opacity-30`;
 
 /**
  * Layout-only shell for the full-width library/settings tab bars (movies /

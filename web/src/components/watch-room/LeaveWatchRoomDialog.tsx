@@ -58,10 +58,7 @@ export default function LeaveWatchRoomDialog({
       }
     } catch {
       onLeaveError?.();
-      showActionFailed(
-        "leave the watch room",
-        "An unexpected error occurred. Please try again.",
-      );
+      showActionFailed("leave the watch room");
     }
 
     setLeaving(false);

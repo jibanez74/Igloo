@@ -387,8 +387,7 @@ describe("movies route library refresh", () => {
 
     await waitFor(() => {
       expect(toastMocks.showActionFailed).toHaveBeenCalledWith(
-        "refresh library",
-        "Unable to refresh the movie library. Please try again.",
+        "refresh the movie library",
       );
     });
 

@@ -67,10 +67,7 @@ export default function DeleteWatchRoomDialog({
       }
     } catch {
       onDeleteError?.();
-      showActionFailed(
-        "close watch room",
-        "An unexpected error occurred. Please try again.",
-      );
+      showActionFailed("close watch room");
     }
 
     setDeleting(false);

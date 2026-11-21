@@ -315,8 +315,7 @@ describe("tv shows route library refresh", () => {
 
     await waitFor(() => {
       expect(toastMocks.showActionFailed).toHaveBeenCalledWith(
-        "refresh library",
-        "Unable to refresh the show library. Please try again.",
+        "refresh the show library",
       );
     });
 
