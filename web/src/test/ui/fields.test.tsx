@@ -186,7 +186,7 @@ describe("SelectTrigger variants", () => {
   const renderTrigger = (
     props: Pick<
       React.ComponentProps<typeof SelectTrigger>,
-      "variant" | "size" | "busy"
+      "variant" | "size" | "busy" | "aria-disabled"
     >,
   ) => {
     render(
@@ -232,6 +232,13 @@ describe("SelectTrigger variants", () => {
     const trigger = renderTrigger({ busy: true });
 
     expect(trigger).toBeEnabled();
+    expect(trigger).toHaveAttribute("aria-disabled", "true");
+    expect(trigger).toHaveClass(...classesOf(BUSY_CONTROL_CLASS));
+  });
+
+  it("keeps busy when a caller also passes aria-disabled", () => {
+    const trigger = renderTrigger({ busy: true, "aria-disabled": false });
+
     expect(trigger).toHaveAttribute("aria-disabled", "true");
     expect(trigger).toHaveClass(...classesOf(BUSY_CONTROL_CLASS));
   });
