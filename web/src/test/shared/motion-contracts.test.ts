@@ -103,7 +103,8 @@ function findInlineMotionViolations(name: string, source: string) {
 const TRANSITION_UTILITY = /(?:^|\s)transition(?:-(?!none\b)|\s|$)/;
 
 /**
- * `<Button className>` values that set a transition. Button's base already
+ * `<Button className>` values, and the classes `cn` adds to a
+ * `buttonVariants()` look, that set a transition. Button's base already
  * animates background, border, colour, box-shadow and opacity, and `cn` keeps
  * the last transition-*, so one more would replace it and drop the focus ring
  * and border from the animation. Reads string literals and the shared
@@ -140,7 +141,20 @@ function findButtonTransitionOverrides(name: string, source: string) {
     }
     ts.forEachChild(node, checkClassName);
   };
+  const isButtonVariantsCall = (node: ts.Node) =>
+    ts.isCallExpression(node) &&
+    node.expression.getText(sourceFile) === "buttonVariants";
   const visit = (node: ts.Node) => {
+    // An element dressed as a Button: cn(buttonVariants(…), …).
+    if (
+      ts.isCallExpression(node) &&
+      node.expression.getText(sourceFile) === "cn" &&
+      node.arguments.some(isButtonVariantsCall)
+    ) {
+      for (const argument of node.arguments) {
+        if (!isButtonVariantsCall(argument)) checkClassName(argument);
+      }
+    }
     if (
       (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) &&
       node.tagName.getText(sourceFile) === "Button"
