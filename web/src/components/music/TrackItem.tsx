@@ -5,8 +5,6 @@ import { useLikeButtonState } from "@/hooks/useTrackLikeToggle";
 import {
   FOCUS_VISIBLE_RING_CLASS,
   MOTION_LOADING_STATE_CLASS,
-  MOTION_TRACK_ICON_BUTTON_CLASS,
-  MOTION_TRACK_MENU_TRIGGER_CLASS,
   MOTION_TRACK_PLAY_BUTTON_CLASS,
   MOTION_TRACK_ROW_CLASS,
 } from "@/lib/constants";
@@ -163,10 +161,7 @@ export default function TrackItem({
           variant="ghost-muted"
           size="icon-sm"
           {...dragHandleProps}
-          className={cn(
-            "cursor-grab active:cursor-grabbing",
-            MOTION_TRACK_MENU_TRIGGER_CLASS,
-          )}
+          className="cursor-grab active:cursor-grabbing"
           aria-label="Drag to reorder"
         >
           <GripVertical className="size-4" aria-hidden="true" />
@@ -250,7 +245,6 @@ export default function TrackItem({
         onClick={handleLikeClick}
         aria-disabled={likeButton.isDisabled || undefined}
         className={cn(
-          MOTION_TRACK_ICON_BUTTON_CLASS,
           // The colour is the toggle's state (liked), not a look a variant
           // could carry.
           // eslint-disable-next-line no-restricted-syntax

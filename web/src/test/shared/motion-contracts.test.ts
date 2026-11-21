@@ -31,11 +31,10 @@ import {
   MOTION_SECTION_ENTER_DELAYED_CLASS,
   MOTION_SETTINGS_SURFACE_CLASS,
   MOTION_SPINNER_STATE_CLASS,
-  MOTION_TRACK_ICON_BUTTON_CLASS,
-  MOTION_TRACK_MENU_TRIGGER_CLASS,
   MOTION_TRACK_PLAY_BUTTON_CLASS,
   MOTION_TRACK_ROW_CLASS,
 } from "@/lib/constants";
+import * as constants from "@/lib/constants";
 import { MOTION_DURATIONS_MS } from "@/lib/theme-tokens";
 
 /** The `duration-<name>` utility of a duration on the motion scale. */
@@ -93,6 +92,68 @@ function findInlineMotionViolations(name: string, source: string) {
       ts.isNoSubstitutionTemplateLiteral(node)
     ) {
       checkLiteral(node.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return violations;
+}
+
+/** A transition utility, ignoring the reduced-motion escape. */
+const TRANSITION_UTILITY = /(?:^|\s)transition(?:-(?!none\b)|\s|$)/;
+
+/**
+ * `<Button className>` values that set a transition. Button's base already
+ * animates background, border, colour, box-shadow and opacity, and `cn` keeps
+ * the last transition-*, so one more would replace it and drop the focus ring
+ * and border from the animation. Reads string literals and the shared
+ * constants a className names.
+ */
+function findButtonTransitionOverrides(name: string, source: string) {
+  const violations: string[] = [];
+  const sourceFile = ts.createSourceFile(
+    name,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    name.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
+  const sharedClasses = constants as Record<string, unknown>;
+  const checkClassName = (node: ts.Node) => {
+    if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
+      if (TRANSITION_UTILITY.test(node.text)) {
+        violations.push(`${name}: <Button className> sets "${node.text}"`);
+      }
+    } else if (ts.isTemplateExpression(node)) {
+      const text = [
+        node.head.text,
+        ...node.templateSpans.map((span) => span.literal.text),
+      ].join(" ");
+      if (TRANSITION_UTILITY.test(text)) {
+        violations.push(`${name}: <Button className> sets "${text}"`);
+      }
+    } else if (ts.isIdentifier(node)) {
+      const value = sharedClasses[node.text];
+      if (typeof value === "string" && TRANSITION_UTILITY.test(value)) {
+        violations.push(`${name}: <Button className> uses ${node.text}`);
+      }
+    }
+    ts.forEachChild(node, checkClassName);
+  };
+  const visit = (node: ts.Node) => {
+    if (
+      (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) &&
+      node.tagName.getText(sourceFile) === "Button"
+    ) {
+      for (const attribute of node.attributes.properties) {
+        if (
+          ts.isJsxAttribute(attribute) &&
+          attribute.name.getText(sourceFile) === "className" &&
+          attribute.initializer
+        ) {
+          checkClassName(attribute.initializer);
+        }
+      }
     }
     ts.forEachChild(node, visit);
   };
@@ -179,10 +240,6 @@ describe("motion contracts", () => {
     expect(MOTION_TRACK_PLAY_BUTTON_CLASS).toContain(
       "motion-reduce:transition-none",
     );
-    expect(MOTION_TRACK_ICON_BUTTON_CLASS).toContain(
-      "motion-reduce:transition-none",
-    );
-    expect(MOTION_TRACK_MENU_TRIGGER_CLASS).toBe(MOTION_MICRO_COLORS_CLASS);
     expect(MOTION_PLAYER_CHROME_PANEL_CLASS).toContain(
       "motion-reduce:transition-none",
     );
@@ -283,6 +340,25 @@ describe("motion contracts", () => {
       const source = readFileSync(path, "utf8");
       const name = path.slice(srcDir.length + 1);
       violations.push(...findInlineMotionViolations(name, source));
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it("never overrides Button's own transition", () => {
+    const srcDir = resolve(process.cwd(), "src");
+    const sourceFiles = readdirSync(srcDir, {
+      recursive: true,
+      withFileTypes: true,
+    })
+      .filter((entry) => entry.isFile() && entry.name.endsWith(".tsx"))
+      .map((entry) => resolve(entry.parentPath, entry.name))
+      .filter((path) => !path.startsWith(resolve(srcDir, "test")));
+    const violations: string[] = [];
+    for (const path of sourceFiles) {
+      const name = path.slice(srcDir.length + 1);
+      violations.push(
+        ...findButtonTransitionOverrides(name, readFileSync(path, "utf8")),
+      );
     }
     expect(violations).toEqual([]);
   });

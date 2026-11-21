@@ -94,7 +94,8 @@ describe("constants contracts", () => {
     expect(SCROLL_RAIL_EDGE_CLASS).toContain("pointer-events-none");
     expect(SCROLL_RAIL_ARROW_CLASS).toContain("group-hover/rail:opacity-100");
     expect(SCROLL_RAIL_ARROW_CLASS).toContain("group-focus-within/rail:opacity-100");
-    expect(SCROLL_RAIL_ARROW_CLASS).toContain("motion-reduce:transition-none");
+    // The fade is Button's own transition (reduced-motion safe there).
+    expect(SCROLL_RAIL_ARROW_CLASS).not.toMatch(/(^|\s)transition(-|\s|$)/);
     // The exhausted arrow stays focusable (aria-disabled, never disabled) and
     // dims only while the rail is hovered or focused: a plain aria-disabled
     // opacity would outrank the hidden state and show the arrow at rest.

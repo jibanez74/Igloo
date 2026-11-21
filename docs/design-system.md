@@ -282,6 +282,11 @@ constant exists — and when you create a new recurring one, add it there so
 - **Transitions enumerate properties** — e.g.
   `transition-[background-color,border-color,color,box-shadow,opacity]` —
   never `transition-all`.
+- **A `Button` brings its own transition** (that list, at 150ms micro). Never
+  pass it another transition class or motion constant: `cn` keeps the last
+  `transition-*`, so the extra one replaces the base and the focus ring and
+  border stop animating. `motion-contracts.test.ts` fails on a `<Button
+  className>` that sets one.
 - **Enter/exit animations** are the app's own utilities, in
   `src/assets/animations.css`: `animate-in` / `animate-out` run one keyframe
   each (`enter`, `exit`) between the resting state and the offsets set by
