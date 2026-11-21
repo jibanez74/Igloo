@@ -445,6 +445,13 @@ export const PEER_FOCUS_VISIBLE_RING_CLASS =
   "peer-focus-visible:border-ring peer-focus-visible:ring-[3px] peer-focus-visible:ring-ring/50";
 
 /**
+ * A control whose save is in flight (design-system §3.7): it stays focusable
+ * (`aria-disabled` or `readOnly`, never `disabled`), so this is what shows it
+ * is busy. Lighter than the disabled dim, with a progress cursor.
+ */
+export const BUSY_CONTROL_CLASS = "cursor-progress opacity-70";
+
+/**
  * Radix Select content uses `data-slot="select-content"` in components/ui/select.tsx.
  * Used to avoid closing a dialog when interacting with a portaled select.
  */

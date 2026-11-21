@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { BUSY_CONTROL_CLASS } from "@/lib/constants";
 import { lightInputClassName } from "@/lib/input-styles";
 import { expectNoClass } from "../helpers/dom";
 
@@ -106,6 +107,27 @@ describe("Input size", () => {
     );
   });
 
+  it("is read-only, not disabled, while busy, and shows it", () => {
+    const { rerender } = render(<Input aria-label="Path" busy />);
+
+    const field = screen.getByRole("textbox", { name: "Path" });
+    expect(field).toHaveAttribute("readonly");
+    expect(field).toBeEnabled();
+    expect(field).toHaveClass(...classesOf(BUSY_CONTROL_CLASS));
+
+    rerender(<Input aria-label="Path" />);
+    expect(field).not.toHaveAttribute("readonly");
+    expectNoClass(field, ...classesOf(BUSY_CONTROL_CLASS));
+  });
+
+  it("keeps a read-only field that is not busy at rest", () => {
+    render(<Input aria-label="Email" readOnly />);
+
+    const field = screen.getByRole("textbox", { name: "Email" });
+    expect(field).toHaveAttribute("readonly");
+    expectNoClass(field, ...classesOf(BUSY_CONTROL_CLASS));
+  });
+
   it("lets className add layout without restating the look", () => {
     render(<Input aria-label="Search" variant="glass" className="pl-10" />);
 
@@ -162,7 +184,10 @@ describe("Textarea and NativeSelect", () => {
 
 describe("SelectTrigger variants", () => {
   const renderTrigger = (
-    props: Pick<React.ComponentProps<typeof SelectTrigger>, "variant" | "size">,
+    props: Pick<
+      React.ComponentProps<typeof SelectTrigger>,
+      "variant" | "size" | "busy"
+    >,
   ) => {
     render(
       <Select value="a" onValueChange={() => {}}>
@@ -201,6 +226,14 @@ describe("SelectTrigger variants", () => {
       "shadow-none",
     );
     expectNoClass(trigger, "h-9", "shadow-xs", "bg-muted");
+  });
+
+  it("stays focusable while busy, and shows it", () => {
+    const trigger = renderTrigger({ busy: true });
+
+    expect(trigger).toBeEnabled();
+    expect(trigger).toHaveAttribute("aria-disabled", "true");
+    expect(trigger).toHaveClass(...classesOf(BUSY_CONTROL_CLASS));
   });
 
   it("keeps the bare trigger for outline", () => {

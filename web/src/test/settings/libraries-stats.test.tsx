@@ -5,6 +5,7 @@ import { authUserData } from "../helpers/fixtures";
 import { deferredResponse, jsonResponse, requestURL } from "../helpers/api";
 import { renderRoute } from "../helpers/render-route";
 import { musicScanStatus, scanStatuses } from "../helpers/scan-status";
+import { BUSY_CONTROL_CLASS } from "@/lib/constants";
 
 // Only the music counts answer; the shows counts fail, and the movie path is
 // blank so its tile never renders. The scan status call falls through to the
@@ -126,6 +127,7 @@ describe("where focus stays in the library form", () => {
     await waitFor(() => expect(path).toHaveAttribute("readonly"));
     expect(path).toBeEnabled();
     expect(path).toHaveFocus();
+    expect(path).toHaveClass(...BUSY_CONTROL_CLASS.split(" "));
   });
 
   // Scan disables itself for as long as the scan takes to start and run.

@@ -6,6 +6,7 @@ import type { PlaybackSettingsType } from "@/types";
 import { jsonResponse, requestURL } from "../helpers/api";
 import { authUser, playbackSettings } from "../helpers/fixtures";
 import { renderRoute } from "../helpers/render-route";
+import { BUSY_CONTROL_CLASS } from "@/lib/constants";
 
 // A 4K-capable catalog, so a 1080p cap is below what the server offers.
 const profilesWith2160p = [
@@ -176,5 +177,6 @@ describe("server playback form effective device notice", () => {
     await waitFor(() => expect(input).toHaveAttribute("readonly"));
     expect(input).toBeEnabled();
     expect(input).toHaveFocus();
+    expect(input).toHaveClass(...BUSY_CONTROL_CLASS.split(" "));
   });
 });

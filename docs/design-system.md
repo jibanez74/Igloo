@@ -623,6 +623,12 @@ of its own, as tall as its text: the size for the two link variants).
   - A text field is `readOnly`, not `disabled`, while the form it sits in
     saves (General, Libraries, Playback): Enter in the field is what
     submitted the form, so the field is what holds focus.
+  - Both show it: `Switch`, `SelectTrigger` and `Input` take `busy`, which
+    sets `aria-disabled` (or `readOnly` on the input) and
+    `BUSY_CONTROL_CLASS` — 70% opacity and a progress cursor, lighter than
+    the disabled dim, so a busy control never reads as unavailable. The
+    avatar upload's label uses the same class. A field that is read-only
+    for good (not busy) keeps its resting look.
   - A dialog returns focus to what opened it, and when that is gone to the
     card's heading or its own action: a revoked device's row to "Devices"
     (`SettingsCardHeader titleRef`, `ConfirmDialog fallbackFocusRef`), a

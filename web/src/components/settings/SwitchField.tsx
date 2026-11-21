@@ -68,7 +68,7 @@ export default function SwitchField({
           }}
           aria-labelledby={labelId}
           aria-describedby={descriptionId}
-          aria-disabled={busy || undefined}
+          busy={busy}
           disabled={disabled}
           className="mt-1"
         />

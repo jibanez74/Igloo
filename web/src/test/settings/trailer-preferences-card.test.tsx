@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import TrailerPreferencesCard from "@/components/settings/TrailerPreferencesCard";
-import { LIVE_ANNOUNCE_DELAY_MS } from "@/lib/constants";
+import { BUSY_CONTROL_CLASS, LIVE_ANNOUNCE_DELAY_MS } from "@/lib/constants";
 import type { TrailerPreferencesData } from "@/types";
 import { mutationSettled, renderAcrossSessions } from "../helpers/session";
 import { renderWithQueryClient } from "../helpers/render";
@@ -121,6 +121,7 @@ describe("TrailerPreferencesCard", () => {
     expect(toggle()).toBeEnabled();
     expect(toggle()).toHaveAttribute("aria-disabled", "true");
     expect(toggle()).toHaveFocus();
+    expect(toggle()).toHaveClass(...BUSY_CONTROL_CLASS.split(" "));
 
     // A second press while the first is saving does not start another save.
     await user.keyboard(" ");
@@ -129,6 +130,7 @@ describe("TrailerPreferencesCard", () => {
     finish(success({ ...defaults, enabled: true }));
     await waitFor(() => expect(toggle()).not.toHaveAttribute("aria-disabled"));
     expect(toggle()).toHaveFocus();
+    expect(toggle()).not.toHaveClass(BUSY_CONTROL_CLASS.split(" ")[0]);
     expect(toggle()).toHaveAttribute("aria-checked", "true");
   });
 
@@ -158,6 +160,7 @@ describe("TrailerPreferencesCard", () => {
     for (const select of selects()) {
       expect(select).toBeEnabled();
       expect(select).toHaveAttribute("aria-disabled", "true");
+      expect(select).toHaveClass(...BUSY_CONTROL_CLASS.split(" "));
     }
 
     // A pick made meanwhile starts no second save.
