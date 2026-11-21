@@ -76,6 +76,27 @@ describe("Switch", () => {
     expectNoClass(toggle, ...BUSY_CONTROL_CLASS.split(" "));
   });
 
+  it("keeps busy when a caller also passes aria-disabled", () => {
+    const { rerender } = render(
+      <Switch
+        checked
+        onCheckedChange={vi.fn()}
+        busy
+        aria-disabled={false}
+        aria-label="Autoplay"
+      />,
+    );
+
+    const toggle = screen.getByRole("switch", { name: "Autoplay" });
+    expect(toggle).toHaveAttribute("aria-disabled", "true");
+
+    rerender(
+      <Switch checked onCheckedChange={vi.fn()} aria-disabled aria-label="Autoplay" />,
+    );
+    expect(toggle).toHaveAttribute("aria-disabled", "true");
+    expectNoClass(toggle, ...BUSY_CONTROL_CLASS.split(" "));
+  });
+
   it("takes layout classes and a ref's worth of button props", () => {
     render(
       <Switch

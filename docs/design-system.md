@@ -1748,8 +1748,8 @@ is unknown or empty.
     that search.". A failure toast whose title already names the action
     ("Failed to update like") takes no description unless the server worded
     one (`showActionFailed(action, envelope)`). `copy-contracts.test.ts`
-    fails on "Please try again" or "Check your connection" anywhere in
-    `src`.
+    fails on "Please try again" or "Check your connection" in any source
+    file outside `src/test`.
 
   Because the erroring subtree often unmounts its own live region, error
   surfaces carry `role="alert"` and announce themselves — never repeat one

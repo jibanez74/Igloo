@@ -51,11 +51,12 @@ function SelectTrigger({
   variant = "filled",
   size = "default",
   busy = false,
+  "aria-disabled": ariaDisabled,
   ...props
 }: SelectTriggerProps) {
   return (
     <SelectPrimitive.Trigger
-      aria-disabled={busy || undefined}
+      aria-disabled={busy || ariaDisabled || undefined}
       data-slot="select-trigger"
       data-variant={variant}
       className={cn(

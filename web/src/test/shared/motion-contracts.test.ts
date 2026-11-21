@@ -99,8 +99,11 @@ function findInlineMotionViolations(name: string, source: string) {
   return violations;
 }
 
-/** A transition utility, ignoring the reduced-motion escape. */
-const TRANSITION_UTILITY = /(?:^|\s)transition(?:-(?!none\b)|\s|$)/;
+/**
+ * A transition utility, variant-prefixed or not (`hover:transition-opacity`),
+ * ignoring the reduced-motion escape.
+ */
+const TRANSITION_UTILITY = /(?:^|[\s:])transition(?:-(?!none\b)|\s|$)/;
 
 /**
  * `<Button className>` values, and the classes `cn` adds to a
@@ -356,6 +359,13 @@ describe("motion contracts", () => {
       violations.push(...findInlineMotionViolations(name, source));
     }
     expect(violations).toEqual([]);
+  });
+
+  it("reads a transition behind a variant, but not the reduced-motion escape", () => {
+    expect(TRANSITION_UTILITY.test("hover:transition-opacity")).toBe(true);
+    expect(TRANSITION_UTILITY.test("rounded transition-colors")).toBe(true);
+    expect(TRANSITION_UTILITY.test("motion-reduce:transition-none")).toBe(false);
+    expect(TRANSITION_UTILITY.test("transitional-copy")).toBe(false);
   });
 
   it("never overrides Button's own transition", () => {

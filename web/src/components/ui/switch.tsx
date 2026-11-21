@@ -31,6 +31,7 @@ function Switch({
   checked,
   onCheckedChange,
   busy = false,
+  "aria-disabled": ariaDisabled,
   className,
   ...props
 }: SwitchProps) {
@@ -39,7 +40,7 @@ function Switch({
       type="button"
       role="switch"
       aria-checked={checked}
-      aria-disabled={busy || undefined}
+      aria-disabled={busy || ariaDisabled || undefined}
       data-slot="switch"
       data-state={checked ? "checked" : "unchecked"}
       onClick={() => onCheckedChange(!checked)}
