@@ -22,14 +22,16 @@ const matchedRoutes = vi.hoisted(() => ({
   current: [{ staticData: {} }] as { staticData: { immersive?: boolean } }[],
 }));
 
-vi.mock("@tanstack/react-router", async importOriginal => ({
-  ...(await importOriginal<typeof import("@tanstack/react-router")>()),
-  useMatches: ({
-    select,
-  }: {
-    select: (matches: typeof matchedRoutes.current) => unknown;
-  }) => select(matchedRoutes.current),
-}));
+vi.mock("@tanstack/react-router", async () =>
+  (await import("../helpers/router-link-mock")).routerWith({
+    // The stub takes only the select the shell passes.
+    useMatches: ({
+      select,
+    }: {
+      select: (matches: typeof matchedRoutes.current) => unknown;
+    }) => select(matchedRoutes.current),
+  }),
+);
 
 vi.mock("@/components/app/app-sidebar", () => ({
   default: () => (

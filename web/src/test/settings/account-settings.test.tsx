@@ -4,9 +4,11 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { authUserFrom, authUserQueryOpts } from "@/lib/query-opts";
 import type { AuthUser } from "@/types";
-import { deferredResponse, jsonResponse, requestURL } from "../helpers/api";
+import { deferredResponse, jsonResponse, requestURL, stubApi } from "../helpers/api";
+import { authUserData } from "../helpers/fixtures";
 import { passwordCases } from "../helpers/password-cases";
 import { renderRoute } from "../helpers/render-route";
+import { scanStatuses } from "../helpers/scan-status";
 import { mutationSettled } from "../helpers/session";
 
 const showValidationErrorMock = vi.fn();
@@ -37,17 +39,12 @@ type CapturedRequest = {
 };
 
 function testUser(overrides: Partial<AuthUser> = {}): AuthUser {
-  return {
+  return authUserData({
     id: 2,
     name: "Dana Scully",
     email: "dana@example.com",
-    is_admin: false,
-    avatar: null,
-    has_pin: false,
-    created_at: "2026-01-01T00:00:00Z",
-    updated_at: "2026-01-01T00:00:00Z",
     ...overrides,
-  };
+  });
 }
 
 function isNameBody(body: unknown): body is { name: string } {
@@ -91,132 +88,105 @@ function setupAccountFetch(
     emailResponse,
   }: AccountFetchOptions = {},
 ) {
-  const requests: CapturedRequest[] = [];
   let currentUser: AuthUser | null = user;
 
-  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-    const url = requestURL(input);
-    const method = init?.method ?? "GET";
-    const body =
-      typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
-    requests.push({ method, url, body });
-
-    if (url === "/api/auth/user") {
-      if (!currentUser) {
-        return jsonResponse({ error: true, message: "not authenticated" }, 401);
-      }
-
-      return jsonResponse({
-        error: false,
-        data: { user: currentUser },
-      });
-    }
-
-    if (url === "/api/devices" && method === "GET") {
-      return jsonResponse({
-        error: false,
-        data: { devices: [] },
-      });
-    }
-
-    if (url === "/api/user/password" && method === "PUT") {
-      if (passwordResponse) return passwordResponse;
-      if (failPassword) {
+  return stubApi(
+    {
+      "/api/auth/user": () =>
+        currentUser
+          ? { user: currentUser }
+          : jsonResponse({ error: true, message: "not authenticated" }, 401),
+      "GET /api/devices": { devices: [] },
+      // The shell polls scan progress for administrators.
+      "GET /api/settings/scan": scanStatuses(),
+      "PUT /api/user/password": () => {
+        if (passwordResponse) return passwordResponse;
+        if (failPassword) {
+          return jsonResponse(
+            { error: true, message: "internal server error" },
+            500,
+          );
+        }
+        if (rejectNewPassword) {
+          return jsonResponse(
+            {
+              error: true,
+              message: "new password must be at least 9 characters",
+            },
+            400,
+          );
+        }
+        if (rejectPassword) {
+          return jsonResponse(
+            { error: true, message: "current password is incorrect" },
+            401,
+          );
+        }
+        return jsonResponse({
+          error: false,
+          message: "Password updated successfully",
+        });
+      },
+      "PUT /api/user/email": () => emailResponse ?? { user: currentUser },
+      "PUT /api/user/name": ({ init }) => {
+        const body =
+          typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
+        if (acceptName && currentUser && isNameBody(body)) {
+          currentUser = { ...currentUser, name: body.name };
+          return { user: currentUser };
+        }
         return jsonResponse(
-          { error: true, message: "internal server error" },
-          500,
+          { error: true, message: "name is already taken" },
+          409,
         );
-      }
-      if (rejectNewPassword) {
-        return jsonResponse(
-          {
-            error: true,
-            message: "new password must be at least 9 characters",
-          },
-          400,
-        );
-      }
-      if (rejectPassword) {
-        return jsonResponse(
-          { error: true, message: "current password is incorrect" },
-          401,
-        );
-      }
-      return jsonResponse({
-        error: false,
-        message: "Password updated successfully",
-      });
-    }
-
-    if (url === "/api/user/email" && method === "PUT") {
-      if (emailResponse) return emailResponse;
-      return jsonResponse({ error: false, data: { user: currentUser } });
-    }
-
-    if (url === "/api/user/name" && method === "PUT") {
-      if (acceptName && currentUser && isNameBody(body)) {
-        currentUser = { ...currentUser, name: body.name };
-        return jsonResponse({ error: false, data: { user: currentUser } });
-      }
-      return jsonResponse(
-        { error: true, message: "name is already taken" },
-        409,
-      );
-    }
-
-    if (url === "/api/user/avatar" && method === "PUT") {
-      if (avatarResponse) return avatarResponse;
-      // The server stores its own copy of the image and answers with it.
-      currentUser = currentUser && {
-        ...currentUser,
-        avatar: "/api/static/avatars/2-stored.webp",
-      };
-      return jsonResponse({ error: false, data: { user: currentUser } });
-    }
-
-    if (url === "/api/user/avatar/upload" && method === "POST") {
-      if (uploadResponse) return uploadResponse;
-      return jsonResponse({
-        error: false,
-        data: { user: currentUser },
-      });
-    }
-
-    if (url === "/api/user" && method === "DELETE") {
-      currentUser = null;
-      return jsonResponse({
-        error: false,
-        message: "Account deleted successfully",
-      });
-    }
-
-    return jsonResponse({
-      error: true,
-      message: `Unexpected request: ${method} ${url}`,
-    }, 500);
-  });
-
-  vi.stubGlobal("fetch", fetchMock);
-  return { requests };
+      },
+      "PUT /api/user/avatar": () => {
+        if (avatarResponse) return avatarResponse;
+        // The server stores its own copy of the image and answers with it.
+        currentUser = currentUser && {
+          ...currentUser,
+          avatar: "/api/static/avatars/2-stored.webp",
+        };
+        return { user: currentUser };
+      },
+      "POST /api/user/avatar/upload": () =>
+        uploadResponse ?? { user: currentUser },
+      "DELETE /api/user": () => {
+        currentUser = null;
+        return jsonResponse({
+          error: false,
+          message: "Account deleted successfully",
+        });
+      },
+    },
+    { user: null },
+  );
 }
+
+type FetchMock = ReturnType<typeof stubApi>;
 
 async function renderAccountRoute(
   user = testUser(),
   options: AccountFetchOptions = {},
 ) {
-  const { requests } = setupAccountFetch(user, options);
+  const fetchMock = setupAccountFetch(user, options);
   const { router, queryClient } = await renderRoute("/settings/account");
 
   await screen.findByText("Profile information");
-  return { requests, router, queryClient };
+  return { fetchMock, router, queryClient };
 }
 
-function requestsFor(
-  requests: CapturedRequest[],
-  method: string,
-  url: string,
-) {
-  return requests.filter(
+/** Every request the page sent, in order. */
+function capturedRequests(fetchMock: FetchMock): CapturedRequest[] {
+  return fetchMock.mock.calls.map(([input, init]) => ({
+    method: init?.method ?? "GET",
+    url: requestURL(input),
+    body: typeof init?.body === "string" ? JSON.parse(init.body) : undefined,
+  }));
+}
+
+function requestsFor(fetchMock: FetchMock, method: string, url: string) {
+  return capturedRequests(fetchMock).filter(
     request => request.method === method && request.url === url,
   );
 }
@@ -224,8 +194,8 @@ function requestsFor(
 describe("Account settings", () => {
   it("keeps the signed-in user when the server refuses a name change", async () => {
     const user = userEvent.setup();
-    const { requests } = await renderAccountRoute();
-    const userRequestsBefore = requestsFor(requests, "GET", "/api/auth/user").length;
+    const { fetchMock } = await renderAccountRoute();
+    const userRequestsBefore = requestsFor(fetchMock, "GET", "/api/auth/user").length;
 
     const nameInput = screen.getByLabelText("Name");
     await user.clear(nameInput);
@@ -240,7 +210,7 @@ describe("Account settings", () => {
     });
     // A refusal changes nothing on the server, so nothing is refetched over
     // the cached user (a network error there used to replace it).
-    expect(requestsFor(requests, "GET", "/api/auth/user")).toHaveLength(
+    expect(requestsFor(fetchMock, "GET", "/api/auth/user")).toHaveLength(
       userRequestsBefore,
     );
     expect(screen.getByText("Profile information")).toBeInTheDocument();
@@ -311,7 +281,7 @@ describe("Account settings", () => {
   it("does not send the name change once the session ended during the email save", async () => {
     const user = userEvent.setup();
     const emailRequest = deferredResponse();
-    const { router, requests, queryClient } = await renderAccountRoute(testUser(), {
+    const { router, fetchMock, queryClient } = await renderAccountRoute(testUser(), {
       emailResponse: emailRequest.promise,
       acceptName: true,
     });
@@ -324,7 +294,7 @@ describe("Account settings", () => {
     await user.type(nameInput, "Fox Mulder");
     await user.click(screen.getByRole("button", { name: "Save profile" }));
     await waitFor(() => {
-      expect(requestsFor(requests, "PUT", "/api/user/email")).toHaveLength(1);
+      expect(requestsFor(fetchMock, "PUT", "/api/user/email")).toHaveLength(1);
     });
 
     await router.navigate({
@@ -349,7 +319,7 @@ describe("Account settings", () => {
     await settled;
     await act(async () => {});
 
-    expect(requestsFor(requests, "PUT", "/api/user/name")).toHaveLength(0);
+    expect(requestsFor(fetchMock, "PUT", "/api/user/name")).toHaveLength(0);
     expect(showSuccessMock).not.toHaveBeenCalled();
   });
 
@@ -395,7 +365,7 @@ describe("Account settings", () => {
 
   it.each(passwordCases)("validates $name when changing a password", async ({ password, error }) => {
     const user = userEvent.setup();
-    const { requests } = await renderAccountRoute();
+    const { fetchMock } = await renderAccountRoute();
     const input = screen.getByLabelText("New password");
     expect(input).not.toHaveAttribute("maxlength");
     expect(input).toHaveAccessibleDescription("At least 9 characters.");
@@ -411,10 +381,10 @@ describe("Account settings", () => {
       expect(input).toHaveAccessibleDescription(expect.stringContaining(`New password ${error}`));
       expect(input).toHaveFocus();
       expect(input).toHaveValue(password);
-      expect(requestsFor(requests, "PUT", "/api/user/password")).toHaveLength(0);
+      expect(requestsFor(fetchMock, "PUT", "/api/user/password")).toHaveLength(0);
     } else {
-      await waitFor(() => expect(requestsFor(requests, "PUT", "/api/user/password")).toHaveLength(1));
-      expect(requestsFor(requests, "PUT", "/api/user/password")[0].body).toEqual({
+      await waitFor(() => expect(requestsFor(fetchMock, "PUT", "/api/user/password")).toHaveLength(1));
+      expect(requestsFor(fetchMock, "PUT", "/api/user/password")[0].body).toEqual({
         current_password: "CurrentPass123",
         new_password: password,
       });
@@ -592,19 +562,19 @@ describe("Account settings", () => {
   // The dialog was not a form, so Enter in its one field did nothing.
   it("confirms account deletion with Enter once DELETE is typed", async () => {
     const user = userEvent.setup();
-    const { requests } = await renderAccountRoute();
+    const { fetchMock } = await renderAccountRoute();
 
     await user.click(screen.getByRole("button", { name: "Delete account" }));
     const dialog = screen.getByRole("dialog", { name: "Delete account" });
     const confirmation = within(dialog).getByLabelText("Type DELETE to confirm");
 
     await user.type(confirmation, "delete{Enter}");
-    expect(requestsFor(requests, "DELETE", "/api/user")).toHaveLength(0);
+    expect(requestsFor(fetchMock, "DELETE", "/api/user")).toHaveLength(0);
 
     await user.clear(confirmation);
     await user.type(confirmation, "DELETE{Enter}");
     await waitFor(() =>
-      expect(requestsFor(requests, "DELETE", "/api/user")).toHaveLength(1),
+      expect(requestsFor(fetchMock, "DELETE", "/api/user")).toHaveLength(1),
     );
   });
 
@@ -625,7 +595,7 @@ describe("Account settings", () => {
 
   it("exposes short password validation to assistive technology", async () => {
     const user = userEvent.setup();
-    const { requests } = await renderAccountRoute();
+    const { fetchMock } = await renderAccountRoute();
 
     await user.type(screen.getByLabelText("Current password"), "CurrentPass123");
     await user.type(screen.getByLabelText("New password"), "short");
@@ -647,12 +617,12 @@ describe("Account settings", () => {
     // Field errors stay inline (design-system §3.7); no toast repeats them.
     expect(showValidationErrorMock).not.toHaveBeenCalled();
     expect(screen.getByLabelText("New password")).toHaveFocus();
-    expect(requestsFor(requests, "PUT", "/api/user/password")).toHaveLength(0);
+    expect(requestsFor(fetchMock, "PUT", "/api/user/password")).toHaveLength(0);
   });
 
   it("exposes mismatched password validation to assistive technology", async () => {
     const user = userEvent.setup();
-    const { requests } = await renderAccountRoute();
+    const { fetchMock } = await renderAccountRoute();
 
     await user.type(screen.getByLabelText("Current password"), "CurrentPass123");
     await user.type(screen.getByLabelText("New password"), "NewPassword123");
@@ -675,7 +645,7 @@ describe("Account settings", () => {
     // Field errors stay inline (design-system §3.7); no toast repeats them.
     expect(showValidationErrorMock).not.toHaveBeenCalled();
     expect(screen.getByLabelText("Confirm new password")).toHaveFocus();
-    expect(requestsFor(requests, "PUT", "/api/user/password")).toHaveLength(0);
+    expect(requestsFor(fetchMock, "PUT", "/api/user/password")).toHaveLength(0);
   });
 
   // An aria-label used to rename most of these ("Your display name" over a
@@ -719,7 +689,7 @@ describe("Account settings", () => {
   // of the upload, the input could not keep it.
   it("keeps the upload input focusable while a file uploads", async () => {
     const upload = deferredResponse();
-    const { requests } = await renderAccountRoute(testUser(), {
+    const { fetchMock } = await renderAccountRoute(testUser(), {
       uploadResponse: upload.promise,
     });
     const input = screen.getByLabelText("Upload image");
@@ -735,7 +705,7 @@ describe("Account settings", () => {
     expect(fireEvent.click(input)).toBe(false);
     // A second file dropped on it meanwhile starts no second upload.
     fireEvent.change(input, { target: { files: [file] } });
-    expect(requestsFor(requests, "POST", "/api/user/avatar/upload")).toHaveLength(
+    expect(requestsFor(fetchMock, "POST", "/api/user/avatar/upload")).toHaveLength(
       1,
     );
 
@@ -747,7 +717,7 @@ describe("Account settings", () => {
   });
 
   it("exposes invalid avatar upload validation to assistive technology", async () => {
-    const { requests } = await renderAccountRoute();
+    const { fetchMock } = await renderAccountRoute();
     const upload = screen.getByLabelText("Upload image");
     const file = new File(["not an image"], "avatar.txt", {
       type: "text/plain",
@@ -767,7 +737,7 @@ describe("Account settings", () => {
     // Field errors stay inline (design-system §3.7); no toast repeats them.
     expect(showValidationErrorMock).not.toHaveBeenCalled();
     expect(upload).toHaveFocus();
-    expect(requestsFor(requests, "POST", "/api/user/avatar/upload")).toHaveLength(
+    expect(requestsFor(fetchMock, "POST", "/api/user/avatar/upload")).toHaveLength(
       0,
     );
   });
@@ -821,7 +791,7 @@ describe("Account settings", () => {
 
   it("deletes the account without calling logout after the session is destroyed", async () => {
     const user = userEvent.setup();
-    const { requests, router, queryClient } = await renderAccountRoute();
+    const { fetchMock, router, queryClient } = await renderAccountRoute();
 
     await user.click(screen.getByRole("button", { name: "Delete account" }));
     const dialog = screen.getByRole("dialog", { name: "Delete account" });
@@ -844,8 +814,8 @@ describe("Account settings", () => {
     await waitFor(() =>
       expect(router.state.location.pathname).toBe("/login"),
     );
-    expect(requestsFor(requests, "DELETE", "/api/user")).toHaveLength(1);
-    expect(requestsFor(requests, "DELETE", "/api/auth/logout")).toHaveLength(0);
+    expect(requestsFor(fetchMock, "DELETE", "/api/user")).toHaveLength(1);
+    expect(requestsFor(fetchMock, "DELETE", "/api/auth/logout")).toHaveLength(0);
     // The reader ended this session on purpose; it is no expiry to announce.
     expect(showInfoMock).not.toHaveBeenCalled();
     // The login guard knows the session is gone, so nothing asks for the
@@ -854,6 +824,7 @@ describe("Account settings", () => {
     await waitFor(() => {
       expect(queryClient.getQueryCache().getAll()).toEqual([]);
     });
+    const requests = capturedRequests(fetchMock);
     const deleteIndex = requests.findIndex(
       request => request.method === "DELETE" && request.url === "/api/user",
     );

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import { QueryObserver } from "@tanstack/react-query";
 import {
   CONTINUE_WATCHING_KEY,
   EPISODE_KEY,
@@ -16,6 +16,7 @@ import {
   watchListQueryKeys,
 } from "@/lib/video-playback-exit";
 import { episodeMediaRef, movieMediaRef } from "@/lib/media-ref";
+import { createTestQueryClient } from "../helpers/render";
 
 function deferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
@@ -146,7 +147,7 @@ describe("playback exit synchronization", () => {
   });
 
   it("invalidates continue watching and the movie's watch progress", async () => {
-    const queryClient = new QueryClient();
+    const queryClient = createTestQueryClient();
     const movieId = 7;
     await queryClient.prefetchQuery({
       queryKey: [CONTINUE_WATCHING_KEY],
@@ -172,7 +173,7 @@ describe("playback exit synchronization", () => {
   });
 
   it("invalidates continue watching, the season list, and the episode's watch progress", async () => {
-    const queryClient = new QueryClient();
+    const queryClient = createTestQueryClient();
     const episodeId = 9;
     await queryClient.prefetchQuery({
       queryKey: [CONTINUE_WATCHING_KEY],
@@ -209,7 +210,7 @@ describe("playback exit synchronization", () => {
   // episode before it, so every cached episode goes stale; none refetches,
   // including the one on screen.
   it("marks every cached episode stale without refetching it", async () => {
-    const queryClient = new QueryClient();
+    const queryClient = createTestQueryClient();
     for (const episodeId of [8, 9]) {
       await queryClient.prefetchQuery({
         queryKey: [EPISODE_KEY, episodeId],
@@ -238,7 +239,7 @@ describe("playback exit synchronization", () => {
   });
 
   it("leaves cached episodes alone after a movie", async () => {
-    const queryClient = new QueryClient();
+    const queryClient = createTestQueryClient();
     await queryClient.prefetchQuery({
       queryKey: [EPISODE_KEY, 8],
       queryFn: () => Promise.resolve("episode-8"),
@@ -253,7 +254,7 @@ describe("playback exit synchronization", () => {
   });
 
   it("only marks inactive lists stale when asked to refetch active ones", async () => {
-    const queryClient = new QueryClient();
+    const queryClient = createTestQueryClient();
     await queryClient.prefetchQuery({
       queryKey: [CONTINUE_WATCHING_KEY],
       queryFn: () => Promise.resolve("continue-watching"),

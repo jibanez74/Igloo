@@ -33,42 +33,11 @@ beforeEach(() => {
       ],
     },
   });
-  showActionFailedMock.mockReset();
-  showSuccessMock.mockReset();
-  showUpdatedMock.mockReset();
 });
 
-vi.mock("@tanstack/react-router", async () => {
-  const actual =
-    await vi.importActual<typeof import("@tanstack/react-router")>(
-      "@tanstack/react-router",
-    );
-
-  return {
-    ...actual,
-    Link: ({
-      children,
-      params,
-      to,
-      ...props
-    }: {
-      children: React.ReactNode;
-      params?: { id?: string };
-      to?: string;
-    }) => {
-      const href =
-        typeof to === "string"
-          ? to.replace("$id", params?.id ?? "")
-          : "#";
-
-      return (
-        <a href={href} {...props}>
-          {children}
-        </a>
-      );
-    },
-  };
-});
+vi.mock("@tanstack/react-router", async () =>
+  (await import("../helpers/router-link-mock")).routerWithAnchorLinks(),
+);
 
 // Radix only mounts the avatar <img> once the browser has loaded it, which
 // jsdom never does; render it outright so its src can be read.

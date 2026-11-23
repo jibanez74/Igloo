@@ -1,27 +1,10 @@
 import { screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
-import { jsonResponse, requestURL } from "../helpers/api";
-import { authUser } from "../helpers/fixtures";
+import { describe, expect, it } from "vitest";
+import { requestURL, stubApi } from "../helpers/api";
 import { readDocumentHead, renderRoute } from "../helpers/render-route";
 
 function mockInTheatersFetch(movie: unknown) {
-  const fetchMock = vi.fn((input: RequestInfo | URL) => {
-    const url = requestURL(input);
-
-    if (url === "/api/auth/user") {
-      return jsonResponse(authUser());
-    }
-
-    if (url.startsWith("/api/tmdb/movies/")) {
-      return jsonResponse({ error: false, data: { movie } });
-    }
-
-    return jsonResponse({ error: false, data: {} });
-  });
-
-  vi.stubGlobal("fetch", fetchMock);
-
-  return fetchMock;
+  return stubApi({ "/api/tmdb/movies/550": { movie } });
 }
 
 describe("in-theaters details head", () => {

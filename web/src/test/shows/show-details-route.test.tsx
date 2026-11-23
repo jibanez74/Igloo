@@ -8,6 +8,7 @@ import {
   deferredResponse,
   jsonResponse,
   requestURL,
+  stubApi,
 } from "../helpers/api";
 import { createTestQueryClient } from "../helpers/render";
 import { readDocumentHead, renderRoute } from "../helpers/render-route";
@@ -24,60 +25,28 @@ type MockOptions = {
 };
 
 function mockShowDetailsFetch({ detailsStatus, detailsBody }: MockOptions = {}) {
-  const fetchMock = vi.fn((input: RequestInfo | URL) => {
-    const url = requestURL(input);
+  // Only this show's seasons are served, so an episode URL built against the
+  // wrong show fails the test.
+  const seasons = Object.fromEntries(
+    showDetails().seasons.map(({ season_number }) => [
+      `/api/shows/${SHOW_ID}/seasons/${season_number}/episodes`,
+      seasonEpisodes(season_number),
+    ]),
+  );
 
-    if (url === "/api/auth/user") {
-      return jsonResponse({
-        error: false,
-        data: {
-          user: {
-            id: 1,
-            name: "Show User",
-            email: "shows@example.com",
-            is_admin: false,
-            avatar: null,
-            created_at: "2026-01-01T00:00:00Z",
-            updated_at: "2026-01-01T00:00:00Z",
-          },
-        },
-      });
-    }
-
-    if (url === `/api/shows/details/${SHOW_ID}`) {
-      if (detailsBody !== undefined) {
-        return jsonResponse(detailsBody, detailsStatus ?? 200);
-      }
-      return jsonResponse({ error: false, data: showDetails() });
-    }
-
-    const episodesMatch = url.match(
-      /^\/api\/shows\/(\d+)\/seasons\/(\d+)\/episodes$/,
-    );
-    if (episodesMatch) {
-      // Validate the show id too: a season fixture served for any id would
-      // hide an episode URL built against the wrong show.
-      if (Number.parseInt(episodesMatch[1], 10) !== SHOW_ID) {
-        return jsonResponse({ error: true, message: "show not found" }, 404);
-      }
-
-      const seasonNumber = Number.parseInt(episodesMatch[2], 10);
-      return jsonResponse({
-        error: false,
-        data: seasonEpisodes(seasonNumber),
-      });
-    }
-
-    // Anything the page asks for that is not stubbed fails loudly rather than
-    // hanging the test.
-    return jsonResponse(
-      { error: true, message: `Unexpected request: ${url}` },
-      500,
-    );
-  });
-
-  vi.stubGlobal("fetch", fetchMock);
-  return fetchMock;
+  return stubApi(
+    {
+      [`/api/shows/details/${SHOW_ID}`]: () =>
+        detailsBody === undefined
+          ? showDetails()
+          : jsonResponse(detailsBody, detailsStatus ?? 200),
+      ...seasons,
+      // A season the show lacks: the loader asks for the URL's season beside
+      // the details, before it can know the show has none.
+      [`/api/shows/${SHOW_ID}/seasons/47/episodes`]: seasonEpisodes(47),
+    },
+    { user: { name: "Show User", email: "shows@example.com" } },
+  );
 }
 
 describe("show details route", () => {

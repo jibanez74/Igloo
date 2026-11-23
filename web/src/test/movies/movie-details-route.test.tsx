@@ -18,7 +18,7 @@ import {
   setDevicePlaybackPreferences,
 } from "@/lib/playback-preferences";
 import { libraryMovieDetailsQueryOpts } from "@/lib/query-opts";
-import { countFetchRequests, jsonResponse, requestURL } from "../helpers/api";
+import { countFetchRequests, stubApi, type StubApiRoute } from "../helpers/api";
 import {
   authUserData,
   nullableFloat64,
@@ -293,84 +293,21 @@ function mockMovieDetailsFetch({
     [SIGNAL_FIRE_ID, signalFireTechnicalDetails()],
   ]);
 
-  const fetchMock = vi.fn((input: RequestInfo | URL) => {
-    const url = requestURL(input);
+  const routes: Record<string, StubApiRoute> = {
+    "/api/settings/playback": { settings: playbackSettings() },
+  };
+  for (const [movieId, technical] of technicalById) {
+    routes[`/api/movies/${movieId}/technical-details`] = technical;
+  }
+  for (const [movieId, details] of detailsById) {
+    routes[`/api/movies/details/${movieId}`] = details;
+    routes[`/api/movies/${movieId}/like-status`] = { is_liked: false };
+    routes[`/api/movies/${movieId}/watch-progress`] = watchProgress;
+  }
 
-    if (url === "/api/auth/user") {
-      return jsonResponse({
-        error: false,
-        data: {
-          user: authUser(),
-        },
-      });
-    }
-
-    if (url === "/api/settings/playback") {
-      return jsonResponse({
-        error: false,
-        data: {
-          settings: playbackSettings(),
-        },
-      });
-    }
-
-    const detailsMatch = url.match(/^\/api\/movies\/details\/(\d+)$/);
-    if (detailsMatch) {
-      const movieId = Number.parseInt(detailsMatch[1], 10);
-      const payload = detailsById.get(movieId);
-      if (payload) {
-        return jsonResponse({
-          error: false,
-          data: payload,
-        });
-      }
-    }
-
-    const technicalMatch = url.match(
-      /^\/api\/movies\/(\d+)\/technical-details$/,
-    );
-    if (technicalMatch) {
-      const movieId = Number.parseInt(technicalMatch[1], 10);
-      const payload = technicalById.get(movieId);
-      if (payload) {
-        return jsonResponse({
-          error: false,
-          data: payload,
-        });
-      }
-    }
-
-    const likeStatusMatch = url.match(/^\/api\/movies\/(\d+)\/like-status$/);
-    if (likeStatusMatch) {
-      return jsonResponse({
-        error: false,
-        data: {
-          is_liked: false,
-        },
-      });
-    }
-
-    const watchProgressMatch = url.match(
-      /^\/api\/movies\/(\d+)\/watch-progress$/,
-    );
-    if (watchProgressMatch) {
-      return jsonResponse({
-        error: false,
-        data: watchProgress,
-      });
-    }
-
-    return jsonResponse(
-      {
-        error: true,
-        message: `Unexpected request: ${url}`,
-      },
-      500,
-    );
+  return stubApi(routes, {
+    user: { name: "Movie User", email: "movies@example.com" },
   });
-
-  vi.stubGlobal("fetch", fetchMock);
-  return fetchMock;
 }
 
 async function renderMovieDetailsRoute(initialEntry: string) {

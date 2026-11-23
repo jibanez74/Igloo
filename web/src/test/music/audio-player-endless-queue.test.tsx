@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AudioPlayerProvider } from "@/context/AudioPlayerContext";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
@@ -69,11 +69,6 @@ describe("endless shuffle queue", () => {
         tracks: Array.from({ length: BATCH_SIZE }, () => rawTrack(nextId++)),
       },
     }));
-  });
-
-  afterEach(() => {
-    cleanup();
-    vi.clearAllMocks();
   });
 
   it(
@@ -186,11 +181,6 @@ describe("endless shuffle queue", () => {
 describe("endless shuffle queue on an exhausted library", () => {
   beforeEach(() => {
     stubMediaElement();
-  });
-
-  afterEach(() => {
-    cleanup();
-    vi.clearAllMocks();
   });
 
   // Stand in for the server: honour the exclusion list the client sends, which
@@ -362,11 +352,6 @@ describe("endless play-all queue", () => {
 
   beforeEach(() => {
     stubMediaElement();
-  });
-
-  afterEach(() => {
-    cleanup();
-    vi.clearAllMocks();
   });
 
   // Play-all walks the library by offset, and that cursor lives in a ref rather
@@ -597,8 +582,6 @@ describe("a pending Shuffle all / Play all", () => {
 
   afterEach(() => {
     infoSpy.mockRestore();
-    cleanup();
-    vi.clearAllMocks();
   });
 
   const expectNoPlayer = () => {
@@ -686,11 +669,6 @@ describe("a pending Shuffle all / Play all", () => {
 describe("a stale shuffle refill", () => {
   beforeEach(() => {
     stubMediaElement();
-  });
-
-  afterEach(() => {
-    cleanup();
-    vi.clearAllMocks();
   });
 
   it("does not mark the replacement queue exhausted", async () => {

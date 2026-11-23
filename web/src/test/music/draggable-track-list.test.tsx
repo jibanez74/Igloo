@@ -60,7 +60,6 @@ const layOutRows = () => layOutTrackRows(["Alabaster", "Borrowed Light"]);
 
 afterEach(() => {
   prefersCoarse.value = false;
-  vi.restoreAllMocks();
   for (const observer of observers.splice(0)) observer.disconnect();
 });
 

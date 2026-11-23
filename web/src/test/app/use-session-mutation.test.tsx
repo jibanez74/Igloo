@@ -72,7 +72,6 @@ function SlowOnMutatePage() {
 beforeEach(() => {
   held.length = 0;
   onMutateProbe.session = undefined;
-  vi.clearAllMocks();
 });
 
 describe("useSessionMutation", () => {

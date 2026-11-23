@@ -31,7 +31,6 @@ const refocusWindow = async () => {
 describe("window-focus refetching", () => {
   afterEach(() => {
     focusManager.setFocused(undefined);
-    vi.unstubAllGlobals();
   });
 
   it("skips it for an infinite track list, which would replay every loaded page", async () => {
@@ -76,10 +75,6 @@ describe("window-focus refetching", () => {
 });
 
 describe("abort signals", () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
   // One factory of each shape: a helper with no arguments, one with
   // arguments, a paged list, an infinite list and a scan-status poll.
   it.each([

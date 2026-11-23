@@ -83,7 +83,6 @@ async function submitCodeAndConfirm() {
 
 describe("QuickConnectApproveCard", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
     lookupQuickConnectMock.mockResolvedValue({
       error: false,
       data: PENDING_DEVICE,

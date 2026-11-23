@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { useWatchProgressSaver } from "@/hooks/useWatchProgressSaver";
 import { WATCH_PROGRESS_SAVE_TIMEOUT_MS } from "@/lib/constants";
 import { episodeMediaRef, movieMediaRef } from "@/lib/media-ref";
+import { jsonResponse } from "../helpers/api";
 
 const updateMediaWatchProgress = vi.hoisted(() => vi.fn());
 
@@ -32,9 +33,7 @@ describe("watch progress saver", () => {
   it("saves nothing while disabled, not even on exit or tab hide", async () => {
     vi.useFakeTimers();
     try {
-      const fetchMock = vi.fn().mockResolvedValue(
-        new Response(JSON.stringify(successfulUpdate), { status: 200 }),
-      );
+      const fetchMock = vi.fn(() => jsonResponse(successfulUpdate));
       vi.stubGlobal("fetch", fetchMock);
       const currentTimeRef = { current: 300 };
       const durationRef = { current: 1000 };

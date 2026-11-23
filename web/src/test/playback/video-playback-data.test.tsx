@@ -25,7 +25,7 @@ import type {
   DevicePlaybackPreferences,
   StreamModeId,
 } from "@/types";
-import { deferredResponse, jsonResponse } from "../helpers/api";
+import { deferredResponse, jsonResponse, stubApi } from "../helpers/api";
 import {
   authUserData,
   nullableFloat64,
@@ -828,16 +828,13 @@ describe("useVideoPlaybackData", () => {
 
     const authRequest = deferredResponse();
     const playbackSettingsRequest = deferredResponse();
-    const fetchMock = vi.fn((input: RequestInfo | URL) => {
-      if (String(input) === "/api/auth/user") {
-        return authRequest.promise;
-      }
-      if (String(input) === "/api/settings/playback") {
-        return playbackSettingsRequest.promise;
-      }
-      throw new Error(`Unexpected request: ${String(input)}`);
-    });
-    vi.stubGlobal("fetch", fetchMock);
+    const fetchMock = stubApi(
+      {
+        "/api/auth/user": () => authRequest.promise,
+        "/api/settings/playback": () => playbackSettingsRequest.promise,
+      },
+      { user: null },
+    );
     const onSyncSearch = vi.fn();
 
     const { result } = renderHook(

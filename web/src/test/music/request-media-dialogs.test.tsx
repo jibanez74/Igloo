@@ -1,7 +1,7 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useRef, useState } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import RequestAlbumDialog from "@/components/music/RequestAlbumDialog";
 import RequestTrackDialog from "@/components/music/RequestTrackDialog";
 import { AUTH_USER_KEY } from "@/lib/constants";
@@ -36,17 +36,11 @@ const toastMocks = vi.hoisted(() => ({
   showInfo: vi.fn(),
 }));
 
-vi.mock("@tanstack/react-router", async () => {
-  const actual =
-    await vi.importActual<typeof import("@tanstack/react-router")>(
-      "@tanstack/react-router",
-    );
-
-  return {
-    ...actual,
+vi.mock("@tanstack/react-router", async () =>
+  (await import("../helpers/router-link-mock")).routerWith({
     useNavigate: () => routerMocks.navigate,
-  };
-});
+  }),
+);
 
 vi.mock("@/lib/api", async () => {
   const actual = await vi.importActual<typeof import("@/lib/api")>("@/lib/api");
@@ -149,10 +143,6 @@ function renderDialog(Dialog: typeof RequestAlbumDialog) {
 
   return { onOpenChange };
 }
-
-beforeEach(() => {
-  vi.clearAllMocks();
-});
 
 afterEach(() => {
   document

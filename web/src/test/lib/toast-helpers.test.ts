@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 const toastError = vi.fn();
 
@@ -7,10 +7,6 @@ vi.mock("sonner", () => ({ toast: { error: (...args: unknown[]) => toastError(..
 const { showActionFailed } = await import("@/lib/toast-helpers");
 
 describe("showActionFailed", () => {
-  beforeEach(() => {
-    toastError.mockClear();
-  });
-
   it("keeps a server-worded client error as the description", () => {
     showActionFailed("create user", {
       error: true,

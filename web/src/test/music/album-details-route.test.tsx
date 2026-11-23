@@ -2,15 +2,16 @@ import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { describe, expect, it, vi } from "vitest";
-import { DETAIL_PAGE_CONTENT_ENTER_CLASS } from "@/lib/constants";
+import { ALBUMS_PER_PAGE, DETAIL_PAGE_CONTENT_ENTER_CLASS } from "@/lib/constants";
 import { albumDetailsQueryOpts, likedTrackIdsQueryOpts } from "@/lib/query-opts";
 import { routeTree } from "@/routeTree.gen";
 import type { AlbumDetailsResponseType } from "@/types";
-import { countFetchRequests, jsonResponse, requestURL } from "../helpers/api";
+import { countFetchRequests, jsonResponse, requestURL, stubApi, type StubApiRoute } from "../helpers/api";
 import { nullableInt64, nullableString } from "../helpers/fixtures";
 import { createTestQueryClient } from "../helpers/render";
 import { albumDetailsResponse, albumTrack } from "../helpers/music";
 import { readDocumentHead, renderRoute } from "../helpers/render-route";
+import { scanStatuses } from "../helpers/scan-status";
 import {
   getDetailMotionWrappers,
   getHeroMotionWrapper,
@@ -37,12 +38,15 @@ type MockAlbumDetailsFetchOptions = {
   };
   isAdmin?: boolean;
   additionalAlbums?: Array<[number, AlbumDetailsResponseType]>;
+  /** Further routes, such as the music page a deletion lands on. */
+  routes?: Record<string, StubApiRoute>;
 };
 
 function mockAlbumDetailsFetch({
   deleteAlbumResponse,
   isAdmin = false,
   additionalAlbums = [],
+  routes: extraRoutes = {},
 }: MockAlbumDetailsFetchOptions = {}) {
   const detailsById = new Map<number, AlbumDetailsResponseType>([
     [42, albumDetailsResponse(42, "Blue Record", "The Band", "Alabaster")],
@@ -50,68 +54,26 @@ function mockAlbumDetailsFetch({
     ...additionalAlbums,
   ]);
 
-  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-    const url = requestURL(input);
-    const method = init?.method ?? "GET";
-
-    if (url === "/api/auth/user") {
-      return jsonResponse({
-        error: false,
-        data: {
-          user: {
-            id: 1,
-            name: "Album User",
-            email: "albums@example.com",
-            is_admin: isAdmin,
-            avatar: null,
-            created_at: "2026-01-01T00:00:00Z",
-            updated_at: "2026-01-01T00:00:00Z",
-          },
-        },
-      });
-    }
-
-    const detailsMatch = url.match(/^\/api\/music\/albums\/details\/(\d+)$/);
-    if (detailsMatch) {
-      const albumId = Number.parseInt(detailsMatch[1], 10);
-      const payload = detailsById.get(albumId);
-      if (payload) {
-        return jsonResponse({
-          error: false,
-          data: payload,
-        });
-      }
-    }
-
-    if (url === "/api/music/tracks/liked-ids") {
-      return jsonResponse({
-        error: false,
-        data: {
-          liked_track_ids: [420],
-        },
-      });
-    }
-
-    if (url === "/api/music/albums/42" && method === "DELETE") {
-      return jsonResponse(
-        deleteAlbumResponse?.body ?? {
-          error: false,
-        },
+  const routes: Record<string, StubApiRoute> = {
+    "/api/music/tracks/liked-ids": { liked_track_ids: [420] },
+    "DELETE /api/music/albums/42": () =>
+      jsonResponse(
+        deleteAlbumResponse?.body ?? { error: false },
         deleteAlbumResponse?.status ?? 200,
-      );
-    }
+      ),
+  };
+  for (const [albumId, details] of detailsById) {
+    routes[`/api/music/albums/details/${albumId}`] = details;
+  }
+  if (isAdmin) {
+    // An administrator's shell also polls these.
+    routes["/api/notifications/unread-count"] = { unread_count: 0 };
+    routes["/api/settings/scan"] = scanStatuses();
+  }
 
-    return jsonResponse(
-      {
-        error: true,
-        message: `Unexpected request: ${url}`,
-      },
-      500,
-    );
+  return stubApi({ ...routes, ...extraRoutes }, {
+    user: { name: "Album User", email: "albums@example.com", is_admin: isAdmin },
   });
-
-  vi.stubGlobal("fetch", fetchMock);
-  return fetchMock;
 }
 
 async function renderAlbumDetailsRoute(
@@ -155,7 +117,8 @@ describe("album details route prefetch", () => {
       history: createMemoryHistory({ initialEntries: ["/music/album/42"] }),
     });
 
-    // Nothing renders: only the loaders run.
+    // Not renderRoute, which renders once the loaders are done: nothing
+    // renders here, so the request can only come from a loader.
     await router.load();
 
     expect(
@@ -526,7 +489,21 @@ describe("album details content", () => {
 describe("album details deletion", () => {
   it("leaves the page before refreshing the library, so the deleted album is never refetched", async () => {
     const user = userEvent.setup();
-    const fetchMock = mockAlbumDetailsFetch({ isAdmin: true });
+    const fetchMock = mockAlbumDetailsFetch({
+      isAdmin: true,
+      // Deleting lands on the music page, which loads these.
+      routes: {
+        "/api/music/stats": { total_albums: 0, total_tracks: 0, total_musicians: 0 },
+        [`/api/music/albums?page=1&per_page=${ALBUMS_PER_PAGE}`]: {
+          albums: [],
+          total: 0,
+          page: 1,
+          per_page: ALBUMS_PER_PAGE,
+          total_pages: 0,
+        },
+        "/api/spotify/status": { available: false },
+      },
+    });
     const { router, queryClient } = await renderRoute("/music/album/42");
     const detailsRequests = () =>
       fetchMock.mock.calls.filter(

@@ -1,6 +1,6 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import SpotifyPicker from "@/components/music/SpotifyPicker";
 import type { ApiResponseType, SpotifyAlbumSearchResultType } from "@/types";
 import { renderWithQueryClient } from "../helpers/render";
@@ -57,10 +57,6 @@ function renderPicker(
 
   return { searchFn };
 }
-
-beforeEach(() => {
-  vi.clearAllMocks();
-});
 
 describe("SpotifyPicker", () => {
   // Neither request dialog test reaches an empty result set.

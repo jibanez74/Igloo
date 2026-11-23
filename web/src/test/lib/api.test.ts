@@ -269,8 +269,6 @@ describe("request deadline", () => {
 
   afterEach(() => {
     vi.useRealTimers();
-    vi.unstubAllGlobals();
-    vi.restoreAllMocks();
   });
 
   it("resolves a timeout envelope once a request goes unanswered too long", async () => {

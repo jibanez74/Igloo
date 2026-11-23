@@ -5,35 +5,9 @@ import MovieCard from "@/components/movies/MovieCard";
 import type { LatestMovieType, TheaterMovieType } from "@/types";
 import { renderWithQueryClient } from "@/test/helpers/render";
 
-vi.mock("@tanstack/react-router", async () => {
-  const actual =
-    await vi.importActual<typeof import("@tanstack/react-router")>(
-      "@tanstack/react-router",
-    );
-
-  return {
-    ...actual,
-    Link: ({
-      children,
-      params,
-      to,
-      ...props
-    }: {
-      children: React.ReactNode;
-      params?: { id?: string };
-      to?: string;
-    }) => {
-      const href =
-        typeof to === "string" ? to.replace("$id", params?.id ?? "") : "#";
-
-      return (
-        <a href={href} {...props}>
-          {children}
-        </a>
-      );
-    },
-  };
-});
+vi.mock("@tanstack/react-router", async () =>
+  (await import("../helpers/router-link-mock")).routerWithAnchorLinks(),
+);
 
 const libraryMovie: LatestMovieType = {
   id: 1,

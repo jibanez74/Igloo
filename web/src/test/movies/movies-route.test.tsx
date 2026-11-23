@@ -10,13 +10,13 @@ import {
   MOVIES_STATS_KEY,
 } from "@/lib/constants";
 import type { MoviePlaylistSummaryType } from "@/types";
-import { countFetchRequests, jsonResponse, requestURL } from "../helpers/api";
+import { countFetchRequests, jsonResponse, stubApi } from "../helpers/api";
 import { runContentFadeTransitionTimeout } from "../helpers/content-fade-transition";
 import {
   restoreMatchMedia,
   setReducedMotionPreference,
 } from "../helpers/dom";
-import { authUser, nullableInt64, nullableString, userSummary } from "../helpers/fixtures";
+import { nullableInt64, nullableString, userSummary } from "../helpers/fixtures";
 import { renderRoute } from "../helpers/render-route";
 
 const toastMocks = vi.hoisted(() => ({
@@ -80,134 +80,76 @@ function mockMoviesFetch(options?: {
   const tmdbAvailable = options?.tmdbAvailable ?? true;
   let statsRequestCount = 0;
 
-  const fetchMock = vi.fn((input: RequestInfo | URL) => {
-    const url = requestURL(input);
+  const libraryPage = {
+    movies: libraryMovies,
+    total: libraryMovies.length,
+    page: 1,
+    per_page: MOVIES_PER_PAGE,
+    total_pages: 1,
+  };
 
-    if (url === "/api/auth/user") {
-      return jsonResponse(
-        authUser({ name: "Movie User", email: "movies@example.com" }),
-      );
-    }
+  return stubApi(
+    {
+      "/api/movies/stats": () => {
+        statsRequestCount += 1;
 
-    if (url === "/api/movies/stats") {
-      statsRequestCount += 1;
+        if (options?.statsRefreshFailure && statsRequestCount > 1) {
+          return jsonResponse({
+            error: true,
+            message: "Movie stats are unavailable.",
+          });
+        }
 
-      if (options?.statsRefreshFailure && statsRequestCount > 1) {
-        return jsonResponse({
-          error: true,
-          message: "Movie stats are unavailable.",
-        });
-      }
-
-      return jsonResponse({
-        error: false,
-        data: {
-          total_movies: 42,
-        },
-      });
-    }
-
-    // Both sort orders answer the same page: the grid hands `sort` to the API
-    // and renders what comes back, so the order itself is not under test.
-    if (
-      url === `/api/movies/library?page=1&per_page=${MOVIES_PER_PAGE}&sort=asc` ||
-      url === `/api/movies/library?page=1&per_page=${MOVIES_PER_PAGE}&sort=desc`
-    ) {
-      return jsonResponse({
-        error: false,
-        data: {
-          movies: libraryMovies,
-          total: libraryMovies.length,
-          page: 1,
-          per_page: MOVIES_PER_PAGE,
-          total_pages: 1,
-        },
-      });
-    }
-
-    if (url === "/api/movies/genres") {
-      return jsonResponse({
-        error: false,
-        data: {
-          genres: [
-            {
-              genre_id: 10,
-              genre_tag: "Action",
-              movie_count: 2,
-              backdrop_path: nullableString("/action-backdrop.jpg"),
-            },
-            {
-              genre_id: 20,
-              genre_tag: "Drama",
-              movie_count: 1,
-              backdrop_path: nullableString(),
-            },
-          ],
-        },
-      });
-    }
-
-    if (url === `/api/movies/genres/10/movies?page=1&per_page=${MOVIES_PER_PAGE}&sort=asc`) {
-      return jsonResponse({
-        error: false,
-        data: {
-          movies: [movie(4, "Die Hard", 1988)],
-          total: 1,
-          page: 1,
-          per_page: MOVIES_PER_PAGE,
-          total_pages: 1,
-        },
-      });
-    }
-
-    if (url === "/api/movies/playlists") {
-      return jsonResponse({
-        error: false,
-        data: {
-          playlists,
-        },
-      });
-    }
-
-    const likedPage = url.startsWith("/api/movies/liked?")
-      ? Number(new URLSearchParams(url.split("?")[1]).get("page"))
-      : null;
-
-    if (likedPage !== null) {
+        return { total_movies: 42 };
+      },
+      // Both sort orders answer the same page: the grid hands `sort` to the
+      // API and renders what comes back, so the order itself is not under test.
+      [`/api/movies/library?page=1&per_page=${MOVIES_PER_PAGE}&sort=asc`]: libraryPage,
+      [`/api/movies/library?page=1&per_page=${MOVIES_PER_PAGE}&sort=desc`]: libraryPage,
+      "/api/movies/genres": {
+        genres: [
+          {
+            genre_id: 10,
+            genre_tag: "Action",
+            movie_count: 2,
+            backdrop_path: nullableString("/action-backdrop.jpg"),
+          },
+          {
+            genre_id: 20,
+            genre_tag: "Drama",
+            movie_count: 1,
+            backdrop_path: nullableString(),
+          },
+        ],
+      },
+      [`/api/movies/genres/10/movies?page=1&per_page=${MOVIES_PER_PAGE}&sort=asc`]: {
+        movies: [movie(4, "Die Hard", 1988)],
+        total: 1,
+        page: 1,
+        per_page: MOVIES_PER_PAGE,
+        total_pages: 1,
+      },
+      // Genre 11's list fails, for the genre-failure case.
+      [`/api/movies/genres/11/movies?page=1&per_page=${MOVIES_PER_PAGE}&sort=asc`]: () =>
+        jsonResponse({ error: true, message: "Genre 11 is unavailable." }, 500),
+      "/api/movies/playlists": { playlists },
       // The API does not clamp: a page past the end answers empty, with the
       // real total still in the envelope.
-      return jsonResponse({
-        error: false,
-        data: {
+      "/api/movies/liked": ({ search }) => {
+        const likedPage = Number(search.get("page"));
+
+        return {
           movies: likedPage === 1 ? likedMovies : [],
           total: likedMovies.length,
           page: likedPage,
           per_page: MOVIES_PER_PAGE,
           total_pages: 1,
-        },
-      });
-    }
-
-    if (url === "/api/tmdb/status") {
-      return jsonResponse({
-        error: false,
-        data: {
-          available: tmdbAvailable,
-        },
-      });
-    }
-
-    return jsonResponse(
-      {
-        error: true,
-        message: `Unexpected request: ${url}`,
+        };
       },
-      500,
-    );
-  });
-
-  vi.stubGlobal("fetch", fetchMock);
-  return fetchMock;
+      "/api/tmdb/status": { available: tmdbAvailable },
+    },
+    { user: { name: "Movie User", email: "movies@example.com" } },
+  );
 }
 
 async function renderMoviesRoute(
@@ -454,7 +396,7 @@ describe("movies route genres", () => {
 
 describe("movies route genre failures", () => {
   it("leaves a failed genre list to its alert instead of announcing it empty", async () => {
-    // Genre 11's movies are not mocked, so the list request fails with a 500.
+    // Genre 11's list request fails with a 500.
     await renderMoviesRoute("/movies/?tab=genres&genreId=11");
 
     expect(

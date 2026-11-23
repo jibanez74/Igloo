@@ -45,13 +45,11 @@ vi.mock("@/lib/api", async () => {
 
 // The dialog reloads the movie route after a save so its head picks up a new
 // title; the tests render without a router.
-vi.mock("@tanstack/react-router", async () => {
-  const actual = await vi.importActual<
-    typeof import("@tanstack/react-router")
-  >("@tanstack/react-router");
-
-  return { ...actual, useRouter: () => routerMocks };
-});
+vi.mock("@tanstack/react-router", async () =>
+  (await import("../helpers/router-link-mock")).routerWith({
+    useRouter: () => routerMocks,
+  }),
+);
 
 vi.mock("sonner", () => ({
   toast: {

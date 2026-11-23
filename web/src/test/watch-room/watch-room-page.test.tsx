@@ -157,22 +157,19 @@ const mockVideoController = {
 };
 
 vi.mock("@tanstack/react-router", async () => {
-  const actual =
-    await vi.importActual<typeof import("@tanstack/react-router")>(
-      "@tanstack/react-router",
-    );
+  // The page reads its route's params and navigate through the route object.
+  const createFileRoute =
+    () =>
+    (options: { component: unknown }) => ({
+      ...options,
+      useParams: () => ({ id: routeParamId }),
+      useNavigate: () => navigateMock,
+    });
 
-  return {
-    ...actual,
-    createFileRoute:
-      () =>
-      (options: { component: unknown }) => ({
-        ...options,
-        useParams: () => ({ id: routeParamId }),
-        useNavigate: () => navigateMock,
-      }),
+  return (await import("../helpers/router-link-mock")).routerWith({
+    createFileRoute,
     useNavigate: () => navigateMock,
-  };
+  });
 });
 
 vi.mock("@tanstack/react-query", async () => {
@@ -394,9 +391,6 @@ describe("WatchRoomPageContent", () => {
       status: 500,
       message: "getWatchRoom is not mocked in this test",
     });
-    showActionFailedMock.mockReset();
-    showInfoMock.mockReset();
-    showSuccessMock.mockReset();
     routeParamId = 7;
     globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
   });

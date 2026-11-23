@@ -37,15 +37,18 @@ function AnchorLink({ children, params, search, to, ...props }: LinkStubProps) {
  *     }),
  *   );
  */
-export async function routerWith(
-  overrides: Partial<typeof import("@tanstack/react-router")>,
-) {
-  const actual =
-    await vi.importActual<typeof import("@tanstack/react-router")>(
-      "@tanstack/react-router",
-    );
+type RouterModule = typeof import("@tanstack/react-router");
 
-  return { ...actual, ...overrides };
+/**
+ * Stand-ins for router exports. They are typed loosely: a stub `useRouter` or
+ * `createFileRoute` returns only what the suite reads, never the generic API.
+ */
+type RouterOverrides = Partial<Record<keyof RouterModule, unknown>>;
+
+export async function routerWith(overrides: RouterOverrides) {
+  const actual = await vi.importActual<RouterModule>("@tanstack/react-router");
+
+  return { ...actual, ...overrides } as RouterModule;
 }
 
 /**
@@ -55,12 +58,8 @@ export async function routerWith(
  *     (await import("../helpers/router-link-mock")).routerWithAnchorLinks(),
  *   );
  */
-export async function routerWithAnchorLinks(
-  overrides: Partial<typeof import("@tanstack/react-router")> = {},
-) {
-  // The stub takes the props the suites pass, not Link's full generic API.
-  const Link = AnchorLink as unknown as typeof import("@tanstack/react-router").Link;
-  return routerWith({ Link, ...overrides });
+export async function routerWithAnchorLinks(overrides: RouterOverrides = {}) {
+  return routerWith({ Link: AnchorLink, ...overrides });
 }
 
 /** The search a stubbed Link was rendered with. */

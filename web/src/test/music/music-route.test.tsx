@@ -10,10 +10,10 @@ import {
   MUSICIANS_PER_PAGE,
   TRACKS_INFINITE_PAGE_SIZE,
 } from "@/lib/constants";
-import { jsonResponse, requestURL } from "../helpers/api";
+import { jsonResponse, stubApi } from "../helpers/api";
 import { runContentFadeTransitionTimeout } from "../helpers/content-fade-transition";
 import { restoreMatchMedia, setReducedMotionPreference } from "../helpers/dom";
-import { authUser, nullableInt64, nullableString, userSummary } from "../helpers/fixtures";
+import { nullableInt64, nullableString, userSummary } from "../helpers/fixtures";
 import { playlistSummary, trackListItem } from "../helpers/music";
 import { renderRoute } from "../helpers/render-route";
 import { audioPlayerActionsMock } from "../helpers/audio-player";
@@ -52,192 +52,128 @@ function mockMusicFetch(options: MockMusicFetchOptions = {}) {
   let nextTracksPageRequestCount = 0;
   let playlistsRequestCount = 0;
   let likedTracksRequestCount = 0;
-  const fetchMock = vi.fn((input: RequestInfo | URL) => {
-    const url = requestURL(input);
-
-    if (url === "/api/auth/user") {
-      return jsonResponse(
-        authUser({ name: "Music User", email: "music@example.com" }),
-      );
-    }
-
-    if (url === "/api/spotify/status") {
-      return jsonResponse({
-        error: false,
-        data: {
-          available: spotifyAvailable,
-        },
-      });
-    }
-
-    if (url === "/api/music/stats") {
-      return jsonResponse({
-        error: false,
-        data: {
-          total_albums: 1,
-          total_tracks: 5,
-          total_musicians: 1,
-        },
-      });
-    }
-
-    if (url === `/api/music/albums?page=1&per_page=${ALBUMS_PER_PAGE}`) {
-      return jsonResponse({
-        error: false,
-        data: {
-          albums: [
-            {
-              id: 1,
-              title: "Blue Record",
-              cover: nullableString(),
-              musician: nullableString("The Band"),
-              year: nullableInt64(2026),
-            },
-          ],
-          total: 1,
-          page: 1,
-          per_page: ALBUMS_PER_PAGE,
-          total_pages: 1,
-        },
-      });
-    }
-
-    if (url === `/api/music/musicians?page=1&per_page=${MUSICIANS_PER_PAGE}`) {
-      if (emptyMusicians) {
-        return jsonResponse({
-          error: false,
-          data: {
+  stubApi(
+    {
+      "/api/spotify/status": { available: spotifyAvailable },
+      "/api/music/stats": {
+        total_albums: 1,
+        total_tracks: 5,
+        total_musicians: 1,
+      },
+      [`/api/music/albums?page=1&per_page=${ALBUMS_PER_PAGE}`]: {
+        albums: [
+          {
+            id: 1,
+            title: "Blue Record",
+            cover: nullableString(),
+            musician: nullableString("The Band"),
+            year: nullableInt64(2026),
+          },
+        ],
+        total: 1,
+        page: 1,
+        per_page: ALBUMS_PER_PAGE,
+        total_pages: 1,
+      },
+      [`/api/music/musicians?page=1&per_page=${MUSICIANS_PER_PAGE}`]: emptyMusicians
+        ? {
             musicians: [],
             total: 0,
             page: 1,
             per_page: MUSICIANS_PER_PAGE,
             total_pages: 0,
+          }
+        : {
+            musicians: [
+              {
+                id: 2,
+                name: "Nina Simone",
+                sort_name: "Simone, Nina",
+                thumb: nullableString(),
+                album_count: 1,
+                track_count: 5,
+              },
+            ],
+            total: 1,
+            page: 1,
+            per_page: MUSICIANS_PER_PAGE,
+            total_pages: 1,
           },
-        });
-      }
+      [`/api/music/tracks?limit=${TRACKS_INFINITE_PAGE_SIZE}&offset=0`]: () => {
+        if (options.tracksFailing?.current) {
+          return jsonResponse({
+            error: true,
+            message: "The tracks library is temporarily unavailable.",
+          });
+        }
 
-      return jsonResponse({
-        error: false,
-        data: {
-          musicians: [
-            {
-              id: 2,
-              name: "Nina Simone",
-              sort_name: "Simone, Nina",
-              thumb: nullableString(),
-              album_count: 1,
-              track_count: 5,
-            },
-          ],
-          total: 1,
-          page: 1,
-          per_page: MUSICIANS_PER_PAGE,
-          total_pages: 1,
-        },
-      });
-    }
-
-    if (url === `/api/music/tracks?limit=${TRACKS_INFINITE_PAGE_SIZE}&offset=0`) {
-      if (options.tracksFailing?.current) {
-        return jsonResponse({
-          error: true,
-          message: "The tracks library is temporarily unavailable.",
-        });
-      }
-
-      const tracks = options.emptyTracks
-        ? []
-        : [track(1, "Alabaster"), track(2, "Borrowed Light")];
-      const hasMore = options.failFirstNextTracksPage === true;
-      return jsonResponse({
-        error: false,
-        data: {
+        const tracks = options.emptyTracks
+          ? []
+          : [track(1, "Alabaster"), track(2, "Borrowed Light")];
+        const hasMore = options.failFirstNextTracksPage === true;
+        return {
           tracks,
           total: hasMore ? tracks.length + 1 : tracks.length,
           offset: 0,
           limit: TRACKS_INFINITE_PAGE_SIZE,
           has_more: hasMore,
+        };
+      },
+      [`/api/music/tracks?limit=${TRACKS_INFINITE_PAGE_SIZE}&offset=${TRACKS_INFINITE_PAGE_SIZE}`]:
+        () => {
+          nextTracksPageRequestCount += 1;
+
+          if (nextTracksPageRequestCount === 1) {
+            return jsonResponse(
+              { error: true, message: "tracks page query failed" },
+              503,
+            );
+          }
+
+          return {
+            tracks: [track(3, "Cascade")],
+            total: 3,
+            offset: TRACKS_INFINITE_PAGE_SIZE,
+            limit: TRACKS_INFINITE_PAGE_SIZE,
+            has_more: false,
+          };
         },
-      });
-    }
+      [`/api/music/tracks/liked?page=1&per_page=${LIKED_TRACKS_PER_PAGE}`]: () => {
+        likedTracksRequestCount += 1;
 
-    if (
-      url ===
-      `/api/music/tracks?limit=${TRACKS_INFINITE_PAGE_SIZE}&offset=${TRACKS_INFINITE_PAGE_SIZE}`
-    ) {
-      nextTracksPageRequestCount += 1;
+        if (options.failFirstLikedTracksRequest && likedTracksRequestCount === 1) {
+          return jsonResponse({
+            error: true,
+            message: "Liked tracks are temporarily unavailable.",
+          });
+        }
 
-      if (nextTracksPageRequestCount === 1) {
-        return jsonResponse(
-          { error: true, message: "tracks page query failed" },
-          503,
-        );
-      }
-
-      return jsonResponse({
-        error: false,
-        data: {
-          tracks: [track(3, "Cascade")],
-          total: 3,
-          offset: TRACKS_INFINITE_PAGE_SIZE,
-          limit: TRACKS_INFINITE_PAGE_SIZE,
-          has_more: false,
-        },
-      });
-    }
-
-    if (
-      url === `/api/music/tracks/liked?page=1&per_page=${LIKED_TRACKS_PER_PAGE}`
-    ) {
-      likedTracksRequestCount += 1;
-
-      if (options.failFirstLikedTracksRequest && likedTracksRequestCount === 1) {
-        return jsonResponse({
-          error: true,
-          message: "Liked tracks are temporarily unavailable.",
-        });
-      }
-
-      const tracks = options.emptyLikedTracks ? [] : [track(2, "Borrowed Light")];
-      return jsonResponse({
-        error: false,
-        data: {
+        const tracks = options.emptyLikedTracks ? [] : [track(2, "Borrowed Light")];
+        return {
           tracks,
           total: tracks.length,
           page: 1,
           per_page: LIKED_TRACKS_PER_PAGE,
           total_pages: tracks.length === 0 ? 0 : 1,
           has_more: false,
-        },
-      });
-    }
+        };
+      },
+      "/api/music/tracks/liked-ids": { liked_track_ids: [2] },
+      "/api/music/playlists": () => {
+        playlistsRequestCount += 1;
 
-    if (url === "/api/music/tracks/liked-ids") {
-      return jsonResponse({
-        error: false,
-        data: {
-          liked_track_ids: [2],
-        },
-      });
-    }
+        if (options.failFirstPlaylistsRequest && playlistsRequestCount === 1) {
+          return jsonResponse({
+            error: true,
+            message: "Playlists are temporarily unavailable.",
+          });
+        }
 
-    if (url === "/api/music/playlists") {
-      playlistsRequestCount += 1;
+        if (options.emptyPlaylists) {
+          return { playlists: [] };
+        }
 
-      if (options.failFirstPlaylistsRequest && playlistsRequestCount === 1) {
-        return jsonResponse({
-          error: true,
-          message: "Playlists are temporarily unavailable.",
-        });
-      }
-
-      if (options.emptyPlaylists) {
-        return jsonResponse({ error: false, data: { playlists: [] } });
-      }
-
-      return jsonResponse({
-        error: false,
-        data: {
+        return {
           playlists: [
             playlistSummary({ id: 30, name: "Morning Rotation", track_count: 3, total_duration: 540_000 }),
             playlistSummary({ id: 31, name: "Shared Discoveries",
@@ -249,20 +185,11 @@ function mockMusicFetch(options: MockMusicFetchOptions = {}) {
               owner: userSummary({ id: 2, name: "Riley" }),
             }),
           ],
-        },
-      });
-    }
-
-    return jsonResponse(
-      {
-        error: true,
-        message: `Unexpected request: ${url}`,
+        };
       },
-      500,
-    );
-  });
-
-  vi.stubGlobal("fetch", fetchMock);
+    },
+    { user: { name: "Music User", email: "music@example.com" } },
+  );
 }
 
 async function renderMusicRoute(

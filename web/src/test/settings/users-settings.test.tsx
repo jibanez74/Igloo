@@ -2,10 +2,13 @@ import type React from "react";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { jsonResponse, requestURL } from "../helpers/api";
+import type { AuthUser } from "@/types";
+import { jsonResponse, requestURL, stubApi, type StubApiRequest, type StubApiRoute } from "../helpers/api";
+import { authUserData } from "../helpers/fixtures";
 import { passwordCases } from "../helpers/password-cases";
 import { watchRoomInviteUsersQueryOpts } from "@/lib/query-opts";
 import { renderRoute } from "../helpers/render-route";
+import { scanStatuses } from "../helpers/scan-status";
 
 const showValidationErrorMock = vi.fn();
 const showActionFailedMock = vi.fn();
@@ -24,33 +27,19 @@ vi.mock("@/lib/toast-helpers", () => ({
   showSuccess: (...args: unknown[]) => showSuccessMock(...args),
 }));
 
-type TestAdminUser = {
-  id: number;
-  name: string;
-  email: string;
-  is_admin: boolean;
-  avatar: string | null;
-  created_at: string;
-  updated_at: string;
-};
-
 type CapturedRequest = {
   method: string;
   url: string;
   body: unknown;
 };
 
-function testUser(overrides: Partial<TestAdminUser>): TestAdminUser {
-  return {
-    id: 1,
+function testUser(overrides: Partial<AuthUser>): AuthUser {
+  return authUserData({
     name: "Admin",
     email: "admin@example.com",
     is_admin: true,
-    avatar: null,
-    created_at: "2026-01-01T00:00:00Z",
-    updated_at: "2026-01-01T00:00:00Z",
     ...overrides,
-  };
+  });
 }
 
 function defaultUsers() {
@@ -71,8 +60,12 @@ function defaultUsers() {
   ];
 }
 
+function requestBody(init?: RequestInit): Partial<AuthUser> | undefined {
+  return typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
+}
+
 function setupUsersFetch(
-  users: TestAdminUser[] = defaultUsers(),
+  users: AuthUser[] = defaultUsers(),
   {
     failList = false,
     stallListAfterDelete = false,
@@ -82,105 +75,77 @@ function setupUsersFetch(
     stallListAfterDelete?: boolean;
   } = {},
 ) {
-  const requests: CapturedRequest[] = [];
   let listStalled = false;
-  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-    const url = requestURL(input);
-    const method = init?.method ?? "GET";
-    const body =
-      typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
-    requests.push({ method, url, body });
-
-    if (url === "/api/auth/user") {
-      return jsonResponse({
-        error: false,
-        data: { user: users[0] },
-      });
-    }
-
-    if (url === "/api/admin/users" && method === "GET") {
+  const routes: Record<string, StubApiRoute> = {
+    "/api/auth/user": () => ({ user: users[0] }),
+    // The shell polls scan progress for administrators.
+    "GET /api/settings/scan": scanStatuses(),
+    "GET /api/admin/users": () => {
       if (failList) {
         return jsonResponse({ error: true, message: "internal_error" }, 500);
       }
       if (listStalled) return new Promise<Response>(() => {});
-      return jsonResponse({
-        error: false,
-        data: { users },
-      });
-    }
-
-    if (url === "/api/admin/users" && method === "POST") {
-      return jsonResponse({
-        error: false,
-        data: {
-          user: testUser({
-            id: 10,
-            ...(body as Partial<TestAdminUser>),
-          }),
+      return { users };
+    },
+    "POST /api/admin/users": ({ init }: StubApiRequest) =>
+      jsonResponse(
+        {
+          error: false,
+          data: { user: testUser({ id: 10, ...requestBody(init) }) },
         },
-      }, 201);
-    }
-
-    if (url.startsWith("/api/admin/users/") && method === "PATCH") {
-      return jsonResponse({
-        error: false,
-        data: {
-          user: testUser({
-            id: 2,
-            ...(body as Partial<TestAdminUser>),
-          }),
-        },
-      });
-    }
-
-    if (url.endsWith("/password") && method === "PUT") {
-      return jsonResponse({
-        error: false,
-        message: "Password reset successfully",
-      });
-    }
-
-    if (url.startsWith("/api/admin/users/") && method === "DELETE") {
-      const id = Number(url.split("/").pop());
+        201,
+      ),
+  };
+  // stubApi keys are literal paths, so each listed user gets its own routes.
+  for (const { id } of users) {
+    const path = `/api/admin/users/${id}`;
+    routes[`PATCH ${path}`] = ({ init }: StubApiRequest) => ({
+      user: testUser({ id: 2, ...requestBody(init) }),
+    });
+    routes[`PUT ${path}/password`] = () =>
+      jsonResponse({ error: false, message: "Password reset successfully" });
+    routes[`DELETE ${path}`] = () => {
       users = users.filter(user => user.id !== id);
       listStalled = stallListAfterDelete;
       return jsonResponse({ error: false, message: "User deleted" });
-    }
+    };
+  }
 
-    return jsonResponse({
-      error: true,
-      message: `Unexpected request: ${method} ${url}`,
-    }, 500);
-  });
-
-  vi.stubGlobal("fetch", fetchMock);
-  return { requests };
+  return stubApi(routes, { user: null });
 }
+
+type FetchMock = ReturnType<typeof stubApi>;
 
 async function renderUsersRoute(
   users = defaultUsers(),
   options: Parameters<typeof setupUsersFetch>[1] = {},
 ) {
-  const { requests } = setupUsersFetch(users, options);
+  const fetchMock = setupUsersFetch(users, options);
   const { queryClient } = await renderRoute("/settings/users");
 
   await screen.findByRole("button", { name: "Add user" });
   await screen.findByText("Dana Scully");
-  return { requests, queryClient };
+  return { fetchMock, queryClient };
 }
 
-function mutationRequests(requests: CapturedRequest[], method: string) {
-  return requests.filter(
-    request =>
-      request.method === method && request.url.startsWith("/api/admin/users"),
-  );
+function mutationRequests(fetchMock: FetchMock, method: string) {
+  return fetchMock.mock.calls
+    .map(([input, init]): CapturedRequest => ({
+      method: init?.method ?? "GET",
+      url: requestURL(input),
+      body: requestBody(init),
+    }))
+    .filter(
+      request =>
+        request.method === method && request.url.startsWith("/api/admin/users"),
+    );
 }
 
 describe("Users settings", () => {
   for (const form of ["create", "reset"] as const) {
     it.each(passwordCases)(`validates $name in the ${form} password form`, async ({ password, error }) => {
       const user = userEvent.setup();
-      const { requests } = await renderUsersRoute();
+      const { fetchMock } = await renderUsersRoute();
       const creating = form === "create";
       await user.click(screen.getByRole("button", {
         name: creating ? "Add user" : "Reset password for Dana Scully",
@@ -211,12 +176,12 @@ describe("Users settings", () => {
         expect(input).toHaveAccessibleDescription(expect.stringContaining(`Password ${error}`));
         expect(input).toHaveFocus();
         expect(input).toHaveValue(password);
-        expect(mutationRequests(requests, method)).toHaveLength(0);
+        expect(mutationRequests(fetchMock, method)).toHaveLength(0);
       } else {
         expect(button).toBeEnabled();
         await user.click(button);
-        await waitFor(() => expect(mutationRequests(requests, method)).toHaveLength(1));
-        expect(mutationRequests(requests, method)[0].body).toMatchObject({ password });
+        await waitFor(() => expect(mutationRequests(fetchMock, method)).toHaveLength(1));
+        expect(mutationRequests(fetchMock, method)[0].body).toMatchObject({ password });
       }
     });
   }
@@ -232,7 +197,7 @@ describe("Users settings", () => {
 
   it("refreshes the watch-room invite list along with the users after a create", async () => {
     const user = userEvent.setup();
-    const { requests, queryClient } = await renderUsersRoute();
+    const { fetchMock, queryClient } = await renderUsersRoute();
     const inviteListKey = watchRoomInviteUsersQueryOpts().queryKey;
     queryClient.setQueryData(inviteListKey, { error: false, data: { users: [] } });
 
@@ -243,7 +208,7 @@ describe("Users settings", () => {
     await user.click(screen.getByRole("button", { name: "Create user" }));
 
     await waitFor(() => {
-      expect(mutationRequests(requests, "POST")).toHaveLength(1);
+      expect(mutationRequests(fetchMock, "POST")).toHaveLength(1);
     });
     await waitFor(() => {
       expect(queryClient.getQueryState(inviteListKey)?.isInvalidated).toBe(true);
@@ -274,7 +239,7 @@ describe("Users settings", () => {
 
   it("offers admin rights as a real checkbox named by its visible label", async () => {
     const user = userEvent.setup();
-    const { requests } = await renderUsersRoute();
+    const { fetchMock } = await renderUsersRoute();
 
     await user.click(screen.getByRole("button", { name: "Add user" }));
     const admin = screen.getByRole("checkbox", {
@@ -293,9 +258,9 @@ describe("Users settings", () => {
     await user.click(screen.getByRole("button", { name: "Create user" }));
 
     await waitFor(() => {
-      expect(mutationRequests(requests, "POST")).toHaveLength(1);
+      expect(mutationRequests(fetchMock, "POST")).toHaveLength(1);
     });
-    expect(mutationRequests(requests, "POST")[0].body).toMatchObject({
+    expect(mutationRequests(fetchMock, "POST")[0].body).toMatchObject({
       is_admin: true,
     });
   });
@@ -317,7 +282,7 @@ describe("Users settings", () => {
 
   it("blocks short create passwords before calling the API", async () => {
     const user = userEvent.setup();
-    const { requests } = await renderUsersRoute();
+    const { fetchMock } = await renderUsersRoute();
 
     await user.click(screen.getByRole("button", { name: "Add user" }));
     await user.type(screen.getByLabelText("Name"), "Short Password User");
@@ -335,12 +300,12 @@ describe("Users settings", () => {
     // Field errors stay inline (design-system §3.7); no toast repeats them.
     expect(showValidationErrorMock).not.toHaveBeenCalled();
     expect(screen.getByLabelText("Password")).toHaveFocus();
-    expect(mutationRequests(requests, "POST")).toHaveLength(0);
+    expect(mutationRequests(fetchMock, "POST")).toHaveLength(0);
   });
 
   it("blocks duplicate create emails before calling the API", async () => {
     const user = userEvent.setup();
-    const { requests } = await renderUsersRoute();
+    const { fetchMock } = await renderUsersRoute();
 
     await user.click(screen.getByRole("button", { name: "Add user" }));
     await user.type(screen.getByLabelText("Name"), "Duplicate User");
@@ -355,12 +320,12 @@ describe("Users settings", () => {
       "aria-invalid",
       "true",
     );
-    expect(mutationRequests(requests, "POST")).toHaveLength(0);
+    expect(mutationRequests(fetchMock, "POST")).toHaveLength(0);
   });
 
   it("confirms a user's deletion with Enter once DELETE is typed", async () => {
     const user = userEvent.setup();
-    const { requests } = await renderUsersRoute();
+    const { fetchMock } = await renderUsersRoute();
 
     await user.click(screen.getByRole("button", { name: "Delete Dana Scully" }));
     const dialog = screen.getByRole("dialog", { name: "Delete user" });
@@ -369,19 +334,19 @@ describe("Users settings", () => {
     expect(confirmation).not.toHaveAttribute("aria-invalid");
 
     await user.type(confirmation, "delete{Enter}");
-    expect(mutationRequests(requests, "DELETE")).toHaveLength(0);
+    expect(mutationRequests(fetchMock, "DELETE")).toHaveLength(0);
     expect(confirmation).toHaveAttribute("aria-invalid", "true");
 
     await user.clear(confirmation);
     await user.type(confirmation, "DELETE{Enter}");
     await waitFor(() =>
-      expect(mutationRequests(requests, "DELETE")).toHaveLength(1),
+      expect(mutationRequests(fetchMock, "DELETE")).toHaveLength(1),
     );
   });
 
   it("blocks duplicate edit emails but allows the unchanged current email", async () => {
     const user = userEvent.setup();
-    const { requests } = await renderUsersRoute();
+    const { fetchMock } = await renderUsersRoute();
 
     await user.click(
       screen.getByRole("button", { name: "Edit Dana Scully" }),
@@ -393,20 +358,20 @@ describe("Users settings", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(
       "A user with that email already exists.",
     );
-    expect(mutationRequests(requests, "PATCH")).toHaveLength(0);
+    expect(mutationRequests(fetchMock, "PATCH")).toHaveLength(0);
 
     await user.clear(screen.getByLabelText("Email"));
     await user.type(screen.getByLabelText("Email"), "dana@example.com");
     await user.click(screen.getByRole("button", { name: "Save changes" }));
 
     await waitFor(() => {
-      expect(mutationRequests(requests, "PATCH")).toHaveLength(1);
+      expect(mutationRequests(fetchMock, "PATCH")).toHaveLength(1);
     });
   });
 
   it("keeps reset password blocked with accessible password errors", async () => {
     const user = userEvent.setup();
-    const { requests } = await renderUsersRoute();
+    const { fetchMock } = await renderUsersRoute();
 
     await user.click(
       screen.getByRole("button", {
@@ -431,7 +396,7 @@ describe("Users settings", () => {
       "Passwords do not match.",
     );
     expect(screen.getByRole("button", { name: "Reset password" })).toBeDisabled();
-    expect(mutationRequests(requests, "PUT")).toHaveLength(0);
+    expect(mutationRequests(fetchMock, "PUT")).toHaveLength(0);
   });
 
   // Focus used to return to the deleted user's own Delete button, and fall

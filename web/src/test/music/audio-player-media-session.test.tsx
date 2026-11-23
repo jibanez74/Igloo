@@ -1,10 +1,8 @@
-import { createRef, useRef, useState, type PropsWithChildren, type ReactNode } from "react";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { createRef, useRef, useState, type ReactNode } from "react";
 import {
   act,
   cleanup,
   fireEvent,
-  render,
   screen,
   waitFor,
 } from "@testing-library/react";
@@ -19,7 +17,7 @@ import {
 } from "@/lib/constants";
 import type { TrackType } from "@/types";
 import { nullableInt64 } from "../helpers/fixtures";
-import { createTestQueryClient } from "../helpers/render";
+import { renderWithQueryClient } from "../helpers/render";
 import { stubMediaElement } from "../helpers/dom";
 
 vi.mock("@/lib/api", async importOriginal => ({
@@ -34,19 +32,6 @@ const prefersCoarse = vi.hoisted(() => ({ value: false }));
 vi.mock("@/hooks/use-coarse-pointer", () => ({
   usePrefersCoarsePointer: () => prefersCoarse.value,
 }));
-
-// The player subtree queries liked-track ids, so every render needs a
-// QueryClientProvider. useState keeps the client stable across rerenders.
-function Providers({ children }: PropsWithChildren) {
-  const [queryClient] = useState(
-    () =>
-      createTestQueryClient(),
-  );
-
-  return (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-  );
-}
 
 const originalMediaMetadataDescriptor = Object.getOwnPropertyDescriptor(
   globalThis,
@@ -118,7 +103,7 @@ function renderAudioPlayer({
   siblings?: ReactNode;
 } = {}) {
   const audioRef = createRef<HTMLAudioElement>();
-  const view = render(
+  const view = renderWithQueryClient(
     <>
       {siblings}
       <AudioPlayer
@@ -136,9 +121,7 @@ function renderAudioPlayer({
         onExpand={vi.fn()}
         onClose={onClose}
       />
-    </>,
-    { wrapper: Providers },
-  );
+    </>);
 
   const audio = view.container.querySelector("audio");
   if (!audio) {
@@ -325,9 +308,7 @@ describe("AudioPlayer Media Session", () => {
       onExpand: vi.fn(),
     };
 
-    const { rerender } = render(<AudioPlayer track={track()} {...sharedProps} />, {
-      wrapper: Providers,
-    });
+    const { rerender } = renderWithQueryClient(<AudioPlayer track={track()} {...sharedProps} />);
     expect(mediaSession.metadata).not.toBeNull();
 
     rerender(<AudioPlayer track={null} {...sharedProps} />);
@@ -352,10 +333,8 @@ describe("AudioPlayer Media Session", () => {
       onExpand: vi.fn(),
     };
 
-    const { rerender, container } = render(
-      <AudioPlayer track={first} {...sharedProps} />,
-      { wrapper: Providers },
-    );
+    const { rerender, container } = renderWithQueryClient(
+      <AudioPlayer track={first} {...sharedProps} />);
 
     const audio = container.querySelector("audio");
     if (!audio) {
@@ -510,7 +489,7 @@ describe("AudioPlayer Media Session", () => {
 
   it("keeps tab focus inside the expanded player", async () => {
     const user = userEvent.setup();
-    render(
+    renderWithQueryClient(
       <>
         <button type="button">Outside player</button>
         <AudioPlayer
@@ -528,9 +507,7 @@ describe("AudioPlayer Media Session", () => {
           onExpand={vi.fn()}
           onClose={vi.fn()}
         />
-      </>,
-      { wrapper: Providers },
-    );
+      </>);
 
     const dialog = screen.getByRole("dialog", {
       name: "Now playing: Alabaster by The Band",
@@ -548,7 +525,7 @@ describe("AudioPlayer Media Session", () => {
 
   it("restores focus to the minimized expand control after Escape", async () => {
     const user = userEvent.setup();
-    render(<AudioPlayerFocusHarness />, { wrapper: Providers });
+    renderWithQueryClient(<AudioPlayerFocusHarness />);
 
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Play" })).toHaveFocus();
@@ -956,10 +933,8 @@ describe("AudioPlayer Media Session", () => {
         onExpand: vi.fn(),
       };
 
-      const { rerender, container } = render(
-        <AudioPlayer track={first} {...sharedProps} />,
-        { wrapper: Providers },
-      );
+      const { rerender, container } = renderWithQueryClient(
+        <AudioPlayer track={first} {...sharedProps} />);
 
       rerender(<AudioPlayer track={second} {...sharedProps} />);
 

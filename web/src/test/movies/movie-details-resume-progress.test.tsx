@@ -1,10 +1,10 @@
 import { screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import MovieDetailsResumeProgress from "@/components/movies/MovieDetailsResumeProgress";
 import { movieMediaRef } from "@/lib/media-ref";
 import { mediaWatchProgressQueryKey } from "@/lib/query-opts";
 import type { WatchProgressType } from "@/types";
-import { jsonResponse, requestURL } from "../helpers/api";
+import { stubApi } from "../helpers/api";
 import { createTestQueryClient, renderWithQueryClient } from "../helpers/render";
 
 const MOVIE_ID = 7;
@@ -19,14 +19,10 @@ const IN_PROGRESS: WatchProgressType = {
 };
 
 function renderStrip(progress: WatchProgressType) {
-  const fetchMock = vi.fn((input: RequestInfo | URL) => {
-    const url = requestURL(input);
-    if (url === `/api/movies/${MOVIE_ID}/watch-progress`) {
-      return jsonResponse({ error: false, data: progress });
-    }
-    throw new Error(`unexpected request: ${url}`);
-  });
-  vi.stubGlobal("fetch", fetchMock);
+  stubApi(
+    { [`/api/movies/${MOVIE_ID}/watch-progress`]: progress },
+    { user: null },
+  );
 
   const queryClient = createTestQueryClient();
   renderWithQueryClient(
@@ -44,10 +40,6 @@ function renderStrip(progress: WatchProgressType) {
     ).toBe("success"),
   );
 }
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
 
 describe("MovieDetailsResumeProgress", () => {
   it("shows the remaining time in hours and minutes", async () => {

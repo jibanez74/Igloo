@@ -136,9 +136,6 @@ beforeEach(() => {
   getMoviePlaylistsMock.mockReset();
   addTracksToPlaylistMock.mockReset();
   addMoviesToMoviePlaylistMock.mockReset();
-  showAddedMock.mockReset();
-  showInfoMock.mockReset();
-  showActionFailedMock.mockReset();
 });
 
 describe("AddToPlaylistDialog", () => {

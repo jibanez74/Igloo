@@ -15,10 +15,9 @@ import type {
   MovieTechnicalDetailsResponse,
   PrerollTrailer,
 } from "@/types";
-import { jsonResponse, requestURL } from "../helpers/api";
+import { jsonResponse, requestURL, stubApi } from "../helpers/api";
 import { stubMediaElement } from "../helpers/dom";
 import {
-  authUser,
   nullableFloat64,
   nullableInt64,
   nullableString,
@@ -150,24 +149,14 @@ type MovieApiOptions = {
 
 function mockMovieApi(options: MovieApiOptions = {}) {
   let technicalDetailsRequests = 0;
-  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-    const url = requestURL(input);
-    const method = init?.method ?? "GET";
 
-    if (url === "/api/auth/user") return jsonResponse(authUser());
-    if (url === "/api/notifications/unread-count") {
-      return jsonResponse({ error: false, data: { unread_count: 0 } });
-    }
-    if (url === "/api/settings/playback") {
-      return jsonResponse({
-        error: false,
-        data: { settings: { profiles: [], server_upload_mbps: null } },
-      });
-    }
-    if (url === `/api/movies/details/${MOVIE_ID}`) {
-      return jsonResponse({ error: false, data: movieDetails });
-    }
-    if (url === `/api/movies/${MOVIE_ID}/technical-details`) {
+  return stubApi({
+    "/api/notifications/unread-count": { unread_count: 0 },
+    "/api/settings/playback": {
+      settings: { profiles: [], server_upload_mbps: null },
+    },
+    [`/api/movies/details/${MOVIE_ID}`]: movieDetails,
+    [`/api/movies/${MOVIE_ID}/technical-details`]: () => {
       technicalDetailsRequests += 1;
       if (options.failTechnicalDetailsOnce && technicalDetailsRequests === 1) {
         return jsonResponse(
@@ -175,52 +164,36 @@ function mockMovieApi(options: MovieApiOptions = {}) {
           503,
         );
       }
-      return jsonResponse({ error: false, data: technicalDetails });
-    }
-    if (url === `/api/movies/${MOVIE_ID}/preroll`) {
-      if (options.preroll === "fail") {
-        return jsonResponse(
-          { error: true, message: "failed to build the trailer queue" },
-          500,
-        );
-      }
-      return jsonResponse({
-        error: false,
-        data: { trailers: options.preroll ?? [] },
-      });
-    }
-    if (url === `/api/movies/${MOVIE_ID}/watch-progress`) {
-      if (method === "DELETE") {
-        return jsonResponse({ error: false, data: { cleared: true } });
-      }
-      if (method === "PUT") {
-        return jsonResponse({ error: false, data: { watched: false } });
-      }
-      return jsonResponse({
-        error: false,
-        data: options.progress
-          ? {
-              ...options.progress,
-              watched: false,
-              updated_at: "2026-09-01T00:00:00Z",
-            }
-          : {
-              progress_sec: null,
-              duration_sec: null,
-              watched: false,
-              updated_at: null,
-            },
-      });
-    }
-
-    return jsonResponse(
-      { error: true, message: `Unexpected request: ${url}` },
-      500,
-    );
+      return technicalDetails;
+    },
+    [`/api/movies/${MOVIE_ID}/preroll`]: () =>
+      options.preroll === "fail"
+        ? jsonResponse(
+            { error: true, message: "failed to build the trailer queue" },
+            500,
+          )
+        : { trailers: options.preroll ?? [] },
+    [`DELETE /api/movies/${MOVIE_ID}/watch-progress`]: { cleared: true },
+    [`PUT /api/movies/${MOVIE_ID}/watch-progress`]: { watched: false },
+    [`GET /api/movies/${MOVIE_ID}/watch-progress`]: options.progress
+      ? {
+          ...options.progress,
+          watched: false,
+          updated_at: "2026-09-01T00:00:00Z",
+        }
+      : {
+          progress_sec: null,
+          duration_sec: null,
+          watched: false,
+          updated_at: null,
+        },
+    // Native HLS preflights the manifest before handing it to the element.
+    [`GET /api/movies/${MOVIE_ID}/hls/remux/playlist.m3u8`]: () =>
+      new Response("#EXTM3U\n", {
+        headers: { "Content-Type": "application/vnd.apple.mpegurl" },
+      }),
+    [`POST /api/movies/${MOVIE_ID}/hls/session/stop`]: {},
   });
-
-  vi.stubGlobal("fetch", fetchMock);
-  return fetchMock;
 }
 
 function requestsTo(

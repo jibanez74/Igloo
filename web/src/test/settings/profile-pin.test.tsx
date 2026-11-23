@@ -41,7 +41,6 @@ function renderCard() {
 
 describe("ProfilePinCard", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
     getAuthUserMock.mockResolvedValue(authUser(testUser()));
     getUserPinMock.mockResolvedValue({
       error: false,

@@ -9,13 +9,13 @@ import {
   SHOWS_PER_PAGE,
   SHOWS_STATS_KEY,
 } from "@/lib/constants";
-import { countFetchRequests, jsonResponse, requestURL } from "../helpers/api";
+import { countFetchRequests, jsonResponse, stubApi } from "../helpers/api";
 import { runContentFadeTransitionTimeout } from "../helpers/content-fade-transition";
 import {
   restoreMatchMedia,
   setReducedMotionPreference,
 } from "../helpers/dom";
-import { authUser, nullableInt64, nullableString } from "../helpers/fixtures";
+import { nullableInt64, nullableString } from "../helpers/fixtures";
 import { renderRoute } from "../helpers/render-route";
 
 const toastMocks = vi.hoisted(() => ({
@@ -53,96 +53,59 @@ function mockShowsFetch(options?: { statsRefreshFailure?: boolean }) {
   ];
   let statsRequestCount = 0;
 
-  const fetchMock = vi.fn((input: RequestInfo | URL) => {
-    const url = requestURL(input);
+  return stubApi(
+    {
+      "/api/shows/stats": () => {
+        statsRequestCount += 1;
 
-    if (url === "/api/auth/user") {
-      return jsonResponse(
-        authUser({ name: "Show User", email: "shows@example.com" }),
-      );
-    }
+        if (options?.statsRefreshFailure && statsRequestCount > 1) {
+          return jsonResponse({
+            error: true,
+            message: "Show stats are unavailable.",
+          });
+        }
 
-    if (url === "/api/shows/stats") {
-      statsRequestCount += 1;
-
-      if (options?.statsRefreshFailure && statsRequestCount > 1) {
-        return jsonResponse({
-          error: true,
-          message: "Show stats are unavailable.",
-        });
-      }
-
-      return jsonResponse({
-        error: false,
-        data: {
+        return {
           total_shows: 3,
           total_seasons: 7,
           total_episodes: 42,
-        },
-      });
-    }
-
-    if (url === `/api/shows/library?page=1&per_page=${SHOWS_PER_PAGE}&sort=asc`) {
-      return jsonResponse({
-        error: false,
-        data: {
-          shows: libraryShows,
-          total: libraryShows.length,
-          page: 1,
-          per_page: SHOWS_PER_PAGE,
-          total_pages: 1,
-          sort: "asc",
-        },
-      });
-    }
-
-    if (url === "/api/shows/genres") {
-      return jsonResponse({
-        error: false,
-        data: {
-          genres: [
-            {
-              genre_id: 10,
-              genre_tag: "Drama",
-              show_count: 2,
-              backdrop_path: nullableString("/drama-backdrop.jpg"),
-            },
-            {
-              genre_id: 20,
-              genre_tag: "Comedy",
-              show_count: 1,
-              backdrop_path: nullableString(),
-            },
-          ],
-        },
-      });
-    }
-
-    if (url === `/api/shows/genres/10/shows?page=1&per_page=${SHOWS_PER_PAGE}&sort=asc`) {
-      return jsonResponse({
-        error: false,
-        data: {
-          shows: [show(403, "Northern Lights", 2019)],
-          total: 1,
-          page: 1,
-          per_page: SHOWS_PER_PAGE,
-          total_pages: 1,
-          sort: "asc",
-        },
-      });
-    }
-
-    return jsonResponse(
-      {
-        error: true,
-        message: `Unexpected request: ${url}`,
+        };
       },
-      500,
-    );
-  });
-
-  vi.stubGlobal("fetch", fetchMock);
-  return fetchMock;
+      [`/api/shows/library?page=1&per_page=${SHOWS_PER_PAGE}&sort=asc`]: {
+        shows: libraryShows,
+        total: libraryShows.length,
+        page: 1,
+        per_page: SHOWS_PER_PAGE,
+        total_pages: 1,
+        sort: "asc",
+      },
+      "/api/shows/genres": {
+        genres: [
+          {
+            genre_id: 10,
+            genre_tag: "Drama",
+            show_count: 2,
+            backdrop_path: nullableString("/drama-backdrop.jpg"),
+          },
+          {
+            genre_id: 20,
+            genre_tag: "Comedy",
+            show_count: 1,
+            backdrop_path: nullableString(),
+          },
+        ],
+      },
+      [`/api/shows/genres/10/shows?page=1&per_page=${SHOWS_PER_PAGE}&sort=asc`]: {
+        shows: [show(403, "Northern Lights", 2019)],
+        total: 1,
+        page: 1,
+        per_page: SHOWS_PER_PAGE,
+        total_pages: 1,
+        sort: "asc",
+      },
+    },
+    { user: { name: "Show User", email: "shows@example.com" } },
+  );
 }
 
 async function renderShowsRoute(

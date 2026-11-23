@@ -28,13 +28,11 @@ vi.mock("@/lib/toast-helpers", () => ({
   showDeleted: mocks.showDeleted,
 }));
 
-vi.mock("@tanstack/react-router", async () => {
-  const actual = await vi.importActual<
-    typeof import("@tanstack/react-router")
-  >("@tanstack/react-router");
-
-  return { ...actual, useNavigate: () => mocks.navigate };
-});
+vi.mock("@tanstack/react-router", async () =>
+  (await import("../helpers/router-link-mock")).routerWith({
+    useNavigate: () => mocks.navigate,
+  }),
+);
 
 const MOVIE_ID = 7;
 
@@ -71,7 +69,6 @@ function renderDialog() {
 
 describe("DeleteMovieDialog", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
     mocks.navigate.mockResolvedValue(undefined);
   });
 
