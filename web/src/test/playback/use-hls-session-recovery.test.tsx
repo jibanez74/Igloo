@@ -65,6 +65,40 @@ describe("useHlsSessionRecovery", () => {
 
   // The budget used to reset on every stream-window change, and a recovery
   // changes the window itself, so a 404 that kept coming back never ran out.
+  it("keeps one retry for a loss reported again while it waits", async () => {
+    const { result, onRecover } = renderRecovery();
+
+    act(() => {
+      result.current.handleSessionLost(42);
+    });
+    await advance(500);
+    act(() => {
+      result.current.handleSessionLost(50);
+      result.current.handleSessionLost(51);
+    });
+    await advance(HLS_SESSION_LOST_MIN_INTERVAL_MS);
+
+    expect(onRecover.mock.calls).toEqual([[42], [50]]);
+  });
+
+  it("schedules the next spaced retry after a spaced one has run", async () => {
+    const { result, onRecover } = renderRecovery();
+
+    act(() => {
+      result.current.handleSessionLost(10);
+    });
+    act(() => {
+      result.current.handleSessionLost(20);
+    });
+    await advance(HLS_SESSION_LOST_MIN_INTERVAL_MS);
+    act(() => {
+      result.current.handleSessionLost(30);
+    });
+    await advance(HLS_SESSION_LOST_MIN_INTERVAL_MS);
+
+    expect(onRecover.mock.calls).toEqual([[10], [20], [30]]);
+  });
+
   it("gives up after the attempt budget when losses keep coming", async () => {
     const { result, onRecover, onMaxAttempts } = renderRecovery();
 
