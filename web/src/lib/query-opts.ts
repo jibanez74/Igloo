@@ -146,7 +146,6 @@ import {
   MUSICIANS_PER_PAGE,
   TRAILER_PREFERENCES_KEY,
   MOVIE_PREROLL_KEY,
-  PREROLL_FETCH_TIMEOUT_MS,
 } from "@/lib/constants";
 import {
   freshFor,
@@ -444,11 +443,7 @@ export function movieLikeStatusQueryOpts(movieId: number) {
 export function moviePrerollQueryOpts(movieId: number) {
   return queryOptions({
     queryKey: [MOVIE_PREROLL_KEY, movieId],
-    // Its own timeout, not the query's signal: joining the two needs
-    // AbortSignal.any (a newer browser floor), and with gcTime 0 a result
-    // nobody waits for is dropped anyway.
-    queryFn: () =>
-      getMoviePreroll(movieId, AbortSignal.timeout(PREROLL_FETCH_TIMEOUT_MS)),
+    queryFn: ({ signal }) => getMoviePreroll(movieId, signal),
     enabled: movieId > 0,
     retry: false,
     staleTime: "static",
