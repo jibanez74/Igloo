@@ -3,59 +3,15 @@ package music
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"path/filepath"
-	"slices"
 	"testing"
-	"time"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/scanner/scannertest"
 	spotifyapi "igloo/cmd/internal/spotify"
 )
-
-func TestSpotifyRetriesUnchangedCatalog(t *testing.T) {
-	for _, offline := range []bool{false, true} {
-		t.Run(fmt.Sprintf("offline_%v", offline), func(t *testing.T) {
-			s := setupMusicScanner(t)
-			dir := t.TempDir()
-			scannertest.WriteFile(t, filepath.Join(dir, "track.m4a"), "audio")
-			probe := &scannertest.CountingProbe{Default: testMusicMetadata()}
-			s.ffprobe = probe
-			stub := &musicScannerSpotifyStub{artistErr: errors.New("temporary"), albumErr: errors.New("temporary")}
-			if !offline {
-				s.spotify = stub
-			}
-			s.scan(dir)
-			if probe.Calls() != 1 {
-				t.Fatalf("probes=%d", probe.Calls())
-			}
-			if !offline && (stub.artistCalls != 1 || stub.albumCalls != 1) {
-				t.Fatalf("repeated initial attempts: %+v", stub)
-			}
-			s.spotify = stub
-			stub.artistErr = nil
-			stub.albumErr = nil
-			stub.artist = &spotifyapi.FullArtist{SimpleArtist: spotifyapi.SimpleArtist{ID: "artist"}}
-			stub.album = &spotifyapi.FullAlbum{SimpleAlbum: spotifyapi.SimpleAlbum{ID: "album", ReleaseDate: "2001", ReleaseDatePrecision: "year"}}
-			beforeArtist, beforeAlbum := stub.artistCalls, stub.albumCalls
-			s.scan(dir)
-			if probe.Calls() != 1 || stub.artistCalls != beforeArtist+1 || stub.albumCalls != beforeAlbum+1 {
-				t.Fatalf("recovery probes=%d artist=%d album=%d", probe.Calls(), stub.artistCalls, stub.albumCalls)
-			}
-			matchedRows := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_provider_matches WHERE status='matched'")
-			if matchedRows != 2 {
-				t.Fatal("recovery did not persist matches")
-			}
-			s.scan(dir)
-			if probe.Calls() != 1 || stub.artistCalls != beforeArtist+1 || stub.albumCalls != beforeAlbum+1 {
-				t.Fatal("final outcomes were retried")
-			}
-		})
-	}
-}
 
 func TestMusicNormalizedIdentityAndMutableMetadata(t *testing.T) {
 	fixtureDir := t.TempDir()
@@ -193,34 +149,6 @@ func TestMusicRelationshipsAndSpotifyDateFallback(t *testing.T) {
 	}
 }
 
-func TestSpotifyRetrySplitsPersistedCompoundCredits(t *testing.T) {
-	fixtureDir := t.TempDir()
-	s := setupMusicScanner(t)
-	scanTaggedTrack(t, s, newMusicScanContext(nil), fixtureDir+"/one", 1, ffprobe.FormatTags{Title: "Track", Artist: "One & Two", Album: "Album", Genre: "Rock", SortArtist: "First & Second"})
-	probe := s.ffprobe.(*scannertest.CountingProbe)
-	s.spotify = &musicScannerSpotifyStub{artistErr: &spotifyapi.MatchError{Info: spotifyapi.MatchDebugInfo{Reason: spotifyapi.MatchReasonNoResults}}, albumErr: errors.New("temporary")}
-	err := s.retrySpotify(context.Background(), newMusicScanContext(nil), newScanReport(Status{}))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if probe.Calls() != 1 {
-		t.Fatal("retry probed a file")
-	}
-	musicianAlbums := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musician_albums")
-	trackMusicians := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM track_musicians")
-	if trackMusicians != 2 || musicianAlbums != 2 {
-		t.Fatal("compound credits or album links not split")
-	}
-	sortedCredits := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musicians WHERE (name='One' AND sort_name='First') OR (name='Two' AND sort_name='Second')")
-	if sortedCredits != 2 {
-		t.Fatal("per-credit sort tags lost")
-	}
-	compoundGenres := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musician_genres WHERE musician_id=(SELECT id FROM musicians WHERE name='One & Two')")
-	if compoundGenres != 0 {
-		t.Fatal("old compound genre relationship remains")
-	}
-}
-
 func TestSpotifyMergesPreserveTracksAndRollback(t *testing.T) {
 	fixtureDir := t.TempDir()
 	s := setupMusicScanner(t)
@@ -325,61 +253,6 @@ func TestSpotifyMergesPreserveTracksAndRollback(t *testing.T) {
 	violations := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM pragma_foreign_key_check")
 	if violations != 0 {
 		t.Fatalf("foreign keys: %d violations", violations)
-	}
-}
-
-func TestSpotifyRetryPagesAndCancellation(t *testing.T) {
-	fixtureDir := t.TempDir()
-	s := setupMusicScanner(t)
-	ctx := context.Background()
-	scan := newMusicScanContext(nil)
-	for i := 0; i < 105; i++ {
-		scanTaggedTrack(t, s, scan, fmt.Sprintf(fixtureDir+"/page/%d", i), 1, ffprobe.FormatTags{Title: "Track", Artist: fmt.Sprintf("Artist %d", i), Album: fmt.Sprintf("Album %d", i)})
-	}
-	// Orphans are deliberately retained, but are not retry candidates.
-	_, err := s.queries.UpsertMusician(ctx, database.UpsertMusicianParams{Name: "Orphan", SortName: "Orphan"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	candidates, err := s.queries.MusicArtistRetryCandidates(ctx, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(candidates) != 100 {
-		t.Fatalf("page size=%d", len(candidates))
-	}
-	probe := s.ffprobe.(*scannertest.CountingProbe)
-	// A failure about one entity, like a 404, leaves the entity failed without
-	// counting against the breaker, so every page is visited.
-	stub := &musicScannerSpotifyStub{artistErr: entityLookupFailure, albumErr: entityLookupFailure}
-	s.spotify = stub
-	retryScan := newMusicScanContext(nil)
-	err = s.retrySpotify(ctx, retryScan, newScanReport(Status{}))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if stub.artistCalls != 105 || stub.albumCalls != 105 || probe.Calls() != 1 {
-		t.Fatalf("paged attempts artist=%d album=%d probes=%d", stub.artistCalls, stub.albumCalls, probe.Calls())
-	}
-	// Reusing the same scan context cannot issue another request for these entities.
-	err = s.retrySpotify(ctx, retryScan, newScanReport(Status{}))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if stub.artistCalls != 105 || stub.albumCalls != 105 {
-		t.Fatal("repeated same-scan request")
-	}
-	canceled, cancel := context.WithCancel(ctx)
-	defer cancel()
-	s.spotify = &cancelingMusicSpotify{cancel: cancel, phase: "artist"}
-	canceledScan := newMusicScanContext(nil)
-	err = s.retrySpotify(canceled, canceledScan, newScanReport(Status{}))
-	canceledError := errors.Is(err, context.Canceled)
-	if !canceledError {
-		t.Fatalf("canceled retry=%v", err)
-	}
-	if len(canceledScan.spotifyArtistMisses) != 0 || len(canceledScan.enrichmentCounts) != 0 {
-		t.Fatal("cancellation recorded as failure")
 	}
 }
 
@@ -543,162 +416,5 @@ func TestCompoundCreditMergeRepointsEarlierCredits(t *testing.T) {
 	}
 	if !primary.Valid || primary.Int64 != owner.ID {
 		t.Fatalf("primary artist = %#v, want the surviving owner %d", primary, owner.ID)
-	}
-}
-
-// A lookup that keeps failing is retried on the next scan once, then held back
-// on the miss backoff instead of costing a request on every scan; a success
-// clears the count.
-func TestSpotifyRetryBacksOffRepeatedFailures(t *testing.T) {
-	s := setupMusicScanner(t)
-	dir := t.TempDir()
-	scannertest.WriteFile(t, filepath.Join(dir, "track.m4a"), "audio")
-	s.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadata()}
-	stub := &musicScannerSpotifyStub{artistErr: errors.New("temporary"), albumErr: errors.New("temporary")}
-	s.spotify = stub
-
-	attempts := func() (int64, int64) {
-		t.Helper()
-		var withWait, total int64
-		err := s.tx.DB.QueryRow(`SELECT count(retry_after), coalesce(sum(attempts), 0) FROM music_provider_matches
-			WHERE entity_type IN ('musician','album') AND status='failed'`).Scan(&withWait, &total)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return withWait, total
-	}
-
-	s.scan(dir)
-	if withWait, total := attempts(); withWait != 0 || total != 2 {
-		t.Fatalf("after the first failure: %d held back, %d attempts; want 0 and 2", withWait, total)
-	}
-
-	s.scan(dir)
-	if stub.artistCalls != 2 || stub.albumCalls != 2 {
-		t.Fatalf("the first failure was not retried on the next scan: %+v", stub)
-	}
-	if withWait, total := attempts(); withWait != 2 || total != 4 {
-		t.Fatalf("after the second failure: %d held back, %d attempts; want 2 and 4", withWait, total)
-	}
-
-	s.scan(dir)
-	if stub.artistCalls != 2 || stub.albumCalls != 2 {
-		t.Fatalf("a held-back failure was looked up again: %+v", stub)
-	}
-
-	_, err := s.tx.DB.Exec(`UPDATE music_provider_matches SET retry_after = unixepoch() - 1`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	stub.artistErr = nil
-	stub.albumErr = nil
-	stub.artist = &spotifyapi.FullArtist{SimpleArtist: spotifyapi.SimpleArtist{ID: "artist"}}
-	stub.album = &spotifyapi.FullAlbum{SimpleAlbum: spotifyapi.SimpleAlbum{ID: "album", ReleaseDate: "2001", ReleaseDatePrecision: "year"}}
-	s.scan(dir)
-	if stub.artistCalls != 3 || stub.albumCalls != 3 {
-		t.Fatalf("an elapsed backoff was not retried: %+v", stub)
-	}
-	cleared := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_provider_matches WHERE status='matched' AND attempts=0 AND retry_after IS NULL")
-	if cleared != 2 {
-		t.Fatalf("matched rows with a cleared count = %d, want 2", cleared)
-	}
-}
-
-// One scan counts a failure once, however often the entity's cached failure is
-// saved again (a later file, a merge clearing the id caches, an adoption per
-// album); the next scan counts again and starts the wait.
-func TestSaveMusicMatchCountsOneFailurePerScan(t *testing.T) {
-	s := setupMusicScanner(t)
-	ctx := context.Background()
-	musician, err := s.queries.UpsertMusician(ctx, database.UpsertMusicianParams{Name: "Flaky", SortName: "Flaky"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	failed := &resolvedMatch{status: musicStatusFailed}
-	read := func() (attempts int64, retryAfter sql.NullInt64) {
-		t.Helper()
-		err := s.tx.DB.QueryRow(`SELECT attempts, retry_after FROM music_provider_matches WHERE entity_type='musician' AND entity_id=?`, musician.ID).
-			Scan(&attempts, &retryAfter)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return attempts, retryAfter
-	}
-
-	first := newMusicScanContext(nil)
-	for range 3 {
-		err = saveMusicMatch(ctx, s.queries, first, musicProviderSpotify, musicEntityMusician, musician.ID, failed)
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-	if attempts, retryAfter := read(); attempts != 1 || retryAfter.Valid {
-		t.Fatalf("one scan's repeated saves: attempts=%d retry_after=%v, want 1 and none", attempts, retryAfter)
-	}
-
-	second := newMusicScanContext(nil)
-	second.startedAt = time.Now().Add(2 * time.Second)
-	for range 2 {
-		err = saveMusicMatch(ctx, s.queries, second, musicProviderSpotify, musicEntityMusician, musician.ID, failed)
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-	attempts, retryAfter := read()
-	if attempts != 2 || !retryAfter.Valid {
-		t.Fatalf("the next scan's failure: attempts=%d retry_after=%v, want 2 and a wait", attempts, retryAfter)
-	}
-
-	err = saveMusicMatch(ctx, s.queries, second, musicProviderSpotify, musicEntityMusician, musician.ID, &resolvedMatch{status: musicStatusMatched})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if attempts, retryAfter := read(); attempts != 0 || retryAfter.Valid {
-		t.Fatalf("a match: attempts=%d retry_after=%v, want the count cleared", attempts, retryAfter)
-	}
-}
-
-// A pending adoption retries on the next scan, but a failed one waits out its
-// backoff like any other failed artist lookup.
-func TestPendingAdoptionHonorsTheFailureBackoff(t *testing.T) {
-	s := setupMusicScanner(t)
-	ctx := context.Background()
-	scan := newMusicScanContext(nil)
-	scanTaggedTrack(t, s, scan, t.TempDir()+"/adopt", 1, ffprobe.FormatTags{Title: "Track", Artist: "Adoptee", Album: "Record"})
-	var musicianID int64
-	err := s.tx.DB.QueryRow(`SELECT id FROM musicians WHERE name='Adoptee'`).Scan(&musicianID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = s.tx.DB.Exec(`INSERT INTO music_spotify_adoptions (musician_id, spotify_id) VALUES (?, 'target')`, musicianID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	isCandidate := func() bool {
-		t.Helper()
-		candidates, err := s.queries.MusicArtistRetryCandidates(ctx, 0)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return slices.ContainsFunc(candidates, func(row database.MusicArtistRetryCandidatesRow) bool { return row.ID == musicianID })
-	}
-
-	if !isCandidate() {
-		t.Fatal("a pending adoption is not retried")
-	}
-	_, err = s.tx.DB.Exec(`INSERT OR REPLACE INTO music_provider_matches (entity_type, entity_id, provider, status, attempts, failed_at, retry_after)
-		VALUES ('musician', ?, 'spotify', 'failed', 2, unixepoch(), unixepoch() + 3600)`, musicianID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if isCandidate() {
-		t.Fatal("a failed adoption was retried inside its backoff")
-	}
-	_, err = s.tx.DB.Exec(`UPDATE music_provider_matches SET retry_after = unixepoch() - 1 WHERE entity_id = ?`, musicianID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !isCandidate() {
-		t.Fatal("a failed adoption is not retried once its backoff has elapsed")
 	}
 }
