@@ -302,6 +302,14 @@ export const WATCH_PROGRESS_SAVE_INTERVAL_MS = 15_000;
  */
 export const WATCH_PROGRESS_SAVE_TIMEOUT_MS = 10_000;
 export const PLAYBACK_EXIT_SYNC_TIMEOUT_MS = 2_000;
+/**
+ * The deadline of every API request unless its helper sets its own: well
+ * above the server's 10 s provider bound (TMDB, Spotify) plus its DB work,
+ * so only a request nobody will answer reaches it.
+ */
+export const API_REQUEST_TIMEOUT_MS = 30_000;
+/** An avatar upload's deadline: up to 20 MB, possibly over a slow uplink. */
+export const AVATAR_UPLOAD_TIMEOUT_MS = 120_000;
 /** Seconds the up-next card counts down before starting the next episode. */
 export const UP_NEXT_COUNTDOWN_SEC = 10;
 

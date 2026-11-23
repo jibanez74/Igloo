@@ -2,6 +2,11 @@ import type { PersonData } from "@/types/people";
 import type { ScanStatuses } from "@/types/settings";
 import { mediaApiBasePath, movieMediaRef } from "@/lib/media-ref";
 import { sessionEndedSince, sessionStamp, type SessionStamp } from "@/lib/session";
+import {
+  API_REQUEST_TIMEOUT_MS,
+  AVATAR_UPLOAD_TIMEOUT_MS,
+  PREROLL_FETCH_TIMEOUT_MS,
+} from "@/lib/constants";
 import type {
   AddMoviesToPlaylistRequest,
   AlbumDetailsResponseType,
@@ -108,6 +113,15 @@ const NETWORK_ERROR: ApiFailureType = {
   status: 500,
 };
 
+// Synthesized when a request outlives its deadline: no answer, or a body that
+// stopped arriving. A 5xx, so the infinite lists retry it like any other
+// transient failure.
+const REQUEST_TIMEOUT: ApiFailureType = {
+  error: true,
+  message: "504 - The server took too long to respond.",
+  status: 504,
+};
+
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 type ApiRequestOptions = {
@@ -121,6 +135,12 @@ type ApiRequestOptions = {
    * already settled that query, discards the envelope.
    */
   signal?: AbortSignal;
+  /**
+   * How long the whole request, body included, may take before it resolves
+   * the REQUEST_TIMEOUT envelope. Every request is bounded, so a server or
+   * proxy that never answers cannot leave a save pending for good.
+   */
+  timeoutMs?: number;
   /**
    * The caller answers a 401 itself: the credentials the request carried
    * were wrong (login, the current password or PIN), or, for logout, the
@@ -157,7 +177,11 @@ function notifySessionExpired(session: SessionStamp) {
 }
 
 function warnUnlessAborted(endpoint: string, err: unknown) {
-  if (!(err instanceof DOMException && err.name === "AbortError")) {
+  // A deadline (TimeoutError) is logged by apiRequest itself.
+  const aborted =
+    err instanceof DOMException &&
+    (err.name === "AbortError" || err.name === "TimeoutError");
+  if (!aborted) {
     console.warn(`apiRequest failed: ${endpoint}`, err);
   }
 }
@@ -223,6 +247,7 @@ async function apiRequest<T extends Record<string, unknown>>(
     method = "GET",
     body,
     signal,
+    timeoutMs = API_REQUEST_TIMEOUT_MS,
     handlesUnauthorized = false,
     failedMessage = "The request could not be completed.",
   } = options;
@@ -230,33 +255,62 @@ async function apiRequest<T extends Record<string, unknown>>(
   // included, itself.
   const formData = body instanceof FormData;
 
-  const session = sessionStamp();
-  let res: Response;
+  // One controller carries both the caller's abort and the deadline, joined
+  // by hand: AbortSignal.any would raise the browser floor.
+  const controller = new AbortController();
+  const abortFromCaller = () => controller.abort(signal?.reason);
+  if (signal?.aborted) abortFromCaller();
+  else signal?.addEventListener("abort", abortFromCaller, { once: true });
+  const deadline = setTimeout(
+    () => controller.abort(new DOMException("Request deadline passed.", "TimeoutError")),
+    timeoutMs,
+  );
+  const timedOut = () =>
+    controller.signal.reason instanceof DOMException &&
+    controller.signal.reason.name === "TimeoutError";
+
   try {
-    res = await fetch(endpoint, {
-      method,
-      credentials: "include",
-      headers: body && !formData ? { "Content-Type": "application/json" } : undefined,
-      body: formData ? body : body ? JSON.stringify(body) : undefined,
-      signal,
-    });
-  } catch (err) {
-    warnUnlessAborted(endpoint, err);
-    return NETWORK_ERROR;
-  }
+    const session = sessionStamp();
+    let res: Response;
+    try {
+      res = await fetch(endpoint, {
+        method,
+        credentials: "include",
+        headers: body && !formData ? { "Content-Type": "application/json" } : undefined,
+        body: formData ? body : body ? JSON.stringify(body) : undefined,
+        signal: controller.signal,
+      });
+    } catch (err) {
+      if (timedOut()) {
+        console.warn(`apiRequest timed out: ${endpoint}`);
+        return REQUEST_TIMEOUT;
+      }
+      // The caller gave up: nothing to report.
+      if (!signal?.aborted) warnUnlessAborted(endpoint, err);
+      return NETWORK_ERROR;
+    }
 
-  // Before the body is read, so a 401 a proxy answered without JSON still
-  // counts, and outside the try, so a listener's own failure is not reported
-  // as a network error.
-  if (res.status === 401 && !handlesUnauthorized) {
-    notifySessionExpired(session);
-  }
+    // Before the body is read, so a 401 a proxy answered without JSON still
+    // counts, and outside the inner try, so a listener's own failure is not
+    // reported as a network error.
+    if (res.status === 401 && !handlesUnauthorized) {
+      notifySessionExpired(session);
+    }
 
-  if (res.status === 404) {
-    return ERROR_NOTFOUND;
-  }
+    if (res.status === 404) {
+      return ERROR_NOTFOUND;
+    }
 
-  return readEnvelope<T>(res, endpoint, failedMessage);
+    const envelope = await readEnvelope<T>(res, endpoint, failedMessage);
+    if (envelope.error && timedOut()) {
+      console.warn(`apiRequest timed out: ${endpoint}`);
+      return REQUEST_TIMEOUT;
+    }
+    return envelope;
+  } finally {
+    clearTimeout(deadline);
+    signal?.removeEventListener("abort", abortFromCaller);
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -413,6 +467,8 @@ export const uploadUserAvatar = (file: File) => {
     method: "POST",
     body: formData,
     failedMessage: "The avatar could not be uploaded.",
+    // Up to the server's 20 MB limit, possibly over a slow uplink.
+    timeoutMs: AVATAR_UPLOAD_TIMEOUT_MS,
   });
 };
 
@@ -1012,8 +1068,12 @@ export const updateTrailerPreferences = (data: UpdateTrailerPreferencesRequest) 
     body: data,
   });
 
+// Bounded tighter than the default, so a slow server never delays the movie.
 export const getMoviePreroll = (movieId: number, signal?: AbortSignal) =>
-  apiRequest<MoviePrerollData>(`/api/movies/${movieId}/preroll`, { signal });
+  apiRequest<MoviePrerollData>(`/api/movies/${movieId}/preroll`, {
+    signal,
+    timeoutMs: PREROLL_FETCH_TIMEOUT_MS,
+  });
 
 export const triggerMusicScan = () =>
   apiRequest<{ message: string }>("/api/settings/scan/music", {

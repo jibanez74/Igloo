@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  API_REQUEST_TIMEOUT_MS,
+  AVATAR_UPLOAD_TIMEOUT_MS,
+  PREROLL_FETCH_TIMEOUT_MS,
+} from "@/lib/constants";
+import {
   getAuthUser,
+  getMoviePreroll,
   getNotifications,
   login,
   logout,
@@ -235,5 +241,138 @@ describe("response envelopes", () => {
       message: "413 - The avatar could not be uploaded.",
       status: 413,
     });
+  });
+});
+
+describe("request deadline", () => {
+  const TIMED_OUT = {
+    error: true,
+    message: "504 - The server took too long to respond.",
+    status: 504,
+  };
+
+  // A server that accepts the request and never answers: fetch rejects only
+  // when its signal aborts, as the real one does.
+  function neverAnswer() {
+    const fetchMock = vi.fn(
+      (_input: RequestInfo | URL, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          if (init?.signal?.aborted) reject(init.signal.reason);
+          init?.signal?.addEventListener("abort", () =>
+            reject(init.signal?.reason),
+          );
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("resolves a timeout envelope once a request goes unanswered too long", async () => {
+    vi.useFakeTimers();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    neverAnswer();
+    let settled = false;
+    const pending = getNotifications().then((res) => {
+      settled = true;
+      return res;
+    });
+
+    await vi.advanceTimersByTimeAsync(API_REQUEST_TIMEOUT_MS - 1);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+
+    await expect(pending).resolves.toEqual(TIMED_OUT);
+    expect(warn).toHaveBeenCalledOnce();
+  });
+
+  it("bounds a body that stops arriving too", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+        const body = new ReadableStream<Uint8Array>({
+          start(stream) {
+            stream.enqueue(new TextEncoder().encode('{"error":'));
+            init?.signal?.addEventListener("abort", () =>
+              stream.error(init.signal?.reason),
+            );
+          },
+        });
+        return Promise.resolve(new Response(body, { status: 200 }));
+      }),
+    );
+
+    const pending = getNotifications();
+    await vi.advanceTimersByTimeAsync(API_REQUEST_TIMEOUT_MS);
+
+    await expect(pending).resolves.toEqual(TIMED_OUT);
+  });
+
+  it.each([
+    ["the preroll queue", () => getMoviePreroll(7), PREROLL_FETCH_TIMEOUT_MS],
+    [
+      "an avatar upload",
+      () => uploadUserAvatar(new File(["x"], "me.png")),
+      AVATAR_UPLOAD_TIMEOUT_MS,
+    ],
+  ])("gives %s its own deadline", async (_name, send, deadline) => {
+    vi.useFakeTimers();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    neverAnswer();
+    let settled = false;
+    const pending = send().then((res) => {
+      settled = true;
+      return res;
+    });
+
+    await vi.advanceTimersByTimeAsync(deadline - 1);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+
+    await expect(pending).resolves.toEqual(TIMED_OUT);
+  });
+
+  it("still answers a caller's abort with the silent network envelope", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    neverAnswer();
+    const caller = new AbortController();
+
+    const pending = getMoviePreroll(7, caller.signal);
+    caller.abort();
+
+    await expect(pending).resolves.toMatchObject({ error: true, status: 500 });
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("aborts at once for a signal already aborted", async () => {
+    const fetchMock = neverAnswer();
+    const caller = new AbortController();
+    caller.abort();
+
+    await expect(getMoviePreroll(7, caller.signal)).resolves.toMatchObject({
+      status: 500,
+    });
+    expect(fetchMock.mock.calls[0][1]?.signal?.aborted).toBe(true);
+  });
+
+  it("clears its deadline and caller listener once the request settles", async () => {
+    vi.useFakeTimers();
+    answerEveryRequest(() => jsonResponse({ error: false, data: {} }));
+    const caller = new AbortController();
+    const remove = vi.spyOn(caller.signal, "removeEventListener");
+
+    await expect(getMoviePreroll(7, caller.signal)).resolves.toMatchObject({
+      error: false,
+    });
+
+    expect(vi.getTimerCount()).toBe(0);
+    expect(remove).toHaveBeenCalledWith("abort", expect.any(Function));
   });
 });
