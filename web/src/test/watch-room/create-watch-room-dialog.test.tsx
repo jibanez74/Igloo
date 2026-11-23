@@ -45,17 +45,11 @@ const showActionFailedMock = vi.fn();
 const showCreatedMock = vi.fn();
 const showValidationErrorMock = vi.fn();
 
-vi.mock("@tanstack/react-router", async () => {
-  const actual =
-    await vi.importActual<typeof import("@tanstack/react-router")>(
-      "@tanstack/react-router",
-    );
-
-  return {
-    ...actual,
+vi.mock("@tanstack/react-router", async () =>
+  (await import("../helpers/router-link-mock")).routerWith({
     useNavigate: () => navigateMock,
-  };
-});
+  }),
+);
 
 vi.mock("@/lib/api", async () => {
   const actual =
@@ -196,10 +190,6 @@ beforeEach(() => {
   createWatchRoomMock.mockReset();
   getMovieTechnicalDetailsMock.mockReset();
   getMovieTechnicalDetailsMock.mockReturnValue(new Promise(() => {}));
-  navigateMock.mockReset();
-  showActionFailedMock.mockReset();
-  showCreatedMock.mockReset();
-  showValidationErrorMock.mockReset();
 });
 
 describe("CreateWatchRoomDialog", () => {

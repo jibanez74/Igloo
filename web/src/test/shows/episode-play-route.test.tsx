@@ -3,10 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AudioPlayerProvider } from "@/context/AudioPlayerContext";
 import { EPISODE_KEY, MOVIE_CONTROLS_IDLE_MS } from "@/lib/constants";
 import { stubMediaElement } from "../helpers/dom";
-import { authUser, nullableFloat64, nullableInt64, nullableString } from "../helpers/fixtures";
-import { jsonResponse, requestURL } from "../helpers/api";
+import { nullableFloat64, nullableInt64, nullableString } from "../helpers/fixtures";
+import { jsonResponse, requestURL, stubApi } from "../helpers/api";
 import { readDocumentHead, renderRoute } from "../helpers/render-route";
-import { SHOW_ID } from "../helpers/show-details";
+import { SHOW_ID, seasonEpisodes, showDetails } from "../helpers/show-details";
 
 // The player pauses the app-wide audio player on mount, so the route needs
 // its provider; the direct stream is never fetched in jsdom, so no media
@@ -123,85 +123,57 @@ type EpisodeApiOptions = {
   nextEpisode?: ReturnType<typeof nextEpisode> | null;
 };
 
-function mockEpisodeApi(options: EpisodeApiOptions = {}) {
-  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-    const url = requestURL(input);
-    const method = init?.method ?? "GET";
+const unwatchedProgress = {
+  progress_sec: null,
+  duration_sec: null,
+  watched: false,
+  updated_at: null,
+};
 
-    if (url === "/api/auth/user") return jsonResponse(authUser());
-    if (url === "/api/notifications/unread-count") {
-      return jsonResponse({ error: false, data: { unread_count: 0 } });
-    }
-    if (url === "/api/settings/playback") {
-      return jsonResponse({
-        error: false,
-        data: { settings: { profiles: [], server_upload_mbps: null } },
-      });
-    }
-    if (url === `/api/shows/episodes/${EPISODE_ID}`) {
-      if (options.episodeStatus) {
-        return jsonResponse(
-          { error: true, message: "episode not found" },
-          options.episodeStatus,
-        );
-      }
-      return jsonResponse({
-        error: false,
-        data: {
-          ...episodePayload,
-          next_episode:
-            options.nextEpisode === undefined
-              ? episodePayload.next_episode
-              : options.nextEpisode,
-        },
-      });
-    }
+function mockEpisodeApi(options: EpisodeApiOptions = {}) {
+  const episodes = (id: number) => `/api/shows/episodes/${id}`;
+  const savedProgress = { watched: true };
+
+  return stubApi({
+    "/api/settings/playback": {
+      settings: { profiles: [], server_upload_mbps: null },
+    },
+    [`GET ${episodes(EPISODE_ID)}`]: () =>
+      options.episodeStatus
+        ? jsonResponse(
+            { error: true, message: "episode not found" },
+            options.episodeStatus,
+          )
+        : {
+            ...episodePayload,
+            next_episode:
+              options.nextEpisode === undefined
+                ? episodePayload.next_episode
+                : options.nextEpisode,
+          },
     // The next episode is only ever reached by the hand-off, so its header
     // and file mirror the fixture's.
-    if (url === `/api/shows/episodes/${NEXT_EPISODE_ID}`) {
-      return jsonResponse({
-        error: false,
-        data: {
-          ...episodePayload,
-          episode: { ...episodePayload.episode, id: NEXT_EPISODE_ID, episode_number: 4, name: "The Long Night" },
-          next_episode: null,
-        },
-      });
-    }
-    if (/^\/api\/shows\/episodes\/\d+\/technical-details$/.test(url)) {
-      return jsonResponse({ error: false, data: technicalDetails });
-    }
-    if (/^\/api\/shows\/episodes\/\d+\/watch-progress$/.test(url) && method === "PUT") {
-      return jsonResponse({ error: false, data: { watched: true } });
-    }
-    if (url === `/api/shows/episodes/${EPISODE_ID}/watch-progress`) {
-      return jsonResponse({
-        error: false,
-        data: options.progress
-          ? { ...options.progress, watched: false, updated_at: "2026-09-01T00:00:00Z" }
-          : {
-              progress_sec: null,
-              duration_sec: null,
-              watched: false,
-              updated_at: null,
-            },
-      });
-    }
-    if (url === `/api/shows/episodes/${NEXT_EPISODE_ID}/watch-progress`) {
-      return jsonResponse({
-        error: false,
-        data: { progress_sec: null, duration_sec: null, watched: false, updated_at: null },
-      });
-    }
-
-    return jsonResponse(
-      { error: true, message: `Unexpected request: ${url}` },
-      500,
-    );
+    [`GET ${episodes(NEXT_EPISODE_ID)}`]: {
+      ...episodePayload,
+      episode: { ...episodePayload.episode, id: NEXT_EPISODE_ID, episode_number: 4, name: "The Long Night" },
+      next_episode: null,
+    },
+    [`GET ${episodes(EPISODE_ID)}/technical-details`]: technicalDetails,
+    [`GET ${episodes(NEXT_EPISODE_ID)}/technical-details`]: technicalDetails,
+    [`GET ${episodes(EPISODE_ID)}/watch-progress`]: () =>
+      options.progress
+        ? { ...options.progress, watched: false, updated_at: "2026-09-01T00:00:00Z" }
+        : unwatchedProgress,
+    [`GET ${episodes(NEXT_EPISODE_ID)}/watch-progress`]: unwatchedProgress,
+    [`PUT ${episodes(EPISODE_ID)}/watch-progress`]: savedProgress,
+    [`PUT ${episodes(NEXT_EPISODE_ID)}/watch-progress`]: savedProgress,
+    // Starting over clears the saved position and ends the playback session
+    // the resume prompt held.
+    [`DELETE ${episodes(EPISODE_ID)}/watch-progress`]: { cleared: true },
+    // The back button falls back to the show page.
+    [`/api/shows/details/${SHOW_ID}`]: showDetails(),
+    [`/api/shows/${SHOW_ID}/seasons/1/episodes`]: seasonEpisodes(1),
   });
-
-  vi.stubGlobal("fetch", fetchMock);
-  return fetchMock;
 }
 
 describe("episode play route", () => {

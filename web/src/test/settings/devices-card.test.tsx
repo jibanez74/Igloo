@@ -44,10 +44,6 @@ function renderCard() {
 }
 
 describe("DevicesCard", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
   afterEach(() => {
     vi.unstubAllEnvs();
   });

@@ -1,28 +1,13 @@
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { jsonResponse, requestURL } from "../helpers/api";
+import { jsonResponse, requestURL, stubApi } from "../helpers/api";
 import { authUser } from "../helpers/fixtures";
 import { renderRoute } from "../helpers/render-route";
 
 vi.mock("@/hooks/useAudioPlayerActions", () => import("../helpers/audio-player"));
 
-function mockTrailerFetch(movieResponse: () => Promise<Response>) {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn((input: RequestInfo | URL) => {
-      const url = requestURL(input);
-
-      if (url === "/api/auth/user") {
-        return jsonResponse(authUser());
-      }
-
-      if (url.startsWith("/api/tmdb/movies/")) {
-        return movieResponse();
-      }
-
-      return jsonResponse({ error: false, data: {} });
-    }),
-  );
+function mockTrailerFetch(movieResponse: () => Promise<Response>, tmdbId = "19") {
+  stubApi({ [`/api/tmdb/movies/${tmdbId}`]: () => movieResponse() });
 }
 
 describe("trailer route load errors", () => {
@@ -84,7 +69,7 @@ describe("trailer route without a trailer", () => {
 describe("trailer route with a hand-edited link", () => {
   it("opens the dialog without a trailer instead of failing the route", async () => {
     const movieResponse = vi.fn(() => jsonResponse({ error: false, data: {} }));
-    mockTrailerFetch(movieResponse);
+    mockTrailerFetch(movieResponse, "abc");
 
     await renderRoute("/trailer?mediaType=movie&tmdbId=abc");
 
@@ -176,7 +161,8 @@ describe("trailer route player", () => {
         setPositionState: vi.fn(),
       },
     });
-    // Close lands on Home, which renders its error states from these.
+    // Close lands on Home, which renders its error states from these: every
+    // request but the signed-in user fails, whatever Home asks for.
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL) =>

@@ -34,13 +34,11 @@ vi.mock("@/lib/api", async () => {
 
 // A rename reloads the playlist route so its head picks up the new name; the
 // tests render without a router.
-vi.mock("@tanstack/react-router", async () => {
-  const actual = await vi.importActual<
-    typeof import("@tanstack/react-router")
-  >("@tanstack/react-router");
-
-  return { ...actual, useRouter: () => routerMocks };
-});
+vi.mock("@tanstack/react-router", async () =>
+  (await import("../helpers/router-link-mock")).routerWith({
+    useRouter: () => routerMocks,
+  }),
+);
 
 describe("PlaylistFormDialog", () => {
   it("gives the description textarea an accessible name from the visible label", () => {

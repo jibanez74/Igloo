@@ -243,6 +243,33 @@ describe("useHlsSessionKeepalive", () => {
     expect(fetchMock).toHaveBeenCalledWith(streamUrl, expect.anything());
   });
 
+  // Only a 404 means the server dropped the session; any other failure
+  // (a 503 while the server restarts, a 500) leaves it to the player.
+  it("does not report a lost session for a failure other than 404", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(async () => new Response("busy", { status: 503 })),
+    );
+    const onSessionLost = vi.fn();
+
+    renderHook(() =>
+      useHlsSessionKeepalive({ enabled: true, streamUrl, onSessionLost }),
+    );
+    await vi.advanceTimersByTimeAsync(HLS_SESSION_KEEPALIVE_INTERVAL_MS * 2);
+
+    expect(onSessionLost).not.toHaveBeenCalled();
+  });
+
+  it("pings nothing before the player has a stream URL", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("#EXTM3U"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderHook(() => useHlsSessionKeepalive({ enabled: true, streamUrl: "" }));
+    await vi.advanceTimersByTimeAsync(HLS_SESSION_KEEPALIVE_INTERVAL_MS * 2);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("survives fetch rejections", async () => {
     const fetchMock = vi.fn().mockRejectedValue(new Error("offline"));
     vi.stubGlobal("fetch", fetchMock);

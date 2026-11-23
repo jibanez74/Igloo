@@ -1,5 +1,5 @@
 import { InfiniteQueryObserver } from "@tanstack/react-query";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   CONTINUE_WATCHING_KEY,
   PERSON_KEY,
@@ -100,10 +100,6 @@ describe("invalidateArtworkQueries", () => {
 });
 
 describe("refreshLibraryWithToasts", () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
   it("reports a refresh whose track page failed instead of toasting success", async () => {
     let failTracks = false;
     vi.stubGlobal(

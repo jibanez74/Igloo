@@ -1,21 +1,7 @@
 import { screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
-import { jsonResponse, requestURL } from "../helpers/api";
-import { authUser } from "../helpers/fixtures";
+import { describe, expect, it } from "vitest";
+import { stubApi } from "../helpers/api";
 import { readDocumentHead, renderRoute } from "../helpers/render-route";
-
-function mockShellFetch() {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn((input: RequestInfo | URL) => {
-      if (requestURL(input) === "/api/auth/user") {
-        return jsonResponse(authUser());
-      }
-
-      return jsonResponse({ error: false, data: {} });
-    }),
-  );
-}
 
 // The router's default not-found view was one unstyled line with no shell
 // and no way back; unknown URLs now land on a page inside the shell.
@@ -23,7 +9,8 @@ describe("unknown URLs", () => {
   it.each(["/does-not-exist", "/photos", "/photos/"])(
     "renders %s as not found inside the authenticated shell",
     async path => {
-      mockShellFetch();
+      // The shell needs only the signed-in user.
+      stubApi({});
 
       await renderRoute(path);
 
@@ -45,7 +32,7 @@ describe("unknown URLs", () => {
   );
 
   it("catch nested paths under a known section too", async () => {
-    mockShellFetch();
+    stubApi({});
 
     await renderRoute("/movies/7/nope");
 

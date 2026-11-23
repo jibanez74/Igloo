@@ -1,7 +1,7 @@
 import { screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import ShowDetailsHeroActions from "@/components/shows/ShowDetailsHeroActions";
-import { jsonResponse } from "../helpers/api";
+import { stubApi } from "../helpers/api";
 import { nullableFloat64 } from "../helpers/fixtures";
 import { renderWithQueryClient } from "../helpers/render";
 import { linkSearch } from "../helpers/router-link-mock";
@@ -12,14 +12,15 @@ vi.mock("@tanstack/react-router", async () =>
 );
 
 function stubSeason(episodes: ReturnType<typeof episode>[]) {
-  const fetchMock = vi.fn(() =>
-    jsonResponse({
-      error: false,
-      data: { season: seasonEpisodes(1).season, episodes },
-    }),
+  return stubApi(
+    {
+      [`/api/shows/${SHOW_ID}/seasons/1/episodes`]: {
+        season: seasonEpisodes(1).season,
+        episodes,
+      },
+    },
+    { user: null },
   );
-  vi.stubGlobal("fetch", fetchMock);
-  return fetchMock;
 }
 
 const playPath = (episodeId: number) =>

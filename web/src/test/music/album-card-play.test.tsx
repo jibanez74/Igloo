@@ -1,5 +1,5 @@
-import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import AlbumCard from "@/components/music/AlbumCard";
 import { AudioPlayerProvider } from "@/context/AudioPlayerContext";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
@@ -80,10 +80,6 @@ describe("an album card's pending play", () => {
           resolveAlbum = resolve;
         }) as never,
     );
-  });
-
-  afterEach(() => {
-    cleanup();
   });
 
   const startAlbum = async () => {

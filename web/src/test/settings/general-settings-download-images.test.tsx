@@ -1,15 +1,15 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { QueryClient } from "@tanstack/react-query";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   ALBUM_DETAILS_KEY,
   MOVIES_LIBRARY_KEY,
   SHOW_DETAILS_KEY,
 } from "@/lib/constants";
-import { deferredResponse, jsonResponse, requestURL } from "../helpers/api";
-import { authUserData } from "../helpers/fixtures";
+import { deferredResponse, jsonResponse, stubApi } from "../helpers/api";
 import { renderRoute } from "../helpers/render-route";
+import { scanStatuses } from "../helpers/scan-status";
 import { BUSY_CONTROL_CLASS } from "@/lib/constants";
 
 const savedSettings = {
@@ -25,33 +25,28 @@ const savedSettings = {
 
 function mockGeneralSettings(saveResponse?: Promise<Response>) {
   const saves: Record<string, unknown>[] = [];
-  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-    const url = requestURL(input);
-    if (url === "/api/auth/user") {
-      return jsonResponse({
-        error: false,
-        data: { user: authUserData({ is_admin: true }) },
-      });
-    }
-    if (url === "/api/settings/general" && init?.method === "PUT") {
-      const body = JSON.parse(String(init.body)) as Record<string, unknown>;
-      saves.push(body);
-      if (saveResponse) return saveResponse;
-      return jsonResponse({
-        error: false,
-        message: "Settings updated",
-        data: {
-          settings: { ...savedSettings, ...body, tmdb_key: null },
-          restart_required: false,
-        },
-      });
-    }
-    if (url === "/api/settings/general") {
-      return jsonResponse({ error: false, data: { settings: savedSettings } });
-    }
-    return jsonResponse({ error: true, message: `Unexpected ${url}` }, 500);
-  });
-  vi.stubGlobal("fetch", fetchMock);
+  stubApi(
+    {
+      "PUT /api/settings/general": ({ init }) => {
+        const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        saves.push(body);
+        if (saveResponse) return saveResponse;
+        return jsonResponse({
+          error: false,
+          message: "Settings updated",
+          data: {
+            settings: { ...savedSettings, ...body, tmdb_key: null },
+            restart_required: false,
+          },
+        });
+      },
+      "GET /api/settings/general": { settings: savedSettings },
+      // The shell's own requests.
+      "/api/notifications/unread-count": { unread_count: 0 },
+      "/api/settings/scan": scanStatuses(),
+    },
+    { user: { is_admin: true } },
+  );
   return saves;
 }
 

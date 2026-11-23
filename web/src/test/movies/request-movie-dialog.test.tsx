@@ -1,10 +1,6 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import {
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { useRef, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import RequestMovieDialog from "@/components/movies/RequestMovieDialog";
 import { AUTH_USER_KEY, NOTIFICATIONS_UNREAD_COUNT_KEY } from "@/lib/constants";
@@ -34,37 +30,9 @@ const toastMocks = vi.hoisted(() => ({
   showInfo: vi.fn(),
 }));
 
-vi.mock("@tanstack/react-router", async () => {
-  const actual =
-    await vi.importActual<typeof import("@tanstack/react-router")>(
-      "@tanstack/react-router",
-    );
-
-  return {
-    ...actual,
-    Link: ({
-      children,
-      params,
-      to,
-      ...props
-    }: {
-      children: ReactNode;
-      params?: { id?: string };
-      to?: string;
-    }) => {
-      const href =
-        typeof to === "string"
-          ? to.replace("$id", params?.id ?? "")
-          : "#";
-
-      return (
-        <a href={href} {...props}>
-          {children}
-        </a>
-      );
-    },
-  };
-});
+vi.mock("@tanstack/react-router", async () =>
+  (await import("../helpers/router-link-mock")).routerWithAnchorLinks(),
+);
 
 vi.mock("@/lib/api", async () => {
   const actual =

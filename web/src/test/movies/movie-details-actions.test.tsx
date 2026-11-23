@@ -1,7 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { ReactElement, ReactNode } from "react";
+import type { ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import MovieDetailsHeroActions from "@/components/movies/MovieDetailsHeroActions";
 import MovieLikeButton from "@/components/movies/MovieLikeButton";
@@ -16,6 +16,7 @@ import type {
   LibraryMovieDetailsMovieType,
   WatchProgressType,
 } from "@/types";
+import { stubApi } from "../helpers/api";
 import { moviePlaylistSummary } from "../helpers/movies";
 import { createTestQueryClient, renderWithQueryClient } from "../helpers/render";
 
@@ -25,40 +26,9 @@ const addMoviesToMoviePlaylistMock = vi.fn();
 const showActionFailedMock = vi.fn();
 const showAddedMock = vi.fn();
 
-vi.mock("@tanstack/react-router", async () => {
-  const actual =
-    await vi.importActual<typeof import("@tanstack/react-router")>(
-      "@tanstack/react-router",
-    );
-
-  return {
-    ...actual,
-    Link: ({
-      children,
-      params,
-      search,
-      to,
-      ...props
-    }: {
-      children: ReactNode;
-      params?: { id?: string };
-      search?: unknown;
-      to?: string;
-    }) => {
-      void search;
-      const href =
-        typeof to === "string"
-          ? to.replace("$id", params?.id ?? "")
-          : "#";
-
-      return (
-        <a href={href} {...props}>
-          {children}
-        </a>
-      );
-    },
-  };
-});
+vi.mock("@tanstack/react-router", async () =>
+  (await import("../helpers/router-link-mock")).routerWithAnchorLinks(),
+);
 
 vi.mock("@/lib/api", async () => {
   const actual =
@@ -223,6 +193,17 @@ describe("MovieDetailsHeroActions More menu", () => {
   it("offers Add to Playlist to every viewer and adds the movie through the picker", async () => {
     const user = userEvent.setup();
     addMoviesToMoviePlaylistMock.mockResolvedValue(success({ added: 1, skipped: 0 }));
+    // The add invalidates the playlists list, which the picker then refetches.
+    stubApi(
+      {
+        "GET /api/movies/playlists": {
+          playlists: [
+            moviePlaylistSummary({ id: 5, name: "Friday Feature", movie_count: 4 }),
+          ],
+        },
+      },
+      { user: null },
+    );
     renderHeroActions();
 
     await user.click(screen.getByRole("button", { name: "More options" }));

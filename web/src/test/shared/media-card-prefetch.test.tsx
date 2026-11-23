@@ -12,7 +12,7 @@ import {
   musicianDetailsQueryOpts,
   showDetailsQueryOpts,
 } from "@/lib/query-opts";
-import { deferredResponse, jsonResponse, requestURL } from "../helpers/api";
+import { deferredResponse, jsonResponse, requestURL, stubApi } from "../helpers/api";
 import { nullableInt64, nullableString } from "../helpers/fixtures";
 import { simpleAlbum, simpleMusician } from "../helpers/music";
 import { renderWithQueryClient } from "../helpers/render";
@@ -93,16 +93,10 @@ describe.each(cardCases)(
     const id = 104;
 
     function mockDetailsFetch(ids = [id]) {
-      const fetchMock = vi.fn((input: RequestInfo | URL) => {
-        const itemId = ids.find((itemId) => requestURL(input) === url(itemId));
-        if (itemId !== undefined) return jsonResponse(response(itemId));
-        return jsonResponse(
-          { error: true, message: `Unexpected request: ${requestURL(input)}` },
-          500,
-        );
-      });
-      vi.stubGlobal("fetch", fetchMock);
-      return fetchMock;
+      return stubApi(
+        Object.fromEntries(ids.map((itemId) => [url(itemId), response(itemId).data])),
+        { user: null },
+      );
     }
 
     it("does not fetch details just by rendering", () => {

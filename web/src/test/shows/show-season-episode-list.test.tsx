@@ -4,10 +4,11 @@ import { describe, expect, it, vi } from "vitest";
 import ShowSeasonEpisodeList from "@/components/shows/ShowSeasonEpisodeList";
 import { CONTINUE_WATCHING_KEY, EPISODE_KEY } from "@/lib/constants";
 import {
+  type StubApiRoute,
   countFetchRequests,
   deferredResponse,
   jsonResponse,
-  requestURL,
+  stubApi,
 } from "../helpers/api";
 import { nullableFloat64 } from "../helpers/fixtures";
 import { renderWithQueryClient } from "../helpers/render";
@@ -48,12 +49,27 @@ function seasonWithProgress() {
   };
 }
 
+const WATCHED_E1 = "PUT /api/shows/episodes/70101/watch-progress/watched";
+const WATCHED_E2 = "PUT /api/shows/episodes/70102/watch-progress/watched";
+
+/** Serves season `seasonNumber`'s episodes; the list renders without a session. */
+function stubSeason(
+  seasonNumber: number,
+  season: StubApiRoute,
+  routes: Record<string, StubApiRoute> = {},
+) {
+  return stubApi(
+    {
+      [`/api/shows/${SHOW_ID}/seasons/${seasonNumber}/episodes`]: season,
+      ...routes,
+    },
+    { user: null },
+  );
+}
+
 describe("ShowSeasonEpisodeList", () => {
   it("links every row to its episode player", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() => jsonResponse({ error: false, data: seasonEpisodes(1) })),
-    );
+    stubSeason(1, seasonEpisodes(1));
 
     renderWithQueryClient(
       <ShowSeasonEpisodeList showId={SHOW_ID} seasonNumber={1} />,
@@ -70,10 +86,7 @@ describe("ShowSeasonEpisodeList", () => {
   });
 
   it("shows resume progress and watched state from the season payload", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() => jsonResponse({ error: false, data: seasonWithProgress() })),
-    );
+    stubSeason(1, seasonWithProgress());
 
     renderWithQueryClient(
       <ShowSeasonEpisodeList showId={SHOW_ID} seasonNumber={1} />,
@@ -108,17 +121,11 @@ describe("ShowSeasonEpisodeList", () => {
     // The server owns the state: once marked, the season refetch that the
     // toggle triggers must return the watched row too.
     let markedWatched = false;
-    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestURL(input);
-      if (url === "/api/shows/episodes/70101/watch-progress/watched") {
-        expect(init?.method).toBe("PUT");
-        expect(JSON.parse(String(init?.body))).toEqual({ watched: true });
-        return watchedRequest.promise;
-      }
-      const season = seasonWithProgress();
-      return jsonResponse({
-        error: false,
-        data: markedWatched
+    const fetchMock = stubSeason(
+      1,
+      () => {
+        const season = seasonWithProgress();
+        return markedWatched
           ? {
               ...season,
               episodes: [
@@ -126,10 +133,15 @@ describe("ShowSeasonEpisodeList", () => {
                 episode(1, 2, { watched: true }),
               ],
             }
-          : season,
-      });
-    });
-    vi.stubGlobal("fetch", fetchMock);
+          : season;
+      },
+      {
+        [WATCHED_E1]: ({ init }) => {
+          expect(JSON.parse(String(init?.body))).toEqual({ watched: true });
+          return watchedRequest.promise;
+        },
+      },
+    );
 
     renderWithQueryClient(
       <ShowSeasonEpisodeList showId={SHOW_ID} seasonNumber={1} />,
@@ -174,17 +186,9 @@ describe("ShowSeasonEpisodeList", () => {
 
   it("refreshes Home's continue-watching row after marking an episode watched", async () => {
     const user = userEvent.setup();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((input: RequestInfo | URL) =>
-        requestURL(input) === "/api/shows/episodes/70101/watch-progress/watched"
-          ? jsonResponse({
-              error: false,
-              data: { episode_id: 70101, watched: true },
-            })
-          : jsonResponse({ error: false, data: seasonWithProgress() }),
-      ),
-    );
+    stubSeason(1, seasonWithProgress(), {
+      [WATCHED_E1]: { episode_id: 70101, watched: true },
+    });
 
     const { queryClient } = renderWithQueryClient(
       <ShowSeasonEpisodeList showId={SHOW_ID} seasonNumber={1} />,
@@ -208,17 +212,9 @@ describe("ShowSeasonEpisodeList", () => {
   // E2 must date that entry or the card resumes E2 from its old position.
   it("marks the previous episode's up-next stale after marking an episode watched", async () => {
     const user = userEvent.setup();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((input: RequestInfo | URL) =>
-        requestURL(input) === "/api/shows/episodes/70101/watch-progress/watched"
-          ? jsonResponse({
-              error: false,
-              data: { episode_id: 70101, watched: true },
-            })
-          : jsonResponse({ error: false, data: seasonWithProgress() }),
-      ),
-    );
+    stubSeason(1, seasonWithProgress(), {
+      [WATCHED_E1]: { episode_id: 70101, watched: true },
+    });
 
     const { queryClient } = renderWithQueryClient(
       <ShowSeasonEpisodeList showId={SHOW_ID} seasonNumber={1} />,
@@ -239,14 +235,9 @@ describe("ShowSeasonEpisodeList", () => {
   it("rolls the row back and reports the failure when marking watched fails", async () => {
     const user = userEvent.setup();
     const watchedRequest = deferredResponse();
-    const fetchMock = vi.fn((input: RequestInfo | URL) => {
-      const url = requestURL(input);
-      if (url === "/api/shows/episodes/70101/watch-progress/watched") {
-        return watchedRequest.promise;
-      }
-      return jsonResponse({ error: false, data: seasonWithProgress() });
+    stubSeason(1, seasonWithProgress(), {
+      [WATCHED_E1]: () => watchedRequest.promise,
     });
-    vi.stubGlobal("fetch", fetchMock);
 
     renderWithQueryClient(
       <ShowSeasonEpisodeList showId={SHOW_ID} seasonNumber={1} />,
@@ -282,19 +273,10 @@ describe("ShowSeasonEpisodeList", () => {
     const user = userEvent.setup();
     const firstRequest = deferredResponse();
     const secondRequest = deferredResponse();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((input: RequestInfo | URL) => {
-        const url = requestURL(input);
-        if (url === "/api/shows/episodes/70101/watch-progress/watched") {
-          return firstRequest.promise;
-        }
-        if (url === "/api/shows/episodes/70102/watch-progress/watched") {
-          return secondRequest.promise;
-        }
-        return jsonResponse({ error: false, data: seasonWithProgress() });
-      }),
-    );
+    stubSeason(1, seasonWithProgress(), {
+      [WATCHED_E1]: () => firstRequest.promise,
+      [WATCHED_E2]: () => secondRequest.promise,
+    });
 
     renderWithQueryClient(
       <ShowSeasonEpisodeList showId={SHOW_ID} seasonNumber={1} />,
@@ -328,10 +310,7 @@ describe("ShowSeasonEpisodeList", () => {
   });
 
   it("renders episode rows with number, runtime, air date, and overview", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() => jsonResponse({ error: false, data: seasonEpisodes(1) })),
-    );
+    stubSeason(1, seasonEpisodes(1));
 
     renderWithQueryClient(
       <ShowSeasonEpisodeList showId={SHOW_ID} seasonNumber={1} />,
@@ -356,15 +335,7 @@ describe("ShowSeasonEpisodeList", () => {
   });
 
   it("names the season in its empty state", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() =>
-        jsonResponse({
-          error: false,
-          data: { season: seasonEpisodes(1).season, episodes: [] },
-        }),
-      ),
-    );
+    stubSeason(1, { season: seasonEpisodes(1).season, episodes: [] });
 
     renderWithQueryClient(
       <ShowSeasonEpisodeList showId={SHOW_ID} seasonNumber={1} />,
@@ -382,10 +353,7 @@ describe("ShowSeasonEpisodeList", () => {
   });
 
   it("names each episode row after its heading", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() => jsonResponse({ error: false, data: seasonEpisodes(1) })),
-    );
+    stubSeason(1, seasonEpisodes(1));
 
     renderWithQueryClient(
       <ShowSeasonEpisodeList showId={SHOW_ID} seasonNumber={1} />,
@@ -401,15 +369,7 @@ describe("ShowSeasonEpisodeList", () => {
   });
 
   it("calls specials by name rather than by number", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() =>
-        jsonResponse({
-          error: false,
-          data: { season: seasonEpisodes(0).season, episodes: [] },
-        }),
-      ),
-    );
+    stubSeason(0, { season: seasonEpisodes(0).season, episodes: [] });
 
     renderWithQueryClient(
       <ShowSeasonEpisodeList showId={SHOW_ID} seasonNumber={0} />,
@@ -423,17 +383,14 @@ describe("ShowSeasonEpisodeList", () => {
   it("offers a retry that refetches after a load failure", async () => {
     const user = userEvent.setup();
     let attempt = 0;
-    const fetchMock = vi.fn((input: RequestInfo | URL) => {
-      expect(requestURL(input)).toBe(
-        `/api/shows/${SHOW_ID}/seasons/1/episodes`,
-      );
+    // Only the season is served: any other request fails the test.
+    const fetchMock = stubSeason(1, () => {
       attempt += 1;
       if (attempt === 1) {
         return jsonResponse({ error: true, message: "server exploded" }, 500);
       }
-      return jsonResponse({ error: false, data: seasonEpisodes(1) });
+      return seasonEpisodes(1);
     });
-    vi.stubGlobal("fetch", fetchMock);
 
     renderWithQueryClient(
       <ShowSeasonEpisodeList showId={SHOW_ID} seasonNumber={1} />,

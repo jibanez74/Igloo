@@ -8,7 +8,7 @@ import {
   SEARCH_PER_PAGE,
 } from "@/lib/constants";
 import { runContentFadeTransitionTimeout } from "../helpers/content-fade-transition";
-import { jsonResponse, requestURL } from "../helpers/api";
+import { jsonResponse, requestURL, stubApi } from "../helpers/api";
 import { readDocumentHead, renderRoute } from "../helpers/render-route";
 import { restoreMatchMedia, setReducedMotionPreference } from "../helpers/dom";
 
@@ -16,81 +16,11 @@ vi.mock("@/hooks/useAudioPlayerActions", () => import("../helpers/audio-player")
 vi.mock("@/hooks/useAudioPlayerNowPlaying", () => import("../helpers/audio-player"));
 
 function mockSearchFetch() {
-  const fetchMock = vi.fn((input: RequestInfo | URL) => {
-    const url =
-      typeof input === "string"
-        ? input
-        : input instanceof URL
-          ? input.toString()
-          : input.url;
-
-    if (url === "/api/auth/user") {
-      return jsonResponse({
-        error: false,
-        data: {
-          user: {
-            id: 1,
-            name: "Search User",
-            email: "search@example.com",
-            is_admin: false,
-            avatar: null,
-            created_at: "2026-01-01T00:00:00Z",
-            updated_at: "2026-01-01T00:00:00Z",
-          },
-        },
-      });
-    }
-
-    if (url === "/api/search?q=Casino") {
-      return jsonResponse({
-        error: false,
-        data: {
-          query: "Casino",
-          movies: {
-            results: [
-              {
-                id: 7,
-                title: "Casino Royale",
-                poster_path: { String: "", Valid: false },
-                year: { Int64: 2006, Valid: true },
-                certification: { String: "PG-13", Valid: true },
-              },
-            ],
-            total: 1,
-          },
-          shows: {
-            results: [
-              {
-                id: 55,
-                name: "Casino Nights",
-                poster_path: { String: "", Valid: false },
-                premiere_year: { Int64: 2001, Valid: true },
-                certification: { String: "TV-MA", Valid: true },
-              },
-            ],
-            total: 1,
-          },
-          albums: {
-            results: [],
-            total: 0,
-          },
-          musicians: {
-            results: [],
-            total: 0,
-          },
-          tracks: {
-            results: [],
-            total: 0,
-          },
-        },
-      });
-    }
-
-    if (url.startsWith("/api/search/movies?")) {
-      return jsonResponse({
-        error: false,
-        data: {
-          query: "Casino",
+  return stubApi(
+    {
+      "/api/search?q=Casino": {
+        query: "Casino",
+        movies: {
           results: [
             {
               id: 7,
@@ -100,19 +30,9 @@ function mockSearchFetch() {
               certification: { String: "PG-13", Valid: true },
             },
           ],
-          total: 50,
-          page: 3,
-          per_page: SEARCH_PER_PAGE,
-          total_pages: 3,
+          total: 1,
         },
-      });
-    }
-
-    if (url === `/api/search/shows?q=Casino&page=1&per_page=${SEARCH_PER_PAGE}`) {
-      return jsonResponse({
-        error: false,
-        data: {
-          query: "Casino",
+        shows: {
           results: [
             {
               id: 55,
@@ -123,43 +43,72 @@ function mockSearchFetch() {
             },
           ],
           total: 1,
-          page: 1,
-          per_page: SEARCH_PER_PAGE,
-          total_pages: 1,
         },
-      });
-    }
-
-    if (url === `/api/search/albums?q=Casino&page=1&per_page=${SEARCH_PER_PAGE}`) {
-      return jsonResponse({
-        error: false,
-        data: {
-          query: "Casino",
-          results: [
-            {
-              id: 12,
-              title: "Casino Original Soundtrack",
-              cover: { String: "", Valid: false },
-              musician: { String: "Various Artists", Valid: true },
-              year: { Int64: 1995, Valid: true },
-            },
-          ],
-          total: 1,
-          page: 1,
-          per_page: SEARCH_PER_PAGE,
-          total_pages: 1,
+        albums: {
+          results: [],
+          total: 0,
         },
-      });
-    }
-
-    return jsonResponse({
-      error: true,
-      message: `Unexpected request: ${url}`,
-    });
-  });
-
-  vi.stubGlobal("fetch", fetchMock);
-  return fetchMock;
+        musicians: {
+          results: [],
+          total: 0,
+        },
+        tracks: {
+          results: [],
+          total: 0,
+        },
+      },
+      // Every page of the movies tab answers with the server-clamped page 3.
+      "/api/search/movies": {
+        query: "Casino",
+        results: [
+          {
+            id: 7,
+            title: "Casino Royale",
+            poster_path: { String: "", Valid: false },
+            year: { Int64: 2006, Valid: true },
+            certification: { String: "PG-13", Valid: true },
+          },
+        ],
+        total: 50,
+        page: 3,
+        per_page: SEARCH_PER_PAGE,
+        total_pages: 3,
+      },
+      [`/api/search/shows?q=Casino&page=1&per_page=${SEARCH_PER_PAGE}`]: {
+        query: "Casino",
+        results: [
+          {
+            id: 55,
+            name: "Casino Nights",
+            poster_path: { String: "", Valid: false },
+            premiere_year: { Int64: 2001, Valid: true },
+            certification: { String: "TV-MA", Valid: true },
+          },
+        ],
+        total: 1,
+        page: 1,
+        per_page: SEARCH_PER_PAGE,
+        total_pages: 1,
+      },
+      [`/api/search/albums?q=Casino&page=1&per_page=${SEARCH_PER_PAGE}`]: {
+        query: "Casino",
+        results: [
+          {
+            id: 12,
+            title: "Casino Original Soundtrack",
+            cover: { String: "", Valid: false },
+            musician: { String: "Various Artists", Valid: true },
+            year: { Int64: 1995, Valid: true },
+          },
+        ],
+        total: 1,
+        page: 1,
+        per_page: SEARCH_PER_PAGE,
+        total_pages: 1,
+      },
+    },
+    { user: { name: "Search User", email: "search@example.com" } },
+  );
 }
 
 async function renderSearchRoute(initialEntry: string) {

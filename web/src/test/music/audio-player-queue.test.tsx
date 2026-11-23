@@ -1,6 +1,6 @@
 import { useRef } from "react";
-import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AudioPlayerProvider } from "@/context/AudioPlayerContext";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { renderWithQueryClient } from "@/test/helpers/render";
@@ -83,10 +83,6 @@ function renderQueue(rawTracks: PlayableTrackData[], startTrackId: number) {
 describe("playTrackFromList", () => {
   beforeEach(() => {
     stubMediaElement();
-  });
-
-  afterEach(() => {
-    cleanup();
   });
 
   const alabaster = rawTrack({
@@ -360,11 +356,6 @@ describe("shuffleQueue", () => {
     stubMediaElement();
   });
 
-  afterEach(() => {
-    cleanup();
-    vi.restoreAllMocks();
-  });
-
   const alabaster = rawTrack({
     id: 1,
     title: "Alabaster",
@@ -506,11 +497,6 @@ describe("shuffleQueue", () => {
 describe("extendQueue", () => {
   beforeEach(() => {
     stubMediaElement();
-  });
-
-  afterEach(() => {
-    cleanup();
-    vi.restoreAllMocks();
   });
 
   const playlistInfo = {
@@ -696,10 +682,6 @@ describe("isQueueLive", () => {
     stubMediaElement();
   });
 
-  afterEach(() => {
-    cleanup();
-  });
-
   const playlistInfo = { cover: null, title: "Road Trip", musician: null };
   const track = (id: number) =>
     rawTrack({ id, title: `Song ${id}`, albumTitle: null, musician: "Band", cover: null });
@@ -752,10 +734,6 @@ describe("isQueueLive", () => {
 describe("artwork reset", () => {
   beforeEach(() => {
     stubMediaElement();
-  });
-
-  afterEach(() => {
-    cleanup();
   });
 
   // Turning image downloads off removes the server's copies, which the queue

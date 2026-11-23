@@ -1,16 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { loadPlayRoute } from "@/lib/play-route-loader";
 import { movieMediaRef } from "@/lib/media-ref";
+import { jsonResponse } from "../helpers/api";
 import { createTestQueryClient } from "../helpers/render";
 
 const preloadHlsLight = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/hls-loader", () => ({ preloadHlsLight }));
 
 beforeEach(() => {
-  preloadHlsLight.mockClear();
   vi.stubGlobal(
     "fetch",
-    vi.fn(async () => new Response(JSON.stringify({ error: true, message: "offline" }), { status: 503 })),
+    vi.fn(() => jsonResponse({ error: true, message: "offline" }, 503)),
   );
 });
 

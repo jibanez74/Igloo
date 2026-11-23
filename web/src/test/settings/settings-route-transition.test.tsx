@@ -12,10 +12,11 @@ import {
 } from "@/lib/constants";
 import type { AudioPlayerNowPlaying } from "@/types";
 import { runContentFadeTransitionTimeout } from "../helpers/content-fade-transition";
-import { jsonResponse, requestURL } from "../helpers/api";
+import { stubApi } from "../helpers/api";
 import { restoreMatchMedia, expectNoClass } from "../helpers/dom";
-import { authUserData, playbackSettings } from "../helpers/fixtures";
+import { playbackSettings } from "../helpers/fixtures";
 import { renderRoute } from "../helpers/render-route";
+import { scanStatuses } from "../helpers/scan-status";
 
 // The shell mounts the real player, whose state would shadow the wrapper's
 // now-playing slice below; these tests only need the shell to see one.
@@ -26,14 +27,6 @@ vi.mock("@/context/AudioPlayerContext", () => ({
 const originalStartViewTransition = (document as Document & {
   startViewTransition?: unknown;
 }).startViewTransition;
-
-function authUser() {
-  return authUserData({
-    name: "Settings User",
-    email: "settings@example.com",
-    is_admin: true,
-  });
-}
 
 function generalSettings() {
   return {
@@ -57,53 +50,32 @@ function librarySettings() {
 }
 
 function mockSettingsFetch() {
-  const fetchMock = vi.fn((input: RequestInfo | URL) => {
-    const url = requestURL(input);
-
-    if (url === "/api/auth/user") {
-      return jsonResponse({
-        error: false,
-        data: {
-          user: authUser(),
-        },
-      });
-    }
-
-    if (url === "/api/settings/general") {
-      return jsonResponse({
-        error: false,
-        data: {
-          settings: generalSettings(),
-        },
-      });
-    }
-
-    if (url === "/api/settings/playback") {
-      return jsonResponse({
-        error: false,
-        data: {
-          settings: playbackSettings({ server_upload_mbps: 20 }),
-        },
-      });
-    }
-
-    if (url === "/api/settings") {
-      return jsonResponse({
-        error: false,
-        data: librarySettings(),
-      });
-    }
-
-    return jsonResponse(
-      {
-        error: true,
-        message: `Unexpected request: ${url}`,
+  stubApi(
+    {
+      "/api/settings/general": { settings: generalSettings() },
+      // The shell's own requests.
+      "/api/notifications/unread-count": { unread_count: 0 },
+      "/api/settings/scan": scanStatuses(),
+      "/api/settings/playback": {
+        settings: playbackSettings({ server_upload_mbps: 20 }),
       },
-      500,
-    );
-  });
-
-  vi.stubGlobal("fetch", fetchMock);
+      "/api/settings": librarySettings(),
+      // What the libraries, playback and account tabs load beside the form.
+      "/api/movies/stats": { total_movies: 0 },
+      "/api/shows/stats": { total_shows: 0, total_seasons: 0, total_episodes: 0 },
+      "/api/music/stats": { total_albums: 0, total_tracks: 0, total_musicians: 0 },
+      "/api/user/preferences/trailers": { enabled: false, count: 2, source: "both" },
+      "/api/tmdb/status": { available: true },
+      "/api/devices": { devices: [] },
+    },
+    {
+      user: {
+        name: "Settings User",
+        email: "settings@example.com",
+        is_admin: true,
+      },
+    },
+  );
 }
 
 async function renderSettingsRoute(

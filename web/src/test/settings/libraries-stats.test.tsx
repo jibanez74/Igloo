@@ -1,70 +1,48 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
-import { authUserData } from "../helpers/fixtures";
-import { deferredResponse, jsonResponse, requestURL } from "../helpers/api";
+import { describe, expect, it } from "vitest";
+import { deferredResponse, jsonResponse, stubApi } from "../helpers/api";
 import { renderRoute } from "../helpers/render-route";
 import { musicScanStatus, scanStatuses } from "../helpers/scan-status";
 import { BUSY_CONTROL_CLASS } from "@/lib/constants";
 
 // Only the music counts answer; the shows counts fail, and the movie path is
-// blank so its tile never renders. The scan status call falls through to the
-// 500 and shows its own unavailable notice.
+// blank so its tile never renders. Unless a music scan is set up, the scan
+// status call fails too and shows its own unavailable notice.
 function mockLibrariesFetch({
   musicScanStart,
 }: {
   /** Makes the music library scannable; answers the request that starts it. */
   musicScanStart?: Promise<Response>;
 } = {}) {
-  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-    const url = requestURL(input);
-    const method = init?.method ?? "GET";
+  const serverError = () =>
+    jsonResponse({ error: true, message: "internal server error" }, 500);
 
-    // A save that never answers: the tests that save are about the time it
-    // takes.
-    if (url === "/api/settings/libraries" && method === "PUT") {
-      return new Promise<Response>(() => {});
-    }
-
-    if (url === "/api/settings/scan/music" && method === "POST" && musicScanStart) {
-      return musicScanStart;
-    }
-
-    if (url === "/api/settings/scan" && musicScanStart) {
-      return jsonResponse({
-        error: false,
-        data: scanStatuses({ music: musicScanStatus({ state: "completed" }) }),
-      });
-    }
-
-    if (url === "/api/auth/user") {
-      return jsonResponse({
-        error: false,
-        data: { user: authUserData({ is_admin: true }) },
-      });
-    }
-
-    if (url === "/api/settings") {
-      return jsonResponse({
-        error: false,
-        data: { movies_dir: "", shows_dir: "/media/shows", music_dir: "/media/music" },
-      });
-    }
-
-    if (url === "/api/music/stats") {
-      return jsonResponse({
-        error: false,
-        data: { total_albums: 12, total_tracks: 140, total_musicians: 0 },
-      });
-    }
-
-    return jsonResponse(
-      { error: true, message: `Unexpected request: ${url}` },
-      500,
-    );
-  });
-
-  vi.stubGlobal("fetch", fetchMock);
+  stubApi(
+    {
+      // A save that never answers: the tests that save are about the time it
+      // takes.
+      "PUT /api/settings/libraries": () => new Promise<Response>(() => {}),
+      "POST /api/settings/scan/music": () => musicScanStart ?? serverError(),
+      "/api/settings/scan": () =>
+        musicScanStart
+          ? scanStatuses({ music: musicScanStatus({ state: "completed" }) })
+          : serverError(),
+      "/api/settings": {
+        movies_dir: "",
+        shows_dir: "/media/shows",
+        music_dir: "/media/music",
+      },
+      "/api/music/stats": {
+        total_albums: 12,
+        total_tracks: 140,
+        total_musicians: 0,
+      },
+      "/api/shows/stats": serverError,
+      "/api/notifications/unread-count": { unread_count: 0 },
+    },
+    { user: { is_admin: true } },
+  );
 }
 
 describe("library count tiles", () => {

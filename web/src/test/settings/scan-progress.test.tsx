@@ -14,7 +14,7 @@ import {
   scanStatuses,
   showScanStatus,
 } from "../helpers/scan-status";
-import { jsonResponse, requestURL } from "../helpers/api";
+import { jsonResponse, requestURL, stubApi } from "../helpers/api";
 
 function ScanView() {
   const query = useScanStatus();
@@ -58,8 +58,6 @@ function AllScansView() {
 
 afterEach(() => {
   vi.useRealTimers();
-  vi.restoreAllMocks();
-  vi.unstubAllGlobals();
 });
 
 describe("movie scan progress", () => {
@@ -216,10 +214,7 @@ describe("music scan progress", () => {
   it("polls the music report and refreshes music statistics and lists", async () => {
     vi.useFakeTimers();
     let status = musicScanStatus();
-    const fetchMock = vi.fn((input: RequestInfo | URL) => jsonResponse(requestURL(input) === "/api/settings/scan"
-      ? { error: false, data: scanStatuses({ music: status }) }
-      : { error: true, message: `unexpected request ${requestURL(input)}` }));
-    vi.stubGlobal("fetch", fetchMock);
+    stubApi({ "/api/settings/scan": () => scanStatuses({ music: status }) }, { user: null });
     const client = createTestQueryClient();
     const invalidate = vi.spyOn(client, "invalidateQueries");
     renderWithQueryClient(<MusicScanView />, { queryClient: client });
@@ -268,10 +263,7 @@ describe("TV shows scan progress", () => {
   it("polls the TV report until the scan completes", async () => {
     vi.useFakeTimers();
     let status = showScanStatus();
-    const fetchMock = vi.fn((input: RequestInfo | URL) => jsonResponse(requestURL(input) === "/api/settings/scan"
-      ? { error: false, data: scanStatuses({ shows: status }) }
-      : { error: true, message: `unexpected request ${requestURL(input)}` }));
-    vi.stubGlobal("fetch", fetchMock);
+    stubApi({ "/api/settings/scan": () => scanStatuses({ shows: status }) }, { user: null });
     const client = createTestQueryClient();
     renderWithQueryClient(<ShowScanView />, { queryClient: client });
     await act(async () => { await vi.advanceTimersByTimeAsync(1); });
@@ -348,13 +340,11 @@ describe("runs of watcher-detected changes", () => {
     let status = movieScanStatus({ run_id: "startup-scan", state: "completed", phase: "enrichment", processed: 418, imported: 418, catalog_revision: 418 });
     const library = { error: false, data: { movies: [], total: 0 } };
     const stats = { error: false, data: { total_movies: 418 } };
-    const fetchMock = vi.fn((input: RequestInfo | URL) => {
-      const url = requestURL(input);
-      if (url === "/api/settings/scan") return jsonResponse({ error: false, data: scanStatuses({ movies: status }) });
-      if (url === "/api/movies/stats") return jsonResponse(stats);
-      return jsonResponse(library);
-    });
-    vi.stubGlobal("fetch", fetchMock);
+    const fetchMock = stubApi({
+      "/api/settings/scan": () => scanStatuses({ movies: status }),
+      "/api/movies/stats": stats.data,
+      "/api/movies/library": library.data,
+    }, { user: null });
     const requests = (path: string) => fetchMock.mock.calls.filter(([input]) => requestURL(input).split("?")[0] === path).length;
     const client = createTestQueryClient();
     // A library page and the statistics the loaders filled, both on screen;

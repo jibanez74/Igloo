@@ -1,22 +1,19 @@
 import { fireEvent, screen, waitFor, within, render } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { Route } from "@/routes/_auth/people/$id";
 import type { PersonData } from "@/types/people";
-import { requestURL, jsonResponse } from "../helpers/api";
-import { authUserData } from "../helpers/fixtures";
+import { jsonResponse, stubApi } from "../helpers/api";
 import { personProfile, personTitle } from "../helpers/people";
 import { readDocumentHead, renderRoute } from "../helpers/render-route";
 
 function mockPerson(profile: PersonData | (() => PersonData), status = 200) {
-  const fetchMock = vi.fn((input: RequestInfo | URL) => {
-    const url = requestURL(input);
-    if (url === "/api/auth/user") return jsonResponse({ error: false, data: { user: authUserData() } });
-    if (url === "/api/people/9001") return jsonResponse(status === 200 ? { error: false, data: typeof profile === "function" ? profile() : profile } : { error: true, message: "Unavailable" }, status);
-    return jsonResponse({ error: false, data: { unread_count: 0 } });
+  return stubApi({
+    "/api/people/9001": () =>
+      status === 200
+        ? typeof profile === "function" ? profile() : profile
+        : jsonResponse({ error: true, message: "Unavailable" }, status),
   });
-  vi.stubGlobal("fetch", fetchMock);
-  return fetchMock;
 }
 
 describe("person route", () => {

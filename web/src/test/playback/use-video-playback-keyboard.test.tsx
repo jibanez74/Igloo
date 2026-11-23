@@ -61,12 +61,16 @@ describe("useVideoPlaybackKeyboard", () => {
     ["K", "onTogglePlay"],
     ["ArrowLeft", "onSeekBackward"],
     ["j", "onSeekBackward"],
+    ["J", "onSeekBackward"],
     ["ArrowRight", "onSeekForward"],
     ["l", "onSeekForward"],
+    ["L", "onSeekForward"],
     ["Home", "onSeekToStart"],
     ["0", "onSeekToStart"],
     ["m", "onToggleMute"],
+    ["M", "onToggleMute"],
     ["f", "onToggleFullscreen"],
+    ["F", "onToggleFullscreen"],
     ["Escape", "onEscape"],
   ] as const)("dispatches %j to %s", (key, callbackName) => {
     const callback = vi.fn();
@@ -81,6 +85,22 @@ describe("useVideoPlaybackKeyboard", () => {
 
     // fireEvent returns false when preventDefault was called.
     expect(press(" ")).toBe(false);
+  });
+
+  // A consumed shortcut stops at the document, so a page-level handler (the
+  // app shell's own keys) never sees it a second time.
+  it("stops consumed shortcuts from reaching window listeners", () => {
+    const windowListener = vi.fn();
+    window.addEventListener("keydown", windowListener);
+    try {
+      const { press } = renderHarness({ onTogglePlay: vi.fn() });
+
+      press(" ");
+      press("q");
+      expect(windowListener.mock.calls.map(([event]) => (event as KeyboardEvent).key)).toEqual(["q"]);
+    } finally {
+      window.removeEventListener("keydown", windowListener);
+    }
   });
 
   it("adjusts volume through the callback with the configured step", () => {
@@ -110,6 +130,18 @@ describe("useVideoPlaybackKeyboard", () => {
     expect(video.muted).toBe(true);
   });
 
+  it("keeps the element's volume between silent and full", () => {
+    const { press, video } = renderHarness({ volumeStep: 0.1 });
+
+    video.volume = 0.95;
+    press("ArrowUp");
+    expect(video.volume).toBe(1);
+
+    video.volume = 0.05;
+    press("ArrowDown");
+    expect(video.volume).toBe(0);
+  });
+
   it("shows the controls on any shortcut while fullscreen", () => {
     const onShowControls = vi.fn();
     const { press } = renderHarness({
@@ -120,6 +152,14 @@ describe("useVideoPlaybackKeyboard", () => {
 
     press("k");
     expect(onShowControls).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves the controls alone outside fullscreen", () => {
+    const onShowControls = vi.fn();
+    const { press } = renderHarness({ onShowControls, onTogglePlay: vi.fn() });
+
+    press("k");
+    expect(onShowControls).not.toHaveBeenCalled();
   });
 
   it("ignores keys while typing in an input", () => {
@@ -170,6 +210,15 @@ describe("useVideoPlaybackKeyboard", () => {
     expect(onSeekBackward).toHaveBeenCalledTimes(1);
   });
 
+  it("holds the jump to the start until there is a timeline", () => {
+    const onSeekToStart = vi.fn();
+    const { press } = renderHarness({ onSeekToStart }, { readyState: 0 });
+
+    press("Home");
+    press("0");
+    expect(onSeekToStart).not.toHaveBeenCalled();
+  });
+
   it("keeps play and pause during a mid-playback stall", () => {
     const onTogglePlay = vi.fn();
     const { press } = renderHarness(
@@ -209,6 +258,18 @@ describe("useVideoPlaybackKeyboard", () => {
 
     press("Escape");
     expect(onEscape).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves Escape to the page while a failed video is not in fullscreen", () => {
+    const onEscape = vi.fn();
+    const { press } = renderHarness({ onEscape }, { readyState: 0 });
+    Object.defineProperty(screen.getByTestId("video"), "error", {
+      configurable: true,
+      value: { code: 3 },
+    });
+
+    press("Escape");
+    expect(onEscape).not.toHaveBeenCalled();
   });
 
   it("keeps the letter shortcuts on a focused slider but leaves it its arrows", () => {

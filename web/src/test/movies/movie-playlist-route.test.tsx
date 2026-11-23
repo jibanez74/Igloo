@@ -2,9 +2,9 @@ import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { MOVIES_PER_PAGE } from "@/lib/constants";
-import { deferredResponse, jsonResponse, requestURL } from "../helpers/api";
+import { deferredResponse, jsonResponse, requestURL, stubApi, type StubApiRoute } from "../helpers/api";
 import type { UserSummaryType } from "@/types";
-import { authUser, nullableInt64, nullableString, userSummary } from "../helpers/fixtures";
+import { nullableInt64, nullableString, userSummary } from "../helpers/fixtures";
 import { moviePlaylist, moviePlaylistDetail } from "../helpers/movies";
 import { readDocumentHead, renderRoute } from "../helpers/render-route";
 
@@ -27,80 +27,77 @@ type MockPlaylist = {
 };
 
 function mockPlaylistsFetch(playlists: Record<number, MockPlaylist>) {
-  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-    const url = requestURL(input);
-    const method = init?.method ?? "GET";
+  const routes: Record<string, StubApiRoute> = {
+    "/api/movies/playlists": { playlists: [] },
+    // Deleting a playlist returns to the movies page, whose header counts the
+    // library.
+    "/api/movies/stats": { total_movies: 0 },
+  };
 
-    if (url === "/api/auth/user") {
-      return jsonResponse(authUser());
-    }
+  for (const [key, initial] of Object.entries(playlists)) {
+    const id = Number(key);
+    const base = `/api/movies/playlists/${id}`;
 
-    const detail = url.match(/^\/api\/movies\/playlists\/(\d+)$/);
-    const playlist = detail ? playlists[Number(detail[1])] : undefined;
-    if (detail && playlist && method === "DELETE") {
-      delete playlists[Number(detail[1])];
-      return jsonResponse({ error: false, message: "Playlist deleted successfully" });
-    }
-    if (detail && playlist) {
-      return jsonResponse({
-        error: false,
-        data: moviePlaylistDetail({
-          playlist: moviePlaylist({
-            id: Number(detail[1]),
-            name: playlist.name,
-            description: nullableString(playlist.description),
-          }),
-          movie_count: playlist.movies.length,
-          is_owner: playlist.is_owner ?? true,
-          can_edit: playlist.can_edit ?? playlist.is_owner ?? true,
-          owner: playlist.owner ?? userSummary(),
+    routes[`GET ${base}`] = () => {
+      const playlist = playlists[id];
+      if (!playlist) {
+        return jsonResponse({ error: true, message: "playlist not found" }, 404);
+      }
+      return moviePlaylistDetail({
+        playlist: moviePlaylist({
+          id,
+          name: playlist.name,
+          description: nullableString(playlist.description),
         }),
+        movie_count: playlist.movies.length,
+        is_owner: playlist.is_owner ?? true,
+        can_edit: playlist.can_edit ?? playlist.is_owner ?? true,
+        owner: playlist.owner ?? userSummary(),
       });
+    };
+    routes[`DELETE ${base}`] = () => {
+      delete playlists[id];
+      return jsonResponse({ error: false, message: "Playlist deleted successfully" });
+    };
+    routes[`GET ${base}/movies`] = ({ search }) => {
+      const movies = playlists[id]?.movies ?? [];
+      const page = Number(search.get("page"));
+      const perPage = Number(search.get("per_page"));
+      const sort = search.get("sort");
+      // The page always asks for a page, a size and a direction; a request
+      // missing any of them is a bug the test should see, not an empty page.
+      if (!(page >= 1) || !(perPage >= 1) || (sort !== "asc" && sort !== "desc")) {
+        return jsonResponse({ error: true, message: `bad page query: ${search}` }, 400);
+      }
+      const sorted = sort === "asc" ? movies : [...movies].reverse();
+      return {
+        movies: sorted.slice((page - 1) * perPage, page * perPage),
+        total: sorted.length,
+        page,
+        per_page: perPage,
+        total_pages: Math.max(1, Math.ceil(sorted.length / perPage)),
+      };
+    };
+    for (const listed of initial.movies) {
+      // Pointing at a card prefetches its details; nothing here reads them.
+      routes[`GET /api/movies/details/${listed.id}`] = {
+        movie: listed,
+        cast: [],
+        crew: [],
+        genres: [],
+        production_companies: [],
+        extra_videos: [],
+      };
+      routes[`DELETE ${base}/movies/${listed.id}`] = () => {
+        initial.movies = initial.movies.filter(
+          candidate => candidate.id !== listed.id,
+        );
+        return jsonResponse({ error: false, message: "Movie removed from playlist" });
+      };
     }
+  }
 
-    const removal = url.match(/^\/api\/movies\/playlists\/(\d+)\/movies\/(\d+)$/);
-    const trimmed = removal ? playlists[Number(removal[1])] : undefined;
-    if (removal && trimmed && method === "DELETE") {
-      trimmed.movies = trimmed.movies.filter(
-        candidate => candidate.id !== Number(removal[2]),
-      );
-      return jsonResponse({ error: false, message: "Movie removed from playlist" });
-    }
-
-    const list = url.match(
-      /^\/api\/movies\/playlists\/(\d+)\/movies\?page=(\d+)&per_page=(\d+)&sort=(asc|desc)$/,
-    );
-    const listed = list ? playlists[Number(list[1])] : undefined;
-    if (list && listed) {
-      const page = Number(list[2]);
-      const perPage = Number(list[3]);
-      const sorted =
-        list[4] === "asc" ? listed.movies : [...listed.movies].reverse();
-      return jsonResponse({
-        error: false,
-        data: {
-          movies: sorted.slice((page - 1) * perPage, page * perPage),
-          total: sorted.length,
-          page,
-          per_page: perPage,
-          total_pages: Math.max(1, Math.ceil(sorted.length / perPage)),
-        },
-      });
-    }
-
-    if (url === "/api/movies/playlists") {
-      return jsonResponse({
-        error: false,
-        data: { playlists: [] },
-      });
-    }
-
-    return jsonResponse({ error: false, data: {} });
-  });
-
-  vi.stubGlobal("fetch", fetchMock);
-
-  return fetchMock;
+  return stubApi(routes);
 }
 
 function mockPlaylistFetch(
@@ -316,19 +313,13 @@ describe("movie playlist route", () => {
   // A private playlist the viewer was not shared answers 403 "access denied";
   // the reader gets a sentence and a way back, never the server's constant.
   it("words a private playlist as no access, with a way back", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((input: RequestInfo | URL) => {
-        const url = requestURL(input);
-        if (url === "/api/auth/user") {
-          return jsonResponse(authUser());
-        }
-        if (url === "/api/movies/playlists/11") {
-          return jsonResponse({ error: true, message: "access denied" }, 403);
-        }
-        return jsonResponse({ error: false, data: {} });
-      }),
-    );
+    stubApi({
+      "/api/movies/playlists/11": () =>
+        jsonResponse({ error: true, message: "access denied" }, 403),
+      // The movie list loads beside the playlist and is refused the same way.
+      "/api/movies/playlists/11/movies": () =>
+        jsonResponse({ error: true, message: "access denied" }, 403),
+    });
 
     await renderRoute("/movies/playlist/11");
 

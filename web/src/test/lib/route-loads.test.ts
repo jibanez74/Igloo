@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   MOVIES_INDEX_DEFAULT_SEARCH,
   MUSIC_INDEX_DEFAULT_SEARCH,
@@ -67,10 +67,6 @@ function stubHangingFetch() {
 }
 
 describe("in-page navigations do not wait for the page's queries", () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
   // Every index and search dep, so the loaders pick the branch that loads the
   // most: a genre, the liked view, a category tab.
   const INDEX_LOADS: [string, RouteWithLoader, Record<string, unknown>][] = [
@@ -158,10 +154,6 @@ describe("in-page navigations do not wait for the page's queries", () => {
 });
 
 describe("index loaders warm only the tab on show", () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
   async function warmedPaths(route: RouteWithLoader, deps: Record<string, unknown>) {
     const fetchMock = vi.fn<(input: RequestInfo | URL) => Promise<Response>>(
       () => jsonResponse({ error: false, data: {} }),

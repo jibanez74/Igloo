@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { DETAIL_PAGE_CONTENT_ENTER_CLASS } from "@/lib/constants";
 import { musicianDetailsQueryOpts } from "@/lib/query-opts";
 import type { MusicianDetailsResponseType, MusicianTrackType } from "@/types";
-import { countFetchRequests, jsonResponse, requestURL } from "../helpers/api";
+import { countFetchRequests, stubApi, type StubApiRoute } from "../helpers/api";
 import { nullableInt64, nullableString } from "../helpers/fixtures";
 import { createTestQueryClient } from "../helpers/render";
 import { readDocumentHead, renderRoute } from "../helpers/render-route";
@@ -163,58 +163,16 @@ function mockMusicianDetailsFetch() {
     ],
   ]);
 
-  const fetchMock = vi.fn((input: RequestInfo | URL) => {
-    const url = requestURL(input);
+  const routes: Record<string, StubApiRoute> = {
+    "/api/music/tracks/liked-ids": { liked_track_ids: [2] },
+  };
+  for (const [musicianId, details] of detailsById) {
+    routes[`/api/music/musicians/${musicianId}`] = details;
+  }
 
-    if (url === "/api/auth/user") {
-      return jsonResponse({
-        error: false,
-        data: {
-          user: {
-            id: 1,
-            name: "Musician User",
-            email: "musicians@example.com",
-            is_admin: false,
-            avatar: null,
-            created_at: "2026-01-01T00:00:00Z",
-            updated_at: "2026-01-01T00:00:00Z",
-          },
-        },
-      });
-    }
-
-    const detailsMatch = url.match(/^\/api\/music\/musicians\/(\d+)$/);
-    if (detailsMatch) {
-      const musicianId = Number.parseInt(detailsMatch[1], 10);
-      const payload = detailsById.get(musicianId);
-      if (payload) {
-        return jsonResponse({
-          error: false,
-          data: payload,
-        });
-      }
-    }
-
-    if (url === "/api/music/tracks/liked-ids") {
-      return jsonResponse({
-        error: false,
-        data: {
-          liked_track_ids: [2],
-        },
-      });
-    }
-
-    return jsonResponse(
-      {
-        error: true,
-        message: `Unexpected request: ${url}`,
-      },
-      500,
-    );
+  return stubApi(routes, {
+    user: { name: "Musician User", email: "musicians@example.com" },
   });
-
-  vi.stubGlobal("fetch", fetchMock);
-  return fetchMock;
 }
 
 async function renderMusicianDetailsRoute(initialEntry = "/music/musician/20") {

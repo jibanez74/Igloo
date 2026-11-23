@@ -4,10 +4,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { PLAYLIST_TRACKS_KEY, PLAYLIST_TRACKS_PAGE_SIZE } from "@/lib/constants";
 import { playlistDetailsQueryOpts } from "@/lib/query-opts";
 import type { components } from "@/types/openapi.gen";
-import { jsonResponse, requestURL } from "../helpers/api";
+import { jsonResponse, requestURL, stubApi, type StubApiRoute } from "../helpers/api";
 import { audioPlayerActionsMock } from "../helpers/audio-player";
 import { layOutTrackRows, pressKey } from "../helpers/drag";
-import { authUser, nullableString, userSummary } from "../helpers/fixtures";
+import { nullableString, userSummary } from "../helpers/fixtures";
 import { playlist, playlistDetail, playlistTrack } from "../helpers/music";
 import { readDocumentHead, renderRoute } from "../helpers/render-route";
 
@@ -57,44 +57,29 @@ function roadTrip(
   };
 }
 
-function mockPlaylistFetch(mock: MockPlaylist) {
-  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-    const url = requestURL(input);
+/** The whole playlist as one page of tracks. */
+function tracksPage(mock: MockPlaylist) {
+  return {
+    tracks: mock.tracks,
+    total: mock.tracks.length,
+    has_more: false,
+    next_offset: mock.tracks.length,
+  };
+}
 
-    if (url === "/api/auth/user") {
-      return jsonResponse(authUser());
-    }
-
-    if (url === "/api/music/playlists/21" && init?.method === "DELETE") {
-      return jsonResponse({ error: false, message: "Playlist deleted successfully" });
-    }
-
-    if (url === "/api/music/playlists/21") {
-      return jsonResponse({ error: false, data: mock.detail });
-    }
-
-    if (url.startsWith("/api/music/playlists/21/tracks?")) {
-      return jsonResponse({
-        error: false,
-        data: {
-          tracks: mock.tracks,
-          total: mock.tracks.length,
-          has_more: false,
-          next_offset: mock.tracks.length,
-        },
-      });
-    }
-
-    if (url === "/api/music/tracks/liked-ids") {
-      return jsonResponse({ error: false, data: { liked_track_ids: [] } });
-    }
-
-    return jsonResponse({ error: false, data: {} });
+/** `routes` take precedence: a page URL with its query beats the default. */
+function mockPlaylistFetch(
+  mock: MockPlaylist,
+  routes: Record<string, StubApiRoute> = {},
+) {
+  return stubApi({
+    "DELETE /api/music/playlists/21": () =>
+      jsonResponse({ error: false, message: "Playlist deleted successfully" }),
+    "GET /api/music/playlists/21": () => mock.detail,
+    "/api/music/playlists/21/tracks": () => tracksPage(mock),
+    "/api/music/tracks/liked-ids": { liked_track_ids: [] },
+    ...routes,
   });
-
-  vi.stubGlobal("fetch", fetchMock);
-
-  return fetchMock;
 }
 
 describe("music playlist route", () => {
@@ -148,7 +133,12 @@ describe("music playlist route", () => {
   });
 
   it("deletes the playlist after confirming and returns to the playlists tab", async () => {
-    const fetchMock = mockPlaylistFetch(roadTrip());
+    // Deleting returns to the music page's Playlists tab, which loads these.
+    const fetchMock = mockPlaylistFetch(roadTrip(), {
+      "/api/music/stats": { total_albums: 1, total_tracks: 2, total_musicians: 1 },
+      "/api/music/playlists": { playlists: [] },
+      "/api/spotify/status": { available: false },
+    });
     const user = userEvent.setup();
 
     const { router, queryClient } = await renderRoute("/music/playlist/21");
@@ -196,16 +186,15 @@ describe("music playlist route", () => {
 
   it("offers Try again instead of the empty copy when the tracks fail to load", async () => {
     const user = userEvent.setup();
-    const fetchMock = mockPlaylistFetch(roadTrip());
-    const respond = fetchMock.getMockImplementation()!;
+    const mock = roadTrip();
     // Failing until Try again: the loader's warm-up and the list's own
     // mount retry both see the failure.
     let failTracks = true;
-    fetchMock.mockImplementation((input, init) => {
-      if (failTracks && requestURL(input) === TRACKS_PAGE_URL(0)) {
-        return jsonResponse({ error: true, message: "tracks query failed" }, 503);
-      }
-      return respond(input, init);
+    mockPlaylistFetch(mock, {
+      [TRACKS_PAGE_URL(0)]: () =>
+        failTracks
+          ? jsonResponse({ error: true, message: "tracks query failed" }, 503)
+          : tracksPage(mock),
     });
 
     await renderRoute("/music/playlist/21");
@@ -233,16 +222,8 @@ describe("music playlist route", () => {
       playlistTrack({ id: 3, title: "Cinder", position: 3, duration: 200 }),
     ];
     const mock = roadTrip({ track_count: 40, is_owner: false, can_edit: false }, tracks);
-    const fetchMock = mockPlaylistFetch(mock);
-    const respond = fetchMock.getMockImplementation()!;
-    fetchMock.mockImplementation((input, init) => {
-      if (requestURL(input) === TRACKS_PAGE_URL(0)) {
-        return jsonResponse({
-          error: false,
-          data: { tracks, total: 40, has_more: true, next_offset: 3 },
-        });
-      }
-      return respond(input, init);
+    mockPlaylistFetch(mock, {
+      [TRACKS_PAGE_URL(0)]: { tracks, total: 40, has_more: true, next_offset: 3 },
     });
 
     await renderRoute("/music/playlist/21");
@@ -260,20 +241,10 @@ describe("music playlist route", () => {
   it("stops loading the rest after a failed page and says how much was queued", async () => {
     const user = userEvent.setup();
     const mock = roadTrip({ track_count: 3 });
-    const fetchMock = mockPlaylistFetch(mock);
-    const respond = fetchMock.getMockImplementation()!;
-    fetchMock.mockImplementation((input, init) => {
-      const url = requestURL(input);
-      if (url === TRACKS_PAGE_URL(0)) {
-        return jsonResponse({
-          error: false,
-          data: { tracks: mock.tracks, total: 3, has_more: true, next_offset: 2 },
-        });
-      }
-      if (url === TRACKS_PAGE_URL(2)) {
-        return jsonResponse({ error: true, message: "tracks query failed" }, 503);
-      }
-      return respond(input, init);
+    mockPlaylistFetch(mock, {
+      [TRACKS_PAGE_URL(0)]: { tracks: mock.tracks, total: 3, has_more: true, next_offset: 2 },
+      [TRACKS_PAGE_URL(2)]: () =>
+        jsonResponse({ error: true, message: "tracks query failed" }, 503),
     });
 
     await renderRoute("/music/playlist/21");
@@ -321,24 +292,28 @@ describe("music playlist route", () => {
       );
       const releasePage = (offset: number) => gates.get(offset)!.open();
       const release = () => gates.forEach((gate) => gate.open());
-      const fetchMock = mockPlaylistFetch(roadTrip({ track_count: 4 }, pages.flat()));
-      const respond = fetchMock.getMockImplementation()!;
-      fetchMock.mockImplementation((input, init) => {
-        const index = offsets.findIndex((offset) => requestURL(input) === TRACKS_PAGE_URL(offset));
-        if (index < 0) return respond(input, init);
-        const last = index === offsets.length - 1;
-        const page = () =>
-          jsonResponse({
-            error: false,
-            data: {
-              tracks: pages[index],
-              total: 4,
-              has_more: !last,
-              next_offset: last ? 4 : offsets[index + 1],
-            },
-          });
-        return index === 0 ? page() : gates.get(offsets[index])!.opened.then(page);
-      });
+      const fetchMock = mockPlaylistFetch(
+        roadTrip({ track_count: 4 }, pages.flat()),
+        Object.fromEntries(
+          offsets.map((offset, index) => {
+            const last = index === offsets.length - 1;
+            const page = () =>
+              jsonResponse({
+                error: false,
+                data: {
+                  tracks: pages[index],
+                  total: 4,
+                  has_more: !last,
+                  next_offset: last ? 4 : offsets[index + 1],
+                },
+              });
+            return [
+              TRACKS_PAGE_URL(offset),
+              () => (index === 0 ? page() : gates.get(offset)!.opened.then(page)),
+            ];
+          }),
+        ),
+      );
       const requested = (offset: number) =>
         fetchMock.mock.calls.some(([input]) => requestURL(input) === TRACKS_PAGE_URL(offset));
       return { release, releasePage, requested };
@@ -472,19 +447,9 @@ describe("music playlist route", () => {
 
   it("reports a refused track removal instead of confirming it", async () => {
     const user = userEvent.setup();
-    const fetchMock = mockPlaylistFetch(roadTrip());
-    const respond = fetchMock.getMockImplementation()!;
-    fetchMock.mockImplementation((input, init) => {
-      if (
-        requestURL(input) === "/api/music/playlists/21/tracks/1" &&
-        init?.method === "DELETE"
-      ) {
-        return jsonResponse(
-          { error: true, message: "You can't edit this playlist." },
-          403,
-        );
-      }
-      return respond(input, init);
+    mockPlaylistFetch(roadTrip(), {
+      "DELETE /api/music/playlists/21/tracks/1": () =>
+        jsonResponse({ error: true, message: "You can't edit this playlist." }, 403),
     });
 
     await renderRoute("/music/playlist/21");
@@ -506,16 +471,9 @@ describe("music playlist route", () => {
 
   it("refreshes the header's details after removing a track", async () => {
     const user = userEvent.setup();
-    const fetchMock = mockPlaylistFetch(roadTrip());
-    const respond = fetchMock.getMockImplementation()!;
-    fetchMock.mockImplementation((input, init) => {
-      if (
-        requestURL(input) === "/api/music/playlists/21/tracks/1" &&
-        init?.method === "DELETE"
-      ) {
-        return jsonResponse({ error: false, message: "Track removed" });
-      }
-      return respond(input, init);
+    const fetchMock = mockPlaylistFetch(roadTrip(), {
+      "DELETE /api/music/playlists/21/tracks/1": () =>
+        jsonResponse({ error: false, message: "Track removed" }),
     });
     const detailsRequests = () =>
       fetchMock.mock.calls.filter(
@@ -542,18 +500,15 @@ describe("music playlist route", () => {
   });
 
   it("falls back to the server's order when a reorder is refused", async () => {
-    const fetchMock = mockPlaylistFetch(roadTrip());
-    const respond = fetchMock.getMockImplementation()!;
     const reorderRequests: unknown[] = [];
-    fetchMock.mockImplementation((input, init) => {
-      if (requestURL(input) === "/api/music/playlists/21/tracks/reorder") {
+    mockPlaylistFetch(roadTrip(), {
+      "/api/music/playlists/21/tracks/reorder": ({ init }) => {
         reorderRequests.push(JSON.parse(String(init?.body)));
         return jsonResponse(
           { error: true, message: "You can't edit this playlist." },
           403,
         );
-      }
-      return respond(input, init);
+      },
     });
 
     await renderRoute("/music/playlist/21");
@@ -590,27 +545,21 @@ describe("music playlist route", () => {
 
   it("keeps a saved reorder once the server's list comes back", async () => {
     const mock = roadTrip();
-    const fetchMock = mockPlaylistFetch(mock);
-    const respond = fetchMock.getMockImplementation()!;
     let saved = false;
-    fetchMock.mockImplementation((input, init) => {
-      const url = requestURL(input);
-      if (url === "/api/music/playlists/21/tracks/reorder") {
+    mockPlaylistFetch(mock, {
+      "/api/music/playlists/21/tracks/reorder": () => {
         saved = true;
         return jsonResponse({ error: false, message: "Tracks reordered" });
-      }
-      if (saved && url === TRACKS_PAGE_URL(0)) {
-        return jsonResponse({
-          error: false,
-          data: {
-            tracks: [...mock.tracks].reverse(),
-            total: 2,
-            has_more: false,
-            next_offset: 2,
-          },
-        });
-      }
-      return respond(input, init);
+      },
+      [TRACKS_PAGE_URL(0)]: () =>
+        saved
+          ? {
+              tracks: [...mock.tracks].reverse(),
+              total: 2,
+              has_more: false,
+              next_offset: 2,
+            }
+          : tracksPage(mock),
     });
 
     await renderRoute("/music/playlist/21");
@@ -660,19 +609,14 @@ describe("music playlist route", () => {
   // A private playlist the viewer was not shared answers 403 "access denied";
   // the reader gets a sentence and a way back, never the server's constant.
   it("words a private playlist as no access, with a way back", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((input: RequestInfo | URL) => {
-        const url = requestURL(input);
-        if (url === "/api/auth/user") {
-          return jsonResponse(authUser());
-        }
-        if (url === "/api/music/playlists/21") {
-          return jsonResponse({ error: true, message: "access denied" }, 403);
-        }
-        return jsonResponse({ error: false, data: {} });
-      }),
-    );
+    stubApi({
+      "/api/music/playlists/21": () =>
+        jsonResponse({ error: true, message: "access denied" }, 403),
+      // The tracks load beside the playlist and are refused the same way.
+      "/api/music/playlists/21/tracks": () =>
+        jsonResponse({ error: true, message: "access denied" }, 403),
+      "/api/music/tracks/liked-ids": { liked_track_ids: [] },
+    });
 
     await renderRoute("/music/playlist/21");
 
@@ -685,19 +629,14 @@ describe("music playlist route", () => {
   });
 
   it("says a missing playlist was not found", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((input: RequestInfo | URL) => {
-        const url = requestURL(input);
-        if (url === "/api/auth/user") {
-          return jsonResponse(authUser());
-        }
-        if (url === "/api/music/playlists/21") {
-          return jsonResponse({ error: true, message: "playlist not found" }, 404);
-        }
-        return jsonResponse({ error: false, data: {} });
-      }),
-    );
+    stubApi({
+      "/api/music/playlists/21": () =>
+        jsonResponse({ error: true, message: "playlist not found" }, 404),
+      // The tracks load beside the playlist and are missing the same way.
+      "/api/music/playlists/21/tracks": () =>
+        jsonResponse({ error: true, message: "playlist not found" }, 404),
+      "/api/music/tracks/liked-ids": { liked_track_ids: [] },
+    });
 
     await renderRoute("/music/playlist/21");
 

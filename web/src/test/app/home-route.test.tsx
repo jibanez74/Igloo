@@ -6,8 +6,8 @@ import {
   MOTION_SECTION_ENTER_CLASS,
   MOTION_SECTION_ENTER_DELAYED_CLASS,
 } from "@/lib/constants";
-import { authUserData } from "../helpers/fixtures";
-import { jsonResponse, requestURL } from "../helpers/api";
+import { jsonResponse, stubApi } from "../helpers/api";
+import { scanStatuses } from "../helpers/scan-status";
 import { renderRoute } from "../helpers/render-route";
 
 vi.mock("@/components/app/AppShell", () => ({
@@ -15,14 +15,6 @@ vi.mock("@/components/app/AppShell", () => ({
     <main id="main">{children}</main>
   ),
 }));
-
-function authUser() {
-  return authUserData({
-    name: "Admin User",
-    email: "admin@example.com",
-    is_admin: true,
-  });
-}
 
 type MockHomeFetchOptions = {
   continueWatching?: unknown[];
@@ -66,63 +58,41 @@ function mockHomeFetch(options: MockHomeFetchOptions = {}) {
   const continueWatching =
     options.continueWatching ?? defaultContinueWatchingItems;
   let latestMoviesRequests = 0;
-  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-    const url = requestURL(input);
-    const method = init?.method ?? "GET";
 
-    if (url === "/api/auth/user") {
-      return jsonResponse({
-        error: false,
-        data: { user: authUser() },
-      });
-    }
-
-    if (url === "/api/watch-rooms") {
-      return jsonResponse({
-        error: false,
-        data: {
-          rooms: [
-            {
-              id: 7,
-              movie_id: 101,
-              movie_title: "Signal Fire",
-              movie_poster: null,
-              owner: {
+  return stubApi(
+    {
+      "/api/watch-rooms": {
+        rooms: [
+          {
+            id: 7,
+            movie_id: 101,
+            movie_title: "Signal Fire",
+            movie_poster: null,
+            owner: {
+              id: 1,
+              name: "Admin User",
+              avatar: null,
+            },
+            members: [
+              {
                 id: 1,
                 name: "Admin User",
                 avatar: null,
               },
-              members: [
-                {
-                  id: 1,
-                  name: "Admin User",
-                  avatar: null,
-                },
-              ],
-              playback_mode: "direct",
-              is_owner: false,
-              created_at: "2026-01-01T00:00:00Z",
-            },
-          ],
-        },
-      });
-    }
-
-    if (url === "/api/continue-watching") {
-      return jsonResponse({
-        error: false,
-        data: { items: continueWatching },
-      });
-    }
-
-    if (url === "/api/movies/latest") {
-      latestMoviesRequests += 1;
-      if (options.latestMoviesFailsFirst && latestMoviesRequests === 1) {
-        return jsonResponse({ error: true, message: "latest exploded" }, 500);
-      }
-      return jsonResponse({
-        error: false,
-        data: {
+            ],
+            playback_mode: "direct",
+            is_owner: false,
+            created_at: "2026-01-01T00:00:00Z",
+          },
+        ],
+      },
+      "/api/continue-watching": { items: continueWatching },
+      "/api/movies/latest": () => {
+        latestMoviesRequests += 1;
+        if (options.latestMoviesFailsFirst && latestMoviesRequests === 1) {
+          return jsonResponse({ error: true, message: "latest exploded" }, 500);
+        }
+        return {
           movies: [
             {
               id: 101,
@@ -136,48 +106,30 @@ function mockHomeFetch(options: MockHomeFetchOptions = {}) {
               year: { Int64: 2026, Valid: true },
             },
           ],
-        },
-      });
-    }
-
-    if (url === "/api/shows/latest") {
-      return jsonResponse({
-        error: false,
-        data: {
-          shows: [
-            {
-              id: 301,
-              name: "Frost Harbor",
-              poster_path: { String: "", Valid: false },
-              premiere_year: { Int64: 2025, Valid: true },
-            },
-          ],
-        },
-      });
-    }
-
-    if (url === "/api/music/albums/latest") {
-      return jsonResponse({
-        error: false,
-        data: { albums: [] },
-      });
-    }
-
-    if (url === "/api/tmdb/movies/in-theaters") {
-      return jsonResponse({
-        error: false,
-        data: { movies: [] },
-      });
-    }
-
-    return jsonResponse({
-      error: true,
-      message: `Unexpected request: ${method} ${url}`,
-    }, 500);
-  });
-
-  vi.stubGlobal("fetch", fetchMock);
-  return fetchMock;
+        };
+      },
+      "/api/shows/latest": {
+        shows: [
+          {
+            id: 301,
+            name: "Frost Harbor",
+            poster_path: { String: "", Valid: false },
+            premiere_year: { Int64: 2025, Valid: true },
+          },
+        ],
+      },
+      "/api/music/albums/latest": { albums: [] },
+      "/api/tmdb/movies/in-theaters": { movies: [] },
+      "/api/settings/scan": scanStatuses(),
+    },
+    {
+      user: {
+        name: "Admin User",
+        email: "admin@example.com",
+        is_admin: true,
+      },
+    },
+  );
 }
 
 async function renderHomeRoute(options: MockHomeFetchOptions = {}) {

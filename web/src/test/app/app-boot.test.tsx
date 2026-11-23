@@ -1,9 +1,9 @@
 import { act, render, screen } from "@testing-library/react";
-import { QueryClient } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AppBoot from "@/AppBoot";
 import { SPLASH_REMOVE_DELAY_MS } from "@/lib/constants";
 import AppLoadingScreen from "@/components/app/AppLoadingScreen";
+import { createTestQueryClient } from "../helpers/render";
 
 vi.mock("@/App", () => ({
   default: () => <div data-testid="app-shell" />,
@@ -44,7 +44,7 @@ describe("App boot loading", () => {
     `;
 
   const renderBoot = () =>
-    render(<AppBoot queryClient={new QueryClient()} />, {
+    render(<AppBoot queryClient={createTestQueryClient()} />, {
       container: document.getElementById("test-root")!,
     });
 
@@ -98,7 +98,7 @@ describe("App boot loading", () => {
     renderBoot().unmount();
     const remountRoot = document.createElement("div");
     document.body.append(remountRoot);
-    render(<AppBoot queryClient={new QueryClient()} />, {
+    render(<AppBoot queryClient={createTestQueryClient()} />, {
       container: remountRoot,
     });
 

@@ -4,7 +4,8 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { MOVIES_IN_THEATERS_KEY, MOVIES_PER_PAGE } from "@/lib/constants";
 import { authUserData } from "../helpers/fixtures";
-import { jsonResponse, requestURL } from "../helpers/api";
+import { jsonResponse, requestURL, stubApi } from "../helpers/api";
+import { scanStatuses } from "../helpers/scan-status";
 import { readDocumentHead, renderRoute } from "../helpers/render-route";
 
 const toastMocks = vi.hoisted(() => ({
@@ -23,7 +24,7 @@ vi.mock("@/lib/toast-helpers", () => ({
   showSuccess: toastMocks.showSuccess,
 }));
 
-function authUser() {
+function adminUser() {
   return authUserData({
     name: "Admin",
     email: "admin@example.com",
@@ -32,7 +33,7 @@ function authUser() {
 }
 
 type MockLoginFetchOptions = {
-  initialUser?: ReturnType<typeof authUser> | null;
+  initialUser?: ReturnType<typeof adminUser> | null;
   loginResponse?: {
     body: unknown;
     status?: number;
@@ -43,111 +44,51 @@ function mockLoginFetch({
   initialUser = null,
   loginResponse,
 }: MockLoginFetchOptions = {}) {
-  let currentUser: ReturnType<typeof authUser> | null = initialUser;
+  let currentUser: ReturnType<typeof adminUser> | null = initialUser;
 
-  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-    const url = requestURL(input);
-    const method = init?.method ?? "GET";
-
-    if (url === "/api/auth/user") {
-      if (currentUser == null) {
-        return jsonResponse({
-          error: true,
-          message: "not authorized",
-        }, 401);
-      }
-
-      return jsonResponse({
-        error: false,
-        data: { user: currentUser },
-      });
-    }
-
-    if (url === "/api/auth/login" && method === "POST") {
+  return stubApi({
+    "GET /api/auth/user": () =>
+      currentUser == null
+        ? jsonResponse({ error: true, message: "not authorized" }, 401)
+        : { user: currentUser },
+    "POST /api/auth/login": () => {
       if (loginResponse) {
         return jsonResponse(loginResponse.body, loginResponse.status ?? 200);
       }
 
-      currentUser = authUser();
+      currentUser = adminUser();
       return jsonResponse({
         error: false,
         message: "Hello Admin, welcome to your media library!",
       });
-    }
-
-    if (url === "/api/movies/stats") {
-      return jsonResponse({
-        error: false,
-        data: { total_movies: 0 },
-      });
-    }
-
-    if (url === `/api/movies/library?page=1&per_page=${MOVIES_PER_PAGE}&sort=asc`) {
-      return jsonResponse({
-        error: false,
-        data: {
-          movies: [],
-          total: 0,
-          page: 1,
-          per_page: MOVIES_PER_PAGE,
-          total_pages: 0,
+    },
+    "/api/movies/stats": { total_movies: 0 },
+    [`/api/movies/library?page=1&per_page=${MOVIES_PER_PAGE}&sort=asc`]: {
+      movies: [],
+      total: 0,
+      page: 1,
+      per_page: MOVIES_PER_PAGE,
+      total_pages: 0,
+    },
+    "/api/tmdb/status": { available: true },
+    "/api/watch-rooms": { rooms: [] },
+    "/api/continue-watching": { items: [] },
+    "/api/settings/scan": scanStatuses(),
+    "/api/movies/latest": { movies: [] },
+    "/api/shows/latest": { shows: [] },
+    "/api/music/albums/latest": { albums: [] },
+    "/api/tmdb/movies/in-theaters": {
+      movies: [
+        {
+          id: 700,
+          title: "Theater Fresh",
+          poster_path: "",
+          vote_average: 7.2,
+          release_date: "2026-06-01",
         },
-      });
-    }
-
-    if (url === "/api/tmdb/status") {
-      return jsonResponse({
-        error: false,
-        data: { available: true },
-      });
-    }
-
-    if (url === "/api/watch-rooms") {
-      return jsonResponse({
-        error: false,
-        data: { rooms: [] },
-      });
-    }
-
-    if (url === "/api/movies/latest") {
-      return jsonResponse({
-        error: false,
-        data: { movies: [] },
-      });
-    }
-
-    if (url === "/api/music/albums/latest") {
-      return jsonResponse({
-        error: false,
-        data: { albums: [] },
-      });
-    }
-
-    if (url === "/api/tmdb/movies/in-theaters") {
-      return jsonResponse({
-        error: false,
-        data: {
-          movies: [
-            {
-              id: 700,
-              title: "Theater Fresh",
-              poster_path: "",
-              vote_average: 7.2,
-              release_date: "2026-06-01",
-            },
-          ],
-        },
-      });
-    }
-
-    return jsonResponse({
-      error: true,
-      message: `Unexpected request: ${method} ${url}`,
-    }, 500);
+      ],
+    },
   });
-
-  vi.stubGlobal("fetch", fetchMock);
-  return fetchMock;
 }
 
 async function renderLoginRoute(initialEntry: string) {
@@ -159,7 +100,7 @@ async function renderLoginRoute(initialEntry: string) {
 
 async function renderLoginRouteTree(
   initialEntry: string,
-  options: MockLoginFetchOptions | ReturnType<typeof authUser> | null = {},
+  options: MockLoginFetchOptions | ReturnType<typeof adminUser> | null = {},
 ) {
   const fetchOptions =
     options == null || "email" in options
@@ -308,7 +249,7 @@ describe("login route redirects", () => {
   });
 
   it("renders in-theaters data for authenticated Home", async () => {
-    await renderLoginRouteTree("/", authUser());
+    await renderLoginRouteTree("/", adminUser());
 
     expect(await screen.findByText("Theater Fresh")).toBeInTheDocument();
   });
