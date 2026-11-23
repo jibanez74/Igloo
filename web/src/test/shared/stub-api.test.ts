@@ -48,6 +48,19 @@ describe("stubApi", () => {
     expect(seen).toEqual(["GET page=3"]);
   });
 
+  it("matches the query for absolute URL and Request inputs too", async () => {
+    stubApi(
+      { "/api/tracks?page=2": "second page", "/api/tracks": "any page" },
+      { user: null },
+    );
+
+    const absolute = "http://localhost/api/tracks?page=2";
+    expect(await body(await fetch(new URL(absolute)))).toMatchObject({ data: "second page" });
+    expect(await body(await fetch(new Request(absolute)))).toMatchObject({
+      data: "second page",
+    });
+  });
+
   it("resolves an async route's plain data into the envelope", async () => {
     stubApi({ "/api/slow": async () => ({ ready: true }) }, { user: null });
 

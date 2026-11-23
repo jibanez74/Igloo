@@ -118,9 +118,13 @@ export function stubApi(
     const method = (
       init?.method ?? (input instanceof Request ? input.method : "GET")
     ).toUpperCase();
+    // An absolute URL or a Request still matches a key with its query.
+    const pathAndQuery = `${parsed.pathname}${parsed.search}`;
     const key = [
       `${method} ${url}`,
       url,
+      `${method} ${pathAndQuery}`,
+      pathAndQuery,
       `${method} ${parsed.pathname}`,
       parsed.pathname,
     ].find(candidate => candidate in table);
