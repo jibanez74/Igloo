@@ -15,7 +15,6 @@ import (
 	"igloo/cmd/internal/helpers"
 )
 
-
 func TestRemuxSafetyFingerprint_ChangesWithStreamProperties(t *testing.T) {
 	baseMovie := database.Movie{ID: 7, Size: 1_000_000, UpdatedAt: "2026-07-01"}
 	baseVideo := database.VideoStream{

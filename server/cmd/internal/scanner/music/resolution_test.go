@@ -12,6 +12,7 @@ import (
 	"igloo/cmd/internal/itunes"
 	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/scannertest"
+	spotifyapi "igloo/cmd/internal/spotify"
 )
 
 func TestResolveTrackFileMapsAudioMetadata(t *testing.T) {
@@ -260,6 +261,57 @@ func TestTrackLanguageImportAndChange(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+			}
+		})
+	}
+}
+
+func TestSpotifyRecoveryCreditSelection(t *testing.T) {
+	cases := []struct {
+		name    string
+		credits []spotifyapi.SimpleArtist
+		target  string
+		matched bool
+		pending string
+	}{
+		{name: "first", credits: []spotifyapi.SimpleArtist{{ID: "artist", Name: "Test Artist"}}, target: "artist"},
+		{name: "second", credits: []spotifyapi.SimpleArtist{{ID: "other", Name: "Other"}, {ID: "artist", Name: "Test Artist"}}, target: "artist"},
+		{name: "later skips empty IDs", credits: []spotifyapi.SimpleArtist{{Name: "Test Artist"}, {ID: "other", Name: "Other"}, {ID: "artist", Name: "Test Artist"}, {ID: "last", Name: "Test Artist"}}, target: "artist"},
+		{name: "unrelated", credits: []spotifyapi.SimpleArtist{{ID: "other", Name: "Other"}}},
+		{name: "empty ID", credits: []spotifyapi.SimpleArtist{{Name: "Test Artist"}}},
+		{name: "various", credits: []spotifyapi.SimpleArtist{{ID: "various", Name: "Various Artists"}}},
+		{name: "already matched", credits: []spotifyapi.SimpleArtist{{ID: "artist", Name: "Test Artist"}}, matched: true},
+		{name: "pending wins", credits: []spotifyapi.SimpleArtist{{ID: "replacement", Name: "Test Artist"}}, pending: "artist", target: "artist"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := setupMusicScanner(t)
+			scanTaggedTrack(t, s, newMusicScanContext(nil), filepath.Join(t.TempDir(), "track.m4a"), 1, albumTags("Song", "1"))
+			if tc.matched {
+				_, err := s.tx.DB.Exec("UPDATE musicians SET spotify_id='known'")
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			if tc.pending != "" {
+				_, err := s.tx.DB.Exec("INSERT INTO music_spotify_adoptions SELECT id,? FROM musicians", tc.pending)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			var steps []spotifyStep
+			if tc.target != "" {
+				steps = append(steps, spotifyStep{operation: "artist", target: tc.target, artist: testArtist()})
+			}
+			s.spotify = scriptedSpotify(t, steps...)
+			album := testAlbum()
+			album.Artists = tc.credits
+			adopted, err := s.adoptAlbumArtist(context.Background(), newMusicScanContext(nil), "Test Artist", album, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if (adopted != nil) != (tc.target != "") {
+				t.Fatalf("adoption=%+v", adopted)
 			}
 		})
 	}

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/scannertest"
 	"igloo/cmd/internal/tmdb"
@@ -384,5 +385,22 @@ func TestShowUnmatchedSaveFailureCountsAsFailure(t *testing.T) {
 	}
 	if scannertest.CountRows(t, s.DB, "SELECT count(*) FROM show_tmdb_retries WHERE attempts > 0") != 0 {
 		t.Fatal("miss was recorded despite the failure")
+	}
+}
+
+func TestShowRankingAmbiguousYearAndDeterministicTies(t *testing.T) {
+	s, _, _ := setupScanner(t)
+	client := &testTMDB{}
+	client.searchHook = func(title string, year int) ([]tmdb.TVShow, error) {
+		return []tmdb.TVShow{{ID: 30, Name: "Space Adventures", FirstAirDate: "1999-01-01"}, {ID: 20, Name: "Space 1999", FirstAirDate: "1975-01-01"}, {ID: 10, Name: "Space 1999", FirstAirDate: "1975-01-01"}}, nil
+	}
+	s.Tmdb = client
+	result, err := s.lookupShow(context.Background(), &scanner.ProviderBreaker{Classify: tmdb.ProviderFailure}, database.Show{DirectoryPath: "/tv/Space 1999"})
+	if err != nil || result.ID != 10 || client.searchCalls != 2 {
+		t.Fatal("ambiguous ranking", result, err, client.searchCalls)
+	}
+	deadline, ok := client.searchCtx.Deadline()
+	if !ok || time.Until(deadline) > scanner.TmdbLookupTimeout {
+		t.Fatal("lookup ran without the shared timeout budget")
 	}
 }
