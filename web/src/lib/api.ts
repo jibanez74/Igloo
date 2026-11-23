@@ -177,11 +177,7 @@ function notifySessionExpired(session: SessionStamp) {
 }
 
 function warnUnlessAborted(endpoint: string, err: unknown) {
-  // A deadline (TimeoutError) is logged by apiRequest itself.
-  const aborted =
-    err instanceof DOMException &&
-    (err.name === "AbortError" || err.name === "TimeoutError");
-  if (!aborted) {
+  if (!(err instanceof DOMException && err.name === "AbortError")) {
     console.warn(`apiRequest failed: ${endpoint}`, err);
   }
 }
@@ -261,13 +257,13 @@ async function apiRequest<T extends Record<string, unknown>>(
   const abortFromCaller = () => controller.abort(signal?.reason);
   if (signal?.aborted) abortFromCaller();
   else signal?.addEventListener("abort", abortFromCaller, { once: true });
-  const deadline = setTimeout(
-    () => controller.abort(new DOMException("Request deadline passed.", "TimeoutError")),
-    timeoutMs,
-  );
-  const timedOut = () =>
-    controller.signal.reason instanceof DOMException &&
-    controller.signal.reason.name === "TimeoutError";
+  // A flag, not the abort reason: a caller's own AbortSignal.timeout aborts
+  // with a TimeoutError too, and that is the caller giving up.
+  let timedOut = false;
+  const deadline = setTimeout(() => {
+    timedOut = true;
+    controller.abort(new DOMException("Request deadline passed.", "TimeoutError"));
+  }, timeoutMs);
 
   try {
     const session = sessionStamp();
@@ -281,7 +277,7 @@ async function apiRequest<T extends Record<string, unknown>>(
         signal: controller.signal,
       });
     } catch (err) {
-      if (timedOut()) {
+      if (timedOut) {
         console.warn(`apiRequest timed out: ${endpoint}`);
         return REQUEST_TIMEOUT;
       }
@@ -301,8 +297,13 @@ async function apiRequest<T extends Record<string, unknown>>(
       return ERROR_NOTFOUND;
     }
 
-    const envelope = await readEnvelope<T>(res, endpoint, failedMessage);
-    if (envelope.error && timedOut()) {
+    const envelope = await readEnvelope<T>(
+      res,
+      endpoint,
+      failedMessage,
+      controller.signal,
+    );
+    if (envelope.error && timedOut) {
       console.warn(`apiRequest timed out: ${endpoint}`);
       return REQUEST_TIMEOUT;
     }
@@ -333,12 +334,15 @@ async function readEnvelope<T extends Record<string, unknown>>(
   res: Response,
   endpoint: string,
   failedMessage: string,
+  // Aborted: apiRequest's deadline or caller ended the read, and apiRequest
+  // reports that itself.
+  signal: AbortSignal,
 ): Promise<ApiResponseType<T>> {
   let body: unknown;
   try {
     body = await res.json();
   } catch (err) {
-    warnUnlessAborted(endpoint, err);
+    if (!signal.aborted) warnUnlessAborted(endpoint, err);
   }
 
   const failed: ApiFailureType = {

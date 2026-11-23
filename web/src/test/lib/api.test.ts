@@ -351,6 +351,49 @@ describe("request deadline", () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
+  // AbortSignal.timeout aborts with a TimeoutError too, but that is the
+  // caller's own bound (the watch-progress saves), not the helper's deadline.
+  it("treats a caller's TimeoutError abort as the caller giving up", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    neverAnswer();
+    const caller = new AbortController();
+
+    const pending = getMoviePreroll(7, caller.signal);
+    caller.abort(new DOMException("caller bound", "TimeoutError"));
+
+    await expect(pending).resolves.toMatchObject({ error: true, status: 500 });
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("stays quiet when the caller aborts while the body is read", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    let started!: () => void;
+    const bodyStarted = new Promise<void>((resolve) => (started = resolve));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+        const body = new ReadableStream<Uint8Array>({
+          start(stream) {
+            stream.enqueue(new TextEncoder().encode('{"error":'));
+            init?.signal?.addEventListener("abort", () =>
+              stream.error(new Error("custom reason")),
+            );
+            started();
+          },
+        });
+        return Promise.resolve(new Response(body, { status: 200 }));
+      }),
+    );
+    const caller = new AbortController();
+
+    const pending = getMoviePreroll(7, caller.signal);
+    await bodyStarted;
+    caller.abort();
+
+    await expect(pending).resolves.toMatchObject({ error: true, status: 500 });
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   it("aborts at once for a signal already aborted", async () => {
     const fetchMock = neverAnswer();
     const caller = new AbortController();
