@@ -57,16 +57,25 @@ describe("stubApi", () => {
     });
   });
 
-  // The 404 itself passes; what fails the test is the onTestFinished check,
-  // "requests no stubApi route answered", so it is marked as expected to fail.
-  it.fails("fails the test on a request no route answers", async () => {
-    stubApi({}, { user: null });
+  it("answers a request no route answers with a 404 and reports it", async () => {
+    const reported: string[] = [];
+    stubApi({}, { user: null, onUnhandled: request => reported.push(request) });
 
-    const answer = await fetch("/api/nowhere");
+    const answer = await fetch("/api/nowhere?page=2", { method: "POST" });
+
     expect(answer.status).toBe(404);
     expect(await body(answer)).toEqual({
       error: true,
       message: "Unhandled stubApi request",
     });
+    expect(reported).toEqual(["POST /api/nowhere?page=2"]);
+  });
+
+  // Without onUnhandled the same request fails the test when it finishes;
+  // the body does nothing else that could fail.
+  it.fails("fails the test on a request no route answers", async () => {
+    stubApi({}, { user: null });
+
+    await fetch("/api/nowhere");
   });
 });

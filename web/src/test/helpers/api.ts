@@ -76,6 +76,11 @@ type StubApiOptions = {
    * route to the table. Defaults to the standard test user.
    */
   user?: Partial<AuthUser> | null;
+  /**
+   * Called with `"METHOD url"` for each request no route answers. By default
+   * those requests fail the test when it finishes.
+   */
+  onUnhandled?: (request: string) => void;
 };
 
 /**
@@ -93,7 +98,7 @@ type StubApiOptions = {
  */
 export function stubApi(
   routes: Record<string, StubApiRoute>,
-  { user = {} }: StubApiOptions = {},
+  { user = {}, onUnhandled }: StubApiOptions = {},
 ) {
   const table: Record<string, StubApiRoute> = { ...routes };
   if (user !== null && !("/api/auth/user" in table) && !("GET /api/auth/user" in table)) {
@@ -101,9 +106,11 @@ export function stubApi(
   }
 
   const unhandled: string[] = [];
-  onTestFinished(() => {
-    expect(unhandled, "requests no stubApi route answered").toEqual([]);
-  });
+  if (onUnhandled === undefined) {
+    onTestFinished(() => {
+      expect(unhandled, "requests no stubApi route answered").toEqual([]);
+    });
+  }
 
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = requestURL(input);
@@ -120,6 +127,7 @@ export function stubApi(
 
     if (key === undefined) {
       unhandled.push(`${method} ${url}`);
+      onUnhandled?.(`${method} ${url}`);
       return jsonResponse({ error: true, message: "Unhandled stubApi request" }, 404);
     }
 
