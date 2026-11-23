@@ -4,6 +4,7 @@ import (
 	"compress/gzip"
 	"io"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -431,5 +432,31 @@ func TestRemoveVaryToken(t *testing.T) {
 				t.Fatalf("Vary = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+// Benchmarks the SPA hot path: an asset-map lookup plus http.ServeContent from
+// the pre-read, pre-fingerprinted bytes. Skips when webdist holds only the test
+// placeholder.
+func BenchmarkServeFrontend(b *testing.B) {
+	_, err := FrontendFS.Open("webdist/index.html")
+	if err != nil {
+		b.Skip("webdist is not populated; run make prepare-web first")
+	}
+
+	b.Setenv("VITE_DEV_SERVER", "")
+	app := &Application{
+		Logger:         slog.New(slog.NewTextHandler(io.Discard, nil)),
+		FrontendAssets: FrontendFS,
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest("GET", "/index.html", nil)
+		app.ServeFrontend(w, r)
+		if w.Code != 200 {
+			b.Fatalf("unexpected status %d", w.Code)
+		}
 	}
 }

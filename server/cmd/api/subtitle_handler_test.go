@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"igloo/cmd/internal/database"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -17,8 +16,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-chi/chi/v5"
+	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
+
+	"github.com/go-chi/chi/v5"
 )
 
 // The subtitle fixtures all live on stream 2, matching a typical container

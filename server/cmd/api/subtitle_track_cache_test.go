@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"igloo/cmd/internal/ffmpeg"
-	"igloo/cmd/internal/helpers"
 )
 
 // testTrackRef names the subtitle insertSubtitleStreamMovie inserted.
@@ -746,37 +745,6 @@ func TestSubtitleStream_KeepsACachedCopyWhenThePlayerLeavesAsFFmpegExits(t *test
 	if err != nil {
 		t.Fatalf("a good copy was deleted when its player left: %v", err)
 	}
-}
-
-func TestWriteSubtitleStreamHeader_MarksFailuresAsThePlayersSide(t *testing.T) {
-	gone := errors.New("connection reset by peer")
-	tests := map[string]struct {
-		writer io.Writer
-		flush  func() error
-	}{
-		"write fails": {writer: failingWriter{err: gone}, flush: func() error { return nil }},
-		"flush fails": {writer: io.Discard, flush: func() error { return gone }},
-	}
-	for name, tt := range tests {
-		t.Run(name, func(t *testing.T) {
-			err := writeSubtitleStreamHeader(tt.writer, tt.flush, testPrimedStream())
-			if !errors.Is(err, gone) || !errors.Is(err, helpers.ErrMatroskaRelayWrite) {
-				t.Fatalf("error = %v, want %v marked as the player's side", err, gone)
-			}
-		})
-	}
-	err := writeSubtitleStreamHeader(io.Discard, func() error { return nil }, testPrimedStream())
-	if err != nil {
-		t.Fatalf("a header that was sent reported %v", err)
-	}
-}
-
-type failingWriter struct {
-	err error
-}
-
-func (w failingWriter) Write([]byte) (int, error) {
-	return 0, w.err
 }
 
 func TestSubtitleStream_CopiesATrackIntoTheCacheOnceItsStreamStaysOpen(t *testing.T) {

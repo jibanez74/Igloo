@@ -10,12 +10,15 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffmpeg/fmp4testutil"
 	"igloo/cmd/internal/helpers"
+
+	"github.com/gorilla/websocket"
 )
 
 func addMembersToRoom(t *testing.T, app *Application, roomID int64, userIDs ...int64) {
@@ -1493,5 +1496,236 @@ func TestWatchRoomMediaSubtitleDriftConformsToOpenAPI(t *testing.T) {
 				assertOpenAPIExchange(t, operation, request, response)
 			})
 		}
+	}
+}
+
+// The owner swaps one invitee for another: the removed guest's socket hears
+// room_access_revoked and closes, the owner hears the new member list and the
+// guest leaving, and the guest's cached access is gone.
+func TestUpdateWatchRoomMembers_ReplacesInviteesAndRevokesRemoved(t *testing.T) {
+	app := setupTestApp(t)
+	ctx := context.Background()
+	ownerID, movieID := createTestUserAndMovie(t, app)
+	guest := createTestUser(t, app, "Guest", "members-guest@example.com", false)
+	added := createTestUser(t, app, "Added", "members-added@example.com", false)
+	room := createTestRoom(t, app, ownerID, movieID)
+	addMembersToRoom(t, app, room.ID, ownerID, guest.ID)
+	server := setupWatchRoomWSTestServer(t, app)
+
+	_, err := app.loadAuthorizedWatchRoom(ctx, room.ID, guest.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ownerConn, _ := dialWatchRoomSocket(t, app, server.URL, room.ID, ownerID)
+	defer ownerConn.Close()
+	readUntilEventType(t, ownerConn, "room_snapshot")
+	guestConn, _ := dialWatchRoomSocket(t, app, server.URL, room.ID, guest.ID)
+	defer guestConn.Close()
+	readUntilEventType(t, guestConn, "room_snapshot")
+	readUntilEventType(t, ownerConn, "member_joined")
+
+	ownerCookie := newAuthSessionCookie(t, app, ownerID)
+	body := fmt.Sprintf(`{"invited_user_ids":[%d,%d,%d]}`, added.ID, added.ID, ownerID)
+	req := membersRequest(room.ID, body)
+	req.AddCookie(ownerCookie)
+	w := serveOpenAPIExchange(t, app.Router, "updateWatchRoomMembers", req, http.StatusOK)
+
+	var envelope struct {
+		Data struct {
+			Room watchRoomDetail `json:"room"`
+		} `json:"data"`
+	}
+	err = json.Unmarshal(w.Body.Bytes(), &envelope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := summaryIDs(envelope.Data.Room.Members); !slices.Equal(got, []int64{ownerID, added.ID}) {
+		t.Fatalf("response members = %v, want owner then added", got)
+	}
+	if got := watchRoomMemberIDs(t, app, room.ID); !slices.Equal(got, []int64{ownerID, added.ID}) {
+		t.Fatalf("stored members = %v", got)
+	}
+	if isWatchRoomAuthCached(app, room.ID, guest.ID) {
+		t.Fatal("the removed guest's cached access survived")
+	}
+
+	revoked := readUntilEventType(t, guestConn, "room_access_revoked")
+	if revoked.RoomID != room.ID {
+		t.Fatalf("room_access_revoked room_id = %d", revoked.RoomID)
+	}
+	expectSocketToClose(t, guestConn)
+
+	// The two come from different goroutines, in either order.
+	events := readUntilEventTypes(t, ownerConn, "members_changed", "member_left")
+	changed, left := events["members_changed"], events["member_left"]
+	if got := summaryIDs(changed.Members); !slices.Equal(got, []int64{ownerID, added.ID}) {
+		t.Fatalf("members_changed members = %v", got)
+	}
+	if left.Member == nil || left.Member.ID != guest.ID {
+		t.Fatalf("member_left = %+v, want the removed guest", left.Member)
+	}
+
+	// The removed guest is refused from now on; the added user is let in.
+	conn, resp := dialWatchRoomSocket(t, app, server.URL, room.ID, guest.ID)
+	if conn != nil || resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("removed guest reconnect status = %v", resp)
+	}
+	addedConn, _ := dialWatchRoomSocket(t, app, server.URL, room.ID, added.ID)
+	defer addedConn.Close()
+	readUntilEventType(t, addedConn, "room_snapshot")
+}
+
+func TestUpdateWatchRoomMembers_RefusesBadRequests(t *testing.T) {
+	app := setupSessionTestApp(t)
+	ownerID, movieID := createTestUserAndMovie(t, app)
+	guest := createTestUser(t, app, "Guest", "members-refused@example.com", false)
+	room := createTestRoom(t, app, ownerID, movieID)
+	addMembersToRoom(t, app, room.ID, ownerID, guest.ID)
+
+	cases := []struct {
+		name   string
+		caller int64
+		req    *http.Request
+		want   int
+	}{
+		{"guest is not the owner", guest.ID, membersRequest(room.ID, `{"invited_user_ids":[]}`), http.StatusForbidden},
+		{"unknown room", ownerID, membersRequest(room.ID+100, `{"invited_user_ids":[]}`), http.StatusNotFound},
+		{"unknown user", ownerID, membersRequest(room.ID, `{"invited_user_ids":[999999]}`), http.StatusBadRequest},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			serveOpenAPIExchange(t, authenticatedRouter(t, app, tc.caller), "updateWatchRoomMembers", tc.req, tc.want)
+		})
+	}
+
+	// Bodies the contract itself rejects, so the exchange is not validated.
+	target := fmt.Sprintf("/api/watch-rooms/%d/members", room.ID)
+	for _, body := range []string{`{}`, `{"invited_user_ids":[],"owner":1}`, `{"invited_user_ids":null}`} {
+		w := serveRequest(t, authenticatedRouter(t, app, ownerID), http.MethodPut, target, body)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("body %s: status = %d, want 400", body, w.Code)
+		}
+	}
+
+	if got := watchRoomMemberIDs(t, app, room.ID); !slices.Equal(got, []int64{ownerID, guest.ID}) {
+		t.Fatalf("a refused request changed the members: %v", got)
+	}
+
+	// An empty list leaves the owner alone in the room.
+	serveOpenAPIExchange(t, authenticatedRouter(t, app, ownerID), "updateWatchRoomMembers",
+		membersRequest(room.ID, `{"invited_user_ids":[]}`), http.StatusOK)
+	if got := watchRoomMemberIDs(t, app, room.ID); !slices.Equal(got, []int64{ownerID}) {
+		t.Fatalf("members after clearing = %v, want only the owner", got)
+	}
+}
+
+// A guest who leaves is removed on every device: both of their sockets hear
+// room_access_revoked, and the owner hears the shorter member list.
+func TestLeaveWatchRoom_RemovesCallerEverywhere(t *testing.T) {
+	app := setupTestApp(t)
+	ownerID, movieID := createTestUserAndMovie(t, app)
+	guest := createTestUser(t, app, "Guest", "leave-guest@example.com", false)
+	room := createTestRoom(t, app, ownerID, movieID)
+	addMembersToRoom(t, app, room.ID, ownerID, guest.ID)
+	server := setupWatchRoomWSTestServer(t, app)
+
+	ownerConn, _ := dialWatchRoomSocket(t, app, server.URL, room.ID, ownerID)
+	defer ownerConn.Close()
+	readUntilEventType(t, ownerConn, "room_snapshot")
+	guestCookie := newAuthSessionCookie(t, app, guest.ID)
+	guestBrowser, _ := dialWatchRoomSocketWithCookie(t, server.URL, room.ID, guestCookie)
+	defer guestBrowser.Close()
+	readUntilEventType(t, guestBrowser, "room_snapshot")
+	guestTV, _ := dialWatchRoomSocketWithBearer(t, server.URL, room.ID, createTestDevice(t, app, guest.ID, "TV", "android_tv"))
+	defer guestTV.Close()
+	readUntilEventType(t, guestTV, "room_snapshot")
+
+	req := leaveRequest(room.ID)
+	req.AddCookie(guestCookie)
+	w := serveOpenAPIExchange(t, app.Router, "leaveWatchRoom", req, http.StatusOK)
+	if !strings.Contains(w.Body.String(), `"left":true`) {
+		t.Fatalf("leave body = %s", w.Body.String())
+	}
+
+	for _, conn := range []*websocket.Conn{guestBrowser, guestTV} {
+		readUntilEventType(t, conn, "room_access_revoked")
+		expectSocketToClose(t, conn)
+	}
+	changed := readUntilEventType(t, ownerConn, "members_changed")
+	if got := summaryIDs(changed.Members); !slices.Equal(got, []int64{ownerID}) {
+		t.Fatalf("members_changed members = %v", got)
+	}
+	if got := watchRoomMemberIDs(t, app, room.ID); !slices.Equal(got, []int64{ownerID}) {
+		t.Fatalf("stored members = %v", got)
+	}
+}
+
+func TestLeaveWatchRoom_RefusesOwnerAndOutsiders(t *testing.T) {
+	app := setupSessionTestApp(t)
+	ownerID, movieID := createTestUserAndMovie(t, app)
+	outsider := createTestUser(t, app, "Outsider", "leave-outsider@example.com", false)
+	room := createTestRoom(t, app, ownerID, movieID)
+	addMembersToRoom(t, app, room.ID, ownerID)
+
+	serveOpenAPIExchange(t, authenticatedRouter(t, app, ownerID), "leaveWatchRoom", leaveRequest(room.ID), http.StatusConflict)
+	serveOpenAPIExchange(t, authenticatedRouter(t, app, outsider.ID), "leaveWatchRoom", leaveRequest(room.ID), http.StatusForbidden)
+	serveOpenAPIExchange(t, authenticatedRouter(t, app, ownerID), "leaveWatchRoom", leaveRequest(room.ID+100), http.StatusNotFound)
+
+	if got := watchRoomMemberIDs(t, app, room.ID); !slices.Equal(got, []int64{ownerID}) {
+		t.Fatalf("members = %v, want the owner kept", got)
+	}
+}
+
+func TestJoinWatchRoom_HTTP_UnknownRoomIsNotFound(t *testing.T) {
+	app := setupSessionTestApp(t)
+	ownerID, _ := createTestUserAndMovie(t, app)
+
+	req := newOpenAPIJSONRequest(http.MethodPost, "/api/watch-rooms/4242/join", "")
+	serveOpenAPIExchange(t, authenticatedRouter(t, app, ownerID), "joinWatchRoom", req, http.StatusNotFound)
+}
+
+// An edit that loses the race with the room's deletion answers the documented
+// 404, not the foreign-key failure of adding a member to a missing room.
+func TestReplaceWatchRoomInvitees_RoomDeletedAnswersDeleted(t *testing.T) {
+	app := setupSessionTestApp(t)
+	ownerID, movieID := createTestUserAndMovie(t, app)
+	guest := createTestUser(t, app, "Guest", "race-guest@example.com", false)
+	room := createTestRoom(t, app, ownerID, movieID)
+	addMembersToRoom(t, app, room.ID, ownerID)
+	err := app.deleteWatchRoom(context.Background(), room.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err = app.replaceWatchRoomInvitees(context.Background(), room.ID, ownerID, []int64{guest.ID})
+	if !errors.Is(err, errWatchRoomDeleted) {
+		t.Fatalf("err = %v, want errWatchRoomDeleted", err)
+	}
+}
+
+// A room deleted after the member edit commits, before the response reads it
+// back, also answers 404 rather than the 403 of a room the caller cannot see.
+func TestWriteUpdatedWatchRoom_RoomDeletedAfterCommitAnswers404(t *testing.T) {
+	app := setupSessionTestApp(t)
+	ownerID, movieID := createTestUserAndMovie(t, app)
+	room := createTestRoom(t, app, ownerID, movieID)
+	addMembersToRoom(t, app, room.ID, ownerID)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/", nil)
+	app.writeUpdatedWatchRoom(w, req, room.ID, ownerID)
+	if w.Code != http.StatusOK {
+		t.Fatalf("live room status = %d, want 200: %s", w.Code, w.Body)
+	}
+
+	err := app.deleteWatchRoom(context.Background(), room.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w = httptest.NewRecorder()
+	app.writeUpdatedWatchRoom(w, req, room.ID, ownerID)
+	if w.Code != http.StatusNotFound || !strings.Contains(w.Body.String(), "room not found") {
+		t.Fatalf("deleted room = %d %s, want 404 room not found", w.Code, w.Body)
 	}
 }
