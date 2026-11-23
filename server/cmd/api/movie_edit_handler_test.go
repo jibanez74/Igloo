@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -480,4 +481,23 @@ func TestUpdateMovieMetadata_MissingUpdateRollsBack(t *testing.T) {
 	if movie.Title != "Original" {
 		t.Fatalf("failed update changed stored title to %q", movie.Title)
 	}
+}
+
+func tmdbMovieFromJSON(t *testing.T, payload string) tmdb.TmdbMovie {
+	t.Helper()
+
+	var movie tmdb.TmdbMovie
+	err := json.Unmarshal([]byte(payload), &movie)
+	if err != nil {
+		t.Fatalf("unmarshal TMDB movie fixture: %v", err)
+	}
+	return movie
+}
+
+func movieGenreTags(genres []database.GetGenresByMovieIDRow) string {
+	tags := make([]string, 0, len(genres))
+	for _, genre := range genres {
+		tags = append(tags, genre.Tag)
+	}
+	return strings.Join(tags, ",")
 }
