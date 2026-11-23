@@ -28,19 +28,39 @@ function AnchorLink({ children, params, search, to, ...props }: LinkStubProps) {
 }
 
 /**
+ * Module factory for suites that render without a router: the real module
+ * with `overrides` swapped in, such as a `useNavigate` the test spies on.
+ *
+ *   vi.mock("@tanstack/react-router", async () =>
+ *     (await import("../helpers/router-link-mock")).routerWith({
+ *       useNavigate: () => mocks.navigate,
+ *     }),
+ *   );
+ */
+export async function routerWith(
+  overrides: Partial<typeof import("@tanstack/react-router")>,
+) {
+  const actual =
+    await vi.importActual<typeof import("@tanstack/react-router")>(
+      "@tanstack/react-router",
+    );
+
+  return { ...actual, ...overrides };
+}
+
+/**
  * Module factory for component suites that render Links without a router:
  *
  *   vi.mock("@tanstack/react-router", async () =>
  *     (await import("../helpers/router-link-mock")).routerWithAnchorLinks(),
  *   );
  */
-export async function routerWithAnchorLinks() {
-  const actual =
-    await vi.importActual<typeof import("@tanstack/react-router")>(
-      "@tanstack/react-router",
-    );
-
-  return { ...actual, Link: AnchorLink };
+export async function routerWithAnchorLinks(
+  overrides: Partial<typeof import("@tanstack/react-router")> = {},
+) {
+  // The stub takes the props the suites pass, not Link's full generic API.
+  const Link = AnchorLink as unknown as typeof import("@tanstack/react-router").Link;
+  return routerWith({ Link, ...overrides });
 }
 
 /** The search a stubbed Link was rendered with. */
