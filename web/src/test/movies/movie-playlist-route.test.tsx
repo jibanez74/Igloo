@@ -63,7 +63,13 @@ function mockPlaylistsFetch(playlists: Record<number, MockPlaylist>) {
       const movies = playlists[id]?.movies ?? [];
       const page = Number(search.get("page"));
       const perPage = Number(search.get("per_page"));
-      const sorted = search.get("sort") === "asc" ? movies : [...movies].reverse();
+      const sort = search.get("sort");
+      // The page always asks for a page, a size and a direction; a request
+      // missing any of them is a bug the test should see, not an empty page.
+      if (!(page >= 1) || !(perPage >= 1) || (sort !== "asc" && sort !== "desc")) {
+        return jsonResponse({ error: true, message: `bad page query: ${search}` }, 400);
+      }
+      const sorted = sort === "asc" ? movies : [...movies].reverse();
       return {
         movies: sorted.slice((page - 1) * perPage, page * perPage),
         total: sorted.length,

@@ -58,9 +58,9 @@ export type StubApiRequest = {
 };
 
 /**
- * What a route answers: a `Response` (or a promise of one) is returned as is,
- * so a test can send an error status or hold a request open; anything else is
- * sent as the `{ error: false, data }` envelope.
+ * What a route answers: a `Response` is returned as is, so a test can send an
+ * error status; anything else is sent as the `{ error: false, data }`
+ * envelope. A route may return a promise of either, to hold a request open.
  */
 export type StubApiRoute =
   | ((request: StubApiRequest) => unknown)
@@ -105,7 +105,7 @@ export function stubApi(
     expect(unhandled, "requests no stubApi route answered").toEqual([]);
   });
 
-  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = requestURL(input);
     const parsed = new URL(url, "http://localhost");
     const method = (
@@ -124,13 +124,11 @@ export function stubApi(
     }
 
     const route = table[key];
-    const answer =
-      typeof route === "function"
-        ? route({ url, path: parsed.pathname, search: parsed.searchParams, method, init })
-        : route;
-    if (answer instanceof Response || answer instanceof Promise) {
-      return Promise.resolve(answer);
-    }
+    // An async route may resolve to a Response or to plain data alike.
+    const answer: unknown = await (typeof route === "function"
+      ? route({ url, path: parsed.pathname, search: parsed.searchParams, method, init })
+      : route);
+    if (answer instanceof Response) return answer;
     return jsonResponse({ error: false, data: answer });
   });
 

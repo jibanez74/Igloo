@@ -63,8 +63,6 @@ describe("useHlsSessionRecovery", () => {
     expect(onRecover).toHaveBeenCalledTimes(2);
   });
 
-  // The budget used to reset on every stream-window change, and a recovery
-  // changes the window itself, so a 404 that kept coming back never ran out.
   it("keeps one retry for a loss reported again while it waits", async () => {
     const { result, onRecover } = renderRecovery();
 
@@ -99,6 +97,8 @@ describe("useHlsSessionRecovery", () => {
     expect(onRecover.mock.calls).toEqual([[10], [20], [30]]);
   });
 
+  // The budget used to reset on every stream-window change, and a recovery
+  // changes the window itself, so a 404 that kept coming back never ran out.
   it("gives up after the attempt budget when losses keep coming", async () => {
     const { result, onRecover, onMaxAttempts } = renderRecovery();
 

@@ -48,10 +48,25 @@ describe("stubApi", () => {
     expect(seen).toEqual(["GET page=3"]);
   });
 
+  it("resolves an async route's plain data into the envelope", async () => {
+    stubApi({ "/api/slow": async () => ({ ready: true }) }, { user: null });
+
+    expect(await body(await fetch("/api/slow"))).toEqual({
+      error: false,
+      data: { ready: true },
+    });
+  });
+
+  // The 404 itself passes; what fails the test is the onTestFinished check,
+  // "requests no stubApi route answered", so it is marked as expected to fail.
   it.fails("fails the test on a request no route answers", async () => {
     stubApi({}, { user: null });
 
     const answer = await fetch("/api/nowhere");
     expect(answer.status).toBe(404);
+    expect(await body(answer)).toEqual({
+      error: true,
+      message: "Unhandled stubApi request",
+    });
   });
 });
