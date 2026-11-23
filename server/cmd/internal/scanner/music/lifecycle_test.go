@@ -639,7 +639,7 @@ func TestMusicChangesRunHandsBackDeferredTracks(t *testing.T) {
 	if status.Deferred != 1 || status.Imported != 0 || !slices.Equal(deferred, []string{"Album/01.flac"}) {
 		t.Fatalf("deferred=%q %+v", deferred, status.Counts)
 	}
-	if status.Issues[0].Reason != scanner.ReasonFileDeferredWatched {
+	if len(status.Issues) != 1 || status.Issues[0].Reason != scanner.ReasonFileDeferredWatched {
 		t.Fatalf("issue = %+v", status.Issues)
 	}
 }
@@ -675,6 +675,16 @@ func TestMusicChangesRunFollowsAlbumMergesIntoTheOwner(t *testing.T) {
 		t.Fatalf("library scan albums = %d, want the two local albums", albums)
 	}
 	assertLinked(t, trackLinkFor(t, s, a1), "t1", false, 1)
+	albumOf := func(path string) int64 {
+		t.Helper()
+		var id int64
+		err := s.tx.DB.QueryRow("SELECT album_id FROM tracks WHERE file_path = ?", path).Scan(&id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	owner := albumOf(a1)
 
 	// The run reconsiders the deluxe folder unchanged; its retry pass now
 	// matches the album to the owner's release, which merges the two.
@@ -687,6 +697,9 @@ func TestMusicChangesRunFollowsAlbumMergesIntoTheOwner(t *testing.T) {
 	if albums := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM albums"); albums != 1 {
 		t.Fatalf("albums after the merge = %d, want one owner", albums)
 	}
+	if got := albumOf(a2); got != owner {
+		t.Fatalf("the deluxe track moved to album %d, want the owner %d", got, owner)
+	}
 	// The merge moved the track to the owner; the run's track pairing must
 	// follow it there rather than keep to the album it deleted.
 	assertLinked(t, trackLinkFor(t, s, a2), "t2", false, 2)
@@ -694,14 +707,15 @@ func TestMusicChangesRunFollowsAlbumMergesIntoTheOwner(t *testing.T) {
 
 func TestAlbumRetryCandidatesInBindsEveryTouchedAlbum(t *testing.T) {
 	s := setupMusicScanner(t)
-	// Three pending albums; the last two carry Apple catalog hints, so they
-	// wait for Apple only while Apple lookups are enabled.
+	// Four pending albums; the second and third carry Apple catalog hints, so
+	// they wait for Apple only while Apple lookups are enabled. The fourth is
+	// never touched, so no scoped run may return it.
 	_, err := s.tx.DB.Exec(`
-		INSERT INTO albums(id, title, sort_title) VALUES (1, 'One', 'One'), (2, 'Two', 'Two'), (3, 'Three', 'Three');
+		INSERT INTO albums(id, title, sort_title) VALUES (1, 'One', 'One'), (2, 'Two', 'Two'), (3, 'Three', 'Three'), (4, 'Four', 'Four');
 		INSERT INTO tracks(title, sort_title, file_path, file_name, container, mime_type, codec, size, track_index, duration, disc, channels, channel_layout, bit_rate, profile, album_id)
 		SELECT 'Track', 'Track', '/music/' || id || '.m4a', id || '.m4a', 'm4a', 'audio/mp4', 'aac', 1, 1, 1, 1, '2', 'stereo', 1, 'LC', id FROM albums;
 		INSERT INTO music_track_metadata(track_id, artist_tag, artist_key, artist_sort, album_sort, apple_album_id)
-		SELECT id, '', '', '', '', 1000 + id FROM tracks WHERE album_id > 1;`)
+		SELECT id, '', '', '', '', 1000 + id FROM tracks WHERE album_id IN (2, 3);`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -788,7 +802,7 @@ func BenchmarkMusicScan(b *testing.B) {
 			results := make(map[string]*ffprobe.FfprobeResult)
 			files := make([]scanner.ScanFile, 120)
 			for i := range files {
-				path := fmt.Sprintf(musicDir+"/%d.m4a", i)
+				path := filepath.Join(musicDir, fmt.Sprintf("%d.m4a", i))
 				tags := ffprobe.FormatTags{Title: fmt.Sprintf("Track %d", i), Artist: "Artist", Album: "Album", Genre: "Rock"}
 				if distinct {
 					tags.Artist = fmt.Sprintf("Artist %d", i)

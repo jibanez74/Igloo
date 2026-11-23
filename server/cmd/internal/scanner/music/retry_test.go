@@ -1311,6 +1311,9 @@ func TestSpotifyRecoveryCanceledBeforePersistence(t *testing.T) {
 	if probe.Calls() != 1 || s.Status().State != scanner.StateCompleted {
 		t.Fatalf("recovery status=%+v probes=%d", s.Status(), probe.Calls())
 	}
+	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musicians WHERE name='Test Artist' AND spotify_id='artist'") != 1 || scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_spotify_adoptions") != 0 {
+		t.Fatal("the recovery scan did not save the adopted artist or clear its pending adoption")
+	}
 }
 
 func TestSpotifyRecoveryAdoptionMergesPreserveReferences(t *testing.T) {
@@ -1537,6 +1540,11 @@ func TestRetryAdoptionIgnoresACachedFailureForAHeldBackArtist(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	var retryAfter int64
+	err = s.tx.DB.QueryRow("SELECT retry_after FROM music_provider_matches WHERE entity_type='musician'").Scan(&retryAfter)
+	if err != nil {
+		t.Fatal(err)
+	}
 	scan.artistIDAttempts["artist"] = artistIDResult{err: errors.New("transport")}
 
 	adopted, err := s.adoptAlbumArtist(context.Background(), scan, "Test Artist", album.spotifyAlbum, true)
@@ -1553,7 +1561,7 @@ func TestRetryAdoptionIgnoresACachedFailureForAHeldBackArtist(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_provider_matches WHERE entity_type='musician' AND status='failed' AND attempts=2 AND failed_at=0") != 1 {
+	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_provider_matches WHERE entity_type='musician' AND status='failed' AND attempts=2 AND failed_at=0 AND retry_after=?", retryAfter) != 1 {
 		t.Fatal("the cached failure counted against the held-back artist")
 	}
 }
@@ -1633,7 +1641,7 @@ func TestSpotifyRetryPagesAndCancellation(t *testing.T) {
 	ctx := context.Background()
 	scan := newMusicScanContext(nil)
 	for i := 0; i < 105; i++ {
-		scanTaggedTrack(t, s, scan, fmt.Sprintf(fixtureDir+"/page/%d", i), 1, ffprobe.FormatTags{Title: "Track", Artist: fmt.Sprintf("Artist %d", i), Album: fmt.Sprintf("Album %d", i)})
+		scanTaggedTrack(t, s, scan, filepath.Join(fixtureDir, "page", strconv.Itoa(i)), 1, ffprobe.FormatTags{Title: "Track", Artist: fmt.Sprintf("Artist %d", i), Album: fmt.Sprintf("Album %d", i)})
 	}
 	// Orphans are deliberately retained, but are not retry candidates.
 	_, err := s.queries.UpsertMusician(ctx, database.UpsertMusicianParams{Name: "Orphan", SortName: "Orphan"})
