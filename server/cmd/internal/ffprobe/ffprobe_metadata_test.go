@@ -7,10 +7,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"igloo/cmd/internal/fakebin"
 )
 
 func TestRunMetadataRejectsEmptyPath(t *testing.T) {
-	probe := &ffprobe{bin: writeFakeFFprobe(t, fakeFFprobeSpec{})}
+	probe := &ffprobe{bin: fakebin.WriteSpec(t, "ffprobe", fakebin.Spec{})}
 
 	_, err := probe.GetMetadata(context.Background(), "")
 	if err == nil || !strings.Contains(err.Error(), "file path is required") {
@@ -24,8 +26,8 @@ func TestRunMetadataRejectsEmptyPath(t *testing.T) {
 }
 
 func TestRunMetadataValidJSON(t *testing.T) {
-	probe := &ffprobe{bin: writeFakeFFprobe(t, fakeFFprobeSpec{
-		stdout: `{"streams":[{"index":1,"codec_name":"aac","codec_type":"audio","sample_rate":"44100"}],"format":{"duration":"12.34","tags":{"title":"Song Title"}},"chapters":[]}`,
+	probe := &ffprobe{bin: fakebin.WriteSpec(t, "ffprobe", fakebin.Spec{
+		Stdout: `{"streams":[{"index":1,"codec_name":"aac","codec_type":"audio","sample_rate":"44100"}],"format":{"duration":"12.34","tags":{"title":"Song Title"}},"chapters":[]}`,
 	})}
 
 	result, err := probe.GetMetadata(context.Background(), "/tmp/song.mp3")
@@ -48,8 +50,8 @@ func TestRunMetadataValidJSON(t *testing.T) {
 }
 
 func TestRunMetadataInvalidJSONIncludesFilePath(t *testing.T) {
-	probe := &ffprobe{bin: writeFakeFFprobe(t, fakeFFprobeSpec{
-		stdout: `{invalid json`,
+	probe := &ffprobe{bin: fakebin.WriteSpec(t, "ffprobe", fakebin.Spec{
+		Stdout: `{invalid json`,
 	})}
 
 	_, err := probe.GetMetadata(context.Background(), "/tmp/bad.mp3")
@@ -64,9 +66,9 @@ func TestRunMetadataInvalidJSONIncludesFilePath(t *testing.T) {
 }
 
 func TestRunMetadataNonzeroExitSurfacesTrimmedStderr(t *testing.T) {
-	probe := &ffprobe{bin: writeFakeFFprobe(t, fakeFFprobeSpec{
-		stderr:   "  fake stderr  ",
-		exitCode: 2,
+	probe := &ffprobe{bin: fakebin.WriteSpec(t, "ffprobe", fakebin.Spec{
+		Stderr:   "  fake stderr  ",
+		ExitCode: 2,
 	})}
 
 	_, err := probe.GetMetadata(context.Background(), "/tmp/fail.mp3")
@@ -87,8 +89,8 @@ func TestRunMetadataNonzeroExitSurfacesTrimmedStderr(t *testing.T) {
 }
 
 func TestRunMetadataNonzeroExitWithoutStderr(t *testing.T) {
-	probe := &ffprobe{bin: writeFakeFFprobe(t, fakeFFprobeSpec{
-		exitCode: 2,
+	probe := &ffprobe{bin: fakebin.WriteSpec(t, "ffprobe", fakebin.Spec{
+		ExitCode: 2,
 	})}
 
 	_, err := probe.GetMetadata(context.Background(), "/tmp/fail.mp3")
@@ -106,8 +108,8 @@ func TestRunMetadataNonzeroExitWithoutStderr(t *testing.T) {
 }
 
 func TestRunMetadataEmptyStreamsRejected(t *testing.T) {
-	probe := &ffprobe{bin: writeFakeFFprobe(t, fakeFFprobeSpec{
-		stdout: `{"streams":[],"format":{},"chapters":[]}`,
+	probe := &ffprobe{bin: fakebin.WriteSpec(t, "ffprobe", fakebin.Spec{
+		Stdout: `{"streams":[],"format":{},"chapters":[]}`,
 	})}
 
 	_, err := probe.GetMetadata(context.Background(), "/tmp/empty.mp3")
@@ -121,7 +123,7 @@ func TestRunMetadataEmptyStreamsRejected(t *testing.T) {
 }
 
 func TestRunMetadataHonorsCallerCancellation(t *testing.T) {
-	probe := &ffprobe{bin: writeFakeFFprobe(t, fakeFFprobeSpec{})}
+	probe := &ffprobe{bin: fakebin.WriteSpec(t, "ffprobe", fakebin.Spec{})}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -137,9 +139,9 @@ func TestRunMetadataHonorsCallerCancellation(t *testing.T) {
 
 func TestGetAudioMetadataRequestsScannerFields(t *testing.T) {
 	argsLog := filepath.Join(t.TempDir(), "args.log")
-	probe := &ffprobe{bin: writeFakeFFprobe(t, fakeFFprobeSpec{
-		stdout:  `{"streams":[{"codec_name":"aac","codec_type":"audio","channels":2}],"format":{"duration":"12.34","bit_rate":"256000","tags":{"title":"Song Title"}}}`,
-		argsLog: argsLog,
+	probe := &ffprobe{bin: fakebin.WriteSpec(t, "ffprobe", fakebin.Spec{
+		Stdout:  `{"streams":[{"codec_name":"aac","codec_type":"audio","channels":2}],"format":{"duration":"12.34","bit_rate":"256000","tags":{"title":"Song Title"}}}`,
+		ArgsLog: argsLog,
 	})}
 
 	_, err := probe.GetAudioMetadata(context.Background(), "/tmp/song.mp3")
@@ -147,7 +149,7 @@ func TestGetAudioMetadataRequestsScannerFields(t *testing.T) {
 		t.Fatalf("GetAudioMetadata failed: %v", err)
 	}
 
-	args := readArgumentLog(t, argsLog)
+	args := fakebin.ReadLog(t, argsLog)
 	requireArgumentValue(t, args, "-print_format", "json")
 	requireArgumentValue(t, args, "-show_entries",
 		"format=duration,bit_rate:format_tags:stream=codec_name,codec_type,profile,channels,channel_layout:stream_tags")

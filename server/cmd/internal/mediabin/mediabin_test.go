@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"igloo/cmd/internal/fakebin"
+
 	"github.com/klauspost/compress/zstd"
 )
 
@@ -42,14 +44,9 @@ func TestResolveExternal(t *testing.T) {
 	})
 
 	t.Run("falls back to PATH when the override is blank", func(t *testing.T) {
-		dir := t.TempDir()
-		binary := filepath.Join(dir, "fakebin")
-		err := os.WriteFile(binary, []byte("#!/bin/sh\n"), 0o755)
-		if err != nil {
-			t.Fatalf("write fake binary: %v", err)
-		}
+		binary := fakebin.Write(t, "fakebin", "")
 		t.Setenv(envVar, "   ")
-		t.Setenv("PATH", dir)
+		t.Setenv("PATH", filepath.Dir(binary))
 
 		path, err := ResolveExternal("fakebin", envVar)
 		if err != nil || path != binary {

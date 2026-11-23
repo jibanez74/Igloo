@@ -4,10 +4,8 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"slices"
 	"strings"
 	"syscall"
@@ -23,48 +21,6 @@ const testProcessTimeout = 10 * time.Second
 type hlsExitResult struct {
 	exitErr    error
 	stderrTail []string
-}
-
-// --- fake FFmpeg processes ---
-
-func writeFakeFFmpeg(t *testing.T, name string, body string) string {
-	t.Helper()
-	dir := t.TempDir()
-	path := filepath.Join(dir, name)
-	contents := "#!/bin/sh\nset -eu\n" + body
-	if !strings.HasSuffix(contents, "\n") {
-		contents += "\n"
-	}
-	err := os.WriteFile(path, []byte(contents), 0755)
-	if err != nil {
-		t.Fatalf("write fake FFmpeg: %v", err)
-	}
-	return path
-}
-
-// appendInvocationLog returns a shell prologue that appends one line per
-// invocation holding the whole argument list, for fakes called several times.
-func appendInvocationLog(logPath string) string {
-	return "printf '%s\\n' \"$*\" >> " + formatShellPath(logPath) + "\n"
-}
-
-// writeArgumentLog returns a shell prologue that writes one line per argument,
-// for fakes called once whose individual arguments are asserted.
-func writeArgumentLog(logPath string) string {
-	return "printf '%s\\n' \"$@\" > " + formatShellPath(logPath) + "\n"
-}
-
-func readArgumentLog(t *testing.T, path string) []string {
-	t.Helper()
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read argument log: %v", err)
-	}
-	return strings.Split(strings.TrimSpace(string(data)), "\n")
-}
-
-func formatShellPath(path string) string {
-	return fmt.Sprintf("'%s'", strings.ReplaceAll(path, "'", "'\\''"))
 }
 
 // --- RunHLS drivers ---

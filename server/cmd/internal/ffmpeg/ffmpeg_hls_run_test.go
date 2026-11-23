@@ -13,11 +13,12 @@ import (
 	"strings"
 	"testing"
 
+	"igloo/cmd/internal/fakebin"
 	"igloo/cmd/internal/helpers"
 )
 
 func TestRunHLSRejectsInvalidOutputPaths(t *testing.T) {
-	script := writeFakeFFmpeg(t, "fake ffmpeg", "exit 0\n")
+	script := fakebin.Write(t, "fake ffmpeg", "exit 0\n")
 	f := &ffmpeg{bin: script}
 	filePath := filepath.Join(t.TempDir(), "output-file")
 	err := os.WriteFile(filePath, []byte("not a directory"), 0644)
@@ -106,7 +107,7 @@ func TestRunHLSDeliversExactlyOneCallbackForSuccessAndFailure(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			script := writeFakeFFmpeg(t, "fake ffmpeg", tt.body)
+			script := fakebin.Write(t, "fake ffmpeg", tt.body)
 			f := &ffmpeg{bin: script}
 			results, _ := startHLS(t, context.Background(), f, basicHLSParams(t.TempDir()))
 
@@ -131,7 +132,7 @@ func TestRunHLSDeliversExactlyOneCallbackForSuccessAndFailure(t *testing.T) {
 }
 
 func TestRunHLSCancellationTerminatesProcess(t *testing.T) {
-	script := writeFakeFFmpeg(t, "fake ffmpeg", "printf '%s\\n' started >&2\nexec sleep 30\n")
+	script := fakebin.Write(t, "fake ffmpeg", "printf '%s\\n' started >&2\nexec sleep 30\n")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	f := &ffmpeg{bin: script}
@@ -149,7 +150,7 @@ func TestRunHLSCancellationTerminatesProcess(t *testing.T) {
 }
 
 func TestRunHLSAllowsNilCallback(t *testing.T) {
-	script := writeFakeFFmpeg(t, "fake ffmpeg", "exit 0\n")
+	script := fakebin.Write(t, "fake ffmpeg", "exit 0\n")
 	f := &ffmpeg{bin: script}
 
 	cmd, err := f.RunHLS(context.Background(), basicHLSParams(t.TempDir()), nil)
@@ -160,7 +161,7 @@ func TestRunHLSAllowsNilCallback(t *testing.T) {
 }
 
 func TestRunHLSRetainsOrderedLastTwentyStderrLines(t *testing.T) {
-	script := writeFakeFFmpeg(t, "fake ffmpeg", `
+	script := fakebin.Write(t, "fake ffmpeg", `
 i=1
 while [ "$i" -le 25 ]; do
   printf 'line-%02d\n' "$i" >&2
@@ -189,7 +190,7 @@ exit 3
 func TestRunHLSCapturesLongStderrLine(t *testing.T) {
 	longLine := strings.Repeat("x", 128*1024)
 	body := fmt.Sprintf("printf '%%s\\n' '%s' >&2\n", longLine)
-	script := writeFakeFFmpeg(t, "fake ffmpeg", body)
+	script := fakebin.Write(t, "fake ffmpeg", body)
 	f := &ffmpeg{bin: script}
 
 	results, _ := startHLS(t, context.Background(), f, basicHLSParams(t.TempDir()))
@@ -206,7 +207,7 @@ func TestRunHLSCapturesLongStderrLine(t *testing.T) {
 }
 
 func TestRunHLSReportsStderrScannerErrors(t *testing.T) {
-	script := writeFakeFFmpeg(t, "fake ffmpeg", "head -c 2000000 /dev/zero | tr '\\000' x >&2\nexit 1\n")
+	script := fakebin.Write(t, "fake ffmpeg", "head -c 2000000 /dev/zero | tr '\\000' x >&2\nexit 1\n")
 	f := &ffmpeg{bin: script}
 
 	results, _ := startHLS(t, context.Background(), f, basicHLSParams(t.TempDir()))
@@ -223,7 +224,7 @@ func TestRunHLSReportsStderrScannerErrors(t *testing.T) {
 }
 
 func TestRunHLSConcurrentSessionsKeepStateIsolated(t *testing.T) {
-	script := writeFakeFFmpeg(t, "fake ffmpeg", `
+	script := fakebin.Write(t, "fake ffmpeg", `
 tag=missing
 previous=
 for argument in "$@"; do
@@ -277,7 +278,7 @@ func TestRunHLSUsesAbsoluteOutputDirectoryAndInternalCapabilities(t *testing.T) 
 
 	// The fake writes both files relative to its working directory, which is
 	// how the test confirms RunHLS resolved and entered the absolute out dir.
-	script := writeFakeFFmpeg(t, "fake ffmpeg", "printf '%s\\n' \"$PWD\" > pwd.txt\nprintf '%s\\n' \"$@\" > args.txt\n")
+	script := fakebin.Write(t, "fake ffmpeg", "printf '%s\\n' \"$PWD\" > pwd.txt\nprintf '%s\\n' \"$@\" > args.txt\n")
 	f := &ffmpeg{
 		bin:          script,
 		capabilities: hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA),
@@ -300,7 +301,7 @@ func TestRunHLSUsesAbsoluteOutputDirectoryAndInternalCapabilities(t *testing.T) 
 		t.Fatalf("command directory = %q, want %q", strings.TrimSpace(string(pwdData)), outDir)
 	}
 
-	args := readArgumentLog(t, filepath.Join(outDir, "args.txt"))
+	args := fakebin.ReadLog(t, filepath.Join(outDir, "args.txt"))
 	if !slices.Contains(args, "h264_nvenc") || !slices.Contains(args, "cuda") {
 		t.Fatalf("internal capabilities were not used: %v", args)
 	}

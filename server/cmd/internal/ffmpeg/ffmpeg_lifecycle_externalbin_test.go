@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+
+	"igloo/cmd/internal/fakebin"
 )
 
 func prepareSingletonTest(t *testing.T) {
@@ -27,7 +29,7 @@ func versionOnlyFakeFFmpeg(t *testing.T, logPath string) string {
 	t.Helper()
 	body := ""
 	if logPath != "" {
-		body += appendInvocationLog(logPath)
+		body += fakebin.CallLogLine(logPath)
 	}
 	body += `
 if [ "$#" -eq 1 ] && [ "$1" = "-version" ]; then
@@ -35,7 +37,7 @@ if [ "$#" -eq 1 ] && [ "$1" = "-version" ]; then
 fi
 exit 0
 `
-	return writeFakeFFmpeg(t, "fake ffmpeg", body)
+	return fakebin.Write(t, "fake ffmpeg", body)
 }
 
 func TestResolveBinaryCandidateUsesConfiguredExternalBinary(t *testing.T) {
@@ -73,12 +75,7 @@ func TestNewVerifiesAndReusesSingleton(t *testing.T) {
 		t.Fatal("New did not reuse the singleton instance")
 	}
 
-	versionCalls := 0
-	for _, line := range readArgumentLog(t, logPath) {
-		if line == "-version" {
-			versionCalls++
-		}
-	}
+	versionCalls := fakebin.CountLine(t, logPath, "-version")
 	if versionCalls != 1 {
 		t.Fatalf("version calls = %d, want 1", versionCalls)
 	}
