@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"io"
@@ -2248,4 +2249,56 @@ func TestHLSManifest_LegacyAssetsOmitAudioProfileParams(t *testing.T) {
 		t.Fatalf("audio channels header = %q, want 2", got)
 	}
 	assertOpenAPIExchange(t, "hlsManifest", request, recorder)
+}
+
+// The manifest flow for a declaring client: video_codecs reaches planning,
+// the HEVC source is copied, every rewritten asset URL carries the parameter,
+// and a segment request built from those URLs finds the same session.
+func TestHLSManifest_HEVCRemux(t *testing.T) {
+	app := setupTestApp(t)
+	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{
+		hlsRunPlan(fmp4testutil.Fixture{SafeVideo: true, HEVC: true, Segments: helpers.HLS_REMUX_PREVALIDATE_SEGMENTS}),
+	}}
+	movieID := insertTestHLSMovieFixture(t, app, "hevc", 2160)
+	setTestVideoStreamColumns(t, app, movieID, "Main 10", "yuv420p10le", sql.NullInt64{Int64: 8, Valid: true}, sql.NullInt64{Int64: 1, Valid: true})
+	handler := authenticatedRouter(t, app, 42)
+
+	manifestURL := fmt.Sprintf(
+		"/api/movies/%d/hls/%s/playlist.m3u8?audio_track=0&video_codecs=hevc&playback_session=%s&start=0",
+		movieID, helpers.HLS_PROFILE_REMUX, testPlaybackSessionID,
+	)
+	request := httptest.NewRequest(http.MethodGet, manifestURL, nil)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("manifest status = %d, want 200: %s", recorder.Code, recorder.Body.String())
+	}
+	if got := recorder.Header().Get(hlsEffectiveProfileHeader); got != helpers.HLS_PROFILE_REMUX {
+		t.Fatalf("effective profile = %q, want remux", got)
+	}
+	assertOpenAPIExchange(t, "hlsManifest", request, recorder)
+
+	wantAssetQuery := fmt.Sprintf("?audio_track=0&playback_session=%s&start=0&video_codecs=hevc", testPlaybackSessionID)
+	segment := helpers.HLS_SEGMENT_FILENAME_PREFIX + "0" + helpers.HLS_SEGMENT_FILENAME_SUFFIX
+	body := recorder.Body.String()
+	if !strings.Contains(body, helpers.HLS_INIT_FILENAME+wantAssetQuery) || !strings.Contains(body, segment+wantAssetQuery) {
+		t.Fatalf("asset URLs do not carry video_codecs: %s", body)
+	}
+
+	segmentURL := fmt.Sprintf("/api/movies/%d/hls/%s/%s%s", movieID, helpers.HLS_PROFILE_REMUX, segment, wantAssetQuery)
+	segmentRequest := httptest.NewRequest(http.MethodGet, segmentURL, nil)
+	segmentRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(segmentRecorder, segmentRequest)
+	if segmentRecorder.Code != http.StatusOK {
+		t.Fatalf("segment status = %d, want 200: %s", segmentRecorder.Code, segmentRecorder.Body.String())
+	}
+	assertOpenAPIExchange(t, "hlsSegment", segmentRequest, segmentRecorder)
+
+	// The H.264-only key names a different session.
+	withoutCodecs := strings.Replace(segmentURL, "&video_codecs=hevc", "", 1)
+	missRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(missRecorder, httptest.NewRequest(http.MethodGet, withoutCodecs, nil))
+	if missRecorder.Code != http.StatusNotFound {
+		t.Fatalf("segment without video_codecs status = %d, want 404", missRecorder.Code)
+	}
 }

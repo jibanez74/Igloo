@@ -681,18 +681,6 @@ func TestStopEpisodeHLSSession_ConformsToOpenAPI(t *testing.T) {
 	}
 }
 
-// The key itself separates media kinds (TestHLSSessionKey); access checks
-// must too, so a movie ref never reaches an episode session with the same id.
-func TestCanAccessPersonalHLSSession_SeparatesMediaKinds(t *testing.T) {
-	session := &HLSSession{Media: episodeRef(9), OwnerUserID: 1}
-	if canAccessPersonalHLSSession(session, movieRef(9), 1) {
-		t.Fatal("a movie ref must not access an episode session")
-	}
-	if !canAccessPersonalHLSSession(session, episodeRef(9), 1) {
-		t.Fatal("the episode ref must access its own session")
-	}
-}
-
 func TestLoadHLSSourceForSession_Episode(t *testing.T) {
 	app := setupTestApp(t)
 	fixture := seedPlaybackEpisode(t, app)

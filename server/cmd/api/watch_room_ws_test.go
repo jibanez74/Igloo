@@ -8,11 +8,14 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"igloo/cmd/internal/database"
 
 	"github.com/gorilla/websocket"
 )
@@ -1002,5 +1005,847 @@ func TestWatchRoomClientEventsConformToOpenAPI(t *testing.T) {
 				t.Fatalf("playback = %+v", event.Playback)
 			}
 		})
+	}
+}
+
+func TestWatchRoomPlaybackState_CurrentPosition(t *testing.T) {
+	now := time.Now().UTC()
+
+	tests := []struct {
+		name  string
+		state watchRoomPlaybackState
+		at    time.Time
+		min   float64
+		max   float64
+	}{
+		{
+			name: "paused state does not extrapolate",
+			state: watchRoomPlaybackState{
+				Paused:      true,
+				PositionSec: 42,
+				UpdatedAt:   now.Add(-10 * time.Second),
+			},
+			at:  now,
+			min: 42,
+			max: 42,
+		},
+		{
+			name: "playing state adds elapsed wall clock",
+			state: watchRoomPlaybackState{
+				Paused:      false,
+				PositionSec: 42,
+				UpdatedAt:   now.Add(-10 * time.Second),
+			},
+			at:  now,
+			min: 52,
+			max: 52,
+		},
+		{
+			name: "position is clamped at the drift floor",
+			state: watchRoomPlaybackState{
+				Paused:      true,
+				PositionSec: -5,
+				UpdatedAt:   now,
+			},
+			at:  now,
+			min: watchRoomPositionDriftFloor,
+			max: watchRoomPositionDriftFloor,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.state.currentPosition(tt.at)
+			if got < tt.min || got > tt.max {
+				t.Fatalf("currentPosition() = %.3f, want in [%.3f, %.3f]", got, tt.min, tt.max)
+			}
+		})
+	}
+}
+
+func TestWatchRoomPlaybackState_SnapshotRebasesUpdatedAt(t *testing.T) {
+	now := time.Now().UTC()
+	state := watchRoomPlaybackState{
+		Paused:      false,
+		PositionSec: 10,
+		UpdatedAt:   now.Add(-4 * time.Second),
+	}
+
+	snap := state.snapshot(now)
+	if snap.Paused {
+		t.Fatal("snapshot flipped paused state")
+	}
+	if snap.PositionSec < 13.9 || snap.PositionSec > 14.1 {
+		t.Fatalf("snapshot position = %.3f, want ~14", snap.PositionSec)
+	}
+	if !snap.UpdatedAt.Equal(now) {
+		t.Fatalf("snapshot UpdatedAt = %v, want %v", snap.UpdatedAt, now)
+	}
+}
+
+func TestWatchRoomHub_ApplyPlaybackEventTransitions(t *testing.T) {
+	// A hub with one client connected to room 1: playback commands come from
+	// a registered sender.
+	newHubWithSession := func(roomID int64) (*WatchRoomHub, *watchRoomClient) {
+		hub := NewWatchRoomHub()
+		client := newWatchRoomClient(nil, roomID, userSummary{ID: 1})
+		if !hub.connect(roomID, client) {
+			t.Fatal("connect refused")
+		}
+		return hub, client
+	}
+
+	t.Run("play sets position and unpauses", func(t *testing.T) {
+		hub, client := newHubWithSession(1)
+		event, ok := hub.applyPlaybackEvent(client, "play", 30, 0)
+		if !ok || event == nil || event.Playback == nil {
+			t.Fatalf("applyPlaybackEvent(play) = %+v, %v", event, ok)
+		}
+		if event.Type != "playback_changed" || event.Playback.Paused || event.Playback.PositionSec != 30 {
+			t.Fatalf("unexpected play event: %+v", event.Playback)
+		}
+	})
+
+	t.Run("pause keeps position and pauses", func(t *testing.T) {
+		hub, client := newHubWithSession(1)
+		_, _ = hub.applyPlaybackEvent(client, "play", 30, 0)
+		event, ok := hub.applyPlaybackEvent(client, "pause", 31, 0)
+		if !ok || event == nil || !event.Playback.Paused || event.Playback.PositionSec != 31 {
+			t.Fatalf("unexpected pause event: %+v ok=%v", event, ok)
+		}
+	})
+
+	t.Run("seek repositions without changing paused state", func(t *testing.T) {
+		hub, client := newHubWithSession(1)
+		_, _ = hub.applyPlaybackEvent(client, "play", 5, 0)
+		event, ok := hub.applyPlaybackEvent(client, "seek", 90, 0)
+		if !ok || event == nil || event.Playback.Paused {
+			t.Fatalf("seek while playing should stay unpaused: %+v ok=%v", event, ok)
+		}
+		if event.Playback.PositionSec < 90 || event.Playback.PositionSec > 90.5 {
+			t.Fatalf("seek position = %.3f, want ~90", event.Playback.PositionSec)
+		}
+
+		_, _ = hub.applyPlaybackEvent(client, "pause", 90, 0)
+		event, ok = hub.applyPlaybackEvent(client, "seek", 10, 0)
+		if !ok || event == nil || !event.Playback.Paused || event.Playback.PositionSec != 10 {
+			t.Fatalf("seek while paused should stay paused: %+v ok=%v", event, ok)
+		}
+	})
+
+	t.Run("missing position falls back to extrapolated current position", func(t *testing.T) {
+		hub, client := newHubWithSession(1)
+		_, _ = hub.applyPlaybackEvent(client, "play", 20, 0)
+		time.Sleep(50 * time.Millisecond)
+		event, ok := hub.applyPlaybackEvent(client, "pause", -1, 0)
+		if !ok || event == nil || !event.Playback.Paused {
+			t.Fatalf("unexpected fallback pause event: %+v ok=%v", event, ok)
+		}
+		if event.Playback.PositionSec <= 20 || event.Playback.PositionSec > 21 {
+			t.Fatalf("fallback position = %.3f, want just past 20", event.Playback.PositionSec)
+		}
+	})
+
+	t.Run("unknown event type is rejected", func(t *testing.T) {
+		hub, client := newHubWithSession(1)
+		event, ok := hub.applyPlaybackEvent(client, "warp", 10, 0)
+		if ok || event != nil {
+			t.Fatalf("expected unknown event to be rejected, got %+v ok=%v", event, ok)
+		}
+	})
+
+	t.Run("unknown room is rejected", func(t *testing.T) {
+		hub := NewWatchRoomHub()
+		stranger := newWatchRoomClient(nil, 404, userSummary{ID: 1})
+		event, ok := hub.applyPlaybackEvent(stranger, "play", 10, 0)
+		if ok || event != nil {
+			t.Fatalf("expected unknown room to be rejected, got %+v ok=%v", event, ok)
+		}
+	})
+
+	// revokeMembers closes a socket before its read loop ends; a command read
+	// in between must not move the room for the members still in it.
+	t.Run("a closed or unregistered sender changes nothing", func(t *testing.T) {
+		hub, client := newHubWithSession(1)
+		other := newWatchRoomClient(nil, 1, userSummary{ID: 2})
+		event, ok := hub.applyPlaybackEvent(other, "play", 10, 0)
+		if ok || event != nil {
+			t.Fatalf("an unregistered sender changed playback: %+v ok=%v", event, ok)
+		}
+
+		hub.revokeMembers(1, []int64{1})
+		event, ok = hub.applyPlaybackEvent(client, "play", 10, 0)
+		if ok || event != nil {
+			t.Fatalf("a revoked sender changed playback: %+v ok=%v", event, ok)
+		}
+		hub.mu.Lock()
+		paused := hub.sessions[1].state.Paused
+		hub.mu.Unlock()
+		if !paused {
+			t.Fatal("the room started playing from a revoked sender")
+		}
+	})
+}
+
+func TestWatchRoomWebSocket_RoomsAreIsolated(t *testing.T) {
+	app := setupTestApp(t)
+
+	ownerAID, movieID := createTestUserAndMovie(t, app)
+	ownerB := createTestUser(t, app, "Owner B", "owner-b-isolated@example.com", false)
+
+	roomA := createTestRoom(t, app, ownerAID, movieID)
+	addMembersToRoom(t, app, roomA.ID, ownerAID)
+	roomB := createTestRoom(t, app, ownerB.ID, movieID)
+	addMembersToRoom(t, app, roomB.ID, ownerB.ID)
+
+	server := setupWatchRoomWSTestServer(t, app)
+
+	connA, _ := dialWatchRoomSocket(t, app, server.URL, roomA.ID, ownerAID)
+	defer connA.Close()
+	connB, _ := dialWatchRoomSocket(t, app, server.URL, roomB.ID, ownerB.ID)
+	defer connB.Close()
+
+	_ = readUntilEventType(t, connA, "room_snapshot")
+	_ = readUntilEventType(t, connB, "room_snapshot")
+
+	if err := connA.WriteJSON(map[string]any{"type": "play", "position_sec": 25}); err != nil {
+		t.Fatalf("room A play event: %v", err)
+	}
+
+	playEvent := readUntilEventType(t, connA, "playback_changed")
+	if playEvent.RoomID != roomA.ID {
+		t.Fatalf("playback_changed room_id = %d, want %d", playEvent.RoomID, roomA.ID)
+	}
+
+	expectNoEventType(t, connB, "playback_changed")
+}
+
+func TestWatchRoomWebSocket_ConcurrentPlaybackEventsDoNotDeadlock(t *testing.T) {
+	app := setupTestApp(t)
+
+	ownerID, movieID := createTestUserAndMovie(t, app)
+	room := createTestRoom(t, app, ownerID, movieID)
+
+	const guestCount = 2
+	userIDs := []int64{ownerID}
+	for i := 0; i < guestCount; i++ {
+		guest := createTestUser(t, app, fmt.Sprintf("Storm Guest %d", i), fmt.Sprintf("storm-guest-%d@example.com", i), false)
+		userIDs = append(userIDs, guest.ID)
+	}
+	addMembersToRoom(t, app, room.ID, userIDs...)
+
+	server := setupWatchRoomWSTestServer(t, app)
+
+	conns := make([]*websocket.Conn, 0, len(userIDs))
+	for _, userID := range userIDs {
+		conn, _ := dialWatchRoomSocket(t, app, server.URL, room.ID, userID)
+		defer conn.Close()
+		_ = readUntilEventType(t, conn, "room_snapshot")
+		conns = append(conns, conn)
+	}
+
+	// Every client fires a burst of playback events at the same time. The
+	// hub must survive the storm without deadlocking and still deliver a
+	// final, distinctive seek to every client.
+	const eventsPerClient = 15
+	var writers sync.WaitGroup
+	for _, conn := range conns {
+		writers.Add(1)
+		go func(conn *websocket.Conn) {
+			defer writers.Done()
+			for i := 0; i < eventsPerClient; i++ {
+				eventType := []string{"play", "pause", "seek"}[i%3]
+				_ = conn.WriteJSON(map[string]any{
+					"type":         eventType,
+					"position_sec": float64(i),
+				})
+			}
+		}(conn)
+	}
+	writers.Wait()
+
+	if err := conns[0].WriteJSON(map[string]any{"type": "seek", "position_sec": 5000}); err != nil {
+		t.Fatalf("final seek event: %v", err)
+	}
+
+	deadline := time.Now().Add(5 * time.Second)
+	for i, conn := range conns {
+		found := false
+		for time.Now().Before(deadline) {
+			if err := conn.SetReadDeadline(deadline); err != nil {
+				t.Fatalf("set read deadline: %v", err)
+			}
+			var event watchRoomWSTestEvent
+			if err := conn.ReadJSON(&event); err != nil {
+				t.Fatalf("client %d read during storm drain: %v", i, err)
+			}
+			if event.Type == "playback_changed" && event.Playback != nil &&
+				event.Playback.PositionSec >= 5000 && event.Playback.PositionSec < 5001 {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("client %d never received the final seek event", i)
+		}
+	}
+}
+
+func TestWatchRoomWebSocket_PlaybackStateSurvivesPartialDisconnectAndResetsWhenEmpty(t *testing.T) {
+	app := setupTestApp(t)
+
+	ownerID, movieID := createTestUserAndMovie(t, app)
+	guest := createTestUser(t, app, "Lifecycle Guest", "lifecycle-guest@example.com", false)
+
+	room := createTestRoom(t, app, ownerID, movieID)
+	addMembersToRoom(t, app, room.ID, ownerID, guest.ID)
+	server := setupWatchRoomWSTestServer(t, app)
+
+	ownerConn, _ := dialWatchRoomSocket(t, app, server.URL, room.ID, ownerID)
+	defer ownerConn.Close()
+	_ = readUntilEventType(t, ownerConn, "room_snapshot")
+
+	if err := ownerConn.WriteJSON(map[string]any{"type": "play", "position_sec": 100}); err != nil {
+		t.Fatalf("owner play event: %v", err)
+	}
+	_ = readUntilEventType(t, ownerConn, "playback_changed")
+
+	// While the owner stays connected, a joining guest sees live playback.
+	guestConn, _ := dialWatchRoomSocket(t, app, server.URL, room.ID, guest.ID)
+	guestSnapshot := readUntilEventType(t, guestConn, "room_snapshot")
+	if guestSnapshot.Playback == nil || guestSnapshot.Playback.Paused {
+		t.Fatalf("guest snapshot should reflect live playback, got %+v", guestSnapshot.Playback)
+	}
+	if guestSnapshot.Playback.PositionSec < 100 || guestSnapshot.Playback.PositionSec > 102 {
+		t.Fatalf("guest snapshot position = %.3f, want ~100", guestSnapshot.Playback.PositionSec)
+	}
+	_ = guestConn.Close()
+
+	// Wait for the guest departure to settle so the owner is last out.
+	_ = readUntilEventType(t, ownerConn, "member_left")
+	_ = ownerConn.Close()
+
+	// Once the room fully empties, its in-memory session is discarded and
+	// a fresh connection starts from the default paused state.
+	var rejoinSnapshot watchRoomWSTestEvent
+	for attempt := 0; attempt < 20; attempt++ {
+		rejoinConn, _ := dialWatchRoomSocket(t, app, server.URL, room.ID, ownerID)
+		rejoinSnapshot = readUntilEventType(t, rejoinConn, "room_snapshot")
+		_ = rejoinConn.Close()
+		if rejoinSnapshot.Playback != nil && rejoinSnapshot.Playback.Paused {
+			break
+		}
+		// The previous socket's server-side cleanup may not have finished;
+		// give it a moment and retry.
+		time.Sleep(50 * time.Millisecond)
+	}
+	if rejoinSnapshot.Playback == nil || !rejoinSnapshot.Playback.Paused || rejoinSnapshot.Playback.PositionSec != 0 {
+		t.Fatalf("expected fresh paused snapshot after room emptied, got %+v", rejoinSnapshot.Playback)
+	}
+}
+
+func dialWatchRoomSocketWithBearer(t *testing.T, serverURL string, roomID int64, token string) (*websocket.Conn, *http.Response) {
+	t.Helper()
+
+	wsURL := "ws" + strings.TrimPrefix(serverURL, "http") + fmt.Sprintf("/api/watch-rooms/%d/ws", roomID)
+	header := http.Header{}
+	header.Set("Authorization", "Bearer "+token)
+	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, header)
+	if err != nil {
+		if resp != nil {
+			return nil, resp
+		}
+		t.Fatalf("dial websocket: %v", err)
+	}
+	return conn, resp
+}
+
+// readUntilEventTypes reads until it has seen each type once, in any order.
+func readUntilEventTypes(t *testing.T, conn *websocket.Conn, types ...string) map[string]watchRoomWSTestEvent {
+	t.Helper()
+
+	seen := make(map[string]watchRoomWSTestEvent, len(types))
+	for i := 0; i < 10 && len(seen) < len(types); i++ {
+		event := readWatchRoomEvent(t, conn)
+		if slices.Contains(types, event.Type) {
+			seen[event.Type] = event
+		}
+	}
+	if len(seen) < len(types) {
+		t.Fatalf("saw %v, want all of %v", seen, types)
+	}
+	return seen
+}
+
+func watchRoomMemberIDs(t *testing.T, app *Application, roomID int64) []int64 {
+	t.Helper()
+
+	ids, err := app.Queries.ListWatchRoomMemberIDs(context.Background(), roomID)
+	if err != nil {
+		t.Fatalf("list members: %v", err)
+	}
+	return ids
+}
+
+func summaryIDs(members []userSummary) []int64 {
+	ids := make([]int64, len(members))
+	for i, member := range members {
+		ids[i] = member.ID
+	}
+	return ids
+}
+
+func isWatchRoomAuthCached(app *Application, roomID, userID int64) bool {
+	app.WatchRoomAuthCache.mu.Lock()
+	defer app.WatchRoomAuthCache.mu.Unlock()
+	_, cached := app.WatchRoomAuthCache.entries[watchRoomAuthKey{roomID: roomID, userID: userID}]
+	return cached
+}
+
+func membersRequest(roomID int64, body string) *http.Request {
+	return newOpenAPIJSONRequest(http.MethodPut, fmt.Sprintf("/api/watch-rooms/%d/members", roomID), body)
+}
+
+func leaveRequest(roomID int64) *http.Request {
+	return newOpenAPIJSONRequest(http.MethodPost, fmt.Sprintf("/api/watch-rooms/%d/leave", roomID), "")
+}
+
+// Deleting an invited member's account tells the rest of the room the new
+// member list, and closes the member's own socket with their credentials.
+func TestDeletingInvitedMemberAnnouncesMembers(t *testing.T) {
+	app := setupTestApp(t)
+	ownerID, movieID := createTestUserAndMovie(t, app)
+	guest := createTestUser(t, app, "Guest", "deleted-member@example.com", false)
+	admin := createTestUser(t, app, "Admin", "deleted-member-admin@example.com", true)
+	room := createTestRoom(t, app, ownerID, movieID)
+	addMembersToRoom(t, app, room.ID, ownerID, guest.ID)
+	server := setupWatchRoomWSTestServer(t, app)
+
+	ownerConn, _ := dialWatchRoomSocket(t, app, server.URL, room.ID, ownerID)
+	defer ownerConn.Close()
+	readUntilEventType(t, ownerConn, "room_snapshot")
+	guestConn, _ := dialWatchRoomSocket(t, app, server.URL, room.ID, guest.ID)
+	defer guestConn.Close()
+	readUntilEventType(t, guestConn, "room_snapshot")
+	readUntilEventType(t, ownerConn, "member_joined")
+
+	req := newOpenAPIJSONRequest(http.MethodDelete, "/api/admin/users/"+strconv.FormatInt(guest.ID, 10), "")
+	serveOpenAPIExchange(t, authenticatedRouter(t, app, admin.ID), "adminDeleteUser", req, http.StatusOK)
+
+	changed := readUntilEventType(t, ownerConn, "members_changed")
+	if got := summaryIDs(changed.Members); !slices.Equal(got, []int64{ownerID}) {
+		t.Fatalf("members_changed members = %v", got)
+	}
+	expectSocketToClose(t, guestConn)
+}
+
+// Each way of ending a credential closes the sockets it opened, and only
+// those: the room stays open on the user's other credential.
+func TestWatchRoomWebSocket_ClosedWhenCredentialRevoked(t *testing.T) {
+	cases := []struct {
+		name string
+		// revoke ends the credential under test; closes names the socket it
+		// must close, and the other must stay open.
+		revoke func(t *testing.T, app *Application, userID int64, cookie *http.Cookie, deviceID int64) *httptest.ResponseRecorder
+		closes string
+	}{
+		{
+			name: "cookie logout",
+			revoke: func(t *testing.T, app *Application, _ int64, cookie *http.Cookie, _ int64) *httptest.ResponseRecorder {
+				return serveWithCookie(t, app, cookie, http.MethodDelete, "/api/auth/logout", "")
+			},
+			closes: "cookie",
+		},
+		{
+			name: "device revoked",
+			revoke: func(t *testing.T, app *Application, userID int64, _ *http.Cookie, deviceID int64) *httptest.ResponseRecorder {
+				// Revoke from another browser session, as Settings does.
+				other := newAuthSessionCookie(t, app, userID)
+				return serveWithCookie(t, app, other, http.MethodDelete, fmt.Sprintf("/api/devices/%d", deviceID), "")
+			},
+			closes: "device",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			app := setupTestApp(t)
+			ownerID, movieID := createTestUserAndMovie(t, app)
+			room := createTestRoom(t, app, ownerID, movieID)
+			addMembersToRoom(t, app, room.ID, ownerID)
+			server := setupWatchRoomWSTestServer(t, app)
+
+			cookie := newAuthSessionCookie(t, app, ownerID)
+			cookieConn, _ := dialWatchRoomSocketWithCookie(t, server.URL, room.ID, cookie)
+			defer cookieConn.Close()
+			readUntilEventType(t, cookieConn, "room_snapshot")
+
+			token := createTestDevice(t, app, ownerID, "TV", "android_tv")
+			devices, err := app.Queries.GetDevicesByUser(context.Background(), ownerID)
+			if err != nil || len(devices) != 1 {
+				t.Fatalf("devices = %v, %v", devices, err)
+			}
+			deviceConn, _ := dialWatchRoomSocketWithBearer(t, server.URL, room.ID, token)
+			defer deviceConn.Close()
+			readUntilEventType(t, deviceConn, "room_snapshot")
+
+			w := tc.revoke(t, app, ownerID, cookie, devices[0].ID)
+			if w.Code != http.StatusOK {
+				t.Fatalf("revoke status = %d: %s", w.Code, w.Body.String())
+			}
+
+			closed, kept := cookieConn, deviceConn
+			if tc.closes == "device" {
+				closed, kept = deviceConn, cookieConn
+			}
+			expectSocketToClose(t, closed)
+			// The other socket still answers, and was never told to leave.
+			err = kept.WriteMessage(websocket.TextMessage, []byte(`{"type":"ping"}`))
+			if err != nil {
+				t.Fatalf("kept socket write: %v", err)
+			}
+			for {
+				event := readWatchRoomEvent(t, kept)
+				if event.Type == "room_access_revoked" {
+					t.Fatal("the kept socket was revoked")
+				}
+				if event.Type == "pong" {
+					break
+				}
+			}
+		})
+	}
+}
+
+// A password change ends every other session and every device: their sockets
+// close, while the session that changed it carries on under a renewed token.
+func TestWatchRoomWebSocket_PasswordChangeClosesOtherSessions(t *testing.T) {
+	app := setupTestApp(t)
+	ownerID, movieID := createTestUserAndMovie(t, app)
+	room := createTestRoom(t, app, ownerID, movieID)
+	addMembersToRoom(t, app, room.ID, ownerID)
+	server := setupWatchRoomWSTestServer(t, app)
+
+	otherConn, _ := dialWatchRoomSocket(t, app, server.URL, room.ID, ownerID)
+	defer otherConn.Close()
+	readUntilEventType(t, otherConn, "room_snapshot")
+	deviceConn, _ := dialWatchRoomSocketWithBearer(t, server.URL, room.ID, createTestDevice(t, app, ownerID, "TV", "android_tv"))
+	defer deviceConn.Close()
+	readUntilEventType(t, deviceConn, "room_snapshot")
+
+	body := fmt.Sprintf(`{"current_password":%q,"new_password":"a new correct horse"}`, testUserPassword)
+	w := serveWithCookie(t, app, newAuthSessionCookie(t, app, ownerID), http.MethodPut, "/api/user/password", body)
+	if w.Code != http.StatusOK {
+		t.Fatalf("password change status = %d: %s", w.Code, w.Body.String())
+	}
+
+	expectSocketToClose(t, otherConn)
+	expectSocketToClose(t, deviceConn)
+	conn, resp := dialWatchRoomSocket(t, app, server.URL, room.ID, ownerID)
+	if conn == nil {
+		t.Fatalf("a fresh session could not reconnect: %v", resp)
+	}
+	conn.Close()
+}
+
+// A device token opens the socket and the room routes, as the TV uses them.
+func TestWatchRoom_DeviceTokenReachesRoutesAndSocket(t *testing.T) {
+	app := setupTestApp(t)
+	ownerID, movieID := createTestUserAndMovie(t, app)
+	guest := createTestUser(t, app, "TV Guest", "tv-guest@example.com", false)
+	room := createTestRoom(t, app, ownerID, movieID)
+	addMembersToRoom(t, app, room.ID, ownerID, guest.ID)
+	server := setupWatchRoomWSTestServer(t, app)
+	token := createTestDevice(t, app, guest.ID, "TV", "android_tv")
+
+	for _, tc := range []struct {
+		operationID string
+		req         *http.Request
+	}{
+		{"getWatchRooms", newOpenAPIJSONRequest(http.MethodGet, "/api/watch-rooms", "")},
+		{"getWatchRoom", newOpenAPIJSONRequest(http.MethodGet, fmt.Sprintf("/api/watch-rooms/%d", room.ID), "")},
+		{"joinWatchRoom", newOpenAPIJSONRequest(http.MethodPost, fmt.Sprintf("/api/watch-rooms/%d/join", room.ID), "")},
+	} {
+		tc.req.Header.Set("Authorization", "Bearer "+token)
+		serveOpenAPIExchange(t, app.Router, tc.operationID, tc.req, http.StatusOK)
+	}
+
+	conn, resp := dialWatchRoomSocketWithBearer(t, server.URL, room.ID, token)
+	if conn == nil {
+		t.Fatalf("bearer upgrade failed: %v", resp)
+	}
+	defer conn.Close()
+	snapshot := readUntilEventType(t, conn, "room_snapshot")
+	expectConnectedUserIDs(t, snapshot, guest.ID)
+
+	// The TV leaves with its token too.
+	req := leaveRequest(room.ID)
+	req.Header.Set("Authorization", "Bearer "+token)
+	serveOpenAPIExchange(t, app.Router, "leaveWatchRoom", req, http.StatusOK)
+	readUntilEventType(t, conn, "room_access_revoked")
+}
+
+func TestWatchRoomWebSocket_OversizedFrameClosesConnection(t *testing.T) {
+	app := setupTestApp(t)
+	ownerID, movieID := createTestUserAndMovie(t, app)
+	room := createTestRoom(t, app, ownerID, movieID)
+	addMembersToRoom(t, app, room.ID, ownerID)
+	server := setupWatchRoomWSTestServer(t, app)
+
+	conn, _ := dialWatchRoomSocket(t, app, server.URL, room.ID, ownerID)
+	defer conn.Close()
+	readUntilEventType(t, conn, "room_snapshot")
+
+	padding := strings.Repeat(" ", watchRoomReadLimit)
+	err := conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"ping"`+padding+`}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectSocketToClose(t, conn)
+}
+
+func TestWatchRoomWebSocket_ClampsPositionToMovieDuration(t *testing.T) {
+	app := setupTestApp(t)
+	ownerID, movieID := createTestUserAndMovie(t, app)
+	_, err := app.DB.Exec(`UPDATE movies SET duration = 120 WHERE id = ?`, movieID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	room := createTestRoom(t, app, ownerID, movieID)
+	addMembersToRoom(t, app, room.ID, ownerID)
+	server := setupWatchRoomWSTestServer(t, app)
+
+	conn, _ := dialWatchRoomSocket(t, app, server.URL, room.ID, ownerID)
+	defer conn.Close()
+	readUntilEventType(t, conn, "room_snapshot")
+
+	err = conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"seek","position_sec":1e12}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	event := readUntilEventType(t, conn, watchRoomPlaybackChangedEvent)
+	if event.Playback == nil || event.Playback.PositionSec != 120 {
+		t.Fatalf("playback = %+v, want position clamped to 120", event.Playback)
+	}
+}
+
+// Members seeking at once must leave every socket on the state the hub
+// holds: each client's last playback_changed is the hub's final position.
+func TestWatchRoomWebSocket_ConcurrentCommandsArriveInHubOrder(t *testing.T) {
+	app := setupTestApp(t)
+	ownerID, movieID := createTestUserAndMovie(t, app)
+	guest := createTestUser(t, app, "Guest", "ordering-guest@example.com", false)
+	room := createTestRoom(t, app, ownerID, movieID)
+	addMembersToRoom(t, app, room.ID, ownerID, guest.ID)
+	server := setupWatchRoomWSTestServer(t, app)
+
+	conns := make([]*websocket.Conn, 0, 4)
+	for _, userID := range []int64{ownerID, ownerID, guest.ID, guest.ID} {
+		conn, _ := dialWatchRoomSocket(t, app, server.URL, room.ID, userID)
+		defer conn.Close()
+		readUntilEventType(t, conn, "room_snapshot")
+		conns = append(conns, conn)
+	}
+
+	const perSender = 40
+	var wg sync.WaitGroup
+	for i, conn := range conns[:2] {
+		wg.Add(1)
+		go func(sender int, conn *websocket.Conn) {
+			defer wg.Done()
+			for n := range perSender {
+				body := fmt.Sprintf(`{"type":"seek","position_sec":%d}`, sender*1000+n)
+				_ = conn.WriteMessage(websocket.TextMessage, []byte(body))
+			}
+		}(i, conn)
+	}
+	// The other two sockets send too, so commands interleave from both users.
+	for i, conn := range conns[2:] {
+		wg.Add(1)
+		go func(sender int, conn *websocket.Conn) {
+			defer wg.Done()
+			for n := range perSender {
+				body := fmt.Sprintf(`{"type":"seek","position_sec":%d}`, (sender+2)*1000+n)
+				_ = conn.WriteMessage(websocket.TextMessage, []byte(body))
+			}
+		}(i, conn)
+	}
+	wg.Wait()
+
+	// Every socket receives every change; read each one's last.
+	for i, conn := range conns {
+		var last float64
+		seen := 0
+		for seen < 4*perSender {
+			_ = conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+			var event watchRoomWSTestEvent
+			err := conn.ReadJSON(&event)
+			if err != nil {
+				t.Fatalf("socket %d after %d changes: %v", i, seen, err)
+			}
+			if event.Type == watchRoomPlaybackChangedEvent && event.Playback != nil {
+				last = event.Playback.PositionSec
+				seen++
+			}
+		}
+		app.WatchRoomHub.mu.Lock()
+		want := app.WatchRoomHub.sessions[room.ID].state.PositionSec
+		app.WatchRoomHub.mu.Unlock()
+		if last != want {
+			t.Fatalf("socket %d ended on %v, hub holds %v", i, last, want)
+		}
+	}
+}
+
+func TestWatchRoomHub_ConnectRefusedAfterShutdown(t *testing.T) {
+	hub := NewWatchRoomHub()
+	hub.Shutdown()
+
+	client := newWatchRoomClient(nil, 1, userSummary{ID: 1})
+	if hub.connect(1, client) {
+		t.Fatal("connect succeeded after shutdown")
+	}
+	hub.mu.Lock()
+	defer hub.mu.Unlock()
+	if len(hub.sessions) != 0 {
+		t.Fatalf("shutdown hub registered a session: %d", len(hub.sessions))
+	}
+}
+
+// A socket that joins the hub after its room was deleted, or its member
+// removed, missed the sweep that ended the others; the re-check after
+// connect sends it the event the sweep would have and closes it.
+func TestWatchRoomSocketStillAllowed_CatchesChangesDuringUpgrade(t *testing.T) {
+	cases := []struct {
+		name   string
+		change func(t *testing.T, app *Application, roomID, guestID int64)
+		want   string
+	}{
+		{
+			name: "room deleted",
+			change: func(t *testing.T, app *Application, roomID, _ int64) {
+				err := app.deleteWatchRoom(context.Background(), roomID)
+				if err != nil {
+					t.Fatal(err)
+				}
+			},
+			want: "room_deleted",
+		},
+		{
+			name: "member removed",
+			change: func(t *testing.T, app *Application, roomID, guestID int64) {
+				_, err := app.Queries.RemoveWatchRoomMember(context.Background(), database.RemoveWatchRoomMemberParams{
+					RoomID: roomID,
+					UserID: guestID,
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+			},
+			want: "room_access_revoked",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			app := setupSessionTestApp(t)
+			ownerID, movieID := createTestUserAndMovie(t, app)
+			guest := createTestUser(t, app, "Guest", "upgrade-race@example.com", false)
+			room := createTestRoom(t, app, ownerID, movieID)
+			addMembersToRoom(t, app, room.ID, ownerID, guest.ID)
+
+			client := newWatchRoomClient(nil, room.ID, userSummary{ID: guest.ID})
+			if !app.WatchRoomHub.connect(room.ID, client) {
+				t.Fatal("connect refused")
+			}
+			<-client.send // the snapshot
+
+			tc.change(t, app, room.ID, guest.ID)
+
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			if app.watchRoomSocketStillAllowed(req, client) {
+				t.Fatal("the socket was still allowed")
+			}
+			var event watchRoomWSTestEvent
+			err := json.Unmarshal(<-client.send, &event)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if event.Type != tc.want {
+				t.Fatalf("event = %q, want %q", event.Type, tc.want)
+			}
+			select {
+			case <-client.done:
+			default:
+				t.Fatal("the socket was not closed")
+			}
+		})
+	}
+}
+
+// A logout destroys the session without changing its version, so the
+// post-connect re-check must look for the session itself: a socket that
+// registered after the logout's sweep would otherwise keep its control.
+func TestWatchRoomCredentialCurrent_RejectsALoggedOutCookieSession(t *testing.T) {
+	app := setupSessionTestApp(t)
+	ownerID, _ := createTestUserAndMovie(t, app)
+	cookie := newAuthSessionCookie(t, app, ownerID)
+	version, err := app.Queries.GetUserSessionVersion(context.Background(), ownerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	auth := watchRoomClientAuth{sessionToken: cookie.Value, sessionVersion: version}
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+
+	if !app.watchRoomCredentialCurrent(req, ownerID, auth) {
+		t.Fatal("a live session was refused")
+	}
+
+	err = app.SessionManager.Store.Delete(cookie.Value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if app.watchRoomCredentialCurrent(req, ownerID, auth) {
+		t.Fatal("a logged-out session was still allowed")
+	}
+}
+
+// A revoked socket's last word is room_access_revoked: the member list that
+// follows goes only to the sockets still open.
+func TestWatchRoomHub_RevokedClientsMissLaterBroadcasts(t *testing.T) {
+	hub := NewWatchRoomHub()
+	kept := newWatchRoomClient(nil, 1, userSummary{ID: 1})
+	revoked := newWatchRoomClient(nil, 1, userSummary{ID: 2})
+	for _, client := range []*watchRoomClient{kept, revoked} {
+		if !hub.connect(1, client) {
+			t.Fatal("connect refused")
+		}
+	}
+	drain := func(client *watchRoomClient) []string {
+		var types []string
+		for {
+			select {
+			case data := <-client.send:
+				var event watchRoomWSTestEvent
+				if err := json.Unmarshal(data, &event); err != nil {
+					t.Fatal(err)
+				}
+				types = append(types, event.Type)
+			default:
+				return types
+			}
+		}
+	}
+	drain(kept)
+	drain(revoked)
+
+	hub.revokeMembers(1, []int64{2})
+	hub.membersChanged(1, []userSummary{{ID: 1}})
+
+	if got := drain(revoked); !slices.Equal(got, []string{"room_access_revoked"}) {
+		t.Fatalf("revoked client got %v", got)
+	}
+	if got := drain(kept); !slices.Equal(got, []string{"members_changed"}) {
+		t.Fatalf("kept client got %v", got)
 	}
 }

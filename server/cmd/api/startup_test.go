@@ -862,3 +862,46 @@ func TestInitDirs(t *testing.T) {
 		t.Errorf("expected missing shows directory not to be created, stat err=%v", err)
 	}
 }
+
+// A library analyzed while it held one album grew to forty before the server
+// stopped without refreshing its statistics. The next start has queried
+// nothing yet, so a plain PRAGMA optimize would skip the table and keep
+// planning for one album: a full scan of albums for every match.
+func TestRefreshQueryPlannerStatsReanalyzesTablesThatGrew(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "igloo.db")
+	ctx := context.Background()
+
+	seed := openSearchStatsTestApp(t, path)
+	err := seed.InitTables()
+	if err != nil {
+		t.Fatalf("InitTables failed: %v", err)
+	}
+	_, err = seed.DB.ExecContext(ctx, `
+INSERT INTO albums (title, sort_title) VALUES ('First', 'first');
+ANALYZE;
+WITH RECURSIVE n(i) AS (SELECT 2 UNION ALL SELECT i + 1 FROM n WHERE i < 40)
+INSERT INTO albums (title, sort_title) SELECT 'Album ' || i, 'album ' || i FROM n;`)
+	if err != nil {
+		t.Fatalf("seed albums: %v", err)
+	}
+	err = seed.DB.Close()
+	if err != nil {
+		t.Fatalf("close database: %v", err)
+	}
+
+	app := openSearchStatsTestApp(t, path)
+	err = app.RefreshQueryPlannerStats(t.Context())
+	if err != nil {
+		t.Fatalf("RefreshQueryPlannerStats failed: %v", err)
+	}
+
+	var stat string
+	err = app.DB.QueryRowContext(ctx, "SELECT stat FROM sqlite_stat1 WHERE tbl = 'albums' AND idx = 'sqlite_autoindex_albums_1'").Scan(&stat)
+	if err != nil {
+		t.Fatalf("read albums statistics: %v", err)
+	}
+	isFresh := strings.HasPrefix(stat, "40 ")
+	if !isFresh {
+		t.Errorf("albums statistics = %q, want them taken over 40 rows", stat)
+	}
+}
