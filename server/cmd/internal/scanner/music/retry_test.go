@@ -1487,7 +1487,8 @@ func TestRetryAdoptionHonorsTheArtistBackoff(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if adopted == nil || adopted.spotifyMatch != nil || adopted.adoptionTarget == "" {
+	// testAlbum credits the artist as "artist".
+	if adopted == nil || adopted.spotifyMatch != nil || adopted.adoptionTarget != "artist" {
 		t.Fatalf("a held-back adoption must keep its target and record no outcome: %+v", adopted)
 	}
 	err = s.persistEnrichment(context.Background(), scan, func(q *database.Queries, txScan *musicScanContext) error {
@@ -1497,14 +1498,14 @@ func TestRetryAdoptionHonorsTheArtistBackoff(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_spotify_adoptions WHERE spotify_id = '"+adopted.adoptionTarget+"'") != 1 {
+	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_spotify_adoptions WHERE spotify_id = 'artist'") != 1 {
 		t.Fatal("the held-back adoption's target was not kept")
 	}
 	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_provider_matches WHERE entity_type='musician' AND status='failed' AND retry_after > unixepoch()") != 1 {
 		t.Fatal("the held-back artist's failure and its wait were not kept")
 	}
 
-	s.spotify = scriptedSpotify(t, spotifyStep{operation: "artist", target: adopted.adoptionTarget, artist: testArtist()})
+	s.spotify = scriptedSpotify(t, spotifyStep{operation: "artist", target: "artist", artist: testArtist()})
 	walkScan := newMusicScanContext(nil)
 	adopted, err = s.adoptAlbumArtist(context.Background(), walkScan, "Test Artist", album.spotifyAlbum, false)
 	if err != nil {
@@ -1708,6 +1709,9 @@ func TestSpotifyRetryBacksOffRepeatedFailures(t *testing.T) {
 		t.Fatalf("after the first failure: %d held back, %d attempts; want 0 and 2", withWait, total)
 	}
 
+	// A scan is named by the millisecond it started in; one started in the
+	// same millisecond would count as the first scan again.
+	time.Sleep(2 * time.Millisecond)
 	s.scan(dir)
 	if stub.artistCalls != 2 || stub.albumCalls != 2 {
 		t.Fatalf("the first failure was not retried on the next scan: %+v", stub)

@@ -571,6 +571,11 @@ func TestMusicChangesRunRemovesOnlyTheReportedTracks(t *testing.T) {
 	if s.Status().Deleted != 1 || scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM tracks") != 1 {
 		t.Fatalf("deleted=%d", s.Status().Deleted)
 	}
+	var kept string
+	err := s.tx.DB.QueryRow("SELECT file_path FROM tracks").Scan(&kept)
+	if err != nil || kept != b1 {
+		t.Fatalf("kept %q, want the unreported %q: %v", kept, b1, err)
+	}
 
 	s.scanChanges(root, scanner.Changes{CatchUp: true})
 	status := s.Status()
