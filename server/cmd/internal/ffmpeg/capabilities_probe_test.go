@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"igloo/cmd/internal/fakebin"
 )
 
 // fakeFFmpegVersionBanner stands in for the `-version` output that
@@ -22,7 +24,7 @@ func fullCapabilityProbeFake(t *testing.T, runtimeExit int, logPath string) stri
 	if runtimeExit != 0 {
 		runtimeResult = "printf '%0300d' 0 >&2\nexit " + strconv.Itoa(runtimeExit)
 	}
-	body := appendInvocationLog(logPath) + `
+	body := fakebin.CallLogLine(logPath) + `
 if [ "$1" = "-encoders" ]; then
   printf '%s\n' ' V..... h264_nvenc NVIDIA' ' V..... h264_qsv Intel' ' V..... libx264 CPU'
   exit 0
@@ -64,7 +66,7 @@ if [ "$1" = "-h" ] && [ "$2" = "encoder=h264_nvenc" ]; then
   exit 0
 fi
 ` + runtimeResult + "\n"
-	return writeFakeFFmpeg(t, "probe ffmpeg", body)
+	return fakebin.Write(t, "probe ffmpeg", body)
 }
 
 func TestProbeCapabilitiesSuccessfulStaticAndRuntimeProbes(t *testing.T) {
@@ -113,7 +115,7 @@ func TestProbeCapabilitiesSuccessfulStaticAndRuntimeProbes(t *testing.T) {
 	sourceSize := regexp.MustCompile(`testsrc2=s=(\d+)x(\d+)`)
 	scaledHeight := regexp.MustCompile(`scale_cuda=w=-2:h=(\d+)`)
 	nvencProbes := 0
-	for _, line := range readArgumentLog(t, logPath) {
+	for _, line := range fakebin.ReadLog(t, logPath) {
 		isNVENCProbe := strings.Contains(line, "-c:v h264_nvenc") && strings.Contains(line, "testsrc2")
 		if !isNVENCProbe {
 			continue
@@ -148,12 +150,12 @@ func TestProbeCapabilitiesSuccessfulStaticAndRuntimeProbes(t *testing.T) {
 // the probe fail on every GPU, whatever the hardware could do.
 func TestNvidiaToneMapProbeTagsItsFrameAsHDR(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "tonemap.log")
-	script := writeFakeFFmpeg(t, "probe ffmpeg", writeArgumentLog(logPath)+"exit 0\n")
+	script := fakebin.Write(t, "probe ffmpeg", fakebin.ArgsLogLine(logPath)+"exit 0\n")
 
 	if !probeNvidiaCUDATonemap(script) {
 		t.Fatal("tone-map probe failed against a fake that accepts it")
 	}
-	args := readArgumentLog(t, logPath)
+	args := fakebin.ReadLog(t, logPath)
 	filterIndex := slices.Index(args, "-vf")
 	if filterIndex < 0 || filterIndex+1 >= len(args) {
 		t.Fatalf("tone-map probe has no filter chain: %q", args)
@@ -169,13 +171,13 @@ func TestNvidiaToneMapProbeTagsItsFrameAsHDR(t *testing.T) {
 
 func TestProbeCapabilitiesMissingPrerequisitesSuppressesFilterRuntimeProbes(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "probes.log")
-	body := appendInvocationLog(logPath) + `
+	body := fakebin.CallLogLine(logPath) + `
 if [ "$1" = "-encoders" ]; then
   printf '%s\n' ' V..... h264_nvenc NVIDIA' ' V..... h264_qsv Intel'
 fi
 exit 0
 `
-	script := writeFakeFFmpeg(t, "probe ffmpeg", body)
+	script := fakebin.Write(t, "probe ffmpeg", body)
 
 	caps := probeCapabilities(script, fakeFFmpegVersionBanner)
 	if !caps.H264NVENCRuntimeUsable || !caps.H264QSVRuntimeUsable {
@@ -185,7 +187,7 @@ exit 0
 		t.Fatalf("filter runtime probes ran without prerequisites: %#v", caps)
 	}
 
-	invocations := readArgumentLog(t, logPath)
+	invocations := fakebin.ReadLog(t, logPath)
 	usedHWDevice := slices.ContainsFunc(invocations, func(line string) bool {
 		return strings.Contains(line, "-init_hw_device")
 	})
@@ -231,7 +233,7 @@ func TestCompactProbeError(t *testing.T) {
 }
 
 func TestRuntimeFilterProbesReturnFalseOnNonzeroExit(t *testing.T) {
-	script := writeFakeFFmpeg(t, "probe ffmpeg", "printf '%s\\n' unavailable >&2\nexit 8\n")
+	script := fakebin.Write(t, "probe ffmpeg", "printf '%s\\n' unavailable >&2\nexit 8\n")
 	if probeNvidiaCUDAScale(script) {
 		t.Fatal("failed CUDA scale probe reported usable")
 	}
@@ -244,7 +246,7 @@ func TestRuntimeFilterProbesReturnFalseOnNonzeroExit(t *testing.T) {
 }
 
 func TestCapabilityRecordersTolerateProbeFailuresAndNilMaps(t *testing.T) {
-	script := writeFakeFFmpeg(t, "probe ffmpeg", "printf '%s\\n' failure >&2\nexit 3\n")
+	script := fakebin.Write(t, "probe ffmpeg", "printf '%s\\n' failure >&2\nexit 3\n")
 	caps := Capabilities{
 		Filters:  map[string]bool{"scale_cuda": true},
 		Encoders: map[string]bool{"h264_qsv": true},
@@ -257,7 +259,7 @@ func TestCapabilityRecordersTolerateProbeFailuresAndNilMaps(t *testing.T) {
 		t.Fatalf("failed help probes populated options: %#v", caps)
 	}
 
-	successScript := writeFakeFFmpeg(t, "probe ffmpeg", "printf '%s\\n' 'format value' '-preset value'\n")
+	successScript := fakebin.Write(t, "probe ffmpeg", "printf '%s\\n' 'format value' '-preset value'\n")
 	caps.recordFilterOptions(successScript, "scale_cuda", []string{"format"})
 	caps.recordEncoderOptions(successScript, "h264_qsv", []string{"preset"})
 	if !caps.FilterOptions["scale_cuda"]["format"] {
@@ -281,7 +283,7 @@ func TestCapabilityRecordersTolerateProbeFailuresAndNilMaps(t *testing.T) {
 // can ever look up, and the silent result is a hardware capability reported as
 // missing. Every name below is padded and mixed-case on purpose.
 func TestCapabilityRecordersKeyNamesTheSameWayLookupsRead(t *testing.T) {
-	script := writeFakeFFmpeg(t, "probe ffmpeg", "printf '%s\\n' 'format value' '-preset value' '-dash value'\n")
+	script := fakebin.Write(t, "probe ffmpeg", "printf '%s\\n' 'format value' '-preset value' '-dash value'\n")
 	caps := Capabilities{
 		Filters:  map[string]bool{"scale_cuda": true},
 		Encoders: map[string]bool{"h264_qsv": true},
@@ -303,7 +305,7 @@ func TestCapabilityRecordersKeyNamesTheSameWayLookupsRead(t *testing.T) {
 }
 
 func TestRunFFmpegProbeContextTimesOut(t *testing.T) {
-	script := writeFakeFFmpeg(t, "slow ffmpeg", "exec sleep 5\n")
+	script := fakebin.Write(t, "slow ffmpeg", "exec sleep 5\n")
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 	started := time.Now()
@@ -318,7 +320,7 @@ func TestRunFFmpegProbeContextTimesOut(t *testing.T) {
 }
 
 func TestRunFFmpegProbeContextReturnsOutputAndNonzeroError(t *testing.T) {
-	script := writeFakeFFmpeg(t, "bad ffmpeg", "printf '%s\\n' diagnostic >&2\nexit 4\n")
+	script := fakebin.Write(t, "bad ffmpeg", "printf '%s\\n' diagnostic >&2\nexit 4\n")
 
 	output, err := runFFmpegProbeContext(context.Background(), script, "-version")
 	if err == nil {
@@ -336,7 +338,7 @@ func TestRunFFmpegProbeContextReturnsOutputAndNonzeroError(t *testing.T) {
 func TestProbeCapabilitiesGatesAppleToneMapOnTheProductionChain(t *testing.T) {
 	appleFake := func(t *testing.T, logPath string, filters string, runtimeExit int) string {
 		t.Helper()
-		body := appendInvocationLog(logPath) + `
+		body := fakebin.CallLogLine(logPath) + `
 if [ "$1" = "-encoders" ]; then
   printf '%s\n' ' V..... h264_videotoolbox VideoToolbox' ' V..... libx264 CPU'
   exit 0
@@ -354,7 +356,7 @@ case "$*" in
 esac
 exit 0
 `
-		return writeFakeFFmpeg(t, "probe ffmpeg", body)
+		return fakebin.Write(t, "probe ffmpeg", body)
 	}
 	bothFilters := `' ... hwupload V->V' ' ... scale_vt V->V'`
 
@@ -366,7 +368,7 @@ exit 0
 		}
 
 		var probe string
-		for _, line := range readArgumentLog(t, logPath) {
+		for _, line := range fakebin.ReadLog(t, logPath) {
 			if strings.Contains(line, "scale_vt") {
 				probe = line
 			}
@@ -404,7 +406,7 @@ exit 0
 		if caps.AppleVTTonemapRuntimeUsable {
 			t.Fatalf("scale_vt probe ran without the filter: %#v", caps)
 		}
-		ranProbe := slices.ContainsFunc(readArgumentLog(t, logPath), func(line string) bool {
+		ranProbe := slices.ContainsFunc(fakebin.ReadLog(t, logPath), func(line string) bool {
 			return strings.Contains(line, "scale_vt")
 		})
 		if ranProbe {

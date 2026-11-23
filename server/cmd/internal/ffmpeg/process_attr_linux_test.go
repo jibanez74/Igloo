@@ -13,6 +13,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"igloo/cmd/internal/fakebin"
 )
 
 const pdeathsigHelperEnv = "IGLOO_TEST_PDEATHSIG_HELPER_DIR"
@@ -45,7 +47,7 @@ func processGone(pid int) bool {
 // that group died with the server's own signal, before shutdown could mark
 // its session stopped, and every session was logged as failed.
 func TestRunHLSStartsFFmpegInItsOwnProcessGroup(t *testing.T) {
-	script := writeFakeFFmpeg(t, "fake ffmpeg", "exec sleep 30\n")
+	script := fakebin.Write(t, "fake ffmpeg", "exec sleep 30\n")
 	f := &ffmpeg{bin: script}
 
 	ctx, cancel := context.WithCancel(context.Background())

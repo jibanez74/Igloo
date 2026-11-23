@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"igloo/cmd/internal/fakebin"
 )
 
 func prepareSingletonLifecycleTest(t *testing.T) {
@@ -62,7 +64,7 @@ func TestNewRejectsInvalidExecutableAndCanRetry(t *testing.T) {
 		t.Fatalf("failed initialization claimed singleton state: instance=%v extractedDir=%q", instance, extractedDir)
 	}
 
-	goodPath := writeFakeFFprobe(t, fakeFFprobeSpec{stdout: "ffprobe version test"})
+	goodPath := fakebin.WriteSpec(t, "ffprobe", fakebin.Spec{Stdout: "ffprobe version test"})
 	t.Setenv("IGLOO_FFPROBE_PATH", goodPath)
 	retried, err := New()
 	if err != nil {
@@ -75,7 +77,7 @@ func TestNewRejectsInvalidExecutableAndCanRetry(t *testing.T) {
 
 func TestResolveBinaryCandidateUsesConfiguredExternalBinary(t *testing.T) {
 	prepareSingletonLifecycleTest(t)
-	script := writeFakeFFprobe(t, fakeFFprobeSpec{stdout: "ffprobe version test"})
+	script := fakebin.WriteSpec(t, "ffprobe", fakebin.Spec{Stdout: "ffprobe version test"})
 	t.Setenv("IGLOO_FFPROBE_PATH", "  "+script+"  ")
 
 	candidate, err := resolveBinaryCandidate()
@@ -90,21 +92,10 @@ func TestResolveBinaryCandidateUsesConfiguredExternalBinary(t *testing.T) {
 	}
 }
 
-func countVersionCalls(t *testing.T, callLog string) int {
-	t.Helper()
-	calls := 0
-	for _, line := range readArgumentLog(t, callLog) {
-		if line == "-version" {
-			calls++
-		}
-	}
-	return calls
-}
-
 func TestNewVerifiesAndReusesSingleton(t *testing.T) {
 	prepareSingletonLifecycleTest(t)
 	callLog := filepath.Join(t.TempDir(), "calls.log")
-	script := writeFakeFFprobe(t, fakeFFprobeSpec{stdout: "ffprobe version test", callLog: callLog})
+	script := fakebin.WriteSpec(t, "ffprobe", fakebin.Spec{Stdout: "ffprobe version test", CallLog: callLog})
 	t.Setenv("IGLOO_FFPROBE_PATH", script)
 
 	first, err := New()
@@ -118,7 +109,7 @@ func TestNewVerifiesAndReusesSingleton(t *testing.T) {
 	if first != second {
 		t.Fatal("New did not reuse the singleton instance")
 	}
-	versionCalls := countVersionCalls(t, callLog)
+	versionCalls := fakebin.CountLine(t, callLog, "-version")
 	if versionCalls != 1 {
 		t.Fatalf("version calls = %d, want 1", versionCalls)
 	}
@@ -155,7 +146,7 @@ func TestCleanupResetsSingletonAndRemovesOwnedDirectory(t *testing.T) {
 
 func TestCleanupAllowsFreshInitialization(t *testing.T) {
 	prepareSingletonLifecycleTest(t)
-	firstScript := writeFakeFFprobe(t, fakeFFprobeSpec{stdout: "ffprobe version test"})
+	firstScript := fakebin.WriteSpec(t, "ffprobe", fakebin.Spec{Stdout: "ffprobe version test"})
 	t.Setenv("IGLOO_FFPROBE_PATH", firstScript)
 	first, err := New()
 	if err != nil {
@@ -170,7 +161,7 @@ func TestCleanupAllowsFreshInitialization(t *testing.T) {
 	}
 
 	callLog := filepath.Join(t.TempDir(), "calls.log")
-	secondScript := writeFakeFFprobe(t, fakeFFprobeSpec{stdout: "ffprobe version test", callLog: callLog})
+	secondScript := fakebin.WriteSpec(t, "ffprobe", fakebin.Spec{Stdout: "ffprobe version test", CallLog: callLog})
 	t.Setenv("IGLOO_FFPROBE_PATH", secondScript)
 	second, err := New()
 	if err != nil {
@@ -182,7 +173,7 @@ func TestCleanupAllowsFreshInitialization(t *testing.T) {
 	if second.(*ffprobe).bin != secondScript {
 		t.Fatalf("fresh singleton binary = %q, want %q", second.(*ffprobe).bin, secondScript)
 	}
-	versionCalls := countVersionCalls(t, callLog)
+	versionCalls := fakebin.CountLine(t, callLog, "-version")
 	if versionCalls != 1 {
 		t.Fatalf("fresh singleton verified the binary %d times, want 1", versionCalls)
 	}

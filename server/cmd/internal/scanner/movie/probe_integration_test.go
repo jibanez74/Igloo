@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"igloo/cmd/internal/fakebin"
 	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/scannertest"
 )
@@ -90,12 +91,7 @@ func TestMovieScanCancelsRunningSubprocess(t *testing.T) {
 	root := createMovieLibrary(t, 1)
 	control := t.TempDir()
 	marker := filepath.Join(control, "started")
-	binary := filepath.Join(control, "ffprobe")
-	script := "#!/bin/sh\nif [ \"$1\" = -version ]; then echo test-probe; exit 0; fi\ntouch '" + marker + "'\nexec sleep 60\n"
-	err := os.WriteFile(binary, []byte(script), 0700)
-	if err != nil {
-		t.Fatal(err)
-	}
+	binary := fakebin.Write(t, "ffprobe", "if [ \"$1\" = -version ]; then echo test-probe; exit 0; fi\ntouch "+fakebin.Quote(marker)+"\nexec sleep 60\n")
 	t.Setenv("IGLOO_FFPROBE_PATH", binary)
 	probe := scannertest.RealProbe(t)
 	s.ffprobe = probe

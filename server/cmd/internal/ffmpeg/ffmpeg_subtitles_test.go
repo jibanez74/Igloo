@@ -11,14 +11,16 @@ import (
 	"testing"
 	"time"
 	"unicode/utf8"
+
+	"igloo/cmd/internal/fakebin"
 )
 
 func TestExtractSubtitleAsWebVTTMapsAbsoluteStreamAndNormalizesHardSpaces(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "arguments.log")
-	body := writeArgumentLog(logPath) + `
+	body := fakebin.ArgsLogLine(logPath) + `
 printf '%s\n' 'WEBVTT' '' '00:00.000 --> 00:01.000' 'hello\hworld'
 `
-	script := writeFakeFFmpeg(t, "fake ffmpeg", body)
+	script := fakebin.Write(t, "fake ffmpeg", body)
 	f := &ffmpeg{bin: script}
 	sourcePath := filepath.Join(t.TempDir(), "movie source.mkv")
 
@@ -33,7 +35,7 @@ printf '%s\n' 'WEBVTT' '' '00:00.000 --> 00:01.000' 'hello\hworld'
 		t.Fatalf("hard-space normalization failed: %q", output)
 	}
 
-	args := readArgumentLog(t, logPath)
+	args := fakebin.ReadLog(t, logPath)
 	requireArgumentValue(t, args, "-i", sourcePath)
 	requireArgumentValue(t, args, "-map", "0:7")
 	requireArgumentValue(t, args, "-c:s", "webvtt")
@@ -55,7 +57,7 @@ func TestExtractSubtitleAsWebVTTReportsNonzeroExit(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			script := writeFakeFFmpeg(t, "fake ffmpeg", tt.body)
+			script := fakebin.Write(t, "fake ffmpeg", tt.body)
 			f := &ffmpeg{bin: script}
 
 			_, err := f.ExtractSubtitleAsWebVTT(context.Background(), "/movie.mkv", 2)
@@ -76,7 +78,7 @@ func TestExtractSubtitleAsWebVTTReportsNonzeroExit(t *testing.T) {
 func TestExtractSubtitleAsWebVTTBoundsDiagnosticTailOnUTF8Boundary(t *testing.T) {
 	diagnostic := "discard-this-prefix-" + strings.Repeat("é", 3000) + "-diagnostic-tail"
 	body := "printf '%s' '" + diagnostic + "' >&2\nexit 6\n"
-	script := writeFakeFFmpeg(t, "fake ffmpeg", body)
+	script := fakebin.Write(t, "fake ffmpeg", body)
 	f := &ffmpeg{bin: script}
 
 	_, err := f.ExtractSubtitleAsWebVTT(context.Background(), "/movie.mkv", 1)
@@ -100,8 +102,8 @@ func TestExtractSubtitleAsWebVTTBoundsDiagnosticTailOnUTF8Boundary(t *testing.T)
 
 func TestExtractSubtitleAsWebVTTCancellationTerminatesProcess(t *testing.T) {
 	markerPath := filepath.Join(t.TempDir(), "started")
-	body := "printf '%s\\n' started > " + formatShellPath(markerPath) + "\nexec sleep 30\n"
-	script := writeFakeFFmpeg(t, "fake ffmpeg", body)
+	body := "printf '%s\\n' started > " + fakebin.Quote(markerPath) + "\nexec sleep 30\n"
+	script := fakebin.Write(t, "fake ffmpeg", body)
 	f := &ffmpeg{bin: script}
 	ctx, cancel := context.WithCancel(context.Background())
 	type subtitleResult struct {
@@ -219,8 +221,8 @@ func TestSubtitleStreamArgs(t *testing.T) {
 
 func TestStreamSubtitleMatroskaRelaysStdoutAndRunsTheBuiltArguments(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "arguments.log")
-	body := writeArgumentLog(logPath) + "printf 'matroska bytes'\n"
-	script := writeFakeFFmpeg(t, "fake ffmpeg", body)
+	body := fakebin.ArgsLogLine(logPath) + "printf 'matroska bytes'\n"
+	script := fakebin.Write(t, "fake ffmpeg", body)
 	f := &ffmpeg{bin: script}
 	params := SubtitleStreamParams{InputPath: "/media/movie with spaces.mkv", StreamIndex: 3, StartSec: 12.5}
 
@@ -239,7 +241,7 @@ func TestStreamSubtitleMatroskaRelaysStdoutAndRunsTheBuiltArguments(t *testing.T
 	if string(output) != "matroska bytes" {
 		t.Fatalf("output = %q", output)
 	}
-	args := readArgumentLog(t, logPath)
+	args := fakebin.ReadLog(t, logPath)
 	if !slices.Equal(args, subtitleStreamArgs(params)) {
 		t.Fatalf("FFmpeg ran with %q, want %q", args, subtitleStreamArgs(params))
 	}
@@ -248,7 +250,7 @@ func TestStreamSubtitleMatroskaRelaysStdoutAndRunsTheBuiltArguments(t *testing.T
 func TestStreamSubtitleMatroskaWaitReportsABoundedStderrTail(t *testing.T) {
 	diagnostic := "discard-this-prefix-" + strings.Repeat("é", 3000) + "-diagnostic-tail"
 	body := "printf 'partial'\nprintf '%s' '" + diagnostic + "' >&2\nexit 3\n"
-	script := writeFakeFFmpeg(t, "fake ffmpeg", body)
+	script := fakebin.Write(t, "fake ffmpeg", body)
 	f := &ffmpeg{bin: script}
 
 	stream, err := f.StreamSubtitleMatroska(context.Background(), SubtitleStreamParams{InputPath: "/movie.mkv", StreamIndex: 1})
@@ -276,7 +278,7 @@ func TestStreamSubtitleMatroskaWaitReportsABoundedStderrTail(t *testing.T) {
 }
 
 func TestStreamSubtitleMatroskaCancellationEndsTheProcess(t *testing.T) {
-	script := writeFakeFFmpeg(t, "fake ffmpeg", "printf 'header'\nexec sleep 30\n")
+	script := fakebin.Write(t, "fake ffmpeg", "printf 'header'\nexec sleep 30\n")
 	f := &ffmpeg{bin: script}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -323,7 +325,7 @@ func TestExtractSubtitleMatroskaWritesASingleTrackWithSourceTimestamps(t *testin
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			logPath := filepath.Join(t.TempDir(), "arguments.log")
-			script := writeFakeFFmpeg(t, "fake ffmpeg", writeArgumentLog(logPath))
+			script := fakebin.Write(t, "fake ffmpeg", fakebin.ArgsLogLine(logPath))
 			f := &ffmpeg{bin: script}
 			outputPath := filepath.Join(t.TempDir(), "track.tmp")
 
@@ -345,7 +347,7 @@ func TestExtractSubtitleMatroskaWritesASingleTrackWithSourceTimestamps(t *testin
 			}
 			want = append(want, tt.limit...)
 			want = append(want, "-f", "matroska", outputPath)
-			args := readArgumentLog(t, logPath)
+			args := fakebin.ReadLog(t, logPath)
 			if !slices.Equal(args, want) {
 				t.Fatalf("args = %q, want %q", args, want)
 			}
@@ -354,7 +356,7 @@ func TestExtractSubtitleMatroskaWritesASingleTrackWithSourceTimestamps(t *testin
 }
 
 func TestExtractSubtitleMatroskaReportsFailure(t *testing.T) {
-	script := writeFakeFFmpeg(t, "fake ffmpeg", "printf '%s\\n' read-failed >&2\nexit 1\n")
+	script := fakebin.Write(t, "fake ffmpeg", "printf '%s\\n' read-failed >&2\nexit 1\n")
 	f := &ffmpeg{bin: script}
 
 	err := f.ExtractSubtitleMatroska(context.Background(), SubtitleExtractParams{SourcePath: "/movie.mkv", OutputPath: "/tmp/out.tmp"})
@@ -376,10 +378,10 @@ func TestExtractCachedSubtitleAsWebVTTUsesTheMediaFilesTimeline(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			logPath := filepath.Join(t.TempDir(), "arguments.log")
-			body := writeArgumentLog(logPath) + `
+			body := fakebin.ArgsLogLine(logPath) + `
 printf '%s\n' 'WEBVTT' '' '00:01.000 --> 00:02.000' 'a\hb'
 `
-			script := writeFakeFFmpeg(t, "fake ffmpeg", body)
+			script := fakebin.Write(t, "fake ffmpeg", body)
 			f := &ffmpeg{bin: script}
 
 			output, err := f.ExtractCachedSubtitleAsWebVTT(context.Background(), "/cache/4.mkv", tt.sourceStartSec)
@@ -392,7 +394,7 @@ printf '%s\n' 'WEBVTT' '' '00:01.000 --> 00:02.000' 'a\hb'
 			want := []string{"-v", "error", "-nostdin", "-i", "/cache/4.mkv", "-copyts", "-map", "0:0"}
 			want = append(want, tt.offset...)
 			want = append(want, "-c:s", "webvtt", "-f", "webvtt", "pipe:1")
-			args := readArgumentLog(t, logPath)
+			args := fakebin.ReadLog(t, logPath)
 			if !slices.Equal(args, want) {
 				t.Fatalf("args = %q, want %q", args, want)
 			}
