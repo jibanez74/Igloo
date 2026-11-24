@@ -4554,6 +4554,8 @@ export interface components {
              * @description Sum of track durations in milliseconds.
              */
             duration: number;
+            /** @description Up to four different album covers from the playlist's first 24 tracks, in playlist order, for the header's collage when the playlist has no cover_image. Empty when none of those tracks has a cover. */
+            artwork: string[];
             is_owner: boolean;
             can_edit: boolean;
             /** @description The playlist's owner; the viewer themself when is_owner is true. */

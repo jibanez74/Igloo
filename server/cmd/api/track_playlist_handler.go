@@ -74,6 +74,12 @@ func (app *Application) GetPlaylist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	covers, err := decodeImageList(summary.Artwork)
+	if err != nil {
+		app.serverError(w, err, "failed to decode playlist artwork", fetchPlaylistMessage, "playlist_id", playlistId)
+		return
+	}
+
 	var collaborators []database.GetPlaylistCollaboratorsRow
 	if permission == PermissionOwner {
 		collaborators, err = app.Queries.GetPlaylistCollaborators(r.Context(), playlistId)
@@ -88,6 +94,7 @@ func (app *Application) GetPlaylist(w http.ResponseWriter, r *http.Request) {
 			"playlist":      playlist,
 			"track_count":   summary.TrackCount,
 			"duration":      summary.TotalDuration,
+			"artwork":       distinctImages(covers, maxPlaylistArtwork),
 			"is_owner":      permission == PermissionOwner,
 			"can_edit":      permission >= PermissionEdit,
 			"owner":         owner,

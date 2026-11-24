@@ -15657,6 +15657,7 @@
           "playlist",
           "track_count",
           "duration",
+          "artwork",
           "is_owner",
           "can_edit",
           "owner",
@@ -15674,6 +15675,15 @@
             "type": "integer",
             "format": "int64",
             "description": "Sum of track durations in milliseconds."
+          },
+          "artwork": {
+            "type": "array",
+            "maxItems": 4,
+            "items": {
+              "type": "string",
+              "description": "Spotify or Apple image URL, or the /api/static/ URL of the server's downloaded copy; see the API description."
+            },
+            "description": "Up to four different album covers from the playlist's first 24 tracks, in playlist order, for the header's collage when the playlist has no cover_image. Empty when none of those tracks has a cover."
           },
           "is_owner": {
             "type": "boolean"

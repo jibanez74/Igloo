@@ -64,23 +64,54 @@ func (q *Queries) CountPlaylistTracks(ctx context.Context, playlistID int64) (in
 const getPlaylistTrackSummary = `-- name: GetPlaylistTrackSummary :one
 SELECT
   COUNT(*) AS track_count,
-  COALESCE(SUM(t.duration), 0) AS total_duration
+  COALESCE(SUM(t.duration), 0) AS total_duration,
+  CAST((
+    SELECT json_group_array(first_track.cover)
+    FROM (
+      SELECT a.cover
+      FROM (
+        SELECT
+          head_pt.track_id,
+          head_pt.position,
+          head_pt.id
+        FROM playlist_tracks AS head_pt
+        WHERE head_pt.playlist_id = ?1
+        ORDER BY
+          head_pt.position ASC,
+          head_pt.id ASC
+        LIMIT 24
+      ) AS head
+      INNER JOIN tracks AS head_t
+        ON head_t.id = head.track_id
+      INNER JOIN albums AS a
+        ON a.id = head_t.album_id
+      WHERE a.cover <> ''
+      ORDER BY
+        head.position ASC,
+        head.id ASC
+    ) AS first_track
+  ) AS TEXT) AS artwork
 FROM playlist_tracks AS pt
 INNER JOIN tracks AS t
   ON pt.track_id = t.id
-WHERE pt.playlist_id = ?
+WHERE pt.playlist_id = ?1
 `
 
 type GetPlaylistTrackSummaryRow struct {
 	TrackCount    int64       `json:"track_count"`
 	TotalDuration interface{} `json:"total_duration"`
+	Artwork       string      `json:"artwork"`
 }
 
-// Count and total duration in one pass; the playlist detail response needs both.
+// Count, total duration and artwork for the playlist detail response.
+// artwork is built like GetPlaylistsWithCollaboratorAccess's: the album covers
+// of the first 24 tracks in playlist order, taken before the covers are looked
+// at, as a JSON array; the handler keeps the first four distinct ones for the
+// header's collage.
 func (q *Queries) GetPlaylistTrackSummary(ctx context.Context, playlistID int64) (GetPlaylistTrackSummaryRow, error) {
 	row := q.queryRow(ctx, q.getPlaylistTrackSummaryStmt, getPlaylistTrackSummary, playlistID)
 	var i GetPlaylistTrackSummaryRow
-	err := row.Scan(&i.TrackCount, &i.TotalDuration)
+	err := row.Scan(&i.TrackCount, &i.TotalDuration, &i.Artwork)
 	return i, err
 }
 

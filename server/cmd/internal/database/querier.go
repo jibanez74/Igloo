@@ -340,7 +340,11 @@ type Querier interface {
 	// Title order matches GET /api/movies/library sort=asc.
 	GetPlaylistMoviesPaginatedAsc(ctx context.Context, arg GetPlaylistMoviesPaginatedAscParams) ([]GetPlaylistMoviesPaginatedAscRow, error)
 	GetPlaylistMoviesPaginatedDesc(ctx context.Context, arg GetPlaylistMoviesPaginatedDescParams) ([]GetPlaylistMoviesPaginatedDescRow, error)
-	// Count and total duration in one pass; the playlist detail response needs both.
+	// Count, total duration and artwork for the playlist detail response.
+	// artwork is built like GetPlaylistsWithCollaboratorAccess's: the album covers
+	// of the first 24 tracks in playlist order, taken before the covers are looked
+	// at, as a JSON array; the handler keeps the first four distinct ones for the
+	// header's collage.
 	GetPlaylistTrackSummary(ctx context.Context, playlistID int64) (GetPlaylistTrackSummaryRow, error)
 	// A reorder that leaves tracks out can tie their positions with listed ones;
 	// id keeps tied tracks in the order they were added, so pages stay stable.
