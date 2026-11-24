@@ -742,6 +742,72 @@ describe("VideoPlayer hls.js error routing", () => {
     });
   });
 
+  it("hands the element's own error after a recovery the same state", async () => {
+    // jsdom has no MediaError; the player's onError reads its codes.
+    vi.stubGlobal("MediaError", {
+      MEDIA_ERR_ABORTED: 1,
+      MEDIA_ERR_NETWORK: 2,
+      MEDIA_ERR_DECODE: 3,
+      MEDIA_ERR_SRC_NOT_SUPPORTED: 4,
+    });
+    const onNativeError = vi.fn();
+    const hls = await renderHlsPlayer({ onNativeError, onError: vi.fn() });
+    const video = document.querySelector("video") as HTMLVideoElement;
+    let paused = false;
+    Object.defineProperty(video, "paused", {
+      configurable: true,
+      get: () => paused,
+    });
+    act(() => {
+      hls.trigger("hlsFragBuffered", {});
+    });
+    video.currentTime = 600;
+
+    act(() => {
+      hls.trigger("hlsError", {
+        type: "mediaError",
+        details: "bufferAppendError",
+        fatal: true,
+      });
+    });
+    paused = true;
+    video.currentTime = 0;
+    Object.defineProperty(video, "error", {
+      configurable: true,
+      value: { code: 3 },
+    });
+    act(() => {
+      video.dispatchEvent(new Event("error"));
+    });
+
+    expect(onNativeError).toHaveBeenCalledWith(3, {
+      timeSec: 600,
+      playing: true,
+    });
+  });
+
+  it("hands no state with an element error outside a recovery", async () => {
+    // jsdom has no MediaError; the player's onError reads its codes.
+    vi.stubGlobal("MediaError", {
+      MEDIA_ERR_ABORTED: 1,
+      MEDIA_ERR_NETWORK: 2,
+      MEDIA_ERR_DECODE: 3,
+      MEDIA_ERR_SRC_NOT_SUPPORTED: 4,
+    });
+    const onNativeError = vi.fn();
+    await renderHlsPlayer({ onNativeError, onError: vi.fn() });
+    const video = document.querySelector("video") as HTMLVideoElement;
+    Object.defineProperty(video, "error", {
+      configurable: true,
+      value: { code: 3 },
+    });
+    act(() => {
+      video.dispatchEvent(new Event("error"));
+    });
+
+    expect(onNativeError).toHaveBeenCalledWith(3, undefined);
+  });
+
   it("reports no time from before the recovery when nothing had buffered", async () => {
     const onDecodeFailure = vi.fn(() => true);
     const hls = await renderHlsPlayer({ onDecodeFailure });

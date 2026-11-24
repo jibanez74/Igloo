@@ -168,9 +168,12 @@ describe("isHdrTransfer without a stored transfer", () => {
       isHdrTransfer(hevcVideo({ dv_bl_signal_compatibility_id: nullableInt64(2) })),
     ).toBe(false);
     expect(isHdrTransfer(hevcVideo())).toBe(false);
+    expect(
+      isHdrTransfer(hevcVideo({ color_transfer: { String: "unknown", Valid: true } })),
+    ).toBe(false);
   });
 
-  it.each(["unknown", "unspecified"])(
+  it.each(["unknown", "unspecified", "reserved"])(
     "treats a stored %s transfer as none",
     (transfer) => {
       expect(

@@ -115,8 +115,8 @@ export function isRemuxSafeHevc(video: HevcCopyVideoInfo): boolean {
 /** Dolby Vision base layers that are PQ (1, 6) or HLG (4) by definition. */
 const HDR_DOLBY_VISION_BASE_LAYERS = [1, 4, 6];
 
-/** Transfers that say nothing, like an absent one. */
-const UNKNOWN_TRANSFERS = ["unknown", "unspecified"];
+/** Transfers that say nothing, like an absent one (ffprobe's names). */
+const UNKNOWN_TRANSFERS = ["unknown", "unspecified", "reserved"];
 
 /**
  * PQ (HDR10, Dolby Vision base layers) or HLG: by the stored transfer, or,

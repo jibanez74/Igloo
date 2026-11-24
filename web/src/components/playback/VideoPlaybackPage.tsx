@@ -10,7 +10,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, type LucideProps } from "lucide-react";
 import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
 import { Spinner } from "@/components/ui/spinner";
-import VideoPlayer from "@/components/playback/VideoPlayer";
+import VideoPlayer, {
+  type PlaybackBeforeRecovery,
+} from "@/components/playback/VideoPlayer";
 import ResumeDialog from "@/components/playback/ResumeDialog";
 import PlayerControls from "@/components/playback/PlayerControls";
 import PrerollPlayer from "@/components/playback/PrerollPlayer";
@@ -493,8 +495,9 @@ export default function VideoPlaybackPage({
     // Resume playing once the new stream is ready; the auto-resume effect is
     // keyed on the stream window and re-fires after this navigation.
     const video = videoRef.current;
+    // A Play pressed on the reloaded element after the recovery counts too.
     const wasPlaying =
-      at?.playing ?? (!!video && !video.paused && !video.ended);
+      (at?.playing ?? false) || (!!video && !video.paused && !video.ended);
     const timeSec = at?.timeSec ?? currentTimeRef.current;
     if (!keepPlayIntent || wasPlaying) {
       pendingAutoPlayOnLoadRef.current = true;
@@ -671,6 +674,8 @@ export default function VideoPlaybackPage({
   // came last wins: a far click made after this run is the viewer's newer
   // choice, and its held rebase stands.
   const handleHlsSeeking = (fromTime: number, toTime: number, order: number) => {
+    // A seek the failed stream settles before the switch renders.
+    if (switchedAway()) return;
     const supersededByControls = isRebasePendingAfter(order);
     if (supersededByControls) return;
 
@@ -816,12 +821,15 @@ export default function VideoPlaybackPage({
   // decode error also takes the HEVC fallback under hls.js: an element in that
   // error state otherwise ends on the error screen, so the transcode is the
   // better outcome than waiting for hls.js's own recovery.
-  const handleNativePlaybackError = (code: number | null | undefined) => {
+  const handleNativePlaybackError = (
+    code: number | null | undefined,
+    beforeRecovery?: PlaybackBeforeRecovery,
+  ) => {
     const decodeIncompatible =
       code === MEDIA_ERR_DECODE || code === MEDIA_ERR_SRC_NOT_SUPPORTED;
     if (
       handleDirectPlayFallbackError(code) ||
-      (decodeIncompatible && handleHevcDecodeFailure())
+      (decodeIncompatible && handleHevcDecodeFailure(beforeRecovery))
     ) {
       fallbackConsumedErrorRef.current = true;
     }

@@ -69,7 +69,14 @@ type VideoPlayerProps = {
   onEnded?: () => void;
   onTimeUpdate?: (time: number) => void;
   onDurationChange?: (duration: number) => void;
-  onNativeError?: (code: number | null | undefined) => void;
+  /**
+   * The element's own error. `beforeRecovery` is set when an hls.js media
+   * recovery of this source is still spent (see `onDecodeFailure`).
+   */
+  onNativeError?: (
+    code: number | null | undefined,
+    beforeRecovery?: PlaybackBeforeRecovery,
+  ) => void;
   /**
    * An hls.js stream failed to decode after its media recovery. Returning
    * true means the parent handled it (by switching the stream), so no error
@@ -312,6 +319,14 @@ export default function VideoPlayer({
   pendingHlsSeekOrderRef,
 }: VideoPlayerProps) {
   const hlsRef = useRef<Hls | null>(null);
+  // Where the viewer was when the current hls.js instance's spent media
+  // recovery started. No fragment has buffered since (that re-arms the
+  // recovery and clears this), so the playhead cannot have moved on from it.
+  // A ref so the element's own error, which can end the stream instead of
+  // hls.js's second report, carries it too.
+  const mediaRecoverySnapshotRef = useRef<PlaybackBeforeRecovery | undefined>(
+    undefined,
+  );
   // Where playback last came to rest in the current source: set by timeupdate
   // outside a seek and by seeked, never while a seek is pending. A drag or a
   // run of key presses reads currentTime as the previous pending target, so
@@ -561,6 +576,7 @@ export default function VideoPlayer({
     if (!isHlsSource || prefersNativeHLS) return;
 
     settledTimeRef.current = null;
+    mediaRecoverySnapshotRef.current = undefined;
     let cancelled = false;
     let disposeHls: (() => void) | null = null;
 
@@ -610,6 +626,7 @@ export default function VideoPlayer({
         disposeHls = () => {
           window.clearTimeout(networkRecoveryTimer);
           hls.destroy();
+          mediaRecoverySnapshotRef.current = undefined;
           // A late dispose must not clobber a newer instance a subsequent
           // effect run already put in the ref.
           if (hlsRef.current === hls) {
@@ -685,10 +702,6 @@ export default function VideoPlayer({
         ];
 
         let mediaRecoveryAttempted = false;
-        // Where the viewer was when the spent media recovery started. No
-        // fragment has buffered since (that re-arms the recovery and clears
-        // this), so the playhead cannot have moved on from it.
-        let beforeMediaRecovery: PlaybackBeforeRecovery | undefined;
         let networkRecoveryAttempts = 0;
         let segmentNotReadyRetries = 0;
         let fragmentBuffered = false;
@@ -720,7 +733,7 @@ export default function VideoPlayer({
         hls.on(Hls.Events.FRAG_BUFFERED, () => {
           fragmentBuffered = true;
           mediaRecoveryAttempted = false;
-          beforeMediaRecovery = undefined;
+          mediaRecoverySnapshotRef.current = undefined;
           networkRecoveryAttempts = 0;
           segmentNotReadyRetries = 0;
         });
@@ -806,7 +819,7 @@ export default function VideoPlayer({
             // playhead, read before the detach resets it. Before the first
             // manifest the gate still starts loading itself.
             const resumeAt = video.currentTime;
-            beforeMediaRecovery = {
+            mediaRecoverySnapshotRef.current = {
               timeSec: fragmentBuffered ? resumeAt : null,
               playing: !video.paused && !video.ended,
             };
@@ -851,7 +864,7 @@ export default function VideoPlayer({
             return;
           }
 
-          handleHlsError(data, beforeMediaRecovery);
+          handleHlsError(data, mediaRecoverySnapshotRef.current);
         });
       } catch {
         if (!cancelled) {
@@ -1087,7 +1100,7 @@ export default function VideoPlayer({
 
             const errorCode = e.currentTarget.error?.code;
 
-            onNativeError?.(errorCode);
+            onNativeError?.(errorCode, mediaRecoverySnapshotRef.current);
 
             switch (errorCode) {
               case MediaError.MEDIA_ERR_ABORTED:
