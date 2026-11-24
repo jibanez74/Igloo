@@ -47,11 +47,11 @@ describe("recommendedProfileId", () => {
 
   it("picks the highest matching profile, not the first encountered", () => {
     const shuffled: PlaybackProfileType[] = [
-      PROFILES[2]!,
-      PROFILES[0]!,
-      PROFILES[4]!,
-      PROFILES[1]!,
-      PROFILES[3]!,
+      PROFILES[2],
+      PROFILES[0],
+      PROFILES[4],
+      PROFILES[1],
+      PROFILES[3],
     ];
     expect(recommendedProfileId(shuffled, 100, null)).toBe("1080p_8mbps");
   });

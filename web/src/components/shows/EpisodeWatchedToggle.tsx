@@ -127,7 +127,7 @@ export default function EpisodeWatchedToggle({
         "min-h-10 min-w-10 touch-manipulation",
         // The colour is the toggle's state (watched), not a look a variant
         // could carry.
-        // eslint-disable-next-line no-restricted-syntax
+        // eslint-disable-next-line shadcn/no-restyle
         watched && "text-success",
       )}
       aria-label={

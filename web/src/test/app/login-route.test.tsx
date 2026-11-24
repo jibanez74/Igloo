@@ -243,7 +243,7 @@ describe("login route redirects", () => {
     expect(router.state.location.pathname).toBe("/login");
     expect(
       fetchMock.mock.calls.some(([input]) => {
-        return requestURL(input as RequestInfo | URL) === "/api/tmdb/movies/in-theaters";
+        return requestURL(input) === "/api/tmdb/movies/in-theaters";
       }),
     ).toBe(false);
   });
@@ -345,7 +345,7 @@ describe("login route redirects", () => {
     });
     expect(
       fetchMock.mock.calls.some(([input]) => {
-        return requestURL(input as RequestInfo | URL) === "/api/tmdb/movies/in-theaters";
+        return requestURL(input) === "/api/tmdb/movies/in-theaters";
       }),
     ).toBe(true);
   });

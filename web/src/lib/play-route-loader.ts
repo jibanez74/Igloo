@@ -71,7 +71,7 @@ export async function loadPlayRoute({
     queryClient.ensureQueryData(playbackSettingsQueryOpts()),
   ]);
 
-  const techData = techRes.error === false ? techRes.data : null;
+  const techData = !techRes.error ? techRes.data : null;
   if (!techData) return null;
 
   const videoStreams = techData.video_streams ?? [];

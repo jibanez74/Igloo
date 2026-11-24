@@ -13,16 +13,16 @@ function renderBar(progressSec: number, durationSec: number) {
 
 describe("WatchProgressBar", () => {
   it("fills in proportion to the saved position", () => {
-    expect(renderBar(675, 2700).fill.style.width).toBe("25%");
+    expect(renderBar(675, 2700).fill.style.getPropertyValue("--progress")).toBe("25%");
   });
 
   it("stays empty when the duration is unknown", () => {
-    expect(renderBar(600, 0).fill.style.width).toBe("0%");
+    expect(renderBar(600, 0).fill.style.getPropertyValue("--progress")).toBe("0%");
   });
 
   it("never overflows the track", () => {
-    expect(renderBar(3000, 2700).fill.style.width).toBe("100%");
-    expect(renderBar(-5, 2700).fill.style.width).toBe("0%");
+    expect(renderBar(3000, 2700).fill.style.getPropertyValue("--progress")).toBe("100%");
+    expect(renderBar(-5, 2700).fill.style.getPropertyValue("--progress")).toBe("0%");
   });
 
   it("is decorative: the paired text carries the position for assistive technology", () => {

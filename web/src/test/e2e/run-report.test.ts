@@ -166,7 +166,7 @@ describe("e2e run summary", () => {
           ],
         },
       ],
-    } as Report);
+    });
 
     expect(summary).toContain("| a.spec.ts › this \\| that | 1.0 s |");
   });

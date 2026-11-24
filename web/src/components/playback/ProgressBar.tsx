@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { formatSpokenTime, formatTimecode } from "@/lib/format";
 import {
   CARD_FOCUS_WITHIN_RING_CLASS,
@@ -203,15 +203,18 @@ export default function ProgressBar({
   };
 
   const slider = (
-    <div className={cn(styles.bar, !isSeekable && "opacity-60")}>
-      <div
-        className={fillClassName}
-        style={{ width: `${progress}%` }}
-      />
+    <div
+      className={cn(styles.bar, !isSeekable && "opacity-60")}
+      style={{ "--progress": `${progress}%` } as CSSProperties}
+    >
+      <div className={cn(fillClassName, "w-(--progress)")} />
       {showThumb && (
         <div
-          className={cn(styles.thumb, MOTION_PROGRESS_THUMB_REVEAL_CLASS)}
-          style={{ left: `${progress}%` }}
+          className={cn(
+            styles.thumb,
+            "left-(--progress)",
+            MOTION_PROGRESS_THUMB_REVEAL_CLASS,
+          )}
         />
       )}
       {/* A transparent native range input handles all interaction: unlike a

@@ -200,7 +200,7 @@ export default function TrackItem({
           {explicit && (
             <Badge
               variant="outline"
-              className="shrink-0 px-1.5 py-0 text-[10px]/4 font-semibold"
+              className="shrink-0 px-1.5 py-0 text-2xs/4 font-semibold"
             >
               <span aria-hidden="true">E</span>
               <span className="sr-only">Explicit</span>
@@ -247,7 +247,7 @@ export default function TrackItem({
         className={cn(
           // The colour is the toggle's state (liked), not a look a variant
           // could carry.
-          // eslint-disable-next-line no-restricted-syntax
+          // eslint-disable-next-line shadcn/no-restyle
           likeButton.isLiked && "text-destructive",
           likeButton.isDisabled && "cursor-not-allowed opacity-50",
         )}

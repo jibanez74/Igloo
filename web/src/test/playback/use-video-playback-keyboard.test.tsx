@@ -39,7 +39,7 @@ function renderHarness(
   document.body.appendChild(outsideButton);
 
   const result = render(<Harness {...options} />);
-  const video = screen.getByTestId("video") as HTMLVideoElement;
+  const video = screen.getByTestId<HTMLVideoElement>("video");
   Object.defineProperty(video, "readyState", {
     configurable: true,
     value: readyState,

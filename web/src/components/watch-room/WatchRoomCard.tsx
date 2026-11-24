@@ -148,13 +148,13 @@ export default function WatchRoomCard({ room }: Props) {
                       alt={member.name}
                     />
                   ) : null}
-                  <AvatarFallback className="bg-accent text-[10px] font-semibold text-foreground">
+                  <AvatarFallback className="bg-accent text-2xs font-semibold text-foreground">
                     {getInitials(member.name, "?")}
                   </AvatarFallback>
                 </Avatar>
               ))}
               {overflow > 0 && (
-                <span className="flex size-7 items-center justify-center rounded-full border-2 border-border bg-muted text-[10px] font-semibold text-muted-foreground">
+                <span className="flex size-7 items-center justify-center rounded-full border-2 border-border bg-muted text-2xs font-semibold text-muted-foreground">
                   +{overflow}
                 </span>
               )}

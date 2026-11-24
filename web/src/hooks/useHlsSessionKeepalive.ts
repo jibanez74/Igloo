@@ -62,6 +62,7 @@ export function useHlsSessionKeepalive({
       // slow ping must not stack a second one behind it.
       if (inFlight) return;
       inFlight = true;
+      let status: number | null = null;
       try {
         const response = await fetch(pingUrl, {
           credentials: "include",
@@ -70,16 +71,17 @@ export function useHlsSessionKeepalive({
         // Only the request matters. Releasing the body frees the connection
         // instead of leaving the playlist unread.
         await releaseResponseBody(response);
-        if (controller.signal.aborted) return;
-        const sessionLost = refreshOnly && response.status === 404;
-        if (sessionLost && !lostReported) {
-          lostReported = true;
-          reportSessionLost();
-        }
+        status = response.status;
       } catch {
         // Best-effort keepalive; playback errors surface through the player.
-      } finally {
-        inFlight = false;
+      }
+      // Not a finally: the React Compiler cannot lower one.
+      inFlight = false;
+      if (status === null || controller.signal.aborted) return;
+      const sessionLost = refreshOnly && status === 404;
+      if (sessionLost && !lostReported) {
+        lostReported = true;
+        reportSessionLost();
       }
     };
 

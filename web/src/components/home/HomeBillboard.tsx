@@ -173,7 +173,7 @@ function Billboard({ featured }: { featured: Featured }) {
       </div>
 
       <div className="flex min-h-120 max-w-2xl flex-col justify-end p-5 sm:min-h-96 sm:p-8 lg:min-h-104 lg:p-10">
-        <p className="text-xs font-semibold tracking-[0.2em] text-white/80 uppercase drop-shadow-md">
+        <p className="text-xs font-semibold tracking-eyebrow text-white/80 uppercase drop-shadow-md">
           {eyebrow}
         </p>
         <h2

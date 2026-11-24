@@ -156,8 +156,8 @@ describe("music playlist route", () => {
     expect(
       fetchMock.mock.calls.some(
         ([input, init]) =>
-          requestURL(input as RequestInfo | URL) === "/api/music/playlists/21" &&
-          (init as RequestInit | undefined)?.method === "DELETE",
+          requestURL(input) === "/api/music/playlists/21" &&
+          (init)?.method === "DELETE",
       ),
     ).toBe(true);
     // Once its page is gone, nothing of the deleted playlist stays cached for
@@ -601,7 +601,7 @@ describe("music playlist route", () => {
     ).toContain("tab=playlists");
     expect(
       fetchMock.mock.calls.some(([input]) =>
-        requestURL(input as RequestInfo | URL).startsWith("/api/music/playlists/"),
+        requestURL(input).startsWith("/api/music/playlists/"),
       ),
     ).toBe(false);
   });

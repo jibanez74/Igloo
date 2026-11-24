@@ -113,29 +113,29 @@ type DialogHarnessProps = {
 };
 
 function getTmdbTitleInput() {
-  return screen.getByLabelText("Title", {
+  return screen.getByLabelText<HTMLInputElement>("Title", {
     selector: "#tmdb-title",
-  }) as HTMLInputElement;
+  });
 }
 
 function getTmdbYearInput() {
-  return screen.getByLabelText("Year", {
+  return screen.getByLabelText<HTMLInputElement>("Year", {
     selector: "#tmdb-year",
-  }) as HTMLInputElement;
+  });
 }
 
 function getTmdbIdInput() {
-  return screen.getByLabelText("TMDB ID") as HTMLInputElement;
+  return screen.getByLabelText<HTMLInputElement>("TMDB ID");
 }
 
 function getManualInput(label: string) {
-  return screen.getByLabelText(label, {
+  return screen.getByLabelText<HTMLInputElement>(label, {
     selector: "input",
-  }) as HTMLInputElement;
+  });
 }
 
 function getManualOverviewInput() {
-  return screen.getByLabelText("Overview") as HTMLTextAreaElement;
+  return screen.getByLabelText<HTMLTextAreaElement>("Overview");
 }
 
 async function openManualTab(user: ReturnType<typeof userEvent.setup>) {

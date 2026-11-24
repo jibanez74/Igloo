@@ -976,7 +976,7 @@ describe("watch progress saver", () => {
           durationRef,
           fallbackDurationSec,
         }),
-      { initialProps: {} as { fallbackDurationSec?: number } },
+      { initialProps: {} },
     );
 
     rerender({ fallbackDurationSec: 5400 });

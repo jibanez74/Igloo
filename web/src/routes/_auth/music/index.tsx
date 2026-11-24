@@ -1,5 +1,12 @@
 import { Skeleton } from "@/components/ui/skeleton";
-import { memo, useEffect, useRef, useState, type RefObject } from "react";
+import {
+  memo,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type RefObject,
+} from "react";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import {
@@ -407,8 +414,10 @@ function AlbumsTabContent({ currentPage }: { currentPage: number }) {
 function TrackRowSkeleton() {
   return (
     <div
-      className="flex items-center gap-2 p-3 sm:gap-4 sm:px-4"
-      style={{ height: `${VIRTUAL_LIST_TRACK_HEIGHT}px` }}
+      className="flex h-(--row-height) items-center gap-2 p-3 sm:gap-4 sm:px-4"
+      style={
+        { "--row-height": `${VIRTUAL_LIST_TRACK_HEIGHT}px` } as CSSProperties
+      }
     >
       <Skeleton pulse className="size-9 shrink-0 rounded-full" />
       <div className="min-w-0 flex-1">
@@ -792,7 +801,7 @@ function PlaylistsTabContent({ playlistsView, likedTracksPage }: PlaylistsTabCon
 
   const handleShowLiked = () => {
     focusIntentRef.current = "enter-liked-from-toolbar";
-    navigate({
+    void navigate({
       to: "/music",
       search: (prev: MusicSearchParams) => ({
         ...prev,
@@ -805,7 +814,7 @@ function PlaylistsTabContent({ playlistsView, likedTracksPage }: PlaylistsTabCon
 
   const handleExitLiked = () => {
     focusIntentRef.current = "return-to-playlists";
-    navigate({
+    void navigate({
       to: "/music",
       search: (prev: MusicSearchParams) => ({
         ...prev,
@@ -926,7 +935,7 @@ function LikedTracksInPlaylistsTab({
   }, [focusIntentRef]);
 
   const handlePageChange = (newPage: number) => {
-    navigate({
+    void navigate({
       to: "/music",
       search: (prev: MusicSearchParams) => ({
         ...prev,

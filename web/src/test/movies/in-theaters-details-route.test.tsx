@@ -63,7 +63,7 @@ describe("in-theaters details guards", () => {
     expect(alert).toHaveTextContent("That movie link is not valid.");
     expect(
       fetchMock.mock.calls.some(([input]) =>
-        requestURL(input as RequestInfo | URL).startsWith("/api/tmdb/movies/"),
+        requestURL(input).startsWith("/api/tmdb/movies/"),
       ),
     ).toBe(false);
   });

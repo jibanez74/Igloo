@@ -329,8 +329,8 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
     });
     const unsubscribe = drain.subscribe(() => {});
 
-    let result = drain.getCurrentResult();
-    for (;;) {
+    let result: ReturnType<typeof drain.getCurrentResult>;
+    while (true) {
       result = await whenIdle(drain);
       if (!result.hasNextPage || !isWanted()) break;
 

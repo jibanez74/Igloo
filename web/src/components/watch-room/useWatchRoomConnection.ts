@@ -304,7 +304,7 @@ export function useWatchRoomConnection({
 
   const sendCommand = (type: WatchRoomPlaybackEventType, positionSec: number) => {
     const socket = socketRef.current;
-    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+    if (socket?.readyState !== WebSocket.OPEN) return;
     socket.send(JSON.stringify({ type, position_sec: positionSec }));
 
     const now = Date.now();
@@ -503,7 +503,7 @@ export function useWatchRoomConnection({
     const instanceId = socketInstanceIdRef.current;
 
     const initRoomConnection = async () => {
-      let res: Awaited<ReturnType<typeof joinWatchRoom>> | null = null;
+      let res: Awaited<ReturnType<typeof joinWatchRoom>> | null;
       try {
         res = await joinWatchRoom(currentRoomId);
       } catch {

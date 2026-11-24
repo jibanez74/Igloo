@@ -147,7 +147,7 @@ export default function QuickConnectApproveCard() {
   const approveMutation = useSessionMutation({
     mutationFn: async (deviceCode: string): Promise<ApprovalResult> => {
       const session = sessionStamp();
-      let baselineDeviceIds: number[] | null = null;
+      let baselineDeviceIds: number[] | null;
 
       try {
         baselineDeviceIds = getDeviceIds(

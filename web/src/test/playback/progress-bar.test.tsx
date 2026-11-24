@@ -193,7 +193,7 @@ describe("ProgressBar", () => {
       />,
     );
 
-    const slider = screen.getByRole("slider") as HTMLInputElement;
+    const slider = screen.getByRole<HTMLInputElement>("slider");
 
     fireEvent.pointerDown(slider);
     fireEvent.change(slider, { target: { value: "100" } });
@@ -233,7 +233,7 @@ describe("ProgressBar", () => {
       />,
     );
 
-    const slider = screen.getByRole("slider") as HTMLInputElement;
+    const slider = screen.getByRole<HTMLInputElement>("slider");
 
     fireEvent.pointerDown(slider);
     fireEvent.change(slider, { target: { value: "100" } });
@@ -338,7 +338,7 @@ describe("ProgressBar", () => {
       />,
     );
 
-    const slider = screen.getByRole("slider") as HTMLInputElement;
+    const slider = screen.getByRole<HTMLInputElement>("slider");
 
     // A VoiceOver adjust: a change with no pointer and no blur after it.
     fireEvent.change(slider, { target: { value: "100" } });
@@ -382,7 +382,7 @@ describe("ProgressBar", () => {
       />,
     );
 
-    const slider = screen.getByRole("slider") as HTMLInputElement;
+    const slider = screen.getByRole<HTMLInputElement>("slider");
 
     fireEvent.change(slider, { target: { value: "180" } });
     expect(slider.value).toBe("180");

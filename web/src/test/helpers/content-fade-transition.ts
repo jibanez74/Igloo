@@ -17,6 +17,6 @@ export async function runContentFadeTransitionTimeout(
   }
 
   await act(async () => {
-    await transitionCallback();
+    transitionCallback();
   });
 }

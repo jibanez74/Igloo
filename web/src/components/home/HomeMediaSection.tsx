@@ -55,7 +55,7 @@ export default function HomeMediaSection<T>({
 }: HomeMediaSectionProps<T>) {
   const sectionSummaryId = `${headingId}-summary`;
   const countLabel = pluralize(items.length, countNoun);
-  let sectionSummary = "";
+  let sectionSummary: string;
 
   if (isPending) {
     sectionSummary = loadingLabel ?? "";

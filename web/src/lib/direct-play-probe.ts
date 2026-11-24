@@ -39,7 +39,7 @@ function audioCodecString(audio: ProbeAudioInfo | undefined): string | undefined
   // mp3/flac/opus tokens inside video/mp4 get inconsistent canPlayType answers
   // across browsers; omitting them keeps the probe from falsely narrowing —
   // the static audio allowlist still governs those codecs.
-  if (!audio || audio.codec.toLowerCase() !== "aac") return undefined;
+  if (audio?.codec.toLowerCase() !== "aac") return undefined;
 
   const profile = unwrapNormalizedString(audio.codec_profile);
   if (!profile) return AAC_PROFILE_CODECS.lc;

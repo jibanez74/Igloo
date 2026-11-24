@@ -97,7 +97,7 @@ export default function DevicesCard() {
             }
           : current,
       );
-      queryClient.invalidateQueries({ queryKey: devicesQueryOpts().queryKey });
+      void queryClient.invalidateQueries({ queryKey: devicesQueryOpts().queryKey });
     },
     onError: () => {
       showActionFailed("revoke device", "An unexpected error occurred");
@@ -117,7 +117,7 @@ export default function DevicesCard() {
       }
       showSuccess("Device renamed");
       closeRename();
-      queryClient.invalidateQueries({ queryKey: devicesQueryOpts().queryKey });
+      void queryClient.invalidateQueries({ queryKey: devicesQueryOpts().queryKey });
     },
     onError: () => {
       showActionFailed("rename device", "An unexpected error occurred");

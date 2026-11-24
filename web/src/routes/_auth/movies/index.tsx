@@ -560,7 +560,7 @@ function PlaylistsTabContent({
 
   const handleShowLiked = () => {
     primeEnterLikedFocus();
-    navigate({
+    void navigate({
       to: "/movies",
       search: (prev: MoviesSearchParams) => ({
         ...prev,
@@ -583,7 +583,7 @@ function PlaylistsTabContent({
         focusIntentRef={focusIntentRef}
         onExitLiked={() => {
           focusIntentRef.current = "return-to-playlists";
-          navigate({
+          void navigate({
             to: "/movies",
             search: (prev: MoviesSearchParams) => ({
               ...prev,
@@ -693,7 +693,7 @@ function LikedMoviesInPlaylistsTab({
   }, [focusIntentRef, isLoading]);
 
   const handlePageChange = (newPage: number) => {
-    navigate({
+    void navigate({
       to: "/movies",
       search: (prev: MoviesSearchParams) => ({
         ...prev,

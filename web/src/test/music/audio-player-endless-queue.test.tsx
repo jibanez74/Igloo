@@ -540,7 +540,7 @@ describe("a pending Shuffle all / Play all", () => {
     vi.mocked(mock).mockImplementation(
       () =>
         new Promise(resolve => {
-          held.push({ resolve: resolve as Held["resolve"] });
+          held.push({ resolve: resolve });
         }) as never,
     );
     return held;

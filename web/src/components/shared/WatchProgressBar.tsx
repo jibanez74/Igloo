@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { watchProgressPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -36,8 +37,8 @@ export default function WatchProgressBar({
       aria-hidden="true"
     >
       <div
-        className={cn("h-full bg-primary", fillClassName)}
-        style={{ width: `${progressPct}%` }}
+        className={cn("h-full w-(--progress) bg-primary", fillClassName)}
+        style={{ "--progress": `${progressPct}%` } as CSSProperties}
       />
     </div>
   );

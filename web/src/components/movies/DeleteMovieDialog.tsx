@@ -61,11 +61,12 @@ export default function DeleteMovieDialog({
     // deleted movie are no longer active and never refetch into a 404.
     try {
       await navigate({ to: "/" });
-    } finally {
-      // Every movie list can hold the deleted title, and so can search,
-      // Home's continue-watching row and the watch rooms.
-      invalidateLibraryQueries(queryClient, "movies");
+    } catch {
+      // A failed navigation leaves the reader here; the lists still go stale.
     }
+    // Every movie list can hold the deleted title, and so can search,
+    // Home's continue-watching row and the watch rooms.
+    invalidateLibraryQueries(queryClient, "movies");
   }
 
   return (

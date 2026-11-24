@@ -445,6 +445,21 @@ export const SHADOW_SCALE = {
 } as const;
 
 /**
+ * `text-<name>`: font sizes below Tailwind's scale. The size only: the line
+ * height is inherited unless the class names one (`text-2xs/4`).
+ */
+export const FONT_SIZE_SCALE = {
+  /** Count badges and the smallest meta chips. */
+  "2xs": "0.625rem",
+} as const;
+
+/** `tracking-<name>`: letter spacing past Tailwind's `tracking-widest`. */
+export const TRACKING_SCALE = {
+  /** The spaced uppercase eyebrow over a hero heading. */
+  eyebrow: "0.2em",
+} as const;
+
+/**
  * `z-<name>`: the layers that stack across the whole app. Stacking inside one
  * component (a badge over its poster) stays a plain `z-10`.
  */
@@ -478,7 +493,7 @@ export const BOOT_COLORS = {
 /** Hex of an opaque token; throws if the token is missing or alpha-only. */
 export function tokenHex(theme: ThemeName, name: string): string {
   const token = THEME_TOKENS[theme][name];
-  if (!token || !token.hex) {
+  if (!token?.hex) {
     throw new Error(`theme token ${name} (${theme}) has no hex value`);
   }
   return token.hex;

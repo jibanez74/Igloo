@@ -11,7 +11,8 @@ export function Toaster(props: ToasterProps) {
       closeButton
       position="top-right"
       // Sonner's stylesheet gives the toaster a system font stack; inherit
-      // the app's Inter from body instead.
+      // the app's Inter from body instead. Its toaster takes no class for it.
+      // eslint-disable-next-line shadcn/no-inline-styles
       style={{ fontFamily: "inherit" }}
       richColors
       toastOptions={{

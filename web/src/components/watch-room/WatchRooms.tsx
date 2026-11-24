@@ -18,7 +18,7 @@ export default function WatchRooms() {
   const { data, isPending, refetch } = useQuery(watchRoomsQueryOpts());
 
   const rooms = data && !data.error ? (data.data?.rooms ?? []) : [];
-  const hasError = data && data.error;
+  const hasError = data?.error;
   const loadErrorMessage = apiErrorMessage(
     data,
     "Couldn’t load watch rooms.",
@@ -48,10 +48,12 @@ export default function WatchRooms() {
     >
       <LiveAnnouncer message={announcementMessage} />
 
+      {/* eslint-disable-next-line shadcn/no-arbitrary-values -- a long primary
+          haze under the hero card, used nowhere else. */}
       <div className="mb-4 rounded-2xl border border-primary/20 bg-linear-to-br from-primary/10 via-card to-background p-5 shadow-[0_20px_60px_-40px] shadow-primary/55">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="flex items-center gap-2 text-xs font-semibold tracking-[0.2em] text-primary uppercase">
+            <p className="flex items-center gap-2 text-xs font-semibold tracking-eyebrow text-primary uppercase">
               <Radio className="size-3.5" aria-hidden="true" />
               Shared Watch
             </p>
