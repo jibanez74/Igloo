@@ -626,11 +626,11 @@ export default function VideoPlayer({
         disposeHls = () => {
           window.clearTimeout(networkRecoveryTimer);
           hls.destroy();
-          mediaRecoverySnapshotRef.current = undefined;
           // A late dispose must not clobber a newer instance a subsequent
-          // effect run already put in the ref.
+          // effect run already put in the ref, nor that instance's snapshot.
           if (hlsRef.current === hls) {
             hlsRef.current = null;
+            mediaRecoverySnapshotRef.current = undefined;
           }
         };
 
