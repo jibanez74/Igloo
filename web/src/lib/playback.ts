@@ -12,6 +12,7 @@ import {
 import { formatLanguageName } from "@/lib/format";
 import {
   detectHevcCopyCapability,
+  INTERLACED_FIELD_ORDERS,
   NO_HEVC_COPY,
   remuxCopiesHevc,
   type HevcCopyCapability,
@@ -200,9 +201,6 @@ export type DirectPlayVideoInfo = Pick<
 > &
   HevcCopyVideoInfo;
 
-/** ffprobe field_order values that mark a stream interlaced. */
-const INTERLACED_FIELD_ORDERS = ["tt", "bb", "tb", "bt"];
-
 const NON_BROWSER_H264_PROFILE_MARKERS = ["10", "4:2:2", "422", "4:4:4", "444"];
 /**
  * The only pixel formats browsers decode for H.264: 8-bit 4:2:0. An allowlist
@@ -354,10 +352,9 @@ export function getAvailableModes(args: AvailableModesArgs) {
       // `resolveModeForAudioTrack` depends on. HEVC is copied only for a
       // request declaring it (`hlsVideoCodecsFor`), so remux is offered for
       // HEVC exactly when that declaration would be sent.
-      const h264Copy =
-        isVideoDirectPlayable(video.codec) && isBrowserSafeH264(video);
       return (
-        h264Copy || remuxCopiesHevc(video, args.hevcCopy ?? browserHevcCopy)
+        copiesH264(video) ||
+        remuxCopiesHevc(video, args.hevcCopy ?? browserHevcCopy)
       );
     }
     const withinServerCap =
@@ -366,12 +363,24 @@ export function getAvailableModes(args: AvailableModesArgs) {
     return sourceHeight > 0 && m.maxHeight <= sourceHeight && withinServerCap;
   });
 
-  if (availableModes.length > 0 || !video) {
+  // A source below every transcode tier still gets the lowest one when
+  // nothing else plays it, and when its only copy is HEVC: a browser that
+  // then fails to decode the copy needs a transcode to fall back to.
+  if (
+    !video ||
+    copiesH264(video) ||
+    availableModes.some((m) => m.type === "transcode")
+  ) {
     return availableModes;
   }
 
   const fallbackMode = STREAM_MODES.find((mode) => mode.id === "720p_3mbps");
-  return fallbackMode ? [fallbackMode] : availableModes;
+  return fallbackMode ? [...availableModes, fallbackMode] : availableModes;
+}
+
+/** Whether remux copies this source's video as H.264. */
+function copiesH264(video: DirectPlayVideoInfo): boolean {
+  return isVideoDirectPlayable(video.codec) && isBrowserSafeH264(video);
 }
 
 /**

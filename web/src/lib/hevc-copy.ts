@@ -71,7 +71,8 @@ export type HevcCopyVideoInfo = Pick<
 const HEVC_CODECS = ["hevc", "h265", "h.265"];
 const REMUX_HEVC_PROFILES = ["main", "main 10"];
 const REMUX_HEVC_PIXEL_FORMATS = ["yuv420p", "yuv420p10le"];
-const INTERLACED_FIELD_ORDERS = ["tt", "bb", "tb", "bt"];
+/** ffprobe field_order values that mark a stream interlaced. */
+export const INTERLACED_FIELD_ORDERS = ["tt", "bb", "tb", "bt"];
 /** HDR10 (1, and 6 on Blu-ray profile 7), SDR (2) and HLG (4). */
 const REMUX_DOLBY_VISION_BASE_LAYERS = [1, 2, 4, 6];
 const HDR_TRANSFERS = ["smpte2084", "arib-std-b67"];

@@ -178,6 +178,12 @@ describe("getAvailableModes with HEVC", () => {
     ).not.toContain("remux");
   });
 
+  it("keeps the lowest transcode beside an HEVC copy below every tier", () => {
+    const short = hevcVideo({ height: 576 });
+    expect(modeIds(capable, short)).toEqual(["remux", "720p_3mbps"]);
+    expect(modeIds(NO_HEVC_COPY, short)).toEqual(["720p_3mbps"]);
+  });
+
   it("offers HDR remux to an HDR display", () => {
     expect(modeIds(capableHdr, hevcVideo(hdr10))).toContain("remux");
   });

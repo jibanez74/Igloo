@@ -453,6 +453,8 @@ export default function VideoPlaybackPage({
       text: notice,
     }));
     showInfo("Switched playback mode", notice);
+    // A session retry still waiting would navigate back to the failed mode.
+    resetRecovery();
     // Resume playing once the new stream is ready; the auto-resume effect is
     // keyed on the stream window and re-fires after this navigation.
     pendingAutoPlayOnLoadRef.current = true;
@@ -752,7 +754,10 @@ export default function VideoPlaybackPage({
   // The player calls this before its own onError, which reports a message for
   // every MediaError code. Writing one here too only produced a value that the
   // next line of the same handler overwrote, so this decides one thing: whether
-  // the error was consumed by a direct-play fallback and must be swallowed.
+  // the error was consumed by a fallback and must be swallowed. The element's
+  // decode error also takes the HEVC fallback under hls.js: an element in that
+  // error state otherwise ends on the error screen, so the transcode is the
+  // better outcome than waiting for hls.js's own recovery.
   const handleNativePlaybackError = (code: number | null | undefined) => {
     const decodeIncompatible =
       code === MEDIA_ERR_DECODE || code === MEDIA_ERR_SRC_NOT_SUPPORTED;
