@@ -55,9 +55,8 @@ import {
   FOCUS_VISIBLE_RING_CLASS,
   MUSIC_DETAIL_ACTIONS_CLASS,
   MUSIC_DETAIL_HERO_ROW_CLASS,
-  PLAYLIST_TRACKS_KEY,
 } from "@/lib/constants";
-import { PLAYLIST_COLLAGE_SIZE, playlistArtUrls } from "@/lib/playlist-art";
+import { playlistArtUrls } from "@/lib/playlist-art";
 import { invalidatePlaylistContents } from "@/lib/playlist-kinds";
 import { cn } from "@/lib/utils";
 import { apiErrorMessage } from "@/lib/is-api-failure";
@@ -211,7 +210,6 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
     coverUrl ?? "",
     artwork.map(cover => getMediaImageUrl(cover) ?? "").filter(url => url !== ""),
   );
-  const isCollage = artUrls.length === PLAYLIST_COLLAGE_SIZE;
   const description = unwrapString(playlist.description);
 
   // Infinite query for tracks
@@ -233,8 +231,9 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
   // retry below them; only a list with nothing to show fails as a whole.
   const tracksLoadFailed = tracksFailed && tracksData === undefined;
 
-  // Remove track mutation. The header's count and duration come from the
-  // details query, so it refreshes with the tracks and the playlists list.
+  // Remove track mutation. The header's count, duration and artwork come
+  // from the details query, so it refreshes with the tracks and the
+  // playlists list.
   const removeTrackMutation = useSessionMutation({
     mutationFn: (trackId: number) =>
       removeTrackFromPlaylist(playlistId, trackId),
@@ -270,7 +269,8 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
 
   // Reorder tracks mutation. Scoped so consecutive drags save in order, and
   // pending until the refetch lands, so the server's order takes over from
-  // the dropped one without a flash of the old order.
+  // the dropped one without a flash of the old order. The details and the
+  // playlists list refetch too: their artwork follows the playlist's order.
   const reorderMutation = useSessionMutation({
     mutationFn: (trackIds: number[]) =>
       reorderPlaylistTracks(playlistId, trackIds),
@@ -282,9 +282,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
       showActionFailed("reorder tracks");
     },
     onSettled: () =>
-      queryClient.invalidateQueries({
-        queryKey: [PLAYLIST_TRACKS_KEY, playlistId],
-      }),
+      invalidatePlaylistContents(queryClient, "music", [playlistId]),
   });
 
   const reorderTracks = (trackIds: number[]) => {
@@ -446,8 +444,8 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
       <header className={MUSIC_DETAIL_HERO_ROW_CLASS}>
         <MusicDetailArt
           variant="playlist"
-          src={isCollage ? "" : (artUrls[0] ?? "")}
-          collage={isCollage ? artUrls : undefined}
+          src={artUrls[0] ?? ""}
+          collage={artUrls}
           name={playlist.name}
         />
 

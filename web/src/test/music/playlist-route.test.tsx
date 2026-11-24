@@ -634,6 +634,44 @@ describe("music playlist route", () => {
     expect(showActionFailedMock).not.toHaveBeenCalled();
   });
 
+  it("refreshes the header's artwork after a saved reorder", async () => {
+    const cover = (name: string) => `/api/static/albums/${name}.jpg`;
+    const mock = roadTrip({ artwork: [cover("alabaster"), cover("borrowed")] });
+    let saved = false;
+    mockPlaylistFetch(mock, {
+      "/api/music/playlists/21/tracks/reorder": () => {
+        saved = true;
+        return jsonResponse({ error: false, message: "Tracks reordered" });
+      },
+      // The server builds artwork in playlist order.
+      "GET /api/music/playlists/21": () =>
+        saved
+          ? { ...mock.detail, artwork: [cover("borrowed"), cover("alabaster")] }
+          : mock.detail,
+    });
+
+    await renderRoute("/music/playlist/21");
+    await screen.findByText("Alabaster");
+    const art = () => screen.getByRole("img", { name: "Playlist cover for Road Trip" });
+    expect(art()).toHaveAttribute("src", cover("alabaster"));
+    layOutTrackRows(["Alabaster", "Borrowed Light"]);
+
+    const handle = (
+      await screen.findAllByRole("button", { name: "Drag to reorder" })
+    )[1];
+    handle.focus();
+    pressKey(handle, "Space");
+    await screen.findByText(/^Picked up Borrowed Light/);
+    pressKey(handle, "ArrowUp");
+    await screen.findByText("Borrowed Light is over Alabaster");
+    pressKey(handle, "Space");
+
+    await waitFor(() => expect(saved).toBe(true));
+    await waitFor(() => {
+      expect(art()).toHaveAttribute("src", cover("borrowed"));
+    });
+  });
+
   it("rejects a malformed playlist id without asking the API", async () => {
     const fetchMock = mockPlaylistFetch(roadTrip());
 

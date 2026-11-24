@@ -45,8 +45,9 @@ type MusicDetailArtProps = {
   /** The cover or photo URL, or "" to show the fallback. */
   src: string;
   /**
-   * Four image URLs drawn as a 2×2 grid in place of `src`: a playlist page
-   * without its own cover shows its tracks' album covers (§3.2).
+   * Image URLs drawn as a 2×2 grid in place of `src` when there are exactly
+   * four: a playlist page without its own cover shows its tracks' album
+   * covers (§3.2). Any other length leaves `src` alone.
    */
   collage?: readonly string[];
   /** The album, musician or playlist name, for the alt text. */
