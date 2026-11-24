@@ -4,7 +4,9 @@ import { apiErrorMessage } from "@/lib/is-api-failure";
 import { mediaKey } from "@/lib/media-ref";
 import {
   getAvailableModes,
+  getDefaultPlaybackSettings,
   getPrimaryVideoStream,
+  hlsVideoCodecsFor,
   playbackDefaultsInput,
   playbackModeLabel,
   resolveModeForAudioTrack,
@@ -175,6 +177,15 @@ export function useVideoPlaybackData({
     playbackStartSec,
     actualHlsStartSec,
   );
+  const hlsVideoCodecs = hlsVideoCodecsFor(resolvedMode, primaryVideo);
+  // Where a copied HEVC stream the browser fails to decode goes: the
+  // transcode the viewer's defaults would pick among this file's.
+  const transcodeModes =
+    availableModes?.filter((m) => m.type === "transcode") ?? [];
+  const hevcFallbackMode =
+    transcodeModes.length > 0
+      ? getDefaultPlaybackSettings(transcodeModes, userPlaybackPrefs).mode
+      : undefined;
   const streamUrl = buildStreamUrl(
     media,
     resolvedMode,
@@ -182,6 +193,7 @@ export function useVideoPlaybackData({
     requestedHlsStartSec,
     streamReloadKey,
     playbackSessionId,
+    hlsVideoCodecs,
   );
   const modeLabel = playbackModeLabel(
     resolvedMode,
@@ -284,5 +296,7 @@ export function useVideoPlaybackData({
     mediaDurationSec,
     sessionWindowKey,
     handleActualHlsStart,
+    hevcCopyDeclared: hlsVideoCodecs === "hevc",
+    hevcFallbackMode,
   };
 }

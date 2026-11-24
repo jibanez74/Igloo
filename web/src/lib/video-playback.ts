@@ -1,6 +1,7 @@
 import { updateMediaWatchProgress } from "@/lib/api";
 import {
   HLS_PLAYBACK_SESSION_QUERY_PARAM,
+  HLS_VIDEO_CODECS_QUERY_PARAM,
   HLS_RESUME_REWIND_BUFFER_SEC,
   MEDIA_ERR_DECODE,
   MEDIA_ERR_SRC_NOT_SUPPORTED,
@@ -191,6 +192,7 @@ export function buildStreamUrl(
   hlsStartSec: number,
   reloadKey: number,
   playbackSessionId: string,
+  videoCodecs?: "hevc",
 ): string {
   const base = mediaApiBasePath(media);
   // Direct play serves the raw container, so there is no track to select;
@@ -203,6 +205,9 @@ export function buildStreamUrl(
   });
   if (audioTrack !== null) {
     params.set("audio_track", String(audioTrack));
+  }
+  if (videoCodecs) {
+    params.set(HLS_VIDEO_CODECS_QUERY_PARAM, videoCodecs);
   }
   if (reloadKey > 0) {
     params.set("reload", String(reloadKey));

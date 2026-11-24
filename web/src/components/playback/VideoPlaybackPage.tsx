@@ -46,6 +46,8 @@ import {
 import {
   MOTION_MEDIA_OVERLAY_ENTER_CLASS,
   MOTION_PLAYER_CHROME_PANEL_CLASS,
+  MEDIA_ERR_DECODE,
+  MEDIA_ERR_SRC_NOT_SUPPORTED,
   MOVIE_CONTROLS_IDLE_MS,
   MOVIE_SEEK_STEP_SEC,
   MOVIE_VOLUME_STEP,
@@ -69,6 +71,7 @@ import { useVideoPlaybackKeyboard } from "@/hooks/useVideoPlaybackKeyboard";
 import { useIdleControls } from "@/hooks/useIdleControls";
 import { useWatchProgressSaver } from "@/hooks/useWatchProgressSaver";
 import { useDirectPlayFallback } from "@/hooks/useDirectPlayFallback";
+import { useHevcCopyFallback } from "@/hooks/useHevcCopyFallback";
 import { useHlsCapacityRetry } from "@/hooks/useHlsCapacityRetry";
 import { useHlsSessionKeepalive } from "@/hooks/useHlsSessionKeepalive";
 import { useHlsSessionRecovery } from "@/hooks/useHlsSessionRecovery";
@@ -76,7 +79,11 @@ import { useSettledHlsRebase } from "@/hooks/useSettledHlsRebase";
 import { useVideoPlaybackData } from "@/hooks/useVideoPlaybackData";
 import { useResumeDecision } from "@/hooks/useResumeDecision";
 import { useShortcutHints } from "@/hooks/useShortcutHints";
-import type { PlaybackMediaRef, UpNextItem } from "@/types/playback";
+import type {
+  PlaybackMediaRef,
+  StreamModeId,
+  UpNextItem,
+} from "@/types/playback";
 
 type ChapterAnnouncement = {
   key: number;
@@ -251,6 +258,8 @@ export default function VideoPlaybackPage({
     mediaDurationSec,
     sessionWindowKey,
     handleActualHlsStart,
+    hevcCopyDeclared,
+    hevcFallbackMode,
   } = useVideoPlaybackData({
     media,
     search,
@@ -436,6 +445,29 @@ export default function VideoPlaybackPage({
       onMaxAttempts: setPlaybackError,
     });
 
+  // Announces a playback-mode switch made because the current one failed,
+  // and moves the stream there at the viewer's position.
+  const switchModeAfterFailure = (mode: StreamModeId, notice: string) => {
+    setFallbackAnnouncement((prev) => ({
+      key: prev.key + 1,
+      text: notice,
+    }));
+    showInfo("Switched playback mode", notice);
+    // Resume playing once the new stream is ready; the auto-resume effect is
+    // keyed on the stream window and re-fires after this navigation.
+    pendingAutoPlayOnLoadRef.current = true;
+    onNavigateSearch((prev) => ({
+      ...prev,
+      mode,
+      // A failure before metadata leaves currentTime at 0; keep the
+      // requested start instead of resetting the position.
+      start:
+        currentTimeRef.current > 0
+          ? Math.floor(clampTime(currentTimeRef.current))
+          : (prev.start ?? 0),
+    }));
+  };
+
   const { handleNativeError: handleDirectPlayFallbackError } =
     useDirectPlayFallback({
       streamWindowKey: sessionWindowKey,
@@ -445,27 +477,24 @@ export default function VideoPlaybackPage({
       techLoaded,
       directAvailable: directPlayAvailable,
       playerMounted,
+      onFallback: () =>
+        switchModeAfterFailure(
+          "remux",
+          `This file can't be played directly by your browser. Switched to ${streamModeLabel("remux")}.`,
+        ),
+    });
+
+  const { handleDecodeFailure: handleHevcDecodeFailure } =
+    useHevcCopyFallback({
+      streamWindowKey: sessionWindowKey,
+      // Without a transcode to go to, the failure is reported as before.
+      hevcCopyDeclared: hevcCopyDeclared && hevcFallbackMode !== undefined,
       onFallback: () => {
-        const notice = `This file can't be played directly by your browser. Switched to ${streamModeLabel("remux")}.`;
-        setFallbackAnnouncement((prev) => ({
-          key: prev.key + 1,
-          text: notice,
-        }));
-        showInfo("Switched playback mode", notice);
-        // Resume playing once the remux stream is ready; the auto-resume
-        // effect is keyed on the stream window and re-fires after this
-        // navigation.
-        pendingAutoPlayOnLoadRef.current = true;
-        onNavigateSearch((prev) => ({
-          ...prev,
-          mode: "remux",
-          // A failure before metadata leaves currentTime at 0; keep the
-          // requested start instead of resetting the position.
-          start:
-            currentTimeRef.current > 0
-              ? Math.floor(clampTime(currentTimeRef.current))
-              : (prev.start ?? 0),
-        }));
+        if (!hevcFallbackMode) return;
+        switchModeAfterFailure(
+          hevcFallbackMode,
+          `Your browser couldn't play this file's HEVC video. Switched to ${streamModeLabel(hevcFallbackMode)}.`,
+        );
       },
     });
 
@@ -725,7 +754,12 @@ export default function VideoPlaybackPage({
   // next line of the same handler overwrote, so this decides one thing: whether
   // the error was consumed by a direct-play fallback and must be swallowed.
   const handleNativePlaybackError = (code: number | null | undefined) => {
-    if (handleDirectPlayFallbackError(code)) {
+    const decodeIncompatible =
+      code === MEDIA_ERR_DECODE || code === MEDIA_ERR_SRC_NOT_SUPPORTED;
+    if (
+      handleDirectPlayFallbackError(code) ||
+      (decodeIncompatible && handleHevcDecodeFailure())
+    ) {
       fallbackConsumedErrorRef.current = true;
     }
   };
@@ -859,6 +893,7 @@ export default function VideoPlaybackPage({
         setDuration(absoluteDuration);
       }}
       onNativeError={handleNativePlaybackError}
+      onDecodeFailure={handleHevcDecodeFailure}
       subtitleTrack={subtitleInfo}
       startSec={isHlsPlayback ? hlsPlaybackOffset : playbackStartSec}
       requestedStartSec={requestedHlsStartSec}

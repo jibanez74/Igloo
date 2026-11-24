@@ -9,7 +9,10 @@ import {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AudioPlayerProvider } from "@/context/AudioPlayerContext";
-import { MEDIA_ERR_SRC_NOT_SUPPORTED } from "@/lib/constants";
+import {
+  MEDIA_ERR_DECODE,
+  MEDIA_ERR_SRC_NOT_SUPPORTED,
+} from "@/lib/constants";
 import type {
   LibraryMovieDetailsResponse,
   MovieTechnicalDetailsResponse,
@@ -65,6 +68,23 @@ vi.mock("@/lib/playback", async (importOriginal) => {
     get prefersNativeHLS() {
       return hlsSupport.native;
     },
+  };
+});
+
+// The HEVC copy capability is also decided once at module load. Getters let
+// a test switch what the browser can decode after that.
+const hevcSupport = vi.hoisted(() => ({ decodes: false }));
+
+vi.mock("@/lib/hevc-copy", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/hevc-copy")>();
+  return {
+    ...actual,
+    detectHevcCopyCapability: () => ({
+      get decodesHevc() {
+        return hevcSupport.decodes;
+      },
+      hdrDisplay: false,
+    }),
   };
 });
 
@@ -145,6 +165,7 @@ type MovieApiOptions = {
   progress?: { progress_sec: number; duration_sec: number };
   /** The first technical-details request answers a 503; later ones succeed. */
   failTechnicalDetailsOnce?: boolean;
+  technical?: MovieTechnicalDetailsResponse;
 };
 
 function mockMovieApi(options: MovieApiOptions = {}) {
@@ -164,7 +185,7 @@ function mockMovieApi(options: MovieApiOptions = {}) {
           503,
         );
       }
-      return technicalDetails;
+      return options.technical ?? technicalDetails;
     },
     [`/api/movies/${MOVIE_ID}/preroll`]: () =>
       options.preroll === "fail"
@@ -189,6 +210,10 @@ function mockMovieApi(options: MovieApiOptions = {}) {
         },
     // Native HLS preflights the manifest before handing it to the element.
     [`GET /api/movies/${MOVIE_ID}/hls/remux/playlist.m3u8`]: () =>
+      new Response("#EXTM3U\n", {
+        headers: { "Content-Type": "application/vnd.apple.mpegurl" },
+      }),
+    [`GET /api/movies/${MOVIE_ID}/hls/1080p_8mbps/playlist.m3u8`]: () =>
       new Response("#EXTM3U\n", {
         headers: { "Content-Type": "application/vnd.apple.mpegurl" },
       }),
@@ -946,5 +971,115 @@ describe("movie play route technical details", () => {
 
     expect(await movieVideo()).toBeInTheDocument();
     expect(screen.queryByText("Playback failed")).toBeNull();
+  });
+});
+
+describe("movie play route HEVC copy", () => {
+  const hevcTechnicalDetails: MovieTechnicalDetailsResponse = {
+    ...technicalDetails,
+    movie: {
+      ...technicalDetails.movie,
+      file_name: "signal-fire.mkv",
+      container: "matroska,webm",
+      mime_type: "video/x-matroska",
+    },
+    video_streams: [
+      videoStream({
+        movie_id: MOVIE_ID,
+        codec: "hevc",
+        codec_profile: nullableString("Main 10"),
+        bit_depth: nullableInt64(10),
+        pixel_format: nullableString("yuv420p10le"),
+      }),
+    ],
+  };
+
+  beforeEach(() => {
+    stubMediaElement();
+    hlsSupport.native = true;
+    hevcSupport.decodes = true;
+    vi.stubGlobal("MediaError", {
+      MEDIA_ERR_ABORTED: 1,
+      MEDIA_ERR_NETWORK: 2,
+      MEDIA_ERR_DECODE,
+      MEDIA_ERR_SRC_NOT_SUPPORTED,
+    });
+  });
+
+  function manifestUrls(fetchMock: ReturnType<typeof mockMovieApi>) {
+    return fetchMock.mock.calls
+      .map(([input]) => new URL(requestURL(input), "http://igloo.test"))
+      .filter((url) => url.pathname.endsWith("/playlist.m3u8"));
+  }
+
+  it("declares HEVC on a remux of an HEVC file the browser decodes", async () => {
+    const fetchMock = mockMovieApi({ technical: hevcTechnicalDetails });
+    await renderMovieRoute("mode=remux&audio_track=0&subtitle_track=off&start=900");
+
+    await waitFor(() => expect(manifestUrls(fetchMock)).toHaveLength(1));
+    const [manifest] = manifestUrls(fetchMock);
+    expect(manifest.pathname).toBe(`/api/movies/${MOVIE_ID}/hls/remux/playlist.m3u8`);
+    expect(manifest.searchParams.get("video_codecs")).toBe("hevc");
+  });
+
+  it("declares nothing on a remux of an H.264 file", async () => {
+    const fetchMock = mockMovieApi();
+    await renderMovieRoute("mode=remux&audio_track=0&subtitle_track=off&start=900");
+
+    await waitFor(() => expect(manifestUrls(fetchMock)).toHaveLength(1));
+    expect(manifestUrls(fetchMock)[0].searchParams.has("video_codecs")).toBe(false);
+  });
+
+  it("switches to a transcode when the browser fails to decode the copy", async () => {
+    const fetchMock = mockMovieApi({ technical: hevcTechnicalDetails });
+    const { router } = await renderMovieRoute(
+      "mode=remux&audio_track=0&subtitle_track=off&start=900",
+    );
+    const video = await movieVideo();
+    await waitFor(() => expect(manifestUrls(fetchMock)).toHaveLength(1));
+
+    Object.defineProperty(video, "error", {
+      configurable: true,
+      value: { code: MEDIA_ERR_DECODE },
+    });
+    act(() => {
+      video.dispatchEvent(new Event("error"));
+    });
+
+    await waitFor(() => {
+      const search = router.state.location.search as Record<string, unknown>;
+      expect(search.mode).toBe("1080p_8mbps");
+      expect(search.start).toBe(900);
+    });
+    expect(screen.queryByText("Playback failed")).toBeNull();
+    await waitFor(() => expect(manifestUrls(fetchMock)).toHaveLength(2));
+    const transcode = manifestUrls(fetchMock)[1];
+    expect(transcode.pathname).toBe(
+      `/api/movies/${MOVIE_ID}/hls/1080p_8mbps/playlist.m3u8`,
+    );
+    expect(transcode.searchParams.has("video_codecs")).toBe(false);
+  });
+
+  it("reports a decode failure of a stream that declared no HEVC", async () => {
+    hevcSupport.decodes = false;
+    mockMovieApi({ technical: hevcTechnicalDetails });
+    const { router } = await renderMovieRoute(
+      "mode=1080p_8mbps&audio_track=0&subtitle_track=off&start=900",
+    );
+    const video = await movieVideo();
+
+    Object.defineProperty(video, "error", {
+      configurable: true,
+      value: { code: MEDIA_ERR_DECODE },
+    });
+    act(() => {
+      video.dispatchEvent(new Event("error"));
+    });
+
+    expect(
+      await screen.findByText("The browser could not decode this video stream."),
+    ).toBeInTheDocument();
+    const search = router.state.location.search as Record<string, unknown>;
+    expect(search.mode).toBe("1080p_8mbps");
   });
 });

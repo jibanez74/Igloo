@@ -679,6 +679,34 @@ describe("VideoPlayer hls.js error routing", () => {
     expect(hls.startLoadPositions).toEqual([10, 42.5]);
   });
 
+  it.each([
+    [true, 0],
+    [false, 1],
+  ])(
+    "hands a media error that outlived its recovery to onDecodeFailure (handled: %s)",
+    async (handled, errorReports) => {
+      const onError = vi.fn();
+      const onDecodeFailure = vi.fn(() => handled);
+      const hls = await renderHlsPlayer({ onError, onDecodeFailure });
+      const mediaError = {
+        type: "mediaError",
+        details: "bufferAddCodecError",
+        fatal: true,
+      };
+
+      act(() => {
+        hls.trigger("hlsError", mediaError);
+      });
+      expect(onDecodeFailure).not.toHaveBeenCalled();
+
+      act(() => {
+        hls.trigger("hlsError", mediaError);
+      });
+      expect(onDecodeFailure).toHaveBeenCalledTimes(1);
+      expect(onError).toHaveBeenCalledTimes(errorReports);
+    },
+  );
+
   it("leaves a media-error recovery before the first manifest to the gate", async () => {
     const hls = await renderHlsPlayer({ startSec: 10 });
 

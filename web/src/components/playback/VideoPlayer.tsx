@@ -63,6 +63,12 @@ type VideoPlayerProps = {
   onTimeUpdate?: (time: number) => void;
   onDurationChange?: (duration: number) => void;
   onNativeError?: (code: number | null | undefined) => void;
+  /**
+   * An hls.js stream failed to decode after its media recovery. Returning
+   * true means the parent handled it (by switching the stream), so no error
+   * is reported. The element's own decode errors go to `onNativeError`.
+   */
+  onDecodeFailure?: () => boolean;
   subtitleTrack?: SubtitleTrackInfo | null;
   startSec?: number;
   /** Requested absolute start that identifies the current HLS session. */
@@ -282,6 +288,7 @@ export default function VideoPlayer({
   onTimeUpdate,
   onDurationChange,
   onNativeError,
+  onDecodeFailure,
   subtitleTrack = null,
   startSec = 0,
   requestedStartSec,
@@ -520,6 +527,7 @@ export default function VideoPlayer({
     if (data.type === HLS_NETWORK_ERROR) {
       reportError(`Network error loading stream (${detail}).`);
     } else if (data.type === HLS_MEDIA_ERROR) {
+      if (onDecodeFailure?.()) return;
       reportError(`The browser could not decode this stream (${detail}).`);
     } else {
       reportError(`Stream error: ${detail}`);

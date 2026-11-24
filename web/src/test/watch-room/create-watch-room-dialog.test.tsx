@@ -16,13 +16,23 @@ import type {
   WatchRoomInviteUsersResponseType,
 } from "@/types";
 import type { SubtitleType } from "@/types/movies";
-import { nullableString } from "../helpers/fixtures";
+import { nullableInt64, nullableString } from "../helpers/fixtures";
 import { createTestQueryClient, renderWithQueryClient } from "../helpers/render";
 import {
   audioStream,
   subtitleStream,
   videoStream,
 } from "../helpers/tech-details";
+
+// A browser that takes any HEVC copy, so a room's own refusal is what keeps
+// remux off an HEVC source.
+vi.mock("@/lib/hevc-copy", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/hevc-copy")>();
+  return {
+    ...actual,
+    detectHevcCopyCapability: () => ({ decodesHevc: true, hdrDisplay: true }),
+  };
+});
 
 const createWatchRoomMock = vi.fn();
 // Lets a test end the session at a chosen moment: the dialog's own check after
@@ -104,7 +114,9 @@ function sdhSubtitle(overrides: Partial<SubtitleType> = {}): SubtitleType {
   });
 }
 
-function technicalDetails(): ApiResponseType<MovieTechnicalDetailsResponse> {
+function technicalDetails(
+  video = videoStream(),
+): ApiResponseType<MovieTechnicalDetailsResponse> {
   return success({
     movie: {
       file_name: "arrival.mp4",
@@ -114,7 +126,7 @@ function technicalDetails(): ApiResponseType<MovieTechnicalDetailsResponse> {
       run_time: { Int64: 116, Valid: true },
       duration: { Float64: 6960, Valid: true },
     },
-    video_streams: [videoStream()],
+    video_streams: [video],
     audio_streams: [
       audioStream(),
       audioStream({
@@ -151,14 +163,14 @@ type DialogProps = ComponentProps<typeof CreateWatchRoomDialog>;
 
 function renderDialog(
   overrides: Partial<DialogProps> = {},
-  { seedTechnicalDetails = true } = {},
+  { seedTechnicalDetails = true, video = videoStream() } = {},
 ) {
   const queryClient = createTestQueryClient();
   queryClient.setQueryData([WATCH_ROOM_INVITE_USERS_KEY], inviteUsers());
   if (seedTechnicalDetails) {
     queryClient.setQueryData(
       [MOVIE_TECHNICAL_DETAILS_KEY, 22],
-      technicalDetails(),
+      technicalDetails(video),
     );
   }
 
@@ -356,6 +368,35 @@ describe("CreateWatchRoomDialog", () => {
     } finally {
       sessionEnded.value = false;
     }
+  });
+
+  // The server never copies HEVC into a room, so a room asked for remux of
+  // an HEVC file would get a transcode it never agreed to.
+  it("never creates a remux room for an HEVC source", async () => {
+    createWatchRoomMock.mockResolvedValue(
+      success<CreateWatchRoomResponseType>({ room_id: 124 }),
+    );
+
+    const user = userEvent.setup();
+    renderDialog(
+      { playbackSettings: { mode: "remux", audioTrack: 0, subtitleTrack: null } },
+      {
+        video: videoStream({
+          codec: "hevc",
+          codec_profile: nullableString("Main 10"),
+          bit_depth: nullableInt64(10),
+          pixel_format: nullableString("yuv420p10le"),
+        }),
+      },
+    );
+
+    await user.click(screen.getByRole("checkbox", { name: /invite dana scully/i }));
+    await user.click(screen.getByRole("button", { name: "Create and join room" }));
+
+    await waitFor(() => expect(createWatchRoomMock).toHaveBeenCalled());
+    expect(createWatchRoomMock.mock.calls[0][0]).toMatchObject({
+      mode: "1080p_8mbps",
+    });
   });
 
   it("keeps the dialog open and reports API errors", async () => {

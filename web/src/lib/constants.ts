@@ -287,6 +287,8 @@ function streamModeIds<T extends readonly { id: string }[]>(modes: T) {
 export const STREAM_MODE_IDS = streamModeIds(STREAM_MODES);
 
 export const HLS_PLAYBACK_SESSION_QUERY_PARAM = "playback_session";
+/** Declares the codecs besides H.264 a remux may copy (see hlsVideoCodecsFor). */
+export const HLS_VIDEO_CODECS_QUERY_PARAM = "video_codecs";
 /** Marks a manifest request as a refresh-only keepalive ping (see useHlsSessionKeepalive). */
 export const HLS_KEEPALIVE_QUERY_PARAM = "keepalive";
 export const MOVIE_SEEK_STEP_SEC = 10;
