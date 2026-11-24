@@ -1,7 +1,7 @@
 # Known issues
 
 Problems found and deliberately left unfixed, each with enough detail to act on it without
-rediscovering it. The Playback and TV entries were still open on 2026-11-03.
+rediscovering it. The Playback entry was still open on 2026-11-03.
 
 When a fix lands, delete its entry in the same change. When adding one, put it under the section
 it belongs to and cover:
@@ -48,18 +48,3 @@ the `isrc:` filter may work either way. Options: read the `ISRC`/`TSRC` tag into
 `music_track_metadata.isrc` column next to the Apple IDs (`scanner/music/persistence.go`), prefer an
 ISRC pairing in the link pass (`linkAlbum` in `scanner/music/retry.go`), and, for an album the title
 search misses, search one of its tracks with `isrc:` and take the hit's album.
-
-## TV app (IglooTV)
-
-### The player's buffer budget is a loading target, not a cap
-
-IglooTV #19 fixed an OutOfMemoryError by asking for a large heap and stopping loading at a third
-of it (`playback/media3/PlayerBufferBudget.kt`). `DefaultLoadControl` stops calling for more
-loading at that point but does not cap the allocator: a load in progress finishes, and a
-subtitle stream reads up to 1 MiB after it was last continued. On the Shield, with PGS subtitles
-on, the heap measured 150–168 MB of 512 MB, so the margin is wide there. A device without a
-large heap has less room. If an OutOfMemoryError comes back, the next step is a hard bound on
-sample allocations.
-
-Left as a watch item on 2026-11-03. Reopen on any OutOfMemoryError in the player, or before
-supporting a device without large-heap headroom.
