@@ -445,19 +445,39 @@ export default function VideoPlaybackPage({
       onMaxAttempts: setPlaybackError,
     });
 
+  // The stream window a failure switched away from. Until the page renders
+  // the new one, a lost-session report from the old stream (a keepalive 404,
+  // a segment error) would rebase it in the failed mode.
+  const switchedFromWindowRef = useRef<string | null>(null);
+  const reportSessionLost = (currentTimeSec: number) => {
+    if (switchedFromWindowRef.current === sessionWindowKey) return;
+    handleSessionLost(currentTimeSec);
+  };
+
   // Announces a playback-mode switch made because the current one failed,
-  // and moves the stream there at the viewer's position.
-  const switchModeAfterFailure = (mode: StreamModeId, notice: string) => {
+  // and moves the stream there at the viewer's position. With
+  // `keepPlayIntent`, the new stream plays only if the failed one was playing
+  // or a play was already pending; otherwise it always resumes.
+  const switchModeAfterFailure = (
+    mode: StreamModeId,
+    notice: string,
+    { keepPlayIntent = false }: { keepPlayIntent?: boolean } = {},
+  ) => {
     setFallbackAnnouncement((prev) => ({
       key: prev.key + 1,
       text: notice,
     }));
     showInfo("Switched playback mode", notice);
     // A session retry still waiting would navigate back to the failed mode.
+    switchedFromWindowRef.current = sessionWindowKey;
     resetRecovery();
     // Resume playing once the new stream is ready; the auto-resume effect is
     // keyed on the stream window and re-fires after this navigation.
-    pendingAutoPlayOnLoadRef.current = true;
+    const video = videoRef.current;
+    const wasPlaying = !!video && !video.paused && !video.ended;
+    if (!keepPlayIntent || wasPlaying) {
+      pendingAutoPlayOnLoadRef.current = true;
+    }
     onNavigateSearch((prev) => ({
       ...prev,
       mode,
@@ -493,9 +513,16 @@ export default function VideoPlaybackPage({
       hevcCopyDeclared: hevcCopyDeclared && hevcFallbackMode !== undefined,
       onFallback: () => {
         if (!hevcFallbackMode) return;
+        const label = streamModeLabel(hevcFallbackMode);
+        // The server may have turned the remux into a transcode (its gate or
+        // preflight refused the copy), and then the failed stream was H.264.
+        const copied = !effectiveProfile || effectiveProfile === "remux";
         switchModeAfterFailure(
           hevcFallbackMode,
-          `Your browser couldn't play this file's HEVC video. Switched to ${streamModeLabel(hevcFallbackMode)}.`,
+          copied
+            ? `Your browser couldn't play this file's HEVC video. Switched to ${label}.`
+            : `Your browser couldn't play this stream. Switched to ${label}.`,
+          { keepPlayIntent: true },
         );
       },
     });
@@ -667,7 +694,7 @@ export default function VideoPlaybackPage({
   useHlsSessionKeepalive({
     enabled: isHlsPlayback && playerMounted && !waitingForCapacity,
     streamUrl,
-    onSessionLost: () => handleSessionLost(currentTimeRef.current),
+    onSessionLost: () => reportSessionLost(currentTimeRef.current),
   });
 
   useBlocker({
@@ -914,7 +941,7 @@ export default function VideoPlaybackPage({
         )
       }
       onSessionLost={(time) =>
-        handleSessionLost(toAbsolutePlaybackTime(time, playbackTiming))
+        reportSessionLost(toAbsolutePlaybackTime(time, playbackTiming))
       }
       onCapacityBusy={handleCapacityBusy}
       onManifestLoaded={notifyManifestLoaded}

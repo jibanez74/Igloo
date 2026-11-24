@@ -112,10 +112,18 @@ export function isRemuxSafeHevc(video: HevcCopyVideoInfo): boolean {
   return true;
 }
 
-/** PQ (HDR10, Dolby Vision base layers) or HLG, by the stored transfer. */
+/** Dolby Vision base layers that are PQ (1, 6) or HLG (4) by definition. */
+const HDR_DOLBY_VISION_BASE_LAYERS = [1, 4, 6];
+
+/**
+ * PQ (HDR10, Dolby Vision base layers) or HLG: by the stored transfer, or,
+ * when ffprobe stored none, by a Dolby Vision base layer that is HDR.
+ */
 export function isHdrTransfer(video: HevcCopyVideoInfo): boolean {
   const transfer = unwrapNormalizedString(video.color_transfer);
-  return transfer !== undefined && HDR_TRANSFERS.includes(transfer);
+  if (transfer !== undefined) return HDR_TRANSFERS.includes(transfer);
+  const baseLayer = unwrapInt(video.dv_bl_signal_compatibility_id);
+  return baseLayer !== null && HDR_DOLBY_VISION_BASE_LAYERS.includes(baseLayer);
 }
 
 /**

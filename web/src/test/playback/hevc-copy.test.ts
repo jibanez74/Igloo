@@ -2,12 +2,14 @@ import { describe, expect, it, vi } from "vitest";
 import {
   detectHevcCopyCapability,
   HEVC_COPY_PROBE_TYPE,
+  isHdrTransfer,
   isRemuxSafeHevc,
   NO_HEVC_COPY,
   remuxCopiesHevc,
   type HevcCopyCapability,
 } from "@/lib/hevc-copy";
 import {
+  browserHevcCopy,
   getAvailableModes,
   hlsVideoCodecsFor,
   type DirectPlayVideoInfo,
@@ -153,6 +155,33 @@ describe("remuxCopiesHevc", () => {
   );
 });
 
+describe("isHdrTransfer without a stored transfer", () => {
+  it.each([1, 4, 6])("treats a Dolby Vision base layer %i as HDR", (id) => {
+    const video = hevcVideo({ dv_bl_signal_compatibility_id: nullableInt64(id) });
+    expect(isHdrTransfer(video)).toBe(true);
+    expect(remuxCopiesHevc(video, capable)).toBe(false);
+    expect(remuxCopiesHevc(video, capableHdr)).toBe(true);
+  });
+
+  it("treats an SDR base layer, or no Dolby Vision, as SDR", () => {
+    expect(
+      isHdrTransfer(hevcVideo({ dv_bl_signal_compatibility_id: nullableInt64(2) })),
+    ).toBe(false);
+    expect(isHdrTransfer(hevcVideo())).toBe(false);
+  });
+
+  it("goes by the stored transfer when there is one", () => {
+    expect(
+      isHdrTransfer(
+        hevcVideo({
+          color_transfer: { String: "bt709", Valid: true },
+          dv_bl_signal_compatibility_id: nullableInt64(1),
+        }),
+      ),
+    ).toBe(false);
+  });
+});
+
 describe("getAvailableModes with HEVC", () => {
   const modeIds = (hevcCopy: HevcCopyCapability, video = hevcVideo()) =>
     getAvailableModes({
@@ -189,6 +218,8 @@ describe("getAvailableModes with HEVC", () => {
   });
 
   it("defaults to no HEVC copy where the browser offers none (jsdom)", () => {
+    // jsdom has no MediaSource and native HLS answers "" (test/setup.ts).
+    expect(browserHevcCopy).toEqual(NO_HEVC_COPY);
     const ids = getAvailableModes({
       videoStreamsLoaded: true,
       video: hevcVideo(),
