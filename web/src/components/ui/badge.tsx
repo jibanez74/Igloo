@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils"
 const badgeVariants = {
   default: "bg-primary text-primary-foreground",
   outline: "border border-border bg-background/60 text-muted-foreground",
-  // A quiet chip over a backdrop or poster: literal white on black, which
+  // A quiet chip over a dimmed backdrop or hero: literal white on black, which
   // must not follow the theme (docs/design-system.md §1.2).
   "over-media": "border border-white/25 bg-black/30 text-white/90",
   // The same chip in a poster card's corner: raw poster art has no backdrop
