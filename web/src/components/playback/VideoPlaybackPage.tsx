@@ -10,7 +10,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, type LucideProps } from "lucide-react";
 import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
 import { Spinner } from "@/components/ui/spinner";
-import VideoPlayer from "@/components/playback/VideoPlayer";
+import VideoPlayer, {
+  type PlaybackBeforeRecovery,
+} from "@/components/playback/VideoPlayer";
 import ResumeDialog from "@/components/playback/ResumeDialog";
 import PlayerControls from "@/components/playback/PlayerControls";
 import PrerollPlayer from "@/components/playback/PrerollPlayer";
@@ -46,6 +48,8 @@ import {
 import {
   MOTION_MEDIA_OVERLAY_ENTER_CLASS,
   MOTION_PLAYER_CHROME_PANEL_CLASS,
+  MEDIA_ERR_DECODE,
+  MEDIA_ERR_SRC_NOT_SUPPORTED,
   MOVIE_CONTROLS_IDLE_MS,
   MOVIE_SEEK_STEP_SEC,
   MOVIE_VOLUME_STEP,
@@ -69,6 +73,7 @@ import { useVideoPlaybackKeyboard } from "@/hooks/useVideoPlaybackKeyboard";
 import { useIdleControls } from "@/hooks/useIdleControls";
 import { useWatchProgressSaver } from "@/hooks/useWatchProgressSaver";
 import { useDirectPlayFallback } from "@/hooks/useDirectPlayFallback";
+import { useHevcCopyFallback } from "@/hooks/useHevcCopyFallback";
 import { useHlsCapacityRetry } from "@/hooks/useHlsCapacityRetry";
 import { useHlsSessionKeepalive } from "@/hooks/useHlsSessionKeepalive";
 import { useHlsSessionRecovery } from "@/hooks/useHlsSessionRecovery";
@@ -76,7 +81,11 @@ import { useSettledHlsRebase } from "@/hooks/useSettledHlsRebase";
 import { useVideoPlaybackData } from "@/hooks/useVideoPlaybackData";
 import { useResumeDecision } from "@/hooks/useResumeDecision";
 import { useShortcutHints } from "@/hooks/useShortcutHints";
-import type { PlaybackMediaRef, UpNextItem } from "@/types/playback";
+import type {
+  PlaybackMediaRef,
+  StreamModeId,
+  UpNextItem,
+} from "@/types/playback";
 
 type ChapterAnnouncement = {
   key: number;
@@ -251,6 +260,8 @@ export default function VideoPlaybackPage({
     mediaDurationSec,
     sessionWindowKey,
     handleActualHlsStart,
+    hevcCopyDeclared,
+    hevcFallbackMode,
   } = useVideoPlaybackData({
     media,
     search,
@@ -408,6 +419,18 @@ export default function VideoPlaybackPage({
     }));
   };
 
+  // The stream window a failure switched away from. Until the page renders
+  // the new one, a lost-session report or a settled seek from the old stream
+  // would rebase it in the failed mode. Cleared once the window has moved on,
+  // so coming back to that window later (Back) recovers as usual.
+  const switchedFromWindowRef = useRef<string | null>(null);
+  const switchedAway = () => switchedFromWindowRef.current === sessionWindowKey;
+  useEffect(() => {
+    if (switchedFromWindowRef.current !== sessionWindowKey) {
+      switchedFromWindowRef.current = null;
+    }
+  }, [sessionWindowKey]);
+
   // VideoPlayer keeps here the order of a seek run it has not reported yet.
   const pendingHlsSeekOrderRef = useRef<number | null>(null);
   const {
@@ -417,7 +440,10 @@ export default function VideoPlaybackPage({
     isRebasePendingAfter,
   } = useSettledHlsRebase({
     resetKey: sessionWindowKey,
-    onRebase: (targetTimeSec) => navigateToPlaybackPosition(targetTimeSec),
+    onRebase: (targetTimeSec) => {
+      if (switchedAway()) return;
+      navigateToPlaybackPosition(targetTimeSec);
+    },
     newerElementSeekPending: (requestOrder) =>
       (pendingHlsSeekOrderRef.current ?? 0) > requestOrder,
   });
@@ -436,6 +462,56 @@ export default function VideoPlaybackPage({
       onMaxAttempts: setPlaybackError,
     });
 
+  const reportSessionLost = (currentTimeSec: number) => {
+    if (switchedAway()) return;
+    handleSessionLost(currentTimeSec);
+  };
+
+  // Announces a playback-mode switch made because the current one failed,
+  // and moves the stream there at the viewer's position. With
+  // `keepPlayIntent`, the new stream plays only if the failed one was playing
+  // or a play was already pending; otherwise it always resumes. `at` is the
+  // viewer's state from before an hls.js recovery reset the element.
+  const switchModeAfterFailure = (
+    mode: StreamModeId,
+    notice: string,
+    {
+      keepPlayIntent = false,
+      at,
+    }: {
+      keepPlayIntent?: boolean;
+      at?: { timeSec: number | null; playing: boolean };
+    } = {},
+  ) => {
+    setFallbackAnnouncement((prev) => ({
+      key: prev.key + 1,
+      text: notice,
+    }));
+    showInfo("Switched playback mode", notice);
+    // A session retry still waiting would navigate back to the failed mode.
+    switchedFromWindowRef.current = sessionWindowKey;
+    resetRecovery();
+    cancelRebase();
+    // Resume playing once the new stream is ready; the auto-resume effect is
+    // keyed on the stream window and re-fires after this navigation.
+    const video = videoRef.current;
+    // A Play pressed on the reloaded element after the recovery counts too.
+    const wasPlaying =
+      (at?.playing ?? false) || (!!video && !video.paused && !video.ended);
+    const timeSec = at?.timeSec ?? currentTimeRef.current;
+    if (!keepPlayIntent || wasPlaying) {
+      pendingAutoPlayOnLoadRef.current = true;
+    }
+    onNavigateSearch((prev) => ({
+      ...prev,
+      mode,
+      // A failure before metadata leaves currentTime at 0; keep the
+      // requested start instead of resetting the position.
+      start:
+        timeSec > 0 ? Math.floor(clampTime(timeSec)) : (prev.start ?? 0),
+    }));
+  };
+
   const { handleNativeError: handleDirectPlayFallbackError } =
     useDirectPlayFallback({
       streamWindowKey: sessionWindowKey,
@@ -445,27 +521,43 @@ export default function VideoPlaybackPage({
       techLoaded,
       directAvailable: directPlayAvailable,
       playerMounted,
-      onFallback: () => {
-        const notice = `This file can't be played directly by your browser. Switched to ${streamModeLabel("remux")}.`;
-        setFallbackAnnouncement((prev) => ({
-          key: prev.key + 1,
-          text: notice,
-        }));
-        showInfo("Switched playback mode", notice);
-        // Resume playing once the remux stream is ready; the auto-resume
-        // effect is keyed on the stream window and re-fires after this
-        // navigation.
-        pendingAutoPlayOnLoadRef.current = true;
-        onNavigateSearch((prev) => ({
-          ...prev,
-          mode: "remux",
-          // A failure before metadata leaves currentTime at 0; keep the
-          // requested start instead of resetting the position.
-          start:
-            currentTimeRef.current > 0
-              ? Math.floor(clampTime(currentTimeRef.current))
-              : (prev.start ?? 0),
-        }));
+      onFallback: () =>
+        switchModeAfterFailure(
+          "remux",
+          `This file can't be played directly by your browser. Switched to ${streamModeLabel("remux")}.`,
+        ),
+    });
+
+  const { handleDecodeFailure: handleHevcDecodeFailure } =
+    useHevcCopyFallback({
+      streamWindowKey: sessionWindowKey,
+      // Without a transcode to go to, the failure is reported as before.
+      hevcCopyDeclared: hevcCopyDeclared && hevcFallbackMode !== undefined,
+      onFallback: (beforeRecovery) => {
+        if (!hevcFallbackMode) return;
+        const label = streamModeLabel(hevcFallbackMode);
+        // The server may have turned the remux into a transcode (its gate or
+        // preflight refused the copy), and then the failed stream was H.264.
+        const copied = !effectiveProfile || effectiveProfile === "remux";
+        switchModeAfterFailure(
+          hevcFallbackMode,
+          copied
+            ? `Your browser couldn't play this file's HEVC video. Switched to ${label}.`
+            : `Your browser couldn't play this stream. Switched to ${label}.`,
+          {
+            keepPlayIntent: true,
+            at: beforeRecovery && {
+              timeSec:
+                beforeRecovery.timeSec === null
+                  ? null
+                  : toAbsolutePlaybackTime(
+                      beforeRecovery.timeSec,
+                      playbackTiming,
+                    ),
+              playing: beforeRecovery.playing,
+            },
+          },
+        );
       },
     });
 
@@ -582,6 +674,8 @@ export default function VideoPlaybackPage({
   // came last wins: a far click made after this run is the viewer's newer
   // choice, and its held rebase stands.
   const handleHlsSeeking = (fromTime: number, toTime: number, order: number) => {
+    // A seek the failed stream settles before the switch renders.
+    if (switchedAway()) return;
     const supersededByControls = isRebasePendingAfter(order);
     if (supersededByControls) return;
 
@@ -636,7 +730,7 @@ export default function VideoPlaybackPage({
   useHlsSessionKeepalive({
     enabled: isHlsPlayback && playerMounted && !waitingForCapacity,
     streamUrl,
-    onSessionLost: () => handleSessionLost(currentTimeRef.current),
+    onSessionLost: () => reportSessionLost(currentTimeRef.current),
   });
 
   useBlocker({
@@ -723,9 +817,20 @@ export default function VideoPlaybackPage({
   // The player calls this before its own onError, which reports a message for
   // every MediaError code. Writing one here too only produced a value that the
   // next line of the same handler overwrote, so this decides one thing: whether
-  // the error was consumed by a direct-play fallback and must be swallowed.
-  const handleNativePlaybackError = (code: number | null | undefined) => {
-    if (handleDirectPlayFallbackError(code)) {
+  // the error was consumed by a fallback and must be swallowed. The element's
+  // decode error also takes the HEVC fallback under hls.js: an element in that
+  // error state otherwise ends on the error screen, so the transcode is the
+  // better outcome than waiting for hls.js's own recovery.
+  const handleNativePlaybackError = (
+    code: number | null | undefined,
+    beforeRecovery?: PlaybackBeforeRecovery,
+  ) => {
+    const decodeIncompatible =
+      code === MEDIA_ERR_DECODE || code === MEDIA_ERR_SRC_NOT_SUPPORTED;
+    if (
+      handleDirectPlayFallbackError(code) ||
+      (decodeIncompatible && handleHevcDecodeFailure(beforeRecovery))
+    ) {
       fallbackConsumedErrorRef.current = true;
     }
   };
@@ -859,6 +964,7 @@ export default function VideoPlaybackPage({
         setDuration(absoluteDuration);
       }}
       onNativeError={handleNativePlaybackError}
+      onDecodeFailure={handleHevcDecodeFailure}
       subtitleTrack={subtitleInfo}
       startSec={isHlsPlayback ? hlsPlaybackOffset : playbackStartSec}
       requestedStartSec={requestedHlsStartSec}
@@ -874,7 +980,7 @@ export default function VideoPlaybackPage({
         )
       }
       onSessionLost={(time) =>
-        handleSessionLost(toAbsolutePlaybackTime(time, playbackTiming))
+        reportSessionLost(toAbsolutePlaybackTime(time, playbackTiming))
       }
       onCapacityBusy={handleCapacityBusy}
       onManifestLoaded={notifyManifestLoaded}

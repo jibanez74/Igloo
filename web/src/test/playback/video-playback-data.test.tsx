@@ -33,6 +33,23 @@ import {
 } from "../helpers/fixtures";
 import { createTestQueryClient, queryClientWrapper } from "../helpers/render";
 
+// The HEVC copy capability is decided once at module load; a getter lets a
+// test switch it afterwards. Off by default, like jsdom.
+const hevcSupport = vi.hoisted(() => ({ decodes: false }));
+
+vi.mock("@/lib/hevc-copy", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/hevc-copy")>();
+  return {
+    ...actual,
+    detectHevcCopyCapability: () => ({
+      get decodesHevc() {
+        return hevcSupport.decodes;
+      },
+      hdrDisplay: false,
+    }),
+  };
+});
+
 const playbackSessionId = "4a5d0cb7-66f7-45ec-95d9-93fbe6e9eea4";
 const authenticatedUserId = 1;
 
@@ -146,6 +163,7 @@ function playbackStatus(
 beforeEach(() => {
   localStorage.clear();
   resetDevicePlaybackPreferencesCache();
+  hevcSupport.decodes = false;
 });
 
 describe("useVideoPlaybackData", () => {
@@ -286,6 +304,52 @@ describe("useVideoPlaybackData", () => {
     expect(result.current.actualHlsStartSec).toBe(490);
     expect(result.current.hlsPlaybackOffset).toBe(10);
     expect(result.current.subtitleInfo?.url).toContain("start=490");
+  });
+
+  it("opens a new window when the remux starts declaring HEVC", async () => {
+    hevcSupport.decodes = true;
+    const movieId = 75;
+    const queryClient = createTestQueryClient();
+    seedPreferenceResolutionMovie(queryClient, movieId);
+    seedSettledPlaybackPreferences(queryClient);
+
+    const { result } = renderHook(
+      () =>
+        useVideoPlaybackData({
+          media: movieMediaRef(movieId),
+          search: {
+            mode: "remux" as const,
+            audio_track: 0,
+            subtitle_track: 0,
+            start: 600,
+          },
+          streamReloadKey: 0,
+          playbackSessionId,
+          onSyncSearch: vi.fn(),
+        }),
+      { wrapper: queryClientWrapper(queryClient) },
+    );
+    act(() => {
+      result.current.handleActualHlsStart(581);
+    });
+    expect(result.current.actualHlsStartSec).toBe(581);
+
+    // The file was replaced in place with an HEVC encode.
+    act(() => {
+      seedPreferenceResolutionMovie(queryClient, movieId, {
+        mimeType: "video/mp4",
+        codec: "hevc",
+        height: 1080,
+      });
+    });
+
+    await waitFor(() =>
+      expect(result.current.streamUrl).toContain("video_codecs=hevc"),
+    );
+    expect(result.current.sessionWindowKey).toBe(
+      `movie:75:remux:0:${playbackSessionId}:590:hevc`,
+    );
+    expect(result.current.actualHlsStartSec).toBe(590);
   });
 
   // Audit D9: while direct play is active the audible stream is always

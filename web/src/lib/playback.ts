@@ -11,6 +11,14 @@ import {
 } from "@/lib/direct-play-probe";
 import { formatLanguageName } from "@/lib/format";
 import {
+  detectHevcCopyCapability,
+  INTERLACED_FIELD_ORDERS,
+  NO_HEVC_COPY,
+  remuxCopiesHevc,
+  type HevcCopyCapability,
+  type HevcCopyVideoInfo,
+} from "@/lib/hevc-copy";
+import {
   unwrapInt,
   unwrapNormalizedString,
   unwrapStringOrUndefined,
@@ -126,6 +134,25 @@ export const prefersNativeHLS = (() => {
   });
 })();
 
+/**
+ * This browser's HEVC copy capability (see `detectHevcCopyCapability`),
+ * asked of the engine `prefersNativeHLS` picked. Evaluated once at module
+ * load; none in non-browser environments.
+ */
+export const browserHevcCopy: HevcCopyCapability = (() => {
+  if (typeof document === "undefined") return NO_HEVC_COPY;
+  const v = document.createElement("video");
+  return detectHevcCopyCapability({
+    nativeHls: prefersNativeHLS,
+    canPlayType: (type) => v.canPlayType(type),
+    mediaSource: typeof MediaSource === "undefined" ? undefined : MediaSource,
+    matchesMedia:
+      typeof window.matchMedia === "function"
+        ? (query) => window.matchMedia(query).matches
+        : undefined,
+  });
+})();
+
 /** The only track direct play can deliver: the container's first audio stream. */
 const DIRECT_PLAY_AUDIO_TRACK = 0;
 
@@ -171,10 +198,8 @@ export type DirectPlayVideoInfo = Pick<
   | "bit_depth"
   | "pixel_format"
   | "field_order"
->;
-
-/** ffprobe field_order values that mark a stream interlaced. */
-const INTERLACED_FIELD_ORDERS = ["tt", "bb", "tb", "bt"];
+> &
+  HevcCopyVideoInfo;
 
 const NON_BROWSER_H264_PROFILE_MARKERS = ["10", "4:2:2", "422", "4:4:4", "444"];
 /**
@@ -276,6 +301,12 @@ type AvailableModesArgs = {
   maxTranscodeHeight?: number;
   /** Injectable for tests; defaults to a real `canPlayType` probe. */
   canPlay?: CanPlayProbe;
+  /**
+   * What this client can do with a copied HEVC stream. Defaults to the
+   * browser's own (`browserHevcCopy`); a watch room passes `NO_HEVC_COPY`,
+   * since the server never copies HEVC into a room.
+   */
+  hevcCopy?: HevcCopyCapability;
 };
 
 const defaultCanPlayProbe = createCanPlayProbe();
@@ -318,8 +349,13 @@ export function getAvailableModes(args: AvailableModesArgs) {
       // 4:2:2 and 4:4:4 H.264 and silently falls back to a full transcode.
       // Offering remux for those advertises a mode the server never runs.
       // This also keeps direct ⊂ remux, which the audio-track upgrade in
-      // `resolveModeForAudioTrack` depends on.
-      return isVideoDirectPlayable(video.codec) && isBrowserSafeH264(video);
+      // `resolveModeForAudioTrack` depends on. HEVC is copied only for a
+      // request declaring it (`hlsVideoCodecsFor`), so remux is offered for
+      // HEVC exactly when that declaration would be sent.
+      return (
+        copiesH264(video) ||
+        remuxCopiesHevc(video, args.hevcCopy ?? browserHevcCopy)
+      );
     }
     const withinServerCap =
       args.maxTranscodeHeight === undefined ||
@@ -327,12 +363,39 @@ export function getAvailableModes(args: AvailableModesArgs) {
     return sourceHeight > 0 && m.maxHeight <= sourceHeight && withinServerCap;
   });
 
-  if (availableModes.length > 0 || !video) {
+  // A source below every transcode tier still gets the lowest one when
+  // nothing else plays it, and when its only copy is HEVC: a browser that
+  // then fails to decode the copy needs a transcode to fall back to.
+  if (
+    !video ||
+    copiesH264(video) ||
+    availableModes.some((m) => m.type === "transcode")
+  ) {
     return availableModes;
   }
 
   const fallbackMode = STREAM_MODES.find((mode) => mode.id === "720p_3mbps");
-  return fallbackMode ? [fallbackMode] : availableModes;
+  return fallbackMode ? [...availableModes, fallbackMode] : availableModes;
+}
+
+/** Whether remux copies this source's video as H.264. */
+function copiesH264(video: DirectPlayVideoInfo): boolean {
+  return isVideoDirectPlayable(video.codec) && isBrowserSafeH264(video);
+}
+
+/**
+ * The `video_codecs` value an HLS request for this mode and source carries:
+ * `hevc` for a remux of an HEVC source this browser can take as a copy (the
+ * rule `getAvailableModes` offers remux by), otherwise none. Transcodes always
+ * encode H.264, so they never carry it and keep their session key.
+ */
+export function hlsVideoCodecsFor(
+  mode: StreamModeId,
+  video: DirectPlayVideoInfo | undefined,
+  hevcCopy: HevcCopyCapability = browserHevcCopy,
+): "hevc" | undefined {
+  if (mode !== "remux" || !video) return undefined;
+  return remuxCopiesHevc(video, hevcCopy) ? "hevc" : undefined;
 }
 
 /**

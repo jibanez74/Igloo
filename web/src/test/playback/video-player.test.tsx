@@ -679,6 +679,155 @@ describe("VideoPlayer hls.js error routing", () => {
     expect(hls.startLoadPositions).toEqual([10, 42.5]);
   });
 
+  it.each([
+    [true, 0],
+    [false, 1],
+  ])(
+    "hands a media error that outlived its recovery to onDecodeFailure (handled: %s)",
+    async (handled, errorReports) => {
+      const onError = vi.fn();
+      const onDecodeFailure = vi.fn(() => handled);
+      const hls = await renderHlsPlayer({ onError, onDecodeFailure });
+      const mediaError = {
+        type: "mediaError",
+        details: "bufferAddCodecError",
+        fatal: true,
+      };
+
+      act(() => {
+        hls.trigger("hlsError", mediaError);
+      });
+      expect(onDecodeFailure).not.toHaveBeenCalled();
+
+      act(() => {
+        hls.trigger("hlsError", mediaError);
+      });
+      expect(onDecodeFailure).toHaveBeenCalledTimes(1);
+      expect(onError).toHaveBeenCalledTimes(errorReports);
+    },
+  );
+
+  it("hands onDecodeFailure where the viewer was before the recovery", async () => {
+    const onDecodeFailure = vi.fn(() => true);
+    const hls = await renderHlsPlayer({ onDecodeFailure });
+    const video = document.querySelector("video") as HTMLVideoElement;
+    const mediaError = {
+      type: "mediaError",
+      details: "bufferAppendError",
+      fatal: true,
+    };
+    let paused = false;
+    Object.defineProperty(video, "paused", {
+      configurable: true,
+      get: () => paused,
+    });
+    act(() => {
+      hls.trigger("hlsFragBuffered", {});
+    });
+    video.currentTime = 600;
+
+    act(() => {
+      hls.trigger("hlsError", mediaError);
+    });
+    // The recovery's reload pauses the element and resets its time.
+    paused = true;
+    video.currentTime = 0;
+    act(() => {
+      hls.trigger("hlsError", mediaError);
+    });
+
+    expect(onDecodeFailure).toHaveBeenCalledWith({
+      timeSec: 600,
+      playing: true,
+    });
+  });
+
+  it("hands the element's own error after a recovery the same state", async () => {
+    // jsdom has no MediaError; the player's onError reads its codes.
+    vi.stubGlobal("MediaError", {
+      MEDIA_ERR_ABORTED: 1,
+      MEDIA_ERR_NETWORK: 2,
+      MEDIA_ERR_DECODE: 3,
+      MEDIA_ERR_SRC_NOT_SUPPORTED: 4,
+    });
+    const onNativeError = vi.fn();
+    const hls = await renderHlsPlayer({ onNativeError, onError: vi.fn() });
+    const video = document.querySelector("video") as HTMLVideoElement;
+    let paused = false;
+    Object.defineProperty(video, "paused", {
+      configurable: true,
+      get: () => paused,
+    });
+    act(() => {
+      hls.trigger("hlsFragBuffered", {});
+    });
+    video.currentTime = 600;
+
+    act(() => {
+      hls.trigger("hlsError", {
+        type: "mediaError",
+        details: "bufferAppendError",
+        fatal: true,
+      });
+    });
+    paused = true;
+    video.currentTime = 0;
+    Object.defineProperty(video, "error", {
+      configurable: true,
+      value: { code: 3 },
+    });
+    act(() => {
+      video.dispatchEvent(new Event("error"));
+    });
+
+    expect(onNativeError).toHaveBeenCalledWith(3, {
+      timeSec: 600,
+      playing: true,
+    });
+  });
+
+  it("hands no state with an element error outside a recovery", async () => {
+    // jsdom has no MediaError; the player's onError reads its codes.
+    vi.stubGlobal("MediaError", {
+      MEDIA_ERR_ABORTED: 1,
+      MEDIA_ERR_NETWORK: 2,
+      MEDIA_ERR_DECODE: 3,
+      MEDIA_ERR_SRC_NOT_SUPPORTED: 4,
+    });
+    const onNativeError = vi.fn();
+    await renderHlsPlayer({ onNativeError, onError: vi.fn() });
+    const video = document.querySelector("video") as HTMLVideoElement;
+    Object.defineProperty(video, "error", {
+      configurable: true,
+      value: { code: 3 },
+    });
+    act(() => {
+      video.dispatchEvent(new Event("error"));
+    });
+
+    expect(onNativeError).toHaveBeenCalledWith(3, undefined);
+  });
+
+  it("reports no time from before the recovery when nothing had buffered", async () => {
+    const onDecodeFailure = vi.fn(() => true);
+    const hls = await renderHlsPlayer({ onDecodeFailure });
+    const mediaError = {
+      type: "mediaError",
+      details: "bufferAddCodecError",
+      fatal: true,
+    };
+
+    act(() => {
+      hls.trigger("hlsError", mediaError);
+      hls.trigger("hlsError", mediaError);
+    });
+
+    expect(onDecodeFailure).toHaveBeenCalledWith({
+      timeSec: null,
+      playing: false,
+    });
+  });
+
   it("leaves a media-error recovery before the first manifest to the gate", async () => {
     const hls = await renderHlsPlayer({ startSec: 10 });
 

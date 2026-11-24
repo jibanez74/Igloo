@@ -4,7 +4,9 @@ import { apiErrorMessage } from "@/lib/is-api-failure";
 import { mediaKey } from "@/lib/media-ref";
 import {
   getAvailableModes,
+  getDefaultPlaybackSettings,
   getPrimaryVideoStream,
+  hlsVideoCodecsFor,
   playbackDefaultsInput,
   playbackModeLabel,
   resolveModeForAudioTrack,
@@ -161,7 +163,11 @@ export function useVideoPlaybackData({
     isHlsPlayback,
     playbackStartSec,
   );
-  const sessionWindowKey = `${mediaKey(media)}:${resolvedMode}:${streamAudioTrack ?? "none"}:${playbackSessionId}:${Math.floor(requestedHlsStartSec)}`;
+  // The codec declaration is part of the server's session key, so a stream
+  // that starts or stops declaring HEVC (the file was replaced) is a new
+  // window: nothing measured on the old session carries over.
+  const hlsVideoCodecs = hlsVideoCodecsFor(resolvedMode, primaryVideo);
+  const sessionWindowKey = `${mediaKey(media)}:${resolvedMode}:${streamAudioTrack ?? "none"}:${playbackSessionId}:${Math.floor(requestedHlsStartSec)}${hlsVideoCodecs ? `:${hlsVideoCodecs}` : ""}`;
   const [reportedActualStart, setReportedActualStart] = useState<{
     sessionWindowKey: string;
     startSec: number;
@@ -175,6 +181,14 @@ export function useVideoPlaybackData({
     playbackStartSec,
     actualHlsStartSec,
   );
+  // Where a copied HEVC stream the browser fails to decode goes: the
+  // transcode the viewer's defaults would pick among this file's.
+  const transcodeModes =
+    availableModes?.filter((m) => m.type === "transcode") ?? [];
+  const hevcFallbackMode =
+    transcodeModes.length > 0
+      ? getDefaultPlaybackSettings(transcodeModes, userPlaybackPrefs).mode
+      : undefined;
   const streamUrl = buildStreamUrl(
     media,
     resolvedMode,
@@ -182,6 +196,7 @@ export function useVideoPlaybackData({
     requestedHlsStartSec,
     streamReloadKey,
     playbackSessionId,
+    hlsVideoCodecs,
   );
   const modeLabel = playbackModeLabel(
     resolvedMode,
@@ -284,5 +299,7 @@ export function useVideoPlaybackData({
     mediaDurationSec,
     sessionWindowKey,
     handleActualHlsStart,
+    hevcCopyDeclared: hlsVideoCodecs === "hevc",
+    hevcFallbackMode,
   };
 }

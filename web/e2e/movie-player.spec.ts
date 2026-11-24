@@ -269,3 +269,65 @@ test("selecting a chapter seeks to its start and announces the jump", async ({
 
   await page.keyboard.press("Escape");
 });
+
+/**
+ * Makes this page's browser answer the HEVC copy probe as `decodes`, before
+ * the app's module-load probe runs. The H.264 probe keeps the real answer.
+ */
+async function stubHevcDecoding(page: Page, decodes: boolean) {
+  await page.addInitScript(hevc => {
+    const realIsTypeSupported = MediaSource.isTypeSupported.bind(MediaSource);
+    MediaSource.isTypeSupported = (type: string) =>
+      type.includes("hvc1") ? hevc : realIsTypeSupported(type);
+  }, decodes);
+}
+
+function makeHevcSource(details: MovieTechnicalDetailsResponse) {
+  details.movie.container = "mkv";
+  details.movie.mime_type = "video/x-matroska";
+  Object.assign(details.video_streams[0], {
+    codec: "hevc",
+    codec_profile: nullableString("Main 10"),
+    bit_depth: { Int64: 10, Valid: true },
+    pixel_format: nullableString("yuv420p10le"),
+    color_transfer: nullableString(""),
+    dv_bl_signal_compatibility_id: { Int64: 0, Valid: false },
+  });
+}
+
+test("a remux of an HEVC file the browser decodes declares video_codecs=hevc", async ({
+  page,
+}) => {
+  await stubHevcDecoding(page, true);
+  const technicalDetails = await gateTechnicalDetails(page, makeHevcSource);
+  const mediaRequests = await openMoviePlayer(
+    page,
+    "mode=remux&audio_track=0&subtitle_track=off&start=0",
+  );
+  technicalDetails.release();
+
+  await expect.poll(() => mediaRequests.length).toBe(1);
+  const requestUrl = new URL(mediaRequests[0]);
+  expect(requestUrl.pathname).toBe(`${movieApiPath}/hls/remux/playlist.m3u8`);
+  expect(requestUrl.searchParams.get("video_codecs")).toBe("hevc");
+  await expectURLParams(page, { mode: "remux" });
+});
+
+test("an HEVC file the browser cannot decode plays a transcode with no declaration", async ({
+  page,
+}) => {
+  await stubHevcDecoding(page, false);
+  const technicalDetails = await gateTechnicalDetails(page, makeHevcSource);
+  const mediaRequests = await openMoviePlayer(
+    page,
+    "mode=remux&audio_track=0&subtitle_track=off&start=0",
+  );
+  technicalDetails.release();
+
+  // Remux is not offered, so the player resolves to a transcode.
+  await expect.poll(() => mediaRequests.length).toBe(1);
+  const requestUrl = new URL(mediaRequests[0]);
+  expect(requestUrl.pathname).not.toBe(`${movieApiPath}/hls/remux/playlist.m3u8`);
+  expect(requestUrl.pathname).toMatch(/\/hls\/\d+p_\d+mbps\/playlist\.m3u8$/);
+  expect(requestUrl.searchParams.has("video_codecs")).toBe(false);
+});

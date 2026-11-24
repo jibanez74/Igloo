@@ -42,6 +42,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import { sessionEndedSince, sessionStamp } from "@/lib/session";
 import { apiErrorMessage } from "@/lib/is-api-failure";
+import { NO_HEVC_COPY } from "@/lib/hevc-copy";
 import WatchRoomInviteePicker from "@/components/watch-room/WatchRoomInviteePicker";
 
 type CreateWatchRoomDialogProps = {
@@ -89,6 +90,8 @@ export default function CreateWatchRoomDialog({
     mimeType,
     maxTranscodeHeight:
       playbackSettingsFromResponse(playbackSettingsData)?.max_transcode_height,
+    // The server never copies HEVC into a room.
+    hevcCopy: NO_HEVC_COPY,
   });
   const resolvedSettings = resolvePlaybackSettings(
     playbackSettings,
