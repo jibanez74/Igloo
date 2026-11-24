@@ -37,6 +37,13 @@ export type SubtitleTrackInfo = {
   srclang: string;
 };
 
+/** Where the viewer was when hls.js started a media recovery. */
+export type PlaybackBeforeRecovery = {
+  /** The element's time, or null before anything buffered. */
+  timeSec: number | null;
+  playing: boolean;
+};
+
 type VideoPlayerProps = {
   videoRef: RefObject<HTMLVideoElement | null>;
   src: string;
@@ -67,8 +74,10 @@ type VideoPlayerProps = {
    * An hls.js stream failed to decode after its media recovery. Returning
    * true means the parent handled it (by switching the stream), so no error
    * is reported. The element's own decode errors go to `onNativeError`.
+   * `beforeRecovery` is where the viewer was when the recovery started: the
+   * recovery reloads the element, which pauses it and resets its time.
    */
-  onDecodeFailure?: () => boolean;
+  onDecodeFailure?: (beforeRecovery?: PlaybackBeforeRecovery) => boolean;
   subtitleTrack?: SubtitleTrackInfo | null;
   startSec?: number;
   /** Requested absolute start that identifies the current HLS session. */
@@ -522,17 +531,19 @@ export default function VideoPlayer({
     reportSessionLost(startSec),
   );
 
-  const handleHlsError = useEffectEvent((data: ErrorData) => {
-    const detail = data.details ?? "unknown error";
-    if (data.type === HLS_NETWORK_ERROR) {
-      reportError(`Network error loading stream (${detail}).`);
-    } else if (data.type === HLS_MEDIA_ERROR) {
-      if (onDecodeFailure?.()) return;
-      reportError(`The browser could not decode this stream (${detail}).`);
-    } else {
-      reportError(`Stream error: ${detail}`);
-    }
-  });
+  const handleHlsError = useEffectEvent(
+    (data: ErrorData, beforeRecovery?: PlaybackBeforeRecovery) => {
+      const detail = data.details ?? "unknown error";
+      if (data.type === HLS_NETWORK_ERROR) {
+        reportError(`Network error loading stream (${detail}).`);
+      } else if (data.type === HLS_MEDIA_ERROR) {
+        if (onDecodeFailure?.(beforeRecovery)) return;
+        reportError(`The browser could not decode this stream (${detail}).`);
+      } else {
+        reportError(`Stream error: ${detail}`);
+      }
+    },
+  );
 
   // hls.js source lifecycle. The start stays in the deps deliberately: the
   // playlist URL can stay identical while the resume target changes (any seek
@@ -674,6 +685,10 @@ export default function VideoPlayer({
         ];
 
         let mediaRecoveryAttempted = false;
+        // Where the viewer was when the spent media recovery started. No
+        // fragment has buffered since (that re-arms the recovery and clears
+        // this), so the playhead cannot have moved on from it.
+        let beforeMediaRecovery: PlaybackBeforeRecovery | undefined;
         let networkRecoveryAttempts = 0;
         let segmentNotReadyRetries = 0;
         let fragmentBuffered = false;
@@ -705,6 +720,7 @@ export default function VideoPlayer({
         hls.on(Hls.Events.FRAG_BUFFERED, () => {
           fragmentBuffered = true;
           mediaRecoveryAttempted = false;
+          beforeMediaRecovery = undefined;
           networkRecoveryAttempts = 0;
           segmentNotReadyRetries = 0;
         });
@@ -790,6 +806,10 @@ export default function VideoPlayer({
             // playhead, read before the detach resets it. Before the first
             // manifest the gate still starts loading itself.
             const resumeAt = video.currentTime;
+            beforeMediaRecovery = {
+              timeSec: fragmentBuffered ? resumeAt : null,
+              playing: !video.paused && !video.ended,
+            };
             hls.recoverMediaError();
             if (loadStarted) {
               hls.startLoad(resumeAt > 0 ? resumeAt : currentStartSec());
@@ -831,7 +851,7 @@ export default function VideoPlayer({
             return;
           }
 
-          handleHlsError(data);
+          handleHlsError(data, beforeMediaRecovery);
         });
       } catch {
         if (!cancelled) {

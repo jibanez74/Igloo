@@ -417,6 +417,18 @@ export default function VideoPlaybackPage({
     }));
   };
 
+  // The stream window a failure switched away from. Until the page renders
+  // the new one, a lost-session report or a settled seek from the old stream
+  // would rebase it in the failed mode. Cleared once the window has moved on,
+  // so coming back to that window later (Back) recovers as usual.
+  const switchedFromWindowRef = useRef<string | null>(null);
+  const switchedAway = () => switchedFromWindowRef.current === sessionWindowKey;
+  useEffect(() => {
+    if (switchedFromWindowRef.current !== sessionWindowKey) {
+      switchedFromWindowRef.current = null;
+    }
+  }, [sessionWindowKey]);
+
   // VideoPlayer keeps here the order of a seek run it has not reported yet.
   const pendingHlsSeekOrderRef = useRef<number | null>(null);
   const {
@@ -426,7 +438,10 @@ export default function VideoPlaybackPage({
     isRebasePendingAfter,
   } = useSettledHlsRebase({
     resetKey: sessionWindowKey,
-    onRebase: (targetTimeSec) => navigateToPlaybackPosition(targetTimeSec),
+    onRebase: (targetTimeSec) => {
+      if (switchedAway()) return;
+      navigateToPlaybackPosition(targetTimeSec);
+    },
     newerElementSeekPending: (requestOrder) =>
       (pendingHlsSeekOrderRef.current ?? 0) > requestOrder,
   });
@@ -445,23 +460,26 @@ export default function VideoPlaybackPage({
       onMaxAttempts: setPlaybackError,
     });
 
-  // The stream window a failure switched away from. Until the page renders
-  // the new one, a lost-session report from the old stream (a keepalive 404,
-  // a segment error) would rebase it in the failed mode.
-  const switchedFromWindowRef = useRef<string | null>(null);
   const reportSessionLost = (currentTimeSec: number) => {
-    if (switchedFromWindowRef.current === sessionWindowKey) return;
+    if (switchedAway()) return;
     handleSessionLost(currentTimeSec);
   };
 
   // Announces a playback-mode switch made because the current one failed,
   // and moves the stream there at the viewer's position. With
   // `keepPlayIntent`, the new stream plays only if the failed one was playing
-  // or a play was already pending; otherwise it always resumes.
+  // or a play was already pending; otherwise it always resumes. `at` is the
+  // viewer's state from before an hls.js recovery reset the element.
   const switchModeAfterFailure = (
     mode: StreamModeId,
     notice: string,
-    { keepPlayIntent = false }: { keepPlayIntent?: boolean } = {},
+    {
+      keepPlayIntent = false,
+      at,
+    }: {
+      keepPlayIntent?: boolean;
+      at?: { timeSec: number | null; playing: boolean };
+    } = {},
   ) => {
     setFallbackAnnouncement((prev) => ({
       key: prev.key + 1,
@@ -471,10 +489,13 @@ export default function VideoPlaybackPage({
     // A session retry still waiting would navigate back to the failed mode.
     switchedFromWindowRef.current = sessionWindowKey;
     resetRecovery();
+    cancelRebase();
     // Resume playing once the new stream is ready; the auto-resume effect is
     // keyed on the stream window and re-fires after this navigation.
     const video = videoRef.current;
-    const wasPlaying = !!video && !video.paused && !video.ended;
+    const wasPlaying =
+      at?.playing ?? (!!video && !video.paused && !video.ended);
+    const timeSec = at?.timeSec ?? currentTimeRef.current;
     if (!keepPlayIntent || wasPlaying) {
       pendingAutoPlayOnLoadRef.current = true;
     }
@@ -484,9 +505,7 @@ export default function VideoPlaybackPage({
       // A failure before metadata leaves currentTime at 0; keep the
       // requested start instead of resetting the position.
       start:
-        currentTimeRef.current > 0
-          ? Math.floor(clampTime(currentTimeRef.current))
-          : (prev.start ?? 0),
+        timeSec > 0 ? Math.floor(clampTime(timeSec)) : (prev.start ?? 0),
     }));
   };
 
@@ -511,7 +530,7 @@ export default function VideoPlaybackPage({
       streamWindowKey: sessionWindowKey,
       // Without a transcode to go to, the failure is reported as before.
       hevcCopyDeclared: hevcCopyDeclared && hevcFallbackMode !== undefined,
-      onFallback: () => {
+      onFallback: (beforeRecovery) => {
         if (!hevcFallbackMode) return;
         const label = streamModeLabel(hevcFallbackMode);
         // The server may have turned the remux into a transcode (its gate or
@@ -522,7 +541,19 @@ export default function VideoPlaybackPage({
           copied
             ? `Your browser couldn't play this file's HEVC video. Switched to ${label}.`
             : `Your browser couldn't play this stream. Switched to ${label}.`,
-          { keepPlayIntent: true },
+          {
+            keepPlayIntent: true,
+            at: beforeRecovery && {
+              timeSec:
+                beforeRecovery.timeSec === null
+                  ? null
+                  : toAbsolutePlaybackTime(
+                      beforeRecovery.timeSec,
+                      playbackTiming,
+                    ),
+              playing: beforeRecovery.playing,
+            },
+          },
         );
       },
     });

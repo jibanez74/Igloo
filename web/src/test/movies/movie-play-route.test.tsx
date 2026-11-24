@@ -1110,6 +1110,44 @@ describe("movie play route HEVC copy", () => {
     expect(search.mode).toBe("1080p_8mbps");
   });
 
+  it("recovers lost sessions again on coming back to the failed window", async () => {
+    const fetchMock = mockMovieApi({ technical: hevcTechnicalDetails });
+    const { router } = await renderMovieRoute(
+      "mode=remux&audio_track=0&subtitle_track=off&start=900",
+    );
+    const video = await movieVideo();
+    await waitFor(() => expect(manifestUrls(fetchMock)).toHaveLength(1));
+    const fail = (code: number) => {
+      Object.defineProperty(video, "error", {
+        configurable: true,
+        value: { code },
+      });
+      act(() => {
+        video.dispatchEvent(new Event("error"));
+      });
+    };
+    const remuxManifests = () =>
+      manifestUrls(fetchMock).filter((url) => url.pathname.includes("/remux/"));
+
+    fail(MEDIA_ERR_DECODE);
+    await waitFor(() => expect(manifestUrls(fetchMock)).toHaveLength(2));
+    // The viewer picks the original video again, at the same start.
+    await act(() =>
+      router.navigate({
+        to: ".",
+        search: (prev: Record<string, unknown>) => ({
+          ...prev,
+          mode: "remux",
+          start: 900,
+        }),
+      } as never),
+    );
+    await waitFor(() => expect(remuxManifests()).toHaveLength(2));
+
+    fail(2); // MEDIA_ERR_NETWORK: a lost session under native HLS
+    await waitFor(() => expect(remuxManifests()).toHaveLength(3));
+  });
+
   it("ignores a lost session the failed stream reports during the switch", async () => {
     const fetchMock = mockMovieApi({ technical: hevcTechnicalDetails });
     const { router } = await renderMovieRoute(

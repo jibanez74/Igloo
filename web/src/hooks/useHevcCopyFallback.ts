@@ -1,10 +1,12 @@
 import { useEffect, useRef } from "react";
+import type { PlaybackBeforeRecovery } from "@/components/playback/VideoPlayer";
 
 type HevcCopyFallbackOptions = {
   streamWindowKey: string;
   /** True while the stream's request declares `video_codecs=hevc`. */
   hevcCopyDeclared: boolean;
-  onFallback: () => void;
+  /** `beforeRecovery` is the viewer's state before hls.js's recovery, if any. */
+  onFallback: (beforeRecovery?: PlaybackBeforeRecovery) => void;
 };
 
 /**
@@ -29,11 +31,13 @@ export function useHevcCopyFallback({
     attemptedRef.current = false;
   }, [streamWindowKey]);
 
-  const handleDecodeFailure = (): boolean => {
+  const handleDecodeFailure = (
+    beforeRecovery?: PlaybackBeforeRecovery,
+  ): boolean => {
     if (!hevcCopyDeclared) return false;
     if (attemptedRef.current) return true;
     attemptedRef.current = true;
-    onFallback();
+    onFallback(beforeRecovery);
     return true;
   };
 

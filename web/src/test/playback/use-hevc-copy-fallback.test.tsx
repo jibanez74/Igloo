@@ -27,6 +27,14 @@ describe("useHevcCopyFallback", () => {
     expect(onFallback).toHaveBeenCalledTimes(1);
   });
 
+  it("passes on where the viewer was before an hls.js recovery", () => {
+    const { result, onFallback } = renderFallback();
+
+    result.current.handleDecodeFailure({ timeSec: 600, playing: true });
+
+    expect(onFallback).toHaveBeenCalledWith({ timeSec: 600, playing: true });
+  });
+
   it("leaves a stream that declared no HEVC to the normal error", () => {
     const { result, onFallback } = renderFallback({ hevcCopyDeclared: false });
 
