@@ -110,6 +110,53 @@ describe("music playlist route", () => {
     });
   });
 
+  const cover = (name: string) => `/api/static/albums/${name}.jpg`;
+
+  it.each([
+    {
+      case: "draws a collage of four album covers when the playlist has no cover",
+      fields: { artwork: ["a", "b", "c", "d", "e"].map(cover) },
+      cells: ["a", "b", "c", "d"].map(cover),
+    },
+    {
+      case: "shows the first album cover alone when fewer than four have one",
+      fields: { artwork: ["a", "b"].map(cover) },
+      cells: [cover("a")],
+    },
+    {
+      case: "shows the playlist's own cover over its tracks' artwork",
+      fields: {
+        playlist: playlist({
+          id: 21,
+          name: "Road Trip",
+          cover_image: nullableString(cover("own")),
+        }),
+        artwork: ["a", "b", "c", "d"].map(cover),
+      },
+      cells: [cover("own")],
+    },
+  ])("$case", async ({ fields, cells }) => {
+    mockPlaylistFetch(roadTrip(fields));
+
+    await renderRoute("/music/playlist/21");
+
+    const art = await screen.findByRole("img", { name: "Playlist cover for Road Trip" });
+    const sources = (
+      art.tagName === "IMG" ? [art] : Array.from(art.querySelectorAll("img"))
+    ).map(image => image.getAttribute("src"));
+    expect(sources).toEqual(cells);
+  });
+
+  it("shows the placeholder when neither the playlist nor its tracks have artwork", async () => {
+    mockPlaylistFetch(roadTrip());
+
+    await renderRoute("/music/playlist/21");
+
+    expect(
+      await screen.findByRole("img", { name: "No cover available" }),
+    ).toBeInTheDocument();
+  });
+
   it("names the owner instead of Edit and Delete for a viewer who does not own the playlist", async () => {
     mockPlaylistFetch(
       roadTrip({

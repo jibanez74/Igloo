@@ -1206,8 +1206,9 @@ its link and placeholder icon from the playlist's `content_type`), circular
 thumbs (`MusicianCard`), or the horizontal `WatchRoomCard`. All of them wear
 `CARD_SURFACE_CLASS`.
 
-A `PlaylistCard`'s square shows, in this order: the playlist's own
-`cover_image`; a 2×2 collage when the list response's `artwork` has four
+A `PlaylistCard`'s square, and the music playlist page's cover beside the
+title, shows, in this order: the playlist's own
+`cover_image`; a 2×2 collage when the response's `artwork` has four
 entries (album covers for music, posters for movies); the first entry alone
 when it has one to three, since two or three would leave holes in the grid;
 the placeholder icon. The images are decorative (`alt=""`), and one that fails
@@ -1523,7 +1524,11 @@ hero, reach the app header with `-mt-6`; with no artwork the band is a plain
 already shows the labelled placeholder), `MusicDetailArt`
 (`variant="album" | "musician" | "playlist"`: the square cover or round photo
 beside the title on all three pages, with a labelled placeholder when there is
-no artwork, and the `MusicDetailArtSkeleton` that reads the same sizes),
+no artwork, and the `MusicDetailArtSkeleton` that reads the same sizes; on the
+playlist page it picks its images by the `PlaylistCard` rule from the detail
+response's `artwork`, through the shared `playlistArtUrls` in
+`lib/playlist-art.ts`, and a `collage` of four draws one named 2×2 grid whose
+cells are decorative and load eagerly like the single cover),
 `MusicStatList` (the album and musician stat pills — `MusicStatChip` per
 figure, `MusicDurationChip` speaking "Total duration …" through an `sr-only`
 span) and `MusicGenreList` (their genre pills), `PlayShuffleButtons` (the

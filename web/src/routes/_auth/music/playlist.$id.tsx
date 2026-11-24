@@ -57,6 +57,7 @@ import {
   MUSIC_DETAIL_HERO_ROW_CLASS,
   PLAYLIST_TRACKS_KEY,
 } from "@/lib/constants";
+import { PLAYLIST_COLLAGE_SIZE, playlistArtUrls } from "@/lib/playlist-art";
 import { invalidatePlaylistContents } from "@/lib/playlist-kinds";
 import { cn } from "@/lib/utils";
 import { apiErrorMessage } from "@/lib/is-api-failure";
@@ -204,8 +205,13 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
   // started — a progress hint on the buttons, not a block on using them.
   const [isLoadingRest, setIsLoadingRest] = useState(false);
 
-  const { playlist, track_count, duration, is_owner, can_edit, owner } = data;
+  const { playlist, track_count, duration, is_owner, can_edit, owner, artwork } = data;
   const coverUrl = getMediaImageUrl(unwrapString(playlist.cover_image));
+  const artUrls = playlistArtUrls(
+    coverUrl ?? "",
+    artwork.map(cover => getMediaImageUrl(cover) ?? "").filter(url => url !== ""),
+  );
+  const isCollage = artUrls.length === PLAYLIST_COLLAGE_SIZE;
   const description = unwrapString(playlist.description);
 
   // Infinite query for tracks
@@ -440,7 +446,8 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
       <header className={MUSIC_DETAIL_HERO_ROW_CLASS}>
         <MusicDetailArt
           variant="playlist"
-          src={coverUrl ?? ""}
+          src={isCollage ? "" : (artUrls[0] ?? "")}
+          collage={isCollage ? artUrls : undefined}
           name={playlist.name}
         />
 

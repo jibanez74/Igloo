@@ -11,6 +11,7 @@ import {
 } from "@/lib/constants";
 import { formatDuration, pluralize } from "@/lib/format";
 import { getMediaImageUrl } from "@/lib/media-image-url";
+import { PLAYLIST_COLLAGE_SIZE, playlistArtUrls } from "@/lib/playlist-art";
 import { unwrapString } from "@/lib/nullable";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { cn } from "@/lib/utils";
@@ -36,19 +37,6 @@ const PLAYLIST_KINDS = {
   },
 } as const;
 
-const COLLAGE_SIZE = 4;
-
-/**
- * The images in the card's art box: the playlist's own cover; else a 2×2
- * collage when four items have artwork; else the first item's image alone,
- * because two or three would leave holes in the grid.
- */
-function playlistArtUrls(coverUrl: string, artworkUrls: string[]) {
-  if (coverUrl !== "") return [coverUrl];
-  if (artworkUrls.length >= COLLAGE_SIZE) return artworkUrls.slice(0, COLLAGE_SIZE);
-  return artworkUrls.slice(0, 1);
-}
-
 type PlaylistCardProps = {
   playlist: PlaylistSummaryType | MoviePlaylistSummaryType;
 };
@@ -63,7 +51,7 @@ export default function PlaylistCard({ playlist }: PlaylistCardProps) {
   );
   // One failure state for the whole box: a collage with a hole reads as broken.
   const { showPoster: showArt, onError } = usePosterFallback(artUrls.join(" "));
-  const isCollage = artUrls.length === COLLAGE_SIZE;
+  const isCollage = artUrls.length === PLAYLIST_COLLAGE_SIZE;
 
   // The visible line joins with " · ", the accessible name with commas; both
   // leave out a zero duration rather than read "0s".

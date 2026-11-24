@@ -110,6 +110,7 @@ export function playlistDetail(
   return {
     track_count: 0,
     duration: 0,
+    artwork: [],
     is_owner: true,
     can_edit: true,
     owner: userSummary(),
