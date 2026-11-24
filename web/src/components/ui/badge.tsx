@@ -11,6 +11,10 @@ const badgeVariants = {
   // A quiet chip over a backdrop or poster: literal white on black, which
   // must not follow the theme (docs/design-system.md §1.2).
   "over-media": "border border-white/25 bg-black/30 text-white/90",
+  // The same chip in a poster card's corner: raw poster art has no backdrop
+  // dim under it, so the fill is darker, blurred and lifted.
+  "over-poster":
+    "border border-white/25 bg-black/60 text-white/90 shadow-lg backdrop-blur-sm",
   // The two chips of a music detail hero: a fact about the album or artist,
   // and a genre.
   muted: "border border-border/40 bg-muted/90 text-foreground",

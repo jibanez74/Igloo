@@ -487,7 +487,7 @@ of its own, as tall as its text: the size for the two link variants).
   | `FieldHint`, `FieldError` | none | a field's help and its error, one size and colour each (§3.7) |
   | `Card` | `surface` | `muted` (default: the Settings panel), `raised` (the opaque card), `error`, `danger` |
   | `CardTitle` | `tone` | `default`, `destructive` |
-  | `Badge` | `variant` | `default`, `outline`, `over-media` (a chip on a backdrop or poster, §1.2), `muted` and `tinted` (the fact and genre chips of a music hero) |
+  | `Badge` | `variant` | `default`, `outline`, `over-media` (a chip on a dimmed backdrop or hero, §1.2), `over-poster` (the same chip in a poster card's corner: raw art has no dim under it, so a darker, blurred, lifted fill), `muted` and `tinted` (the fact and genre chips of a music hero) |
   | `Badge` | `size` | `sm`, `default`, `lg` |
 
   A spinner's tone is `!important` on purpose: inside an outline button,
@@ -868,8 +868,9 @@ The styling families:
   `CARD_OVERLAY_REVEAL_CLASS` / `CARD_ACTION_REVEAL_CLASS` (hover/focus-within
   overlay + scaled action reveal), `CARD_FOCUS_WITHIN_RING_CLASS` (§1.7) and
   `MEDIA_FALLBACK_SURFACE_CLASS`, the tile under a card or hero whose media
-  is missing (§1.2). The chip over a poster or backdrop is the `Badge`'s
-  `over-media` variant (§1.6).
+  is missing (§1.2). The chip over a backdrop is the `Badge`'s `over-media`
+  variant, and the one in a poster card's corner its `over-poster` variant
+  (§1.6).
 - **Motion** — `MOTION_*`: page/section, media-overlay and -dialog,
   player-chrome, track-row and settings-surface classes, plus the
   loading/spinner states and the three `MOTION_DURATION_*_MS` numbers (§1.5).

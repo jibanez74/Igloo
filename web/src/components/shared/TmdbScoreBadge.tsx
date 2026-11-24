@@ -5,6 +5,8 @@ type TmdbScoreBadgeProps = Omit<ComponentProps<"span">, "children"> & {
   score: number;
   /** `sm` fits a poster card's corner; the default sits in a hero's chip row. */
   size?: "default" | "sm";
+  /** `over-poster` darkens the chip over raw poster art (§1.6). */
+  variant?: "over-media" | "over-poster";
 };
 
 /**
@@ -16,12 +18,13 @@ type TmdbScoreBadgeProps = Omit<ComponentProps<"span">, "children"> & {
 export default function TmdbScoreBadge({
   score,
   size = "default",
+  variant = "over-media",
   className,
   ...props
 }: TmdbScoreBadgeProps) {
   return (
     <Badge
-      variant="over-media"
+      variant={variant}
       size={size === "sm" ? "sm" : "lg"}
       className={className}
       {...props}
