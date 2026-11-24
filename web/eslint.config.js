@@ -140,10 +140,6 @@ const restrictedClassRule = [
   },
 ];
 
-// A button is a Button (docs/design-system.md section 1.6). The primitives
-// and the playback surfaces draw their own (the PLAYER_* transport recipes,
-// section 3.5); anywhere else a raw <button> says why inline: a whole row or
-// tile that is the control, or a control over media.
 // @shadcn/lint reads className, cn() and same-file class variables on the
 // components imported from components/ui (docs/design-system.md section
 // 2.1). Its theme is src/assets/styles.css, the stylesheet that imports
@@ -211,7 +207,12 @@ const shadcnRules = {
             "opacity-*",
             "shadow-glow",
           ],
-          deny: Array.from({ length: 10 }, (_, digit) => `h-${digit}*`),
+          // A glob's `*` needs at least one character, so `h-4` is listed
+          // beside `h-4*` (which covers `h-40`, `h-4.5`).
+          deny: Array.from({ length: 10 }, (_, digit) => [
+            `h-${digit}`,
+            `h-${digit}*`,
+          ]).flat(),
         },
       ],
     },
@@ -223,6 +224,10 @@ const shadcnRules = {
   "shadcn/no-inline-styles": "error",
 };
 
+// A button is a Button (docs/design-system.md section 1.6). The primitives
+// and the playback surfaces draw their own (the PLAYER_* transport recipes,
+// section 3.5); anywhere else a raw <button> says why inline: a whole row or
+// tile that is the control, or a control over media.
 const rawButtonRule = {
   selector: "JSXOpeningElement[name.name='button']",
   message:
