@@ -235,6 +235,31 @@ func playlistArtworkByID(t *testing.T, body []byte) map[int64][]string {
 	return byID
 }
 
+// playlistDetailArtwork reads the artwork of GET /api/music/playlists/{id},
+// which the music playlist page's header collage shows.
+func playlistDetailArtwork(t *testing.T, app *Application, userID, playlistID int64) []string {
+	t.Helper()
+
+	w := serveAs(t, app, userID, http.MethodGet, fmt.Sprintf("/api/music/playlists/%d", playlistID), "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("playlist %d status = %d: %s", playlistID, w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		Data struct {
+			Artwork []string `json:"artwork"`
+		} `json:"data"`
+	}
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Data.Artwork == nil {
+		t.Fatalf("playlist %d detail must send an artwork array: %s", playlistID, w.Body.String())
+	}
+	return resp.Data.Artwork
+}
+
 func TestGetPlaylists_CarriesDistinctCoversInPlaylistOrder(t *testing.T) {
 	app := setupSessionTestApp(t)
 	user := createTestUser(t, app, "Listener", "playlist-covers@example.com", false)
@@ -295,6 +320,14 @@ func TestGetPlaylists_CarriesDistinctCoversInPlaylistOrder(t *testing.T) {
 	}
 	if got := artwork[empty.ID]; len(got) != 0 {
 		t.Errorf("empty playlist artwork = %q, want none", got)
+	}
+
+	// The playlist page's header follows the same rule as the card.
+	if got := playlistDetailArtwork(t, app, user.ID, filled.ID); !slices.Equal(got, want) {
+		t.Errorf("detail artwork = %q, want %q", got, want)
+	}
+	if got := playlistDetailArtwork(t, app, user.ID, empty.ID); len(got) != 0 {
+		t.Errorf("empty playlist detail artwork = %q, want none", got)
 	}
 }
 
@@ -368,6 +401,10 @@ func TestPlaylistArtwork_LooksOnlyAtTheFirst24Items(t *testing.T) {
 		if got == nil || len(got) != 0 {
 			t.Errorf("%s artwork = %#v, want an empty array: nothing from beyond the first 24 items", target, got)
 		}
+	}
+
+	if got := playlistDetailArtwork(t, app, user.ID, tracks.ID); len(got) != 0 {
+		t.Errorf("detail artwork = %q, want none: nothing from beyond the first 24 items", got)
 	}
 }
 

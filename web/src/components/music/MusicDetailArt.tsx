@@ -1,5 +1,6 @@
 import { Disc3, ListMusic, User } from "lucide-react";
 import { usePosterFallback } from "@/hooks/usePosterFallback";
+import { PLAYLIST_COLLAGE_SIZE } from "@/lib/playlist-art";
 import { cn } from "@/lib/utils";
 
 type MusicDetailArtVariant = "album" | "musician" | "playlist";
@@ -43,6 +44,12 @@ type MusicDetailArtProps = {
   variant: MusicDetailArtVariant;
   /** The cover or photo URL, or "" to show the fallback. */
   src: string;
+  /**
+   * Image URLs drawn as a 2×2 grid in place of `src` when there are exactly
+   * four: a playlist page without its own cover shows its tracks' album
+   * covers (§3.2). Any other length leaves `src` alone.
+   */
+  collage?: readonly string[];
   /** The album, musician or playlist name, for the alt text. */
   name: string;
 };
@@ -55,10 +62,15 @@ type MusicDetailArtProps = {
 export default function MusicDetailArt({
   variant,
   src,
+  collage,
   name,
 }: MusicDetailArtProps) {
   const art = ART_BY_VARIANT[variant];
-  const { showPoster: showImage, onError } = usePosterFallback(src);
+  const isCollage = collage?.length === PLAYLIST_COLLAGE_SIZE;
+  // One failure state for the whole box: a collage with a hole reads as broken.
+  const { showPoster: showImage, onError } = usePosterFallback(
+    isCollage ? collage.join(" ") : src,
+  );
   const FallbackIcon = art.icon;
 
   return (
@@ -69,7 +81,27 @@ export default function MusicDetailArt({
           art.boxClassName,
         )}
       >
-        {showImage ? (
+        {showImage && isCollage ? (
+          <div
+            className="grid size-full grid-cols-2 grid-rows-2"
+            role="img"
+            aria-label={art.alt(name)}
+          >
+            {collage.map((url, slot) => (
+              <img
+                // Four fixed cells: two tracks' albums can share a cover URL.
+                key={slot}
+                src={url}
+                alt=""
+                width={320}
+                height={320}
+                decoding="async"
+                className="size-full min-h-0 object-cover"
+                onError={onError}
+              />
+            ))}
+          </div>
+        ) : showImage ? (
           <img
             src={src}
             alt={art.alt(name)}

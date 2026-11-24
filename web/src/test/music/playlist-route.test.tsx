@@ -110,6 +110,53 @@ describe("music playlist route", () => {
     });
   });
 
+  const cover = (name: string) => `/api/static/albums/${name}.jpg`;
+
+  it.each([
+    {
+      case: "draws a collage of four album covers when the playlist has no cover",
+      fields: { artwork: ["a", "b", "c", "d", "e"].map(cover) },
+      cells: ["a", "b", "c", "d"].map(cover),
+    },
+    {
+      case: "shows the first album cover alone when fewer than four have one",
+      fields: { artwork: ["a", "b"].map(cover) },
+      cells: [cover("a")],
+    },
+    {
+      case: "shows the playlist's own cover over its tracks' artwork",
+      fields: {
+        playlist: playlist({
+          id: 21,
+          name: "Road Trip",
+          cover_image: nullableString(cover("own")),
+        }),
+        artwork: ["a", "b", "c", "d"].map(cover),
+      },
+      cells: [cover("own")],
+    },
+  ])("$case", async ({ fields, cells }) => {
+    mockPlaylistFetch(roadTrip(fields));
+
+    await renderRoute("/music/playlist/21");
+
+    const art = await screen.findByRole("img", { name: "Playlist cover for Road Trip" });
+    const sources = (
+      art.tagName === "IMG" ? [art] : Array.from(art.querySelectorAll("img"))
+    ).map(image => image.getAttribute("src"));
+    expect(sources).toEqual(cells);
+  });
+
+  it("shows the placeholder when neither the playlist nor its tracks have artwork", async () => {
+    mockPlaylistFetch(roadTrip());
+
+    await renderRoute("/music/playlist/21");
+
+    expect(
+      await screen.findByRole("img", { name: "No cover available" }),
+    ).toBeInTheDocument();
+  });
+
   it("names the owner instead of Edit and Delete for a viewer who does not own the playlist", async () => {
     mockPlaylistFetch(
       roadTrip({
@@ -585,6 +632,44 @@ describe("music playlist route", () => {
       expect(titlesInOrder()).toEqual(["Borrowed Light", "Alabaster"]);
     });
     expect(showActionFailedMock).not.toHaveBeenCalled();
+  });
+
+  it("refreshes the header's artwork after a saved reorder", async () => {
+    const cover = (name: string) => `/api/static/albums/${name}.jpg`;
+    const mock = roadTrip({ artwork: [cover("alabaster"), cover("borrowed")] });
+    let saved = false;
+    mockPlaylistFetch(mock, {
+      "/api/music/playlists/21/tracks/reorder": () => {
+        saved = true;
+        return jsonResponse({ error: false, message: "Tracks reordered" });
+      },
+      // The server builds artwork in playlist order.
+      "GET /api/music/playlists/21": () =>
+        saved
+          ? { ...mock.detail, artwork: [cover("borrowed"), cover("alabaster")] }
+          : mock.detail,
+    });
+
+    await renderRoute("/music/playlist/21");
+    await screen.findByText("Alabaster");
+    const art = () => screen.getByRole("img", { name: "Playlist cover for Road Trip" });
+    expect(art()).toHaveAttribute("src", cover("alabaster"));
+    layOutTrackRows(["Alabaster", "Borrowed Light"]);
+
+    const handle = (
+      await screen.findAllByRole("button", { name: "Drag to reorder" })
+    )[1];
+    handle.focus();
+    pressKey(handle, "Space");
+    await screen.findByText(/^Picked up Borrowed Light/);
+    pressKey(handle, "ArrowUp");
+    await screen.findByText("Borrowed Light is over Alabaster");
+    pressKey(handle, "Space");
+
+    await waitFor(() => expect(saved).toBe(true));
+    await waitFor(() => {
+      expect(art()).toHaveAttribute("src", cover("borrowed"));
+    });
   });
 
   it("rejects a malformed playlist id without asking the API", async () => {

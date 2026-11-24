@@ -59,6 +59,66 @@ describe("MusicDetailArt", () => {
     ).toBeInTheDocument();
   });
 
+  const COLLAGE = ["/a.jpg", "/b.jpg", "/c.jpg", "/d.jpg"];
+
+  it("draws four images as one named 2×2 collage in place of src", () => {
+    render(
+      <MusicDetailArt
+        variant="playlist"
+        src=""
+        collage={COLLAGE}
+        name="Late Shift"
+      />,
+    );
+
+    const collage = screen.getByRole("img", { name: "Playlist cover for Late Shift" });
+    expect(collage).toHaveClass("grid-cols-2", "grid-rows-2");
+    const cells = Array.from(collage.querySelectorAll("img"));
+    expect(cells.map(cell => cell.getAttribute("src"))).toEqual(COLLAGE);
+    // The cells are decorative: the grid carries the name, and like the
+    // single hero image they load eagerly.
+    for (const cell of cells) {
+      expect(cell).toHaveAttribute("alt", "");
+      expect(cell).not.toHaveAttribute("loading");
+    }
+  });
+
+  it("swaps the whole collage for the placeholder when one cell fails", () => {
+    render(
+      <MusicDetailArt
+        variant="playlist"
+        src=""
+        collage={COLLAGE}
+        name="Late Shift"
+      />,
+    );
+
+    const cells = screen
+      .getByRole("img", { name: "Playlist cover for Late Shift" })
+      .querySelectorAll("img");
+    fireEvent.error(cells[2]);
+
+    expect(
+      screen.getByRole("img", { name: "No cover available" }),
+    ).toBeInTheDocument();
+    expect(document.querySelectorAll("img")).toHaveLength(0);
+  });
+
+  it("ignores a collage without four images and shows src", () => {
+    render(
+      <MusicDetailArt
+        variant="playlist"
+        src="/a.jpg"
+        collage={["/a.jpg", "/b.jpg"]}
+        name="Late Shift"
+      />,
+    );
+
+    expect(
+      screen.getByRole("img", { name: "Playlist cover for Late Shift" }),
+    ).toHaveAttribute("src", "/a.jpg");
+  });
+
   it.each(["album", "musician", "playlist"] as const)(
     "gives the %s skeleton the same box as the art",
     variant => {

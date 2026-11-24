@@ -6,7 +6,8 @@ import (
 	"slices"
 )
 
-// maxPlaylistArtwork is how many images a playlist card's collage shows.
+// maxPlaylistArtwork is how many images a playlist collage shows, on the card
+// and on the music playlist page.
 const maxPlaylistArtwork = 4
 
 // decodeImageList reads the JSON array of image references a list query built

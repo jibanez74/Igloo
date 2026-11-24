@@ -360,3 +360,69 @@ test.describe("dragging a track", () => {
     await expect.poll(() => reorders).toEqual([[1001, 1005, 1002, 1003, 1004, 1006]]);
   });
 });
+
+test.describe("header art", () => {
+  const COLLAGE_PLAYLIST_ID = 57;
+  const covers = [1, 2, 3, 4].map(n => `/api/static/albums/${n}.jpg`);
+
+  test("draws a 2×2 collage of album covers for a playlist without its own cover", async ({ page }) => {
+    const tracks = Array.from({ length: 4 }, (_, index) => longHaulTrack(index + 1));
+    const details = playlistDetail({
+      playlist: playlist({ id: COLLAGE_PLAYLIST_ID, name: "Four Corners" }),
+      track_count: tracks.length,
+      duration: tracks.length * 200_000,
+      artwork: covers,
+    });
+
+    await mockApi(page, {
+      handle: async ({ route, url, method }) => {
+        const base = `/api/music/playlists/${COLLAGE_PLAYLIST_ID}`;
+        if (method !== "GET") return false;
+
+        if (url.pathname === base) {
+          await fulfillJSON(route, apiResponse(details));
+          return true;
+        }
+
+        if (url.pathname === `${base}/tracks`) {
+          await fulfillJSON(route, apiResponse({
+            tracks,
+            total: tracks.length,
+            has_more: false,
+            next_offset: tracks.length,
+          }));
+          return true;
+        }
+
+        if (url.pathname === "/api/music/tracks/liked-ids") {
+          await fulfillJSON(route, apiResponse({ liked_track_ids: [] }));
+          return true;
+        }
+
+        return false;
+      },
+    });
+
+    await page.goto(`/music/playlist/${COLLAGE_PLAYLIST_ID}`);
+
+    const collage = page.getByRole("img", { name: "Playlist cover for Four Corners" });
+    await expect(collage).toBeVisible();
+    const cells = collage.locator("img");
+    await expect(cells).toHaveCount(4);
+    for (const [slot, cover] of covers.entries()) {
+      await expect(cells.nth(slot)).toHaveAttribute("src", cover);
+      // Loaded, not the broken-image fallback that swaps in the placeholder.
+      await expect
+        .poll(() => cells.nth(slot).evaluate(img => (img as HTMLImageElement).naturalWidth))
+        .toBeGreaterThan(0);
+    }
+
+    // The grid fills the square: each cell is a quarter of the box.
+    const box = await collage.boundingBox();
+    const cell = await cells.first().boundingBox();
+    expect(box).not.toBeNull();
+    expect(cell).not.toBeNull();
+    expect(Math.abs(cell!.width * 2 - box!.width)).toBeLessThanOrEqual(1);
+    expect(Math.abs(cell!.height * 2 - box!.height)).toBeLessThanOrEqual(1);
+  });
+});
