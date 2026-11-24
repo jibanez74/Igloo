@@ -100,14 +100,18 @@ export const Route = createFileRoute("/_auth/search/")({
     const { queryClient } = context;
     if (tab === "all") {
       await loadOnEntry(cause, [
-        queryClient.ensureQueryData(searchAllQueryOpts(trimmed)),
+        queryClient.query({
+          ...searchAllQueryOpts(trimmed),
+          staleTime: "static",
+        }),
       ]);
       return;
     }
 
-    const results = queryClient.ensureQueryData(
-      searchCategoryQueryOpts(tab, trimmed, page, SEARCH_PER_PAGE),
-    );
+    const results = queryClient.query({
+      ...searchCategoryQueryOpts(tab, trimmed, page, SEARCH_PER_PAGE),
+      staleTime: "static",
+    });
     // A new query, tab or page from the header and the pager is always in
     // range, so only an entered URL needs the last-page clamp below.
     if (cause === "stay") {

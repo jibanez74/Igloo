@@ -40,7 +40,10 @@ export const Route = createFileRoute(
       queryClient: context.queryClient,
       media: episodeMediaRef(episodeId),
       ensureDetails: () =>
-        context.queryClient.ensureQueryData(showEpisodeQueryOpts(episodeId)),
+        context.queryClient.query({
+          ...showEpisodeQueryOpts(episodeId),
+          staleTime: "static",
+        }),
       deps,
     });
     if (search) {

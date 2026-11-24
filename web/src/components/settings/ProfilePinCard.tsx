@@ -1,5 +1,5 @@
 import { useId, useRef, useState } from "react";
-import type { FormEvent } from "react";
+import type { SubmitEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSessionMutation } from "@/hooks/useSessionMutation";
 import { Card, CardContent } from "@/components/ui/card";
@@ -159,7 +159,7 @@ export default function ProfilePinCard() {
     return true;
   };
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     // In the order the fields are in, so the first invalid one takes focus.

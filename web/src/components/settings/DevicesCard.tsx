@@ -1,5 +1,5 @@
 import { useId, useLayoutEffect, useRef, useState } from "react";
-import type { FormEvent } from "react";
+import type { SubmitEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSessionMutation } from "@/hooks/useSessionMutation";
 import { Card, CardContent } from "@/components/ui/card";
@@ -124,7 +124,7 @@ export default function DevicesCard() {
     },
   });
 
-  const handleRenameSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleRenameSubmit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!deviceToRename) return;
 

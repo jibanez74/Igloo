@@ -1166,8 +1166,9 @@ six sections in order — `WatchRooms`, `ContinueWatching`, `LatestMovies`,
   each card at a fixed width (`HOME_RAIL_POSTER_ITEM_CLASS` /
   `HOME_RAIL_ALBUM_ITEM_CLASS`), so the page is as tall on a phone as on a
   desktop.
-- The route loader `ensureQueryData`s every one of these queries, so the
-  page arrives complete rather than popping in section by section.
+- The route loader loads every one of these queries (`queryClient.query`
+  with `staleTime: "static"`, so cached data is used as it is), and the page
+  arrives complete rather than popping in section by section.
 
 Each row's cards sit in a `<ul role="list">` named by the
 row's heading (`aria-labelledby`), one `<li>` per card, so a screen reader names
@@ -1635,7 +1636,8 @@ is unknown or empty.
 ### 3.4 UI states — loading, empty, error
 
 - **Loading, two tiers.** Route navigations suspend in loaders
-  (`ensureQueryData` + `defaultPreload: "intent"`). Once a loader outlasts
+  (`queryClient.query` with `staleTime: "static"`, plus
+  `defaultPreload: "intent"`). Once a loader outlasts
   the router's `pendingMs`, the pending view renders **inside the shell's
   content area**, so the sidebar and header stay put. A detail route shows
   its own skeleton: it lifts the skeleton it hands `MediaDetailGuard` into

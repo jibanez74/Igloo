@@ -15,7 +15,7 @@ async function refetchWith(cached: unknown, answer: unknown) {
   const opts = watchRoomQueryOpts(7);
   client.setQueryData(opts.queryKey, cached as never);
   getWatchRoomMock.mockResolvedValueOnce(answer);
-  const result = await client.fetchQuery({ ...opts, staleTime: 0 });
+  const result = await client.query({ ...opts, staleTime: 0 });
   expect(getWatchRoomMock).toHaveBeenCalled();
   return result;
 }

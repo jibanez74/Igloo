@@ -34,9 +34,10 @@ export const Route = createFileRoute("/_auth/movies/$id/play")({
       queryClient: context.queryClient,
       media: movieMediaRef(movieId),
       ensureDetails: () =>
-        context.queryClient.ensureQueryData(
-          libraryMovieDetailsQueryOpts(movieId),
-        ),
+        context.queryClient.query({
+          ...libraryMovieDetailsQueryOpts(movieId),
+          staleTime: "static",
+        }),
       deps,
     });
     if (search) {

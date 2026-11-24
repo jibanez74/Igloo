@@ -1,4 +1,4 @@
-import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
+import { infiniteQueryOptions, noop, queryOptions } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import type {
   ApiResponseType,
@@ -658,7 +658,7 @@ export function likedTrackIdsQueryOpts() {
  * waits on it: a failure leaves the hearts disabled, as before.
  */
 export function warmLikedTrackIds(queryClient: QueryClient) {
-  void queryClient.prefetchQuery(likedTrackIdsQueryOpts());
+  void queryClient.query(likedTrackIdsQueryOpts()).catch(noop);
 }
 
 export function likedTracksQueryOpts(

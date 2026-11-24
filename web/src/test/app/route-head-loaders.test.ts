@@ -64,7 +64,7 @@ const FAILURE = { error: true, message: "Not found" } as const;
 
 // Runs a route's loader against a query cache seeded with `seed`, then hands
 // the result to its head, exactly as the router does after a load. Seeded data
-// satisfies ensureQueryData, so nothing reaches the network.
+// satisfies a static-staleTime query(), so nothing reaches the network.
 async function headAfterLoad(
   route: RouteWithHead,
   seed: [queryKey: readonly unknown[], data: unknown][],

@@ -59,9 +59,10 @@ export const Route = createFileRoute("/_auth/people/$id")({
   loader: async ({ context, params }) => {
     const id = parseRouteId(params.id);
     if (id == null) return { person: null };
-    const response = await context.queryClient.ensureQueryData(
-      personQueryOpts(id),
-    );
+    const response = await context.queryClient.query({
+      ...personQueryOpts(id),
+      staleTime: "static",
+    });
     return { person: response.error ? null : response.data.person };
   },
   head: ({ loaderData }) =>

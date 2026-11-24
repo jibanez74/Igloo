@@ -192,7 +192,7 @@ describe("musician details route prefetch", () => {
     const detailsUrl = "/api/music/musicians/20";
     const likedIdsUrl = "/api/music/tracks/liked-ids";
 
-    await queryClient.prefetchQuery(musicianDetailsQueryOpts(20));
+    await queryClient.query(musicianDetailsQueryOpts(20));
     expect(countFetchRequests(fetchMock, detailsUrl)).toBe(1);
     expect(countFetchRequests(fetchMock, likedIdsUrl)).toBe(0);
 

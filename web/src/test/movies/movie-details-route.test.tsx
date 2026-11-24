@@ -340,7 +340,7 @@ describe("movie details route prefetch", () => {
     const queryClient = createTestQueryClient();
     const detailsUrl = "/api/movies/details/57";
 
-    await queryClient.prefetchQuery(libraryMovieDetailsQueryOpts(57));
+    await queryClient.query(libraryMovieDetailsQueryOpts(57));
     expect(countFetchRequests(fetchMock, detailsUrl)).toBe(1);
     expect(
       countFetchRequests(fetchMock, "/api/movies/57/technical-details"),

@@ -68,7 +68,7 @@ async function signedInUser(queryClient: QueryClient) {
   if (cached?.error === false && !query?.isStaleByTime(STALE_1M) && !isSessionEnding()) {
     return cached;
   }
-  return queryClient.fetchQuery(authUserQueryOpts({ revalidate: true }));
+  return queryClient.query(authUserQueryOpts({ revalidate: true }));
 }
 
 // The music player lives with the shell, not above the router: the login

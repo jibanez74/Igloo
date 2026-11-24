@@ -56,7 +56,7 @@ describe("show details route", () => {
     const detailsUrl = `/api/shows/details/${SHOW_ID}`;
     const episodesUrl = `/api/shows/${SHOW_ID}/seasons/1/episodes`;
 
-    await queryClient.prefetchQuery(showDetailsQueryOpts(SHOW_ID));
+    await queryClient.query(showDetailsQueryOpts(SHOW_ID));
     expect(countFetchRequests(fetchMock, detailsUrl)).toBe(1);
     expect(countFetchRequests(fetchMock, episodesUrl)).toBe(0);
 

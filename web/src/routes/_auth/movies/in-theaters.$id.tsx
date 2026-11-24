@@ -45,9 +45,10 @@ export const Route = createFileRoute("/_auth/movies/in-theaters/$id")({
     const movieId = parseRouteId(params.id);
     if (movieId == null) return { movie: null };
 
-    const res = await context.queryClient.ensureQueryData(
-      movieDetailsQueryOpts(movieId),
-    );
+    const res = await context.queryClient.query({
+      ...movieDetailsQueryOpts(movieId),
+      staleTime: "static",
+    });
     const movie = res.error ? null : res.data.movie;
 
     return {

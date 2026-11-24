@@ -78,11 +78,11 @@ describe("abort signals", () => {
   // One factory of each shape: a helper with no arguments, one with
   // arguments, a paged list, an infinite list and a scan-status poll.
   it.each([
-    ["the signed-in user", (client: QueryClient) => client.fetchQuery(authUserQueryOpts())],
-    ["a movie's details", (client: QueryClient) => client.fetchQuery(libraryMovieDetailsQueryOpts(7))],
-    ["a library page", (client: QueryClient) => client.fetchQuery(moviesLibraryQueryOpts(2))],
-    ["an infinite list", (client: QueryClient) => client.fetchInfiniteQuery(tracksInfiniteQueryOpts())],
-    ["a scan status poll", (client: QueryClient) => client.fetchQuery(scanStatusQueryOpts())],
+    ["the signed-in user", (client: QueryClient) => client.query(authUserQueryOpts())],
+    ["a movie's details", (client: QueryClient) => client.query(libraryMovieDetailsQueryOpts(7))],
+    ["a library page", (client: QueryClient) => client.query(moviesLibraryQueryOpts(2))],
+    ["an infinite list", (client: QueryClient) => client.infiniteQuery(tracksInfiniteQueryOpts())],
+    ["a scan status poll", (client: QueryClient) => client.query(scanStatusQueryOpts())],
   ])("aborts the request for %s when its query is cancelled", async (_name, start) => {
     const signals: (AbortSignal | null | undefined)[] = [];
     vi.stubGlobal(

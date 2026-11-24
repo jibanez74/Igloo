@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSessionMutation } from "@/hooks/useSessionMutation";
 import { Fragment, useId, useRef, useState } from "react";
-import type { FormEvent, ReactNode } from "react";
+import type { ReactNode, SubmitEvent } from "react";
 import {
   AlertCircle,
   Disc3,
@@ -302,7 +302,7 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
     setFeedback(DEFAULT_FEEDBACK);
   };
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     setFeedback({ message: "Saving library paths...", tone: "neutral" });

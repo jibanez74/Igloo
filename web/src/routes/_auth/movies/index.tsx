@@ -2,7 +2,6 @@ import {
   useEffect,
   useRef,
   useState,
-  type MutableRefObject,
   type RefObject,
 } from "react";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
@@ -96,32 +95,46 @@ export const Route = createFileRoute("/_auth/movies/")({
     const { queryClient } = context;
     // The stats sit above every tab; the rest warms only the tab on show.
     const promises: Promise<unknown>[] = [
-      queryClient.ensureQueryData(moviesStatsQueryOpts()),
+      queryClient.query({ ...moviesStatsQueryOpts(), staleTime: "static" }),
     ];
     if (tab === "all") {
       promises.push(
-        queryClient.ensureQueryData(
-          moviesLibraryQueryOpts(allPage, MOVIES_PER_PAGE, sort),
-        ),
+        queryClient.query({
+          ...moviesLibraryQueryOpts(allPage, MOVIES_PER_PAGE, sort),
+          staleTime: "static",
+        }),
       );
     }
     if (tab === "genres") {
-      promises.push(queryClient.ensureQueryData(moviesGenresQueryOpts()));
+      promises.push(queryClient.query({
+        ...moviesGenresQueryOpts(),
+        staleTime: "static",
+      }));
       if (genreId != null && genreId > 0) {
         promises.push(
-          queryClient.ensureQueryData(
-            moviesByGenreQueryOpts(genreId, genresPage, MOVIES_PER_PAGE, sort),
-          ),
+          queryClient.query({
+            ...moviesByGenreQueryOpts(
+              genreId,
+              genresPage,
+              MOVIES_PER_PAGE,
+              sort,
+            ),
+            staleTime: "static",
+          }),
         );
       }
     }
     if (tab === "playlists") {
       promises.push(
         playlistsView === "liked"
-          ? queryClient.ensureQueryData(
-              likedMoviesQueryOpts(playlistsPage, MOVIES_PER_PAGE, sort),
-            )
-          : queryClient.ensureQueryData(moviePlaylistsQueryOpts()),
+          ? queryClient.query({
+              ...likedMoviesQueryOpts(playlistsPage, MOVIES_PER_PAGE, sort),
+              staleTime: "static",
+            })
+          : queryClient.query({
+              ...moviePlaylistsQueryOpts(),
+              staleTime: "static",
+            }),
       );
     }
     await loadOnEntry(cause, promises);
@@ -519,7 +532,7 @@ type PlaylistsTabContentProps = {
   playlistsView: "liked" | undefined;
   playlistsPage: number;
   sort: SortOrder;
-  focusIntentRef: MutableRefObject<PlaylistsFocusIntent | null>;
+  focusIntentRef: RefObject<PlaylistsFocusIntent | null>;
   primeEnterLikedFocus: () => void;
   playlistsTabTriggerRef: RefObject<HTMLButtonElement | null>;
 };
@@ -662,7 +675,7 @@ type LikedMoviesInPlaylistsTabProps = {
   playlistsPage: number;
   sort: SortOrder;
   onExitLiked: () => void;
-  focusIntentRef: MutableRefObject<PlaylistsFocusIntent | null>;
+  focusIntentRef: RefObject<PlaylistsFocusIntent | null>;
 };
 
 function LikedMoviesInPlaylistsTab({

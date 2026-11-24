@@ -236,7 +236,7 @@ export function AudioPlayerProvider({
 
     const queueId = liveQueueIdRef.current;
     for (const [staleCover, albumId] of albumByStaleCover) {
-      const response = await queryClient.fetchQuery(
+      const response = await queryClient.query(
         albumDetailsQueryOpts(albumId),
       );
       if (liveQueueIdRef.current !== queueId) return;

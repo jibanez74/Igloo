@@ -27,12 +27,15 @@ export const Route = createFileRoute("/_auth/")({
     const { queryClient } = context;
 
     await Promise.all([
-      queryClient.ensureQueryData(watchRoomsQueryOpts()),
-      queryClient.ensureQueryData(continueWatchingQueryOpts()),
-      queryClient.ensureQueryData(latestMoviesQueryOpts()),
-      queryClient.ensureQueryData(latestShowsQueryOpts()),
-      queryClient.ensureQueryData(latestAlbumsQueryOpts()),
-      queryClient.ensureQueryData(inTheatersQueryOpts()),
+      queryClient.query({ ...watchRoomsQueryOpts(), staleTime: "static" }),
+      queryClient.query({
+        ...continueWatchingQueryOpts(),
+        staleTime: "static",
+      }),
+      queryClient.query({ ...latestMoviesQueryOpts(), staleTime: "static" }),
+      queryClient.query({ ...latestShowsQueryOpts(), staleTime: "static" }),
+      queryClient.query({ ...latestAlbumsQueryOpts(), staleTime: "static" }),
+      queryClient.query({ ...inTheatersQueryOpts(), staleTime: "static" }),
     ]);
   },
   component: HomePage,

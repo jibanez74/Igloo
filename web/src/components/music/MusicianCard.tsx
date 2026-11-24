@@ -1,6 +1,6 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { noop, useQueryClient } from "@tanstack/react-query";
 import { User } from "lucide-react";
 import { musicianDetailsQueryOpts } from "@/lib/query-opts";
 import { usePosterFallback } from "@/hooks/usePosterFallback";
@@ -28,7 +28,7 @@ export default function MusicianCard({ musician }: MusicianCardProps) {
   const { showPoster: showThumb, onError } = usePosterFallback(thumbUrl);
 
   const handlePrefetch = () =>
-    queryClient.prefetchQuery(musicianDetailsQueryOpts(id));
+    queryClient.query(musicianDetailsQueryOpts(id)).catch(noop);
 
   return (
     <article

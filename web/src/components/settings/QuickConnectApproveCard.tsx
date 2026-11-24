@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import type { FormEvent } from "react";
+import type { SubmitEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSessionMutation } from "@/hooks/useSessionMutation";
 import { sessionEndedSince, sessionStamp } from "@/lib/session";
@@ -141,7 +141,7 @@ export default function QuickConnectApproveCard() {
     },
   });
 
-  // The mutationFn refreshes [DEVICES_KEY] itself via fetchQuery, and the poll
+  // The mutationFn refreshes [DEVICES_KEY] itself via query(), and the poll
   // below keeps it current, so there is nothing left to invalidate.
   // react-doctor-disable-next-line react-doctor/query-mutation-missing-invalidation
   const approveMutation = useSessionMutation({
@@ -151,7 +151,7 @@ export default function QuickConnectApproveCard() {
 
       try {
         baselineDeviceIds = getDeviceIds(
-          await queryClient.fetchQuery({
+          await queryClient.query({
             ...devicesQueryOpts(),
             staleTime: 0,
           }),
@@ -253,7 +253,7 @@ export default function QuickConnectApproveCard() {
     return () => window.clearTimeout(timeout);
   }, [waiting, queryClient]);
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     // The field that has to change takes focus, also when Continue was

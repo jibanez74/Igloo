@@ -28,9 +28,10 @@ export const Route = createFileRoute("/_auth/watch-rooms/$id")({
   loader: async ({ context, params: { id } }) => {
     if (id === null) return { movieTitle: null };
 
-    const res = await context.queryClient.ensureQueryData(
-      watchRoomQueryOpts(id),
-    );
+    const res = await context.queryClient.query({
+      ...watchRoomQueryOpts(id),
+      staleTime: "static",
+    });
     const playbackMode = res.error ? undefined : res.data.room?.playback_mode;
     if (playbackMode && playbackMode !== "direct") preloadHlsLight();
 
