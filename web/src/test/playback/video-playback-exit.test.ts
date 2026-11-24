@@ -149,11 +149,11 @@ describe("playback exit synchronization", () => {
   it("invalidates continue watching and the movie's watch progress", async () => {
     const queryClient = createTestQueryClient();
     const movieId = 7;
-    await queryClient.prefetchQuery({
+    await queryClient.query({
       queryKey: [CONTINUE_WATCHING_KEY],
       queryFn: () => Promise.resolve("continue-watching"),
     });
-    await queryClient.prefetchQuery({
+    await queryClient.query({
       queryKey: [MOVIE_WATCH_PROGRESS_KEY, movieId],
       queryFn: () => Promise.resolve("watch-progress"),
     });
@@ -175,15 +175,15 @@ describe("playback exit synchronization", () => {
   it("invalidates continue watching, the season list, and the episode's watch progress", async () => {
     const queryClient = createTestQueryClient();
     const episodeId = 9;
-    await queryClient.prefetchQuery({
+    await queryClient.query({
       queryKey: [CONTINUE_WATCHING_KEY],
       queryFn: () => Promise.resolve("continue-watching"),
     });
-    await queryClient.prefetchQuery({
+    await queryClient.query({
       queryKey: [SHOW_SEASON_EPISODES_KEY, 401, 1],
       queryFn: () => Promise.resolve("episodes"),
     });
-    await queryClient.prefetchQuery({
+    await queryClient.query({
       queryKey: [EPISODE_WATCH_PROGRESS_KEY, episodeId],
       queryFn: () => Promise.resolve("watch-progress"),
     });
@@ -212,7 +212,7 @@ describe("playback exit synchronization", () => {
   it("marks every cached episode stale without refetching it", async () => {
     const queryClient = createTestQueryClient();
     for (const episodeId of [8, 9]) {
-      await queryClient.prefetchQuery({
+      await queryClient.query({
         queryKey: [EPISODE_KEY, episodeId],
         queryFn: () => Promise.resolve(`episode-${episodeId}`),
       });
@@ -240,7 +240,7 @@ describe("playback exit synchronization", () => {
 
   it("leaves cached episodes alone after a movie", async () => {
     const queryClient = createTestQueryClient();
-    await queryClient.prefetchQuery({
+    await queryClient.query({
       queryKey: [EPISODE_KEY, 8],
       queryFn: () => Promise.resolve("episode-8"),
     });
@@ -255,11 +255,11 @@ describe("playback exit synchronization", () => {
 
   it("only marks inactive lists stale when asked to refetch active ones", async () => {
     const queryClient = createTestQueryClient();
-    await queryClient.prefetchQuery({
+    await queryClient.query({
       queryKey: [CONTINUE_WATCHING_KEY],
       queryFn: () => Promise.resolve("continue-watching"),
     });
-    await queryClient.prefetchQuery({
+    await queryClient.query({
       queryKey: [SHOW_SEASON_EPISODES_KEY, 402, 2],
       queryFn: () => Promise.resolve("other-season"),
     });

@@ -487,7 +487,7 @@ of its own, as tall as its text: the size for the two link variants).
   | `FieldHint`, `FieldError` | none | a field's help and its error, one size and colour each (§3.7) |
   | `Card` | `surface` | `muted` (default: the Settings panel), `raised` (the opaque card), `error`, `danger` |
   | `CardTitle` | `tone` | `default`, `destructive` |
-  | `Badge` | `variant` | `default`, `outline`, `over-media` (a chip on a backdrop or poster, §1.2), `muted` and `tinted` (the fact and genre chips of a music hero) |
+  | `Badge` | `variant` | `default`, `outline`, `over-media` (a chip on a dimmed backdrop or hero, §1.2), `over-poster` (the same chip in a poster card's corner: raw art has no dim under it, so a darker, blurred, lifted fill), `muted` and `tinted` (the fact and genre chips of a music hero) |
   | `Badge` | `size` | `sm`, `default`, `lg` |
 
   A spinner's tone is `!important` on purpose: inside an outline button,
@@ -868,8 +868,9 @@ The styling families:
   `CARD_OVERLAY_REVEAL_CLASS` / `CARD_ACTION_REVEAL_CLASS` (hover/focus-within
   overlay + scaled action reveal), `CARD_FOCUS_WITHIN_RING_CLASS` (§1.7) and
   `MEDIA_FALLBACK_SURFACE_CLASS`, the tile under a card or hero whose media
-  is missing (§1.2). The chip over a poster or backdrop is the `Badge`'s
-  `over-media` variant (§1.6).
+  is missing (§1.2). The chip over a backdrop is the `Badge`'s `over-media`
+  variant, and the one in a poster card's corner its `over-poster` variant
+  (§1.6).
 - **Motion** — `MOTION_*`: page/section, media-overlay and -dialog,
   player-chrome, track-row and settings-surface classes, plus the
   loading/spinner states and the three `MOTION_DURATION_*_MS` numbers (§1.5).
@@ -1166,8 +1167,9 @@ six sections in order — `WatchRooms`, `ContinueWatching`, `LatestMovies`,
   each card at a fixed width (`HOME_RAIL_POSTER_ITEM_CLASS` /
   `HOME_RAIL_ALBUM_ITEM_CLASS`), so the page is as tall on a phone as on a
   desktop.
-- The route loader `ensureQueryData`s every one of these queries, so the
-  page arrives complete rather than popping in section by section.
+- The route loader loads every one of these queries (`queryClient.query`
+  with `staleTime: "static"`, so cached data is used as it is), and the page
+  arrives complete rather than popping in section by section.
 
 Each row's cards sit in a `<ul role="list">` named by the
 row's heading (`aria-labelledby`), one `<li>` per card, so a screen reader names
@@ -1635,7 +1637,8 @@ is unknown or empty.
 ### 3.4 UI states — loading, empty, error
 
 - **Loading, two tiers.** Route navigations suspend in loaders
-  (`ensureQueryData` + `defaultPreload: "intent"`). Once a loader outlasts
+  (`queryClient.query` with `staleTime: "static"`, plus
+  `defaultPreload: "intent"`). Once a loader outlasts
   the router's `pendingMs`, the pending view renders **inside the shell's
   content area**, so the sidebar and header stay put. A detail route shows
   its own skeleton: it lifts the skeleton it hands `MediaDetailGuard` into

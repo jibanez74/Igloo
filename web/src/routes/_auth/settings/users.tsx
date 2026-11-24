@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSessionMutation } from "@/hooks/useSessionMutation";
 import { useId, useRef, useState } from "react";
-import type { FormEvent } from "react";
+import type { SubmitEvent } from "react";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -477,7 +477,7 @@ function CreateUserDialog({
   const passwordDescriptionId = `${passwordId}-description`;
   const passwordErrorId = `${passwordId}-error`;
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = (e: SubmitEvent) => {
     e.preventDefault();
     const trimmedName = name.trim();
     const trimmedEmail = email.trim();
@@ -662,7 +662,7 @@ function EditUserDialog({
   const nameErrorId = `${nameId}-error`;
   const emailErrorId = `${emailId}-error`;
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = (e: SubmitEvent) => {
     e.preventDefault();
     const trimmedName = name.trim();
     const trimmedEmail = email.trim();
@@ -903,7 +903,7 @@ function ResetPasswordDialog({
   const passwordErrorId = `${passwordId}-error`;
   const confirmPasswordErrorId = `${confirmPasswordId}-error`;
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = (e: SubmitEvent) => {
     e.preventDefault();
     const nextErrors: UserFormErrors = {};
 

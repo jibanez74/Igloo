@@ -85,9 +85,10 @@ export const Route = createFileRoute("/_auth/trailer")({
       return { movieTitle: null };
     }
 
-    const res = await context.queryClient.ensureQueryData(
-      movieDetailsQueryOpts(deps.tmdbId),
-    );
+    const res = await context.queryClient.query({
+      ...movieDetailsQueryOpts(deps.tmdbId),
+      staleTime: "static",
+    });
 
     return {
       movieTitle: !res.error ? (res.data.movie?.title ?? null) : null,

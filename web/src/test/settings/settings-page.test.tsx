@@ -19,7 +19,7 @@ describe("SettingsPage", () => {
   });
 
   it("is the form itself for a tab saved by a Save bar", () => {
-    const onSubmit = vi.fn((event: React.FormEvent) => event.preventDefault());
+    const onSubmit = vi.fn((event: React.SubmitEvent) => event.preventDefault());
     render(
       <SettingsPage as="form" data-testid="page" noValidate onSubmit={onSubmit}>
         <button type="submit">Save</button>

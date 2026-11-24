@@ -50,16 +50,18 @@ export const Route = createFileRoute("/_auth/tv-shows/$id/")({
 
     // A URL naming its season (a reload, a shared link, the trailer's return
     // link) starts that season's episodes beside the details instead of after
-    // them; the ensureQueryData below joins the request already in flight.
+    // them; the query() below joins the request already in flight.
     // A cached season is used as it is, as below.
     if (season != null) {
-      void context.queryClient.ensureQueryData(
-        showSeasonEpisodesQueryOpts(showId, season),
-      );
+      void context.queryClient.query({
+        ...showSeasonEpisodesQueryOpts(showId, season),
+        staleTime: "static",
+      });
     }
-    const details = await context.queryClient.ensureQueryData(
-      showDetailsQueryOpts(showId),
-    );
+    const details = await context.queryClient.query({
+      ...showDetailsQueryOpts(showId),
+      staleTime: "static",
+    });
 
     if (details.error) return { show: null };
     const detailsShow = details.data?.show;
@@ -97,9 +99,10 @@ export const Route = createFileRoute("/_auth/tv-shows/$id/")({
     // A season switch keeps the page and lets the episode list show its own
     // loading state; entering the page waits so the hero's Play arrives with it.
     await loadOnEntry(cause, [
-      context.queryClient.ensureQueryData(
-        showSeasonEpisodesQueryOpts(showId, selected),
-      ),
+      context.queryClient.query({
+        ...showSeasonEpisodesQueryOpts(showId, selected),
+        staleTime: "static",
+      }),
     ]);
 
     return { show };

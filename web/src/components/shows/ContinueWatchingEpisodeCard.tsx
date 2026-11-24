@@ -1,4 +1,4 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { noop, useQueryClient } from "@tanstack/react-query";
 import { Tv } from "lucide-react";
 import PosterCard from "@/components/shared/PosterCard";
 import { TMDB_POSTER_SIZE } from "@/lib/constants";
@@ -24,7 +24,7 @@ export default function ContinueWatchingEpisodeCard({
   const queryClient = useQueryClient();
 
   const handlePrefetch = () =>
-    queryClient.prefetchQuery(showDetailsQueryOpts(episode.show_id));
+    queryClient.query(showDetailsQueryOpts(episode.show_id)).catch(noop);
 
   const code = episodeCode(episode.season_number, episode.episode_number);
   const subtitle = `${code} · ${episode.episode_name}`;

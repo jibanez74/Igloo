@@ -122,6 +122,10 @@ describe("Badge", () => {
     ["default", ["bg-primary", "text-primary-foreground"]],
     ["outline", ["border-border", "bg-background/60", "text-muted-foreground"]],
     ["over-media", ["border-white/25", "bg-black/30", "text-white/90"]],
+    [
+      "over-poster",
+      ["border-white/25", "bg-black/60", "text-white/90", "shadow-lg", "backdrop-blur-sm"],
+    ],
     ["muted", ["border-border/40", "bg-muted/90", "text-foreground"]],
     ["tinted", ["border-primary/30", "bg-muted/80", "text-primary"]],
   ] as const)("draws the %s variant", (variant, classes) => {

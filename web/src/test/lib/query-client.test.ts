@@ -38,9 +38,9 @@ describe("a query using freshFor", () => {
       staleTime: freshFor(STALE_LIST),
     });
 
-    await queryClient.fetchQuery(options);
+    await queryClient.query(options);
     vi.advanceTimersByTime(gapMs);
-    await queryClient.fetchQuery(options);
+    await queryClient.query(options);
     queryClient.clear();
 
     return queryFn.mock.calls.length;

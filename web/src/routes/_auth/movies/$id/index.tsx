@@ -74,18 +74,27 @@ export const Route = createFileRoute("/_auth/movies/$id/")({
     if (movieId == null) return { movie: null };
 
     const [details] = await Promise.all([
-      context.queryClient.ensureQueryData(
-        libraryMovieDetailsQueryOpts(movieId),
-      ),
-      context.queryClient.ensureQueryData(
-        movieTechnicalDetailsQueryOpts(movieId),
-      ),
-      context.queryClient.ensureQueryData(movieLikeStatusQueryOpts(movieId)),
-      context.queryClient.ensureQueryData(
-        movieWatchProgressQueryOpts(movieId),
-      ),
+      context.queryClient.query({
+        ...libraryMovieDetailsQueryOpts(movieId),
+        staleTime: "static",
+      }),
+      context.queryClient.query({
+        ...movieTechnicalDetailsQueryOpts(movieId),
+        staleTime: "static",
+      }),
+      context.queryClient.query({
+        ...movieLikeStatusQueryOpts(movieId),
+        staleTime: "static",
+      }),
+      context.queryClient.query({
+        ...movieWatchProgressQueryOpts(movieId),
+        staleTime: "static",
+      }),
       // The Play link's default mode reads the server's playback settings.
-      context.queryClient.ensureQueryData(playbackSettingsQueryOpts()),
+      context.queryClient.query({
+        ...playbackSettingsQueryOpts(),
+        staleTime: "static",
+      }),
     ]);
 
     const movie = details.error ? null : details.data.movie;

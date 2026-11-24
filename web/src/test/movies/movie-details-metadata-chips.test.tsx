@@ -59,6 +59,11 @@ describe("MovieDetailsMetadataChips", () => {
 
     expect(screen.getByText("TMDB user score: 8.2 out of 10")).toBeInTheDocument();
     expect(screen.getByText("TMDB")).toBeInTheDocument();
+    // A hero already dims its backdrop, so the quiet over-media chip.
+    expect(screen.getByText("TMDB").closest('[data-slot="badge"]')).toHaveAttribute(
+      "data-variant",
+      "over-media",
+    );
     expect(document.querySelector(".bg-aurora")).toBeNull();
     expect(document.querySelector("svg.lucide-star")).toBeNull();
   });

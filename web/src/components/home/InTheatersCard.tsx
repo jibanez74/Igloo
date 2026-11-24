@@ -34,14 +34,13 @@ export default function InTheatersCard({ movie }: InTheatersCardProps) {
       detailsLabel={`${title}${year ? `, ${year}` : ""}${rating ? `, TMDB user score ${rating} out of 10` : ""}`}
       badge={
         rating && (
-          // The link already speaks the score; the darker fill keeps the
-          // badge legible over raw poster art, which has no backdrop dim.
+          // The link already speaks the score.
           <TmdbScoreBadge
             score={vote_average}
             size="sm"
+            variant="over-poster"
             aria-hidden="true"
-            // eslint-disable-next-line shadcn/no-restyle -- no Badge variant has it yet.
-            className="absolute top-2 right-2 bg-black/60 shadow-lg backdrop-blur-sm"
+            className="absolute top-2 right-2"
           />
         )
       }

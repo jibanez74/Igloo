@@ -71,9 +71,10 @@ export const Route = createFileRoute("/_auth/music/musician/$id")({
     if (musicianId == null) return { musician: null };
 
     warmLikedTrackIds(context.queryClient);
-    const res = await context.queryClient.ensureQueryData(
-      musicianDetailsQueryOpts(musicianId),
-    );
+    const res = await context.queryClient.query({
+      ...musicianDetailsQueryOpts(musicianId),
+      staleTime: "static",
+    });
     if (res.error || !res.data.musician) return { musician: null };
 
     return {

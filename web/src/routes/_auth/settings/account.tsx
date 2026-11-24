@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useSessionMutation } from "@/hooks/useSessionMutation";
 import { useId, useRef, useState, useTransition } from "react";
-import type { FormEvent } from "react";
+import type { SubmitEvent } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { FieldError, FieldHint } from "@/components/ui/field";
@@ -367,7 +367,7 @@ function AccountSettings() {
     },
   });
 
-  const handleSaveProfile = async (event: FormEvent<HTMLFormElement>) => {
+  const handleSaveProfile = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!user) return;
 
@@ -417,7 +417,7 @@ function AccountSettings() {
     }
   };
 
-  const handleUpdatePassword = (event: FormEvent<HTMLFormElement>) => {
+  const handleUpdatePassword = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const nextErrors: AccountErrors = {};

@@ -7,7 +7,7 @@ import { expectNoClass } from "../helpers/dom";
 // button (an invitee chip's remove in the create-room form) into a submit.
 describe("Button type", () => {
   function renderInForm(button: React.ReactNode) {
-    const onSubmit = vi.fn((event: React.FormEvent) => event.preventDefault());
+    const onSubmit = vi.fn((event: React.SubmitEvent) => event.preventDefault());
     render(<form onSubmit={onSubmit}>{button}</form>);
     return onSubmit;
   }

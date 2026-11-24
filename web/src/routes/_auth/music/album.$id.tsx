@@ -105,9 +105,10 @@ export const Route = createFileRoute("/_auth/music/album/$id")({
     if (albumId == null) return { album: null };
 
     warmLikedTrackIds(context.queryClient);
-    const res = await context.queryClient.ensureQueryData(
-      albumDetailsQueryOpts(albumId),
-    );
+    const res = await context.queryClient.query({
+      ...albumDetailsQueryOpts(albumId),
+      staleTime: "static",
+    });
     if (res.error || !res.data.album) return { album: null };
 
     return {

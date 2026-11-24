@@ -51,26 +51,35 @@ export default defineConfig(({ mode }) => {
             ]
           : undefined,
         output: {
-          manualChunks(id) {
-            if (!/[\\/]node_modules[\\/]/.test(id)) {
-              return;
-            }
+          // One group whose name() picks the chunk: what Rolldown turns the
+          // deprecated manualChunks function into.
+          codeSplitting: {
+            groups: [
+              {
+                name(id) {
+                  if (!/[\\/]node_modules[\\/]/.test(id)) {
+                    return null;
+                  }
 
-            if (/[\\/]node_modules[\\/](react|react-dom)[\\/]/.test(id)) {
-              return "vendor-react";
-            }
-            if (/[\\/]node_modules[\\/]@tanstack[\\/](react-router|router)[\\/]/.test(id)) {
-              return "vendor-router";
-            }
-            if (/[\\/]node_modules[\\/]@tanstack[\\/](react-query|query)[\\/]/.test(id)) {
-              return "vendor-query";
-            }
-            if (/[\\/]node_modules[\\/](radix-ui|@radix-ui)[\\/]/.test(id)) {
-              return "vendor-radix";
-            }
-            if (/[\\/]node_modules[\\/]lucide-react[\\/]/.test(id)) {
-              return "vendor-lucide";
-            }
+                  if (/[\\/]node_modules[\\/](react|react-dom)[\\/]/.test(id)) {
+                    return "vendor-react";
+                  }
+                  if (/[\\/]node_modules[\\/]@tanstack[\\/](react-router|router)[\\/]/.test(id)) {
+                    return "vendor-router";
+                  }
+                  if (/[\\/]node_modules[\\/]@tanstack[\\/](react-query|query)[\\/]/.test(id)) {
+                    return "vendor-query";
+                  }
+                  if (/[\\/]node_modules[\\/](radix-ui|@radix-ui)[\\/]/.test(id)) {
+                    return "vendor-radix";
+                  }
+                  if (/[\\/]node_modules[\\/]lucide-react[\\/]/.test(id)) {
+                    return "vendor-lucide";
+                  }
+                  return null;
+                },
+              },
+            ],
           },
         },
       },

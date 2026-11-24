@@ -196,6 +196,16 @@ function BadgesSection() {
             PG-13
           </Badge>
         </span>
+        <span
+          className={cn(
+            "inline-flex rounded-lg p-3",
+            MEDIA_FALLBACK_SURFACE_CLASS,
+          )}
+        >
+          <Badge variant="over-poster" size="sm">
+            TMDB 7.6
+          </Badge>
+        </span>
       </GalleryRow>
 
       <GalleryRow label="spinner sizes and tone">

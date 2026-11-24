@@ -1,4 +1,4 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { noop, useQueryClient } from "@tanstack/react-query";
 import { Tv } from "lucide-react";
 import PosterCard from "@/components/shared/PosterCard";
 import { TMDB_POSTER_SIZE } from "@/lib/constants";
@@ -19,7 +19,8 @@ export default function ShowCard({ show }: ShowCardProps) {
   const { id, name, poster_path, premiere_year } = show;
   const queryClient = useQueryClient();
 
-  const handlePrefetch = () => queryClient.prefetchQuery(showDetailsQueryOpts(id));
+  const handlePrefetch = () =>
+    queryClient.query(showDetailsQueryOpts(id)).catch(noop);
 
   const posterUrl = buildTmdbImageUrl(
     unwrapString(poster_path),

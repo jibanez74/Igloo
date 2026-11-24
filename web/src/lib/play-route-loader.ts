@@ -51,24 +51,39 @@ export async function loadPlayRoute({
     // render until every query resolves. The component's own queries join
     // these in-flight fetches; errors surface through them.
     void (async () => {
-      const authRes = await queryClient.ensureQueryData(authUserQueryOpts());
+      const authRes = await queryClient.query({
+        ...authUserQueryOpts(),
+        staleTime: "static",
+      });
       if (authRes.error) return;
       await Promise.all([
         ensureDetails(),
-        queryClient.ensureQueryData(mediaTechnicalDetailsQueryOpts(media)),
-        queryClient.ensureQueryData(playbackSettingsQueryOpts()),
+        queryClient.query({
+          ...mediaTechnicalDetailsQueryOpts(media),
+          staleTime: "static",
+        }),
+        queryClient.query({
+          ...playbackSettingsQueryOpts(),
+          staleTime: "static",
+        }),
       ]);
     })().catch(() => {});
     return null;
   }
 
-  const authRes = await queryClient.ensureQueryData(authUserQueryOpts());
+  const authRes = await queryClient.query({
+    ...authUserQueryOpts(),
+    staleTime: "static",
+  });
   if (authRes.error) return null;
 
   const [, techRes, playbackRes] = await Promise.all([
     ensureDetails(),
-    queryClient.ensureQueryData(mediaTechnicalDetailsQueryOpts(media)),
-    queryClient.ensureQueryData(playbackSettingsQueryOpts()),
+    queryClient.query({
+      ...mediaTechnicalDetailsQueryOpts(media),
+      staleTime: "static",
+    }),
+    queryClient.query({ ...playbackSettingsQueryOpts(), staleTime: "static" }),
   ]);
 
   const techData = !techRes.error ? techRes.data : null;

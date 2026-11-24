@@ -1,7 +1,7 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { noop, useQueryClient } from "@tanstack/react-query";
 import { showActionFailed } from "@/lib/toast-helpers";
 import { Music, Play } from "lucide-react";
 import { albumDetailsQueryOpts } from "@/lib/query-opts";
@@ -38,7 +38,7 @@ export default function AlbumCard({ album, subtitle }: AlbumCardProps) {
   const { showPoster: showCover, onError } = usePosterFallback(coverUrl);
 
   const handlePrefetch = () =>
-    queryClient.prefetchQuery(albumDetailsQueryOpts(id));
+    queryClient.query(albumDetailsQueryOpts(id)).catch(noop);
 
   const handlePlayAlbum = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
@@ -52,7 +52,7 @@ export default function AlbumCard({ album, subtitle }: AlbumCardProps) {
     const isCurrent = audioPlayer.beginStart();
 
     try {
-      const data = await queryClient.fetchQuery(albumDetailsQueryOpts(id));
+      const data = await queryClient.query(albumDetailsQueryOpts(id));
 
       if (!isCurrent()) {
         // A newer start or Stop owns the player now.

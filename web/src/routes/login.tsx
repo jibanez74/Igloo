@@ -56,7 +56,7 @@ export const Route = createFileRoute("/login")({
     // is still on screen (useEndSession).
     if (arrivedLoggedOut(location.state)) return;
 
-    const res = await context.queryClient.fetchQuery(
+    const res = await context.queryClient.query(
       authUserQueryOpts({ revalidate: true }),
     );
 
@@ -84,7 +84,7 @@ function LoginPage() {
   const theme = useSyncExternalStore(subscribeTheme, getActiveTheme);
   const loginBg = theme === "light" ? loginBgLight : loginBgDark;
 
-  const loginHandler = async (e: React.FormEvent<HTMLFormElement>) => {
+  const loginHandler = async (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const email = (formData.get("email") as string).trim();
@@ -130,7 +130,7 @@ function LoginPage() {
 
       // Nothing the previous session cached may carry over to this user.
       queryClient.clear();
-      const authRes = await queryClient.fetchQuery(
+      const authRes = await queryClient.query(
         authUserQueryOpts({ revalidate: true }),
       );
       if (authRes.error) {

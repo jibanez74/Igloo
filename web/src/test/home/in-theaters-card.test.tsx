@@ -36,6 +36,8 @@ describe("InTheatersCard", () => {
     const badge = screen.getByText("8.3").closest('[data-slot="badge"]');
     expect(badge).toHaveAttribute("aria-hidden", "true");
     expect(badge).toHaveClass("absolute", "text-xs");
+    // Over raw poster art, the darker corner variant.
+    expect(badge).toHaveAttribute("data-variant", "over-poster");
     expect(badge).toHaveTextContent("TMDB");
     expect(document.querySelector(".bg-aurora")).toBeNull();
     expect(document.querySelector("svg.lucide-star")).toBeNull();

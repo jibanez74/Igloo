@@ -10,7 +10,7 @@ import {
 import { useSessionMutation } from "@/hooks/useSessionMutation";
 import { restoreOptimistic, writeOptimistically } from "@/lib/optimistic";
 import { useId, useRef, useState, useTransition } from "react";
-import type { FormEvent, ReactNode } from "react";
+import type { ReactNode, SubmitEvent } from "react";
 import {
   Activity,
   Disc3,
@@ -389,7 +389,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
     );
   };
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     // Enter in a read-only field still submits.
     if (savePending) return;
@@ -410,7 +410,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
     const turnsDownloadsOff =
       syncedSettings.download_images && !form.download_images;
     if (turnsDownloadsOff) {
-      const submitter = (event.nativeEvent as SubmitEvent).submitter;
+      const submitter = event.nativeEvent.submitter;
       imageRemovalReturnRef.current =
         submitter ?? (document.activeElement as HTMLElement | null);
       setConfirmingImageRemoval(true);

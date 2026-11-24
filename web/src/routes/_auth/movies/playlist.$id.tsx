@@ -47,14 +47,16 @@ export const Route = createFileRoute("/_auth/movies/playlist/$id")({
     const id = parseRouteId(params.id);
     if (id == null) return { playlistName: null };
 
-    const detailsLoad = context.queryClient.ensureQueryData(
-      moviePlaylistDetailsQueryOpts(id),
-    );
+    const detailsLoad = context.queryClient.query({
+      ...moviePlaylistDetailsQueryOpts(id),
+      staleTime: "static",
+    });
     await loadOnEntry(cause, [
       detailsLoad,
-      context.queryClient.ensureQueryData(
-        moviePlaylistMoviesQueryOpts(id, page, MOVIES_PER_PAGE, sort),
-      ),
+      context.queryClient.query({
+        ...moviePlaylistMoviesQueryOpts(id, page, MOVIES_PER_PAGE, sort),
+        staleTime: "static",
+      }),
     ]);
     // A page or sort change starts the list without waiting for it; the
     // details were loaded on entry, so the title does not wait either.

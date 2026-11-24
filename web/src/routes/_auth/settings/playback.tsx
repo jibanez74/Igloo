@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSessionMutation } from "@/hooks/useSessionMutation";
 import { useId, useState, useTransition } from "react";
-import type { FormEvent, ReactNode } from "react";
+import type { ReactNode, SubmitEvent } from "react";
 import { Apple, CircuitBoard, Cpu, MonitorCog, Server } from "lucide-react";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -301,7 +301,7 @@ function ServerPlaybackForm({ settings }: ServerPlaybackFormProps) {
     setValidationMessage("");
   };
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (isServerUploadOutOfRange(form)) {
       setValidationMessage(SERVER_UPLOAD_VALIDATION_MESSAGE);

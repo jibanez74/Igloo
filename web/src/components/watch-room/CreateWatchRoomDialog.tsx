@@ -167,7 +167,7 @@ export default function CreateWatchRoomDialog({
     onOpenChange(next);
   };
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (event: React.SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (selectedUserIds.length === 0) {

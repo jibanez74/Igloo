@@ -304,6 +304,8 @@ export default defineConfig([
         },
       ],
       "@typescript-eslint/consistent-type-exports": "error",
+      // A deprecated API names its replacement; the next major removes it.
+      "@typescript-eslint/no-deprecated": "error",
       "@typescript-eslint/no-meaningless-void-operator": "error",
       "@typescript-eslint/no-unnecessary-boolean-literal-compare": "error",
       "@typescript-eslint/no-unnecessary-type-arguments": "error",
@@ -337,6 +339,7 @@ export default defineConfig([
     },
     rules: {
       "@typescript-eslint/await-thenable": "error",
+      "@typescript-eslint/no-deprecated": "error",
       "@typescript-eslint/no-floating-promises": "error",
       "@typescript-eslint/no-misused-promises": [
         "error",
@@ -468,6 +471,7 @@ export default defineConfig([
       },
     },
     rules: {
+      "@typescript-eslint/no-deprecated": "error",
       "@typescript-eslint/no-floating-promises": "error",
       "@typescript-eslint/no-misused-promises": [
         "error",

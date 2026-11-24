@@ -92,7 +92,7 @@ describe("album details route prefetch", () => {
     const detailsUrl = "/api/music/albums/details/42";
     const likedIdsUrl = "/api/music/tracks/liked-ids";
 
-    await queryClient.prefetchQuery(albumDetailsQueryOpts(42));
+    await queryClient.query(albumDetailsQueryOpts(42));
     expect(countFetchRequests(fetchMock, detailsUrl)).toBe(1);
     expect(countFetchRequests(fetchMock, likedIdsUrl)).toBe(0);
 

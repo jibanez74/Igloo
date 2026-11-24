@@ -8,7 +8,7 @@ import {
   type RefObject,
 } from "react";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { noop, useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
   Disc3,
@@ -118,39 +118,48 @@ export const Route = createFileRoute("/_auth/music/")({
     const { queryClient } = context;
     // The stats sit above every tab; the rest warms only the tab on show.
     const loads: Promise<unknown>[] = [
-      queryClient.ensureQueryData(musicStatsQueryOpts()),
+      queryClient.query({ ...musicStatsQueryOpts(), staleTime: "static" }),
     ];
 
     switch (deps.tab) {
       case "albums":
         loads.push(
-          queryClient.ensureQueryData(
-            albumsPaginatedQueryOpts(deps.albumsPage, ALBUMS_PER_PAGE),
-          ),
+          queryClient.query({
+            ...albumsPaginatedQueryOpts(deps.albumsPage, ALBUMS_PER_PAGE),
+            staleTime: "static",
+          }),
         );
         break;
       case "musicians":
         loads.push(
-          queryClient.ensureQueryData(
-            musiciansPaginatedQueryOpts(deps.musiciansPage, MUSICIANS_PER_PAGE),
-          ),
+          queryClient.query({
+            ...musiciansPaginatedQueryOpts(
+              deps.musiciansPage,
+              MUSICIANS_PER_PAGE,
+            ),
+            staleTime: "static",
+          }),
         );
         break;
       case "tracks":
         // Its pages throw, and retry a server failure, so the loader starts
         // the first page without waiting on it: the tab's skeleton and alert
         // cover the load, and a failure never reaches the route's boundary.
-        void queryClient.prefetchInfiniteQuery(tracksInfiniteQueryOpts());
+        void queryClient.infiniteQuery(tracksInfiniteQueryOpts()).catch(noop);
         warmLikedTrackIds(queryClient);
         break;
       case "playlists":
         if (deps.playlistsView === "liked") warmLikedTrackIds(queryClient);
         loads.push(
           deps.playlistsView === "liked"
-            ? queryClient.ensureQueryData(
-                likedTracksQueryOpts(deps.likedTracksPage),
-              )
-            : queryClient.ensureQueryData(playlistsQueryOpts()),
+            ? queryClient.query({
+                ...likedTracksQueryOpts(deps.likedTracksPage),
+                staleTime: "static",
+              })
+            : queryClient.query({
+                ...playlistsQueryOpts(),
+                staleTime: "static",
+              }),
         );
         break;
     }

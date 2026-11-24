@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { noop, useQueryClient } from "@tanstack/react-query";
 import { Film } from "lucide-react";
 import PosterCard from "@/components/shared/PosterCard";
 import { watchProgressPercent } from "@/lib/format";
@@ -29,7 +29,7 @@ export default function MovieCard({
   const queryClient = useQueryClient();
 
   const handlePrefetch = () =>
-    queryClient.prefetchQuery(libraryMovieDetailsQueryOpts(id));
+    queryClient.query(libraryMovieDetailsQueryOpts(id)).catch(noop);
 
   const releaseYear = unwrapInt(year);
   const ariaTitle = releaseYear == null ? title : `${title} ${releaseYear}`;

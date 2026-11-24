@@ -2,6 +2,7 @@ import { lazy, Suspense, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   InfiniteQueryObserver,
+  noop,
   useInfiniteQuery,
   useQuery,
   useQueryClient,
@@ -134,13 +135,14 @@ export const Route = createFileRoute("/_auth/music/playlist/$id")({
     // spins after the page paints. Its pages throw, and retry a server
     // failure, so the loader does not wait on them: the list's own spinner
     // and alert cover them.
-    void context.queryClient.prefetchInfiniteQuery(
-      playlistTracksInfiniteQueryOpts(id),
-    );
+    void context.queryClient
+      .infiniteQuery(playlistTracksInfiniteQueryOpts(id))
+      .catch(noop);
     warmLikedTrackIds(context.queryClient);
-    const res = await context.queryClient.ensureQueryData(
-      playlistDetailsQueryOpts(id),
-    );
+    const res = await context.queryClient.query({
+      ...playlistDetailsQueryOpts(id),
+      staleTime: "static",
+    });
     if (res.error || !res.data.playlist) return { playlist: null };
 
     return {
