@@ -177,6 +177,9 @@ func TestLoginAttemptsShareOneBudget(t *testing.T) {
 	if w.Code != http.StatusTooManyRequests {
 		t.Fatalf("login past the budget = %d, want 429", w.Code)
 	}
+	if got := w.Header().Get("Retry-After"); got == "" {
+		t.Fatal("login past the budget sent no Retry-After")
+	}
 	if code := attempt("/api/auth/device-login", wrongDevice); code != http.StatusTooManyRequests {
 		t.Fatalf("device login past the budget = %d, want 429", code)
 	}

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -77,6 +78,9 @@ func TestAuthenticateDevice_IsRateLimited(t *testing.T) {
 	app.Router.ServeHTTP(w, req)
 	if w.Code != http.StatusTooManyRequests {
 		t.Fatalf("11th attempt status = %d, want 429, body = %s", w.Code, w.Body.String())
+	}
+	if got, err := strconv.Atoi(w.Header().Get("Retry-After")); err != nil || got < 1 || got > 300 {
+		t.Fatalf("Retry-After = %q, want whole seconds within the 5-minute window", w.Header().Get("Retry-After"))
 	}
 }
 

@@ -227,8 +227,8 @@ func (app *Application) UpdateUserPassword(w http.ResponseWriter, r *http.Reques
 
 	// The current-password check is a password oracle, so it shares the
 	// login budget's size, per user rather than per address.
-	if !app.AuthLimiter.Allow("password:"+strconv.FormatInt(userID, 10), loginAttemptLimit, loginAttemptWindow) {
-		helpers.ErrorJSON(w, errors.New(tooManyAttemptsMessage), http.StatusTooManyRequests)
+	if allowed, wait := app.AuthLimiter.Allow("password:"+strconv.FormatInt(userID, 10), loginAttemptLimit, loginAttemptWindow); !allowed {
+		tooManyAttempts(w, wait)
 		return
 	}
 

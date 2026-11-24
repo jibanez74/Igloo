@@ -1764,7 +1764,10 @@ is unknown or empty.
     `apiErrorMessage`, which keeps the server's message only for a 4xx other
     than 404 and otherwise uses the surface's own sentence, so a 404 (whose
     body `apiRequest` replaces with a canned string) or a 5xx (internal error
-    text) never reaches the screen. Never show the client's canned "404 - The
+    text) never reaches the screen. A 429 never shows the server's text either:
+    `apiErrorMessage` words it from the `Retry-After` that `apiRequest` stamps
+    on the envelope ("Too many attempts. Wait 4 minutes.", or "Too many
+    attempts." when no wait is known). Never show the client's canned "404 - The
     resource…" or "500 - A network error…" strings or a lowercase server
     constant as the copy.
   - **Failure copy names what did not load and stops.** A fallback never

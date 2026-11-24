@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
+	"time"
 
 	"igloo/cmd/internal/helpers"
 )
@@ -21,6 +23,15 @@ const (
 	// Said by the movie and the episode technical-details endpoints.
 	fetchTechnicalDetailsMessage = "failed to fetch technical details"
 )
+
+// tooManyAttempts answers 429 for a rate-limited attempt. Retry-After names the
+// wait in whole seconds, rounded up so a client that waits exactly that long
+// lands in the next window, and never below one second.
+func tooManyAttempts(w http.ResponseWriter, retryAfter time.Duration) {
+	seconds := max(int64((retryAfter+time.Second-1)/time.Second), 1)
+	w.Header().Set("Retry-After", strconv.FormatInt(seconds, 10))
+	helpers.ErrorJSON(w, errors.New(tooManyAttemptsMessage), http.StatusTooManyRequests)
+}
 
 // Log lines repeated across handlers that share no feature file.
 const beginTransactionLogMessage = "failed to begin transaction"

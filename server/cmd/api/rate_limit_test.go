@@ -176,7 +176,7 @@ func loginAttempts(t *testing.T, trustedProxies string, remoteAddr string, forwa
 
 	limiter := newRateLimiter()
 	handler := clientIPMiddleware(prefixes)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !limiter.Allow("login:"+clientIP(r), 1, time.Minute) {
+		if !allows(limiter, "login:"+clientIP(r), 1, time.Minute) {
 			w.WriteHeader(http.StatusTooManyRequests)
 			return
 		}
@@ -225,7 +225,7 @@ func TestRateLimiterBoundsBucketMap(t *testing.T) {
 	// must stay bounded even though pruning alone would keep every bucket.
 	total := rateLimiterPruneThreshold * 3
 	for i := 0; i < total; i++ {
-		limiter.Allow(fmt.Sprintf("auth:198.51.%d.%d", i/256, i%256), 5, time.Minute)
+		allows(limiter, fmt.Sprintf("auth:198.51.%d.%d", i/256, i%256), 5, time.Minute)
 	}
 
 	limiter.mu.Lock()
@@ -254,7 +254,7 @@ func TestRateLimiterAllowsConcurrentCallsSafely(t *testing.T) {
 		go func() {
 			ready.Done()
 			<-start
-			results <- limiter.Allow("auth:198.51.100.7", limit, time.Minute)
+			results <- allows(limiter, "auth:198.51.100.7", limit, time.Minute)
 		}()
 	}
 
@@ -289,17 +289,17 @@ func TestRateLimiter_WindowRollsOver(t *testing.T) {
 	limiter.now = func() time.Time { return current }
 
 	for i := 0; i < 3; i++ {
-		if !limiter.Allow("key", 3, time.Minute) {
+		if !allows(limiter, "key", 3, time.Minute) {
 			t.Fatalf("attempt %d unexpectedly limited", i+1)
 		}
 	}
-	if limiter.Allow("key", 3, time.Minute) {
+	if allows(limiter, "key", 3, time.Minute) {
 		t.Fatal("4th attempt in window should be limited")
 	}
 
 	// A new window admits attempts again.
 	current = current.Add(time.Minute + time.Second)
-	if !limiter.Allow("key", 3, time.Minute) {
+	if !allows(limiter, "key", 3, time.Minute) {
 		t.Fatal("attempt after window rollover should be allowed")
 	}
 }
@@ -307,13 +307,57 @@ func TestRateLimiter_WindowRollsOver(t *testing.T) {
 func TestRateLimiter_KeysAreIndependent(t *testing.T) {
 	limiter := newRateLimiter()
 
-	if !limiter.Allow("a", 1, time.Minute) {
+	if !allows(limiter, "a", 1, time.Minute) {
 		t.Fatal("first attempt for key a should be allowed")
 	}
-	if limiter.Allow("a", 1, time.Minute) {
+	if allows(limiter, "a", 1, time.Minute) {
 		t.Fatal("second attempt for key a should be limited")
 	}
-	if !limiter.Allow("b", 1, time.Minute) {
+	if !allows(limiter, "b", 1, time.Minute) {
 		t.Fatal("key b should be unaffected by key a")
+	}
+}
+
+// allows is Allow's verdict alone, for tests that do not read the wait.
+func allows(limiter *rateLimiter, key string, limit int, window time.Duration) bool {
+	allowed, _ := limiter.Allow(key, limit, window)
+	return allowed
+}
+
+func TestRateLimiterRefusalNamesTheWindowsEnd(t *testing.T) {
+	limiter := newRateLimiter()
+
+	current := time.Now()
+	limiter.now = func() time.Time { return current }
+
+	if allowed, wait := limiter.Allow("key", 1, 5*time.Minute); !allowed || wait != 0 {
+		t.Fatalf("first attempt = (%v, %v), want (true, 0)", allowed, wait)
+	}
+
+	current = current.Add(time.Minute)
+	if allowed, wait := limiter.Allow("key", 1, 5*time.Minute); allowed || wait != 4*time.Minute {
+		t.Fatalf("attempt a minute in = (%v, %v), want (false, 4m0s)", allowed, wait)
+	}
+}
+
+func TestTooManyAttemptsRoundsRetryAfterUp(t *testing.T) {
+	for _, tc := range []struct {
+		wait time.Duration
+		want string
+	}{
+		{4 * time.Minute, "240"},
+		{4*time.Minute + time.Millisecond, "241"},
+		{time.Millisecond, "1"},
+		{0, "1"},
+	} {
+		w := httptest.NewRecorder()
+		tooManyAttempts(w, tc.wait)
+
+		if w.Code != http.StatusTooManyRequests {
+			t.Fatalf("tooManyAttempts(%v) status = %d, want 429", tc.wait, w.Code)
+		}
+		if got := w.Header().Get("Retry-After"); got != tc.want {
+			t.Fatalf("tooManyAttempts(%v) Retry-After = %q, want %q", tc.wait, got, tc.want)
+		}
 	}
 }

@@ -37,6 +37,7 @@ type MockLoginFetchOptions = {
   loginResponse?: {
     body: unknown;
     status?: number;
+    headers?: Record<string, string>;
   };
 };
 
@@ -53,7 +54,12 @@ function mockLoginFetch({
         : { user: currentUser },
     "POST /api/auth/login": () => {
       if (loginResponse) {
-        return jsonResponse(loginResponse.body, loginResponse.status ?? 200);
+        return Promise.resolve(
+          new Response(JSON.stringify(loginResponse.body), {
+            status: loginResponse.status ?? 200,
+            headers: { "Content-Type": "application/json", ...loginResponse.headers },
+          }),
+        );
       }
 
       currentUser = adminUser();
@@ -235,6 +241,26 @@ describe("login route redirects", () => {
     await waitFor(() => expect(toastMocks.showError).toHaveBeenCalledWith("Login failed", "The email or password is incorrect."));
     const request = fetchMock.mock.calls.find(([url]) => requestURL(url) === "/api/auth/login");
     expect(JSON.parse(request![1]!.body as string)).toEqual({ email: "admin@example.com", password });
+  });
+
+  it("words a rate limit by its wait, never the server's text", async () => {
+    await renderLoginRouteTree("/login", {
+      loginResponse: {
+        body: { error: true, message: "too many attempts, please try again later" },
+        status: 429,
+        headers: { "Retry-After": "240" },
+      },
+    });
+
+    await signIn();
+
+    await waitFor(() =>
+      expect(toastMocks.showError).toHaveBeenCalledWith(
+        "Login failed",
+        "Too many attempts. Wait 4 minutes.",
+      ),
+    );
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeEnabled();
   });
 
   it("redirects unauthenticated Home before loading in-theaters data", async () => {

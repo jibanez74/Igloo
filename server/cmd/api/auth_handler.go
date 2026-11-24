@@ -33,7 +33,7 @@ const (
 	loginAttemptWindow = 5 * time.Minute
 )
 
-func (app *Application) allowLoginAttempt(r *http.Request) bool {
+func (app *Application) allowLoginAttempt(r *http.Request) (bool, time.Duration) {
 	return app.AuthLimiter.Allow("login:"+clientIP(r), loginAttemptLimit, loginAttemptWindow)
 }
 
@@ -64,8 +64,8 @@ func (app *Application) verifyCredentials(w http.ResponseWriter, r *http.Request
 }
 
 func (app *Application) AuthenticateUser(w http.ResponseWriter, r *http.Request) {
-	if !app.allowLoginAttempt(r) {
-		helpers.ErrorJSON(w, errors.New(tooManyAttemptsMessage), http.StatusTooManyRequests)
+	if allowed, wait := app.allowLoginAttempt(r); !allowed {
+		tooManyAttempts(w, wait)
 		return
 	}
 
@@ -120,8 +120,8 @@ type DeviceAuthRequest struct {
 // AuthenticateDevice is the password-based login path for TV / mobile
 // clients. It issues a long-lived bearer token and never touches the session.
 func (app *Application) AuthenticateDevice(w http.ResponseWriter, r *http.Request) {
-	if !app.allowLoginAttempt(r) {
-		helpers.ErrorJSON(w, errors.New(tooManyAttemptsMessage), http.StatusTooManyRequests)
+	if allowed, wait := app.allowLoginAttempt(r); !allowed {
+		tooManyAttempts(w, wait)
 		return
 	}
 

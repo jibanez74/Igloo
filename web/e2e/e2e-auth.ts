@@ -8,25 +8,40 @@ import { isRealInstance, readE2EEnv, type Credentials } from "./e2e-env";
 // A real instance takes 10 sign-ins per 5 minutes from one IP
 // (loginAttemptLimit in server/cmd/api/auth_handler.go), fewer than one
 // real-instance run makes. A refused attempt does not use up the budget, so
-// the helpers below try again until the window rolls over, stretching the
-// running test's timeout to cover the wait. The mock never refuses a sign-in.
+// the helpers below wait out the Retry-After the refusal names and try again,
+// stretching the running test's timeout to cover the wait. The mock never
+// refuses a sign-in.
 const LOGIN_WINDOW_MS = 5 * 60_000;
+// Without a usable Retry-After (a proxy's 429), poll at this pace instead.
 const LOGIN_RETRY_MS = 10_000;
+// Past the named wait, so the retry lands after the window rolls over.
+const RETRY_AFTER_MARGIN_MS = 1_000;
+
+/** How long a refused sign-in asks to wait, or the polling pace. */
+function loginRetryDelayMs(response: { headers(): Record<string, string> }) {
+  const seconds = Number(response.headers()["retry-after"]);
+  return Number.isInteger(seconds) && seconds > 0
+    ? seconds * 1000 + RETRY_AFTER_MARGIN_MS
+    : LOGIN_RETRY_MS;
+}
 
 /** Sends a sign-in until a real instance stops refusing it for the limit. */
-async function outlastLoginLimit<T extends { status(): number }>(
+async function outlastLoginLimit<
+  T extends { status(): number; headers(): Record<string, string> },
+>(
   attempt: () => Promise<T>,
 ): Promise<T> {
   let response = await attempt();
   if (!isRealInstance || response.status() !== 429) return response;
 
   // Enough for the longest wait: a window that has only just started.
-  const waitBudgetMs = LOGIN_WINDOW_MS + LOGIN_RETRY_MS;
+  const waitBudgetMs = LOGIN_WINDOW_MS + LOGIN_RETRY_MS + RETRY_AFTER_MARGIN_MS;
   const info = test.info();
   if (info.timeout > 0) info.setTimeout(info.timeout + waitBudgetMs);
   const deadline = Date.now() + waitBudgetMs;
   while (response.status() === 429 && Date.now() < deadline) {
-    await new Promise(resolve => setTimeout(resolve, LOGIN_RETRY_MS));
+    const delayMs = Math.min(loginRetryDelayMs(response), Math.max(deadline - Date.now(), 0));
+    await new Promise(resolve => setTimeout(resolve, delayMs));
     response = await attempt();
   }
   return response;

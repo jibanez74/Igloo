@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -386,6 +387,11 @@ func TestPinAttempts_RateLimited(t *testing.T) {
 	change := serveRequest(t, handler, http.MethodPut, "/api/user/pin", `{"pin":"5678","current_pin":"1234"}`)
 	if change.Code != http.StatusTooManyRequests {
 		t.Fatalf("expected 429 for change while limited, got %d: %s", change.Code, change.Body.String())
+	}
+	for _, w := range []*httptest.ResponseRecorder{limited, change} {
+		if got, err := strconv.Atoi(w.Header().Get("Retry-After")); err != nil || got < 1 || got > 60 {
+			t.Fatalf("Retry-After = %q, want whole seconds within the 1-minute window", w.Header().Get("Retry-After"))
+		}
 	}
 }
 

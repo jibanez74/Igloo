@@ -33,7 +33,7 @@ func validatePin(pin string) error {
 // allowPinAttempt rate-limits every code path that compares a stored PIN. The
 // 4-digit keyspace is small, so guesses through verify and change share one
 // per-user bucket.
-func (app *Application) allowPinAttempt(userID int64) bool {
+func (app *Application) allowPinAttempt(userID int64) (bool, time.Duration) {
 	return app.AuthLimiter.Allow("pin:"+strconv.FormatInt(userID, 10), pinAttemptLimit, pinAttemptWindow)
 }
 
@@ -85,8 +85,8 @@ func (app *Application) UpdateUserPin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if currentPin.Valid {
-		if !app.allowPinAttempt(userID) {
-			helpers.ErrorJSON(w, errors.New(tooManyAttemptsMessage), http.StatusTooManyRequests)
+		if allowed, wait := app.allowPinAttempt(userID); !allowed {
+			tooManyAttempts(w, wait)
 			return
 		}
 
@@ -177,8 +177,8 @@ func (app *Application) VerifyUserPin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !app.allowPinAttempt(userID) {
-		helpers.ErrorJSON(w, errors.New(tooManyAttemptsMessage), http.StatusTooManyRequests)
+	if allowed, wait := app.allowPinAttempt(userID); !allowed {
+		tooManyAttempts(w, wait)
 		return
 	}
 

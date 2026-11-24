@@ -21,6 +21,9 @@ export type ApiFailureType = {
   // HTTP status, stamped by the client on every failure it returns, including
   // the ones it synthesizes (404, network). Not part of the JSON body.
   status?: number;
+  // Whole seconds a 429's Retry-After header asks the client to wait, stamped
+  // like `status`; absent when the header is missing or not a number.
+  retryAfterSec?: number;
   data?: never; // Explicitly no data on failure
 };
 
