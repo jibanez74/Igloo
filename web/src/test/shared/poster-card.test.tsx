@@ -79,7 +79,7 @@ describe("PosterCard", () => {
       />,
     );
 
-    expect(progressFill(container)?.style.width).toBe("25%");
+    expect(progressFill(container)?.style.getPropertyValue("--progress")).toBe("25%");
   });
 
   it("omits the progress bar when there is no progress or no duration", () => {

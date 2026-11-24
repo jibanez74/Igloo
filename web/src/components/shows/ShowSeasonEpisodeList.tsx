@@ -229,7 +229,7 @@ export default function ShowSeasonEpisodeList({
       <LoadErrorAlert
         message={message}
         onRetry={() => {
-          refetch();
+          void refetch();
         }}
       />
     );

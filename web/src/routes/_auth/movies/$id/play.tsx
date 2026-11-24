@@ -82,7 +82,7 @@ function PlayMoviePage() {
   const movie = data && !data.error ? data.data?.movie : null;
   const notFound =
     parsedId === null ||
-    Boolean(isError || (data && data.error) || (data && !movie));
+    Boolean(isError || data?.error || (data && !movie));
 
   return (
     // Keyed on the movie: the player's refs and state belong to one media

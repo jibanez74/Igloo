@@ -28,7 +28,7 @@ export default function Header() {
     if (active instanceof HTMLElement) active.blur();
 
     const q = value.trim();
-    navigate({
+    void navigate({
       to: "/search",
       search: { q, tab: "all", page: 1 },
     });

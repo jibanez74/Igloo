@@ -1,7 +1,8 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, type CSSProperties, type ReactNode } from "react";
 import { useWindowVirtualizer, type Virtualizer } from "@tanstack/react-virtual";
 import { useWindowScrollMargin } from "@/hooks/useWindowScrollMargin";
 import { VIRTUAL_LIST_TRACK_HEIGHT } from "@/lib/constants";
+import { cn } from "@/lib/utils";
 
 // The divider a divided list draws under every row but the last, as the
 // album page's divide-y does; the row's slot grows by its pixel.
@@ -68,7 +69,7 @@ export default function VirtualTrackList({
   // Compiler would cache stale.
   "use no memo";
 
-  const { listRef, scrollMargin } = useWindowScrollMargin<HTMLDivElement>();
+  const { listRef, scrollMargin } = useWindowScrollMargin();
   const hasDivider = (index: number) => divided && index < count - 1;
 
   const virtualizer = useWindowVirtualizer({
@@ -90,11 +91,12 @@ export default function VirtualTrackList({
       <div
         role="list"
         aria-label={label}
-        style={{
-          height: `${virtualizer.getTotalSize()}px`,
-          width: "100%",
-          position: "relative",
-        }}
+        className="relative h-(--list-height) w-full"
+        style={
+          {
+            "--list-height": `${virtualizer.getTotalSize()}px`,
+          } as CSSProperties
+        }
       >
         {virtualizer.getVirtualItems().map((virtualRow) => {
           const position = positionOf(virtualRow.index);
@@ -105,15 +107,16 @@ export default function VirtualTrackList({
               role={position === null ? "presentation" : "listitem"}
               aria-posinset={position ?? undefined}
               aria-setsize={position === null ? undefined : setSize}
-              className={hasDivider(virtualRow.index) ? ROW_DIVIDER_CLASS : undefined}
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                height: `${virtualRow.size}px`,
-                transform: `translateY(${virtualRow.start - scrollMargin}px)`,
-              }}
+              className={cn(
+                "absolute top-0 left-0 h-(--row-height) w-full translate-y-(--row-y)",
+                hasDivider(virtualRow.index) && ROW_DIVIDER_CLASS,
+              )}
+              style={
+                {
+                  "--row-height": `${virtualRow.size}px`,
+                  "--row-y": `${virtualRow.start - scrollMargin}px`,
+                } as CSSProperties
+              }
             >
               {renderRow(virtualRow.index)}
             </div>

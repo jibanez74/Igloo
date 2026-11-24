@@ -78,7 +78,13 @@ export function isDocumentFullscreenEntryLikely(): boolean {
   if (document.fullscreenEnabled || doc.webkitFullscreenEnabled) {
     return true;
   }
-  return document.fullscreenEnabled !== false && doc.webkitFullscreenEnabled !== false;
+  // iOS Safari leaves document.fullscreenEnabled undefined, which the DOM
+  // types do not admit: an unknown flag counts as maybe.
+  return (
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-boolean-literal-compare
+    document.fullscreenEnabled !== false &&
+    doc.webkitFullscreenEnabled !== false
+  );
 }
 
 export function tryWebKitVideoEnterFullscreen(video: HTMLVideoElement): boolean {

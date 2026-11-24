@@ -189,8 +189,8 @@ describe("movie playlist route", () => {
     expect(
       fetchMock.mock.calls.some(
         ([input, init]) =>
-          requestURL(input as RequestInfo | URL) === "/api/movies/playlists/11" &&
-          (init as RequestInit | undefined)?.method === "DELETE",
+          requestURL(input) === "/api/movies/playlists/11" &&
+          (init)?.method === "DELETE",
       ),
     ).toBe(true);
   });
@@ -220,8 +220,8 @@ describe("movie playlist route", () => {
     expect(
       fetchMock.mock.calls.some(
         ([input, init]) =>
-          requestURL(input as RequestInfo | URL) === "/api/movies/playlists/11/movies/2" &&
-          (init as RequestInit | undefined)?.method === "DELETE",
+          requestURL(input) === "/api/movies/playlists/11/movies/2" &&
+          (init)?.method === "DELETE",
       ),
     ).toBe(true);
   });
@@ -305,7 +305,7 @@ describe("movie playlist route", () => {
     expect(backLink.getAttribute("href")).toContain("tab=playlists");
     expect(
       fetchMock.mock.calls.some(([input]) =>
-        requestURL(input as RequestInfo | URL).startsWith("/api/movies/playlists/"),
+        requestURL(input).startsWith("/api/movies/playlists/"),
       ),
     ).toBe(false);
   });
@@ -378,7 +378,7 @@ describe("movie playlist route", () => {
     ).toBeInTheDocument();
 
     const listRequests = fetchMock.mock.calls
-      .map(([input]) => requestURL(input as RequestInfo | URL))
+      .map(([input]) => requestURL(input))
       .filter(url => url.startsWith("/api/movies/playlists/12/movies"));
     expect(listRequests).toEqual([
       `/api/movies/playlists/12/movies?page=1&per_page=${MOVIES_PER_PAGE}&sort=asc`,
@@ -392,7 +392,7 @@ describe("movie playlist route", () => {
 
     const listRequests = (fetchMock: ReturnType<typeof mockPlaylistFetch>) =>
       fetchMock.mock.calls
-        .map(([input]) => requestURL(input as RequestInfo | URL))
+        .map(([input]) => requestURL(input))
         .filter(url => url.startsWith("/api/movies/playlists/11/movies"));
 
     it("opens on the page and sort the link names", async () => {

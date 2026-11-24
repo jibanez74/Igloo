@@ -35,7 +35,7 @@ export default function ConfirmDialog({
   description,
   children,
   confirmLabel,
-  pendingLabel = `${confirmLabel}...`,
+  pendingLabel,
   pending = false,
   restoreFocusRef,
   fallbackFocusRef,
@@ -85,7 +85,7 @@ export default function ConfirmDialog({
             disabled={pending}
           >
             {pending ? <Spinner aria-hidden="true" /> : null}
-            {pending ? pendingLabel : confirmLabel}
+            {pending ? (pendingLabel ?? `${confirmLabel}...`) : confirmLabel}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>

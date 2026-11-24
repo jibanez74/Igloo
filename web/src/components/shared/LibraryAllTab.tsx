@@ -109,7 +109,7 @@ export default function LibraryAllTab<
   perPage,
   noun,
   emptyIcon,
-  emptyMessage = `No ${noun.plural} found in your library.`,
+  emptyMessage,
   onPageChange,
   onSortToggle,
   gridClassName = LIBRARY_POSTER_GRID_CLASS,
@@ -209,7 +209,10 @@ export default function LibraryAllTab<
 
     if (items.length === 0) {
       return (
-        <LibraryEmptyState icon={emptyIcon} message={emptyMessage} />
+        <LibraryEmptyState
+          icon={emptyIcon}
+          message={emptyMessage ?? `No ${noun.plural} found in your library.`}
+        />
       );
     }
 
@@ -253,12 +256,14 @@ type LibraryAllTabSkeletonProps = {
 export function LibraryAllTabSkeleton({
   perPage,
   gridClassName = LIBRARY_POSTER_GRID_CLASS,
-  skeletonCard = <PosterCardSkeleton />,
+  skeletonCard,
 }: LibraryAllTabSkeletonProps) {
+  // Not a parameter default: the React Compiler cannot lower JSX there.
+  const card = skeletonCard === undefined ? <PosterCardSkeleton /> : skeletonCard;
   return (
     <div className={cn("mb-8", gridClassName)}>
       {Array.from({ length: perPage }).map((_, i) => (
-        <Fragment key={i}>{skeletonCard}</Fragment>
+        <Fragment key={i}>{card}</Fragment>
       ))}
     </div>
   );

@@ -108,8 +108,12 @@ type VideoPlayerProps = {
   pendingHlsSeekOrderRef?: RefObject<number | null>;
 };
 
+// hls.js loads in its own chunk, so its ErrorTypes enum is named here by
+// value rather than imported.
+/* eslint-disable @typescript-eslint/no-unsafe-enum-assignment */
 const HLS_NETWORK_ERROR = "networkError" as ErrorData["type"];
 const HLS_MEDIA_ERROR = "mediaError" as ErrorData["type"];
+/* eslint-enable @typescript-eslint/no-unsafe-enum-assignment */
 
 /**
  * A 503 is answered deliberately and after the server already waited (a segment

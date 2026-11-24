@@ -230,20 +230,20 @@ function AlbumDetailsContent({
   // Build a map of track_id -> genre tags for easy lookup
   const trackGenreMap = new Map<number, string[]>();
   track_genres.forEach((tg: TrackGenreType) => {
-    const existing = trackGenreMap.get(tg.track_id) || [];
+    const existing = trackGenreMap.get(tg.track_id) ?? [];
     existing.push(tg.tag);
     trackGenreMap.set(tg.track_id, existing);
   });
 
   // Group tracks by disc
-  const tracksByDisc = tracks.reduce(
+  const tracksByDisc = tracks.reduce<Record<number, TrackType[]>>(
     (acc, track) => {
       const disc = track.disc || 1;
       if (!acc[disc]) acc[disc] = [];
       acc[disc].push(track);
       return acc;
     },
-    {} as Record<number, TrackType[]>,
+    {},
   );
 
   const discNumbers = Object.keys(tracksByDisc)
@@ -545,7 +545,7 @@ function AlbumDetailsContent({
                         duration={track.duration}
                         trackIndex={track.track_index}
                         explicit={track.explicit}
-                        genres={trackGenreMap.get(track.id) || []}
+                        genres={trackGenreMap.get(track.id) ?? []}
                         variant="album"
                         musicianId={linkedArtist?.id}
                         {...matchTrackPlayback(track.id)}

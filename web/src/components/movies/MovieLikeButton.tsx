@@ -34,7 +34,7 @@ export default function MovieLikeButton({
   const likeKey = likeQuery.queryKey;
   const { data, isLoading } = useQuery(likeQuery);
   const isLiked =
-    data?.error === false ? Boolean(data.data.is_liked) : false;
+    data?.error === false ? data.data.is_liked : false;
 
   const mutation = useSessionMutation({
     mutationFn: () => toggleLikeMovie(movieId),

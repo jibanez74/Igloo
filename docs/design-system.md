@@ -29,12 +29,14 @@ this doc, prefer adding a guard too.
 | Every focus indicator in `src/` uses a shared focus-ring recipe — no hand-written widths, offsets, or `focus:` (mouse-visible) rings | `web/src/test/shared/focus-contracts.test.ts` |
 | No string in `src/` hard-codes a keyboard-shortcut hint suffix (`"Mute (M)"`) — hints go through `useShortcutHints` | `web/src/test/shared/shortcut-hint-contracts.test.ts` |
 | Input styling contracts | `web/src/test/shared/input-styles.test.ts` |
-| Fields share their looks; a dialog's surface, width, elevation and title tone are props; neither takes a colour or height in `className` (§1.6) | `web/src/test/ui/fields.test.tsx`, `web/src/test/ui/dialog.test.tsx`, ESLint `no-restricted-syntax` (**error**) |
+| Fields share their looks; a dialog's surface, width, elevation and title tone are props; neither takes a colour, a shadow (other than `shadow-glow`) or a fixed height in `className`, directly or through a wrapper component (§1.6) | `web/src/test/ui/fields.test.tsx`, `web/src/test/ui/dialog.test.tsx`, ESLint `shadcn/no-restyle` + `no-restricted-syntax` for class constants (**error**) |
 | App-wide layers and motion durations are written as tokens, not numbers (§1.4, §1.5) | ESLint `no-restricted-syntax` (**error**) |
 | Shared class-string constants keep their contracts | `web/src/test/lib/constants-contracts.test.ts` |
 | Primitives and the baseline pages render the same pixels as the committed baselines, pixel for pixel, both themes (§2.5) | `web/e2e/visual/*.visual.ts` (`make test-visual-docker`, local; required for UI changes) |
 | The component gallery renders, and stays out of the production bundle (§2.5) | `web/src/test/gallery/gallery.test.tsx`, CI marker grep, `web/e2e/boot.spec.ts` |
-| No raw Tailwind palette classes (all 22 color families) | ESLint `no-restricted-syntax` (**error**) in `web/eslint.config.js` |
+| No raw Tailwind palette classes (all 22 color families) | ESLint `shadcn/no-raw-colors` and `no-restricted-syntax` (**error**) in `web/eslint.config.js` |
+| Font sizes, spacing, radius, tracking and shadows come from the scale or a theme token; only sizes, positions, grid templates, transition lists and `content-*` may be arbitrary (§1.3, §2.1) | ESLint `shadcn/no-arbitrary-values` (**error**) |
+| No inline `style`: a value that changes at runtime is a CSS custom property read by a class (§2.1) | ESLint `shadcn/no-inline-styles` (**error**) |
 | Class order, duplicates, unknown and non-canonical classes — in `className`, inside `cn()`, and in every class constant and variant record (§2.3) | `eslint-plugin-better-tailwindcss` (**warn**; `bun run lint` runs `--max-warnings 0`, so warnings still fail CI) |
 
 ---
@@ -190,8 +192,12 @@ Rules:
   render-blocking CSS and cost ~700 ms of first styled paint for ~170 ms of
   earlier Inter, and the subsets' names are fingerprinted. Do not declare
   other font families in components.
-- **Scale**: Tailwind's default type scale as utility literals; there are no
-  custom font-size tokens. In practice: `text-sm`/`text-xs` for body and
+- **Scale**: Tailwind's default type scale as utility literals, plus two
+  tokens from `src/lib/theme-tokens.ts` below it: `text-2xs` (10px, count
+  badges and the smallest meta chips; size only, so the line height is
+  inherited unless the class names one, `text-2xs/4`) and `tracking-eyebrow`
+  (0.2em, the spaced uppercase eyebrow over a hero heading). An arbitrary
+  `text-[13px]` or `tracking-[…]` is a lint error. In practice: `text-sm`/`text-xs` for body and
   secondary text, `text-lg`–`text-2xl` for section and card titles,
   `text-3xl`–`text-5xl` for page/hero headings.
 - **Weights**: `font-medium` for controls/labels, `font-semibold` for titles.
@@ -736,6 +742,25 @@ of its own, as tall as its text: the size for the two link variants).
   `--max-warnings 0`, so a warning still fails the build; write class lists in
   its canonical order (the lint autofixes). Line wrapping is explicitly
   disabled — Prettier owns that.
+- `@shadcn/lint` checks the same class strings against this document, and
+  its reports name the token or prop to use instead:
+  - `shadcn/no-restyle`: the primitives listed in `styledByProps` (§1.6)
+    take no colour, shadow or fixed height in `className`, including through
+    a wrapper that forwards `className` (`TmdbScoreBadge` → `Badge`). It
+    cannot read a class constant imported from another file, so the
+    `no-restricted-syntax` rule beside it names those.
+  - `shadcn/no-raw-colors`: no palette colour in a class (§1.2).
+  - `shadcn/no-arbitrary-values`: sizes (`w-`, `h-`, `size-`, `min-`/`max-`),
+    positions, `translate-`, grid templates, `transition-[…]` property
+    lists, `content-[…]` and the shared `ring-[3px]` may be arbitrary;
+    type, spacing, radius, tracking and shadows may not. A one-off says why
+    in an inline exemption.
+  - `shadcn/no-inline-styles`: no `style` attribute. A value computed at
+    runtime goes through a custom property, `style={{ "--progress": "40%" }
+    as CSSProperties}` read by `w-(--progress)`. Third-party APIs that hand
+    over a style (dnd-kit's transform, Sonner's toaster) are exempt inline.
+  - `require-static-classes` stays off: it rejects every imported class
+    constant, which is the shared-recipe pattern of §2.3.
 
 ### 2.2 The primitives in `components/ui`
 

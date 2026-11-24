@@ -366,7 +366,7 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
     return <WatchRoomLoading />;
   }
 
-  if (isError || (data && data.error) || !room) {
+  if (isError || data?.error || !room) {
     // A room the server refuses (403 "access denied") or cannot find (404)
     // reads the same to the viewer: it is gone or was never theirs.
     const unreachable =
@@ -566,7 +566,7 @@ function WatchRoomHeader({
     >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="flex items-center gap-2 text-xs font-semibold tracking-[0.2em] text-primary uppercase">
+          <p className="flex items-center gap-2 text-xs font-semibold tracking-eyebrow text-primary uppercase">
             <Radio className="size-3.5" aria-hidden="true" />
             Shared Watch Room
           </p>

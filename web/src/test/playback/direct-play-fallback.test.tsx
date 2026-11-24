@@ -31,9 +31,9 @@ describe("shouldDirectPlayFallback", () => {
   it.each<[string, Partial<typeof eligibleArgs>]>([
     ["MEDIA_ERR_ABORTED", { trigger: 1 }],
     ["MEDIA_ERR_NETWORK", { trigger: 2 }],
-    ["a missing error code", { trigger: undefined as unknown as number }],
+    ["a missing error code", { trigger: undefined }],
     ["HLS playback", { isHlsPlayback: true }],
-    ["a non-direct resolved mode", { resolvedMode: "remux" as StreamModeId }],
+    ["a non-direct resolved mode", { resolvedMode: "remux" }],
     // D16 guard: an error from a pre-eligibility request must not fall back.
     ["pending technical details", { techLoaded: false }],
     ["a file the app decided is not direct-playable", { directAvailable: false }],

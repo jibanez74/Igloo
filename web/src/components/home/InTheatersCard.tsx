@@ -40,6 +40,7 @@ export default function InTheatersCard({ movie }: InTheatersCardProps) {
             score={vote_average}
             size="sm"
             aria-hidden="true"
+            // eslint-disable-next-line shadcn/no-restyle -- no Badge variant has it yet.
             className="absolute top-2 right-2 bg-black/60 shadow-lg backdrop-blur-sm"
           />
         )

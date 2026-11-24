@@ -49,6 +49,8 @@
   --color-accent-teal-foreground: var(--accent-teal-foreground);
   --color-media-fallback: var(--media-fallback);
   --color-media-fallback-foreground: var(--media-fallback-foreground);
+  --text-2xs: 0.625rem;
+  --tracking-eyebrow: 0.2em;
   --shadow-floating: var(--elevation-floating);
   --shadow-glow: 0 10px 15px -3px color-mix(in oklab, var(--primary) 12%, transparent), 0 4px 6px -4px color-mix(in oklab, var(--primary) 12%, transparent);
   --z-index-chrome: 40;

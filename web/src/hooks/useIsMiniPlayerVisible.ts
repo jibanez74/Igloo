@@ -8,9 +8,6 @@ import { AudioPlayerNowPlayingContext } from "@/context/audio-player-contexts";
 export function useIsMiniPlayerVisible() {
   const nowPlaying = useContext(AudioPlayerNowPlayingContext);
 
-  return (
-    nowPlaying !== null &&
-    nowPlaying.currentTrackId !== null &&
-    !nowPlaying.isExpanded
-  );
+  if (nowPlaying === null) return false;
+  return nowPlaying.currentTrackId !== null && !nowPlaying.isExpanded;
 }

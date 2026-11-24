@@ -31,11 +31,15 @@ export default function SortableTrackItem({
     },
   });
 
+  // dnd-kit hands over the transform and transition as strings for the
+  // style attribute, recomputed on every drag frame.
+  /* eslint-disable shadcn/no-inline-styles */
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
     zIndex: isDragging ? 50 : undefined,
   };
+  /* eslint-enable shadcn/no-inline-styles */
 
   return (
     <div ref={setNodeRef} style={style}>

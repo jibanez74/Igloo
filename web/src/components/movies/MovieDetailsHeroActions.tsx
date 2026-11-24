@@ -137,7 +137,7 @@ export default function MovieDetailsHeroActions({
     useQuery(watchProgressQuery);
   const isWatched =
     watchProgressData?.error === false
-      ? Boolean(watchProgressData.data.watched)
+      ? watchProgressData.data.watched
       : false;
 
   const watchedMutation = useSessionMutation({

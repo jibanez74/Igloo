@@ -142,7 +142,7 @@ function PlaylistForm({
         showActionFailed("create playlist", data);
         return;
       }
-      queryClient.invalidateQueries({ queryKey: [api.listKey] });
+      void queryClient.invalidateQueries({ queryKey: [api.listKey] });
       showCreated("Playlist", `"${name}" has been created successfully.`);
       handleClose();
     },
@@ -169,7 +169,7 @@ function PlaylistForm({
         showActionFailed("update playlist", data);
         return;
       }
-      queryClient.invalidateQueries({ queryKey: [api.listKey] });
+      void queryClient.invalidateQueries({ queryKey: [api.listKey] });
       showUpdated("Playlist");
       onOpenChange(false);
       if (playlist) {

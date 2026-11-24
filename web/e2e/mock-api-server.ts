@@ -663,7 +663,7 @@ async function handleQuickConnectPublicRoutes(
       return true;
     }
 
-    let code = "";
+    let code: string;
     do {
       code = randomUUID().replace(/[^A-Z2-9]/gi, "").toUpperCase().slice(0, 6);
     } while (code.length < 6 || pendingPairings.has(code));

@@ -186,10 +186,7 @@ export function playbackSettingsToPlaySearch(
   return {
     mode: settings.mode,
     audio_track: settings.audioTrack,
-    subtitle_track:
-      settings.subtitleTrack === null
-        ? SUBTITLE_OFF_VALUE
-        : settings.subtitleTrack,
+    subtitle_track: settings.subtitleTrack ?? SUBTITLE_OFF_VALUE,
   };
 }
 

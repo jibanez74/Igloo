@@ -14,6 +14,8 @@ export default function OverviewSection({ overview }: OverviewSectionProps) {
       >
         Overview
       </h2>
+      {/* eslint-disable-next-line shadcn/no-arbitrary-values -- a step between
+          text-sm and text-base, for a phone-width overview only. */}
       <p className="text-[15px] leading-relaxed text-muted-foreground sm:text-base">
         {overview || "No overview available."}
       </p>

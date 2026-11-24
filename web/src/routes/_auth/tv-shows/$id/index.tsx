@@ -294,7 +294,7 @@ function ShowDetailsContent({
           selectedSeason={selectedSeason}
           onSelectSeason={seasonNumber => {
             // replace: true so paging through seasons does not stack history.
-            navigate({
+            void navigate({
               search: { season: seasonNumber },
               replace: true,
             });

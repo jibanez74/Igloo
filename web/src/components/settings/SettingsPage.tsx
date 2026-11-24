@@ -21,11 +21,9 @@ type SettingsPageProps =
 export default function SettingsPage(props: SettingsPageProps) {
   if (props.as === "form") {
     const { as, className, ...rest } = props;
-    void as;
     return <form className={cn(PAGE_CLASS, className)} {...rest} />;
   }
 
   const { as, className, ...rest } = props;
-  void as;
   return <div className={cn(PAGE_CLASS, className)} {...rest} />;
 }

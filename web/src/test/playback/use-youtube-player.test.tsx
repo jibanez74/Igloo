@@ -196,7 +196,7 @@ describe("useYouTubePlayer controls", () => {
     const enter = (state: number) => {
       player.state = state;
       act(() =>
-        player.events.onStateChange?.({ target, data: state } as YT.OnStateChangeEvent),
+        player.events.onStateChange?.({ target, data: state }),
       );
     };
 
@@ -223,7 +223,7 @@ describe("useYouTubePlayer controls", () => {
     act(() => player.events.onReady?.({ target }));
     player.state = 1;
     act(() =>
-      player.events.onStateChange?.({ target, data: 1 } as YT.OnStateChangeEvent),
+      player.events.onStateChange?.({ target, data: 1 }),
     );
 
     player.muted = true;

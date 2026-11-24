@@ -43,7 +43,7 @@ function renderStrip(progress: WatchProgressType) {
 
 describe("MovieDetailsResumeProgress", () => {
   it("shows the remaining time in hours and minutes", async () => {
-    renderStrip(IN_PROGRESS);
+    await renderStrip(IN_PROGRESS);
 
     expect(await screen.findByText("1 hr 35 min left")).toBeInTheDocument();
   });
@@ -51,7 +51,7 @@ describe("MovieDetailsResumeProgress", () => {
   // The abbreviated text is aria-hidden because screen readers read "hr" and
   // "min" inconsistently; the sr-only twin carries the spoken words.
   it("speaks the remaining time in full words", async () => {
-    renderStrip(IN_PROGRESS);
+    await renderStrip(IN_PROGRESS);
 
     const spoken = await screen.findByText("1 hour 35 minutes left");
     expect(spoken).toHaveClass("sr-only");
@@ -62,12 +62,12 @@ describe("MovieDetailsResumeProgress", () => {
   });
 
   it("fills the bar to the share already watched", async () => {
-    renderStrip(IN_PROGRESS);
+    await renderStrip(IN_PROGRESS);
 
     const caption = (await screen.findByText("1 hr 35 min left")).closest("p");
     const track = caption?.previousElementSibling;
     expect(track).toHaveAttribute("aria-hidden", "true");
-    expect((track?.firstElementChild as HTMLElement).style.width).toBe("25%");
+    expect((track?.firstElementChild as HTMLElement).style.getPropertyValue("--progress")).toBe("25%");
   });
 
   it("renders nothing once the movie is marked watched", async () => {

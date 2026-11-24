@@ -57,6 +57,9 @@ export function isEditableTarget(target: HTMLElement) {
     target.tagName === "INPUT" ||
     target.tagName === "TEXTAREA" ||
     target.tagName === "SELECT" ||
+    // jsdom leaves isContentEditable undefined, so the caller would get
+    // undefined back instead of false.
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-boolean-literal-compare
     target.isContentEditable === true
   )
 }

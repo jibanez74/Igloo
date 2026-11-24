@@ -364,9 +364,9 @@ describe("VideoPlayer source lifecycle on start changes", () => {
     );
     await act(async () => {});
     expect(fakeHlsInstances).toHaveLength(1);
-    const video = screen.getByLabelText(
+    const video = screen.getByLabelText<HTMLVideoElement>(
       "Video player for Test Movie",
-    ) as HTMLVideoElement;
+    );
 
     fireEvent(video, new Event("loadedmetadata"));
 
@@ -665,7 +665,7 @@ describe("VideoPlayer hls.js error routing", () => {
       hls.trigger("hlsManifestLoaded", {});
       hls.trigger("hlsManifestParsed", {});
     });
-    const video = screen.getByLabelText("Video player for Test Movie") as HTMLVideoElement;
+    const video = screen.getByLabelText<HTMLVideoElement>("Video player for Test Movie");
     Object.defineProperty(video, "currentTime", { configurable: true, value: 42.5 });
 
     act(() => {

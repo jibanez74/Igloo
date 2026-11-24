@@ -117,7 +117,7 @@ export const Route = createFileRoute("/_auth/search/")({
 
     const result = await results;
 
-    if (result.error === false) {
+    if (!result.error) {
       redirectToLastSearchPage({
         q: trimmed,
         tab,
@@ -549,7 +549,7 @@ function CategoryResultsTab<K extends PagedSearchTab>({
   );
 
   const handlePageChange = (newPage: number) => {
-    navigate({
+    void navigate({
       to: "/search",
       search: (prev: SearchParams) => ({ ...prev, page: newPage }),
       replace: true,

@@ -15,12 +15,14 @@ import { fileURLToPath } from "node:url";
 import {
   BOOT_COLORS,
   ELEVATION_TOKENS,
+  FONT_SIZE_SCALE,
   MOTION_DURATIONS_MS,
   ROOT_ONLY_TOKENS,
   SHADOW_SCALE,
   THEME_STORAGE_KEY,
   THEME_TOKENS,
   tokenHex,
+  TRACKING_SCALE,
   Z_INDEX_SCALE,
   type ThemeName,
   type ThemeToken,
@@ -77,6 +79,12 @@ export function renderThemeMapBlock(): string {
     line("--radius-xl", "calc(var(--radius) + 4px)"),
     ...Object.keys(THEME_TOKENS.light).map((name) =>
       line(`--color-${name.slice(2)}`, `var(${name})`),
+    ),
+    ...Object.entries(FONT_SIZE_SCALE).map(([name, value]) =>
+      line(`--text-${name}`, value),
+    ),
+    ...Object.entries(TRACKING_SCALE).map(([name, value]) =>
+      line(`--tracking-${name}`, value),
     ),
     ...Object.entries(SHADOW_SCALE).map(([name, value]) =>
       line(`--shadow-${name}`, value),
