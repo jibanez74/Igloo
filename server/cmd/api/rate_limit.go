@@ -34,8 +34,10 @@ func newRateLimiter() *rateLimiter {
 }
 
 // Allow reports whether another attempt is permitted for key within the given
-// fixed window, and records the attempt when it is.
-func (l *rateLimiter) Allow(key string, limit int, window time.Duration) bool {
+// fixed window, and records the attempt when it is. A refused attempt also
+// gets the time left until the window ends, when the next one is admitted;
+// an allowed one gets zero.
+func (l *rateLimiter) Allow(key string, limit int, window time.Duration) (bool, time.Duration) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -49,16 +51,16 @@ func (l *rateLimiter) Allow(key string, limit int, window time.Duration) bool {
 	bucket, ok := l.buckets[key]
 	if !ok || now.Sub(bucket.windowStart) >= window {
 		l.buckets[key] = rateBucket{count: 1, windowStart: now}
-		return true
+		return true, 0
 	}
 
 	if bucket.count >= limit {
-		return false
+		return false, bucket.windowStart.Add(window).Sub(now)
 	}
 
 	bucket.count++
 	l.buckets[key] = bucket
-	return true
+	return true, 0
 }
 
 // evictOverflowLocked drops arbitrary buckets until the map is back at the

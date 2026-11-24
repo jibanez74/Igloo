@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { apiErrorMessage, isApiFailure } from "@/lib/is-api-failure";
+import {
+  apiErrorMessage,
+  isApiFailure,
+  tooManyAttemptsMessage,
+} from "@/lib/is-api-failure";
 
 describe("isApiFailure", () => {
   it("accepts a failure envelope", () => {
@@ -70,5 +74,44 @@ describe("apiErrorMessage", () => {
         "Couldn’t load playlists.",
       ),
     ).toBe("Couldn’t load playlists.");
+  });
+});
+
+describe("rate-limit copy", () => {
+  it.each([
+    [1, "Too many attempts. Wait 1 second."],
+    [30, "Too many attempts. Wait 30 seconds."],
+    [60, "Too many attempts. Wait 1 minute."],
+    [61, "Too many attempts. Wait 2 minutes."],
+    [240, "Too many attempts. Wait 4 minutes."],
+    [300, "Too many attempts. Wait 5 minutes."],
+    [undefined, "Too many attempts."],
+    [0, "Too many attempts."],
+  ])("words a %s-second wait", (retryAfterSec, copy) => {
+    expect(tooManyAttemptsMessage(retryAfterSec)).toBe(copy);
+  });
+
+  // The server's lowercase constant prescribes a retry (design-system §3.4).
+  it("replaces the server's message on a 429", () => {
+    expect(
+      apiErrorMessage(
+        {
+          error: true,
+          message: "too many attempts, please try again later",
+          status: 429,
+          retryAfterSec: 240,
+        },
+        "Fallback.",
+      ),
+    ).toBe("Too many attempts. Wait 4 minutes.");
+  });
+
+  it("words a 429 with no known wait, such as a proxy's", () => {
+    expect(
+      apiErrorMessage(
+        { error: true, message: "429 - The request could not be completed.", status: 429 },
+        "Fallback.",
+      ),
+    ).toBe("Too many attempts.");
   });
 });

@@ -314,6 +314,19 @@ async function apiRequest<T extends Record<string, unknown>>(
   }
 }
 
+/**
+ * A 429's Retry-After in whole seconds, as `{ retryAfterSec }`, or nothing.
+ * Only the delta-seconds form counts: the server sends no HTTP date, and a
+ * value that is neither leaves the wait unknown rather than guessed.
+ */
+function retryAfter(res: Response): { retryAfterSec?: number } {
+  if (res.status !== 429) return {};
+  const value = res.headers.get("Retry-After")?.trim() ?? "";
+  if (!/^\d+$/.test(value)) return {};
+  const seconds = Number(value);
+  return seconds > 0 ? { retryAfterSec: seconds } : {};
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -345,10 +358,12 @@ async function readEnvelope<T extends Record<string, unknown>>(
     if (!signal.aborted) warnUnlessAborted(endpoint, err);
   }
 
+  // A rate limit says how long it lasts; whoever words the failure says it.
+  const stamp = { status: res.status, ...retryAfter(res) };
   const failed: ApiFailureType = {
     error: true,
     message: `${res.status} - ${failedMessage}`,
-    status: res.status,
+    ...stamp,
   };
 
   if (!isRecord(body)) {
@@ -356,7 +371,7 @@ async function readEnvelope<T extends Record<string, unknown>>(
   }
   if (body.error === true) {
     return typeof body.message === "string"
-      ? { error: true, message: body.message, status: res.status }
+      ? { error: true, message: body.message, ...stamp }
       : failed;
   }
   if (!res.ok) {

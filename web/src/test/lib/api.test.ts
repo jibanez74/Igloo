@@ -231,6 +231,76 @@ describe("response envelopes", () => {
     expect(res).toEqual(body);
   });
 
+  describe("a rate limit", () => {
+    const tooManyAttempts = (retryAfter: string | null, body: string) =>
+      Promise.resolve(
+        new Response(body, {
+          status: 429,
+          headers: {
+            "Content-Type": "application/json",
+            ...(retryAfter === null ? {} : { "Retry-After": retryAfter }),
+          },
+        }),
+      );
+    const SERVER_BODY = JSON.stringify({
+      error: true,
+      message: "too many attempts, please try again later",
+    });
+
+    it("stamps the wait its Retry-After names", async () => {
+      answerEveryRequest(() => tooManyAttempts("240", SERVER_BODY));
+
+      const res = await login("a@example.com", "wrong");
+
+      expect(res).toEqual({
+        error: true,
+        message: "too many attempts, please try again later",
+        status: 429,
+        retryAfterSec: 240,
+      });
+    });
+
+    it("stamps the wait on a 429 whose body is not an envelope", async () => {
+      answerEveryRequest(() => tooManyAttempts("30", "<html>Slow down</html>"));
+
+      const res = await login("a@example.com", "wrong");
+
+      expect(res).toMatchObject({ error: true, status: 429, retryAfterSec: 30 });
+    });
+
+    it.each([
+      ["no header", null],
+      ["an HTTP date", "Wed, 21 Oct 2026 07:28:00 GMT"],
+      ["zero", "0"],
+      ["a fraction", "1.5"],
+    ])("leaves the wait unknown for %s", async (_name, retryAfter) => {
+      answerEveryRequest(() => tooManyAttempts(retryAfter, SERVER_BODY));
+
+      const res = await login("a@example.com", "wrong");
+
+      expect(res).toEqual({
+        error: true,
+        message: "too many attempts, please try again later",
+        status: 429,
+      });
+    });
+
+    it("ignores Retry-After on any other status", async () => {
+      answerEveryRequest(() =>
+        Promise.resolve(
+          new Response(JSON.stringify({ error: true, message: "busy" }), {
+            status: 503,
+            headers: { "Retry-After": "120" },
+          }),
+        ),
+      );
+
+      const res = await login("a@example.com", "wrong");
+
+      expect(res).toEqual({ error: true, message: "busy", status: 503 });
+    });
+  });
+
   it("fails an avatar upload whose non-2xx body is not an envelope", async () => {
     answerEveryRequest(() => jsonResponse({ detail: "too large" }, 413));
 

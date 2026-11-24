@@ -22,8 +22,8 @@ type InitiateQuickConnectRequest struct {
 }
 
 func (app *Application) InitiateQuickConnect(w http.ResponseWriter, r *http.Request) {
-	if !app.AuthLimiter.Allow("initiate:"+clientIP(r), 10, time.Minute) {
-		helpers.ErrorJSON(w, errors.New(tooManyAttemptsMessage), http.StatusTooManyRequests)
+	if allowed, wait := app.AuthLimiter.Allow("initiate:"+clientIP(r), 10, time.Minute); !allowed {
+		tooManyAttempts(w, wait)
 		return
 	}
 
@@ -69,8 +69,8 @@ type RedeemQuickConnectRequest struct {
 }
 
 func (app *Application) RedeemQuickConnect(w http.ResponseWriter, r *http.Request) {
-	if !app.AuthLimiter.Allow("redeem:"+clientIP(r), 60, time.Minute) {
-		helpers.ErrorJSON(w, errors.New(tooManyAttemptsMessage), http.StatusTooManyRequests)
+	if allowed, wait := app.AuthLimiter.Allow("redeem:"+clientIP(r), 60, time.Minute); !allowed {
+		tooManyAttempts(w, wait)
 		return
 	}
 
@@ -120,8 +120,8 @@ func (app *Application) LookupQuickConnect(w http.ResponseWriter, r *http.Reques
 
 	// Shares the approve bucket so lookup cannot be used to guess codes
 	// faster than approve alone would allow.
-	if !app.AuthLimiter.Allow("approve:"+strconv.FormatInt(userID, 10), 10, 5*time.Minute) {
-		helpers.ErrorJSON(w, errors.New(tooManyAttemptsMessage), http.StatusTooManyRequests)
+	if allowed, wait := app.AuthLimiter.Allow("approve:"+strconv.FormatInt(userID, 10), 10, 5*time.Minute); !allowed {
+		tooManyAttempts(w, wait)
 		return
 	}
 
@@ -164,8 +164,8 @@ func (app *Application) ApproveQuickConnect(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if !app.AuthLimiter.Allow("approve:"+strconv.FormatInt(userID, 10), 10, 5*time.Minute) {
-		helpers.ErrorJSON(w, errors.New(tooManyAttemptsMessage), http.StatusTooManyRequests)
+	if allowed, wait := app.AuthLimiter.Allow("approve:"+strconv.FormatInt(userID, 10), 10, 5*time.Minute); !allowed {
+		tooManyAttempts(w, wait)
 		return
 	}
 

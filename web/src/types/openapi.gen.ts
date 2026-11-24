@@ -6486,9 +6486,11 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
-        /** @description Rate limit exceeded. Limits are fixed windows held in this server process's memory, and no Retry-After header is sent. They are best effort: past 1,024 tracked keys, windows that started more than 5 minutes ago are pruned and then arbitrary others are forgotten, restarting their count. Each operation's description states its limit. */
+        /** @description Rate limit exceeded. Limits are fixed windows held in this server process's memory. They are best effort: past 1,024 tracked keys, windows that started more than 5 minutes ago are pruned and then arbitrary others are forgotten, restarting their count. Each operation's description states its limit. */
         TooManyRequests: {
             headers: {
+                /** @description Seconds until the window ends and the next attempt is admitted at the latest, rounded up to a whole second and at least 1. */
+                "Retry-After": number;
                 [name: string]: unknown;
             };
             content: {
