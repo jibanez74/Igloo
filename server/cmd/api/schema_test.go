@@ -980,6 +980,56 @@ func TestSchema_ArtworkSourceDecidesTheReturnedImage(t *testing.T) {
 	}
 }
 
+// An album's own art wins over its provider's cover, and a new Spotify or
+// Apple ID, which moves the provider copy's folder, leaves it in place.
+func TestSchema_AlbumLocalCoverWinsOverItsSource(t *testing.T) {
+	db := newTestDBApp(t).DB
+	const local = "/api/static/local/albums/1/cover.jpg?v=1a2b3c4d"
+	const downloaded = "/api/static/albums/abc/daylight_cover.jpg?v=5e6f7a8b"
+
+	cover := func() sql.NullString {
+		t.Helper()
+		var value sql.NullString
+		err := db.QueryRow(`SELECT cover FROM albums WHERE id = 1`).Scan(&value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return value
+	}
+	exec := func(query string, args ...any) {
+		t.Helper()
+		_, err := db.Exec(query, args...)
+		if err != nil {
+			t.Fatalf("%s: %v", query, err)
+		}
+	}
+
+	exec(`INSERT INTO albums (id, title, sort_title, cover_source, cover_local) VALUES (1, 'Daylight', 'daylight', '/first.jpg', ?)`, local)
+	if got := cover(); got.String != local {
+		t.Fatalf("after insert cover = %+v, want the local cover", got)
+	}
+	steps := []struct {
+		name  string
+		query string
+		args  []any
+		want  sql.NullString
+	}{
+		{"a new source keeps the local cover", `UPDATE albums SET cover_source = '/second.jpg' WHERE id = 1`, nil, sql.NullString{String: local, Valid: true}},
+		{"a new provider ID keeps it", `UPDATE albums SET spotify_id = 'abc' WHERE id = 1`, nil, sql.NullString{String: local, Valid: true}},
+		{"clearing it returns the source", `UPDATE albums SET cover_local = NULL WHERE id = 1`, nil, sql.NullString{String: "/second.jpg", Valid: true}},
+		{"a downloaded copy is the syncer's", `UPDATE albums SET cover = ? WHERE id = 1`, []any{downloaded}, sql.NullString{String: downloaded, Valid: true}},
+		{"a local cover replaces the copy", `UPDATE albums SET cover_local = ? WHERE id = 1`, []any{local}, sql.NullString{String: local, Valid: true}},
+		{"without a source it is the cover", `UPDATE albums SET cover_source = NULL WHERE id = 1`, nil, sql.NullString{String: local, Valid: true}},
+		{"and clearing it leaves none", `UPDATE albums SET cover_local = NULL WHERE id = 1`, nil, sql.NullString{}},
+	}
+	for _, step := range steps {
+		exec(step.query, step.args...)
+		if got := cover(); got != step.want {
+			t.Errorf("%s: cover = %+v, want %+v", step.name, got, step.want)
+		}
+	}
+}
+
 // Rows written without a source, as fixtures and hand edits are, keep the
 // image they were given.
 func TestSchema_ArtworkWithoutSourceIsKept(t *testing.T) {

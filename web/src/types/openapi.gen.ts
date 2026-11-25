@@ -5141,9 +5141,33 @@ export interface components {
             issues: components["schemas"]["ScanIssue"][];
             /**
              * Format: int64
-             * @description Running count of the catalog changes this scanner has made since the server started: files imported, updated or deleted, artists and albums enriched, committed Apple Music or Spotify track pairings, and album matches dropped because their tracks contradicted them, summed across runs. Track pairings count even for unchanged files or fingerprint-only updates; they do not increase enriched. A dropped match counts even though it lowers enriched. Rolled-back pairings and repeated publication of the same committed changes add nothing. It changes even when the run that made the change finished between two reads of this report, so a client compares it to tell whether the catalog changed. Compare it for change only; it restarts from 0 with the server.
+             * @description Running count of the catalog changes this scanner has made since the server started: files imported, updated or deleted, artists and albums enriched, committed Apple Music or Spotify track pairings, and album matches dropped because their tracks contradicted them, summed across runs, plus the album covers the background lookups changed between runs. Track pairings count even for unchanged files or fingerprint-only updates; they do not increase enriched. A dropped match counts even though it lowers enriched. Rolled-back pairings and repeated publication of the same committed changes add nothing. It changes even when the run that made the change finished between two reads of this report, so a client compares it to tell whether the catalog changed. Compare it for change only; it restarts from 0 with the server.
              */
             catalog_revision: number;
+            lookups: components["schemas"]["MusicLookupStatusData"];
+        };
+        /** @description The background lookups that run between music scans, after the scan run ends; a scan pauses them until it finishes. The counters describe the current or latest pass and count albums. */
+        MusicLookupStatusData: {
+            /**
+             * @description running: a pass is reading albums; paused: a music scan is running and the pass resumes after it; idle: no pass is waiting.
+             * @enum {string}
+             */
+            state: "idle" | "running" | "paused";
+            /**
+             * @description The stage the running pass is in; null between passes. local-art copies each album's own art: a cover image in its folder or a picture embedded in its tracks.
+             * @enum {string|null}
+             */
+            stage: "local-art" | null;
+            /** @description Albums the pass has read so far. */
+            processed: number;
+            /** @description Albums the pass reads. */
+            total: number;
+            /** @description Albums that show art of their own. */
+            matched: number;
+            /** @description Albums whose art could not be read or copied; a cover copied earlier stays. */
+            failed: number;
+            /** @description Albums with no art of their own. */
+            unmatched: number;
         };
         /** @description One episode's catalog metadata (TMDB fields only). */
         ShowEpisodeSummary: {

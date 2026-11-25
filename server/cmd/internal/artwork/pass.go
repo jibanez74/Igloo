@@ -821,21 +821,9 @@ func (s *Syncer) watchLibraries() ([]string, func() bool) {
 func (s *Syncer) overlappingDirs(staticDir string, roots []string) map[string]string {
 	overlapping := make(map[string]string)
 	for _, dir := range managedDirs() {
-		managed, err := resolvedPath(filepath.Join(staticDir, dir))
-		if err != nil {
-			overlapping[dir] = err.Error()
-			continue
-		}
-
-		for _, library := range roots {
-			libraryPath, err := resolvedPath(library)
-			if err != nil {
-				overlapping[dir] = library
-				continue
-			}
-			if pathsOverlap(managed, libraryPath) {
-				overlapping[dir] = library
-			}
+		library, overlaps := helpers.OverlappingLibrary(filepath.Join(staticDir, dir), roots)
+		if overlaps {
+			overlapping[dir] = library
 		}
 	}
 
@@ -867,53 +855,9 @@ func (s *Syncer) reportOverlaps(staticDir string, skipped map[string]string) {
 	}
 }
 
-// resolvedPath is the absolute path p leads to with every symlink in it
-// resolved. A path that does not exist yet resolves through its nearest
-// existing ancestor, since a folder created there lands wherever that
-// ancestor leads.
-func resolvedPath(p string) (string, error) {
-	current, err := filepath.Abs(p)
-	if err != nil {
-		return "", err
-	}
-
-	var missing []string
-	for {
-		resolved, err := filepath.EvalSymlinks(current)
-		if err == nil {
-			return filepath.Join(append([]string{resolved}, missing...)...), nil
-		}
-		if !errors.Is(err, fs.ErrNotExist) {
-			return "", err
-		}
-
-		parent := filepath.Dir(current)
-		if parent == current {
-			return "", err
-		}
-		missing = append([]string{filepath.Base(current)}, missing...)
-		current = parent
-	}
-}
-
 // errLibrariesChanged stops a download that would write under library roots
 // other than the ones the pass checked.
 var errLibrariesChanged = errors.New("library directories changed during the pass")
-
-// pathsOverlap reports whether one of two clean absolute paths is or lies
-// beneath the other, the filesystem root included.
-func pathsOverlap(a, b string) bool {
-	return isWithin(a, b) || isWithin(b, a)
-}
-
-func isWithin(path, dir string) bool {
-	rel, err := filepath.Rel(dir, path)
-	if err != nil {
-		return false
-	}
-	isOutside := rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator))
-	return !isOutside
-}
 
 // errLinkedKeyFolder refuses a download into a key folder that is a symlink or
 // another non-directory: the syncer creates these folders itself, so one that

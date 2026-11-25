@@ -27,7 +27,7 @@ func (q *Queries) DeleteAlbum(ctx context.Context, id int64) (string, error) {
 
 const getAlbumByID = `-- name: GetAlbumByID :one
 SELECT
-  id, title, sort_title, spotify_id, apple_id, musicbrainz_release_id, musicbrainz_release_group_id, album_type, musician, release_date, year, total_tracks, cover, cover_source, created_at, updated_at
+  id, title, sort_title, spotify_id, apple_id, musicbrainz_release_id, musicbrainz_release_group_id, album_type, musician, release_date, year, total_tracks, cover, cover_source, cover_local, created_at, updated_at
 FROM albums
 WHERE id = ?
 LIMIT 1
@@ -51,6 +51,7 @@ func (q *Queries) GetAlbumByID(ctx context.Context, id int64) (Album, error) {
 		&i.TotalTracks,
 		&i.Cover,
 		&i.CoverSource,
+		&i.CoverLocal,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

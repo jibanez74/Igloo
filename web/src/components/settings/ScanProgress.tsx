@@ -84,6 +84,26 @@ const SHOW_COPY: LibraryCopy<ShowScanStatus["phase"]> = {
   changes: { running: "Applying detected TV show changes", completed: "Detected TV show changes applied" },
 };
 
+// The music library's background lookups run after each scan, so their line
+// shows whatever the scan's state; it is not announced, since it changes on
+// every poll for minutes at a time.
+const LOOKUP_STAGES: Record<NonNullable<MusicScanStatus["lookups"]["stage"]>, string> = {
+  "local-art": "Album art",
+};
+
+const lookupsLine = (lookups: MusicScanStatus["lookups"]) => {
+  const label = lookups.stage === null ? "Album art" : LOOKUP_STAGES[lookups.stage];
+  const paused = lookups.state === "paused" ? " · paused until the scan finishes" : "";
+  return `${label}: ${lookups.processed} of ${lookups.total} albums checked · ${lookups.matched} found · ${lookups.failed} failed · ${lookups.unmatched} without art${paused}`;
+};
+
+// A worker that never ran a pass has nothing to show.
+const visibleLookups = (props: Props) => {
+  const lookups = props.library === "music" ? props.status?.lookups : undefined;
+  const hasPass = lookups !== undefined && (lookups.state !== "idle" || lookups.total > 0);
+  return hasPass ? lookups : undefined;
+};
+
 // A watcher run defers a file still being written and retries it itself.
 const WATCHED_DEFERRED = "Files still being written are retried by the library watcher once they are quiet.";
 
@@ -133,6 +153,7 @@ export default function ScanProgress(props: Props) {
   const copy = copyFor(props);
   const announcement = announcementFor(props);
   const watched = status?.scope === "changes";
+  const lookups = visibleLookups(props);
   return (
     <div className="space-y-2 text-sm text-muted-foreground">
       <p role="status" aria-live="polite" aria-atomic="true">{announcement}</p>
@@ -160,6 +181,7 @@ export default function ScanProgress(props: Props) {
           )}
         </>
       )}
+      {lookups && <p>{lookupsLine(lookups)}</p>}
     </div>
   );
 }

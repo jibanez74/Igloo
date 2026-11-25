@@ -515,7 +515,11 @@ func (f musicStartFunc) Start() scanner.StartResult { return f() }
 
 func (f musicStartFunc) StartChanges(scanner.Changes) scanner.StartResult { return f() }
 
-func (musicStartFunc) Status() music.Status { return music.Status{Progress: idleScanProgress()} }
+func (musicStartFunc) Status() music.Status {
+	return music.Status{Progress: idleScanProgress(), Lookups: music.LookupStatus{State: music.LookupIdle}}
+}
+
+func (musicStartFunc) RequestLookups() {}
 
 func idleScanProgress() scanner.Progress {
 	return scanner.Progress{State: scanner.StateIdle, Phase: scanner.PhaseIdle, ActiveFiles: []string{}, Issues: []scanner.Issue{}}

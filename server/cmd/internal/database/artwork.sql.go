@@ -45,7 +45,7 @@ func (q *Queries) GetArtworkStaticDir(ctx context.Context) (string, error) {
 const listAlbumArtwork = `-- name: ListAlbumArtwork :many
 SELECT id, spotify_id, apple_id, title, cover, cover_source
 FROM albums
-WHERE id > ?1 AND (cover IS NOT NULL OR cover_source IS NOT NULL)
+WHERE id > ?1 AND (cover IS NOT NULL OR cover_source IS NOT NULL) AND cover_local IS NULL
 ORDER BY id
 LIMIT ?2
 `
@@ -65,7 +65,8 @@ type ListAlbumArtworkRow struct {
 }
 
 // An album is matched by Spotify or by Apple, never both; the ID of the one
-// that matched it names its folder.
+// that matched it names its folder. An album with art of its own shows that,
+// so the syncer leaves it out.
 func (q *Queries) ListAlbumArtwork(ctx context.Context, arg ListAlbumArtworkParams) ([]ListAlbumArtworkRow, error) {
 	rows, err := q.query(ctx, q.listAlbumArtworkStmt, listAlbumArtwork, arg.AfterID, arg.PageSize)
 	if err != nil {
@@ -101,7 +102,7 @@ SELECT id, spotify_id, apple_id, title, cover, cover_source
 FROM albums
 WHERE (spotify_id IN (SELECT value FROM json_each(CAST(?1 AS TEXT)))
     OR apple_id IN (SELECT value FROM json_each(CAST(?1 AS TEXT))))
-  AND (cover IS NOT NULL OR cover_source IS NOT NULL)
+  AND (cover IS NOT NULL OR cover_source IS NOT NULL) AND cover_local IS NULL
 ORDER BY id
 `
 
@@ -538,7 +539,7 @@ func (q *Queries) ListNetworkArtworkInFolders(ctx context.Context, keys string) 
 const listPendingAlbumArtwork = `-- name: ListPendingAlbumArtwork :many
 SELECT id, spotify_id, apple_id, title, cover, cover_source
 FROM albums INDEXED BY idx_albums_artwork_pending
-WHERE id > ?1 AND cover_source IS NOT NULL AND cover IS cover_source
+WHERE id > ?1 AND cover_source IS NOT NULL AND cover IS cover_source AND cover_local IS NULL
 ORDER BY id
 LIMIT ?2
 `
@@ -1260,7 +1261,7 @@ func (q *Queries) ListShowSeasonArtworkInFolders(ctx context.Context, keys strin
 }
 
 const revertAlbumCoverArtwork = `-- name: RevertAlbumCoverArtwork :execrows
-UPDATE albums SET cover = cover_source WHERE cover LIKE '/api/static/%'
+UPDATE albums SET cover = cover_source WHERE cover LIKE '/api/static/%' AND cover_local IS NULL
 `
 
 func (q *Queries) RevertAlbumCoverArtwork(ctx context.Context) (int64, error) {
@@ -1380,7 +1381,7 @@ func (q *Queries) RevertShowSeasonPosterArtwork(ctx context.Context) (int64, err
 }
 
 const setAlbumCoverArtwork = `-- name: SetAlbumCoverArtwork :execrows
-UPDATE albums SET cover = ?1 WHERE id = ?2 AND cover_source IS ?3
+UPDATE albums SET cover = ?1 WHERE id = ?2 AND cover_source IS ?3 AND cover_local IS NULL
   AND (?1 IS ?3 OR spotify_id IS CAST(?4 AS TEXT) OR CAST(apple_id AS TEXT) IS CAST(?4 AS TEXT))
 `
 

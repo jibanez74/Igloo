@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -89,6 +90,10 @@ func TestUpdateGeneralSettings_RequestsAnArtworkPassForItsSettings(t *testing.T)
 	admin := createTestUser(t, app, "Settings Admin", "settings-admin@example.com", true)
 	artwork := &artworkRequests{}
 	app.Artwork = artwork
+	// Albums' own art lives in the static directory too, so moving it asks
+	// the music worker to copy it again.
+	music := &musicLookupRequests{musicStartFunc: func() scanner.StartResult { return scanner.StartResult{} }}
+	app.MusicScanner = music
 	staticDir := filepath.Join(t.TempDir(), "static")
 	otherStaticDir := filepath.Join(t.TempDir(), "static")
 
@@ -102,13 +107,14 @@ func TestUpdateGeneralSettings_RequestsAnArtworkPassForItsSettings(t *testing.T)
 		body        string
 		wantPasses  int32
 		wantReverts int32
+		wantLookups int32
 	}{
-		{"turning downloads on", generalSettingsBody(staticDir), 1, 0},
-		{"saving the same values", generalSettingsBody(staticDir), 1, 0},
-		{"changing another setting", generalSettingsBodyWithWatcher(staticDir, false), 1, 0},
-		{"moving the static directory", generalSettingsBody(otherStaticDir), 2, 1},
-		{"turning downloads off", downloadsOff(otherStaticDir), 3, 2},
-		{"moving the directory while off", downloadsOff(staticDir), 4, 2},
+		{"turning downloads on", generalSettingsBody(staticDir), 1, 0, 1},
+		{"saving the same values", generalSettingsBody(staticDir), 1, 0, 1},
+		{"changing another setting", generalSettingsBodyWithWatcher(staticDir, false), 1, 0, 1},
+		{"moving the static directory", generalSettingsBody(otherStaticDir), 2, 1, 2},
+		{"turning downloads off", downloadsOff(otherStaticDir), 3, 2, 2},
+		{"moving the directory while off", downloadsOff(staticDir), 4, 2, 3},
 	}
 	for _, step := range steps {
 		w := serveAs(t, app, admin.ID, http.MethodPut, "/api/settings/general", step.body)
@@ -118,8 +124,18 @@ func TestUpdateGeneralSettings_RequestsAnArtworkPassForItsSettings(t *testing.T)
 		if artwork.count.Load() != step.wantPasses || artwork.reverts.Load() != step.wantReverts {
 			t.Fatalf("%s: passes = %d, reverts = %d; want %d and %d", step.name, artwork.count.Load(), artwork.reverts.Load(), step.wantPasses, step.wantReverts)
 		}
+		if music.lookups.Load() != step.wantLookups {
+			t.Fatalf("%s: music lookup passes = %d, want %d", step.name, music.lookups.Load(), step.wantLookups)
+		}
 	}
 }
+
+type musicLookupRequests struct {
+	musicStartFunc
+	lookups atomic.Int32
+}
+
+func (m *musicLookupRequests) RequestLookups() { m.lookups.Add(1) }
 
 func TestGeneralSettingsRestartRequired_OnlyForStartupClients(t *testing.T) {
 	previous := database.Setting{

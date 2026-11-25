@@ -8,7 +8,7 @@ import type {
 // A scan run in its local phase with nothing processed yet. The three
 // libraries share this shape; each builder adds its own library size and the
 // counters only that library reports.
-function runningScan(total: number): MusicScanStatus {
+function runningScan(total: number): Omit<MusicScanStatus, "lookups"> {
   return {
     run_id: "test-run", state: "running", phase: "local", scope: "library",
     started_at: "2026-09-10T10:00:00Z", updated_at: "2026-09-10T10:00:00Z", finished_at: null,
@@ -23,8 +23,13 @@ export function movieScanStatus(overrides: Partial<MovieScanStatus> = {}): Movie
   return { ...runningScan(418), pending_enrichment: 0, ...overrides };
 }
 
+/** The music worker's lookups before their first pass. */
+export const IDLE_LOOKUPS: MusicScanStatus["lookups"] = {
+  state: "idle", stage: null, processed: 0, total: 0, matched: 0, failed: 0, unmatched: 0,
+};
+
 export function musicScanStatus(overrides: Partial<MusicScanStatus> = {}): MusicScanStatus {
-  return { ...runningScan(2267), ...overrides };
+  return { ...runningScan(2267), lookups: IDLE_LOOKUPS, ...overrides };
 }
 
 export function showScanStatus(overrides: Partial<ShowScanStatus> = {}): ShowScanStatus {

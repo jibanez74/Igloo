@@ -69,3 +69,15 @@ names: a lone `A & B` credit gets no id rather than A's. ffprobe also
 hides ID3's `UFID` frame, where Picard stores an MP3's MusicBrainz recording id. Accepted on
 2026-11-25 rather than adding an ID3/MP4 tag reader next to `isobmff`; reproduce with any
 Picard-tagged MP3 whose `ARTISTS` holds two names.
+
+### A new or changed album image waits for the next library scan
+
+The library watcher reacts only to audio files, so adding, replacing or deleting a `cover.jpg` (or
+any folder image the music worker reads) without touching a track changes nothing until the next
+library scan, whose background pass reads every album again. Runs of changes also read only the
+albums of the tracks they touched, so a deleted track whose embedded picture was its album's cover
+leaves that copy in place until then. Decided on 2026-11-25 for the phase 2 music scanner work
+(`server/cmd/internal/scanner/music/localart.go`); reproduce by dropping a `cover.jpg` into a
+scanned album folder with the watcher on. Options: let the watcher pass image files of a music
+library through to a run of changes that reads only the album art stage, or a per-album Refresh
+metadata action (planned for the Fix match phase).

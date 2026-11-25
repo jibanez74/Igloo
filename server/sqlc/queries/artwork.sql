@@ -228,17 +228,18 @@ UPDATE networks SET logo = logo_source WHERE logo LIKE '/api/static/%';
 
 -- name: ListAlbumArtwork :many
 -- An album is matched by Spotify or by Apple, never both; the ID of the one
--- that matched it names its folder.
+-- that matched it names its folder. An album with art of its own shows that,
+-- so the syncer leaves it out.
 SELECT id, spotify_id, apple_id, title, cover, cover_source
 FROM albums
-WHERE id > sqlc.arg(after_id) AND (cover IS NOT NULL OR cover_source IS NOT NULL)
+WHERE id > sqlc.arg(after_id) AND (cover IS NOT NULL OR cover_source IS NOT NULL) AND cover_local IS NULL
 ORDER BY id
 LIMIT sqlc.arg(page_size);
 
 -- name: ListPendingAlbumArtwork :many
 SELECT id, spotify_id, apple_id, title, cover, cover_source
 FROM albums INDEXED BY idx_albums_artwork_pending
-WHERE id > sqlc.arg(after_id) AND cover_source IS NOT NULL AND cover IS cover_source
+WHERE id > sqlc.arg(after_id) AND cover_source IS NOT NULL AND cover IS cover_source AND cover_local IS NULL
 ORDER BY id
 LIMIT sqlc.arg(page_size);
 
@@ -249,15 +250,15 @@ SELECT id, spotify_id, apple_id, title, cover, cover_source
 FROM albums
 WHERE (spotify_id IN (SELECT value FROM json_each(CAST(sqlc.arg(keys) AS TEXT)))
     OR apple_id IN (SELECT value FROM json_each(CAST(sqlc.arg(keys) AS TEXT))))
-  AND (cover IS NOT NULL OR cover_source IS NOT NULL)
+  AND (cover IS NOT NULL OR cover_source IS NOT NULL) AND cover_local IS NULL
 ORDER BY id;
 
 -- name: SetAlbumCoverArtwork :execrows
-UPDATE albums SET cover = sqlc.narg(value) WHERE id = sqlc.arg(id) AND cover_source IS sqlc.narg(source)
+UPDATE albums SET cover = sqlc.narg(value) WHERE id = sqlc.arg(id) AND cover_source IS sqlc.narg(source) AND cover_local IS NULL
   AND (sqlc.narg(value) IS sqlc.narg(source) OR spotify_id IS CAST(sqlc.arg(key) AS TEXT) OR CAST(apple_id AS TEXT) IS CAST(sqlc.arg(key) AS TEXT));
 
 -- name: RevertAlbumCoverArtwork :execrows
-UPDATE albums SET cover = cover_source WHERE cover LIKE '/api/static/%';
+UPDATE albums SET cover = cover_source WHERE cover LIKE '/api/static/%' AND cover_local IS NULL;
 
 -- name: ListMusicianArtwork :many
 SELECT id, spotify_id, name, thumb, thumb_source

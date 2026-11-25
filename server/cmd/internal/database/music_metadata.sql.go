@@ -219,6 +219,25 @@ func (q *Queries) GetAlbumByAppleID(ctx context.Context, appleID sql.NullInt64) 
 	return id, err
 }
 
+const getMusicAlbumLocalCover = `-- name: GetMusicAlbumLocalCover :one
+SELECT a.cover_local, m.local_cover_fingerprint
+FROM albums a
+LEFT JOIN music_album_metadata m ON m.album_id = a.id
+WHERE a.id = ?
+`
+
+type GetMusicAlbumLocalCoverRow struct {
+	CoverLocal            sql.NullString `json:"-"`
+	LocalCoverFingerprint sql.NullString `json:"local_cover_fingerprint"`
+}
+
+func (q *Queries) GetMusicAlbumLocalCover(ctx context.Context, id int64) (GetMusicAlbumLocalCoverRow, error) {
+	row := q.queryRow(ctx, q.getMusicAlbumLocalCoverStmt, getMusicAlbumLocalCover, id)
+	var i GetMusicAlbumLocalCoverRow
+	err := row.Scan(&i.CoverLocal, &i.LocalCoverFingerprint)
+	return i, err
+}
+
 const getMusicSpotifyAdoption = `-- name: GetMusicSpotifyAdoption :one
 SELECT spotify_id FROM music_spotify_adoptions WHERE musician_id=?
 `
@@ -228,6 +247,155 @@ func (q *Queries) GetMusicSpotifyAdoption(ctx context.Context, musicianID int64)
 	var spotify_id string
 	err := row.Scan(&spotify_id)
 	return spotify_id, err
+}
+
+const listMusicAlbumArtTracks = `-- name: ListMusicAlbumArtTracks :many
+SELECT t.id, t.file_path, t.size, f.mtime_ns, m.picture_stream
+FROM tracks t
+LEFT JOIN music_track_metadata m ON m.track_id = t.id
+LEFT JOIN track_file_fingerprints f ON f.track_id = t.id
+WHERE t.album_id = ?
+ORDER BY t.disc, t.track_index, t.id
+`
+
+type ListMusicAlbumArtTracksRow struct {
+	ID            int64         `json:"id"`
+	FilePath      string        `json:"file_path"`
+	Size          int64         `json:"size"`
+	MtimeNs       sql.NullInt64 `json:"mtime_ns"`
+	PictureStream sql.NullInt64 `json:"picture_stream"`
+}
+
+// An album's tracks in play order, with the picture each embeds and the
+// fingerprint that tells when the file changed.
+func (q *Queries) ListMusicAlbumArtTracks(ctx context.Context, albumID sql.NullInt64) ([]ListMusicAlbumArtTracksRow, error) {
+	rows, err := q.query(ctx, q.listMusicAlbumArtTracksStmt, listMusicAlbumArtTracks, albumID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListMusicAlbumArtTracksRow{}
+	for rows.Next() {
+		var i ListMusicAlbumArtTracksRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FilePath,
+			&i.Size,
+			&i.MtimeNs,
+			&i.PictureStream,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMusicAlbumIDs = `-- name: ListMusicAlbumIDs :many
+SELECT id FROM albums WHERE id > ?1 ORDER BY id LIMIT ?2
+`
+
+type ListMusicAlbumIDsParams struct {
+	AfterID  int64 `json:"after_id"`
+	PageSize int64 `json:"page_size"`
+}
+
+// One page of the albums a full local-art pass reads.
+func (q *Queries) ListMusicAlbumIDs(ctx context.Context, arg ListMusicAlbumIDsParams) ([]int64, error) {
+	rows, err := q.query(ctx, q.listMusicAlbumIDsStmt, listMusicAlbumIDs, arg.AfterID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMusicAlbumsWithLocalCover = `-- name: ListMusicAlbumsWithLocalCover :many
+SELECT id FROM albums WHERE cover_local IS NOT NULL
+`
+
+// The albums whose art copies a full pass keeps.
+func (q *Queries) ListMusicAlbumsWithLocalCover(ctx context.Context) ([]int64, error) {
+	rows, err := q.query(ctx, q.listMusicAlbumsWithLocalCoverStmt, listMusicAlbumsWithLocalCover)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMusicTrackAlbumsUnder = `-- name: ListMusicTrackAlbumsUnder :many
+SELECT file_path, album_id FROM tracks
+WHERE file_path >= ?1 AND file_path < ?2
+`
+
+type ListMusicTrackAlbumsUnderParams struct {
+	Lower string `json:"lower"`
+	Upper string `json:"upper"`
+}
+
+type ListMusicTrackAlbumsUnderRow struct {
+	FilePath string        `json:"file_path"`
+	AlbumID  sql.NullInt64 `json:"album_id"`
+}
+
+// The album of every track beneath a folder; lower and upper bound its
+// children as in ListMusicTrackScanIndexUnder.
+func (q *Queries) ListMusicTrackAlbumsUnder(ctx context.Context, arg ListMusicTrackAlbumsUnderParams) ([]ListMusicTrackAlbumsUnderRow, error) {
+	rows, err := q.query(ctx, q.listMusicTrackAlbumsUnderStmt, listMusicTrackAlbumsUnder, arg.Lower, arg.Upper)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListMusicTrackAlbumsUnderRow{}
+	for rows.Next() {
+		var i ListMusicTrackAlbumsUnderRow
+		if err := rows.Scan(&i.FilePath, &i.AlbumID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const moveMusicAlbumAliases = `-- name: MoveMusicAlbumAliases :exec
@@ -1270,6 +1438,22 @@ func (q *Queries) SaveMusicAlbumIdentity(ctx context.Context, arg SaveMusicAlbum
 	return err
 }
 
+const saveMusicAlbumLocalCoverFingerprint = `-- name: SaveMusicAlbumLocalCoverFingerprint :exec
+INSERT INTO music_album_metadata(album_id, local_cover_fingerprint)
+SELECT ?1, ?2 WHERE EXISTS (SELECT 1 FROM albums WHERE id = ?1)
+ON CONFLICT(album_id) DO UPDATE SET local_cover_fingerprint = excluded.local_cover_fingerprint
+`
+
+type SaveMusicAlbumLocalCoverFingerprintParams struct {
+	AlbumID     int64          `json:"album_id"`
+	Fingerprint sql.NullString `json:"fingerprint"`
+}
+
+func (q *Queries) SaveMusicAlbumLocalCoverFingerprint(ctx context.Context, arg SaveMusicAlbumLocalCoverFingerprintParams) error {
+	_, err := q.exec(ctx, q.saveMusicAlbumLocalCoverFingerprintStmt, saveMusicAlbumLocalCoverFingerprint, arg.AlbumID, arg.Fingerprint)
+	return err
+}
+
 const saveMusicArtistIdentity = `-- name: SaveMusicArtistIdentity :exec
 INSERT INTO music_artist_identity(identity_key, musician_id) VALUES (?, ?) ON CONFLICT DO NOTHING
 `
@@ -1345,13 +1529,13 @@ func (q *Queries) SaveMusicSpotifyAdoption(ctx context.Context, arg SaveMusicSpo
 
 const saveMusicTrackMetadata = `-- name: SaveMusicTrackMetadata :exec
 INSERT INTO music_track_metadata(track_id,artist_tag,artist_key,artist_sort,album_sort,apple_track_id,apple_album_id,
-artists_tag,mb_recording_id,mb_release_id,mb_release_group_id,mb_artist_ids,mb_album_artist_ids,isrc,label,compilation,track_total,disc_total)
-VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+artists_tag,mb_recording_id,mb_release_id,mb_release_group_id,mb_artist_ids,mb_album_artist_ids,isrc,label,compilation,track_total,disc_total,picture_stream)
+VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 ON CONFLICT(track_id) DO UPDATE SET artist_tag=excluded.artist_tag,artist_key=excluded.artist_key,artist_sort=excluded.artist_sort,album_sort=excluded.album_sort,
 apple_track_id=excluded.apple_track_id,apple_album_id=excluded.apple_album_id,artists_tag=excluded.artists_tag,
 mb_recording_id=excluded.mb_recording_id,mb_release_id=excluded.mb_release_id,mb_release_group_id=excluded.mb_release_group_id,
 mb_artist_ids=excluded.mb_artist_ids,mb_album_artist_ids=excluded.mb_album_artist_ids,isrc=excluded.isrc,label=excluded.label,
-compilation=excluded.compilation,track_total=excluded.track_total,disc_total=excluded.disc_total
+compilation=excluded.compilation,track_total=excluded.track_total,disc_total=excluded.disc_total,picture_stream=excluded.picture_stream
 `
 
 type SaveMusicTrackMetadataParams struct {
@@ -1373,6 +1557,7 @@ type SaveMusicTrackMetadataParams struct {
 	Compilation      bool           `json:"compilation"`
 	TrackTotal       int64          `json:"track_total"`
 	DiscTotal        int64          `json:"disc_total"`
+	PictureStream    sql.NullInt64  `json:"picture_stream"`
 }
 
 func (q *Queries) SaveMusicTrackMetadata(ctx context.Context, arg SaveMusicTrackMetadataParams) error {
@@ -1395,6 +1580,7 @@ func (q *Queries) SaveMusicTrackMetadata(ctx context.Context, arg SaveMusicTrack
 		arg.Compilation,
 		arg.TrackTotal,
 		arg.DiscTotal,
+		arg.PictureStream,
 	)
 	return err
 }
@@ -1411,6 +1597,25 @@ type SetMusicAlbumAppleIDParams struct {
 func (q *Queries) SetMusicAlbumAppleID(ctx context.Context, arg SetMusicAlbumAppleIDParams) error {
 	_, err := q.exec(ctx, q.setMusicAlbumAppleIDStmt, setMusicAlbumAppleID, arg.AppleID, arg.ID)
 	return err
+}
+
+const setMusicAlbumLocalCover = `-- name: SetMusicAlbumLocalCover :execrows
+UPDATE albums SET cover_local = ?1, updated_at = CURRENT_TIMESTAMP
+WHERE id = ?2 AND cover_local IS NOT ?1
+`
+
+type SetMusicAlbumLocalCoverParams struct {
+	CoverLocal sql.NullString `json:"-"`
+	ID         int64          `json:"id"`
+}
+
+// Writes nothing for an album deleted since it was read.
+func (q *Queries) SetMusicAlbumLocalCover(ctx context.Context, arg SetMusicAlbumLocalCoverParams) (int64, error) {
+	result, err := q.exec(ctx, q.setMusicAlbumLocalCoverStmt, setMusicAlbumLocalCover, arg.CoverLocal, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const setMusicAlbumSpotifyID = `-- name: SetMusicAlbumSpotifyID :exec

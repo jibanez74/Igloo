@@ -2,8 +2,30 @@ package music
 
 import (
 	"path/filepath"
+	"regexp"
 	"strings"
 )
+
+// discFolderPattern names the folders a multi-disc album keeps each disc in:
+// CD1, Disc 2, Disk_3, Vol. 1, Volume 2, Part 3.
+var discFolderPattern = regexp.MustCompile(`(?i)^(cd|disc|disk|vol|volume|part)[ ._-]*[0-9]+$`)
+
+// isDiscFolder reports whether name is a disc folder of an album.
+func isDiscFolder(name string) bool {
+	return discFolderPattern.MatchString(strings.TrimSpace(name))
+}
+
+// albumFolder is the folder of an album a track at path belongs to: the
+// track's own folder, or that folder's parent when it is a disc folder, which
+// disc then names; disc is "" otherwise.
+func albumFolder(path string) (folder, disc string) {
+	dir := filepath.Dir(path)
+	isDisc := isDiscFolder(filepath.Base(dir))
+	if isDisc {
+		return filepath.Dir(dir), dir
+	}
+	return dir, ""
+}
 
 // iTunesLPExtension names the bundle folders iTunes keeps an album's
 // interactive booklet in; their .aif and .m4a files are interface sounds and

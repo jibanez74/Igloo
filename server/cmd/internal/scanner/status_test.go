@@ -268,3 +268,24 @@ func TestRevisionCountsChangesAcrossRuns(t *testing.T) {
 		t.Fatalf("a run that changed nothing: %d", got)
 	}
 }
+
+// Changes made between runs, by a background pass, count on the same total,
+// and the next run's changes still count from there.
+func TestRevisionAddCountsChangesBetweenRuns(t *testing.T) {
+	var revision Revision
+	run := Progress{RunID: "first"}
+	revision.Stamp(&run, Counts{Imported: 3}, 0)
+	revision.Add(&run, 2)
+	if run.CatalogRevision != 5 {
+		t.Fatalf("revision = %d after 2 background changes, want 5", run.CatalogRevision)
+	}
+	revision.Stamp(&run, Counts{Imported: 4}, 0)
+	if run.CatalogRevision != 6 {
+		t.Fatalf("revision = %d after one more import, want 6", run.CatalogRevision)
+	}
+	next := Progress{RunID: "second"}
+	revision.Stamp(&next, Counts{Updated: 1}, 0)
+	if next.CatalogRevision != 7 {
+		t.Fatalf("revision = %d in the next run, want 7", next.CatalogRevision)
+	}
+}

@@ -31,6 +31,19 @@ func (s *Scanner) StartChanges(changes scanner.Changes) scanner.StartResult {
 // runMusicScan expects beginReport to have published the run it continues.
 // changes is nil for a library scan.
 func (s *Scanner) runMusicScan(directory string, changes *scanner.Changes) {
+	// The background worker never writes beside a scan. It resumes once the
+	// run is over with the albums the run touched, or with every album after
+	// a library scan or a run that stopped before it knew them.
+	s.lookups.pause()
+	var scanned *musicScanContext
+	defer func() {
+		resume := lookupRequest{full: true}
+		hasScope := changes.Scoped() && scanned != nil && scanned.scope != nil
+		if hasScope {
+			resume = albumsRequest(scanned.scope.albums)
+		}
+		s.lookups.resume(resume)
+	}()
 	report := newScanReport(s.Status())
 	ctx := s.scanContext
 	stopProgressLog := scanner.StartProgressLog(scanner.ProgressLogInterval, func() {
@@ -74,6 +87,7 @@ func (s *Scanner) runMusicScan(directory string, changes *scanner.Changes) {
 		return
 	}
 	scan := newMusicScanContext(scanIndex)
+	scanned = scan
 	scan.changes = changes
 	scan.appleEnabled = s.apple != nil && s.appleLookupsEnabled()
 	report.scan = scan

@@ -94,6 +94,9 @@ type StreamDisposition struct {
 type StreamTags struct {
 	Title    string `json:"title"`
 	Language string `json:"language"`
+	// Comment names an attached picture's role in MP3 and FLAC files, such as
+	// "Cover (front)".
+	Comment string `json:"comment"`
 	// Music is the stream's full music tag set: Opus and Ogg Vorbis files
 	// carry every tag on their audio stream and none on the container.
 	Music FormatTags `json:"-"`
@@ -110,6 +113,7 @@ func (t *StreamTags) UnmarshalJSON(data []byte) error {
 
 	t.Title = firstTagValue(values, "title")
 	t.Language = firstTagValue(values, "language", "lang")
+	t.Comment = firstTagValue(values, "comment")
 	t.Music = formatTagsFrom(values)
 
 	return nil
@@ -323,7 +327,7 @@ func (f *ffprobe) GetAudioMetadata(ctx context.Context, filePath string) (*Ffpro
 		"-print_format", "json",
 		"-show_format",
 		"-show_streams",
-		"-show_entries", "format=duration,bit_rate:format_tags:stream=codec_name,codec_type,profile,channels,channel_layout:stream_tags",
+		"-show_entries", "format=duration,bit_rate:format_tags:stream=index,codec_name,codec_type,profile,channels,channel_layout:stream_disposition=attached_pic:stream_tags",
 		filePath,
 	)
 }

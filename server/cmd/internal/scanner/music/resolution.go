@@ -33,6 +33,9 @@ type resolvedTrack struct {
 	artistTag  string
 	artistSort string
 	albumSort  string
+	// picture is the stream index of the picture the file embeds; see
+	// embeddedPicture.
+	picture sql.NullInt64
 }
 
 type resolvedMusician struct {
@@ -211,6 +214,7 @@ func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, 
 		tags:      extra,
 		genreTag:  strings.TrimSpace(tags.Genre),
 		artistTag: tags.Artist, artistSort: tags.SortArtist, albumSort: strings.TrimSpace(tags.SortAlbum),
+		picture: embeddedPicture(info.Streams),
 	}
 
 	artistTag := strings.TrimSpace(tags.Artist)

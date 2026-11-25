@@ -238,6 +238,77 @@ describe("music scan progress", () => {
   });
 });
 
+describe("music lookups", () => {
+  const completed = { state: "completed", phase: "enrichment", processed: 2267, imported: 2267 } as const;
+
+  it("shows the album art pass beside the scan, whatever its state", () => {
+    const { rerender } = render(<ScanProgress library="music" status={musicScanStatus(completed)} unavailable={false} />);
+    expect(screen.queryByText(/Album art/)).not.toBeInTheDocument();
+
+    const running = { state: "running", stage: "local-art", processed: 12, total: 209, matched: 10, failed: 1, unmatched: 1 } as const;
+    rerender(<ScanProgress library="music" status={musicScanStatus({ ...completed, lookups: running })} unavailable={false} />);
+    expect(screen.getByText("Album art: 12 of 209 albums checked · 10 found · 1 failed · 1 without art")).toBeInTheDocument();
+    // The scan's announcement does not change with the pass.
+    expect(screen.getByRole("status")).toHaveTextContent("Music scan completed");
+
+    rerender(<ScanProgress library="music" status={musicScanStatus({ lookups: { ...running, state: "paused" } })} unavailable={false} />);
+    expect(screen.getByText(/· paused until the scan finishes$/)).toBeInTheDocument();
+
+    // After the pass, its last tallies stay, and an idle scan still shows them.
+    const finished = { ...running, state: "idle", stage: null, processed: 209, matched: 163, unmatched: 45 } as const;
+    rerender(<ScanProgress library="music" status={musicScanStatus({ ...IDLE_SCAN, lookups: finished })} unavailable={false} />);
+    expect(screen.getByText("Album art: 209 of 209 albums checked · 163 found · 1 failed · 45 without art")).toBeInTheDocument();
+  });
+
+  it("refreshes the music lists as the pass changes covers after the scan", async () => {
+    vi.useFakeTimers();
+    const lookups = (overrides: Partial<ReturnType<typeof musicScanStatus>["lookups"]>) => ({
+      state: "running", stage: "local-art", processed: 0, total: 209, matched: 0, failed: 0, unmatched: 0, ...overrides,
+    } as const);
+    let status = musicScanStatus({ ...completed, catalog_revision: 2267 });
+    stubApi({ "/api/settings/scan": () => scanStatuses({ music: status }) }, { user: null });
+    const client = createTestQueryClient();
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    renderWithQueryClient(<MusicScanView />, { queryClient: client });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    invalidate.mockClear();
+
+    // A running pass polls at the scan's pace and refreshes at most every 15 s.
+    status = musicScanStatus({ ...completed, catalog_revision: 2270, lookups: lookups({ processed: 3, matched: 3 }) });
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+    expect(invalidate).not.toHaveBeenCalledWith({ queryKey: [ALBUMS_PAGINATED_KEY] });
+    status = musicScanStatus({ ...completed, catalog_revision: 2275, lookups: lookups({ processed: 8, matched: 8 }) });
+    await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
+    expect(screen.getByText(/8 of 209 albums checked/)).toBeInTheDocument();
+    expect(invalidate).not.toHaveBeenCalledWith({ queryKey: [ALBUMS_PAGINATED_KEY] });
+    status = musicScanStatus({ ...completed, catalog_revision: 2280, lookups: lookups({ processed: 13, matched: 13 }) });
+    await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
+    expect(invalidate).not.toHaveBeenCalledWith({ queryKey: [ALBUMS_PAGINATED_KEY] });
+    // A running pass changes its report at every poll.
+    status = musicScanStatus({ ...completed, catalog_revision: 2280, lookups: lookups({ processed: 14, matched: 13, unmatched: 1 }) });
+    await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: [ALBUMS_PAGINATED_KEY] });
+
+    // The end of the pass refreshes them once more.
+    invalidate.mockClear();
+    status = musicScanStatus({ ...completed, catalog_revision: 2281, lookups: lookups({ state: "idle", stage: null, processed: 209 }) });
+    await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: [ALBUMS_PAGINATED_KEY] });
+
+    // A pass that ran entirely between two polls, after a settings save,
+    // shows only as a revision that moved.
+    invalidate.mockClear();
+    status = musicScanStatus({ ...completed, catalog_revision: 2290, lookups: lookups({ state: "idle", stage: null, processed: 209 }) });
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: [ALBUMS_PAGINATED_KEY] });
+
+    invalidate.mockClear();
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+    expect(invalidate).not.toHaveBeenCalledWith({ queryKey: [ALBUMS_PAGINATED_KEY] });
+    client.clear();
+  });
+});
+
 describe("TV shows scan progress", () => {
   it("announces TV phases, the local episode count and the TMDB tallies", async () => {
     const user = userEvent.setup();

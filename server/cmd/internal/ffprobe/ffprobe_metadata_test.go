@@ -152,7 +152,7 @@ func TestGetAudioMetadataRequestsScannerFields(t *testing.T) {
 	args := fakebin.ReadLog(t, argsLog)
 	requireArgumentValue(t, args, "-print_format", "json")
 	requireArgumentValue(t, args, "-show_entries",
-		"format=duration,bit_rate:format_tags:stream=codec_name,codec_type,profile,channels,channel_layout:stream_tags")
+		"format=duration,bit_rate:format_tags:stream=index,codec_name,codec_type,profile,channels,channel_layout:stream_disposition=attached_pic:stream_tags")
 	if args[len(args)-1] != "/tmp/song.mp3" {
 		t.Fatalf("last argument = %q, want the probed file path", args[len(args)-1])
 	}
@@ -488,5 +488,16 @@ func TestAudioTagsWithoutAnAudioStreamAreTheContainers(t *testing.T) {
 	tags := result.AudioTags()
 	if tags != result.Format.Tags {
 		t.Errorf("AudioTags() = %+v, want the container's %+v", tags, result.Format.Tags)
+	}
+}
+
+func TestStreamTagsUnmarshalPictureComment(t *testing.T) {
+	var stream Stream
+	err := json.Unmarshal([]byte(`{"index": 1, "codec_type": "video", "disposition": {"attached_pic": 1}, "tags": {"COMMENT": " Cover (front) "}}`), &stream)
+	if err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+	if stream.Index != 1 || stream.Disposition.AttachedPic != 1 || stream.Tags.Comment != "Cover (front)" {
+		t.Fatalf("stream = index %d, attached_pic %d, comment %q; want 1, 1, %q", stream.Index, stream.Disposition.AttachedPic, stream.Tags.Comment, "Cover (front)")
 	}
 }

@@ -504,6 +504,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getMoviesLibraryDescStmt, err = db.PrepareContext(ctx, getMoviesLibraryDesc); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMoviesLibraryDesc: %w", err)
 	}
+	if q.getMusicAlbumLocalCoverStmt, err = db.PrepareContext(ctx, getMusicAlbumLocalCover); err != nil {
+		return nil, fmt.Errorf("error preparing query GetMusicAlbumLocalCover: %w", err)
+	}
 	if q.getMusicLibraryCountsStmt, err = db.PrepareContext(ctx, getMusicLibraryCounts); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMusicLibraryCounts: %w", err)
 	}
@@ -846,6 +849,18 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.listMovieArtworkInFoldersStmt, err = db.PrepareContext(ctx, listMovieArtworkInFolders); err != nil {
 		return nil, fmt.Errorf("error preparing query ListMovieArtworkInFolders: %w", err)
 	}
+	if q.listMusicAlbumArtTracksStmt, err = db.PrepareContext(ctx, listMusicAlbumArtTracks); err != nil {
+		return nil, fmt.Errorf("error preparing query ListMusicAlbumArtTracks: %w", err)
+	}
+	if q.listMusicAlbumIDsStmt, err = db.PrepareContext(ctx, listMusicAlbumIDs); err != nil {
+		return nil, fmt.Errorf("error preparing query ListMusicAlbumIDs: %w", err)
+	}
+	if q.listMusicAlbumsWithLocalCoverStmt, err = db.PrepareContext(ctx, listMusicAlbumsWithLocalCover); err != nil {
+		return nil, fmt.Errorf("error preparing query ListMusicAlbumsWithLocalCover: %w", err)
+	}
+	if q.listMusicTrackAlbumsUnderStmt, err = db.PrepareContext(ctx, listMusicTrackAlbumsUnder); err != nil {
+		return nil, fmt.Errorf("error preparing query ListMusicTrackAlbumsUnder: %w", err)
+	}
 	if q.listMusicTrackScanIndexStmt, err = db.PrepareContext(ctx, listMusicTrackScanIndex); err != nil {
 		return nil, fmt.Errorf("error preparing query ListMusicTrackScanIndex: %w", err)
 	}
@@ -1149,6 +1164,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.saveMusicAlbumIdentityStmt, err = db.PrepareContext(ctx, saveMusicAlbumIdentity); err != nil {
 		return nil, fmt.Errorf("error preparing query SaveMusicAlbumIdentity: %w", err)
 	}
+	if q.saveMusicAlbumLocalCoverFingerprintStmt, err = db.PrepareContext(ctx, saveMusicAlbumLocalCoverFingerprint); err != nil {
+		return nil, fmt.Errorf("error preparing query SaveMusicAlbumLocalCoverFingerprint: %w", err)
+	}
 	if q.saveMusicArtistIdentityStmt, err = db.PrepareContext(ctx, saveMusicArtistIdentity); err != nil {
 		return nil, fmt.Errorf("error preparing query SaveMusicArtistIdentity: %w", err)
 	}
@@ -1184,6 +1202,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.setMusicAlbumAppleIDStmt, err = db.PrepareContext(ctx, setMusicAlbumAppleID); err != nil {
 		return nil, fmt.Errorf("error preparing query SetMusicAlbumAppleID: %w", err)
+	}
+	if q.setMusicAlbumLocalCoverStmt, err = db.PrepareContext(ctx, setMusicAlbumLocalCover); err != nil {
+		return nil, fmt.Errorf("error preparing query SetMusicAlbumLocalCover: %w", err)
 	}
 	if q.setMusicAlbumSpotifyIDStmt, err = db.PrepareContext(ctx, setMusicAlbumSpotifyID); err != nil {
 		return nil, fmt.Errorf("error preparing query SetMusicAlbumSpotifyID: %w", err)
@@ -2167,6 +2188,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getMoviesLibraryDescStmt: %w", cerr)
 		}
 	}
+	if q.getMusicAlbumLocalCoverStmt != nil {
+		if cerr := q.getMusicAlbumLocalCoverStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getMusicAlbumLocalCoverStmt: %w", cerr)
+		}
+	}
 	if q.getMusicLibraryCountsStmt != nil {
 		if cerr := q.getMusicLibraryCountsStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getMusicLibraryCountsStmt: %w", cerr)
@@ -2737,6 +2763,26 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing listMovieArtworkInFoldersStmt: %w", cerr)
 		}
 	}
+	if q.listMusicAlbumArtTracksStmt != nil {
+		if cerr := q.listMusicAlbumArtTracksStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listMusicAlbumArtTracksStmt: %w", cerr)
+		}
+	}
+	if q.listMusicAlbumIDsStmt != nil {
+		if cerr := q.listMusicAlbumIDsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listMusicAlbumIDsStmt: %w", cerr)
+		}
+	}
+	if q.listMusicAlbumsWithLocalCoverStmt != nil {
+		if cerr := q.listMusicAlbumsWithLocalCoverStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listMusicAlbumsWithLocalCoverStmt: %w", cerr)
+		}
+	}
+	if q.listMusicTrackAlbumsUnderStmt != nil {
+		if cerr := q.listMusicTrackAlbumsUnderStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listMusicTrackAlbumsUnderStmt: %w", cerr)
+		}
+	}
 	if q.listMusicTrackScanIndexStmt != nil {
 		if cerr := q.listMusicTrackScanIndexStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing listMusicTrackScanIndexStmt: %w", cerr)
@@ -3242,6 +3288,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing saveMusicAlbumIdentityStmt: %w", cerr)
 		}
 	}
+	if q.saveMusicAlbumLocalCoverFingerprintStmt != nil {
+		if cerr := q.saveMusicAlbumLocalCoverFingerprintStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing saveMusicAlbumLocalCoverFingerprintStmt: %w", cerr)
+		}
+	}
 	if q.saveMusicArtistIdentityStmt != nil {
 		if cerr := q.saveMusicArtistIdentityStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing saveMusicArtistIdentityStmt: %w", cerr)
@@ -3300,6 +3351,11 @@ func (q *Queries) Close() error {
 	if q.setMusicAlbumAppleIDStmt != nil {
 		if cerr := q.setMusicAlbumAppleIDStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing setMusicAlbumAppleIDStmt: %w", cerr)
+		}
+	}
+	if q.setMusicAlbumLocalCoverStmt != nil {
+		if cerr := q.setMusicAlbumLocalCoverStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing setMusicAlbumLocalCoverStmt: %w", cerr)
 		}
 	}
 	if q.setMusicAlbumSpotifyIDStmt != nil {
@@ -3796,6 +3852,7 @@ type Queries struct {
 	getMoviesCountStmt                          *sql.Stmt
 	getMoviesLibraryAscStmt                     *sql.Stmt
 	getMoviesLibraryDescStmt                    *sql.Stmt
+	getMusicAlbumLocalCoverStmt                 *sql.Stmt
 	getMusicLibraryCountsStmt                   *sql.Stmt
 	getMusicProviderMatchStmt                   *sql.Stmt
 	getMusicProviderMatchFailureStmt            *sql.Stmt
@@ -3910,6 +3967,10 @@ type Queries struct {
 	listLibraryMountPointsStmt                  *sql.Stmt
 	listMovieArtworkStmt                        *sql.Stmt
 	listMovieArtworkInFoldersStmt               *sql.Stmt
+	listMusicAlbumArtTracksStmt                 *sql.Stmt
+	listMusicAlbumIDsStmt                       *sql.Stmt
+	listMusicAlbumsWithLocalCoverStmt           *sql.Stmt
+	listMusicTrackAlbumsUnderStmt               *sql.Stmt
 	listMusicTrackScanIndexStmt                 *sql.Stmt
 	listMusicTrackScanIndexUnderStmt            *sql.Stmt
 	listMusicianArtworkStmt                     *sql.Stmt
@@ -4011,6 +4072,7 @@ type Queries struct {
 	revertShowSeasonPosterArtworkStmt           *sql.Stmt
 	saveMusicAlbumDateStmt                      *sql.Stmt
 	saveMusicAlbumIdentityStmt                  *sql.Stmt
+	saveMusicAlbumLocalCoverFingerprintStmt     *sql.Stmt
 	saveMusicArtistIdentityStmt                 *sql.Stmt
 	saveMusicCreditIDStmt                       *sql.Stmt
 	saveMusicCreditMetadataStmt                 *sql.Stmt
@@ -4023,6 +4085,7 @@ type Queries struct {
 	setMovieBackdropArtworkStmt                 *sql.Stmt
 	setMoviePosterArtworkStmt                   *sql.Stmt
 	setMusicAlbumAppleIDStmt                    *sql.Stmt
+	setMusicAlbumLocalCoverStmt                 *sql.Stmt
 	setMusicAlbumSpotifyIDStmt                  *sql.Stmt
 	setMusicArtistSpotifyIDStmt                 *sql.Stmt
 	setMusicianThumbArtworkStmt                 *sql.Stmt
@@ -4248,6 +4311,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getMoviesCountStmt:                          q.getMoviesCountStmt,
 		getMoviesLibraryAscStmt:                     q.getMoviesLibraryAscStmt,
 		getMoviesLibraryDescStmt:                    q.getMoviesLibraryDescStmt,
+		getMusicAlbumLocalCoverStmt:                 q.getMusicAlbumLocalCoverStmt,
 		getMusicLibraryCountsStmt:                   q.getMusicLibraryCountsStmt,
 		getMusicProviderMatchStmt:                   q.getMusicProviderMatchStmt,
 		getMusicProviderMatchFailureStmt:            q.getMusicProviderMatchFailureStmt,
@@ -4362,6 +4426,10 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		listLibraryMountPointsStmt:                  q.listLibraryMountPointsStmt,
 		listMovieArtworkStmt:                        q.listMovieArtworkStmt,
 		listMovieArtworkInFoldersStmt:               q.listMovieArtworkInFoldersStmt,
+		listMusicAlbumArtTracksStmt:                 q.listMusicAlbumArtTracksStmt,
+		listMusicAlbumIDsStmt:                       q.listMusicAlbumIDsStmt,
+		listMusicAlbumsWithLocalCoverStmt:           q.listMusicAlbumsWithLocalCoverStmt,
+		listMusicTrackAlbumsUnderStmt:               q.listMusicTrackAlbumsUnderStmt,
 		listMusicTrackScanIndexStmt:                 q.listMusicTrackScanIndexStmt,
 		listMusicTrackScanIndexUnderStmt:            q.listMusicTrackScanIndexUnderStmt,
 		listMusicianArtworkStmt:                     q.listMusicianArtworkStmt,
@@ -4463,6 +4531,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		revertShowSeasonPosterArtworkStmt:           q.revertShowSeasonPosterArtworkStmt,
 		saveMusicAlbumDateStmt:                      q.saveMusicAlbumDateStmt,
 		saveMusicAlbumIdentityStmt:                  q.saveMusicAlbumIdentityStmt,
+		saveMusicAlbumLocalCoverFingerprintStmt:     q.saveMusicAlbumLocalCoverFingerprintStmt,
 		saveMusicArtistIdentityStmt:                 q.saveMusicArtistIdentityStmt,
 		saveMusicCreditIDStmt:                       q.saveMusicCreditIDStmt,
 		saveMusicCreditMetadataStmt:                 q.saveMusicCreditMetadataStmt,
@@ -4475,6 +4544,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		setMovieBackdropArtworkStmt:                 q.setMovieBackdropArtworkStmt,
 		setMoviePosterArtworkStmt:                   q.setMoviePosterArtworkStmt,
 		setMusicAlbumAppleIDStmt:                    q.setMusicAlbumAppleIDStmt,
+		setMusicAlbumLocalCoverStmt:                 q.setMusicAlbumLocalCoverStmt,
 		setMusicAlbumSpotifyIDStmt:                  q.setMusicAlbumSpotifyIDStmt,
 		setMusicArtistSpotifyIDStmt:                 q.setMusicArtistSpotifyIDStmt,
 		setMusicianThumbArtworkStmt:                 q.setMusicianThumbArtworkStmt,

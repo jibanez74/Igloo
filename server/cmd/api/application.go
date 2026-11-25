@@ -121,6 +121,10 @@ type Application struct {
 		Start() scanner.StartResult
 		StartChanges(scanner.Changes) scanner.StartResult
 		Status() music.Status
+		// RequestLookups asks the background worker for a pass over every
+		// album, which copies each album's own art under the static
+		// directory.
+		RequestLookups()
 	}
 	// Watcher follows the library roots while enable_watcher is on; Sync
 	// starts and stops it.
@@ -314,6 +318,8 @@ func (app *Application) initScanners(musicSpotify music.SpotifyProvider, musicAp
 		Ffprobe: app.Ffprobe,
 		Spotify: musicSpotify,
 		Apple:   musicApple,
+		// Album art embedded in tracks is copied with FFmpeg.
+		Pictures: app.FFmpeg,
 		AppleLookupsEnabled: func() bool {
 			return app.CurrentSettings().EnableAppleLookups
 		},
@@ -327,6 +333,13 @@ func (app *Application) initScanners(musicSpotify music.SpotifyProvider, musicAp
 			app.StreamFileCache.invalidate(trackStreamFileKey(trackID))
 		},
 		ScanFinished: app.scanFinished,
+		StaticDir: func() string {
+			return app.CurrentSettings().StaticDir
+		},
+		LibraryDirs: app.libraryDirs,
+		// The worker hands covers back to their provider when an album's own
+		// art goes away; the artwork pass downloads those.
+		LookupsChanged: func() { app.syncArtworkAfterScan(true) },
 	})
 
 	app.ShowScanner = show.New(show.Dependencies{
@@ -409,19 +422,22 @@ func (app *Application) initArtwork() {
 		StaticDir: func() string {
 			return app.CurrentSettings().StaticDir
 		},
-		LibraryDirs: func() []string {
-			settings := app.CurrentSettings()
-			var dirs []string
-			for _, dir := range []sql.NullString{settings.MoviesDir, settings.ShowsDir, settings.MusicDir} {
-				if dir.Valid && dir.String != "" {
-					dirs = append(dirs, dir.String)
-				}
-			}
-			return dirs
-		},
+		LibraryDirs:      app.libraryDirs,
 		TmdbImageBaseURL: app.tmdbImageBaseURL,
 		HTTPClient:       app.TmdbImageHTTPClient,
 	})
+}
+
+// libraryDirs lists the configured library roots.
+func (app *Application) libraryDirs() []string {
+	settings := app.CurrentSettings()
+	var dirs []string
+	for _, dir := range []sql.NullString{settings.MoviesDir, settings.ShowsDir, settings.MusicDir} {
+		if dir.Valid && dir.String != "" {
+			dirs = append(dirs, dir.String)
+		}
+	}
+	return dirs
 }
 
 // syncArtwork requests an artwork pass, which downloads what is missing while

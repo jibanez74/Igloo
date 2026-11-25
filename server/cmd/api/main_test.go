@@ -27,6 +27,8 @@ func (f startupFake[S]) StartChanges(changes scanner.Changes) scanner.StartResul
 	return f.run(kind)
 }
 
+func (startupFake[S]) RequestLookups() {}
+
 func (startupFake[S]) Status() S {
 	var status S
 	return status

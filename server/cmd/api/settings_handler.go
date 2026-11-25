@@ -256,6 +256,11 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 	if artworkChanged {
 		app.syncArtwork()
 	}
+	// Albums' own art is copied into the static directory whatever the
+	// download setting, so a new one needs the copies made again.
+	if previous.StaticDir != updatedSettings.StaticDir {
+		app.MusicScanner.RequestLookups()
+	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Message: "Settings updated",
