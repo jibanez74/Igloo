@@ -120,6 +120,9 @@ CREATE TABLE IF NOT EXISTS musicians (
   sort_name TEXT NOT NULL,
   summary TEXT,
   spotify_id TEXT UNIQUE,
+  -- The MusicBrainz artist most of the artist's credits carry in their tags.
+  -- Not unique: tags decide what an artist is, so two artists may share one.
+  musicbrainz_id TEXT,
   thumb TEXT,
   thumb_source TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -142,6 +145,10 @@ CREATE TABLE IF NOT EXISTS albums (
   spotify_id TEXT UNIQUE,
   -- An album is matched by Apple or by Spotify, never both.
   apple_id INTEGER UNIQUE,
+  -- The MusicBrainz release and release group most of the album's tracks carry
+  -- in their tags. Not unique, like musicians.musicbrainz_id.
+  musicbrainz_release_id TEXT,
+  musicbrainz_release_group_id TEXT,
   album_type TEXT CHECK (album_type IN ('album', 'single', 'compilation')),
   musician TEXT,
   release_date TEXT,
@@ -176,9 +183,9 @@ CREATE TABLE IF NOT EXISTS tracks (
   sort_title TEXT NOT NULL,
   file_path TEXT NOT NULL UNIQUE,
   file_name TEXT NOT NULL,
-  container TEXT NOT NULL CHECK (container IN ('mp3', 'flac', 'm4a')),
+  container TEXT NOT NULL CHECK (container IN ('mp3', 'flac', 'm4a', 'opus', 'ogg', 'aiff', 'aif', 'wav')),
   mime_type TEXT NOT NULL CHECK (
-    mime_type IN ('audio/mpeg', 'audio/flac', 'audio/mp4')
+    mime_type IN ('audio/mpeg', 'audio/flac', 'audio/mp4', 'audio/ogg', 'audio/aiff', 'audio/wav')
   ),
   codec TEXT NOT NULL,
   size INTEGER NOT NULL,
@@ -305,7 +312,12 @@ CREATE TABLE IF NOT EXISTS music_genre_identity (
 
 -- Original tags support enrichment retries and credit reconciliation
 -- without probing files again. The Apple ids are the catalog ids an iTunes
--- Store purchase carries; NULL when the file has none.
+-- Store purchase carries; NULL when the file has none. artists_tag is the
+-- ARTISTS tag's names joined with ';': two or more are the track's credits,
+-- and a single one names only its lead artist. The MusicBrainz ids are the ones the
+-- file's tags carry (lists joined with ';' in credit order), NULL when absent
+-- or not UUIDs; the album's ids are their majority. track_total and
+-- disc_total are 0 when untagged.
 CREATE TABLE IF NOT EXISTS music_track_metadata (
   track_id INTEGER PRIMARY KEY REFERENCES tracks (id) ON DELETE CASCADE,
   artist_tag TEXT NOT NULL,
@@ -313,7 +325,18 @@ CREATE TABLE IF NOT EXISTS music_track_metadata (
   artist_sort TEXT NOT NULL,
   album_sort TEXT NOT NULL,
   apple_track_id INTEGER,
-  apple_album_id INTEGER
+  apple_album_id INTEGER,
+  artists_tag TEXT NOT NULL DEFAULT '',
+  mb_recording_id TEXT,
+  mb_release_id TEXT,
+  mb_release_group_id TEXT,
+  mb_artist_ids TEXT,
+  mb_album_artist_ids TEXT,
+  isrc TEXT,
+  label TEXT,
+  compilation BOOLEAN NOT NULL DEFAULT false,
+  track_total INTEGER NOT NULL DEFAULT 0,
+  disc_total INTEGER NOT NULL DEFAULT 0
 );
 
 -- Explicit credit sort values contribute at most one vote per track and artist.
@@ -328,6 +351,21 @@ CREATE TABLE IF NOT EXISTS music_credit_metadata (
 -- track_id before sort_name: the artist-sort vote groups an artist's credits by
 -- track, and this order hands them over already grouped instead of sorting them.
 CREATE INDEX IF NOT EXISTS music_credit_metadata_votes ON music_credit_metadata (musician_id, track_id, sort_name);
+
+-- The MusicBrainz artist id a track's tags give each credit, paired by
+-- position only when the tag holds one id per credit. Each row is a track's
+-- one vote for musicians.musicbrainz_id: when two credits of a track resolve
+-- to one artist, or a merge brings a second id, the first id stays.
+CREATE TABLE IF NOT EXISTS music_credit_ids (
+  track_id INTEGER NOT NULL REFERENCES tracks (id) ON DELETE CASCADE,
+  musician_id INTEGER NOT NULL REFERENCES musicians (id) ON DELETE CASCADE,
+  musicbrainz_id TEXT NOT NULL,
+  FOREIGN KEY (track_id, musician_id) REFERENCES track_musicians (track_id, musician_id) ON DELETE CASCADE,
+  PRIMARY KEY (track_id, musician_id)
+);
+
+-- The id vote reads one artist's rows.
+CREATE INDEX IF NOT EXISTS music_credit_ids_votes ON music_credit_ids (musician_id, musicbrainz_id);
 
 -- Spotify dates are a fallback when no valid local track date remains.
 CREATE TABLE IF NOT EXISTS music_album_metadata (

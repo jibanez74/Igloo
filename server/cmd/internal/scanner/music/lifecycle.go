@@ -98,6 +98,10 @@ func (s *Scanner) runMusicScan(directory string, changes *scanner.Changes) {
 		report.Issue(path, scanner.PhaseDiscovery, scanner.ReasonDiscoveryEntry)
 	}
 	onFile := func(file scanner.ScanFile) error {
+		skipped := skipFile(file.Path)
+		if skipped {
+			return nil
+		}
 		reconciliation.MarkSeen(file.Path)
 		batch = append(batch, file)
 		report.status.Total++
@@ -108,7 +112,8 @@ func (s *Scanner) runMusicScan(directory string, changes *scanner.Changes) {
 
 		return nil
 	}
-	err = scanner.WalkRun(ctx, directory, changes, paths, helpers.ValidAudioExtensions, onError, onFile, nil)
+	allowed := func(path string) bool { return AllowDirectory(directory, path) }
+	err = scanner.WalkRun(ctx, directory, changes, paths, helpers.ValidAudioExtensions, onError, onFile, allowed)
 	if err != nil {
 		fail(err, scanner.ReasonDiscoveryInterrupted)
 		return

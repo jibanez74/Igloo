@@ -28,6 +28,7 @@ type resolvedTrack struct {
 	adoptedArtist *resolvedMusician
 	// catalog holds the Apple ids the file carries, kept for the Apple pass.
 	catalog    itunes.CatalogIDs
+	tags       trackTags
 	genreTag   string
 	artistTag  string
 	artistSort string
@@ -96,6 +97,10 @@ func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, 
 	}
 
 	tags := info.Format.Tags
+	streamTagged := streamTaggedContainers[file.Ext]
+	if streamTagged {
+		tags = info.AudioTags()
+	}
 	if tags.Title != "" {
 		params.Title = tags.Title
 	} else {
@@ -123,26 +128,34 @@ func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, 
 		}
 	}
 
-	var trackTotal int64
+	extra := readTrackTags(tags)
 	if tags.Track != "" {
 		index, total, parseErr := helpers.ParseSlashNumbers(tags.Track)
 		if parseErr == nil {
 			params.TrackIndex = index
-			trackTotal = total
+			extra.trackTotal = max(total, 0)
 		} else {
 			s.logTagParse(file.Path, "track", tags.Track, parseErr)
 		}
+	}
+	// Vorbis comments keep the totals in keys of their own.
+	if extra.trackTotal == 0 {
+		extra.trackTotal = tagTotal(tags.TrackTotal)
 	}
 
 	params.BitRate = helpers.ParseBitRate(info.Format.BitRate)
 
 	if tags.Disc != "" {
-		disc, _, parseErr := helpers.ParseSlashNumbers(tags.Disc)
+		disc, total, parseErr := helpers.ParseSlashNumbers(tags.Disc)
 		if parseErr == nil {
 			params.Disc = disc
+			extra.discTotal = max(total, 0)
 		} else {
 			s.logTagParse(file.Path, "disc", tags.Disc, parseErr)
 		}
+	}
+	if extra.discTotal == 0 {
+		extra.discTotal = tagTotal(tags.DiscTotal)
 	}
 
 	params.Copyright = helpers.NullString(tags.Copyright)
@@ -195,13 +208,15 @@ func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, 
 	resolved := &resolvedTrack{
 		params:    params,
 		catalog:   catalog,
+		tags:      extra,
 		genreTag:  strings.TrimSpace(tags.Genre),
 		artistTag: tags.Artist, artistSort: tags.SortArtist, albumSort: strings.TrimSpace(tags.SortAlbum),
 	}
 
 	artistTag := strings.TrimSpace(tags.Artist)
-	if artistTag != "" {
-		musicians, resolveErr := s.resolveTrackMusicians(ctx, scan, tags.Artist, tags.SortArtist)
+	hasCredits := artistTag != "" || len(extra.artists) > 0
+	if hasCredits {
+		musicians, resolveErr := s.resolveTrackMusicians(ctx, scan, tags.Artist, tags.SortArtist, extra.artists)
 		if resolveErr != nil {
 			return nil, resolveErr
 		}
@@ -220,7 +235,7 @@ func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, 
 			effectiveAlbumArtist = artistTag
 		}
 
-		query := albumQuery{title: tags.Album, sortTitle: sortAlbum, artist: effectiveAlbumArtist, totalTracks: int(trackTotal), appleAlbumID: catalog.Album}
+		query := albumQuery{title: tags.Album, sortTitle: sortAlbum, artist: effectiveAlbumArtist, totalTracks: int(extra.trackTotal), appleAlbumID: catalog.Album}
 		if params.Year.Valid {
 			query.year = int(params.Year.Int64)
 		}
@@ -243,10 +258,16 @@ func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, 
 	return resolved, nil
 }
 
-func (s *Scanner) resolveTrackMusicians(ctx context.Context, scan *musicScanContext, artistTag, sortArtist string) ([]resolvedMusician, error) {
-
+// resolveTrackMusicians resolves a track's credits. listed, the values of a
+// multi-value ARTISTS tag, names them outright; otherwise artistTag is split
+// by the compound credit rules.
+func (s *Scanner) resolveTrackMusicians(ctx context.Context, scan *musicScanContext, artistTag, sortArtist string, listed []string) ([]resolvedMusician, error) {
 	credits := parseCompoundArtistCredits(artistTag)
 	splitLocally := shouldSplitCompoundArtistCreditsLocally(credits)
+	if len(listed) > 0 {
+		credits = compoundArtistCredits{occurrences: listed}
+		splitLocally = true
+	}
 	if !splitLocally {
 		musician, err := s.resolveMusician(ctx, scan, artistTag, sortArtist)
 		if err != nil {

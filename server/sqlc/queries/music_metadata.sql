@@ -17,15 +17,26 @@ SELECT e.id FROM genres e JOIN music_genre_identity i ON i.genre_id=e.id WHERE i
 INSERT INTO music_genre_identity(identity_key, genre_id) VALUES (?, ?) ON CONFLICT DO NOTHING;
 
 -- name: SaveMusicTrackMetadata :exec
-INSERT INTO music_track_metadata(track_id,artist_tag,artist_key,artist_sort,album_sort,apple_track_id,apple_album_id) VALUES(?,?,?,?,?,?,?)
+INSERT INTO music_track_metadata(track_id,artist_tag,artist_key,artist_sort,album_sort,apple_track_id,apple_album_id,
+artists_tag,mb_recording_id,mb_release_id,mb_release_group_id,mb_artist_ids,mb_album_artist_ids,isrc,label,compilation,track_total,disc_total)
+VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 ON CONFLICT(track_id) DO UPDATE SET artist_tag=excluded.artist_tag,artist_key=excluded.artist_key,artist_sort=excluded.artist_sort,album_sort=excluded.album_sort,
-apple_track_id=excluded.apple_track_id,apple_album_id=excluded.apple_album_id;
+apple_track_id=excluded.apple_track_id,apple_album_id=excluded.apple_album_id,artists_tag=excluded.artists_tag,
+mb_recording_id=excluded.mb_recording_id,mb_release_id=excluded.mb_release_id,mb_release_group_id=excluded.mb_release_group_id,
+mb_artist_ids=excluded.mb_artist_ids,mb_album_artist_ids=excluded.mb_album_artist_ids,isrc=excluded.isrc,label=excluded.label,
+compilation=excluded.compilation,track_total=excluded.track_total,disc_total=excluded.disc_total;
 
 -- name: DeleteMusicCreditMetadata :exec
 DELETE FROM music_credit_metadata WHERE track_id=?;
 
 -- name: SaveMusicCreditMetadata :exec
 INSERT OR IGNORE INTO music_credit_metadata(track_id,musician_id,sort_name) VALUES(?,?,?);
+
+-- name: DeleteMusicCreditIDs :exec
+DELETE FROM music_credit_ids WHERE track_id=?;
+
+-- name: SaveMusicCreditID :exec
+INSERT OR IGNORE INTO music_credit_ids(track_id,musician_id,musicbrainz_id) VALUES(?,?,?);
 
 -- name: SaveMusicAlbumDate :exec
 INSERT INTO music_album_metadata(album_id,spotify_date) VALUES(?,?)
@@ -50,6 +61,25 @@ UPDATE albums SET release_date=COALESCE((SELECT t.release_date FROM tracks t WHE
 GROUP BY t.release_date ORDER BY COUNT(*) DESC,t.release_date LIMIT 1),(SELECT spotify_date FROM music_album_metadata WHERE album_id=albums.id)), updated_at = CURRENT_TIMESTAMP
 WHERE albums.id=? AND release_date IS NOT COALESCE((SELECT t.release_date FROM tracks t WHERE t.album_id=albums.id AND t.release_date IS NOT NULL
 GROUP BY t.release_date ORDER BY COUNT(*) DESC,t.release_date LIMIT 1),(SELECT spotify_date FROM music_album_metadata WHERE album_id=albums.id));
+
+-- name: ReconcileMusicArtistMusicBrainzID :exec
+-- The id most of the artist's credits carry, ties to the lowest.
+UPDATE musicians SET musicbrainz_id=(SELECT musicbrainz_id FROM music_credit_ids WHERE musician_id=musicians.id
+GROUP BY musicbrainz_id ORDER BY COUNT(*) DESC,musicbrainz_id LIMIT 1), updated_at = CURRENT_TIMESTAMP
+WHERE id=? AND musicbrainz_id IS NOT (SELECT musicbrainz_id FROM music_credit_ids WHERE musician_id=musicians.id
+GROUP BY musicbrainz_id ORDER BY COUNT(*) DESC,musicbrainz_id LIMIT 1);
+
+-- name: ReconcileMusicAlbumReleaseID :exec
+UPDATE albums SET musicbrainz_release_id=(SELECT m.mb_release_id FROM music_track_metadata m JOIN tracks t ON t.id=m.track_id
+WHERE t.album_id=albums.id AND m.mb_release_id IS NOT NULL GROUP BY m.mb_release_id ORDER BY COUNT(*) DESC,m.mb_release_id LIMIT 1), updated_at = CURRENT_TIMESTAMP
+WHERE albums.id=? AND musicbrainz_release_id IS NOT (SELECT m.mb_release_id FROM music_track_metadata m JOIN tracks t ON t.id=m.track_id
+WHERE t.album_id=albums.id AND m.mb_release_id IS NOT NULL GROUP BY m.mb_release_id ORDER BY COUNT(*) DESC,m.mb_release_id LIMIT 1);
+
+-- name: ReconcileMusicAlbumReleaseGroupID :exec
+UPDATE albums SET musicbrainz_release_group_id=(SELECT m.mb_release_group_id FROM music_track_metadata m JOIN tracks t ON t.id=m.track_id
+WHERE t.album_id=albums.id AND m.mb_release_group_id IS NOT NULL GROUP BY m.mb_release_group_id ORDER BY COUNT(*) DESC,m.mb_release_group_id LIMIT 1), updated_at = CURRENT_TIMESTAMP
+WHERE albums.id=? AND musicbrainz_release_group_id IS NOT (SELECT m.mb_release_group_id FROM music_track_metadata m JOIN tracks t ON t.id=m.track_id
+WHERE t.album_id=albums.id AND m.mb_release_group_id IS NOT NULL GROUP BY m.mb_release_group_id ORDER BY COUNT(*) DESC,m.mb_release_group_id LIMIT 1);
 
 -- name: ReconcileMusicAlbumYear :exec
 UPDATE albums SET year=CAST(substr(release_date,1,4) AS INTEGER), updated_at = CURRENT_TIMESTAMP WHERE id=? AND year IS NOT CAST(substr(release_date,1,4) AS INTEGER);
@@ -162,13 +192,19 @@ SELECT track_id,sqlc.arg(owner) FROM track_musicians WHERE track_musicians.music
 INSERT OR IGNORE INTO music_credit_metadata(track_id,musician_id,sort_name)
 SELECT track_id,sqlc.arg(owner),sort_name FROM music_credit_metadata WHERE music_credit_metadata.musician_id=sqlc.arg(redundant);
 
+-- name: MoveMusicArtistCreditIDs :exec
+-- After MoveMusicArtistCredits: each row needs the owner's credit.
+INSERT OR IGNORE INTO music_credit_ids(track_id,musician_id,musicbrainz_id)
+SELECT track_id,sqlc.arg(owner),musicbrainz_id FROM music_credit_ids WHERE music_credit_ids.musician_id=sqlc.arg(redundant);
+
 -- name: MoveMusicAlbumFallback :exec
 INSERT OR IGNORE INTO music_album_metadata(album_id,spotify_date)
 SELECT sqlc.arg(owner),spotify_date FROM music_album_metadata WHERE music_album_metadata.album_id=sqlc.arg(redundant);
 
 -- name: MusicArtistTrackMetadata :many
 -- The range and order ride idx_track_musicians_musician_track, so keep them on tm.
-SELECT m.track_id, m.artist_tag, m.artist_sort FROM track_musicians tm JOIN music_track_metadata m ON m.track_id=tm.track_id
+SELECT m.track_id, m.artist_tag, m.artist_sort, m.artists_tag, m.mb_artist_ids, t.container FROM track_musicians tm
+JOIN music_track_metadata m ON m.track_id=tm.track_id JOIN tracks t ON t.id=tm.track_id
 WHERE tm.musician_id=? AND tm.track_id>sqlc.arg(after_id) ORDER BY tm.track_id LIMIT 100;
 
 -- name: UpdateMusicTrackPrimaryArtist :exec

@@ -108,6 +108,7 @@ type Querier interface {
 	DeleteMovieVideoStreams(ctx context.Context, movieID int64) error
 	DeleteMovieWatchProgress(ctx context.Context, arg DeleteMovieWatchProgressParams) error
 	DeleteMusicAlbumTrackMatches(ctx context.Context, albumID sql.NullInt64) error
+	DeleteMusicCreditIDs(ctx context.Context, trackID int64) error
 	DeleteMusicCreditMetadata(ctx context.Context, trackID int64) error
 	DeleteMusicProviderMatch(ctx context.Context, arg DeleteMusicProviderMatchParams) error
 	DeleteMusicSpotifyAdoption(ctx context.Context, musicianID int64) error
@@ -672,6 +673,8 @@ type Querier interface {
 	MoveMusicAlbumTracks(ctx context.Context, arg MoveMusicAlbumTracksParams) error
 	MoveMusicArtistAliases(ctx context.Context, arg MoveMusicArtistAliasesParams) error
 	MoveMusicArtistContributions(ctx context.Context, arg MoveMusicArtistContributionsParams) error
+	// After MoveMusicArtistCredits: each row needs the owner's credit.
+	MoveMusicArtistCreditIDs(ctx context.Context, arg MoveMusicArtistCreditIDsParams) error
 	MoveMusicArtistCredits(ctx context.Context, arg MoveMusicArtistCreditsParams) error
 	MoveMusicArtistGenres(ctx context.Context, arg MoveMusicArtistGenresParams) error
 	MoveMusicArtistTracks(ctx context.Context, arg MoveMusicArtistTracksParams) error
@@ -749,8 +752,12 @@ type Querier interface {
 	// catalog rows behind, and a full-table NOT EXISTS per file did not scale.
 	PruneShowSeasonEpisodes(ctx context.Context, seasonID int64) error
 	ReconcileMusicAlbumDate(ctx context.Context, id int64) error
+	ReconcileMusicAlbumReleaseGroupID(ctx context.Context, id int64) error
+	ReconcileMusicAlbumReleaseID(ctx context.Context, id int64) error
 	ReconcileMusicAlbumSort(ctx context.Context, id int64) error
 	ReconcileMusicAlbumYear(ctx context.Context, id int64) error
+	// The id most of the artist's credits carry, ties to the lowest.
+	ReconcileMusicArtistMusicBrainzID(ctx context.Context, id int64) error
 	ReconcileMusicArtistSort(ctx context.Context, id int64) error
 	RecordMovieTmdbMiss(ctx context.Context, arg RecordMovieTmdbMissParams) error
 	// ============================================================================
@@ -777,6 +784,7 @@ type Querier interface {
 	SaveMusicAlbumDate(ctx context.Context, arg SaveMusicAlbumDateParams) error
 	SaveMusicAlbumIdentity(ctx context.Context, arg SaveMusicAlbumIdentityParams) error
 	SaveMusicArtistIdentity(ctx context.Context, arg SaveMusicArtistIdentityParams) error
+	SaveMusicCreditID(ctx context.Context, arg SaveMusicCreditIDParams) error
 	SaveMusicCreditMetadata(ctx context.Context, arg SaveMusicCreditMetadataParams) error
 	SaveMusicGenreIdentity(ctx context.Context, arg SaveMusicGenreIdentityParams) error
 	SaveMusicSpotifyAdoption(ctx context.Context, arg SaveMusicSpotifyAdoptionParams) error

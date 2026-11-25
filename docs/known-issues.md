@@ -36,15 +36,36 @@ than 4 s after video, or a TV resume fails with an `init.mp4` that has no `dec3`
 
 ### Spotify matching does not use ISRCs
 
-Albums and tracks are matched on Spotify by searching names, never by ISRC. The scanner stores no
-ISRC tag (`music_track_metadata` keeps only the Apple IDs), and `spotify_types.go` does not decode
-`external_ids`, so a track whose title differs from Spotify's (a translated title, different
-qualifiers) can stay unpaired, and an album whose title search misses stays unmatched even though
-its tracks carry the codes that would identify it. Seen while triaging leftovers on 2026-11-13.
+Albums and tracks are matched on Spotify by searching names, never by ISRC. The scanner stores the
+ISRC tag (`music_track_metadata.isrc`, since 2026-11-25), but nothing matches on it, and
+`spotify_types.go` does not decode `external_ids`, so a track whose title differs from Spotify's (a
+translated title, different qualifiers) can stay unpaired, and an album whose title search misses
+stays unmatched even though its tracks carry the codes that would identify it. Seen while triaging
+leftovers on 2026-11-13.
 
 Not known: whether Spotify still returns `external_ids` to Development Mode apps, which lost
 popularity, followers and genres in February 2026; check with a live request first. A search with
-the `isrc:` filter may work either way. Options: read the `ISRC`/`TSRC` tag into a new
-`music_track_metadata.isrc` column next to the Apple IDs (`scanner/music/persistence.go`), prefer an
-ISRC pairing in the link pass (`linkAlbum` in `scanner/music/retry.go`), and, for an album the title
-search misses, search one of its tracks with `isrc:` and take the hit's album.
+the `isrc:` filter may work either way. Options: prefer an ISRC pairing in the link pass
+(`linkAlbum` in `scanner/music/retry.go`), and, for an album the title search misses, search one of
+its tracks with `isrc:` and take the hit's album.
+
+### AIFF tracks play only in Safari
+
+AIFF (`.aiff`, `.aif`) tracks are scanned and streamed as stored, with `audio/aiff`, and only
+Safari decodes AIFF: Chrome and Firefox show the player's playback error. Ogg Vorbis and Opus play
+in Chrome and Firefox; whether a given Safari version plays them, and whether the TV app's Media3
+player plays AIFF, was not checked. Decided on 2026-11-25 to scan AIFF anyway. Options: convert
+AIFF to FLAC when it is streamed (Igloo's FFmpeg build has the FLAC encoder and muxer; seeking in a
+converted stream needs thought), or have the web player test `canPlayType` and explain the
+failure.
+
+### MP3 and M4A multi-value tags keep only their first value
+
+ffprobe joins the values of a repeated Vorbis comment (FLAC, Opus, Ogg) with `;`, but returns only
+the first value of an ID3 or MP4 multi-value tag. An MP3 or M4A `ARTISTS` tag therefore names one
+credit and is ignored, so its credits come from splitting the `ARTIST` string, and its MusicBrainz
+artist id list holds one id, which pairs only with a lone credit that does not read as several
+names: a lone `A & B` credit gets no id rather than A's. ffprobe also
+hides ID3's `UFID` frame, where Picard stores an MP3's MusicBrainz recording id. Accepted on
+2026-11-25 rather than adding an ID3/MP4 tag reader next to `isobmff`; reproduce with any
+Picard-tagged MP3 whose `ARTISTS` holds two names.

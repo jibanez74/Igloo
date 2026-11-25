@@ -383,10 +383,11 @@ func (app *Application) initScanners(musicSpotify music.SpotifyProvider, musicAp
 				StartChanges:   func(changes scanner.Changes) scanner.StartResult { return app.ShowScanner.StartChanges(changes) },
 			},
 			{
-				Name:         musicLibrary.directory,
-				Directory:    func() sql.NullString { return app.CurrentSettings().MusicDir },
-				Extensions:   helpers.ValidAudioExtensions,
-				StartChanges: func(changes scanner.Changes) scanner.StartResult { return app.MusicScanner.StartChanges(changes) },
+				Name:           musicLibrary.directory,
+				Directory:      func() sql.NullString { return app.CurrentSettings().MusicDir },
+				Extensions:     helpers.ValidAudioExtensions,
+				AllowDirectory: music.AllowDirectory,
+				StartChanges:   func(changes scanner.Changes) scanner.StartResult { return app.MusicScanner.StartChanges(changes) },
 			},
 		},
 	})

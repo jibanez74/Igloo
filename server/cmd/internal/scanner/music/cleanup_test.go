@@ -404,9 +404,13 @@ func TestMusicCleanupReconcilesMetadataAndCascades(t *testing.T) {
 	root := t.TempDir()
 	first, second := filepath.Join(root, "first.m4a"), filepath.Join(root, "second.m4a")
 	scan := newMusicScanContext(nil)
-	tags := ffprobe.FormatTags{Title: "First", Artist: "Artist", Album: "Album", Genre: "Rock", SortArtist: "A", SortAlbum: "A", Date: "2010"}
+	const releaseA, releaseB = "4a000000-0000-4000-8000-000000000000", "4b000000-0000-4000-8000-000000000000"
+	const artistA, artistB = "5a000000-0000-4000-8000-000000000000", "5b000000-0000-4000-8000-000000000000"
+	tags := ffprobe.FormatTags{Title: "First", Artist: "Artist", Album: "Album", Genre: "Rock", SortArtist: "A", SortAlbum: "A", Date: "2010",
+		MusicBrainzReleaseID: releaseA, MusicBrainzArtistID: artistA}
 	scanTaggedTrack(t, s, scan, first, 1, tags)
 	tags.Title, tags.SortArtist, tags.SortAlbum, tags.Date = "Second", "B", "B", "2020"
+	tags.MusicBrainzReleaseID, tags.MusicBrainzArtistID = releaseB, artistB
 	scanTaggedTrack(t, s, scan, second, 1, tags)
 	_, err := s.tx.DB.Exec(`
  INSERT INTO users(id,name,email,password) VALUES(1,'Listener','listener@example.test','unused');
@@ -439,7 +443,7 @@ func TestMusicCleanupReconcilesMetadataAndCascades(t *testing.T) {
 	if err == nil || deleted != 0 || invalidations != 0 {
 		t.Fatalf("rollback: %d %d %v", deleted, invalidations, err)
 	}
-	for _, table := range []string{"tracks", "track_file_fingerprints", "track_musicians", "track_genres", "music_track_metadata", "music_credit_metadata", "tracks_search_fts", "playlist_tracks", "user_play_history", "user_track_stats", "user_liked_tracks"} {
+	for _, table := range []string{"tracks", "track_file_fingerprints", "track_musicians", "track_genres", "music_track_metadata", "music_credit_metadata", "music_credit_ids", "tracks_search_fts", "playlist_tracks", "user_play_history", "user_track_stats", "user_liked_tracks"} {
 		count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM "+table)
 		if count != 2 {
 			t.Fatalf("rollback left %d rows in %s", count, table)
@@ -466,6 +470,14 @@ func TestMusicCleanupReconcilesMetadataAndCascades(t *testing.T) {
 	if artistSort != "B" || albumSort != "B" || date != "2020-01-01" || year != 2020 {
 		t.Fatalf("remaining contributions: %s/%s/%s/%d", artistSort, albumSort, date, year)
 	}
+	var release, artistID sql.NullString
+	err = s.tx.DB.QueryRow("SELECT a.musicbrainz_release_id, m.musicbrainz_id FROM musicians m CROSS JOIN albums a").Scan(&release, &artistID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if release.String != releaseB || artistID.String != artistB {
+		t.Fatalf("remaining musicbrainz ids: %q/%q, want %q/%q", release.String, artistID.String, releaseB, artistB)
+	}
 	err = os.Remove(second)
 	if err != nil {
 		t.Fatal(err)
@@ -477,7 +489,7 @@ func TestMusicCleanupReconcilesMetadataAndCascades(t *testing.T) {
 	if spotify.artistCalls != 0 || spotify.albumCalls != 0 {
 		t.Fatal("deleted tracks caused Spotify retries")
 	}
-	for _, table := range []string{"tracks", "track_file_fingerprints", "track_musicians", "track_genres", "music_track_metadata", "music_credit_metadata", "tracks_search_fts", "playlist_tracks", "user_play_history", "user_track_stats", "user_liked_tracks", "musician_albums", "musician_genres", "album_genres"} {
+	for _, table := range []string{"tracks", "track_file_fingerprints", "track_musicians", "track_genres", "music_track_metadata", "music_credit_metadata", "music_credit_ids", "tracks_search_fts", "playlist_tracks", "user_play_history", "user_track_stats", "user_liked_tracks", "musician_albums", "musician_genres", "album_genres"} {
 		count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM "+table)
 		if count != 0 {
 			t.Fatalf("cleanup left %d rows in %s", count, table)
@@ -495,5 +507,12 @@ func TestMusicCleanupReconcilesMetadataAndCascades(t *testing.T) {
 	}
 	if artistSort != "Artist" || albumSort != "Album" || date != "2000-01-01" || year != 2000 {
 		t.Fatalf("fallback: %s/%s/%s/%d", artistSort, albumSort, date, year)
+	}
+	err = s.tx.DB.QueryRow("SELECT a.musicbrainz_release_id, m.musicbrainz_id FROM musicians m CROSS JOIN albums a").Scan(&release, &artistID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if release.Valid || artistID.Valid {
+		t.Fatalf("musicbrainz ids without tracks: %v/%v, want NULL", release, artistID)
 	}
 }

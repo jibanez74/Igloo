@@ -23,3 +23,17 @@ initially, then `language=zxx` in the changed fixture.
 The integration test copies each pair onto one temporary catalog path, probes
 with the ffprobe wrapper, and checks initial and changed-file SQLite persistence.
 Its injected clock makes each write eligible without sleeping.
+
+The four `tagged.*` fixtures cover the formats Igloo's FFmpeg can neither
+encode nor mux (Opus, Ogg Vorbis, WAV, AIFF), so they were made with a system
+FFmpeg 4.4.2 (libopus, libvorbis) from `-f lavfi -i anullsrc=cl=mono -t 0.1`:
+`-c:a libopus -b:a 16k` at 48 kHz for `.opus`, `-c:a libvorbis -q:a 0` at
+44.1 kHz for `.ogg`, and at 8 kHz `-c:a pcm_s16le` for `.wav` and
+`-c:a pcm_s16be -write_id3v2 1 -id3v2_version 4` for `.aiff`. Each sets
+`title=Tagged`, `artist=Format Band`, `album=Format Test`, `track=2`,
+`TRACKTOTAL=3`, `COMPILATION=1`,
+`MUSICBRAINZ_ALBUMID=03271bb1-a396-4038-a068-b7d5945c2c37` and
+`ARTISTS=Format Band;Guest`. The Ogg muxer writes every tag as a Vorbis
+comment on the audio stream, leaving the container's tags empty; the AIFF
+muxer writes ID3 frames; the WAV muxer keeps only the RIFF INFO fields
+(title, artist, album, track).

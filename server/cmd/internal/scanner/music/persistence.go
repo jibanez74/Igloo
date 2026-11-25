@@ -129,26 +129,29 @@ func (s *Scanner) persistResolvedTrackTx(ctx context.Context, qtx *database.Quer
 
 	}
 
+	tags := resolved.tags
+	artistNames := tags.artists
+	if tags.soleArtist != "" {
+		artistNames = []string{tags.soleArtist}
+	}
 	err = qtx.SaveMusicTrackMetadata(ctx, database.SaveMusicTrackMetadataParams{
 		TrackID: trackID, ArtistTag: resolved.artistTag, ArtistKey: scanner.NormalizedScanCacheKey(resolved.artistTag), ArtistSort: resolved.artistSort, AlbumSort: resolved.albumSort,
 		AppleTrackID: helpers.NullInt64(resolved.catalog.Track), AppleAlbumID: helpers.NullInt64(resolved.catalog.Album),
+		ArtistsTag: joinTagList(artistNames), MbRecordingID: helpers.NullString(tags.recordingID), MbReleaseID: helpers.NullString(tags.releaseID),
+		MbReleaseGroupID: helpers.NullString(tags.releaseGroupID), MbArtistIds: helpers.NullString(joinTagList(tags.artistIDs)),
+		MbAlbumArtistIds: helpers.NullString(joinTagList(tags.albumArtistIDs)), Isrc: helpers.NullString(tags.isrc), Label: helpers.NullString(tags.label),
+		Compilation: tags.compilation, TrackTotal: tags.trackTotal, DiscTotal: tags.discTotal,
 	})
 	if err != nil {
 		return 0, err
 	}
-	err = qtx.DeleteMusicCreditMetadata(ctx, trackID)
+	err = saveCreditMetadata(ctx, qtx, trackID, resolved.musicians, musicianIDs, pairableArtistIDs(tags, params.Container, resolved.musicians))
 	if err != nil {
 		return 0, err
 	}
-	for i, input := range resolved.musicians {
-		err = qtx.SaveMusicCreditMetadata(ctx, database.SaveMusicCreditMetadataParams{TrackID: trackID, MusicianID: musicianIDs[i], SortName: input.sortName})
-		if err != nil {
-			return 0, err
-		}
-	}
 
 	for _, id := range uniqueIDs(oldArtists, musicianIDs, adoptedIDs) {
-		err = qtx.ReconcileMusicArtistSort(ctx, id)
+		err = reconcileArtist(ctx, qtx, id)
 		if err != nil {
 			return 0, err
 		}
@@ -432,8 +435,57 @@ func (s *Scanner) syncTrackMusicians(ctx context.Context, qtx *database.Queries,
 	return nil
 }
 
+// saveCreditMetadata rewrites a track's per-credit votes: each credit's
+// explicit sort value, and its MusicBrainz artist id when artistIDs, from
+// pairableArtistIDs, has one per credit. ids are the credits' musicians, in
+// credit order.
+func saveCreditMetadata(ctx context.Context, qtx *database.Queries, trackID int64, credits []resolvedMusician, ids []int64, artistIDs []string) error {
+	err := qtx.DeleteMusicCreditMetadata(ctx, trackID)
+	if err != nil {
+		return err
+	}
+	for i, id := range ids {
+		err = qtx.SaveMusicCreditMetadata(ctx, database.SaveMusicCreditMetadataParams{TrackID: trackID, MusicianID: id, SortName: credits[i].sortName})
+		if err != nil {
+			return err
+		}
+	}
+
+	err = qtx.DeleteMusicCreditIDs(ctx, trackID)
+	if err != nil {
+		return err
+	}
+	paired := len(artistIDs) == len(ids)
+	if !paired {
+		return nil
+	}
+	for i, id := range ids {
+		err = qtx.SaveMusicCreditID(ctx, database.SaveMusicCreditIDParams{TrackID: trackID, MusicianID: id, MusicbrainzID: artistIDs[i]})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// reconcileArtist and reconcileAlbum re-run every vote over the entity's
+// current tracks after its tracks or credits change.
+func reconcileArtist(ctx context.Context, qtx *database.Queries, id int64) error {
+	for _, update := range []func(context.Context, int64) error{qtx.ReconcileMusicArtistSort, qtx.ReconcileMusicArtistMusicBrainzID} {
+		err := update(ctx, id)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func reconcileAlbum(ctx context.Context, qtx *database.Queries, id int64) error {
-	for _, update := range []func(context.Context, int64) error{qtx.ReconcileMusicAlbumSort, qtx.ReconcileMusicAlbumDate, qtx.ReconcileMusicAlbumYear} {
+	updates := []func(context.Context, int64) error{
+		qtx.ReconcileMusicAlbumSort, qtx.ReconcileMusicAlbumDate, qtx.ReconcileMusicAlbumYear,
+		qtx.ReconcileMusicAlbumReleaseID, qtx.ReconcileMusicAlbumReleaseGroupID,
+	}
+	for _, update := range updates {
 		err := update(ctx, id)
 		if err != nil {
 			return err

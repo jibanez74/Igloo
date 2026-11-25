@@ -94,6 +94,9 @@ type StreamDisposition struct {
 type StreamTags struct {
 	Title    string `json:"title"`
 	Language string `json:"language"`
+	// Music is the stream's full music tag set: Opus and Ogg Vorbis files
+	// carry every tag on their audio stream and none on the container.
+	Music FormatTags `json:"-"`
 }
 
 // UnmarshalJSON normalizes stream tag keys the same way FormatTags does, so
@@ -107,6 +110,7 @@ func (t *StreamTags) UnmarshalJSON(data []byte) error {
 
 	t.Title = firstTagValue(values, "title")
 	t.Language = firstTagValue(values, "language", "lang")
+	t.Music = formatTagsFrom(values)
 
 	return nil
 }
@@ -135,6 +139,22 @@ type FormatTags struct {
 	SortAlbum   string `json:"sort_album"`
 	SortArtist  string `json:"sort_artist"`
 	Language    string `json:"language"`
+	// The fields below are music-only. Key spellings differ by container
+	// (Vorbis MUSICBRAINZ_ALBUMID, ID3 TXXX "MusicBrainz Album Id", MP4
+	// freeform atoms), and normalizeTagKey makes each one key.
+	Compilation string `json:"compilation"`
+	TrackTotal  string `json:"track_total"`
+	DiscTotal   string `json:"disc_total"`
+	ISRC        string `json:"isrc"`
+	Label       string `json:"label"`
+	// Artists is the multi-value ARTISTS tag, which ffprobe joins with ";"
+	// for Vorbis comments and cuts to its first value for ID3 and MP4.
+	Artists                   string `json:"artists"`
+	MusicBrainzReleaseID      string `json:"musicbrainz_release_id"`
+	MusicBrainzReleaseGroupID string `json:"musicbrainz_release_group_id"`
+	MusicBrainzArtistID       string `json:"musicbrainz_artist_id"`
+	MusicBrainzAlbumArtistID  string `json:"musicbrainz_album_artist_id"`
+	MusicBrainzRecordingID    string `json:"musicbrainz_recording_id"`
 }
 
 func (t *FormatTags) UnmarshalJSON(data []byte) error {
@@ -143,22 +163,77 @@ func (t *FormatTags) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	t.Title = firstTagValue(values, "title")
-	t.Artist = firstTagValue(values, "artist")
-	t.AlbumArtist = firstTagValue(values, "album_artist")
-	t.Composer = firstTagValue(values, "composer")
-	t.Album = firstTagValue(values, "album")
-	t.Genre = firstTagValue(values, "genre")
-	t.Track = firstTagValue(values, "track", "tracknumber")
-	t.Disc = firstTagValue(values, "disc", "discnumber")
-	t.Date = firstTagValue(values, "date", "year")
-	t.Copyright = firstTagValue(values, "copyright")
-	t.SortName = firstTagValue(values, "sort_name", "titlesort")
-	t.SortAlbum = firstTagValue(values, "sort_album", "albumsort")
-	t.SortArtist = firstTagValue(values, "sort_artist", "artistsort")
-	t.Language = firstTagValue(values, "language", "lang")
+	*t = formatTagsFrom(values)
 
 	return nil
+}
+
+func formatTagsFrom(values map[string]string) FormatTags {
+	return FormatTags{
+		Title:       firstTagValue(values, "title"),
+		Artist:      firstTagValue(values, "artist"),
+		AlbumArtist: firstTagValue(values, "album_artist"),
+		Composer:    firstTagValue(values, "composer"),
+		Album:       firstTagValue(values, "album"),
+		Genre:       firstTagValue(values, "genre"),
+		Track:       firstTagValue(values, "track", "tracknumber"),
+		Disc:        firstTagValue(values, "disc", "discnumber"),
+		Date:        firstTagValue(values, "date", "year"),
+		Copyright:   firstTagValue(values, "copyright"),
+		SortName:    firstTagValue(values, "sort_name", "titlesort"),
+		SortAlbum:   firstTagValue(values, "sort_album", "albumsort"),
+		SortArtist:  firstTagValue(values, "sort_artist", "artistsort"),
+		Language:    firstTagValue(values, "language", "lang"),
+		Compilation: firstTagValue(values, "compilation"),
+		TrackTotal:  firstTagValue(values, "tracktotal", "totaltracks"),
+		DiscTotal:   firstTagValue(values, "disctotal", "totaldiscs"),
+		// ffprobe leaves the ID3 ISRC frame under its raw id, TSRC, and maps the
+		// ID3 label frame (TPUB) to publisher; Vorbis also has ORGANIZATION.
+		ISRC:                      firstTagValue(values, "isrc", "tsrc"),
+		Label:                     firstTagValue(values, "label", "publisher", "organization"),
+		Artists:                   firstTagValue(values, "artists"),
+		MusicBrainzReleaseID:      firstTagValue(values, "musicbrainz_albumid"),
+		MusicBrainzReleaseGroupID: firstTagValue(values, "musicbrainz_releasegroupid"),
+		MusicBrainzArtistID:       firstTagValue(values, "musicbrainz_artistid"),
+		MusicBrainzAlbumArtistID:  firstTagValue(values, "musicbrainz_albumartistid"),
+		// Picard writes the recording id as MUSICBRAINZ_TRACKID in Vorbis and
+		// MP4; in ID3 it goes into a UFID frame, which ffprobe does not expose.
+		MusicBrainzRecordingID: firstTagValue(values, "musicbrainz_trackid"),
+	}
+}
+
+// AudioTags returns the container's tags with each blank field filled from
+// the first audio stream's tags, where Opus and Ogg Vorbis keep them.
+func (r *FfprobeResult) AudioTags() FormatTags {
+	tags := r.Format.Tags
+	for _, stream := range r.Streams {
+		if stream.CodecType != "audio" {
+			continue
+		}
+		from := stream.Tags.Music
+		fields := []struct {
+			value    *string
+			fallback string
+		}{
+			{&tags.Title, from.Title}, {&tags.Artist, from.Artist}, {&tags.AlbumArtist, from.AlbumArtist},
+			{&tags.Composer, from.Composer}, {&tags.Album, from.Album}, {&tags.Genre, from.Genre},
+			{&tags.Track, from.Track}, {&tags.Disc, from.Disc}, {&tags.Date, from.Date},
+			{&tags.Copyright, from.Copyright}, {&tags.SortName, from.SortName}, {&tags.SortAlbum, from.SortAlbum},
+			{&tags.SortArtist, from.SortArtist}, {&tags.Language, from.Language}, {&tags.Compilation, from.Compilation},
+			{&tags.TrackTotal, from.TrackTotal}, {&tags.DiscTotal, from.DiscTotal}, {&tags.ISRC, from.ISRC},
+			{&tags.Label, from.Label}, {&tags.Artists, from.Artists},
+			{&tags.MusicBrainzReleaseID, from.MusicBrainzReleaseID}, {&tags.MusicBrainzReleaseGroupID, from.MusicBrainzReleaseGroupID},
+			{&tags.MusicBrainzArtistID, from.MusicBrainzArtistID}, {&tags.MusicBrainzAlbumArtistID, from.MusicBrainzAlbumArtistID},
+			{&tags.MusicBrainzRecordingID, from.MusicBrainzRecordingID},
+		}
+		for _, field := range fields {
+			if *field.value == "" {
+				*field.value = field.fallback
+			}
+		}
+		break
+	}
+	return tags
 }
 
 func decodeTagValues(data []byte) (map[string]string, error) {
