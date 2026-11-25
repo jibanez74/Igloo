@@ -302,7 +302,7 @@ func (s *Scanner) withNeighborAlbums(ctx context.Context, ids []int64) ([]int64,
 // localArtStage gives each album in ids the art of its own, then, after a
 // full pass, removes the folders no album points at. It reports how many
 // albums it got through, how many changed and how many folders it removed.
-// The static directory must exist and must not overlap a library: the stage
+// The static directory must be set and must not overlap a library: the stage
 // never writes into one.
 func (s *Scanner) localArtStage(ctx context.Context, full bool, ids []int64) (int, int, int, error) {
 	// A stage that cannot run reads no album, so its line shows none.

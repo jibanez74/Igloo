@@ -49,7 +49,7 @@ export function useScanStatus({ enabled = true, background = false }: ScanStatus
   useLibraryScanRefresh(query.data?.movies, "movies", MOVIES_STATS_KEY);
   useLibraryScanRefresh(query.data?.music, "music", MUSIC_STATS_KEY);
   useLibraryScanRefresh(query.data?.shows, "shows", SHOWS_STATS_KEY);
-  useMusicLookupsRefresh(query.data?.music);
+  useMusicLookupsRefresh(query.data?.music, query.dataUpdatedAt);
   return query;
 }
 
@@ -70,7 +70,7 @@ const LOOKUP_REFRESH_MS = 15_000;
 // and changes the catalog, and when the revision moves between two reports
 // of the same finished run with the worker idle in both: a pass that ran
 // entirely between two polls.
-function useMusicLookupsRefresh(status: MusicScanStatus | undefined) {
+function useMusicLookupsRefresh(status: MusicScanStatus | undefined, polledAt: number) {
   const queryClient = useQueryClient();
   const previous = useRef<{ runId: string; scanState: string; lookups: string; revision: number; listedAt: number; listedRevision: number } | null>(null);
   const runId = status?.run_id ?? "";
@@ -93,7 +93,9 @@ function useMusicLookupsRefresh(status: MusicScanStatus | undefined) {
     current.listedAt = now;
     current.listedRevision = revision;
     invalidateLibraryQueries(queryClient, "music");
-  }, [queryClient, status, runId, scanState, lookups, revision]);
+    // polledAt re-runs this on every poll: an unchanged report keeps its
+    // reference, and the throttle still needs to see time pass.
+  }, [queryClient, status, runId, scanState, lookups, revision, polledAt]);
 }
 
 // A new catalog revision refreshes the library's statistics; a new run, phase

@@ -399,6 +399,12 @@ func folderImages(folder string) (sources []artSource, skipped, err error) {
 		path := filepath.Join(folder, entry.Name())
 		info, err := os.Stat(path)
 		if errors.Is(err, fs.ErrNotExist) {
+			// A link whose target is away, as on another disk that is
+			// not mounted, is unreadable rather than gone.
+			_, linkErr := os.Lstat(path)
+			if linkErr == nil {
+				skipped = errors.Join(skipped, err)
+			}
 			continue
 		}
 		if err != nil {
