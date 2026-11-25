@@ -43,9 +43,14 @@ func readTrackTags(tags ffprobe.FormatTags) trackTags {
 		compilation:    tagIsTrue(tags.Compilation),
 	}
 
-	artists := splitMultiValue(tags.Artists)
+	artists, gap := splitMultiValue(tags.Artists)
 	if len(artists) >= 2 {
 		read.artists = artists
+	}
+	// The usable names still credit the track, but an id list no longer
+	// lines up with credits that skipped a blank slot.
+	if gap {
+		read.artistIDs = nil
 	}
 
 	return read
@@ -83,16 +88,29 @@ func musicBrainzIDs(value string) []string {
 	return ids
 }
 
-func splitMultiValue(value string) []string {
-	values := []string{}
-	for raw := range strings.SplitSeq(value, multiValueSeparator) {
-		part := strings.TrimSpace(raw)
-		if part != "" {
-			values = append(values, part)
-		}
+// splitMultiValue returns a ';'-joined tag's nonblank values, and whether a
+// value between separators was blank.
+func splitMultiValue(value string) ([]string, bool) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return nil, false
 	}
-	return values
+	values := []string{}
+	gap := false
+	for raw := range strings.SplitSeq(trimmed, multiValueSeparator) {
+		part := strings.TrimSpace(raw)
+		if part == "" {
+			gap = true
+			continue
+		}
+		values = append(values, part)
+	}
+	return values, gap
 }
+
+// vorbisCommentContainers keep their tags as Vorbis comments, whose repeated
+// values ffprobe joins in full; it cuts an ID3 or MP4 list to its first value.
+var vorbisCommentContainers = map[string]bool{"flac": true, "opus": true, "ogg": true}
 
 func tagIsTrue(value string) bool {
 	switch strings.ToLower(strings.TrimSpace(value)) {

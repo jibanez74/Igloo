@@ -453,7 +453,7 @@ func (s *Scanner) reconcileCompoundCredits(ctx context.Context, scan *musicScanC
 				if syncErr != nil {
 					return syncErr
 				}
-				syncErr = saveCreditMetadata(ctx, qtx, row.TrackID, credits, ids, musicBrainzIDs(row.MbArtistIds.String))
+				syncErr = saveCreditMetadata(ctx, qtx, row.TrackID, credits, ids, musicBrainzIDs(row.MbArtistIds.String), row.Container)
 				if syncErr != nil {
 					return syncErr
 				}

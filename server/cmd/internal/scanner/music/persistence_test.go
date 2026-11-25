@@ -677,13 +677,25 @@ func TestArtistMusicBrainzIDsPairWithCreditsOnlyOnePerCredit(t *testing.T) {
 	}
 
 	// A lone credit that reads as two names, beside one id: ffprobe may have
-	// cut an ID3 list to its first id, which is one of the two artists'.
+	// cut an m4a's (MP4) list to its first id, which is one of the two artists'.
 	scanTaggedTrack(t, s, newMusicScanContext(nil), filepath.Join(dir, "three"), 1, ffprobe.FormatTags{
 		Title: "Three", Artist: "Simon & Garfunkel", MusicBrainzArtistID: lead,
 	})
 	got = musicianIDs()
 	if got["Simon & Garfunkel"] != "" {
-		t.Fatalf("Simon & Garfunkel musicbrainz_id = %q, want none for a lone compound credit", got["Simon & Garfunkel"])
+		t.Fatalf("Simon & Garfunkel musicbrainz_id = %q, want none for a lone compound credit in an m4a", got["Simon & Garfunkel"])
+	}
+	// A Vorbis comment list is never cut, so a FLAC's one id is the duo's.
+	s.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadataWithTags(ffprobe.FormatTags{
+		Title: "Four", Artist: "Hall & Oates", MusicBrainzArtistID: guest,
+	})}
+	imported, _, failures := s.processMusicFixtureBatch(t, context.Background(), newMusicScanContext(nil), []scanner.ScanFile{{Path: filepath.Join(dir, "four.flac"), Ext: "flac", Size: 1}})
+	if imported != 1 || failures != 0 {
+		t.Fatalf("scan four.flac: %d imported, %d failed", imported, failures)
+	}
+	got = musicianIDs()
+	if got["Hall & Oates"] != guest {
+		t.Fatalf("Hall & Oates musicbrainz_id = %q, want %q from a whole Vorbis list", got["Hall & Oates"], guest)
 	}
 
 	// Removing the only voting track clears the artist's id.
@@ -694,9 +706,9 @@ func TestArtistMusicBrainzIDsPairWithCreditsOnlyOnePerCredit(t *testing.T) {
 	if got["Lead"] != "" || got["Guest"] != "" {
 		t.Fatalf("musician ids after the votes went away = %v, want none", got)
 	}
-	votes := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_credit_ids")
+	votes := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_credit_ids c JOIN tracks t ON t.id = c.track_id WHERE t.file_path = ?", filepath.Join(dir, "one"))
 	if votes != 0 {
-		t.Fatalf("music_credit_ids rows = %d, want 0", votes)
+		t.Fatalf("music_credit_ids rows for the rescanned track = %d, want 0", votes)
 	}
 }
 

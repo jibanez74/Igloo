@@ -36,6 +36,11 @@ func TestReadTrackTags(t *testing.T) {
 			want: trackTags{},
 		},
 		{
+			name: "a blank ARTISTS slot keeps the names but drops the ids beside them",
+			tags: ffprobe.FormatTags{Artists: "A;;C", MusicBrainzArtistID: a + ";" + b},
+			want: trackTags{artists: []string{"A", "C"}},
+		},
+		{
 			name: "a trailing separator is an empty slot too",
 			tags: ffprobe.FormatTags{MusicBrainzArtistID: a + ";"},
 			want: trackTags{},

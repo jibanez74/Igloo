@@ -886,7 +886,8 @@ func (q *Queries) MusicArtistTrackIDs(ctx context.Context, musicianID int64) ([]
 }
 
 const musicArtistTrackMetadata = `-- name: MusicArtistTrackMetadata :many
-SELECT m.track_id, m.artist_tag, m.artist_sort, m.artists_tag, m.mb_artist_ids FROM track_musicians tm JOIN music_track_metadata m ON m.track_id=tm.track_id
+SELECT m.track_id, m.artist_tag, m.artist_sort, m.artists_tag, m.mb_artist_ids, t.container FROM track_musicians tm
+JOIN music_track_metadata m ON m.track_id=tm.track_id JOIN tracks t ON t.id=tm.track_id
 WHERE tm.musician_id=? AND tm.track_id>?2 ORDER BY tm.track_id LIMIT 100
 `
 
@@ -901,6 +902,7 @@ type MusicArtistTrackMetadataRow struct {
 	ArtistSort  string         `json:"artist_sort"`
 	ArtistsTag  string         `json:"artists_tag"`
 	MbArtistIds sql.NullString `json:"mb_artist_ids"`
+	Container   string         `json:"container"`
 }
 
 // The range and order ride idx_track_musicians_musician_track, so keep them on tm.
@@ -919,6 +921,7 @@ func (q *Queries) MusicArtistTrackMetadata(ctx context.Context, arg MusicArtistT
 			&i.ArtistSort,
 			&i.ArtistsTag,
 			&i.MbArtistIds,
+			&i.Container,
 		); err != nil {
 			return nil, err
 		}

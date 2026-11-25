@@ -141,7 +141,7 @@ func (s *Scanner) persistResolvedTrackTx(ctx context.Context, qtx *database.Quer
 	if err != nil {
 		return 0, err
 	}
-	err = saveCreditMetadata(ctx, qtx, trackID, resolved.musicians, musicianIDs, tags.artistIDs)
+	err = saveCreditMetadata(ctx, qtx, trackID, resolved.musicians, musicianIDs, tags.artistIDs, params.Container)
 	if err != nil {
 		return 0, err
 	}
@@ -433,8 +433,9 @@ func (s *Scanner) syncTrackMusicians(ctx context.Context, qtx *database.Queries,
 
 // saveCreditMetadata rewrites a track's per-credit votes: each credit's
 // explicit sort value, and, when the tags give one MusicBrainz artist id per
-// credit, that id. ids are the credits' musicians, in credit order.
-func saveCreditMetadata(ctx context.Context, qtx *database.Queries, trackID int64, credits []resolvedMusician, ids []int64, artistIDs []string) error {
+// credit, that id. ids are the credits' musicians, in credit order; container
+// is the track's, which says whether ffprobe may have cut the id list.
+func saveCreditMetadata(ctx context.Context, qtx *database.Queries, trackID int64, credits []resolvedMusician, ids []int64, artistIDs []string, container string) error {
 	err := qtx.DeleteMusicCreditMetadata(ctx, trackID)
 	if err != nil {
 		return err
@@ -454,10 +455,12 @@ func saveCreditMetadata(ctx context.Context, qtx *database.Queries, trackID int6
 	if !paired {
 		return nil
 	}
-	// ffprobe keeps only the first id of an ID3 or MP4 list, so one id beside
-	// one credit that reads as several names ("A & B") is likely A's alone.
+	// ffprobe keeps only the first id of an ID3 or MP4 list, so there one id
+	// beside one credit that reads as several names ("A & B") is likely A's
+	// alone. A Vorbis comment list is whole, so its one id is the duo's.
+	cut := !vorbisCommentContainers[container]
 	loneCompound := len(credits) == 1 && len(parseCompoundArtistCredits(credits[0].name).parts) >= 2
-	if loneCompound {
+	if cut && loneCompound {
 		return nil
 	}
 	for i, id := range ids {

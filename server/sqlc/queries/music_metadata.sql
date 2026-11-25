@@ -203,7 +203,8 @@ SELECT sqlc.arg(owner),spotify_date FROM music_album_metadata WHERE music_album_
 
 -- name: MusicArtistTrackMetadata :many
 -- The range and order ride idx_track_musicians_musician_track, so keep them on tm.
-SELECT m.track_id, m.artist_tag, m.artist_sort, m.artists_tag, m.mb_artist_ids FROM track_musicians tm JOIN music_track_metadata m ON m.track_id=tm.track_id
+SELECT m.track_id, m.artist_tag, m.artist_sort, m.artists_tag, m.mb_artist_ids, t.container FROM track_musicians tm
+JOIN music_track_metadata m ON m.track_id=tm.track_id JOIN tracks t ON t.id=tm.track_id
 WHERE tm.musician_id=? AND tm.track_id>sqlc.arg(after_id) ORDER BY tm.track_id LIMIT 100;
 
 -- name: UpdateMusicTrackPrimaryArtist :exec
