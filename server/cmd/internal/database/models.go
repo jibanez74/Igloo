@@ -9,20 +9,22 @@ import (
 )
 
 type Album struct {
-	ID          int64          `json:"id"`
-	Title       string         `json:"title"`
-	SortTitle   string         `json:"sort_title"`
-	SpotifyID   sql.NullString `json:"spotify_id"`
-	AppleID     sql.NullInt64  `json:"apple_id"`
-	AlbumType   sql.NullString `json:"album_type"`
-	Musician    sql.NullString `json:"musician"`
-	ReleaseDate sql.NullString `json:"release_date"`
-	Year        sql.NullInt64  `json:"year"`
-	TotalTracks sql.NullInt64  `json:"total_tracks"`
-	Cover       sql.NullString `json:"cover"`
-	CoverSource sql.NullString `json:"-"`
-	CreatedAt   string         `json:"created_at"`
-	UpdatedAt   string         `json:"updated_at"`
+	ID                        int64          `json:"id"`
+	Title                     string         `json:"title"`
+	SortTitle                 string         `json:"sort_title"`
+	SpotifyID                 sql.NullString `json:"spotify_id"`
+	AppleID                   sql.NullInt64  `json:"apple_id"`
+	MusicbrainzReleaseID      sql.NullString `json:"-"`
+	MusicbrainzReleaseGroupID sql.NullString `json:"-"`
+	AlbumType                 sql.NullString `json:"album_type"`
+	Musician                  sql.NullString `json:"musician"`
+	ReleaseDate               sql.NullString `json:"release_date"`
+	Year                      sql.NullInt64  `json:"year"`
+	TotalTracks               sql.NullInt64  `json:"total_tracks"`
+	Cover                     sql.NullString `json:"cover"`
+	CoverSource               sql.NullString `json:"-"`
+	CreatedAt                 string         `json:"created_at"`
+	UpdatedAt                 string         `json:"updated_at"`
 }
 
 type Artist struct {
@@ -93,15 +95,16 @@ type MusicAlbumIdentity struct {
 }
 
 type Musician struct {
-	ID          int64          `json:"id"`
-	Name        string         `json:"name"`
-	SortName    string         `json:"sort_name"`
-	Summary     sql.NullString `json:"summary"`
-	SpotifyID   sql.NullString `json:"spotify_id"`
-	Thumb       sql.NullString `json:"thumb"`
-	ThumbSource sql.NullString `json:"-"`
-	CreatedAt   string         `json:"created_at"`
-	UpdatedAt   string         `json:"updated_at"`
+	ID            int64          `json:"id"`
+	Name          string         `json:"name"`
+	SortName      string         `json:"sort_name"`
+	Summary       sql.NullString `json:"summary"`
+	SpotifyID     sql.NullString `json:"spotify_id"`
+	MusicbrainzID sql.NullString `json:"-"`
+	Thumb         sql.NullString `json:"thumb"`
+	ThumbSource   sql.NullString `json:"-"`
+	CreatedAt     string         `json:"created_at"`
+	UpdatedAt     string         `json:"updated_at"`
 }
 
 type Playlist struct {

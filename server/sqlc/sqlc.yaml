@@ -38,3 +38,10 @@ sql:
             go_struct_tag: 'json:"-"'
           - column: "musicians.thumb_source"
             go_struct_tag: 'json:"-"'
+          # Catalog ids from tags; the API exposes catalog links, not raw ids.
+          - column: "albums.musicbrainz_release_id"
+            go_struct_tag: 'json:"-"'
+          - column: "albums.musicbrainz_release_group_id"
+            go_struct_tag: 'json:"-"'
+          - column: "musicians.musicbrainz_id"
+            go_struct_tag: 'json:"-"'

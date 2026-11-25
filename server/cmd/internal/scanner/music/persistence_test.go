@@ -593,3 +593,129 @@ func TestUniqueIDsPreservesOrderAndDropsRepeats(t *testing.T) {
 		t.Fatalf("validIDs = %v, want only the valid id", present)
 	}
 }
+
+func TestAlbumMusicBrainzIDsFollowTheMajorityOfTheirTracks(t *testing.T) {
+	s := setupMusicScanner(t)
+	dir := t.TempDir()
+	const releaseA = "0a000000-0000-4000-8000-000000000000"
+	const releaseB = "0b000000-0000-4000-8000-000000000000"
+	const group = "0c000000-0000-4000-8000-000000000000"
+	tagged := func(title, release string) ffprobe.FormatTags {
+		return ffprobe.FormatTags{Title: title, Artist: "Coldplay", Album: "Parachutes", MusicBrainzReleaseID: release, MusicBrainzReleaseGroupID: group}
+	}
+	albumIDs := func() (string, string) {
+		t.Helper()
+		var release, releaseGroup sql.NullString
+		err := s.tx.DB.QueryRow("SELECT musicbrainz_release_id, musicbrainz_release_group_id FROM albums").Scan(&release, &releaseGroup)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return release.String, releaseGroup.String
+	}
+
+	scanTaggedTrack(t, s, newMusicScanContext(nil), filepath.Join(dir, "one"), 1, tagged("One", releaseB))
+	scanTaggedTrack(t, s, newMusicScanContext(nil), filepath.Join(dir, "two"), 1, tagged("Two", releaseA))
+	release, releaseGroup := albumIDs()
+	if release != releaseA || releaseGroup != group {
+		t.Fatalf("tied album ids = %q, %q, want the lowest release %q and %q", release, releaseGroup, releaseA, group)
+	}
+
+	scanTaggedTrack(t, s, newMusicScanContext(nil), filepath.Join(dir, "three"), 1, tagged("Three", releaseB))
+	release, _ = albumIDs()
+	if release != releaseB {
+		t.Fatalf("album release = %q, want the majority %q", release, releaseB)
+	}
+
+	// Changing a track's tags takes its vote back.
+	scanTaggedTrack(t, s, newMusicScanContext(nil), filepath.Join(dir, "three"), 2, tagged("Three", ""))
+	release, _ = albumIDs()
+	if release != releaseA {
+		t.Fatalf("album release after a vote went away = %q, want %q", release, releaseA)
+	}
+}
+
+func TestArtistMusicBrainzIDsPairWithCreditsOnlyOnePerCredit(t *testing.T) {
+	s := setupMusicScanner(t)
+	dir := t.TempDir()
+	const lead = "1a000000-0000-4000-8000-000000000000"
+	const guest = "1b000000-0000-4000-8000-000000000000"
+	musicianIDs := func() map[string]string {
+		t.Helper()
+		rows, err := s.tx.DB.Query("SELECT name, COALESCE(musicbrainz_id, '') FROM musicians")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rows.Close()
+		ids := map[string]string{}
+		for rows.Next() {
+			var name, id string
+			err = rows.Scan(&name, &id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ids[name] = id
+		}
+		return ids
+	}
+
+	// The ARTISTS tag names two credits and the id tag gives one id each.
+	scanTaggedTrack(t, s, newMusicScanContext(nil), filepath.Join(dir, "one"), 1, ffprobe.FormatTags{
+		Title: "One", Artist: "Lead feat. Guest", Artists: "Lead;Guest", MusicBrainzArtistID: lead + ";" + guest,
+	})
+	got := musicianIDs()
+	if got["Lead"] != lead || got["Guest"] != guest || len(got) != 2 {
+		t.Fatalf("musician ids = %v, want Lead %s and Guest %s", got, lead, guest)
+	}
+
+	// One credit and two ids: the positions cannot be trusted, so no vote.
+	scanTaggedTrack(t, s, newMusicScanContext(nil), filepath.Join(dir, "two"), 1, ffprobe.FormatTags{
+		Title: "Two", Artist: "Solo", MusicBrainzArtistID: lead + ";" + guest,
+	})
+	got = musicianIDs()
+	if got["Solo"] != "" {
+		t.Fatalf("Solo musicbrainz_id = %q, want none from an unpaired id list", got["Solo"])
+	}
+
+	// Removing the only voting track clears the artist's id.
+	scanTaggedTrack(t, s, newMusicScanContext(nil), filepath.Join(dir, "one"), 2, ffprobe.FormatTags{
+		Title: "One", Artist: "Lead feat. Guest", Artists: "Lead;Guest",
+	})
+	got = musicianIDs()
+	if got["Lead"] != "" || got["Guest"] != "" {
+		t.Fatalf("musician ids after the votes went away = %v, want none", got)
+	}
+	votes := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_credit_ids")
+	if votes != 0 {
+		t.Fatalf("music_credit_ids rows = %d, want 0", votes)
+	}
+}
+
+func TestTrackMetadataKeepsTheTagsLaterPassesRead(t *testing.T) {
+	s := setupMusicScanner(t)
+	const recording = "2a000000-0000-4000-8000-000000000000"
+	const albumArtist = "2b000000-0000-4000-8000-000000000000"
+	scanTaggedTrack(t, s, newMusicScanContext(nil), filepath.Join(t.TempDir(), "one"), 1, ffprobe.FormatTags{
+		Title: "One", Artist: "A", Album: "Pure Dance", Track: "2", TrackTotal: "12", Disc: "1/2",
+		Compilation: "1", ISRC: "usum71703861", Label: "Ministry of Sound", Artists: "A;B",
+		MusicBrainzRecordingID: recording, MusicBrainzAlbumArtistID: albumArtist,
+	})
+
+	var row struct {
+		artists, isrc, label, recording, albumArtists string
+		compilation                                   bool
+		trackTotal, discTotal                         int64
+	}
+	err := s.tx.DB.QueryRow(`SELECT artists_tag, isrc, label, mb_recording_id, mb_album_artist_ids, compilation, track_total, disc_total
+		FROM music_track_metadata`).Scan(&row.artists, &row.isrc, &row.label, &row.recording, &row.albumArtists, &row.compilation, &row.trackTotal, &row.discTotal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := struct {
+		artists, isrc, label, recording, albumArtists string
+		compilation                                   bool
+		trackTotal, discTotal                         int64
+	}{"A;B", "USUM71703861", "Ministry of Sound", recording, albumArtist, true, 12, 2}
+	if row != want {
+		t.Fatalf("music_track_metadata = %+v, want %+v", row, want)
+	}
+}

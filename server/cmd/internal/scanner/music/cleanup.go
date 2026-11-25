@@ -30,7 +30,7 @@ func (s *Scanner) deleteMissingTrack(ctx context.Context, scan *musicScanContext
 		}
 
 		for _, id := range artists {
-			err = qtx.ReconcileMusicArtistSort(ctx, id)
+			err = reconcileArtist(ctx, qtx, id)
 			if err != nil {
 				return false, err
 			}

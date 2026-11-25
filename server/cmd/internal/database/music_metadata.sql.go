@@ -131,6 +131,15 @@ func (q *Queries) DeleteMusicAlbumTrackMatches(ctx context.Context, albumID sql.
 	return err
 }
 
+const deleteMusicCreditIDs = `-- name: DeleteMusicCreditIDs :exec
+DELETE FROM music_credit_ids WHERE track_id=?
+`
+
+func (q *Queries) DeleteMusicCreditIDs(ctx context.Context, trackID int64) error {
+	_, err := q.exec(ctx, q.deleteMusicCreditIDsStmt, deleteMusicCreditIDs, trackID)
+	return err
+}
+
 const deleteMusicCreditMetadata = `-- name: DeleteMusicCreditMetadata :exec
 DELETE FROM music_credit_metadata WHERE track_id=?
 `
@@ -305,6 +314,22 @@ type MoveMusicArtistContributionsParams struct {
 
 func (q *Queries) MoveMusicArtistContributions(ctx context.Context, arg MoveMusicArtistContributionsParams) error {
 	_, err := q.exec(ctx, q.moveMusicArtistContributionsStmt, moveMusicArtistContributions, arg.Owner, arg.Redundant)
+	return err
+}
+
+const moveMusicArtistCreditIDs = `-- name: MoveMusicArtistCreditIDs :exec
+INSERT OR IGNORE INTO music_credit_ids(track_id,musician_id,musicbrainz_id)
+SELECT track_id,?1,musicbrainz_id FROM music_credit_ids WHERE music_credit_ids.musician_id=?2
+`
+
+type MoveMusicArtistCreditIDsParams struct {
+	Owner     int64 `json:"owner"`
+	Redundant int64 `json:"redundant"`
+}
+
+// After MoveMusicArtistCredits: each row needs the owner's credit.
+func (q *Queries) MoveMusicArtistCreditIDs(ctx context.Context, arg MoveMusicArtistCreditIDsParams) error {
+	_, err := q.exec(ctx, q.moveMusicArtistCreditIDsStmt, moveMusicArtistCreditIDs, arg.Owner, arg.Redundant)
 	return err
 }
 
@@ -861,7 +886,7 @@ func (q *Queries) MusicArtistTrackIDs(ctx context.Context, musicianID int64) ([]
 }
 
 const musicArtistTrackMetadata = `-- name: MusicArtistTrackMetadata :many
-SELECT m.track_id, m.artist_tag, m.artist_sort FROM track_musicians tm JOIN music_track_metadata m ON m.track_id=tm.track_id
+SELECT m.track_id, m.artist_tag, m.artist_sort, m.artists_tag, m.mb_artist_ids FROM track_musicians tm JOIN music_track_metadata m ON m.track_id=tm.track_id
 WHERE tm.musician_id=? AND tm.track_id>?2 ORDER BY tm.track_id LIMIT 100
 `
 
@@ -871,9 +896,11 @@ type MusicArtistTrackMetadataParams struct {
 }
 
 type MusicArtistTrackMetadataRow struct {
-	TrackID    int64  `json:"track_id"`
-	ArtistTag  string `json:"artist_tag"`
-	ArtistSort string `json:"artist_sort"`
+	TrackID     int64          `json:"track_id"`
+	ArtistTag   string         `json:"artist_tag"`
+	ArtistSort  string         `json:"artist_sort"`
+	ArtistsTag  string         `json:"artists_tag"`
+	MbArtistIds sql.NullString `json:"mb_artist_ids"`
 }
 
 // The range and order ride idx_track_musicians_musician_track, so keep them on tm.
@@ -886,7 +913,13 @@ func (q *Queries) MusicArtistTrackMetadata(ctx context.Context, arg MusicArtistT
 	items := []MusicArtistTrackMetadataRow{}
 	for rows.Next() {
 		var i MusicArtistTrackMetadataRow
-		if err := rows.Scan(&i.TrackID, &i.ArtistTag, &i.ArtistSort); err != nil {
+		if err := rows.Scan(
+			&i.TrackID,
+			&i.ArtistTag,
+			&i.ArtistSort,
+			&i.ArtistsTag,
+			&i.MbArtistIds,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1132,6 +1165,30 @@ func (q *Queries) ReconcileMusicAlbumDate(ctx context.Context, id int64) error {
 	return err
 }
 
+const reconcileMusicAlbumReleaseGroupID = `-- name: ReconcileMusicAlbumReleaseGroupID :exec
+UPDATE albums SET musicbrainz_release_group_id=(SELECT m.mb_release_group_id FROM music_track_metadata m JOIN tracks t ON t.id=m.track_id
+WHERE t.album_id=albums.id AND m.mb_release_group_id IS NOT NULL GROUP BY m.mb_release_group_id ORDER BY COUNT(*) DESC,m.mb_release_group_id LIMIT 1), updated_at = CURRENT_TIMESTAMP
+WHERE albums.id=? AND musicbrainz_release_group_id IS NOT (SELECT m.mb_release_group_id FROM music_track_metadata m JOIN tracks t ON t.id=m.track_id
+WHERE t.album_id=albums.id AND m.mb_release_group_id IS NOT NULL GROUP BY m.mb_release_group_id ORDER BY COUNT(*) DESC,m.mb_release_group_id LIMIT 1)
+`
+
+func (q *Queries) ReconcileMusicAlbumReleaseGroupID(ctx context.Context, id int64) error {
+	_, err := q.exec(ctx, q.reconcileMusicAlbumReleaseGroupIDStmt, reconcileMusicAlbumReleaseGroupID, id)
+	return err
+}
+
+const reconcileMusicAlbumReleaseID = `-- name: ReconcileMusicAlbumReleaseID :exec
+UPDATE albums SET musicbrainz_release_id=(SELECT m.mb_release_id FROM music_track_metadata m JOIN tracks t ON t.id=m.track_id
+WHERE t.album_id=albums.id AND m.mb_release_id IS NOT NULL GROUP BY m.mb_release_id ORDER BY COUNT(*) DESC,m.mb_release_id LIMIT 1), updated_at = CURRENT_TIMESTAMP
+WHERE albums.id=? AND musicbrainz_release_id IS NOT (SELECT m.mb_release_id FROM music_track_metadata m JOIN tracks t ON t.id=m.track_id
+WHERE t.album_id=albums.id AND m.mb_release_id IS NOT NULL GROUP BY m.mb_release_id ORDER BY COUNT(*) DESC,m.mb_release_id LIMIT 1)
+`
+
+func (q *Queries) ReconcileMusicAlbumReleaseID(ctx context.Context, id int64) error {
+	_, err := q.exec(ctx, q.reconcileMusicAlbumReleaseIDStmt, reconcileMusicAlbumReleaseID, id)
+	return err
+}
+
 const reconcileMusicAlbumSort = `-- name: ReconcileMusicAlbumSort :exec
 UPDATE albums SET sort_title=COALESCE((SELECT m.album_sort FROM music_track_metadata m JOIN tracks t ON t.id=m.track_id
 WHERE t.album_id=albums.id AND m.album_sort<>'' GROUP BY m.album_sort ORDER BY COUNT(*) DESC,m.album_sort COLLATE BINARY LIMIT 1),title), updated_at = CURRENT_TIMESTAMP
@@ -1150,6 +1207,19 @@ UPDATE albums SET year=CAST(substr(release_date,1,4) AS INTEGER), updated_at = C
 
 func (q *Queries) ReconcileMusicAlbumYear(ctx context.Context, id int64) error {
 	_, err := q.exec(ctx, q.reconcileMusicAlbumYearStmt, reconcileMusicAlbumYear, id)
+	return err
+}
+
+const reconcileMusicArtistMusicBrainzID = `-- name: ReconcileMusicArtistMusicBrainzID :exec
+UPDATE musicians SET musicbrainz_id=(SELECT musicbrainz_id FROM music_credit_ids WHERE musician_id=musicians.id
+GROUP BY musicbrainz_id ORDER BY COUNT(*) DESC,musicbrainz_id LIMIT 1), updated_at = CURRENT_TIMESTAMP
+WHERE id=? AND musicbrainz_id IS NOT (SELECT musicbrainz_id FROM music_credit_ids WHERE musician_id=musicians.id
+GROUP BY musicbrainz_id ORDER BY COUNT(*) DESC,musicbrainz_id LIMIT 1)
+`
+
+// The id most of the artist's credits carry, ties to the lowest.
+func (q *Queries) ReconcileMusicArtistMusicBrainzID(ctx context.Context, id int64) error {
+	_, err := q.exec(ctx, q.reconcileMusicArtistMusicBrainzIDStmt, reconcileMusicArtistMusicBrainzID, id)
 	return err
 }
 
@@ -1211,6 +1281,21 @@ func (q *Queries) SaveMusicArtistIdentity(ctx context.Context, arg SaveMusicArti
 	return err
 }
 
+const saveMusicCreditID = `-- name: SaveMusicCreditID :exec
+INSERT OR IGNORE INTO music_credit_ids(track_id,musician_id,musicbrainz_id) VALUES(?,?,?)
+`
+
+type SaveMusicCreditIDParams struct {
+	TrackID       int64  `json:"track_id"`
+	MusicianID    int64  `json:"musician_id"`
+	MusicbrainzID string `json:"musicbrainz_id"`
+}
+
+func (q *Queries) SaveMusicCreditID(ctx context.Context, arg SaveMusicCreditIDParams) error {
+	_, err := q.exec(ctx, q.saveMusicCreditIDStmt, saveMusicCreditID, arg.TrackID, arg.MusicianID, arg.MusicbrainzID)
+	return err
+}
+
 const saveMusicCreditMetadata = `-- name: SaveMusicCreditMetadata :exec
 INSERT OR IGNORE INTO music_credit_metadata(track_id,musician_id,sort_name) VALUES(?,?,?)
 `
@@ -1256,19 +1341,35 @@ func (q *Queries) SaveMusicSpotifyAdoption(ctx context.Context, arg SaveMusicSpo
 }
 
 const saveMusicTrackMetadata = `-- name: SaveMusicTrackMetadata :exec
-INSERT INTO music_track_metadata(track_id,artist_tag,artist_key,artist_sort,album_sort,apple_track_id,apple_album_id) VALUES(?,?,?,?,?,?,?)
+INSERT INTO music_track_metadata(track_id,artist_tag,artist_key,artist_sort,album_sort,apple_track_id,apple_album_id,
+artists_tag,mb_recording_id,mb_release_id,mb_release_group_id,mb_artist_ids,mb_album_artist_ids,isrc,label,compilation,track_total,disc_total)
+VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 ON CONFLICT(track_id) DO UPDATE SET artist_tag=excluded.artist_tag,artist_key=excluded.artist_key,artist_sort=excluded.artist_sort,album_sort=excluded.album_sort,
-apple_track_id=excluded.apple_track_id,apple_album_id=excluded.apple_album_id
+apple_track_id=excluded.apple_track_id,apple_album_id=excluded.apple_album_id,artists_tag=excluded.artists_tag,
+mb_recording_id=excluded.mb_recording_id,mb_release_id=excluded.mb_release_id,mb_release_group_id=excluded.mb_release_group_id,
+mb_artist_ids=excluded.mb_artist_ids,mb_album_artist_ids=excluded.mb_album_artist_ids,isrc=excluded.isrc,label=excluded.label,
+compilation=excluded.compilation,track_total=excluded.track_total,disc_total=excluded.disc_total
 `
 
 type SaveMusicTrackMetadataParams struct {
-	TrackID      int64         `json:"track_id"`
-	ArtistTag    string        `json:"artist_tag"`
-	ArtistKey    string        `json:"artist_key"`
-	ArtistSort   string        `json:"artist_sort"`
-	AlbumSort    string        `json:"album_sort"`
-	AppleTrackID sql.NullInt64 `json:"apple_track_id"`
-	AppleAlbumID sql.NullInt64 `json:"apple_album_id"`
+	TrackID          int64          `json:"track_id"`
+	ArtistTag        string         `json:"artist_tag"`
+	ArtistKey        string         `json:"artist_key"`
+	ArtistSort       string         `json:"artist_sort"`
+	AlbumSort        string         `json:"album_sort"`
+	AppleTrackID     sql.NullInt64  `json:"apple_track_id"`
+	AppleAlbumID     sql.NullInt64  `json:"apple_album_id"`
+	ArtistsTag       string         `json:"artists_tag"`
+	MbRecordingID    sql.NullString `json:"mb_recording_id"`
+	MbReleaseID      sql.NullString `json:"mb_release_id"`
+	MbReleaseGroupID sql.NullString `json:"mb_release_group_id"`
+	MbArtistIds      sql.NullString `json:"mb_artist_ids"`
+	MbAlbumArtistIds sql.NullString `json:"mb_album_artist_ids"`
+	Isrc             sql.NullString `json:"isrc"`
+	Label            sql.NullString `json:"label"`
+	Compilation      bool           `json:"compilation"`
+	TrackTotal       int64          `json:"track_total"`
+	DiscTotal        int64          `json:"disc_total"`
 }
 
 func (q *Queries) SaveMusicTrackMetadata(ctx context.Context, arg SaveMusicTrackMetadataParams) error {
@@ -1280,6 +1381,17 @@ func (q *Queries) SaveMusicTrackMetadata(ctx context.Context, arg SaveMusicTrack
 		arg.AlbumSort,
 		arg.AppleTrackID,
 		arg.AppleAlbumID,
+		arg.ArtistsTag,
+		arg.MbRecordingID,
+		arg.MbReleaseID,
+		arg.MbReleaseGroupID,
+		arg.MbArtistIds,
+		arg.MbAlbumArtistIds,
+		arg.Isrc,
+		arg.Label,
+		arg.Compilation,
+		arg.TrackTotal,
+		arg.DiscTotal,
 	)
 	return err
 }

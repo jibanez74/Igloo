@@ -316,3 +316,71 @@ func TestSpotifyRecoveryCreditSelection(t *testing.T) {
 		})
 	}
 }
+
+// Opus and Ogg Vorbis keep their tags on the audio stream, and Vorbis
+// comments keep the track and disc totals in keys of their own.
+func TestResolveTrackFileReadsAudioStreamTagsAndSeparateTotals(t *testing.T) {
+	app := setupMusicScanner(t)
+	trackPath := filepath.Join(t.TempDir(), "02 Hit.opus")
+	app.ffprobe = newMusicScannerFfprobeByPath(map[string]*ffprobe.FfprobeResult{
+		trackPath: {
+			Format: ffprobe.Format{Duration: "3.0"},
+			Streams: []ffprobe.Stream{{
+				CodecName: "opus", CodecType: "audio", Channels: 2, ChannelLayout: "stereo",
+				Tags: ffprobe.StreamTags{Music: ffprobe.FormatTags{
+					Title: "Hit", Artist: "Singer Alpha", AlbumArtist: "Various Artists", Album: "Summer Hits 2010",
+					Track: "2", TrackTotal: "3", Disc: "1", DiscTotal: "1", Compilation: "1",
+				}},
+			}},
+		},
+	})
+
+	resolved, err := app.resolveTrackFile(context.Background(), newMusicScanContext(nil), scanner.ScanFile{Path: trackPath, Ext: "opus", Size: 1}, itunes.CatalogIDs{})
+	if err != nil {
+		t.Fatalf("resolve track file: %v", err)
+	}
+
+	params := resolved.params
+	if params.Title != "Hit" || params.TrackIndex != 2 || params.Disc != 1 {
+		t.Fatalf("title, track, disc = %q, %d, %d, want Hit, 2, 1", params.Title, params.TrackIndex, params.Disc)
+	}
+	if params.Container != "opus" || params.MimeType != "audio/ogg" {
+		t.Fatalf("container, mime = %q, %q, want opus, audio/ogg", params.Container, params.MimeType)
+	}
+	if resolved.album == nil || resolved.album.title != "Summer Hits 2010" || resolved.album.albumArtist != "Various Artists" {
+		t.Fatalf("album = %+v, want Summer Hits 2010 by Various Artists", resolved.album)
+	}
+	if resolved.tags.trackTotal != 3 || resolved.tags.discTotal != 1 || !resolved.tags.compilation {
+		t.Fatalf("tags = %+v, want totals 3 and 1 and the compilation flag", resolved.tags)
+	}
+}
+
+func TestResolveTrackFileTakesCreditsFromAMultiValueArtistsTag(t *testing.T) {
+	app := setupMusicScanner(t)
+	trackPath := filepath.Join(t.TempDir(), "Wait For It.flac")
+	app.ffprobe = newMusicScannerFfprobeByPath(map[string]*ffprobe.FfprobeResult{
+		trackPath: testMusicMetadataWithTags(ffprobe.FormatTags{
+			Title: "Wait For It", Album: "Hamilton",
+			// ARTIST alone would split into a bogus "Jr." credit.
+			Artist:  "Leslie Odom, Jr., Lin-Manuel Miranda & Ensemble",
+			Artists: "Leslie Odom, Jr.;Lin-Manuel Miranda;Ensemble",
+		}),
+	})
+
+	resolved, err := app.resolveTrackFile(context.Background(), newMusicScanContext(nil), scanner.ScanFile{Path: trackPath, Ext: "flac", Size: 1}, itunes.CatalogIDs{})
+	if err != nil {
+		t.Fatalf("resolve track file: %v", err)
+	}
+
+	names := make([]string, 0, len(resolved.musicians))
+	for _, musician := range resolved.musicians {
+		names = append(names, musician.name)
+	}
+	want := []string{"Leslie Odom, Jr.", "Lin-Manuel Miranda", "Ensemble"}
+	if strings.Join(names, "|") != strings.Join(want, "|") {
+		t.Fatalf("credits = %q, want %q", names, want)
+	}
+	if resolved.album == nil || resolved.album.albumArtist != "Leslie Odom, Jr., Lin-Manuel Miranda & Ensemble" {
+		t.Fatalf("album = %+v, want the ARTIST string as the fallback album artist", resolved.album)
+	}
+}

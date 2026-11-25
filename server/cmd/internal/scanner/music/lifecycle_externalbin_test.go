@@ -75,3 +75,65 @@ func TestMusicMetadataRealProbePersistence(t *testing.T) {
 		})
 	}
 }
+
+// The formats Igloo's own FFmpeg cannot write, probed for real: Opus and Ogg
+// keep their tags on the audio stream, AIFF in ID3 frames, WAV in RIFF INFO.
+func TestMusicRealProbeReadsEachNewFormat(t *testing.T) {
+	probe := scannertest.RealProbe(t)
+	cases := []struct {
+		ext, mime string
+		// WAV's INFO chunk has no field for the rest of the tags.
+		fullTags bool
+	}{
+		{"opus", "audio/ogg", true},
+		{"ogg", "audio/ogg", true},
+		{"aiff", "audio/aiff", true},
+		{"wav", "audio/wav", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.ext, func(t *testing.T) {
+			s := setupMusicScanner(t)
+			s.ffprobe = probe
+			data, err := os.ReadFile(filepath.Join("testdata", "tagged."+tc.ext))
+			if err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(t.TempDir(), "track."+tc.ext)
+			err = os.WriteFile(path, data, 0600)
+			if err != nil {
+				t.Fatal(err)
+			}
+			n, _, failures := s.processBatchCounts(context.Background(), newMusicScanContext(nil), []scanner.ScanFile{{Path: path, Ext: tc.ext}})
+			if n != 1 || failures != 0 {
+				t.Fatalf("scan: %d imported, %d failed", n, failures)
+			}
+
+			var title, mime, album string
+			var trackIndex int64
+			err = s.tx.DB.QueryRow("SELECT t.title, t.mime_type, t.track_index, a.title FROM tracks t JOIN albums a ON a.id = t.album_id WHERE t.file_path = ?", path).Scan(&title, &mime, &trackIndex, &album)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if title != "Tagged" || mime != tc.mime || trackIndex != 2 || album != "Format Test" {
+				t.Fatalf("track = %q, %q, %d, album %q", title, mime, trackIndex, album)
+			}
+			if !tc.fullTags {
+				return
+			}
+			var release string
+			var compilation bool
+			var trackTotal int64
+			err = s.tx.DB.QueryRow("SELECT a.musicbrainz_release_id, m.compilation, m.track_total FROM albums a JOIN tracks t ON t.album_id = a.id JOIN music_track_metadata m ON m.track_id = t.id").Scan(&release, &compilation, &trackTotal)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if release != "03271bb1-a396-4038-a068-b7d5945c2c37" || !compilation || trackTotal != 3 {
+				t.Fatalf("release, compilation, track total = %q, %v, %d", release, compilation, trackTotal)
+			}
+			credits := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM track_musicians tm JOIN musicians m ON m.id = tm.musician_id WHERE m.name IN ('Format Band', 'Guest')")
+			if credits != 2 {
+				t.Fatalf("ARTISTS credits = %d, want Format Band and Guest", credits)
+			}
+		})
+	}
+}

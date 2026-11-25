@@ -397,3 +397,96 @@ func TestTagAliasSelectionIsDeterministic(t *testing.T) {
 		}
 	}
 }
+
+// Each container spells the music keys its own way; ffprobe passes Vorbis
+// comments through, maps a few ID3 frames (TPUB to publisher, TCMP to
+// compilation), leaves others under their frame id (TSRC) and names TXXX and
+// MP4 freeform tags by their description.
+func TestFormatTagsReadMusicFieldsInEachContainerSpelling(t *testing.T) {
+	const release = "03271bb1-a396-4038-a068-b7d5945c2c37"
+	const group = "a8d9bd8d-1b0b-3e3d-9c4c-3c8e3d0a7e11"
+	const artist = "cc197bad-dc9c-440d-a5b5-d52ba2e14234"
+	const recording = "6f7a3c0e-2d4b-4f0a-9a43-2f6c1b8e5d21"
+	want := FormatTags{
+		Compilation: "1", TrackTotal: "10", DiscTotal: "2", ISRC: "GBAYE0000351", Label: "Parlophone",
+		Artists: "Coldplay;Guest", MusicBrainzReleaseID: release, MusicBrainzReleaseGroupID: group,
+		MusicBrainzArtistID: artist, MusicBrainzAlbumArtistID: artist, MusicBrainzRecordingID: recording,
+	}
+	cases := []struct {
+		name    string
+		payload string
+		want    FormatTags
+	}{
+		{
+			name: "vorbis comments",
+			payload: `{"COMPILATION":"1","TRACKTOTAL":"10","DISCTOTAL":"2","ISRC":"GBAYE0000351","LABEL":"Parlophone",
+				"ARTISTS":"Coldplay;Guest","MUSICBRAINZ_ALBUMID":"` + release + `","MUSICBRAINZ_RELEASEGROUPID":"` + group + `",
+				"MUSICBRAINZ_ARTISTID":"` + artist + `","MUSICBRAINZ_ALBUMARTISTID":"` + artist + `","MUSICBRAINZ_TRACKID":"` + recording + `"}`,
+			want: want,
+		},
+		{
+			name: "id3 frames and mp4 freeform descriptions",
+			payload: `{"compilation":"1","totaltracks":"10","totaldiscs":"2","TSRC":"GBAYE0000351","publisher":"Parlophone",
+				"ARTISTS":"Coldplay;Guest","MusicBrainz Album Id":"` + release + `","MusicBrainz Release Group Id":"` + group + `",
+				"MusicBrainz Artist Id":"` + artist + `","MusicBrainz Album Artist Id":"` + artist + `","MusicBrainz Track Id":"` + recording + `"}`,
+			want: want,
+		},
+		{
+			name:    "vorbis organization stands in for label",
+			payload: `{"ORGANIZATION":"Parlophone"}`,
+			want:    FormatTags{Label: "Parlophone"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var tags FormatTags
+			err := json.Unmarshal([]byte(tc.payload), &tags)
+			if err != nil {
+				t.Fatalf("Unmarshal failed: %v", err)
+			}
+			if tags != tc.want {
+				t.Errorf("tags = %+v, want %+v", tags, tc.want)
+			}
+		})
+	}
+}
+
+func TestAudioTagsFillBlanksFromTheAudioStream(t *testing.T) {
+	var result FfprobeResult
+	// An Opus file: the container has no music tags, the audio stream has all
+	// of them, and a picture stream before it carries only its own.
+	err := json.Unmarshal([]byte(`{
+		"format": {"duration": "3.0", "tags": {"title": "Container Title"}},
+		"streams": [
+			{"index": 0, "codec_type": "video", "tags": {"comment": "Cover (front)", "title": "Picture"}},
+			{"index": 1, "codec_type": "audio", "codec_name": "opus", "tags": {
+				"TITLE": "Stream Title", "ARTIST": "Stream Artist", "ALBUM": "Summer Hits 2010",
+				"TRACKNUMBER": "2", "TRACKTOTAL": "3", "COMPILATION": "1"}}
+		]}`), &result)
+	if err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+
+	tags := result.AudioTags()
+	if tags.Title != "Container Title" {
+		t.Errorf("Title = %q, want the container's %q", tags.Title, "Container Title")
+	}
+	if tags.Artist != "Stream Artist" || tags.Album != "Summer Hits 2010" {
+		t.Errorf("Artist, Album = %q, %q, want the audio stream's", tags.Artist, tags.Album)
+	}
+	if tags.Track != "2" || tags.TrackTotal != "3" || tags.Compilation != "1" {
+		t.Errorf("Track, TrackTotal, Compilation = %q, %q, %q, want 2, 3, 1", tags.Track, tags.TrackTotal, tags.Compilation)
+	}
+	if result.Format.Tags.Artist != "" {
+		t.Errorf("Format.Tags.Artist = %q, want the container's tags left as read", result.Format.Tags.Artist)
+	}
+}
+
+func TestAudioTagsWithoutAnAudioStreamAreTheContainers(t *testing.T) {
+	result := FfprobeResult{Format: Format{Tags: FormatTags{Album: "Only Album"}}}
+	tags := result.AudioTags()
+	if tags != result.Format.Tags {
+		t.Errorf("AudioTags() = %+v, want the container's %+v", tags, result.Format.Tags)
+	}
+}

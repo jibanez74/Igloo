@@ -26,6 +26,11 @@ func TestMimeTypesPinValuesAndCoverValidExtensions(t *testing.T) {
 		"mp3":  "audio/mpeg",
 		"flac": "audio/flac",
 		"m4a":  "audio/mp4",
+		"opus": "audio/ogg",
+		"ogg":  "audio/ogg",
+		"aiff": "audio/aiff",
+		"aif":  "audio/aiff",
+		"wav":  "audio/wav",
 	}
 	if !maps.Equal(AudioMimeTypes, wantAudio) {
 		t.Errorf("AudioMimeTypes = %v, want %v", AudioMimeTypes, wantAudio)

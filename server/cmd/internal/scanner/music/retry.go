@@ -159,7 +159,7 @@ func (s *Scanner) persistEnrichedMusician(ctx context.Context, qtx *database.Que
 	if err != nil {
 		return err
 	}
-	return qtx.ReconcileMusicArtistSort(ctx, id)
+	return reconcileArtist(ctx, qtx, id)
 }
 
 func (s *Scanner) persistEnrichment(ctx context.Context, scan *musicScanContext, persist func(*database.Queries, *musicScanContext) error) error {
@@ -422,11 +422,16 @@ func (s *Scanner) reconcileCompoundCredits(ctx context.Context, scan *musicScanC
 				return contextErr
 			}
 			after = row.TrackID
+			// A track whose ARTISTS tag names its credits keeps them.
+			listed := row.ArtistsTag != ""
+			if listed {
+				continue
+			}
 			parsed := parseCompoundArtistCredits(row.ArtistTag)
 			if len(parsed.parts) < 2 {
 				continue
 			}
-			credits, err := s.resolveTrackMusicians(ctx, scan, row.ArtistTag, row.ArtistSort)
+			credits, err := s.resolveTrackMusicians(ctx, scan, row.ArtistTag, row.ArtistSort, nil)
 			if err != nil {
 				return err
 			}
@@ -448,18 +453,12 @@ func (s *Scanner) reconcileCompoundCredits(ctx context.Context, scan *musicScanC
 				if syncErr != nil {
 					return syncErr
 				}
-				syncErr = qtx.DeleteMusicCreditMetadata(ctx, row.TrackID)
+				syncErr = saveCreditMetadata(ctx, qtx, row.TrackID, credits, ids, musicBrainzIDs(row.MbArtistIds.String))
 				if syncErr != nil {
 					return syncErr
 				}
-				for i, id := range ids {
-					syncErr = qtx.SaveMusicCreditMetadata(ctx, database.SaveMusicCreditMetadataParams{TrackID: row.TrackID, MusicianID: id, SortName: credits[i].sortName})
-					if syncErr != nil {
-						return syncErr
-					}
-				}
 				for _, id := range uniqueIDs(ids, []int64{musicianID}) {
-					syncErr = qtx.ReconcileMusicArtistSort(ctx, id)
+					syncErr = reconcileArtist(ctx, qtx, id)
 					if syncErr != nil {
 						return syncErr
 					}

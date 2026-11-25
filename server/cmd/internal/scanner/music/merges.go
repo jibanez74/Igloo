@@ -35,6 +35,10 @@ func (s *Scanner) mergeMusicArtist(ctx context.Context, qtx *database.Queries, s
 	if err != nil {
 		return err
 	}
+	err = qtx.MoveMusicArtistCreditIDs(ctx, database.MoveMusicArtistCreditIDsParams{Owner: owner, Redundant: redundant})
+	if err != nil {
+		return err
+	}
 	err = qtx.MoveMusicArtistContributions(ctx, database.MoveMusicArtistContributionsParams{Owner: owner, Redundant: redundant})
 	if err != nil {
 		return err
@@ -46,7 +50,7 @@ func (s *Scanner) mergeMusicArtist(ctx context.Context, qtx *database.Queries, s
 	scan.merged = true
 	scan.musicianIDs = scanner.NewScanCache[string, int64]()
 	scan.albumIDs = scanner.NewScanCache[string, int64]()
-	return qtx.ReconcileMusicArtistSort(ctx, owner)
+	return reconcileArtist(ctx, qtx, owner)
 }
 
 func (s *Scanner) mergeMusicAlbum(ctx context.Context, qtx *database.Queries, scan *musicScanContext, redundant, owner int64) error {

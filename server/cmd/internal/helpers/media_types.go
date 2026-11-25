@@ -4,12 +4,24 @@ var ValidAudioExtensions = map[string]bool{
 	"mp3":  true,
 	"flac": true,
 	"m4a":  true,
+	"opus": true,
+	"ogg":  true,
+	"aiff": true,
+	"aif":  true,
+	"wav":  true,
 }
 
+// AudioMimeTypes is the Content-Type each track is streamed with. Tracks are
+// served as stored: an AIFF track plays only where the browser decodes AIFF.
 var AudioMimeTypes = map[string]string{
 	"mp3":  "audio/mpeg",
 	"flac": "audio/flac",
 	"m4a":  "audio/mp4",
+	"opus": "audio/ogg",
+	"ogg":  "audio/ogg",
+	"aiff": "audio/aiff",
+	"aif":  "audio/aiff",
+	"wav":  "audio/wav",
 }
 
 var ValidVideoExtensions = map[string]bool{
