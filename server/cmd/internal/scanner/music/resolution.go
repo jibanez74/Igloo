@@ -96,7 +96,11 @@ func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, 
 		Size:     file.Size,
 	}
 
-	tags := info.AudioTags()
+	tags := info.Format.Tags
+	streamTagged := streamTaggedContainers[file.Ext]
+	if streamTagged {
+		tags = info.AudioTags()
+	}
 	if tags.Title != "" {
 		params.Title = tags.Title
 	} else {
@@ -129,7 +133,7 @@ func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, 
 		index, total, parseErr := helpers.ParseSlashNumbers(tags.Track)
 		if parseErr == nil {
 			params.TrackIndex = index
-			extra.trackTotal = total
+			extra.trackTotal = max(total, 0)
 		} else {
 			s.logTagParse(file.Path, "track", tags.Track, parseErr)
 		}
@@ -145,7 +149,7 @@ func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, 
 		disc, total, parseErr := helpers.ParseSlashNumbers(tags.Disc)
 		if parseErr == nil {
 			params.Disc = disc
-			extra.discTotal = total
+			extra.discTotal = max(total, 0)
 		} else {
 			s.logTagParse(file.Path, "disc", tags.Disc, parseErr)
 		}

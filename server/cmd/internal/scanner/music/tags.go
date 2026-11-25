@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"igloo/cmd/internal/ffprobe"
+	"igloo/cmd/internal/scanner"
 )
 
 // trackTags are the tags a track keeps for its album's and artists' votes and
@@ -13,8 +14,10 @@ import (
 type trackTags struct {
 	// artists holds the ARTISTS values when the tag has two or more. ffprobe
 	// keeps only the first value of an ID3 or MP4 multi-value tag, so a lone
-	// value says nothing about the credits and is ignored.
+	// value says nothing about the credits and is ignored as a credit; it is
+	// kept as soleArtist, the artist the first id of such a list belongs to.
 	artists                                []string
+	soleArtist                             string
 	recordingID, releaseID, releaseGroupID string
 	// artistIDs and albumArtistIDs are in credit order, or nil when any entry
 	// is not a MusicBrainz id, since one bad entry shifts every position.
@@ -44,16 +47,49 @@ func readTrackTags(tags ffprobe.FormatTags) trackTags {
 	}
 
 	artists, gap := splitMultiValue(tags.Artists)
-	if len(artists) >= 2 {
+	listed := len(artists) >= 2
+	if listed {
 		read.artists = artists
+		// The usable names still credit the track, but an id list no longer
+		// lines up with credits that skipped a blank slot.
+		if gap {
+			read.artistIDs = nil
+		}
 	}
-	// The usable names still credit the track, but an id list no longer
-	// lines up with credits that skipped a blank slot.
-	if gap {
-		read.artistIDs = nil
+	if len(artists) == 1 {
+		read.soleArtist = artists[0]
 	}
 
 	return read
+}
+
+// pairableArtistIDs returns the tags' artist ids when they line up with the
+// track's credits by position, one each, and nil otherwise. container is the
+// track's: ffprobe joins a Vorbis comment list in full, but cuts an ID3 or
+// MP4 list to its first id, so there one id beside one credit may belong to
+// only the first of the artists that credit names.
+func pairableArtistIDs(tags trackTags, container string, credits []resolvedMusician) []string {
+	aligned := len(tags.artistIDs) == len(credits)
+	if !aligned {
+		return nil
+	}
+	cut := !vorbisCommentContainers[container]
+	lone := len(credits) == 1
+	if !cut || !lone {
+		return tags.artistIDs
+	}
+	name := credits[0].name
+	compound := len(parseCompoundArtistCredits(name).parts) >= 2
+	if compound {
+		return nil
+	}
+	// The cut ARTISTS tag's first value names the artist the first id is for,
+	// which catches join words the credit rules do not split ("A x B").
+	other := tags.soleArtist != "" && scanner.NormalizedScanCacheKey(tags.soleArtist) != scanner.NormalizedScanCacheKey(name)
+	if other {
+		return nil
+	}
+	return tags.artistIDs
 }
 
 // musicBrainzID returns the first of a tag's values when it is a MusicBrainz
@@ -111,6 +147,10 @@ func splitMultiValue(value string) ([]string, bool) {
 // vorbisCommentContainers keep their tags as Vorbis comments, whose repeated
 // values ffprobe joins in full; it cuts an ID3 or MP4 list to its first value.
 var vorbisCommentContainers = map[string]bool{"flac": true, "opus": true, "ogg": true}
+
+// streamTaggedContainers keep every tag on the audio stream: the Ogg muxer
+// writes Opus and Vorbis comments there and none on the container.
+var streamTaggedContainers = map[string]bool{"opus": true, "ogg": true}
 
 func tagIsTrue(value string) bool {
 	switch strings.ToLower(strings.TrimSpace(value)) {

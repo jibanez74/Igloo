@@ -41,14 +41,19 @@ func TestReadTrackTags(t *testing.T) {
 			want: trackTags{artists: []string{"A", "C"}},
 		},
 		{
+			name: "a blank slot beside a single ARTISTS name keeps the ids",
+			tags: ffprobe.FormatTags{Artists: "A;", MusicBrainzArtistID: a},
+			want: trackTags{soleArtist: "A", artistIDs: []string{a}},
+		},
+		{
 			name: "a trailing separator is an empty slot too",
 			tags: ffprobe.FormatTags{MusicBrainzArtistID: a + ";"},
 			want: trackTags{},
 		},
 		{
-			name: "a lone ARTISTS value is ignored",
+			name: "a lone ARTISTS value is no credit list, only the lead artist",
 			tags: ffprobe.FormatTags{Artists: "Leslie Odom, Jr."},
-			want: trackTags{},
+			want: trackTags{soleArtist: "Leslie Odom, Jr."},
 		},
 		{
 			name: "two or more ARTISTS values name the credits",
@@ -65,7 +70,7 @@ func TestReadTrackTags(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			got := readTrackTags(tc.tags)
-			same := slices.Equal(got.artists, tc.want.artists) && slices.Equal(got.artistIDs, tc.want.artistIDs) &&
+			same := slices.Equal(got.artists, tc.want.artists) && got.soleArtist == tc.want.soleArtist && slices.Equal(got.artistIDs, tc.want.artistIDs) &&
 				slices.Equal(got.albumArtistIDs, tc.want.albumArtistIDs) && got.recordingID == tc.want.recordingID &&
 				got.releaseID == tc.want.releaseID && got.releaseGroupID == tc.want.releaseGroupID &&
 				got.isrc == tc.want.isrc && got.label == tc.want.label && got.compilation == tc.want.compilation
@@ -91,5 +96,41 @@ func TestTagTotalReadsOnlyNonnegativeNumbers(t *testing.T) {
 		if got != want {
 			t.Errorf("tagTotal(%q) = %d, want %d", value, got, want)
 		}
+	}
+}
+
+func TestPairableArtistIDsDistrustsALoneIDFromACutList(t *testing.T) {
+	const a = "cc197bad-dc9c-440d-a5b5-d52ba2e14234"
+	const b = "1f9df192-a621-4f54-8850-2c5373b7eac9"
+	credit := func(names ...string) []resolvedMusician {
+		credits := make([]resolvedMusician, 0, len(names))
+		for _, name := range names {
+			credits = append(credits, resolvedMusician{name: name})
+		}
+		return credits
+	}
+	cases := []struct {
+		name      string
+		tags      trackTags
+		container string
+		credits   []resolvedMusician
+		want      []string
+	}{
+		{"one id per credit", trackTags{artistIDs: []string{a, b}}, "mp3", credit("A", "B"), []string{a, b}},
+		{"a count mismatch pairs nothing", trackTags{artistIDs: []string{a, b}}, "flac", credit("A"), nil},
+		{"a lone plain credit keeps its id", trackTags{artistIDs: []string{a}}, "m4a", credit("Adele"), []string{a}},
+		{"a cut list beside a compound credit", trackTags{artistIDs: []string{a}}, "mp3", credit("Simon & Garfunkel"), nil},
+		{"a whole Vorbis list beside a compound credit", trackTags{artistIDs: []string{a}}, "flac", credit("Simon & Garfunkel"), []string{a}},
+		{"the cut ARTISTS lead names someone else", trackTags{artistIDs: []string{a}, soleArtist: "A"}, "mp3", credit("A x B"), nil},
+		{"the cut ARTISTS lead is the credit", trackTags{artistIDs: []string{a}, soleArtist: " adele "}, "m4a", credit("Adele"), []string{a}},
+		{"a Vorbis lead naming someone else is a whole list's", trackTags{artistIDs: []string{a}, soleArtist: "A"}, "opus", credit("A x B"), []string{a}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := pairableArtistIDs(tc.tags, tc.container, tc.credits)
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("pairableArtistIDs() = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }

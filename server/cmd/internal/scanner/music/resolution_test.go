@@ -384,3 +384,31 @@ func TestResolveTrackFileTakesCreditsFromAMultiValueArtistsTag(t *testing.T) {
 		t.Fatalf("album = %+v, want the ARTIST string as the fallback album artist", resolved.album)
 	}
 }
+
+// Only Opus and Ogg read tags off the audio stream: an MP4 track's own name
+// is not a song title.
+func TestResolveTrackFileReadsStreamTagsOnlyForOggFamilyFiles(t *testing.T) {
+	app := setupMusicScanner(t)
+	trackPath := filepath.Join(t.TempDir(), "07 Untitled.m4a")
+	app.ffprobe = newMusicScannerFfprobeByPath(map[string]*ffprobe.FfprobeResult{
+		trackPath: {
+			Format: ffprobe.Format{Duration: "3.0", Tags: ffprobe.FormatTags{Disc: "1/-2", DiscTotal: "2", Track: "7/-1"}},
+			Streams: []ffprobe.Stream{{
+				CodecName: "aac", CodecType: "audio", Channels: 2,
+				Tags: ffprobe.StreamTags{Title: "Stereo", Music: ffprobe.FormatTags{Title: "Stereo"}},
+			}},
+		},
+	})
+
+	resolved, err := app.resolveTrackFile(context.Background(), newMusicScanContext(nil), scanner.ScanFile{Path: trackPath, Ext: "m4a", Size: 1}, itunes.CatalogIDs{})
+	if err != nil {
+		t.Fatalf("resolve track file: %v", err)
+	}
+	if resolved.params.Title == "Stereo" {
+		t.Fatalf("title = %q, want the file name, not the stream's own name", resolved.params.Title)
+	}
+	// A negative total after the slash is no total, so the separate key counts.
+	if resolved.tags.discTotal != 2 || resolved.tags.trackTotal != 0 {
+		t.Fatalf("disc total, track total = %d, %d, want 2, 0", resolved.tags.discTotal, resolved.tags.trackTotal)
+	}
+}
