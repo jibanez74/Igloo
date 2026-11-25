@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -488,4 +489,148 @@ func TestLocalArtCopiesIntoANewStaticDirectory(t *testing.T) {
 
 func itoa(id int64) string {
 	return strconv.FormatInt(id, 10)
+}
+
+func TestLocalArtKeepsTheCopyWhileTheFolderCannotBeRead(t *testing.T) {
+	for _, hide := range []string{"unreadable", "missing"} {
+		t.Run(hide, func(t *testing.T) {
+			f := newArtFixture(t)
+			f.track(t, "Band/Album/01.flac", "Album")
+			f.image(t, "Band/Album/cover.jpg", jpegBytes)
+			f.scan(t)
+			before := f.album(t, "Album")
+
+			folder := filepath.Join(f.musicDir, "Band", "Album")
+			if hide == "unreadable" {
+				err := os.Chmod(folder, 0)
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = os.Chmod(folder, 0o755) })
+			} else {
+				err := os.Rename(filepath.Join(f.musicDir, "Band"), filepath.Join(f.musicDir, "Elsewhere"))
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			f.s.runLookups(context.Background(), lookupRequest{full: true})
+			after := f.album(t, "Album")
+			if after != before {
+				t.Fatalf("album = %+v with its folder %s, want the copy kept: %+v", after, hide, before)
+			}
+			if f.s.Status().Lookups.Failed != 1 {
+				t.Fatalf("lookups = %+v, want the album failed", f.s.Status().Lookups)
+			}
+		})
+	}
+}
+
+func TestLocalArtCopiesAgainInAStaticDirectoryUsedBefore(t *testing.T) {
+	f := newArtFixture(t)
+	f.track(t, "Band/Album/01.flac", "Album")
+	image := f.image(t, "Band/Album/cover.jpg", jpegBytes)
+	f.scan(t)
+	first := f.staticDir
+
+	f.staticDir = t.TempDir()
+	f.s.runLookups(context.Background(), lookupRequest{full: true})
+	changed := append(append([]byte{}, jpegBytes...), []byte(" changed")...)
+	err := os.WriteFile(image, changed, 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	future := time.Now().Add(time.Minute)
+	err = os.Chtimes(image, future, future)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.s.runLookups(context.Background(), lookupRequest{full: true})
+
+	f.staticDir = first
+	f.s.runLookups(context.Background(), lookupRequest{full: true})
+	if !bytes.Equal(f.copied(t, f.album(t, "Album")), changed) {
+		t.Fatal("the old directory's stale copy was taken for current")
+	}
+}
+
+func TestLocalArtDoesNotCopyAFallbackAgainEachPass(t *testing.T) {
+	f := newArtFixture(t)
+	f.track(t, "Band/Album/01.flac", "Album", picture(1, "Cover (front)"))
+	f.image(t, "Band/Album/cover.jpg", []byte("not an image"))
+	f.scan(t)
+	f.s.runLookups(context.Background(), lookupRequest{full: true})
+	if f.pictures.callCount() != 1 {
+		t.Fatalf("extracted %d times, want once: an unchanged fallback is kept", f.pictures.callCount())
+	}
+}
+
+func TestLocalArtStopsWhenTheLibraryRootsChange(t *testing.T) {
+	f := newArtFixture(t)
+	f.track(t, "One/First/01.flac", "First", picture(1, ""))
+	f.track(t, "Two/Second/01.flac", "Second", picture(1, ""))
+	f.s.staticDir = func() string { return "" }
+	f.scan(t)
+	f.s.staticDir = func() string { return f.staticDir }
+
+	var mu sync.Mutex
+	roots := []string{f.musicDir}
+	f.s.libraryDirs = func() []string {
+		mu.Lock()
+		defer mu.Unlock()
+		return slices.Clone(roots)
+	}
+	f.pictures.hook = func() {
+		mu.Lock()
+		roots = append(roots, filepath.Join(f.staticDir, "local"))
+		mu.Unlock()
+	}
+	rest := f.s.runLookups(context.Background(), lookupRequest{full: true})
+	if !rest.full {
+		t.Fatalf("a pass stopped by new roots handed back %+v, want a full pass", rest)
+	}
+	if f.album(t, "First").coverLocal.Valid || f.album(t, "Second").coverLocal.Valid {
+		t.Fatal("a pass wrote after the library roots changed")
+	}
+}
+
+func TestLocalArtTreatsALoneDiscLikeFolderAsTheAlbum(t *testing.T) {
+	f := newArtFixture(t)
+	f.track(t, "Sabbath/Vol. 4/01.flac", "Vol. 4")
+	f.image(t, "Sabbath/Vol. 4/cover.jpg", jpegBytes)
+	f.image(t, "Sabbath/folder.jpg", pngBytes)
+	f.scan(t)
+	if !bytes.Equal(f.copied(t, f.album(t, "Vol. 4")), jpegBytes) {
+		t.Fatal("an album named like a disc took its artist folder's image")
+	}
+}
+
+func TestLocalArtSkippedStageReadsNoAlbum(t *testing.T) {
+	f := newArtFixture(t)
+	f.track(t, "Band/Album/01.flac", "Album")
+	f.s.staticDir = func() string { return "" }
+	f.scan(t)
+	status := f.s.Status().Lookups
+	if status.Total != 0 || status.Processed != 0 {
+		t.Fatalf("lookups = %+v, want no album read by a stage that cannot run", status)
+	}
+}
+
+func TestLookupsOfSomeAlbumsAddTheirFolderNeighbors(t *testing.T) {
+	f := newArtFixture(t)
+	f.track(t, "Band/Album/01.flac", "Album")
+	f.track(t, "Band/Album/02.flac", "Stray")
+	f.track(t, "Band/Other/01.flac", "Other")
+	f.track(t, "Multi/Set/CD1/01.flac", "Set")
+	f.track(t, "Multi/Set/CD2/01.flac", "Set Bonus")
+	f.scan(t)
+
+	ids, err := f.s.withNeighborAlbums(context.Background(), []int64{f.album(t, "Stray").id, f.album(t, "Set Bonus").id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []int64{f.album(t, "Album").id, f.album(t, "Stray").id, f.album(t, "Set").id, f.album(t, "Set Bonus").id}
+	slices.Sort(want)
+	if !slices.Equal(ids, want) {
+		t.Fatalf("ids = %v, want %v", ids, want)
+	}
 }

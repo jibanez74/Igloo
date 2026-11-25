@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// OverlappingLibrary reports the first of the library roots that dir is,
+// OverlappingLibrary reports a library root (the last, when several) that dir is,
 // contains or lies inside. Symlinks are resolved on both sides, since a
 // folder that links into a library is that library. A dir that cannot be
 // resolved overlaps and reports its error; a root that cannot be resolved

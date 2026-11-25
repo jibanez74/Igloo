@@ -15,18 +15,6 @@ func isDiscFolder(name string) bool {
 	return discFolderPattern.MatchString(strings.TrimSpace(name))
 }
 
-// albumFolder is the folder of an album a track at path belongs to: the
-// track's own folder, or that folder's parent when it is a disc folder, which
-// disc then names; disc is "" otherwise.
-func albumFolder(path string) (folder, disc string) {
-	dir := filepath.Dir(path)
-	isDisc := isDiscFolder(filepath.Base(dir))
-	if isDisc {
-		return filepath.Dir(dir), dir
-	}
-	return dir, ""
-}
-
 // iTunesLPExtension names the bundle folders iTunes keeps an album's
 // interactive booklet in; their .aif and .m4a files are interface sounds and
 // intros, not tracks.

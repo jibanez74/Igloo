@@ -3,6 +3,7 @@ package music
 import (
 	"cmp"
 	"context"
+	"database/sql"
 	"errors"
 	"maps"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
+	"igloo/cmd/internal/scanner"
 )
 
 // The background worker runs the slow music lookups the scan run leaves out,
@@ -215,7 +217,7 @@ func (s *Scanner) runLookups(ctx context.Context, request lookupRequest) lookupR
 	defer s.setLookups(func(status *LookupStatus) { status.Stage = nil })
 
 	done, changed, removed, err := s.localArtStage(ctx, request.full, ids)
-	if err != nil && ctx.Err() == nil && !errors.Is(err, errStaticDirChanged) {
+	if err != nil && ctx.Err() == nil && !errors.Is(err, errSettingsChanged) {
 		s.logger.Error("music album art stage failed", "error", err)
 	}
 	if changed > 0 || removed > 0 {
@@ -232,7 +234,7 @@ func (s *Scanner) runLookups(ctx context.Context, request lookupRequest) lookupR
 		s.logger.Debug("music album art pass finished", summary...)
 	}
 
-	stopped := ctx.Err() != nil || errors.Is(err, errStaticDirChanged)
+	stopped := ctx.Err() != nil || errors.Is(err, errSettingsChanged)
 	if !stopped {
 		return lookupRequest{}
 	}
@@ -245,8 +247,7 @@ func (s *Scanner) runLookups(ctx context.Context, request lookupRequest) lookupR
 // lookupAlbums lists the albums a pass reads, by id.
 func (s *Scanner) lookupAlbums(ctx context.Context, request lookupRequest) ([]int64, error) {
 	if !request.full {
-		ids := slices.Sorted(maps.Keys(request.albums))
-		return ids, nil
+		return s.withNeighborAlbums(ctx, slices.Sorted(maps.Keys(request.albums)))
 	}
 	var ids []int64
 	var afterID int64
@@ -263,23 +264,69 @@ func (s *Scanner) lookupAlbums(ctx context.Context, request lookupRequest) ([]in
 	}
 }
 
+// withNeighborAlbums adds to ids the albums whose tracks share a folder, or
+// the parent of a disc folder, with theirs: a track that joins or leaves a
+// folder changes whether the folder's image is another album's.
+func (s *Scanner) withNeighborAlbums(ctx context.Context, ids []int64) ([]int64, error) {
+	folders := make(map[string]bool)
+	for _, id := range ids {
+		tracks, err := s.queries.ListMusicAlbumArtTracks(ctx, sql.NullInt64{Int64: id, Valid: true})
+		if err != nil {
+			return nil, err
+		}
+		for _, track := range tracks {
+			dir := filepath.Dir(track.FilePath)
+			folders[dir] = true
+			if isDiscFolder(filepath.Base(dir)) {
+				folders[filepath.Dir(dir)] = true
+			}
+		}
+	}
+	all := slices.Clone(ids)
+	for folder := range folders {
+		lower, upper := scanner.ChildBounds(folder)
+		rows, err := s.queries.ListMusicTrackAlbumsUnder(ctx, database.ListMusicTrackAlbumsUnderParams{Lower: lower, Upper: upper})
+		if err != nil {
+			return nil, err
+		}
+		for _, row := range rows {
+			if row.AlbumID.Valid && isNearTrack(folder, row.FilePath) {
+				all = append(all, row.AlbumID.Int64)
+			}
+		}
+	}
+	slices.Sort(all)
+	return slices.Compact(all), nil
+}
+
 // localArtStage gives each album in ids the art of its own, then, after a
 // full pass, removes the folders no album points at. It reports how many
 // albums it got through, how many changed and how many folders it removed.
 // The static directory must exist and must not overlap a library: the stage
 // never writes into one.
 func (s *Scanner) localArtStage(ctx context.Context, full bool, ids []int64) (int, int, int, error) {
+	// A stage that cannot run reads no album, so its line shows none.
+	skip := func() (int, int, int, error) {
+		s.setLookups(func(status *LookupStatus) { status.Total = 0 })
+		return len(ids), 0, 0, nil
+	}
 	staticDir := s.staticDir()
 	if staticDir == "" {
-		return len(ids), 0, 0, nil
+		return skip()
 	}
-	library, overlaps := helpers.OverlappingLibrary(filepath.Join(staticDir, "local"), s.libraryDirs())
+	roots := s.libraryDirs()
+	library, overlaps := helpers.OverlappingLibrary(filepath.Join(staticDir, "local"), roots)
 	if overlaps {
 		s.logger.Error("not copying album art into a folder that overlaps a media library; choose another static directory", "folder", filepath.Join(staticDir, "local"), "library", library)
-		return len(ids), 0, 0, nil
+		return skip()
 	}
 
-	art := &localArt{staticDir: staticDir, owners: make(map[string]int64)}
+	art := &localArt{
+		staticDir: staticDir,
+		roots:     roots,
+		current:   func() bool { return s.staticDir() == staticDir && slices.Equal(s.libraryDirs(), roots) },
+		owners:    make(map[string]int64),
+	}
 	changed, sinceRequest := 0, 0
 	lastRequest := s.now()
 	for i, id := range ids {
@@ -287,17 +334,19 @@ func (s *Scanner) localArtStage(ctx context.Context, full bool, ids []int64) (in
 			return i, changed, 0, ctx.Err()
 		}
 		outcome, albumChanged, err := s.syncAlbumArt(ctx, art, id)
-		if ctx.Err() != nil || errors.Is(err, errStaticDirChanged) {
+		// A change that committed counts even when the pass stops right
+		// after it: the next pass finds the album unchanged.
+		if albumChanged {
+			changed++
+			sinceRequest++
+			s.noteLookupChange()
+		}
+		if ctx.Err() != nil || errors.Is(err, errSettingsChanged) {
 			return i, changed, 0, cmp.Or(ctx.Err(), err)
 		}
 		if err != nil {
 			s.logger.Warn("failed to read the album's own art", "album_id", id, "error", err)
 			outcome = artFailed
-		}
-		if albumChanged {
-			changed++
-			sinceRequest++
-			s.noteLookupChange()
 		}
 		s.setLookups(func(status *LookupStatus) {
 			status.Processed++

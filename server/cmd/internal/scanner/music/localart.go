@@ -103,15 +103,29 @@ type artSource struct {
 	fingerprint string
 }
 
-// errStaticDirChanged stops a pass whose static directory changed under it;
-// the settings save that changed it requests another.
-var errStaticDirChanged = errors.New("static_dir changed during the pass")
+// errSettingsChanged stops a pass whose static directory or library roots
+// changed under it: its overlap check no longer holds. The next pass, which
+// takes the albums it did not reach, checks again.
+var errSettingsChanged = errors.New("static_dir or library roots changed during the pass")
 
 // localArt is one pass's local-art context.
 type localArt struct {
 	staticDir string
+	// roots are the library roots the pass checked the static directory
+	// against.
+	roots []string
+	// current reports whether the settings still match staticDir and roots.
+	current func() bool
 	// owners caches each folder's verdict for the album that asked.
 	owners map[string]int64
+}
+
+// check stops a write or removal once the settings the pass checked changed.
+func (art *localArt) check() error {
+	if !art.current() {
+		return errSettingsChanged
+	}
+	return nil
 }
 
 // syncAlbumArt points an album's cover_local at a copy of its own art: the
@@ -125,6 +139,8 @@ func (s *Scanner) syncAlbumArt(ctx context.Context, art *localArt, albumID int64
 	if err != nil {
 		return artFailed, false, err
 	}
+	// A folder that cannot be read, such as one on a library that is not
+	// mounted, says nothing about the album's art: the copy stays.
 	sources, err := s.albumArtSources(ctx, art, albumID)
 	if err != nil {
 		return artFailed, false, err
@@ -134,35 +150,48 @@ func (s *Scanner) syncAlbumArt(ctx context.Context, art *localArt, albumID int64
 		return artNone, changed, err
 	}
 
-	isUnchanged := current.CoverLocal.Valid && current.LocalCoverFingerprint.Valid &&
-		current.LocalCoverFingerprint.String == sources[0].fingerprint && localCoverExists(art.staticDir, current.CoverLocal.String)
-	if isUnchanged {
-		return artFound, false, nil
+	// The fingerprint covers every source up to the one copied, so a copy
+	// made from a fallback is kept while the better sources before it stay
+	// as they were, and the static directory, so a directory used before
+	// holds no copy taken for current.
+	hasCopy := current.CoverLocal.Valid && current.LocalCoverFingerprint.Valid && localCoverExists(art.staticDir, current.CoverLocal.String)
+	for i := range sources {
+		isUnchanged := hasCopy && current.LocalCoverFingerprint.String == sourcesFingerprint(art.staticDir, sources[:i+1])
+		if isUnchanged {
+			return artFound, false, nil
+		}
 	}
 
 	var copyErr error
 	embeddedAttempts := 0
-	for _, source := range sources {
+	for i, source := range sources {
 		if source.embedded {
 			if s.pictures == nil || embeddedAttempts == maxEmbeddedAttempts {
 				continue
 			}
 			embeddedAttempts++
 		}
-		url, err := s.copyAlbumArt(ctx, art, albumID, source)
+		copied, err := s.copyAlbumArt(ctx, art, albumID, source)
 		if ctx.Err() != nil {
 			return artFailed, false, ctx.Err()
+		}
+		if errors.Is(err, errSettingsChanged) {
+			return artFailed, false, err
 		}
 		if err != nil {
 			s.logger.Debug("failed to copy album art", "album_id", albumID, "source", source.path, "error", err)
 			copyErr = errors.Join(copyErr, err)
 			continue
 		}
-		changed, err := s.saveAlbumArt(ctx, art, albumID, sql.NullString{String: url, Valid: true}, helpers.NullString(source.fingerprint))
+		fingerprint := sourcesFingerprint(art.staticDir, sources[:i+1])
+		changed, err := s.saveAlbumArt(ctx, art, albumID, sql.NullString{String: copied.url, Valid: true}, helpers.NullString(fingerprint))
 		if err != nil {
 			return artFailed, false, err
 		}
-		return artFound, changed || current.CoverLocal.String != url, nil
+		// Only once the column points at the new copy does an earlier one of
+		// another type go: until then it is what the album shows.
+		removeOtherFiles(copied.dir, copied.name)
+		return artFound, changed, nil
 	}
 	if copyErr != nil {
 		s.logger.Warn("failed to copy the album's own art", "album_id", albumID, "error", copyErr)
@@ -181,8 +210,9 @@ func (s *Scanner) albumArtSources(ctx context.Context, art *localArt, albumID in
 	// them comes first.
 	counts := make(map[string]int)
 	discs := make(map[string][]string)
+	discParents := discFoldersOf(tracks)
 	for _, track := range tracks {
-		folder, disc := albumFolder(track.FilePath)
+		folder, disc := albumFolder(track.FilePath, discParents)
 		counts[folder]++
 		if disc != "" && !slices.Contains(discs[folder], disc) {
 			discs[folder] = append(discs[folder], disc)
@@ -203,7 +233,11 @@ func (s *Scanner) albumArtSources(ctx context.Context, art *localArt, albumID in
 			return nil, err
 		}
 		if owned {
-			sources = append(sources, folderImages(folder)...)
+			images, err := folderImages(folder)
+			if err != nil {
+				return nil, err
+			}
+			sources = append(sources, images...)
 		}
 		discFolders := discs[folder]
 		slices.Sort(discFolders)
@@ -213,7 +247,11 @@ func (s *Scanner) albumArtSources(ctx context.Context, art *localArt, albumID in
 				return nil, err
 			}
 			if owned {
-				sources = append(sources, folderImages(disc)...)
+				images, err := folderImages(disc)
+				if err != nil {
+					return nil, err
+				}
+				sources = append(sources, images...)
 			}
 		}
 	}
@@ -247,13 +285,7 @@ func (art *localArt) ownsFolder(ctx context.Context, q *database.Queries, albumI
 	// -1 marks a folder no single album owns.
 	owner = 0
 	for _, row := range rows {
-		rel, err := filepath.Rel(folder, row.FilePath)
-		if err != nil {
-			continue
-		}
-		dir := filepath.Dir(rel)
-		isNear := dir == "." || (!strings.Contains(dir, string(filepath.Separator)) && isDiscFolder(dir))
-		if !isNear {
+		if !isNearTrack(folder, row.FilePath) {
 			continue
 		}
 		trackOwner := int64(-1)
@@ -271,12 +303,55 @@ func (art *localArt) ownsFolder(ctx context.Context, q *database.Queries, albumI
 	return owner == albumID, nil
 }
 
+// discFoldersOf maps each folder holding the tracks' disc folders to how
+// many of them it holds.
+func discFoldersOf(tracks []database.ListMusicAlbumArtTracksRow) map[string]int {
+	seen := make(map[string]bool)
+	parents := make(map[string]int)
+	for _, track := range tracks {
+		dir := filepath.Dir(track.FilePath)
+		if seen[dir] || !isDiscFolder(filepath.Base(dir)) {
+			continue
+		}
+		seen[dir] = true
+		parents[filepath.Dir(dir)]++
+	}
+	return parents
+}
+
+// albumFolder is the folder of the album a track at path belongs to: the
+// track's own folder, or its parent when the track is in a disc folder and
+// the album keeps two or more disc folders there; disc then names the
+// track's. A lone disc-like folder, such as an album named "Vol. 4" in its
+// artist's folder, is the album's own folder.
+func albumFolder(path string, discParents map[string]int) (folder, disc string) {
+	dir := filepath.Dir(path)
+	parent := filepath.Dir(dir)
+	isDisc := isDiscFolder(filepath.Base(dir)) && discParents[parent] >= 2
+	if isDisc {
+		return parent, dir
+	}
+	return dir, ""
+}
+
+// isNearTrack reports whether the track at path lies directly in folder or in
+// a disc folder directly beneath it.
+func isNearTrack(folder, path string) bool {
+	rel, err := filepath.Rel(folder, path)
+	if err != nil {
+		return false
+	}
+	dir := filepath.Dir(rel)
+	return dir == "." || (!strings.Contains(dir, string(filepath.Separator)) && isDiscFolder(dir))
+}
+
 // folderImages lists the cover images in folder, best first. A symlink is
-// followed, as the library's tracks are.
-func folderImages(folder string) []artSource {
+// followed, as the library's tracks are. A folder that cannot be read, or an
+// image in it that cannot be looked at, is an error rather than no art.
+func folderImages(folder string) ([]artSource, error) {
 	entries, err := os.ReadDir(folder)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	type ranked struct {
 		source artSource
@@ -293,7 +368,13 @@ func folderImages(folder string) []artSource {
 		}
 		path := filepath.Join(folder, entry.Name())
 		info, err := os.Stat(path)
-		if err != nil || !info.Mode().IsRegular() {
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		if !info.Mode().IsRegular() {
 			continue
 		}
 		fingerprint := "file:" + path + ":" + strconv.FormatInt(info.Size(), 10) + ":" + strconv.FormatInt(info.ModTime().UnixNano(), 10)
@@ -304,49 +385,79 @@ func folderImages(folder string) []artSource {
 	for _, f := range found {
 		sources = append(sources, f.source)
 	}
-	return sources
+	return sources, nil
 }
 
-// copyAlbumArt copies source into the album's folder and returns the URL of
-// the copy, versioned by a hash of its bytes. Any other file in the folder is
-// an earlier copy and is removed.
-func (s *Scanner) copyAlbumArt(ctx context.Context, art *localArt, albumID int64, source artSource) (string, error) {
+// sourcesFingerprint names the sources a copy in staticDir was chosen from,
+// the last of them copied.
+func sourcesFingerprint(staticDir string, sources []artSource) string {
+	digest := sha256.New()
+	io.WriteString(digest, staticDir)
+	for _, source := range sources {
+		io.WriteString(digest, "\x00"+source.fingerprint)
+	}
+	return hex.EncodeToString(digest.Sum(nil))
+}
+
+// localCopy is a copy of an album's art: its folder, file name and URL.
+type localCopy struct {
+	dir, name, url string
+}
+
+// copyAlbumArt copies source into the album's folder, versioned by a hash of
+// its bytes. An earlier copy of another type stays until the column points
+// at this one.
+func (s *Scanner) copyAlbumArt(ctx context.Context, art *localArt, albumID int64, source artSource) (localCopy, error) {
 	rel := filepath.Join(localCoverDir, strconv.FormatInt(albumID, 10))
 	dir := filepath.Join(art.staticDir, rel)
-	err := checkLocalCoverDir(art.staticDir, rel)
+	err := art.check()
 	if err != nil {
-		return "", err
+		return localCopy{}, err
+	}
+	err = checkLocalCoverDir(art.staticDir, rel)
+	if err != nil {
+		return localCopy{}, err
 	}
 	_, err = helpers.GetOrCreateDir(dir)
 	if err != nil {
-		return "", err
+		return localCopy{}, err
 	}
 
 	path := source.path
 	if source.embedded {
-		extracted := filepath.Join(dir, helpers.TEMP_FILE_PREFIX+"embedded")
+		// A name of its own, created here, so nothing already at a known
+		// name is written through.
+		temp, err := os.CreateTemp(dir, helpers.TEMP_FILE_PREFIX+"embedded-*")
+		if err != nil {
+			return localCopy{}, err
+		}
+		extracted := temp.Name()
 		defer os.Remove(extracted)
+		err = temp.Close()
+		if err != nil {
+			return localCopy{}, err
+		}
 		err = s.pictures.ExtractAttachedPicture(ctx, source.path, source.stream, extracted)
 		if err != nil {
-			return "", err
+			return localCopy{}, err
 		}
 		path = extracted
 	}
 
 	file, err := os.Open(path)
 	if err != nil {
-		return "", err
+		return localCopy{}, err
 	}
 	defer file.Close()
 	digest := sha256.New()
 	saved, err := helpers.SaveImage(dir, localCoverStem, io.TeeReader(file, digest), maxLocalCoverSize)
 	if err != nil {
-		return "", fmt.Errorf("copy %s: %w", filepath.Base(source.path), err)
+		return localCopy{}, fmt.Errorf("copy %s: %w", filepath.Base(source.path), err)
 	}
-	removeOtherFiles(dir, filepath.Base(saved))
 
-	name := filepath.ToSlash(filepath.Join(rel, filepath.Base(saved)))
-	return helpers.STATIC_URL_PREFIX + name + "?v=" + shortHash(digest), nil
+	name := filepath.Base(saved)
+	url := helpers.STATIC_URL_PREFIX + filepath.ToSlash(filepath.Join(rel, name)) + "?v=" + shortHash(digest)
+	return localCopy{dir: dir, name: name, url: url}, nil
 }
 
 // saveAlbumArt points cover_local at value and records the fingerprint of
@@ -355,9 +466,9 @@ func (s *Scanner) copyAlbumArt(ctx context.Context, art *localArt, albumID int64
 func (s *Scanner) saveAlbumArt(ctx context.Context, art *localArt, albumID int64, value, fingerprint sql.NullString) (bool, error) {
 	changed := false
 	err := s.tx.Run(ctx, func(q *database.Queries) error {
-		isCurrent := s.staticDir() == art.staticDir
-		if !isCurrent {
-			return errStaticDirChanged
+		err := art.check()
+		if err != nil {
+			return err
 		}
 		n, err := q.SetMusicAlbumLocalCover(ctx, database.SetMusicAlbumLocalCoverParams{ID: albumID, CoverLocal: value})
 		if err != nil {
@@ -381,7 +492,7 @@ func (s *Scanner) clearAlbumArt(ctx context.Context, art *localArt, albumID int6
 		return false, err
 	}
 	rel := filepath.Join(localCoverDir, strconv.FormatInt(albumID, 10))
-	if checkLocalCoverDir(art.staticDir, rel) == nil {
+	if art.check() == nil && checkLocalCoverDir(art.staticDir, rel) == nil {
 		_ = os.RemoveAll(filepath.Join(art.staticDir, rel))
 	}
 	return changed, nil
@@ -419,6 +530,10 @@ func (s *Scanner) pruneLocalCovers(ctx context.Context, art *localArt) (int, err
 		isAlbumFolder := entry.IsDir() && strings.Trim(name, "0123456789") == "" && name != ""
 		if !isAlbumFolder || kept[name] {
 			continue
+		}
+		err = art.check()
+		if err != nil {
+			return removed, err
 		}
 		err = os.RemoveAll(filepath.Join(art.staticDir, localCoverDir, name))
 		if err != nil {
