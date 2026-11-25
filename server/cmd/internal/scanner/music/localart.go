@@ -30,7 +30,7 @@ type PictureExtractor interface {
 }
 
 // localCoverDir is where, under the static directory, an album's own art is
-// copied: local/albums/<album id>/cover<ext>. The artwork syncer manages
+// copied: local/albums/<album id>/cover-<hash><ext>. The artwork syncer manages
 // other folders, so turning download_images off never touches these.
 var localCoverDir = filepath.Join("local", "albums")
 
@@ -89,8 +89,8 @@ const (
 	artNone artOutcome = iota
 	// artFound: the album shows its own art, copied now or before.
 	artFound
-	// artFailed: art was found but none of it could be copied; a cover
-	// copied before stays.
+	// artFailed: the album's art could not be read or copied; a cover
+	// copied before stays while its file is still in the static directory.
 	artFailed
 )
 
@@ -193,9 +193,12 @@ func (s *Scanner) syncAlbumArt(ctx context.Context, art *localArt, albumID int64
 		if err != nil {
 			return artFailed, false, err
 		}
-		// Only once the column points at the new copy does an earlier one of
-		// another type go: until then it is what the album shows.
-		removeOtherFiles(copied.dir, copied.name)
+		// Only once the column points at the new copy do the earlier ones
+		// go: until then one is what the album shows. The folder must still
+		// be the static directory's, not a library's.
+		if art.check() == nil {
+			removeOtherFiles(copied.dir, copied.name)
+		}
 		return artFound, changed, nil
 	}
 	if copyErr != nil {
@@ -211,7 +214,7 @@ func (s *Scanner) syncAlbumArt(ctx context.Context, art *localArt, albumID int64
 // nothing would hide the provider cover. The next pass that reads the
 // folder copies the art again.
 func (s *Scanner) dropMissingCopy(ctx context.Context, art *localArt, albumID int64, current database.GetMusicAlbumLocalCoverRow) bool {
-	isMissing := current.CoverLocal.Valid && !localCoverExists(art.staticDir, current.CoverLocal.String)
+	isMissing := current.CoverLocal.Valid && localCoverMissing(art.staticDir, current.CoverLocal.String)
 	if !isMissing {
 		return false
 	}
@@ -405,7 +408,9 @@ func folderImages(folder string) (sources []artSource, skipped, err error) {
 		if !info.Mode().IsRegular() {
 			continue
 		}
-		fingerprint := "file:" + path + ":" + strconv.FormatInt(info.Size(), 10) + ":" + strconv.FormatInt(info.ModTime().UnixNano(), 10)
+		// The mode counts too: an image that could not be opened is copied
+		// once its permissions let it be.
+		fingerprint := "file:" + path + ":" + strconv.FormatInt(info.Size(), 10) + ":" + strconv.FormatInt(info.ModTime().UnixNano(), 10) + ":" + info.Mode().String()
 		found = append(found, ranked{source: artSource{path: path, fingerprint: fingerprint}, rank: nameRank*len(coverExtensions) + extRank})
 	}
 	slices.SortStableFunc(found, func(a, b ranked) int { return cmp.Compare(a.rank, b.rank) })
@@ -433,8 +438,7 @@ type localCopy struct {
 }
 
 // copyAlbumArt copies source into the album's folder, versioned by a hash of
-// its bytes. An earlier copy of another type stays until the column points
-// at this one.
+// its bytes. Earlier copies stay until the column points at this one.
 func (s *Scanner) copyAlbumArt(ctx context.Context, art *localArt, albumID int64, source artSource) (localCopy, error) {
 	rel := filepath.Join(localCoverDir, strconv.FormatInt(albumID, 10))
 	dir := filepath.Join(art.staticDir, rel)
@@ -519,6 +523,7 @@ func readCapped(path string, limit int64) ([]byte, error) {
 func (s *Scanner) saveAlbumArt(ctx context.Context, art *localArt, albumID int64, value, fingerprint sql.NullString) (bool, error) {
 	changed := false
 	err := s.tx.Run(ctx, func(q *database.Queries) error {
+		changed = false
 		err := art.check()
 		if err != nil {
 			return err
@@ -530,7 +535,11 @@ func (s *Scanner) saveAlbumArt(ctx context.Context, art *localArt, albumID int64
 		changed = n > 0
 		return q.SaveMusicAlbumLocalCoverFingerprint(ctx, database.SaveMusicAlbumLocalCoverFingerprintParams{AlbumID: albumID, Fingerprint: fingerprint})
 	}, nil)
-	return changed, err
+	if err != nil {
+		// Nothing committed.
+		return false, err
+	}
+	return changed, nil
 }
 
 // clearAlbumArt drops the copy of an album that no longer has art of its
@@ -638,8 +647,24 @@ func localCoverExists(staticDir, value string) bool {
 	return err == nil && info.Mode().IsRegular()
 }
 
-// removeOtherFiles removes every file in dir except keep: an earlier copy of
-// another type, or the temporary file of an interrupted one.
+// localCoverMissing reports whether the copy a cover_local URL names is known
+// to be gone: absent, or not a regular file. A static directory that cannot
+// be read right now says nothing.
+func localCoverMissing(staticDir, value string) bool {
+	rest, isLocal := strings.CutPrefix(value, helpers.STATIC_URL_PREFIX)
+	if !isLocal {
+		return true
+	}
+	rel, _, _ := strings.Cut(rest, "?v=")
+	info, err := os.Lstat(filepath.Join(staticDir, filepath.FromSlash(rel)))
+	if errors.Is(err, fs.ErrNotExist) {
+		return true
+	}
+	return err == nil && !info.Mode().IsRegular()
+}
+
+// removeOtherFiles removes every file in dir except keep: earlier copies, or
+// the temporary file of an interrupted one.
 func removeOtherFiles(dir, keep string) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {

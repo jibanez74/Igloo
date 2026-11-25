@@ -198,8 +198,11 @@ INSERT OR IGNORE INTO music_credit_ids(track_id,musician_id,musicbrainz_id)
 SELECT track_id,sqlc.arg(owner),musicbrainz_id FROM music_credit_ids WHERE music_credit_ids.musician_id=sqlc.arg(redundant);
 
 -- name: MoveMusicAlbumFallback :exec
-INSERT OR IGNORE INTO music_album_metadata(album_id,spotify_date)
-SELECT sqlc.arg(owner),spotify_date FROM music_album_metadata WHERE music_album_metadata.album_id=sqlc.arg(redundant);
+-- The owner's own date wins; a row it holds only for its local cover still
+-- takes the redundant album's.
+INSERT INTO music_album_metadata(album_id,spotify_date)
+SELECT sqlc.arg(owner),spotify_date FROM music_album_metadata WHERE music_album_metadata.album_id=sqlc.arg(redundant)
+ON CONFLICT(album_id) DO UPDATE SET spotify_date=COALESCE(music_album_metadata.spotify_date, excluded.spotify_date);
 
 -- name: MusicArtistTrackMetadata :many
 -- The range and order ride idx_track_musicians_musician_track, so keep them on tm.

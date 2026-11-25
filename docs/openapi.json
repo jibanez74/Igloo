@@ -17910,7 +17910,7 @@
           "failed": {
             "type": "integer",
             "minimum": 0,
-            "description": "Albums whose art could not be read or copied; a cover copied earlier stays."
+            "description": "Albums whose art could not be read or copied; a cover copied earlier stays while its file is still in the static directory, and the provider cover shows otherwise."
           },
           "unmatched": {
             "type": "integer",

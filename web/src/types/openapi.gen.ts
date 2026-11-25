@@ -5164,7 +5164,7 @@ export interface components {
             total: number;
             /** @description Albums that show art of their own. */
             matched: number;
-            /** @description Albums whose art could not be read or copied; a cover copied earlier stays. */
+            /** @description Albums whose art could not be read or copied; a cover copied earlier stays while its file is still in the static directory, and the provider cover shows otherwise. */
             failed: number;
             /** @description Albums with no art of their own. */
             unmatched: number;

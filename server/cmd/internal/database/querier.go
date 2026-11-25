@@ -680,6 +680,8 @@ type Querier interface {
 	// edits included. SET reads the row as it was, so file_name is the old name.
 	MoveMovieFile(ctx context.Context, arg MoveMovieFileParams) (int64, error)
 	MoveMusicAlbumAliases(ctx context.Context, arg MoveMusicAlbumAliasesParams) error
+	// The owner's own date wins; a row it holds only for its local cover still
+	// takes the redundant album's.
 	MoveMusicAlbumFallback(ctx context.Context, arg MoveMusicAlbumFallbackParams) error
 	MoveMusicAlbumGenres(ctx context.Context, arg MoveMusicAlbumGenresParams) error
 	MoveMusicAlbumTracks(ctx context.Context, arg MoveMusicAlbumTracksParams) error

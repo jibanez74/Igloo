@@ -726,3 +726,85 @@ func TestLocalArtShowsTheProviderCoverWhenTheCopyIsGoneAndTheFolderUnreadable(t 
 		t.Fatal("the copy was not made again once the folder could be read")
 	}
 }
+
+// A merged-away album's Spotify date moves to its owner even when the owner
+// holds a metadata row for its local cover alone.
+func TestAlbumMergeKeepsTheFallbackDateBesideALocalCover(t *testing.T) {
+	s := setupMusicScanner(t)
+	ctx := context.Background()
+	db := s.tx.DB
+	for _, query := range []string{
+		`INSERT INTO albums (id, title, sort_title) VALUES (1, 'Owner', 'owner'), (2, 'Redundant', 'redundant'), (3, 'Dated', 'dated')`,
+		`INSERT INTO music_album_metadata (album_id, local_cover_fingerprint) VALUES (1, 'abc')`,
+		`INSERT INTO music_album_metadata (album_id, spotify_date, local_cover_fingerprint) VALUES (2, '2001-02-03', NULL), (3, '1999-01-01', 'def')`,
+	} {
+		_, err := db.Exec(query)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	err := s.queries.MoveMusicAlbumFallback(ctx, database.MoveMusicAlbumFallbackParams{Owner: 1, Redundant: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = s.queries.MoveMusicAlbumFallback(ctx, database.MoveMusicAlbumFallbackParams{Owner: 3, Redundant: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var owner, dated, ownerFingerprint string
+	err = db.QueryRow(`SELECT spotify_date, local_cover_fingerprint FROM music_album_metadata WHERE album_id = 1`).Scan(&owner, &ownerFingerprint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = db.QueryRow(`SELECT spotify_date FROM music_album_metadata WHERE album_id = 3`).Scan(&dated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if owner != "2001-02-03" || ownerFingerprint != "abc" || dated != "1999-01-01" {
+		t.Fatalf("owner date %q fingerprint %q, dated owner %q; want the moved date, the fingerprint kept, the own date kept", owner, ownerFingerprint, dated)
+	}
+}
+
+func TestLocalArtCopiesAnImageOnceItCanBeOpened(t *testing.T) {
+	f := newArtFixture(t)
+	f.track(t, "Band/Album/01.flac", "Album", picture(1, ""))
+	image := f.image(t, "Band/Album/cover.jpg", jpegBytes)
+	err := os.Chmod(image, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.scan(t)
+	if !bytes.Equal(f.copied(t, f.album(t, "Album")), pngBytes) {
+		t.Fatal("an image that cannot be opened did not give way to the embedded picture")
+	}
+	err = os.Chmod(image, 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.s.runLookups(context.Background(), lookupRequest{full: true})
+	if !bytes.Equal(f.copied(t, f.album(t, "Album")), jpegBytes) {
+		t.Fatal("the image was not copied once it could be opened")
+	}
+}
+
+func TestLocalArtKeepsTheCopyWhileTheStaticDirectoryCannotBeRead(t *testing.T) {
+	f := newArtFixture(t)
+	f.track(t, "Band/Album/01.flac", "Album")
+	f.image(t, "Band/Album/cover.jpg", jpegBytes)
+	f.scan(t)
+	before := f.album(t, "Album")
+
+	folder := filepath.Join(f.musicDir, "Band", "Album")
+	copies := filepath.Join(f.staticDir, "local", "albums", itoa(before.id))
+	for _, dir := range []string{folder, copies} {
+		err := os.Chmod(dir, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+	}
+	f.s.runLookups(context.Background(), lookupRequest{full: true})
+	if after := f.album(t, "Album"); after != before {
+		t.Fatalf("album = %+v, want the copy kept while neither side can be read: %+v", after, before)
+	}
+}

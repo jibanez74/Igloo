@@ -413,8 +413,9 @@ func (q *Queries) MoveMusicAlbumAliases(ctx context.Context, arg MoveMusicAlbumA
 }
 
 const moveMusicAlbumFallback = `-- name: MoveMusicAlbumFallback :exec
-INSERT OR IGNORE INTO music_album_metadata(album_id,spotify_date)
+INSERT INTO music_album_metadata(album_id,spotify_date)
 SELECT ?1,spotify_date FROM music_album_metadata WHERE music_album_metadata.album_id=?2
+ON CONFLICT(album_id) DO UPDATE SET spotify_date=COALESCE(music_album_metadata.spotify_date, excluded.spotify_date)
 `
 
 type MoveMusicAlbumFallbackParams struct {
@@ -422,6 +423,8 @@ type MoveMusicAlbumFallbackParams struct {
 	Redundant int64 `json:"redundant"`
 }
 
+// The owner's own date wins; a row it holds only for its local cover still
+// takes the redundant album's.
 func (q *Queries) MoveMusicAlbumFallback(ctx context.Context, arg MoveMusicAlbumFallbackParams) error {
 	_, err := q.exec(ctx, q.moveMusicAlbumFallbackStmt, moveMusicAlbumFallback, arg.Owner, arg.Redundant)
 	return err
