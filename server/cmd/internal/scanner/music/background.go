@@ -345,7 +345,9 @@ func (s *Scanner) localArtStage(ctx context.Context, full bool, ids []int64) (in
 			return i, changed, 0, cmp.Or(ctx.Err(), err)
 		}
 		if err != nil {
-			s.logger.Warn("failed to read the album's own art", "album_id", id, "error", err)
+			// A library that is not mounted fails every album; the pass
+			// summary reports how many.
+			s.logger.Debug("failed to read the album's own art", "album_id", id, "error", err)
 			outcome = artFailed
 		}
 		s.setLookups(func(status *LookupStatus) {

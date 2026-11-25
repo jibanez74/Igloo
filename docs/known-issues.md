@@ -75,8 +75,9 @@ Picard-tagged MP3 whose `ARTISTS` holds two names.
 The library watcher reacts only to audio files, so adding, replacing or deleting a `cover.jpg` (or
 any folder image the music worker reads) without touching a track changes nothing until the next
 library scan, whose background pass reads every album again. Runs of changes also read only the
-albums of the tracks they touched, so a deleted track whose embedded picture was its album's cover
-leaves that copy in place until then. Decided on 2026-11-25 for the phase 2 music scanner work
+albums of the tracks they touched and of their folders' other tracks, as those folders are now: a
+deleted track whose embedded picture was its album's cover leaves that copy in place until then, and
+a track moved out of a folder it shared does not hand the folder's image to the album left there. Decided on 2026-11-25 for the phase 2 music scanner work
 (`server/cmd/internal/scanner/music/localart.go`); reproduce by dropping a `cover.jpg` into a
 scanned album folder with the watcher on. Options: let the watcher pass image files of a music
 library through to a run of changes that reads only the album art stage, or a per-album Refresh

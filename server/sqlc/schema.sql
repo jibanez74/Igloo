@@ -374,9 +374,9 @@ CREATE TABLE IF NOT EXISTS music_credit_ids (
 CREATE INDEX IF NOT EXISTS music_credit_ids_votes ON music_credit_ids (musician_id, musicbrainz_id);
 
 -- Spotify dates are a fallback when no valid local track date remains.
--- local_cover_fingerprint names the file or embedded picture albums.cover_local
--- was copied from, with its size and modification time, so an unchanged one
--- is not copied again.
+-- local_cover_fingerprint hashes the static directory albums.cover_local's
+-- copy is in and every source up to the one it was copied from (path, size,
+-- modification time), so an unchanged choice is not copied again.
 CREATE TABLE IF NOT EXISTS music_album_metadata (
   album_id INTEGER PRIMARY KEY REFERENCES albums (id) ON DELETE CASCADE,
   spotify_date TEXT,

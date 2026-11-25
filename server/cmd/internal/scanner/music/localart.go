@@ -1,6 +1,7 @@
 package music
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"crypto/sha256"
@@ -8,7 +9,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"hash"
 	"io"
 	"io/fs"
 	"os"
@@ -34,8 +34,8 @@ type PictureExtractor interface {
 // other folders, so turning download_images off never touches these.
 var localCoverDir = filepath.Join("local", "albums")
 
-// localCoverStem names the copy; its extension follows the type its bytes
-// sniff as.
+// localCoverStem starts the copy's name, cover-<hash of its bytes>; its
+// extension follows the type its bytes sniff as.
 const localCoverStem = "cover"
 
 // maxLocalCoverSize bounds a copy: scans and booklets can be large, but not
@@ -141,9 +141,14 @@ func (s *Scanner) syncAlbumArt(ctx context.Context, art *localArt, albumID int64
 	}
 	// A folder that cannot be read, such as one on a library that is not
 	// mounted, says nothing about the album's art: the copy stays.
-	sources, err := s.albumArtSources(ctx, art, albumID)
+	sources, unreadable, err := s.albumArtSources(ctx, art, albumID)
 	if err != nil {
-		return artFailed, false, err
+		changed := s.dropMissingCopy(ctx, art, albumID, current)
+		return artFailed, changed, err
+	}
+	if len(sources) == 0 && unreadable != nil {
+		changed := s.dropMissingCopy(ctx, art, albumID, current)
+		return artFailed, changed, unreadable
 	}
 	if len(sources) == 0 {
 		changed, err := s.clearAlbumArt(ctx, art, albumID, current)
@@ -194,16 +199,36 @@ func (s *Scanner) syncAlbumArt(ctx context.Context, art *localArt, albumID int64
 		return artFound, changed, nil
 	}
 	if copyErr != nil {
-		s.logger.Warn("failed to copy the album's own art", "album_id", albumID, "error", copyErr)
+		s.logger.Debug("failed to copy the album's own art", "album_id", albumID, "error", copyErr)
 	}
-	return artFailed, false, nil
+	changed := s.dropMissingCopy(ctx, art, albumID, current)
+	return artFailed, changed, nil
 }
 
-// albumArtSources lists the images an album may use, best first.
-func (s *Scanner) albumArtSources(ctx context.Context, art *localArt, albumID int64) ([]artSource, error) {
+// dropMissingCopy points an album that failed back at its provider cover
+// when its copy is not in the static directory, as after the directory
+// moved while the album's folder could not be read: a column pointing at
+// nothing would hide the provider cover. The next pass that reads the
+// folder copies the art again.
+func (s *Scanner) dropMissingCopy(ctx context.Context, art *localArt, albumID int64, current database.GetMusicAlbumLocalCoverRow) bool {
+	isMissing := current.CoverLocal.Valid && !localCoverExists(art.staticDir, current.CoverLocal.String)
+	if !isMissing {
+		return false
+	}
+	changed, err := s.saveAlbumArt(ctx, art, albumID, sql.NullString{}, sql.NullString{})
+	if err != nil {
+		s.logger.Debug("failed to drop a missing album art copy", "album_id", albumID, "error", err)
+	}
+	return changed
+}
+
+// albumArtSources lists the images an album may use, best first. A folder
+// that cannot be read is an error; unreadable reports cover images that could
+// not be looked at, which the album may still have.
+func (s *Scanner) albumArtSources(ctx context.Context, art *localArt, albumID int64) (sources []artSource, unreadable, err error) {
 	tracks, err := s.queries.ListMusicAlbumArtTracks(ctx, sql.NullInt64{Int64: albumID, Valid: true})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Its tracks may lie in more than one folder; the one holding most of
@@ -226,17 +251,17 @@ func (s *Scanner) albumArtSources(ctx context.Context, art *localArt, albumID in
 		return cmp.Or(cmp.Compare(counts[b], counts[a]), cmp.Compare(a, b))
 	})
 
-	var sources []artSource
 	for _, folder := range folders {
 		owned, err := art.ownsFolder(ctx, s.queries, albumID, folder)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if owned {
-			images, err := folderImages(folder)
+			images, skipped, err := folderImages(folder)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
+			unreadable = errors.Join(unreadable, skipped)
 			sources = append(sources, images...)
 		}
 		discFolders := discs[folder]
@@ -244,13 +269,14 @@ func (s *Scanner) albumArtSources(ctx context.Context, art *localArt, albumID in
 		for _, disc := range discFolders {
 			owned, err := art.ownsFolder(ctx, s.queries, albumID, disc)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			if owned {
-				images, err := folderImages(disc)
+				images, skipped, err := folderImages(disc)
 				if err != nil {
-					return nil, err
+					return nil, nil, err
 				}
+				unreadable = errors.Join(unreadable, skipped)
 				sources = append(sources, images...)
 			}
 		}
@@ -264,7 +290,7 @@ func (s *Scanner) albumArtSources(ctx context.Context, art *localArt, albumID in
 			strconv.FormatInt(track.Size, 10) + ":" + strconv.FormatInt(track.MtimeNs.Int64, 10)
 		sources = append(sources, artSource{path: track.FilePath, stream: int(track.PictureStream.Int64), embedded: true, fingerprint: fingerprint})
 	}
-	return sources, nil
+	return sources, unreadable, nil
 }
 
 // ownsFolder reports whether every track directly in folder, or in a disc
@@ -346,12 +372,13 @@ func isNearTrack(folder, path string) bool {
 }
 
 // folderImages lists the cover images in folder, best first. A symlink is
-// followed, as the library's tracks are. A folder that cannot be read, or an
-// image in it that cannot be looked at, is an error rather than no art.
-func folderImages(folder string) ([]artSource, error) {
+// followed, as the library's tracks are. A folder that cannot be read is an
+// error rather than no art; an image in it that cannot be looked at is left
+// out and reported in skipped.
+func folderImages(folder string) (sources []artSource, skipped, err error) {
 	entries, err := os.ReadDir(folder)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	type ranked struct {
 		source artSource
@@ -372,7 +399,8 @@ func folderImages(folder string) ([]artSource, error) {
 			continue
 		}
 		if err != nil {
-			return nil, err
+			skipped = errors.Join(skipped, err)
+			continue
 		}
 		if !info.Mode().IsRegular() {
 			continue
@@ -381,11 +409,11 @@ func folderImages(folder string) ([]artSource, error) {
 		found = append(found, ranked{source: artSource{path: path, fingerprint: fingerprint}, rank: nameRank*len(coverExtensions) + extRank})
 	}
 	slices.SortStableFunc(found, func(a, b ranked) int { return cmp.Compare(a.rank, b.rank) })
-	sources := make([]artSource, 0, len(found))
+	sources = make([]artSource, 0, len(found))
 	for _, f := range found {
 		sources = append(sources, f.source)
 	}
-	return sources, nil
+	return sources, skipped, nil
 }
 
 // sourcesFingerprint names the sources a copy in staticDir was chosen from,
@@ -444,20 +472,45 @@ func (s *Scanner) copyAlbumArt(ctx context.Context, art *localArt, albumID int64
 		path = extracted
 	}
 
-	file, err := os.Open(path)
+	content, err := readCapped(path, maxLocalCoverSize)
+	if err != nil {
+		return localCopy{}, fmt.Errorf("copy %s: %w", filepath.Base(source.path), err)
+	}
+	// Each version gets a name of its own, so the file behind the URL the
+	// column holds now is never overwritten before the column moves on.
+	sum := sha256.Sum256(content)
+	version := hex.EncodeToString(sum[:4])
+	// An extraction can take a while; the settings may have moved since.
+	err = art.check()
 	if err != nil {
 		return localCopy{}, err
 	}
-	defer file.Close()
-	digest := sha256.New()
-	saved, err := helpers.SaveImage(dir, localCoverStem, io.TeeReader(file, digest), maxLocalCoverSize)
+	saved, err := helpers.SaveImage(dir, localCoverStem+"-"+version, bytes.NewReader(content), maxLocalCoverSize)
 	if err != nil {
 		return localCopy{}, fmt.Errorf("copy %s: %w", filepath.Base(source.path), err)
 	}
 
 	name := filepath.Base(saved)
-	url := helpers.STATIC_URL_PREFIX + filepath.ToSlash(filepath.Join(rel, name)) + "?v=" + shortHash(digest)
+	url := helpers.STATIC_URL_PREFIX + filepath.ToSlash(filepath.Join(rel, name)) + "?v=" + version
 	return localCopy{dir: dir, name: name, url: url}, nil
+}
+
+// readCapped reads the file at path, failing with helpers.ErrImageTooLarge
+// past limit bytes.
+func readCapped(path string, limit int64) ([]byte, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	content, err := io.ReadAll(io.LimitReader(file, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(content)) > limit {
+		return nil, helpers.ErrImageTooLarge
+	}
+	return content, nil
 }
 
 // saveAlbumArt points cover_local at value and records the fingerprint of
@@ -598,8 +651,4 @@ func removeOtherFiles(dir, keep string) {
 		}
 		_ = os.Remove(filepath.Join(dir, entry.Name()))
 	}
-}
-
-func shortHash(digest hash.Hash) string {
-	return hex.EncodeToString(digest.Sum(nil)[:4])
 }

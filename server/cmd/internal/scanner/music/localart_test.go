@@ -202,9 +202,9 @@ func TestLocalArtCopiesTheBestNamedFolderImage(t *testing.T) {
 	f.scan(t)
 
 	art := f.album(t, "Album")
-	wantPrefix := helpers.STATIC_URL_PREFIX + "local/albums/" + itoa(art.id) + "/cover.jpg?v="
-	if !strings.HasPrefix(art.coverLocal.String, wantPrefix) {
-		t.Fatalf("cover_local = %q, want prefix %q", art.coverLocal.String, wantPrefix)
+	wantPrefix := helpers.STATIC_URL_PREFIX + "local/albums/" + itoa(art.id) + "/cover-"
+	if !strings.HasPrefix(art.coverLocal.String, wantPrefix) || !strings.Contains(art.coverLocal.String, ".jpg?v=") {
+		t.Fatalf("cover_local = %q, want %q<hash>.jpg?v=<hash>", art.coverLocal.String, wantPrefix)
 	}
 	if art.cover != art.coverLocal {
 		t.Fatalf("cover = %v, want the local cover %v", art.cover, art.coverLocal)
@@ -296,7 +296,7 @@ func TestLocalArtKeepsAnUnchangedCopyAndFollowsAChangedImage(t *testing.T) {
 	f.image(t, "Band/Album/cover.png", pngBytes)
 	f.s.runLookups(context.Background(), lookupRequest{full: true})
 	changed := f.album(t, "Album")
-	if changed.coverLocal == first.coverLocal || !strings.Contains(changed.coverLocal.String, "/cover.png?v=") {
+	if changed.coverLocal == first.coverLocal || !strings.Contains(changed.coverLocal.String, ".png?v=") {
 		t.Fatalf("cover_local = %v after the image changed, want a new png copy", changed.coverLocal)
 	}
 	entries, err := os.ReadDir(filepath.Join(f.staticDir, "local", "albums", itoa(changed.id)))
@@ -591,6 +591,10 @@ func TestLocalArtStopsWhenTheLibraryRootsChange(t *testing.T) {
 	if f.album(t, "First").coverLocal.Valid || f.album(t, "Second").coverLocal.Valid {
 		t.Fatal("a pass wrote after the library roots changed")
 	}
+	copies, _ := filepath.Glob(filepath.Join(f.staticDir, "local", "albums", "*", "cover-*"))
+	if len(copies) != 0 {
+		t.Fatalf("a pass wrote %v after the library roots changed", copies)
+	}
 }
 
 func TestLocalArtTreatsALoneDiscLikeFolderAsTheAlbum(t *testing.T) {
@@ -632,5 +636,93 @@ func TestLookupsOfSomeAlbumsAddTheirFolderNeighbors(t *testing.T) {
 	slices.Sort(want)
 	if !slices.Equal(ids, want) {
 		t.Fatalf("ids = %v, want %v", ids, want)
+	}
+}
+
+func TestLocalArtGivesEachVersionANameOfItsOwn(t *testing.T) {
+	f := newArtFixture(t)
+	f.track(t, "Band/Album/01.flac", "Album")
+	image := f.image(t, "Band/Album/cover.jpg", jpegBytes)
+	f.scan(t)
+	first := f.album(t, "Album")
+
+	changed := append(append([]byte{}, jpegBytes...), []byte(" changed")...)
+	err := os.WriteFile(image, changed, 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	future := time.Now().Add(time.Minute)
+	err = os.Chtimes(image, future, future)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.s.runLookups(context.Background(), lookupRequest{full: true})
+	second := f.album(t, "Album")
+	firstName, _, _ := strings.Cut(first.coverLocal.String, "?")
+	secondName, _, _ := strings.Cut(second.coverLocal.String, "?")
+	if firstName == secondName {
+		t.Fatalf("a new version of a .jpg reused the name %q", firstName)
+	}
+	if !bytes.Equal(f.copied(t, second), changed) {
+		t.Fatal("the new copy does not hold the new bytes")
+	}
+	copies, _ := filepath.Glob(filepath.Join(f.staticDir, "local", "albums", itoa(second.id), "*"))
+	if len(copies) != 1 {
+		t.Fatalf("the album folder holds %v, want only the new copy", copies)
+	}
+}
+
+func TestLocalArtSkipsAnImageItCannotLookAt(t *testing.T) {
+	f := newArtFixture(t)
+	f.track(t, "Band/Album/01.flac", "Album")
+	f.image(t, "Band/Album/folder.png", pngBytes)
+	locked := filepath.Join(t.TempDir(), "locked")
+	scannertest.WriteFile(t, filepath.Join(locked, "cover.jpg"), "hidden")
+	err := os.Symlink(filepath.Join(locked, "cover.jpg"), filepath.Join(f.musicDir, "Band", "Album", "cover.jpg"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = os.Chmod(locked, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o755) })
+	f.scan(t)
+	if !bytes.Equal(f.copied(t, f.album(t, "Album")), pngBytes) {
+		t.Fatal("an image that cannot be looked at kept the album from its next one")
+	}
+}
+
+func TestLocalArtShowsTheProviderCoverWhenTheCopyIsGoneAndTheFolderUnreadable(t *testing.T) {
+	f := newArtFixture(t)
+	f.track(t, "Band/Album/01.flac", "Album")
+	f.image(t, "Band/Album/cover.jpg", jpegBytes)
+	f.scan(t)
+	art := f.album(t, "Album")
+	_, err := f.s.tx.DB.Exec(`UPDATE albums SET cover_source = 'https://covers.example/a.jpg' WHERE id = ?`, art.id)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	folder := filepath.Join(f.musicDir, "Band", "Album")
+	err = os.Chmod(folder, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(folder, 0o755) })
+	f.staticDir = t.TempDir()
+	f.s.runLookups(context.Background(), lookupRequest{full: true})
+	moved := f.album(t, "Album")
+	if moved.coverLocal.Valid || moved.cover.String != "https://covers.example/a.jpg" {
+		t.Fatalf("album = %+v, want the provider cover while the copy cannot be made again", moved)
+	}
+
+	err = os.Chmod(folder, 0o755)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.s.runLookups(context.Background(), lookupRequest{full: true})
+	if !bytes.Equal(f.copied(t, f.album(t, "Album")), jpegBytes) {
+		t.Fatal("the copy was not made again once the folder could be read")
 	}
 }
