@@ -33,7 +33,9 @@ export default defineConfig(({ mode }) => {
     },
 
     build: {
-      target: "esnext",
+      // No target: Vite's default (baseline-widely-available) emits the same
+      // JS as esnext did, and Lightning CSS keeps -webkit-backdrop-filter,
+      // without which backdrop-blur does nothing on Safari before 18.
       modulePreload: {
         polyfill: false,
       },
@@ -52,10 +54,14 @@ export default defineConfig(({ mode }) => {
           : undefined,
         output: {
           // One group whose name() picks the chunk: what Rolldown turns the
-          // deprecated manualChunks function into.
+          // deprecated manualChunks function into. Only the libraries every
+          // page loads get a stable vendor chunk. Radix and lucide stay with
+          // the chunks that use them: a single chunk for each put all of
+          // Radix and every icon into the entry, /login included.
           codeSplitting: {
             groups: [
               {
+                debugName: "vendor",
                 name(id) {
                   if (!/[\\/]node_modules[\\/]/.test(id)) {
                     return null;
@@ -69,12 +75,6 @@ export default defineConfig(({ mode }) => {
                   }
                   if (/[\\/]node_modules[\\/]@tanstack[\\/](react-query|query)[\\/]/.test(id)) {
                     return "vendor-query";
-                  }
-                  if (/[\\/]node_modules[\\/](radix-ui|@radix-ui)[\\/]/.test(id)) {
-                    return "vendor-radix";
-                  }
-                  if (/[\\/]node_modules[\\/]lucide-react[\\/]/.test(id)) {
-                    return "vendor-lucide";
                   }
                   return null;
                 },
@@ -133,15 +133,27 @@ export default defineConfig(({ mode }) => {
       tanstackRouter({
         target: "react",
         autoCodeSplitting: true,
+        // The plugin keeps pendingComponent in the route file by default,
+        // which put every detail skeleton in the entry chunk. Split, the
+        // router preloads it together with the route's component and waits
+        // for it before it shows the pending view.
+        codeSplittingOptions: {
+          defaultBehavior: [
+            ["component"],
+            ["pendingComponent"],
+            ["errorComponent"],
+            ["notFoundComponent"],
+          ],
+        },
         routesDirectory: "./src/routes",
         generatedRouteTree: "./src/routeTree.gen.ts",
       }),
 
-      react({
-        babel: {
-          plugins: [["babel-plugin-react-compiler"]],
-        },
-      }),
+      // The React Compiler runs natively (oxc-transform-react, pinned to the
+      // plugin's peer range): Babel took over 80% of the build. A Babel
+      // fallback (@rolldown/plugin-babel + reactCompilerPreset) must stay on
+      // @babel/core 7; Babel 8 compiled 66 fewer components here.
+      react({ compiler: true }),
     ],
   };
     });

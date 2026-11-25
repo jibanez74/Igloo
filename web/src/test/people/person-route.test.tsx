@@ -87,6 +87,7 @@ describe("person route", () => {
   });
   it("shows not-found, recoverable errors and a matching skeleton", async () => {
     const Pending = Route.options.pendingComponent!;
+    await Pending.preload?.();
     const view = render(<Pending />);
     expect(screen.getByRole("status", { name: "Loading person profile" })).toBeVisible();
     view.unmount();
