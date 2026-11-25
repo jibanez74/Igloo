@@ -64,29 +64,29 @@ func readTrackTags(tags ffprobe.FormatTags) trackTags {
 }
 
 // pairableArtistIDs returns the tags' artist ids when they line up with the
-// track's credits by position, one each, and nil otherwise. container is the
-// track's: ffprobe joins a Vorbis comment list in full, but cuts an ID3 or
-// MP4 list to its first id, so there one id beside one credit may belong to
-// only the first of the artists that credit names.
+// track's credits by position, one each, and nil otherwise. A lone credit
+// beside a lone id needs care: a single ARTISTS value naming another artist
+// says the id is that artist's, in any container; and ffprobe cuts an ID3 or
+// MP4 list to its first id (a Vorbis comment list stays whole), so in those
+// containers one id beside a credit that reads as several names ("A & B") may
+// be only the first artist's. container is the track's.
 func pairableArtistIDs(tags trackTags, container string, credits []resolvedMusician) []string {
 	aligned := len(tags.artistIDs) == len(credits)
 	if !aligned {
 		return nil
 	}
-	cut := !vorbisCommentContainers[container]
 	lone := len(credits) == 1
-	if !cut || !lone {
+	if !lone {
 		return tags.artistIDs
 	}
 	name := credits[0].name
-	compound := len(parseCompoundArtistCredits(name).parts) >= 2
-	if compound {
-		return nil
-	}
-	// The cut ARTISTS tag's first value names the artist the first id is for,
-	// which catches join words the credit rules do not split ("A x B").
 	other := tags.soleArtist != "" && scanner.NormalizedScanCacheKey(tags.soleArtist) != scanner.NormalizedScanCacheKey(name)
 	if other {
+		return nil
+	}
+	cut := !vorbisCommentContainers[container]
+	compound := len(parseCompoundArtistCredits(name).parts) >= 2
+	if cut && compound {
 		return nil
 	}
 	return tags.artistIDs

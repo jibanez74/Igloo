@@ -123,7 +123,8 @@ func TestPairableArtistIDsDistrustsALoneIDFromACutList(t *testing.T) {
 		{"a whole Vorbis list beside a compound credit", trackTags{artistIDs: []string{a}}, "flac", credit("Simon & Garfunkel"), []string{a}},
 		{"the cut ARTISTS lead names someone else", trackTags{artistIDs: []string{a}, soleArtist: "A"}, "mp3", credit("A x B"), nil},
 		{"the cut ARTISTS lead is the credit", trackTags{artistIDs: []string{a}, soleArtist: " adele "}, "m4a", credit("Adele"), []string{a}},
-		{"a Vorbis lead naming someone else is a whole list's", trackTags{artistIDs: []string{a}, soleArtist: "A"}, "opus", credit("A x B"), []string{a}},
+		{"a lead naming someone else withholds the id in a Vorbis list too", trackTags{artistIDs: []string{a}, soleArtist: "A"}, "flac", credit("A x B"), nil},
+		{"a Vorbis lead that is the credit keeps the id", trackTags{artistIDs: []string{a}, soleArtist: "Hall & Oates"}, "opus", credit("Hall & Oates"), []string{a}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
