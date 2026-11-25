@@ -353,14 +353,15 @@ CREATE TABLE IF NOT EXISTS music_credit_metadata (
 CREATE INDEX IF NOT EXISTS music_credit_metadata_votes ON music_credit_metadata (musician_id, track_id, sort_name);
 
 -- The MusicBrainz artist id a track's tags give each credit, paired by
--- position only when the tag holds one id per credit. Each row is one vote
--- for musicians.musicbrainz_id.
+-- position only when the tag holds one id per credit. Each row is a track's
+-- one vote for musicians.musicbrainz_id: when two credits of a track resolve
+-- to one artist, or a merge brings a second id, the first id stays.
 CREATE TABLE IF NOT EXISTS music_credit_ids (
   track_id INTEGER NOT NULL REFERENCES tracks (id) ON DELETE CASCADE,
   musician_id INTEGER NOT NULL REFERENCES musicians (id) ON DELETE CASCADE,
   musicbrainz_id TEXT NOT NULL,
   FOREIGN KEY (track_id, musician_id) REFERENCES track_musicians (track_id, musician_id) ON DELETE CASCADE,
-  PRIMARY KEY (track_id, musician_id, musicbrainz_id)
+  PRIMARY KEY (track_id, musician_id)
 );
 
 -- The id vote reads one artist's rows.

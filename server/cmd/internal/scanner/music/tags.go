@@ -62,23 +62,23 @@ func musicBrainzID(value string) string {
 }
 
 // musicBrainzIDs splits a tag on ';' (ffprobe's Vorbis join) and '/' (how
-// ID3v2.3 taggers join multiple values); neither appears in an id.
+// ID3v2.3 taggers join multiple values); neither appears in an id. An empty
+// slot is as bad as an invalid id: dropping it would shift every later id
+// onto the wrong credit.
 func musicBrainzIDs(value string) []string {
-	fields := strings.FieldsFunc(value, func(r rune) bool { return r == ';' || r == '/' })
-	ids := make([]string, 0, len(fields))
-	for _, field := range fields {
-		id := strings.ToLower(strings.TrimSpace(field))
-		if id == "" {
-			continue
-		}
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return nil
+	}
+	slots := strings.Split(strings.ReplaceAll(trimmed, "/", multiValueSeparator), multiValueSeparator)
+	ids := make([]string, 0, len(slots))
+	for _, slot := range slots {
+		id := strings.ToLower(strings.TrimSpace(slot))
 		valid := musicBrainzIDPattern.MatchString(id)
 		if !valid {
 			return nil
 		}
 		ids = append(ids, id)
-	}
-	if len(ids) == 0 {
-		return nil
 	}
 	return ids
 }

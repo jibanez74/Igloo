@@ -676,6 +676,16 @@ func TestArtistMusicBrainzIDsPairWithCreditsOnlyOnePerCredit(t *testing.T) {
 		t.Fatalf("Solo musicbrainz_id = %q, want none from an unpaired id list", got["Solo"])
 	}
 
+	// A lone credit that reads as two names, beside one id: ffprobe may have
+	// cut an ID3 list to its first id, which is one of the two artists'.
+	scanTaggedTrack(t, s, newMusicScanContext(nil), filepath.Join(dir, "three"), 1, ffprobe.FormatTags{
+		Title: "Three", Artist: "Simon & Garfunkel", MusicBrainzArtistID: lead,
+	})
+	got = musicianIDs()
+	if got["Simon & Garfunkel"] != "" {
+		t.Fatalf("Simon & Garfunkel musicbrainz_id = %q, want none for a lone compound credit", got["Simon & Garfunkel"])
+	}
+
 	// Removing the only voting track clears the artist's id.
 	scanTaggedTrack(t, s, newMusicScanContext(nil), filepath.Join(dir, "one"), 2, ffprobe.FormatTags{
 		Title: "One", Artist: "Lead feat. Guest", Artists: "Lead;Guest",
@@ -717,5 +727,28 @@ func TestTrackMetadataKeepsTheTagsLaterPassesRead(t *testing.T) {
 	}{"A;B", "USUM71703861", "Ministry of Sound", recording, albumArtist, true, 12, 2}
 	if row != want {
 		t.Fatalf("music_track_metadata = %+v, want %+v", row, want)
+	}
+}
+
+func TestArtistMusicBrainzIDGetsOneVotePerTrack(t *testing.T) {
+	s := setupMusicScanner(t)
+	const first = "6a000000-0000-4000-8000-000000000000"
+	const repeat = "6b000000-0000-4000-8000-000000000000"
+	const other = "6c000000-0000-4000-8000-000000000000"
+	// The repeated credit's second id does not out-vote its first.
+	scanTaggedTrack(t, s, newMusicScanContext(nil), filepath.Join(t.TempDir(), "one"), 1, ffprobe.FormatTags{
+		Title: "One", Artist: "Artist One, Artist Two, Artist One", MusicBrainzArtistID: first + ";" + other + ";" + repeat,
+	})
+	votes := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_credit_ids")
+	if votes != 2 {
+		t.Fatalf("music_credit_ids rows = %d, want one per credited artist", votes)
+	}
+	var id string
+	err := s.tx.DB.QueryRow("SELECT musicbrainz_id FROM musicians WHERE name = 'Artist One'").Scan(&id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id != first {
+		t.Fatalf("Artist One musicbrainz_id = %q, want the first credit's %q", id, first)
 	}
 }

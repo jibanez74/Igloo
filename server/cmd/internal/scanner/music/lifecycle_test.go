@@ -831,20 +831,24 @@ func BenchmarkMusicScan(b *testing.B) {
 	}
 }
 
-func TestRunMusicScanReadsNewFormatsAndSkipsHiddenFilesAndITunesLPBundles(t *testing.T) {
+func TestRunMusicScanReadsNewFormatsAndSkipsSystemFoldersAndITunesLPBundles(t *testing.T) {
 	app := setupMusicScanner(t)
 	musicDir := t.TempDir()
 	album := filepath.Join(musicDir, "Format Band", "Format Test")
 	tracks := map[string]string{
-		filepath.Join(album, "01 Opus.opus"):  "audio/ogg",
-		filepath.Join(album, "02 Vorbis.ogg"): "audio/ogg",
-		filepath.Join(album, "03 Wave.wav"):   "audio/wav",
-		filepath.Join(album, "04 Aiff.aiff"):  "audio/aiff",
-		filepath.Join(album, "05 Aif.AIF"):    "audio/aiff",
+		// A leading dot alone is a name, not a system folder or companion file.
+		filepath.Join(musicDir, "Metallica", "...And Justice for All", "01 Blackened.flac"): "audio/flac",
+		filepath.Join(musicDir, ".38 Special - Hold On Loosely.mp3"):                        "audio/mpeg",
+		filepath.Join(album, "01 Opus.opus"):                                                "audio/ogg",
+		filepath.Join(album, "02 Vorbis.ogg"):                                               "audio/ogg",
+		filepath.Join(album, "03 Wave.wav"):                                                 "audio/wav",
+		filepath.Join(album, "04 Aiff.aiff"):                                                "audio/aiff",
+		filepath.Join(album, "05 Aif.AIF"):                                                  "audio/aiff",
 	}
 	skipped := []string{
 		filepath.Join(album, "._01 Opus.opus"),
 		filepath.Join(musicDir, ".Trashes", "501", "Old.mp3"),
+		filepath.Join(album, "iTunes LP.itlp", "audio", "intro.m4a"),
 		filepath.Join(album, "iTunes LP.itlp", "sound.aif"),
 	}
 	results := map[string]*ffprobe.FfprobeResult{}
@@ -871,9 +875,10 @@ func TestRunMusicScanReadsNewFormatsAndSkipsHiddenFilesAndITunesLPBundles(t *tes
 		}
 	}
 
-	// A run of changes the watcher reports inside a bundle skips it too.
+	// A run of changes the watcher reports inside a bundle or a system folder
+	// skips it too, for the folder itself and for a file below it.
 	bundle := filepath.Join(album, "iTunes LP.itlp")
-	app.scanChanges(musicDir, scanner.Changes{Paths: []string{bundle, skipped[0]}})
+	app.scanChanges(musicDir, scanner.Changes{Paths: append([]string{bundle}, skipped...)})
 	status = app.Status()
 	if status.Total != 0 || status.Failed != 0 {
 		t.Fatalf("changes run total, failed = %d, %d, want 0, 0", status.Total, status.Failed)

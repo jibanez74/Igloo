@@ -454,6 +454,12 @@ func saveCreditMetadata(ctx context.Context, qtx *database.Queries, trackID int6
 	if !paired {
 		return nil
 	}
+	// ffprobe keeps only the first id of an ID3 or MP4 list, so one id beside
+	// one credit that reads as several names ("A & B") is likely A's alone.
+	loneCompound := len(credits) == 1 && len(parseCompoundArtistCredits(credits[0].name).parts) >= 2
+	if loneCompound {
+		return nil
+	}
 	for i, id := range ids {
 		err = qtx.SaveMusicCreditID(ctx, database.SaveMusicCreditIDParams{TrackID: trackID, MusicianID: id, MusicbrainzID: artistIDs[i]})
 		if err != nil {

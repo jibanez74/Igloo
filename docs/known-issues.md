@@ -64,7 +64,8 @@ failure.
 ffprobe joins the values of a repeated Vorbis comment (FLAC, Opus, Ogg) with `;`, but returns only
 the first value of an ID3 or MP4 multi-value tag. An MP3 or M4A `ARTISTS` tag therefore names one
 credit and is ignored, so its credits come from splitting the `ARTIST` string, and its MusicBrainz
-artist id list holds one id, which pairs with its credits only when the track has one. ffprobe also
+artist id list holds one id, which pairs only with a lone credit that does not read as several
+names: a lone `A & B` credit gets no id rather than A's. ffprobe also
 hides ID3's `UFID` frame, where Picard stores an MP3's MusicBrainz recording id. Accepted on
 2026-11-25 rather than adding an ID3/MP4 tag reader next to `isobmff`; reproduce with any
 Picard-tagged MP3 whose `ARTISTS` holds two names.

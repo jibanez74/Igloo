@@ -2,15 +2,20 @@ package music
 
 import "testing"
 
-func TestAllowDirectorySkipsHiddenFoldersAndITunesLPBundles(t *testing.T) {
+func TestAllowDirectorySkipsSystemFoldersAndITunesLPBundles(t *testing.T) {
 	cases := map[string]bool{
-		"/music/Adele/25":          true,
-		"/music/Adele/25 (Deluxe)": true,
-		"/music/.Trashes":          false,
-		"/music/Adele/.hidden":     false,
+		"/music/Adele/25":                                     true,
+		"/music/Metallica/...And Justice for All":             true,
+		"/music/.38 Special":                                  true,
+		"/music/Bundles.itlp.d":                               true,
+		"/music/.Trashes":                                     false,
+		"/music/.Trash-1000":                                  false,
+		"/music/.fseventsd":                                   false,
+		"/music/.Spotlight-V100":                              false,
+		"/music/Adele/25/.AppleDouble":                        false,
+		"/music/Adele/@eaDir":                                 false,
 		"/music/Kelly Clarkson/Wrapped In Red/iTunes LP.itlp": false,
 		"/music/Kelly Clarkson/Booklet.ITLP":                  false,
-		"/music/Bundles.itlp.d":                               true,
 	}
 	for path, want := range cases {
 		got := AllowDirectory("/music", path)
@@ -20,11 +25,12 @@ func TestAllowDirectorySkipsHiddenFoldersAndITunesLPBundles(t *testing.T) {
 	}
 }
 
-func TestSkipFileSkipsHiddenFiles(t *testing.T) {
+func TestSkipFileSkipsOnlyAppleDoubleCompanions(t *testing.T) {
 	cases := map[string]bool{
-		"/music/Adele/25/01 Hello.m4a":   false,
-		"/music/Adele/25/._01 Hello.m4a": true,
-		"/music/.hidden.flac":            true,
+		"/music/Adele/25/01 Hello.m4a":                     false,
+		"/music/Britney Spears/...Baby One More Time.flac": false,
+		"/music/.38 Special - Hold On Loosely.mp3":         false,
+		"/music/Adele/25/._01 Hello.m4a":                   true,
 	}
 	for path, want := range cases {
 		got := skipFile(path)
