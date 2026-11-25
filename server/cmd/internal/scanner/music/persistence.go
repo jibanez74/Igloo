@@ -130,10 +130,14 @@ func (s *Scanner) persistResolvedTrackTx(ctx context.Context, qtx *database.Quer
 	}
 
 	tags := resolved.tags
+	artistNames := tags.artists
+	if tags.soleArtist != "" {
+		artistNames = []string{tags.soleArtist}
+	}
 	err = qtx.SaveMusicTrackMetadata(ctx, database.SaveMusicTrackMetadataParams{
 		TrackID: trackID, ArtistTag: resolved.artistTag, ArtistKey: scanner.NormalizedScanCacheKey(resolved.artistTag), ArtistSort: resolved.artistSort, AlbumSort: resolved.albumSort,
 		AppleTrackID: helpers.NullInt64(resolved.catalog.Track), AppleAlbumID: helpers.NullInt64(resolved.catalog.Album),
-		ArtistsTag: joinTagList(tags.artists), MbRecordingID: helpers.NullString(tags.recordingID), MbReleaseID: helpers.NullString(tags.releaseID),
+		ArtistsTag: joinTagList(artistNames), MbRecordingID: helpers.NullString(tags.recordingID), MbReleaseID: helpers.NullString(tags.releaseID),
 		MbReleaseGroupID: helpers.NullString(tags.releaseGroupID), MbArtistIds: helpers.NullString(joinTagList(tags.artistIDs)),
 		MbAlbumArtistIds: helpers.NullString(joinTagList(tags.albumArtistIDs)), Isrc: helpers.NullString(tags.isrc), Label: helpers.NullString(tags.label),
 		Compilation: tags.compilation, TrackTotal: tags.trackTotal, DiscTotal: tags.discTotal,

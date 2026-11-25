@@ -313,8 +313,8 @@ CREATE TABLE IF NOT EXISTS music_genre_identity (
 -- Original tags support enrichment retries and credit reconciliation
 -- without probing files again. The Apple ids are the catalog ids an iTunes
 -- Store purchase carries; NULL when the file has none. artists_tag is the
--- multi-value ARTISTS tag joined with ';' when it holds two or more names,
--- which then are the track's credits. The MusicBrainz ids are the ones the
+-- ARTISTS tag's names joined with ';': two or more are the track's credits,
+-- and a single one names only its lead artist. The MusicBrainz ids are the ones the
 -- file's tags carry (lists joined with ';' in credit order), NULL when absent
 -- or not UUIDs; the album's ids are their majority. track_total and
 -- disc_total are 0 when untagged.

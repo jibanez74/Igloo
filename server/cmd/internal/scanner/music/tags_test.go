@@ -125,6 +125,9 @@ func TestPairableArtistIDsDistrustsALoneIDFromACutList(t *testing.T) {
 		{"the cut ARTISTS lead is the credit", trackTags{artistIDs: []string{a}, soleArtist: " adele "}, "m4a", credit("Adele"), []string{a}},
 		{"a lead naming someone else withholds the id in a Vorbis list too", trackTags{artistIDs: []string{a}, soleArtist: "A"}, "flac", credit("A x B"), nil},
 		{"a Vorbis lead that is the credit keeps the id", trackTags{artistIDs: []string{a}, soleArtist: "Hall & Oates"}, "opus", credit("Hall & Oates"), []string{a}},
+		{"a lead other than the first of several credits", trackTags{artistIDs: []string{a, b}, soleArtist: "A"}, "mp3", credit("B", "A"), nil},
+		{"a lead that is the first of several credits", trackTags{artistIDs: []string{a, b}, soleArtist: "A"}, "mp3", credit("A", "B"), []string{a, b}},
+		{"no credits pair nothing", trackTags{}, "flac", nil, nil},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -133,5 +136,23 @@ func TestPairableArtistIDsDistrustsALoneIDFromACutList(t *testing.T) {
 				t.Errorf("pairableArtistIDs() = %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestStoredArtistsReadsBackWhatTheTrackKept(t *testing.T) {
+	cases := []struct {
+		value string
+		names []string
+		lead  string
+	}{
+		{"", nil, ""},
+		{"Adele", nil, "Adele"},
+		{"Leslie Odom, Jr.;Lin-Manuel Miranda", []string{"Leslie Odom, Jr.", "Lin-Manuel Miranda"}, ""},
+	}
+	for _, tc := range cases {
+		names, lead := storedArtists(tc.value)
+		if !slices.Equal(names, tc.names) || lead != tc.lead {
+			t.Errorf("storedArtists(%q) = %q, %q, want %q, %q", tc.value, names, lead, tc.names, tc.lead)
+		}
 	}
 }

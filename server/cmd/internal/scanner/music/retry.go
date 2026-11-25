@@ -423,7 +423,8 @@ func (s *Scanner) reconcileCompoundCredits(ctx context.Context, scan *musicScanC
 			}
 			after = row.TrackID
 			// A track whose ARTISTS tag names its credits keeps them.
-			listed := row.ArtistsTag != ""
+			listedArtists, soleArtist := storedArtists(row.ArtistsTag)
+			listed := len(listedArtists) > 0
 			if listed {
 				continue
 			}
@@ -453,7 +454,7 @@ func (s *Scanner) reconcileCompoundCredits(ctx context.Context, scan *musicScanC
 				if syncErr != nil {
 					return syncErr
 				}
-				stored := trackTags{artistIDs: musicBrainzIDs(row.MbArtistIds.String)}
+				stored := trackTags{artistIDs: musicBrainzIDs(row.MbArtistIds.String), soleArtist: soleArtist}
 				syncErr = saveCreditMetadata(ctx, qtx, row.TrackID, credits, ids, pairableArtistIDs(stored, row.Container, credits))
 				if syncErr != nil {
 					return syncErr

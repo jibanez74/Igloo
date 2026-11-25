@@ -764,3 +764,23 @@ func TestArtistMusicBrainzIDGetsOneVotePerTrack(t *testing.T) {
 		t.Fatalf("Artist One musicbrainz_id = %q, want the first credit's %q", id, first)
 	}
 }
+
+func TestASingleArtistsValueIsKeptAsTheLeadNotAsCredits(t *testing.T) {
+	s := setupMusicScanner(t)
+	// The ID3 list was cut to its first value: the lead, not the credits.
+	scanTaggedTrack(t, s, newMusicScanContext(nil), filepath.Join(t.TempDir(), "one"), 1, ffprobe.FormatTags{
+		Title: "One", Artist: "Leslie Odom, Jr. & Lin-Manuel Miranda", Artists: "Leslie Odom, Jr.",
+	})
+	var stored string
+	err := s.tx.DB.QueryRow("SELECT artists_tag FROM music_track_metadata").Scan(&stored)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored != "Leslie Odom, Jr." {
+		t.Fatalf("artists_tag = %q, want the lone lead kept", stored)
+	}
+	credits := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM track_musicians")
+	if credits != 2 {
+		t.Fatalf("credits = %d, want the ARTIST string's two", credits)
+	}
+}
