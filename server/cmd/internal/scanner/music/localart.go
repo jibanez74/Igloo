@@ -120,9 +120,15 @@ type localArt struct {
 	owners map[string]int64
 }
 
-// check stops a write or removal once the settings the pass checked changed.
+// check stops a write or removal once the settings the pass checked changed,
+// or once the library roots lead somewhere that overlaps the copies' folder,
+// as a root symlink retargeted during the pass can.
 func (art *localArt) check() error {
 	if !art.current() {
+		return errSettingsChanged
+	}
+	_, overlaps := helpers.OverlappingLibrary(filepath.Join(art.staticDir, "local"), art.roots)
+	if overlaps {
 		return errSettingsChanged
 	}
 	return nil
@@ -307,7 +313,12 @@ func (s *Scanner) albumArtSources(ctx context.Context, art *localArt, albumID in
 	// album's art either.
 	if len(sources) == 0 {
 		for _, track := range tracks {
-			_, statErr := os.Lstat(track.FilePath)
+			// Followed like the walk follows it: a link to a disk that is
+			// away is a track that is not there.
+			info, statErr := os.Stat(track.FilePath)
+			if statErr == nil && !info.Mode().IsRegular() {
+				statErr = fmt.Errorf("%s is not a regular file", track.FilePath)
+			}
 			if statErr != nil {
 				unreadable = errors.Join(unreadable, statErr)
 				break
@@ -520,7 +531,13 @@ func (s *Scanner) copyAlbumArt(ctx context.Context, art *localArt, albumID int64
 	if err != nil {
 		return localCopy{}, err
 	}
-	saved, err := helpers.SaveImage(dir, localCoverStem+"-"+version, bytes.NewReader(content), maxLocalCoverSize)
+	// The same bytes copied before keep their file: it may be the one the
+	// column points at, which is never rewritten.
+	stem := localCoverStem + "-" + version
+	saved := existingCopy(dir, stem)
+	if saved == "" {
+		saved, err = helpers.SaveImage(dir, stem, bytes.NewReader(content), maxLocalCoverSize)
+	}
 	if err != nil {
 		return localCopy{}, fmt.Errorf("copy %s: %w", filepath.Base(source.path), err)
 	}
@@ -528,6 +545,19 @@ func (s *Scanner) copyAlbumArt(ctx context.Context, art *localArt, albumID int64
 	name := filepath.Base(saved)
 	url := helpers.STATIC_URL_PREFIX + filepath.ToSlash(filepath.Join(rel, name)) + "?v=" + version
 	return localCopy{dir: dir, name: name, url: url}, nil
+}
+
+// existingCopy returns the path of a regular file named stem plus an image
+// extension in dir, or "" when there is none.
+func existingCopy(dir, stem string) string {
+	for _, ext := range []string{".jpg", ".png", ".gif", ".webp"} {
+		path := filepath.Join(dir, stem+ext)
+		info, err := os.Lstat(path)
+		if err == nil && info.Mode().IsRegular() {
+			return path
+		}
+	}
+	return ""
 }
 
 // readCapped reads the file at path, failing with helpers.ErrImageTooLarge

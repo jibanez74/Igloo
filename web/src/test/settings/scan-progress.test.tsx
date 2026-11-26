@@ -254,6 +254,10 @@ describe("music lookups", () => {
     rerender(<ScanProgress library="music" status={musicScanStatus({ lookups: { ...running, state: "paused" } })} unavailable={false} />);
     expect(screen.getByText(/· paused until the scan finishes$/)).toBeInTheDocument();
 
+    // A request waiting behind the first scan, before any pass read albums.
+    rerender(<ScanProgress library="music" status={musicScanStatus({ lookups: { ...running, state: "paused", stage: null, processed: 0, total: 0, matched: 0, failed: 0, unmatched: 0 } })} unavailable={false} />);
+    expect(screen.queryByText(/Album art/)).not.toBeInTheDocument();
+
     // After the pass, its last tallies stay, and an idle scan still shows them.
     const finished = { ...running, state: "idle", stage: null, processed: 209, matched: 163, unmatched: 45 } as const;
     rerender(<ScanProgress library="music" status={musicScanStatus({ ...IDLE_SCAN, lookups: finished })} unavailable={false} />);

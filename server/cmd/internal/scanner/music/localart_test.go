@@ -901,3 +901,68 @@ func TestLocalArtTriesABetterSourceAgainAfterAFailureThatMayPass(t *testing.T) {
 		t.Fatalf("a pass extracted %d more times, want none once the fallback is settled", f.pictures.callCount()-calls)
 	}
 }
+
+func TestLocalArtKeepsTheCopyWhenATrackLinkLeadsNowhere(t *testing.T) {
+	f := newArtFixture(t)
+	elsewhere := filepath.Join(t.TempDir(), "disk")
+	scannertest.WriteFile(t, filepath.Join(elsewhere, "01.flac"), "audio")
+	link := filepath.Join(f.musicDir, "Band", "Album", "01.flac")
+	err := os.MkdirAll(filepath.Dir(link), 0o755)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = os.Symlink(filepath.Join(elsewhere, "01.flac"), link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.probes[link] = testMusicMetadataWithTags(ffprobe.FormatTags{Title: "01", Artist: "Art Band", Album: "Album", Track: "1"})
+	image := f.image(t, "Band/Album/cover.jpg", jpegBytes)
+	f.scan(t)
+	before := f.album(t, "Album")
+	if !before.coverLocal.Valid {
+		t.Fatal("no copy to keep")
+	}
+
+	err = os.RemoveAll(elsewhere)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = os.Remove(image)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.s.runLookups(context.Background(), lookupRequest{full: true})
+	if after := f.album(t, "Album"); after != before {
+		t.Fatalf("album = %+v with its track's disk away, want the copy kept: %+v", after, before)
+	}
+}
+
+func TestLocalArtDoesNotRewriteTheCopyItKeeps(t *testing.T) {
+	f := newArtFixture(t)
+	f.track(t, "Band/Album/01.flac", "Album", picture(1, ""))
+	f.track(t, "Band/Album/02.flac", "Album", picture(1, ""))
+	f.pictures.failing = map[string]error{"01.flac": errors.New("ffmpeg timed out")}
+	f.scan(t)
+	art := f.album(t, "Album")
+	rest := strings.TrimPrefix(art.coverLocal.String, helpers.STATIC_URL_PREFIX)
+	rel, _, _ := strings.Cut(rest, "?v=")
+	path := filepath.Join(f.staticDir, filepath.FromSlash(rel))
+	past := time.Now().Add(-time.Hour)
+	err := os.Chtimes(path, past, past)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The retried pass copies the same fallback bytes again.
+	f.s.runLookups(context.Background(), lookupRequest{full: true})
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.ModTime().Equal(past) {
+		t.Fatal("the file behind the album's URL was written again")
+	}
+	if f.album(t, "Album") != art {
+		t.Fatal("the album changed though its copy did not")
+	}
+}

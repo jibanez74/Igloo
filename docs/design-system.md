@@ -2157,7 +2157,8 @@ require the full playback test pass.
   albums checked · 10 found · 1 failed · 1 without art", with "· paused until
   the scan finishes" while a scan holds the pass. It shows whatever the
   scan's state, since the pass runs after the scan ends, and keeps the last
-  pass's tallies until the next one; it is hidden until a first pass runs. It
+  pass's tallies until the next one; it is hidden while the pass has no
+  album to read, including a request still waiting behind the first scan. It
   is not announced: it changes at every poll for minutes at a time, and the
   scan's own status line already announces the scan.
 - **Card section titles are real headings**: render `CardTitle` with `asChild`

@@ -97,10 +97,10 @@ const lookupsLine = (lookups: MusicScanStatus["lookups"]) => {
   return `${label}: ${lookups.processed} of ${lookups.total} albums checked · ${lookups.matched} found · ${lookups.failed} failed · ${lookups.unmatched} without art${paused}`;
 };
 
-// A worker that never ran a pass has nothing to show.
+// A pass with no album to read, or none yet, has nothing to show.
 const visibleLookups = (props: Props) => {
   const lookups = props.library === "music" ? props.status?.lookups : undefined;
-  const hasPass = lookups !== undefined && (lookups.state !== "idle" || lookups.total > 0);
+  const hasPass = lookups !== undefined && lookups.total > 0;
   return hasPass ? lookups : undefined;
 };
 
