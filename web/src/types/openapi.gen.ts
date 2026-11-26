@@ -5146,7 +5146,7 @@ export interface components {
             catalog_revision: number;
             lookups: components["schemas"]["MusicLookupStatusData"];
         };
-        /** @description The background lookups that run between music scans, after the scan run ends; a scan pauses them until it finishes. The counters describe the current or latest pass and count albums. */
+        /** @description The background lookups that run between music scans, after the scan run ends; a scan pauses them until it finishes. The counters describe the current or latest pass and count albums; a full pass a scan interrupted resumes as a new pass over the albums it had left, which its counters then count. */
         MusicLookupStatusData: {
             /**
              * @description running: a pass is reading albums; paused: a music scan is running and the pass resumes after it; idle: no pass is waiting.

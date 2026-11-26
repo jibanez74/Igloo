@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -33,12 +34,17 @@ type fakePictures struct {
 	calls   []string
 	err     error
 	hook    func()
+	// failing fails the extraction from tracks of these base names.
+	failing map[string]error
 }
 
 func (f *fakePictures) ExtractAttachedPicture(_ context.Context, source string, index int, dest string) error {
 	f.mu.Lock()
 	f.calls = append(f.calls, filepath.Base(source)+"#"+string(rune('0'+index)))
 	hook, err := f.hook, f.err
+	if failure, ok := f.failing[filepath.Base(source)]; ok {
+		err = failure
+	}
 	f.mu.Unlock()
 	if hook != nil {
 		hook()
@@ -846,5 +852,52 @@ func TestLocalArtFullPassResumesWhereAPauseStoppedIt(t *testing.T) {
 		if !f.album(t, album).coverLocal.Valid {
 			t.Fatalf("album %s has no cover after the resumed pass", album)
 		}
+	}
+}
+
+func TestLocalArtKeepsTheCopyWhenTheTracksAreGone(t *testing.T) {
+	f := newArtFixture(t)
+	track := f.track(t, "Band/Album/01.flac", "Album")
+	image := f.image(t, "Band/Album/cover.jpg", jpegBytes)
+	f.scan(t)
+	before := f.album(t, "Album")
+
+	// A disk mounted on the album's folder that is not mounted: the folder
+	// is there and empty.
+	for _, path := range []string{track, image} {
+		err := os.Remove(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	f.s.runLookups(context.Background(), lookupRequest{full: true})
+	if after := f.album(t, "Album"); after != before {
+		t.Fatalf("album = %+v with its tracks gone, want the copy kept: %+v", after, before)
+	}
+}
+
+func TestLocalArtTriesABetterSourceAgainAfterAFailureThatMayPass(t *testing.T) {
+	f := newArtFixture(t)
+	f.track(t, "Band/Album/01.flac", "Album", picture(1, ""))
+	f.track(t, "Band/Album/02.flac", "Album", picture(1, ""))
+	f.pictures.failing = map[string]error{"01.flac": errors.New("ffmpeg timed out")}
+	f.scan(t)
+	if !f.album(t, "Album").coverLocal.Valid {
+		t.Fatal("the second track's picture was not used")
+	}
+
+	calls := f.pictures.callCount()
+	f.s.runLookups(context.Background(), lookupRequest{full: true})
+	if got := f.pictures.calls[calls]; got != "01.flac#1" {
+		t.Fatalf("the next pass extracted %q first, want the better source tried again", got)
+	}
+
+	// A source that fails for its content is not retried.
+	f.pictures.failing = map[string]error{"01.flac": helpers.ErrUnsupportedImageType}
+	f.s.runLookups(context.Background(), lookupRequest{full: true})
+	calls = f.pictures.callCount()
+	f.s.runLookups(context.Background(), lookupRequest{full: true})
+	if f.pictures.callCount() != calls {
+		t.Fatalf("a pass extracted %d more times, want none once the fallback is settled", f.pictures.callCount()-calls)
 	}
 }

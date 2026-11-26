@@ -329,8 +329,16 @@ func (s *Scanner) localArtStage(ctx context.Context, full bool, ids []int64) (in
 		s.setLookups(func(status *LookupStatus) { status.Total = 0 })
 		return len(ids), 0, 0, nil
 	}
-	staticDir := s.staticDir()
-	if staticDir == "" {
+	configured := s.staticDir()
+	if configured == "" {
+		return skip()
+	}
+	// The pass writes to the directory the setting leads to now, so a
+	// symlink retargeted meanwhile cannot send its writes or removals
+	// somewhere it did not check.
+	staticDir, err := helpers.ResolvedPath(configured)
+	if err != nil {
+		s.logger.Error("not copying album art: the static directory cannot be resolved", "static_dir", configured, "error", err)
 		return skip()
 	}
 	roots := s.libraryDirs()
@@ -343,7 +351,7 @@ func (s *Scanner) localArtStage(ctx context.Context, full bool, ids []int64) (in
 	art := &localArt{
 		staticDir: staticDir,
 		roots:     roots,
-		current:   func() bool { return s.staticDir() == staticDir && slices.Equal(s.libraryDirs(), roots) },
+		current:   func() bool { return s.staticDir() == configured && slices.Equal(s.libraryDirs(), roots) },
 		owners:    make(map[string]int64),
 	}
 	changed, sinceRequest := 0, 0

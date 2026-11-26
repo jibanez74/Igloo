@@ -168,6 +168,10 @@ func (s *Scanner) syncAlbumArt(ctx context.Context, art *localArt, albumID int64
 	}
 
 	var copyErr error
+	// A better source that failed for a reason that may pass, such as a
+	// read error or an FFmpeg timeout, is tried again on the next pass:
+	// the fingerprint of a fallback copied after one never matches.
+	retryBetter := false
 	embeddedAttempts := 0
 	for i, source := range sources {
 		if source.embedded {
@@ -186,9 +190,14 @@ func (s *Scanner) syncAlbumArt(ctx context.Context, art *localArt, albumID int64
 		if err != nil {
 			s.logger.Debug("failed to copy album art", "album_id", albumID, "source", source.path, "error", err)
 			copyErr = errors.Join(copyErr, err)
+			isContent := errors.Is(err, helpers.ErrUnsupportedImageType) || errors.Is(err, helpers.ErrImageTooLarge)
+			retryBetter = retryBetter || !isContent
 			continue
 		}
 		fingerprint := sourcesFingerprint(art.staticDir, sources[:i+1])
+		if retryBetter {
+			fingerprint += retryMarker
+		}
 		changed, err := s.saveAlbumArt(ctx, art, albumID, sql.NullString{String: copied.url, Valid: true}, helpers.NullString(fingerprint))
 		if err != nil {
 			return artFailed, false, err
@@ -292,6 +301,18 @@ func (s *Scanner) albumArtSources(ctx context.Context, art *localArt, albumID in
 		fingerprint := "embedded:" + track.FilePath + ":" + strconv.FormatInt(track.PictureStream.Int64, 10) + ":" +
 			strconv.FormatInt(track.Size, 10) + ":" + strconv.FormatInt(track.MtimeNs.Int64, 10)
 		sources = append(sources, artSource{path: track.FilePath, stream: int(track.PictureStream.Int64), embedded: true, fingerprint: fingerprint})
+	}
+	// No art and tracks that are not there, as in a folder that is the
+	// mount point of a disk that is not mounted, says nothing about the
+	// album's art either.
+	if len(sources) == 0 {
+		for _, track := range tracks {
+			_, statErr := os.Lstat(track.FilePath)
+			if statErr != nil {
+				unreadable = errors.Join(unreadable, statErr)
+				break
+			}
+		}
 	}
 	return sources, unreadable, nil
 }
@@ -426,6 +447,10 @@ func folderImages(folder string) (sources []artSource, skipped, err error) {
 	}
 	return sources, skipped, nil
 }
+
+// retryMarker ends the fingerprint of a copy made after a better source
+// failed for a reason that may pass, so no pass finds it unchanged.
+const retryMarker = ":retry"
 
 // sourcesFingerprint names the sources a copy in staticDir was chosen from,
 // the last of them copied.
