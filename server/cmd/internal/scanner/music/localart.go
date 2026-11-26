@@ -570,6 +570,12 @@ func (s *Scanner) clearAlbumArt(ctx context.Context, art *localArt, albumID int6
 // copy: deleted albums, and albums whose art went away while a write failed.
 // It reports how many it removed.
 func (s *Scanner) pruneLocalCovers(ctx context.Context, art *localArt) (int, error) {
+	// The roots may lead elsewhere by now, through a symlink the settings
+	// do not show: check the overlap again before deleting anything.
+	_, overlaps := helpers.OverlappingLibrary(filepath.Join(art.staticDir, "local"), s.libraryDirs())
+	if overlaps {
+		return 0, errSettingsChanged
+	}
 	err := checkLocalCoverDir(art.staticDir, localCoverDir)
 	if err != nil {
 		return 0, err

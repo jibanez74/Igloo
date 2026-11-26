@@ -808,3 +808,43 @@ func TestLocalArtKeepsTheCopyWhileTheStaticDirectoryCannotBeRead(t *testing.T) {
 		t.Fatalf("album = %+v, want the copy kept while neither side can be read: %+v", after, before)
 	}
 }
+
+// A full pass a scan interrupts resumes above the last album it read, so
+// runs of changes arriving one after another never send it back to the
+// start.
+func TestLocalArtFullPassResumesWhereAPauseStoppedIt(t *testing.T) {
+	f := newArtFixture(t)
+	for _, album := range []string{"A", "B", "C"} {
+		f.track(t, "Band/"+album+"/01.flac", album, picture(1, ""))
+	}
+	f.s.staticDir = func() string { return "" }
+	f.scan(t)
+	f.s.staticDir = func() string { return f.staticDir }
+
+	ctx, cancel := context.WithCancel(context.Background())
+	f.pictures.hook = func() {
+		if f.pictures.callCount() == 2 {
+			cancel()
+		}
+	}
+	rest := f.s.runLookups(ctx, lookupRequest{full: true})
+	first := f.album(t, "A")
+	if !rest.full || rest.after != first.id {
+		t.Fatalf("an interrupted pass handed back %+v, want a full pass after album %d", rest, first.id)
+	}
+
+	f.pictures.hook = nil
+	rest.merge(albumsRequest([]int64{f.album(t, "C").id}))
+	left := f.s.runLookups(context.Background(), rest)
+	if !left.empty() {
+		t.Fatalf("the resumed pass left %+v", left)
+	}
+	if f.pictures.callCount() != 4 {
+		t.Fatalf("extracted %d times, want 4: A once, B twice (interrupted, then again), C once", f.pictures.callCount())
+	}
+	for _, album := range []string{"A", "B", "C"} {
+		if !f.album(t, album).coverLocal.Valid {
+			t.Fatalf("album %s has no cover after the resumed pass", album)
+		}
+	}
+}

@@ -93,18 +93,41 @@ func TestLookupsPauseStopsAPassAndResumeRunsWhatItLeft(t *testing.T) {
 	}
 }
 
-func TestLookupsFullRequestAbsorbsAlbums(t *testing.T) {
+func TestLookupsFullRequestKeepsItsAlbums(t *testing.T) {
 	b := newBlockingLookups(context.Background())
 	b.l.pause()
 	b.l.request(albumsRequest([]int64{1}))
 	b.l.request(lookupRequest{full: true})
 	b.l.resume(albumsRequest([]int64{2}))
 	request := b.nextStart(t)
-	if !request.full || len(request.albums) != 0 {
-		t.Fatalf("pass = %+v, want one full pass", request)
+	if !request.full || request.after != 0 || len(request.albums) != 2 {
+		t.Fatalf("pass = %+v, want a full pass from the start with albums 1 and 2", request)
 	}
 	close(b.release)
 	scannertest.WaitForGroup(t, b.wait, 5*time.Second, "lookups")
+}
+
+func TestLookupRequestMergeKeepsTheResumePoint(t *testing.T) {
+	tests := []struct {
+		name      string
+		a, b      lookupRequest
+		wantFull  bool
+		wantAfter int64
+	}{
+		{"albums keep a resumed pass where it was", lookupRequest{full: true, after: 40}, albumsRequest([]int64{3}), true, 40},
+		{"a resumed pass joins albums", albumsRequest([]int64{3}), lookupRequest{full: true, after: 40}, true, 40},
+		{"a new full request starts over", lookupRequest{full: true, after: 40}, lookupRequest{full: true}, true, 0},
+		{"albums alone are no full pass", albumsRequest([]int64{1}), albumsRequest([]int64{2}), false, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.a
+			got.merge(tt.b)
+			if got.full != tt.wantFull || got.after != tt.wantAfter {
+				t.Fatalf("merged = %+v, want full %v after %d", got, tt.wantFull, tt.wantAfter)
+			}
+		})
+	}
 }
 
 func TestLookupsRequestsDuringAPassShareTheNextOne(t *testing.T) {

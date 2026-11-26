@@ -60,17 +60,23 @@ type LookupStatus struct {
 	Unmatched int          `json:"unmatched"`
 }
 
-// lookupRequest is the work a pass does: every album, or only some.
+// lookupRequest is the work a pass does: every album with an id above after
+// when full, and the albums in albums. A full pass a scan interrupted resumes
+// above the last album it read, so runs of watcher-detected changes, each of
+// which pauses the worker, never send it back to the first album; a new full
+// request starts it over.
 type lookupRequest struct {
 	full   bool
+	after  int64
 	albums map[int64]bool
 }
 
 func (r *lookupRequest) merge(other lookupRequest) {
-	r.full = r.full || other.full
-	if r.full {
-		r.albums = nil
-		return
+	switch {
+	case r.full && other.full:
+		r.after = min(r.after, other.after)
+	case other.full:
+		r.full, r.after = true, other.after
 	}
 	if len(other.albums) == 0 {
 		return
@@ -239,18 +245,30 @@ func (s *Scanner) runLookups(ctx context.Context, request lookupRequest) lookupR
 		return lookupRequest{}
 	}
 	if request.full {
-		return request
+		// The ids are sorted, so every album up to the last one read is
+		// done; the rest, requested or not, is above it.
+		rest := lookupRequest{full: true, after: request.after}
+		if done > 0 {
+			rest.after = max(rest.after, ids[done-1])
+		}
+		for _, id := range ids[done:] {
+			if id <= rest.after {
+				rest.merge(albumsRequest([]int64{id}))
+			}
+		}
+		return rest
 	}
 	return albumsRequest(ids[done:])
 }
 
 // lookupAlbums lists the albums a pass reads, by id.
 func (s *Scanner) lookupAlbums(ctx context.Context, request lookupRequest) ([]int64, error) {
-	if !request.full {
-		return s.withNeighborAlbums(ctx, slices.Sorted(maps.Keys(request.albums)))
+	requested, err := s.withNeighborAlbums(ctx, slices.Sorted(maps.Keys(request.albums)))
+	if err != nil || !request.full {
+		return requested, err
 	}
-	var ids []int64
-	var afterID int64
+	ids := requested
+	afterID := request.after
 	for {
 		page, err := s.queries.ListMusicAlbumIDs(ctx, database.ListMusicAlbumIDsParams{AfterID: afterID, PageSize: lookupPageSize})
 		if err != nil {
@@ -258,7 +276,8 @@ func (s *Scanner) lookupAlbums(ctx context.Context, request lookupRequest) ([]in
 		}
 		ids = append(ids, page...)
 		if len(page) < lookupPageSize {
-			return ids, nil
+			slices.Sort(ids)
+			return slices.Compact(ids), nil
 		}
 		afterID = page[len(page)-1]
 	}
