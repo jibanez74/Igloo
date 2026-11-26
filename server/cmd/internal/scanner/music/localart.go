@@ -211,7 +211,8 @@ func (s *Scanner) syncAlbumArt(ctx context.Context, art *localArt, albumID int64
 		// Only once the column points at the new copy do the earlier ones
 		// go: until then one is what the album shows. The folder must still
 		// be the static directory's, not a library's.
-		if art.check() == nil {
+		rel, _ := filepath.Rel(art.staticDir, copied.dir)
+		if art.check() == nil && checkLocalCoverDir(art.staticDir, rel) == nil {
 			removeOtherFiles(copied.dir, copied.name)
 		}
 		return artFound, changed, nil
@@ -526,8 +527,13 @@ func (s *Scanner) copyAlbumArt(ctx context.Context, art *localArt, albumID int64
 	// column holds now is never overwritten before the column moves on.
 	sum := sha256.Sum256(content)
 	version := hex.EncodeToString(sum[:4])
-	// An extraction can take a while; the settings may have moved since.
+	// An extraction can take a while; the settings, or the folders on the
+	// way to the copy, may have changed since.
 	err = art.check()
+	if err != nil {
+		return localCopy{}, err
+	}
+	err = checkLocalCoverDir(art.staticDir, rel)
 	if err != nil {
 		return localCopy{}, err
 	}
