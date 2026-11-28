@@ -126,6 +126,14 @@ func (r *Revision) Stamp(progress *Progress, counts Counts, additionalChanges in
 	progress.CatalogRevision = r.total
 }
 
+// Add counts n catalog changes made outside a run, such as a background
+// pass's, and sets the running total on progress, the scanner's published
+// status.
+func (r *Revision) Add(progress *Progress, n int) {
+	r.total += int64(n)
+	progress.CatalogRevision = r.total
+}
+
 type Issue struct {
 	Filename string    `json:"filename"`
 	Phase    ScanPhase `json:"phase"`

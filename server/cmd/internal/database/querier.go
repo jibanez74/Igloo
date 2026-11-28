@@ -303,6 +303,7 @@ type Querier interface {
 	GetMoviesLibraryAsc(ctx context.Context, arg GetMoviesLibraryAscParams) ([]GetMoviesLibraryAscRow, error)
 	// Paginated library Z-A (id tie-breaker so LIMIT/OFFSET is stable when titles match).
 	GetMoviesLibraryDesc(ctx context.Context, arg GetMoviesLibraryDescParams) ([]GetMoviesLibraryDescRow, error)
+	GetMusicAlbumLocalCover(ctx context.Context, id int64) (GetMusicAlbumLocalCoverRow, error)
 	// The music stats endpoint needs all three; one round trip instead of three.
 	GetMusicLibraryCounts(ctx context.Context) (GetMusicLibraryCountsRow, error)
 	GetMusicProviderMatch(ctx context.Context, arg GetMusicProviderMatchParams) (GetMusicProviderMatchRow, error)
@@ -598,7 +599,8 @@ type Querier interface {
 	LinkMusicTrackSpotify(ctx context.Context, arg LinkMusicTrackSpotifyParams) error
 	LinkShowEpisodeFile(ctx context.Context, arg LinkShowEpisodeFileParams) error
 	// An album is matched by Spotify or by Apple, never both; the ID of the one
-	// that matched it names its folder.
+	// that matched it names its folder. An album with art of its own shows that,
+	// so the syncer leaves it out.
 	ListAlbumArtwork(ctx context.Context, arg ListAlbumArtworkParams) ([]ListAlbumArtworkRow, error)
 	// Either ID may name a folder, so both are matched; the syncer keeps the
 	// albums whose own folder it asked for.
@@ -608,6 +610,16 @@ type Querier interface {
 	ListLibraryMountPoints(ctx context.Context, root string) ([]string, error)
 	ListMovieArtwork(ctx context.Context, arg ListMovieArtworkParams) ([]ListMovieArtworkRow, error)
 	ListMovieArtworkInFolders(ctx context.Context, keys string) ([]ListMovieArtworkInFoldersRow, error)
+	// An album's tracks in play order, with the picture each embeds and the
+	// fingerprint that tells when the file changed.
+	ListMusicAlbumArtTracks(ctx context.Context, albumID sql.NullInt64) ([]ListMusicAlbumArtTracksRow, error)
+	// One page of the albums a full local-art pass reads.
+	ListMusicAlbumIDs(ctx context.Context, arg ListMusicAlbumIDsParams) ([]int64, error)
+	// The albums whose art copies a full pass keeps.
+	ListMusicAlbumsWithLocalCover(ctx context.Context) ([]int64, error)
+	// The album of every track beneath a folder; lower and upper bound its
+	// children as in ListMusicTrackScanIndexUnder.
+	ListMusicTrackAlbumsUnder(ctx context.Context, arg ListMusicTrackAlbumsUnderParams) ([]ListMusicTrackAlbumsUnderRow, error)
 	ListMusicTrackScanIndex(ctx context.Context) ([]ListMusicTrackScanIndexRow, error)
 	// ListMusicTrackScanIndex for one path a run of watcher-detected changes
 	// covers; lower and upper bound its children as in GetMovieScanIndexUnder.
@@ -668,6 +680,8 @@ type Querier interface {
 	// edits included. SET reads the row as it was, so file_name is the old name.
 	MoveMovieFile(ctx context.Context, arg MoveMovieFileParams) (int64, error)
 	MoveMusicAlbumAliases(ctx context.Context, arg MoveMusicAlbumAliasesParams) error
+	// The owner's own date wins; a row it holds only for its local cover still
+	// takes the redundant album's.
 	MoveMusicAlbumFallback(ctx context.Context, arg MoveMusicAlbumFallbackParams) error
 	MoveMusicAlbumGenres(ctx context.Context, arg MoveMusicAlbumGenresParams) error
 	MoveMusicAlbumTracks(ctx context.Context, arg MoveMusicAlbumTracksParams) error
@@ -783,6 +797,7 @@ type Querier interface {
 	RevertShowSeasonPosterArtwork(ctx context.Context) (int64, error)
 	SaveMusicAlbumDate(ctx context.Context, arg SaveMusicAlbumDateParams) error
 	SaveMusicAlbumIdentity(ctx context.Context, arg SaveMusicAlbumIdentityParams) error
+	SaveMusicAlbumLocalCoverFingerprint(ctx context.Context, arg SaveMusicAlbumLocalCoverFingerprintParams) error
 	SaveMusicArtistIdentity(ctx context.Context, arg SaveMusicArtistIdentityParams) error
 	SaveMusicCreditID(ctx context.Context, arg SaveMusicCreditIDParams) error
 	SaveMusicCreditMetadata(ctx context.Context, arg SaveMusicCreditMetadataParams) error
@@ -799,6 +814,8 @@ type Querier interface {
 	// source, and a copy in the old folder would be taken for an orphan.
 	SetMoviePosterArtwork(ctx context.Context, arg SetMoviePosterArtworkParams) (int64, error)
 	SetMusicAlbumAppleID(ctx context.Context, arg SetMusicAlbumAppleIDParams) error
+	// Writes nothing for an album deleted since it was read.
+	SetMusicAlbumLocalCover(ctx context.Context, arg SetMusicAlbumLocalCoverParams) (int64, error)
 	SetMusicAlbumSpotifyID(ctx context.Context, arg SetMusicAlbumSpotifyIDParams) error
 	SetMusicArtistSpotifyID(ctx context.Context, arg SetMusicArtistSpotifyIDParams) error
 	SetMusicianThumbArtwork(ctx context.Context, arg SetMusicianThumbArtworkParams) (int64, error)

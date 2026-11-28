@@ -110,6 +110,10 @@ func (f *fakeFFmpeg) SeekLanding(ctx context.Context, params ffmpeg.SeekLandingP
 	return seekLanding(ctx, params)
 }
 
+func (f *fakeFFmpeg) ExtractAttachedPicture(context.Context, string, int, string) error {
+	return errors.New("picture extraction is not stubbed")
+}
+
 func (f *fakeFFmpeg) SeekLandingCalls() []ffmpeg.SeekLandingParams {
 	f.mu.Lock()
 	defer f.mu.Unlock()

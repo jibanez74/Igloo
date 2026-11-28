@@ -23,6 +23,7 @@ type Album struct {
 	TotalTracks               sql.NullInt64  `json:"total_tracks"`
 	Cover                     sql.NullString `json:"cover"`
 	CoverSource               sql.NullString `json:"-"`
+	CoverLocal                sql.NullString `json:"-"`
 	CreatedAt                 string         `json:"created_at"`
 	UpdatedAt                 string         `json:"updated_at"`
 }

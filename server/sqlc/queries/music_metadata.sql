@@ -18,13 +18,13 @@ INSERT INTO music_genre_identity(identity_key, genre_id) VALUES (?, ?) ON CONFLI
 
 -- name: SaveMusicTrackMetadata :exec
 INSERT INTO music_track_metadata(track_id,artist_tag,artist_key,artist_sort,album_sort,apple_track_id,apple_album_id,
-artists_tag,mb_recording_id,mb_release_id,mb_release_group_id,mb_artist_ids,mb_album_artist_ids,isrc,label,compilation,track_total,disc_total)
-VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+artists_tag,mb_recording_id,mb_release_id,mb_release_group_id,mb_artist_ids,mb_album_artist_ids,isrc,label,compilation,track_total,disc_total,picture_stream)
+VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 ON CONFLICT(track_id) DO UPDATE SET artist_tag=excluded.artist_tag,artist_key=excluded.artist_key,artist_sort=excluded.artist_sort,album_sort=excluded.album_sort,
 apple_track_id=excluded.apple_track_id,apple_album_id=excluded.apple_album_id,artists_tag=excluded.artists_tag,
 mb_recording_id=excluded.mb_recording_id,mb_release_id=excluded.mb_release_id,mb_release_group_id=excluded.mb_release_group_id,
 mb_artist_ids=excluded.mb_artist_ids,mb_album_artist_ids=excluded.mb_album_artist_ids,isrc=excluded.isrc,label=excluded.label,
-compilation=excluded.compilation,track_total=excluded.track_total,disc_total=excluded.disc_total;
+compilation=excluded.compilation,track_total=excluded.track_total,disc_total=excluded.disc_total,picture_stream=excluded.picture_stream;
 
 -- name: DeleteMusicCreditMetadata :exec
 DELETE FROM music_credit_metadata WHERE track_id=?;
@@ -198,8 +198,11 @@ INSERT OR IGNORE INTO music_credit_ids(track_id,musician_id,musicbrainz_id)
 SELECT track_id,sqlc.arg(owner),musicbrainz_id FROM music_credit_ids WHERE music_credit_ids.musician_id=sqlc.arg(redundant);
 
 -- name: MoveMusicAlbumFallback :exec
-INSERT OR IGNORE INTO music_album_metadata(album_id,spotify_date)
-SELECT sqlc.arg(owner),spotify_date FROM music_album_metadata WHERE music_album_metadata.album_id=sqlc.arg(redundant);
+-- The owner's own date wins; a row it holds only for its local cover still
+-- takes the redundant album's.
+INSERT INTO music_album_metadata(album_id,spotify_date)
+SELECT sqlc.arg(owner),spotify_date FROM music_album_metadata WHERE music_album_metadata.album_id=sqlc.arg(redundant)
+ON CONFLICT(album_id) DO UPDATE SET spotify_date=COALESCE(music_album_metadata.spotify_date, excluded.spotify_date);
 
 -- name: MusicArtistTrackMetadata :many
 -- The range and order ride idx_track_musicians_musician_track, so keep them on tm.
@@ -375,3 +378,43 @@ SELECT id FROM albums WHERE apple_id=? LIMIT 1;
 
 -- name: SetMusicAlbumAppleID :exec
 UPDATE albums SET apple_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=?;
+
+-- name: ListMusicAlbumIDs :many
+-- One page of the albums a full local-art pass reads.
+SELECT id FROM albums WHERE id > sqlc.arg(after_id) ORDER BY id LIMIT sqlc.arg(page_size);
+
+-- name: ListMusicAlbumArtTracks :many
+-- An album's tracks in play order, with the picture each embeds and the
+-- fingerprint that tells when the file changed.
+SELECT t.id, t.file_path, t.size, f.mtime_ns, m.picture_stream
+FROM tracks t
+LEFT JOIN music_track_metadata m ON m.track_id = t.id
+LEFT JOIN track_file_fingerprints f ON f.track_id = t.id
+WHERE t.album_id = ?
+ORDER BY t.disc, t.track_index, t.id;
+
+-- name: ListMusicTrackAlbumsUnder :many
+-- The album of every track beneath a folder; lower and upper bound its
+-- children as in ListMusicTrackScanIndexUnder.
+SELECT file_path, album_id FROM tracks
+WHERE file_path >= sqlc.arg(lower) AND file_path < sqlc.arg(upper);
+
+-- name: GetMusicAlbumLocalCover :one
+SELECT a.cover_local, m.local_cover_fingerprint
+FROM albums a
+LEFT JOIN music_album_metadata m ON m.album_id = a.id
+WHERE a.id = ?;
+
+-- name: SetMusicAlbumLocalCover :execrows
+-- Writes nothing for an album deleted since it was read.
+UPDATE albums SET cover_local = sqlc.narg(cover_local), updated_at = CURRENT_TIMESTAMP
+WHERE id = sqlc.arg(id) AND cover_local IS NOT sqlc.narg(cover_local);
+
+-- name: SaveMusicAlbumLocalCoverFingerprint :exec
+INSERT INTO music_album_metadata(album_id, local_cover_fingerprint)
+SELECT sqlc.arg(album_id), sqlc.narg(fingerprint) WHERE EXISTS (SELECT 1 FROM albums WHERE id = sqlc.arg(album_id))
+ON CONFLICT(album_id) DO UPDATE SET local_cover_fingerprint = excluded.local_cover_fingerprint;
+
+-- name: ListMusicAlbumsWithLocalCover :many
+-- The albums whose art copies a full pass keeps.
+SELECT id FROM albums WHERE cover_local IS NOT NULL;

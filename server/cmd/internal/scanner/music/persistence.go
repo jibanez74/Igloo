@@ -140,7 +140,7 @@ func (s *Scanner) persistResolvedTrackTx(ctx context.Context, qtx *database.Quer
 		ArtistsTag: joinTagList(artistNames), MbRecordingID: helpers.NullString(tags.recordingID), MbReleaseID: helpers.NullString(tags.releaseID),
 		MbReleaseGroupID: helpers.NullString(tags.releaseGroupID), MbArtistIds: helpers.NullString(joinTagList(tags.artistIDs)),
 		MbAlbumArtistIds: helpers.NullString(joinTagList(tags.albumArtistIDs)), Isrc: helpers.NullString(tags.isrc), Label: helpers.NullString(tags.label),
-		Compilation: tags.compilation, TrackTotal: tags.trackTotal, DiscTotal: tags.discTotal,
+		Compilation: tags.compilation, TrackTotal: tags.trackTotal, DiscTotal: tags.discTotal, PictureStream: resolved.picture,
 	})
 	if err != nil {
 		return 0, err

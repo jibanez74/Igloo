@@ -2152,6 +2152,15 @@ require the full playback test pass.
   `gap-4 p-4` and `text-2xl` return. TV Shows counts Shows, Seasons and
   Episodes from `GET /api/shows/stats`: library totals, distinct from the scan
   panel's per-run "local episodes" figure.
+- **The music scan panel adds one line for the background lookups**, after
+  the scan's own lines and outside its live region: "Album art: 12 of 209
+  albums checked · 10 found · 1 failed · 1 without art", with "· paused until
+  the scan finishes" while a scan holds the pass. It shows whatever the
+  scan's state, since the pass runs after the scan ends, and keeps the last
+  pass's tallies until the next one; it is hidden while the pass has no
+  album to read, including a request still waiting behind the first scan. It
+  is not announced: it changes at every poll for minutes at a time, and the
+  scan's own status line already announces the scan.
 - **Card section titles are real headings**: render `CardTitle` with `asChild`
   wrapping an `<h2>` (login's is the page `<h1>`) so card-sectioned pages are
   navigable by heading.

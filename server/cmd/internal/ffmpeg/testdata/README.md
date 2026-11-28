@@ -19,3 +19,12 @@ Check the picture types with the pinned FFmpeg; expect one type 20 (IDR_N_LP) an
 "$IGLOO_FFMPEG_PATH" -v trace -i server/cmd/internal/ffmpeg/testdata/hevc-hdr10-open-gop.mkv -map 0:v -c copy \
   -bsf:v trace_headers -f null - 2>&1 | grep -E 'nal_unit_type +[0-9]+ = (1[6-9]|2[01])'
 ```
+
+- `embedded-cover.flac`: 0.1 seconds of silent mono FLAC with a 16x16 red JPEG attached as stream 1, marked `Cover (front)`. Igloo's FFmpeg has no MJPEG encoder, so it was made with the same Ubuntu FFmpeg 4.4.2:
+
+```sh
+ffmpeg -nostdin -v error -y -f lavfi -i color=c=red:s=16x16 -frames:v 1 red.jpg
+ffmpeg -nostdin -v error -y -f lavfi -t 0.1 -i anullsrc=r=8000:cl=mono -i red.jpg -map 0:a -map 1:v \
+  -c:a flac -c:v copy -disposition:v attached_pic -metadata:s:v comment="Cover (front)" -metadata title=Covered \
+  server/cmd/internal/ffmpeg/testdata/embedded-cover.flac
+```

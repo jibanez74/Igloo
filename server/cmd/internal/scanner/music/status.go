@@ -11,6 +11,9 @@ import (
 type Status struct {
 	scanner.Progress
 	scanner.Counts
+	// Lookups is the background worker's current or latest pass, which runs
+	// between scans.
+	Lookups LookupStatus `json:"lookups"`
 }
 
 // scanReport is owned by the scan goroutine. The provider tallies are not kept
@@ -59,6 +62,12 @@ func (s *Scanner) Status() Status {
 	defer s.statusMu.RUnlock()
 	result := s.status
 	result.Progress = result.Progress.Clone()
+	result.Lookups = s.lookupStatus
+	result.Lookups.State = s.lookups.state()
+	if result.Lookups.Stage != nil {
+		stage := *result.Lookups.Stage
+		result.Lookups.Stage = &stage
+	}
 	return result
 }
 

@@ -17706,7 +17706,8 @@
           "enrichment_unmatched",
           "issue_count",
           "issues",
-          "catalog_revision"
+          "catalog_revision",
+          "lookups"
         ],
         "properties": {
           "run_id": {
@@ -17850,7 +17851,71 @@
             "type": "integer",
             "format": "int64",
             "minimum": 0,
-            "description": "Running count of the catalog changes this scanner has made since the server started: files imported, updated or deleted, artists and albums enriched, committed Apple Music or Spotify track pairings, and album matches dropped because their tracks contradicted them, summed across runs. Track pairings count even for unchanged files or fingerprint-only updates; they do not increase enriched. A dropped match counts even though it lowers enriched. Rolled-back pairings and repeated publication of the same committed changes add nothing. It changes even when the run that made the change finished between two reads of this report, so a client compares it to tell whether the catalog changed. Compare it for change only; it restarts from 0 with the server."
+            "description": "Running count of the catalog changes this scanner has made since the server started: files imported, updated or deleted, artists and albums enriched, committed Apple Music or Spotify track pairings, and album matches dropped because their tracks contradicted them, summed across runs, plus the album covers the background lookups changed between runs. Track pairings count even for unchanged files or fingerprint-only updates; they do not increase enriched. A dropped match counts even though it lowers enriched. Rolled-back pairings and repeated publication of the same committed changes add nothing. It changes even when the run that made the change finished between two reads of this report, so a client compares it to tell whether the catalog changed. Compare it for change only; it restarts from 0 with the server."
+          },
+          "lookups": {
+            "$ref": "#/components/schemas/MusicLookupStatusData"
+          }
+        },
+        "additionalProperties": false
+      },
+      "MusicLookupStatusData": {
+        "type": "object",
+        "description": "The background lookups that run between music scans, after the scan run ends; a scan pauses them until it finishes. The counters describe the current or latest pass and count albums; a full pass a scan interrupted resumes as a new pass over the albums it had left, which its counters then count.",
+        "required": [
+          "state",
+          "stage",
+          "processed",
+          "total",
+          "matched",
+          "failed",
+          "unmatched"
+        ],
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "idle",
+              "running",
+              "paused"
+            ],
+            "description": "running: a pass is reading albums; paused: a music scan is running and the pass resumes after it; idle: no pass is waiting."
+          },
+          "stage": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "local-art",
+              null
+            ],
+            "description": "The stage the running pass is in; null between passes. local-art copies each album's own art: a cover image in its folder or a picture embedded in its tracks."
+          },
+          "processed": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Albums the pass has read so far."
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Albums the pass reads."
+          },
+          "matched": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Albums that show art of their own."
+          },
+          "failed": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Albums whose art could not be read or copied; a cover copied earlier stays while its file is still in the static directory, and the provider cover shows otherwise."
+          },
+          "unmatched": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Albums with no art of their own."
           }
         },
         "additionalProperties": false

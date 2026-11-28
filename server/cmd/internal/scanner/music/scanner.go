@@ -52,6 +52,16 @@ type Dependencies struct {
 	// ScanFinished runs when each run ends, to download the artwork it
 	// brought; scoped marks a run of watcher-detected changes.
 	ScanFinished func(scoped bool)
+	// Pictures extracts the pictures tracks embed; without it albums use
+	// only folder images.
+	Pictures PictureExtractor
+	// StaticDir and LibraryDirs read the current settings: album art is
+	// copied under the static directory, never into a library.
+	StaticDir   func() string
+	LibraryDirs func() []string
+	// LookupsChanged runs when the background worker changed album covers,
+	// to download the provider covers it handed back.
+	LookupsChanged func()
 }
 
 // Scanner scans and persists the configured music library.
@@ -70,8 +80,14 @@ type Scanner struct {
 	outstanding              scanner.Outstanding
 	currentMusicDirectory    func() sql.NullString
 	invalidateCommittedTrack func(int64)
+	pictures                 PictureExtractor
+	staticDir                func() string
+	libraryDirs              func() []string
+	lookupsChanged           func()
+	lookups                  *lookups
 	statusMu                 sync.RWMutex
 	status                   Status
+	lookupStatus             LookupStatus
 	revision                 scanner.Revision
 }
 
@@ -98,7 +114,16 @@ func New(deps Dependencies) *Scanner {
 	if deps.InvalidateCommittedTrack == nil {
 		deps.InvalidateCommittedTrack = func(int64) {}
 	}
-	return &Scanner{
+	if deps.StaticDir == nil {
+		deps.StaticDir = func() string { return "" }
+	}
+	if deps.LibraryDirs == nil {
+		deps.LibraryDirs = func() []string { return nil }
+	}
+	if deps.LookupsChanged == nil {
+		deps.LookupsChanged = func() {}
+	}
+	s := &Scanner{
 		now:     deps.Now,
 		queries: deps.Queries, logger: deps.Logger, ffprobe: deps.Ffprobe,
 		spotify: deps.Spotify, apple: deps.Apple, appleLookupsEnabled: deps.AppleLookupsEnabled,
@@ -107,5 +132,11 @@ func New(deps Dependencies) *Scanner {
 		mountPoints:              scanner.MountPoints,
 		currentMusicDirectory:    deps.CurrentMusicDirectory,
 		invalidateCommittedTrack: deps.InvalidateCommittedTrack,
+		pictures:                 deps.Pictures,
+		staticDir:                deps.StaticDir,
+		libraryDirs:              deps.LibraryDirs,
+		lookupsChanged:           deps.LookupsChanged,
 	}
+	s.lookups = &lookups{ctx: func() context.Context { return s.scanContext }, wait: deps.Wait, run: s.runLookups}
+	return s
 }

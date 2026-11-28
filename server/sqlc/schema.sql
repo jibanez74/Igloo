@@ -156,6 +156,10 @@ CREATE TABLE IF NOT EXISTS albums (
   total_tracks INTEGER,
   cover TEXT,
   cover_source TEXT,
+  -- The URL of the copy of the album's own art, a folder image or a picture
+  -- embedded in a track, under <static_dir>/local/albums/<id>/. It wins over
+  -- cover_source, and the artwork syncer never touches it.
+  cover_local TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -317,7 +321,8 @@ CREATE TABLE IF NOT EXISTS music_genre_identity (
 -- and a single one names only its lead artist. The MusicBrainz ids are the ones the
 -- file's tags carry (lists joined with ';' in credit order), NULL when absent
 -- or not UUIDs; the album's ids are their majority. track_total and
--- disc_total are 0 when untagged.
+-- disc_total are 0 when untagged. picture_stream is the index of the picture
+-- the file embeds, its front cover when it marks one; NULL without one.
 CREATE TABLE IF NOT EXISTS music_track_metadata (
   track_id INTEGER PRIMARY KEY REFERENCES tracks (id) ON DELETE CASCADE,
   artist_tag TEXT NOT NULL,
@@ -336,7 +341,8 @@ CREATE TABLE IF NOT EXISTS music_track_metadata (
   label TEXT,
   compilation BOOLEAN NOT NULL DEFAULT false,
   track_total INTEGER NOT NULL DEFAULT 0,
-  disc_total INTEGER NOT NULL DEFAULT 0
+  disc_total INTEGER NOT NULL DEFAULT 0,
+  picture_stream INTEGER
 );
 
 -- Explicit credit sort values contribute at most one vote per track and artist.
@@ -368,9 +374,13 @@ CREATE TABLE IF NOT EXISTS music_credit_ids (
 CREATE INDEX IF NOT EXISTS music_credit_ids_votes ON music_credit_ids (musician_id, musicbrainz_id);
 
 -- Spotify dates are a fallback when no valid local track date remains.
+-- local_cover_fingerprint hashes the static directory albums.cover_local's
+-- copy is in and every source up to the one it was copied from (path, size,
+-- modification time and, for a folder image, its permissions), so an unchanged choice is not copied again.
 CREATE TABLE IF NOT EXISTS music_album_metadata (
   album_id INTEGER PRIMARY KEY REFERENCES albums (id) ON DELETE CASCADE,
-  spotify_date TEXT
+  spotify_date TEXT,
+  local_cover_fingerprint TEXT
 );
 
 -- Album-credit adoption targets survive provider failures and scan interruption.
@@ -1809,18 +1819,19 @@ BEGIN
   UPDATE networks SET logo = new.logo_source WHERE id = new.id;
 END;
 
+-- An album's own art wins over its provider's.
 CREATE TRIGGER IF NOT EXISTS albums_artwork_ai
 AFTER INSERT ON albums
-WHEN new.cover_source IS NOT NULL
+WHEN COALESCE(new.cover_local, new.cover_source) IS NOT NULL
 BEGIN
-  UPDATE albums SET cover = new.cover_source WHERE id = new.id;
+  UPDATE albums SET cover = COALESCE(new.cover_local, new.cover_source) WHERE id = new.id;
 END;
 
 CREATE TRIGGER IF NOT EXISTS albums_artwork_au
-AFTER UPDATE OF cover_source ON albums
-WHEN new.cover_source IS NOT old.cover_source
+AFTER UPDATE OF cover_source, cover_local ON albums
+WHEN new.cover_source IS NOT old.cover_source OR new.cover_local IS NOT old.cover_local
 BEGIN
-  UPDATE albums SET cover = new.cover_source WHERE id = new.id;
+  UPDATE albums SET cover = COALESCE(new.cover_local, new.cover_source) WHERE id = new.id;
 END;
 
 CREATE TRIGGER IF NOT EXISTS musicians_artwork_ai
@@ -1875,12 +1886,13 @@ BEGIN
   UPDATE networks SET logo = logo_source WHERE id = new.id AND logo LIKE '/api/static/%';
 END;
 
--- An album's folder is its Spotify ID, or its Apple ID without one.
+-- An album's folder is its Spotify ID, or its Apple ID without one. Its own
+-- art lives in a folder of its own and stays.
 CREATE TRIGGER IF NOT EXISTS albums_artwork_key_au
 AFTER UPDATE OF spotify_id, apple_id ON albums
 WHEN new.spotify_id IS NOT old.spotify_id OR new.apple_id IS NOT old.apple_id
 BEGIN
-  UPDATE albums SET cover = cover_source WHERE id = new.id AND cover LIKE '/api/static/%';
+  UPDATE albums SET cover = cover_source WHERE id = new.id AND cover_local IS NULL AND cover LIKE '/api/static/%';
 END;
 
 CREATE TRIGGER IF NOT EXISTS musicians_artwork_key_au
