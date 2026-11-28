@@ -497,6 +497,16 @@ func itoa(id int64) string {
 	return strconv.FormatInt(id, 10)
 }
 
+// skipIfRoot skips a test that makes a file or folder unreadable with mode 0,
+// which does not restrict root.
+func skipIfRoot(t *testing.T) {
+	t.Helper()
+	isRoot := os.Geteuid() == 0
+	if isRoot {
+		t.Skip("file permissions do not restrict root")
+	}
+}
+
 func TestLocalArtKeepsTheCopyWhileTheFolderCannotBeRead(t *testing.T) {
 	for _, hide := range []string{"unreadable", "missing"} {
 		t.Run(hide, func(t *testing.T) {
@@ -508,6 +518,7 @@ func TestLocalArtKeepsTheCopyWhileTheFolderCannotBeRead(t *testing.T) {
 
 			folder := filepath.Join(f.musicDir, "Band", "Album")
 			if hide == "unreadable" {
+				skipIfRoot(t)
 				err := os.Chmod(folder, 0)
 				if err != nil {
 					t.Fatal(err)
@@ -688,6 +699,7 @@ func TestLocalArtSkipsAnImageItCannotLookAt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	skipIfRoot(t)
 	err = os.Chmod(locked, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -711,6 +723,7 @@ func TestLocalArtShowsTheProviderCoverWhenTheCopyIsGoneAndTheFolderUnreadable(t 
 	}
 
 	folder := filepath.Join(f.musicDir, "Band", "Album")
+	skipIfRoot(t)
 	err = os.Chmod(folder, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -775,6 +788,7 @@ func TestLocalArtCopiesAnImageOnceItCanBeOpened(t *testing.T) {
 	f := newArtFixture(t)
 	f.track(t, "Band/Album/01.flac", "Album", picture(1, ""))
 	image := f.image(t, "Band/Album/cover.jpg", jpegBytes)
+	skipIfRoot(t)
 	err := os.Chmod(image, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -802,6 +816,7 @@ func TestLocalArtKeepsTheCopyWhileTheStaticDirectoryCannotBeRead(t *testing.T) {
 
 	folder := filepath.Join(f.musicDir, "Band", "Album")
 	copies := filepath.Join(f.staticDir, "local", "albums", itoa(before.id))
+	skipIfRoot(t)
 	for _, dir := range []string{folder, copies} {
 		err := os.Chmod(dir, 0)
 		if err != nil {
