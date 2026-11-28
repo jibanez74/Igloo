@@ -315,7 +315,9 @@ CREATE TABLE IF NOT EXISTS music_genre_identity (
 );
 
 -- Original tags support enrichment retries and credit reconciliation
--- without probing files again. The Apple ids are the catalog ids an iTunes
+-- without probing files again. artist_tag is the artist the scan used, from
+-- the tag or the file's path, and artist_key keys its main credit, featured
+-- artists left off. The Apple ids are the catalog ids an iTunes
 -- Store purchase carries; NULL when the file has none. artists_tag is the
 -- ARTISTS tag's names joined with ';': two or more are the track's credits,
 -- and a single one names only its lead artist. The MusicBrainz ids are the ones the
@@ -380,6 +382,9 @@ CREATE INDEX IF NOT EXISTS music_credit_ids_votes ON music_credit_ids (musician_
 CREATE TABLE IF NOT EXISTS music_album_metadata (
   album_id INTEGER PRIMARY KEY REFERENCES albums (id) ON DELETE CASCADE,
   spotify_date TEXT,
+  -- The album type the matching provider gives; albums.album_type takes it
+  -- unless most of the album's tracks carry the compilation flag.
+  provider_album_type TEXT CHECK (provider_album_type IN ('album', 'single', 'compilation')),
   local_cover_fingerprint TEXT
 );
 

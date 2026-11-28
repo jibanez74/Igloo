@@ -22,9 +22,10 @@ type Querier interface {
 	ClearArtworkStaticDir(ctx context.Context) error
 	ClearMovieTmdbRetry(ctx context.Context, movieID int64) error
 	// Drops what a match its tracks contradicted stored on the album; the next
-	// three statements drop its date and its tracks' pairings and outcomes.
+	// three statements drop its date and type and its tracks' pairings and
+	// outcomes, and reconciling the album then rebuilds both from its tracks.
 	ClearMusicAlbumSpotify(ctx context.Context, id int64) error
-	ClearMusicAlbumSpotifyDate(ctx context.Context, albumID int64) error
+	ClearMusicAlbumSpotifyFallback(ctx context.Context, albumID int64) error
 	ClearMusicAlbumTrackLinks(ctx context.Context, albumID sql.NullInt64) error
 	ClearShowEpisodeRetry(ctx context.Context, episodeID int64) error
 	ClearShowRetry(ctx context.Context, showID int64) error
@@ -680,8 +681,8 @@ type Querier interface {
 	// edits included. SET reads the row as it was, so file_name is the old name.
 	MoveMovieFile(ctx context.Context, arg MoveMovieFileParams) (int64, error)
 	MoveMusicAlbumAliases(ctx context.Context, arg MoveMusicAlbumAliasesParams) error
-	// The owner's own date wins; a row it holds only for its local cover still
-	// takes the redundant album's.
+	// The owner's own date and type win; a row it holds only for its local cover
+	// still takes the redundant album's.
 	MoveMusicAlbumFallback(ctx context.Context, arg MoveMusicAlbumFallbackParams) error
 	MoveMusicAlbumGenres(ctx context.Context, arg MoveMusicAlbumGenresParams) error
 	MoveMusicAlbumTracks(ctx context.Context, arg MoveMusicAlbumTracksParams) error
@@ -769,6 +770,9 @@ type Querier interface {
 	ReconcileMusicAlbumReleaseGroupID(ctx context.Context, id int64) error
 	ReconcileMusicAlbumReleaseID(ctx context.Context, id int64) error
 	ReconcileMusicAlbumSort(ctx context.Context, id int64) error
+	// Local wins: an album most of whose tracks carry the compilation flag is a
+	// compilation whatever its provider says; any other takes the provider's type.
+	ReconcileMusicAlbumType(ctx context.Context, id int64) error
 	ReconcileMusicAlbumYear(ctx context.Context, id int64) error
 	// The id most of the artist's credits carry, ties to the lowest.
 	ReconcileMusicArtistMusicBrainzID(ctx context.Context, id int64) error
@@ -798,6 +802,9 @@ type Querier interface {
 	SaveMusicAlbumDate(ctx context.Context, arg SaveMusicAlbumDateParams) error
 	SaveMusicAlbumIdentity(ctx context.Context, arg SaveMusicAlbumIdentityParams) error
 	SaveMusicAlbumLocalCoverFingerprint(ctx context.Context, arg SaveMusicAlbumLocalCoverFingerprintParams) error
+	// An unknown type keeps the one stored, as UpdateMusicAlbumEnrichment keeps
+	// its counts.
+	SaveMusicAlbumProviderType(ctx context.Context, arg SaveMusicAlbumProviderTypeParams) error
 	SaveMusicArtistIdentity(ctx context.Context, arg SaveMusicArtistIdentityParams) error
 	SaveMusicCreditID(ctx context.Context, arg SaveMusicCreditIDParams) error
 	SaveMusicCreditMetadata(ctx context.Context, arg SaveMusicCreditMetadataParams) error
@@ -840,9 +847,9 @@ type Querier interface {
 	UpdateMovie(ctx context.Context, arg UpdateMovieParams) (int64, error)
 	UpdateMoviePlaylist(ctx context.Context, arg UpdateMoviePlaylistParams) (Playlist, error)
 	UpdateMovieTmdbMetadata(ctx context.Context, arg UpdateMovieTmdbMetadataParams) error
-	// COALESCE like UpsertAlbum: the scanner maps a zero track count and an
-	// unknown album type to NULL, so an unguarded SET would erase values a
-	// previous match stored.
+	// COALESCE like UpsertAlbum: the scanner maps a zero track count to NULL, so
+	// an unguarded SET would erase the count a previous match stored. The album
+	// type goes through SaveMusicAlbumProviderType and ReconcileMusicAlbumType.
 	UpdateMusicAlbumEnrichment(ctx context.Context, arg UpdateMusicAlbumEnrichmentParams) error
 	// Guarded so an unchanged primary artist does not fire the search triggers.
 	UpdateMusicTrackPrimaryArtist(ctx context.Context, arg UpdateMusicTrackPrimaryArtistParams) error

@@ -383,3 +383,49 @@ func TestArtistSortCreditPositions(t *testing.T) {
 		t.Fatalf("occurrences lost: %+v", credits)
 	}
 }
+
+func TestSplitFeaturedFindsEveryMarker(t *testing.T) {
+	cases := []struct {
+		value, main, featured string
+	}{
+		{"Juanes feat. Nelly Furtado", "Juanes", "Nelly Furtado"},
+		{"Juanes Feat Nelly Furtado", "Juanes", "Nelly Furtado"},
+		{"Juanes ft. Nelly Furtado", "Juanes", "Nelly Furtado"},
+		{"Juanes featuring Nelly Furtado", "Juanes", "Nelly Furtado"},
+		{"Juanes FEATURING Nelly Furtado", "Juanes", "Nelly Furtado"},
+		{"Juanes (feat. Nelly Furtado)", "Juanes", "Nelly Furtado"},
+		{"Juanes [ft. Nelly Furtado]", "Juanes", "Nelly Furtado"},
+		{"Juanes(feat. Nelly Furtado)", "Juanes", "Nelly Furtado"},
+		{"A & B feat. C, D", "A & B", "C, D"},
+		{"Featherstone", "Featherstone", ""},
+		{"The Featherstones feat", "The Featherstones feat", ""},
+		{"Soft Cell", "Soft Cell", ""},
+		{"Left Boy", "Left Boy", ""},
+		{"Craft Spells", "Craft Spells", ""},
+		{"feat. Nobody", "feat. Nobody", ""},
+		{"Juanes feat. ", "Juanes feat.", ""},
+		{"Earth, Wind & Fire", "Earth, Wind & Fire", ""},
+	}
+	for _, tc := range cases {
+		main, featured := splitFeatured(tc.value)
+		if main != tc.main || featured != tc.featured {
+			t.Errorf("splitFeatured(%q) = %q, %q, want %q, %q", tc.value, main, featured, tc.main, tc.featured)
+		}
+	}
+}
+
+func TestCompoundCreditsKeepKnownNamesWhole(t *testing.T) {
+	cases := map[string][]string{
+		"Earth, Wind & Fire":                {"Earth, Wind & Fire"},
+		"simon & garfunkel":                 {"simon & garfunkel"},
+		"Simon & Garfunkel feat. Art Guest": {"Simon & Garfunkel"},
+		"Artist One & Artist Two feat. C":   {"Artist One", "Artist Two"},
+		"Juanes feat. Nelly Furtado":        {"Juanes"},
+	}
+	for value, want := range cases {
+		got := compoundCredits(value).parts
+		if !slices.Equal(got, want) {
+			t.Errorf("compoundCredits(%q).parts = %q, want %q", value, got, want)
+		}
+	}
+}

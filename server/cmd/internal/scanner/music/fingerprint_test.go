@@ -143,7 +143,7 @@ func TestFingerprintRollbackPreservesBaseline(t *testing.T) {
 			s.invalidateCommittedTrack = func(int64) { invalidations++ }
 			scan := newMusicScanContext(nil)
 			file := scanner.ScanFile{Path: path, Ext: "m4a"}
-			outcome, _, err := s.processFile(ctx, scan, file)
+			outcome, _, err := s.processFile(ctx, scan, "", file)
 			if err != nil || outcome != scanner.FileNeedsProcessing {
 				t.Fatalf("initial: %v %v", outcome, err)
 			}
@@ -164,7 +164,7 @@ func TestFingerprintRollbackPreservesBaseline(t *testing.T) {
 			if !identical {
 				probeFailure := errors.New("probe failed")
 				s.ffprobe = &scannertest.Probe{Callback: func(context.Context, string) (*ffprobe.FfprobeResult, error) { return nil, probeFailure }}
-				_, _, err = s.processFile(ctx, scan, file)
+				_, _, err = s.processFile(ctx, scan, "", file)
 				failedProbe := errors.Is(err, probeFailure)
 				if !failedProbe {
 					t.Fatalf("probe error: %v", err)
@@ -179,7 +179,7 @@ func TestFingerprintRollbackPreservesBaseline(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, _, err = s.processFile(ctx, scan, file)
+			_, _, err = s.processFile(ctx, scan, "", file)
 			if err == nil {
 				t.Fatal("expected persistence failure")
 			}
@@ -196,14 +196,14 @@ func TestFingerprintRollbackPreservesBaseline(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, _, err = s.processFile(ctx, scan, file)
+			_, _, err = s.processFile(ctx, scan, "", file)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if scan.trackIndex[path] == baseline {
 				t.Fatal("retry did not advance baseline")
 			}
-			outcome, _, err = s.processFile(ctx, scan, file)
+			outcome, _, err = s.processFile(ctx, scan, "", file)
 			if err != nil || outcome != scanner.FileUnchanged {
 				t.Fatalf("repeat after commit: %v %v", outcome, err)
 			}
@@ -221,7 +221,7 @@ func TestFileChangesDuringResolutionAndCommit(t *testing.T) {
 			s.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadata()}
 			scan := newMusicScanContext(nil)
 			file := scanner.ScanFile{Path: path, Ext: "m4a"}
-			_, _, err := s.processFile(ctx, scan, file)
+			_, _, err := s.processFile(ctx, scan, "", file)
 			if err != nil {
 				t.Fatal(err)
 			}

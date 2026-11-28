@@ -134,8 +134,11 @@ func (s *Scanner) persistResolvedTrackTx(ctx context.Context, qtx *database.Quer
 	if tags.soleArtist != "" {
 		artistNames = []string{tags.soleArtist}
 	}
+	// The key is the main credit's, the musician compound reconciliation
+	// looks the track up by; featured artists are credits of their own.
+	mainArtist, _ := splitFeatured(resolved.artistTag)
 	err = qtx.SaveMusicTrackMetadata(ctx, database.SaveMusicTrackMetadataParams{
-		TrackID: trackID, ArtistTag: resolved.artistTag, ArtistKey: scanner.NormalizedScanCacheKey(resolved.artistTag), ArtistSort: resolved.artistSort, AlbumSort: resolved.albumSort,
+		TrackID: trackID, ArtistTag: resolved.artistTag, ArtistKey: scanner.NormalizedScanCacheKey(mainArtist), ArtistSort: resolved.artistSort, AlbumSort: resolved.albumSort,
 		AppleTrackID: helpers.NullInt64(resolved.catalog.Track), AppleAlbumID: helpers.NullInt64(resolved.catalog.Album),
 		ArtistsTag: joinTagList(artistNames), MbRecordingID: helpers.NullString(tags.recordingID), MbReleaseID: helpers.NullString(tags.releaseID),
 		MbReleaseGroupID: helpers.NullString(tags.releaseGroupID), MbArtistIds: helpers.NullString(joinTagList(tags.artistIDs)),
@@ -352,7 +355,11 @@ func (s *Scanner) persistAlbum(ctx context.Context, qtx *database.Queries, scan 
 	}
 
 	if input.spotifyAlbum != nil {
-		err = qtx.UpdateMusicAlbumEnrichment(ctx, database.UpdateMusicAlbumEnrichmentParams{ID: album.ID, TotalTracks: helpers.NullInt64(int64(input.spotifyAlbum.TotalTracks)), AlbumType: albumTypeValue(input.spotifyAlbum.AlbumType)})
+		err = qtx.UpdateMusicAlbumEnrichment(ctx, database.UpdateMusicAlbumEnrichmentParams{ID: album.ID, TotalTracks: helpers.NullInt64(int64(input.spotifyAlbum.TotalTracks))})
+		if err != nil {
+			return 0, err
+		}
+		err = saveProviderAlbumType(ctx, qtx, album.ID, input.spotifyAlbum.AlbumType)
 		if err != nil {
 			return 0, err
 		}
@@ -483,7 +490,7 @@ func reconcileArtist(ctx context.Context, qtx *database.Queries, id int64) error
 func reconcileAlbum(ctx context.Context, qtx *database.Queries, id int64) error {
 	updates := []func(context.Context, int64) error{
 		qtx.ReconcileMusicAlbumSort, qtx.ReconcileMusicAlbumDate, qtx.ReconcileMusicAlbumYear,
-		qtx.ReconcileMusicAlbumReleaseID, qtx.ReconcileMusicAlbumReleaseGroupID,
+		qtx.ReconcileMusicAlbumReleaseID, qtx.ReconcileMusicAlbumReleaseGroupID, qtx.ReconcileMusicAlbumType,
 	}
 	for _, update := range updates {
 		err := update(ctx, id)

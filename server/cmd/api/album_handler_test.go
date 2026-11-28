@@ -61,6 +61,21 @@ func TestAlbumHandlers_RejectBadIDsUnknownRowsAndNonAdmins(t *testing.T) {
 	}
 }
 
+// setProviderAlbumType stores a provider's album type the way a match does:
+// as the album's fallback, which the type rule then copies onto the album.
+func setProviderAlbumType(t *testing.T, app *Application, albumID int64, albumType string) {
+	t.Helper()
+	ctx := context.Background()
+	err := app.Queries.SaveMusicAlbumProviderType(ctx, database.SaveMusicAlbumProviderTypeParams{AlbumID: albumID, ProviderAlbumType: sql.NullString{String: albumType, Valid: true}})
+	if err != nil {
+		t.Fatalf("save provider album type: %v", err)
+	}
+	err = app.Queries.ReconcileMusicAlbumType(ctx, albumID)
+	if err != nil {
+		t.Fatalf("reconcile album type: %v", err)
+	}
+}
+
 // spotify_url is derived from the stored id, and album_type is whatever the
 // Spotify match reported; both are null for an unmatched album.
 func TestGetAlbumDetails_DerivesCatalogURLsAndReportsAlbumType(t *testing.T) {
@@ -78,19 +93,13 @@ func TestGetAlbumDetails_DerivesCatalogURLsAndReportsAlbumType(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create matched album: %v", err)
 	}
-	err = app.Queries.UpdateMusicAlbumEnrichment(ctx, database.UpdateMusicAlbumEnrichmentParams{ID: matched.ID, AlbumType: sql.NullString{String: "single", Valid: true}})
-	if err != nil {
-		t.Fatalf("set album type: %v", err)
-	}
+	setProviderAlbumType(t, app, matched.ID, "single")
 	appleID := createTestAlbum(t, app, "Cry Pretty", "Carrie Underwood")
 	err = app.Queries.SetMusicAlbumAppleID(ctx, database.SetMusicAlbumAppleIDParams{ID: appleID, AppleID: sql.NullInt64{Int64: 1432044881, Valid: true}})
 	if err != nil {
 		t.Fatalf("set apple id: %v", err)
 	}
-	err = app.Queries.UpdateMusicAlbumEnrichment(ctx, database.UpdateMusicAlbumEnrichmentParams{ID: appleID, AlbumType: sql.NullString{String: "album", Valid: true}})
-	if err != nil {
-		t.Fatalf("set album type: %v", err)
-	}
+	setProviderAlbumType(t, app, appleID, "album")
 	unmatchedID := createTestAlbum(t, app, "Local Album", "Local Artist")
 
 	tests := []struct {

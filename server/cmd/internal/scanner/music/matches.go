@@ -121,6 +121,17 @@ func albumTypeValue(albumType string) sql.NullString {
 	return sql.NullString{}
 }
 
+// saveProviderAlbumType stores the matching provider's album type as the
+// album's fallback and re-runs the type rule, which lets the tracks'
+// compilation flag win.
+func saveProviderAlbumType(ctx context.Context, qtx *database.Queries, albumID int64, albumType string) error {
+	err := qtx.SaveMusicAlbumProviderType(ctx, database.SaveMusicAlbumProviderTypeParams{AlbumID: albumID, ProviderAlbumType: albumTypeValue(albumType)})
+	if err != nil {
+		return err
+	}
+	return qtx.ReconcileMusicAlbumType(ctx, albumID)
+}
+
 // noteProviderStop reports a provider's breaker tripping once per scan and
 // returns whether it has tripped.
 func (s *Scanner) noteProviderStop(report *scanReport, breaker *scanner.ProviderBreaker, reported *bool, provider, reason string) bool {

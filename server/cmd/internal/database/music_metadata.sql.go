@@ -12,22 +12,23 @@ import (
 )
 
 const clearMusicAlbumSpotify = `-- name: ClearMusicAlbumSpotify :exec
-UPDATE albums SET spotify_id=NULL, cover_source=NULL, album_type=NULL, total_tracks=NULL, updated_at=CURRENT_TIMESTAMP WHERE id=?
+UPDATE albums SET spotify_id=NULL, cover_source=NULL, total_tracks=NULL, updated_at=CURRENT_TIMESTAMP WHERE id=?
 `
 
 // Drops what a match its tracks contradicted stored on the album; the next
-// three statements drop its date and its tracks' pairings and outcomes.
+// three statements drop its date and type and its tracks' pairings and
+// outcomes, and reconciling the album then rebuilds both from its tracks.
 func (q *Queries) ClearMusicAlbumSpotify(ctx context.Context, id int64) error {
 	_, err := q.exec(ctx, q.clearMusicAlbumSpotifyStmt, clearMusicAlbumSpotify, id)
 	return err
 }
 
-const clearMusicAlbumSpotifyDate = `-- name: ClearMusicAlbumSpotifyDate :exec
-UPDATE music_album_metadata SET spotify_date=NULL WHERE album_id=?
+const clearMusicAlbumSpotifyFallback = `-- name: ClearMusicAlbumSpotifyFallback :exec
+UPDATE music_album_metadata SET spotify_date=NULL, provider_album_type=NULL WHERE album_id=?
 `
 
-func (q *Queries) ClearMusicAlbumSpotifyDate(ctx context.Context, albumID int64) error {
-	_, err := q.exec(ctx, q.clearMusicAlbumSpotifyDateStmt, clearMusicAlbumSpotifyDate, albumID)
+func (q *Queries) ClearMusicAlbumSpotifyFallback(ctx context.Context, albumID int64) error {
+	_, err := q.exec(ctx, q.clearMusicAlbumSpotifyFallbackStmt, clearMusicAlbumSpotifyFallback, albumID)
 	return err
 }
 
@@ -413,9 +414,10 @@ func (q *Queries) MoveMusicAlbumAliases(ctx context.Context, arg MoveMusicAlbumA
 }
 
 const moveMusicAlbumFallback = `-- name: MoveMusicAlbumFallback :exec
-INSERT INTO music_album_metadata(album_id,spotify_date)
-SELECT ?1,spotify_date FROM music_album_metadata WHERE music_album_metadata.album_id=?2
-ON CONFLICT(album_id) DO UPDATE SET spotify_date=COALESCE(music_album_metadata.spotify_date, excluded.spotify_date)
+INSERT INTO music_album_metadata(album_id,spotify_date,provider_album_type)
+SELECT ?1,spotify_date,provider_album_type FROM music_album_metadata WHERE music_album_metadata.album_id=?2
+ON CONFLICT(album_id) DO UPDATE SET spotify_date=COALESCE(music_album_metadata.spotify_date, excluded.spotify_date),
+provider_album_type=COALESCE(music_album_metadata.provider_album_type, excluded.provider_album_type)
 `
 
 type MoveMusicAlbumFallbackParams struct {
@@ -423,8 +425,8 @@ type MoveMusicAlbumFallbackParams struct {
 	Redundant int64 `json:"redundant"`
 }
 
-// The owner's own date wins; a row it holds only for its local cover still
-// takes the redundant album's.
+// The owner's own date and type win; a row it holds only for its local cover
+// still takes the redundant album's.
 func (q *Queries) MoveMusicAlbumFallback(ctx context.Context, arg MoveMusicAlbumFallbackParams) error {
 	_, err := q.exec(ctx, q.moveMusicAlbumFallbackStmt, moveMusicAlbumFallback, arg.Owner, arg.Redundant)
 	return err
@@ -1375,6 +1377,20 @@ func (q *Queries) ReconcileMusicAlbumSort(ctx context.Context, id int64) error {
 	return err
 }
 
+const reconcileMusicAlbumType = `-- name: ReconcileMusicAlbumType :exec
+UPDATE albums SET album_type=CASE WHEN (SELECT 2*COALESCE(SUM(m.compilation),0)>COUNT(*) FROM tracks t LEFT JOIN music_track_metadata m ON m.track_id=t.id
+WHERE t.album_id=albums.id) THEN 'compilation' ELSE (SELECT provider_album_type FROM music_album_metadata WHERE album_id=albums.id) END, updated_at = CURRENT_TIMESTAMP
+WHERE albums.id=? AND album_type IS NOT CASE WHEN (SELECT 2*COALESCE(SUM(m.compilation),0)>COUNT(*) FROM tracks t LEFT JOIN music_track_metadata m ON m.track_id=t.id
+WHERE t.album_id=albums.id) THEN 'compilation' ELSE (SELECT provider_album_type FROM music_album_metadata WHERE album_id=albums.id) END
+`
+
+// Local wins: an album most of whose tracks carry the compilation flag is a
+// compilation whatever its provider says; any other takes the provider's type.
+func (q *Queries) ReconcileMusicAlbumType(ctx context.Context, id int64) error {
+	_, err := q.exec(ctx, q.reconcileMusicAlbumTypeStmt, reconcileMusicAlbumType, id)
+	return err
+}
+
 const reconcileMusicAlbumYear = `-- name: ReconcileMusicAlbumYear :exec
 UPDATE albums SET year=CAST(substr(release_date,1,4) AS INTEGER), updated_at = CURRENT_TIMESTAMP WHERE id=? AND year IS NOT CAST(substr(release_date,1,4) AS INTEGER)
 `
@@ -1454,6 +1470,23 @@ type SaveMusicAlbumLocalCoverFingerprintParams struct {
 
 func (q *Queries) SaveMusicAlbumLocalCoverFingerprint(ctx context.Context, arg SaveMusicAlbumLocalCoverFingerprintParams) error {
 	_, err := q.exec(ctx, q.saveMusicAlbumLocalCoverFingerprintStmt, saveMusicAlbumLocalCoverFingerprint, arg.AlbumID, arg.Fingerprint)
+	return err
+}
+
+const saveMusicAlbumProviderType = `-- name: SaveMusicAlbumProviderType :exec
+INSERT INTO music_album_metadata(album_id,provider_album_type) VALUES(?1,?2)
+ON CONFLICT(album_id) DO UPDATE SET provider_album_type=COALESCE(excluded.provider_album_type, music_album_metadata.provider_album_type)
+`
+
+type SaveMusicAlbumProviderTypeParams struct {
+	AlbumID           int64          `json:"album_id"`
+	ProviderAlbumType sql.NullString `json:"provider_album_type"`
+}
+
+// An unknown type keeps the one stored, as UpdateMusicAlbumEnrichment keeps
+// its counts.
+func (q *Queries) SaveMusicAlbumProviderType(ctx context.Context, arg SaveMusicAlbumProviderTypeParams) error {
+	_, err := q.exec(ctx, q.saveMusicAlbumProviderTypeStmt, saveMusicAlbumProviderType, arg.AlbumID, arg.ProviderAlbumType)
 	return err
 }
 
@@ -1652,22 +1685,20 @@ func (q *Queries) SetMusicArtistSpotifyID(ctx context.Context, arg SetMusicArtis
 const updateMusicAlbumEnrichment = `-- name: UpdateMusicAlbumEnrichment :exec
 UPDATE albums SET
  total_tracks = COALESCE(?1, total_tracks),
- album_type = COALESCE(?2, album_type),
  updated_at = CURRENT_TIMESTAMP
-WHERE id = ?3
+WHERE id = ?2
 `
 
 type UpdateMusicAlbumEnrichmentParams struct {
-	TotalTracks sql.NullInt64  `json:"total_tracks"`
-	AlbumType   sql.NullString `json:"album_type"`
-	ID          int64          `json:"id"`
+	TotalTracks sql.NullInt64 `json:"total_tracks"`
+	ID          int64         `json:"id"`
 }
 
-// COALESCE like UpsertAlbum: the scanner maps a zero track count and an
-// unknown album type to NULL, so an unguarded SET would erase values a
-// previous match stored.
+// COALESCE like UpsertAlbum: the scanner maps a zero track count to NULL, so
+// an unguarded SET would erase the count a previous match stored. The album
+// type goes through SaveMusicAlbumProviderType and ReconcileMusicAlbumType.
 func (q *Queries) UpdateMusicAlbumEnrichment(ctx context.Context, arg UpdateMusicAlbumEnrichmentParams) error {
-	_, err := q.exec(ctx, q.updateMusicAlbumEnrichmentStmt, updateMusicAlbumEnrichment, arg.TotalTracks, arg.AlbumType, arg.ID)
+	_, err := q.exec(ctx, q.updateMusicAlbumEnrichmentStmt, updateMusicAlbumEnrichment, arg.TotalTracks, arg.ID)
 	return err
 }
 

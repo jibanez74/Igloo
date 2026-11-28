@@ -81,7 +81,10 @@ func resolvedAlbumMatch(resolved *resolvedAlbum) *resolvedMatch {
 	return resolved.spotifyMatch
 }
 
-func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, file scanner.ScanFile, catalog itunes.CatalogIDs) (*resolvedTrack, error) {
+// resolveTrackFile reads a file's tags, filling the ones it leaves blank from
+// its name and from where it sits under root (see fillTagsFromPath), and
+// resolves its credits and album.
+func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, root string, file scanner.ScanFile, catalog itunes.CatalogIDs) (*resolvedTrack, error) {
 	info, err := s.ffprobe.GetAudioMetadata(ctx, file.Path)
 	if err != nil {
 		return nil, fmt.Errorf("ffprobe failed: %w", err)
@@ -104,10 +107,15 @@ func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, 
 	if streamTagged {
 		tags = info.AudioTags()
 	}
+	stemIndex, stemTitle := stemTrack(strings.TrimSuffix(fileName, filepath.Ext(fileName)))
+	if stemTitle == "" {
+		stemTitle = fileName
+	}
+	fillTagsFromPath(&tags, root, file.Path, stemTitle)
 	if tags.Title != "" {
 		params.Title = tags.Title
 	} else {
-		params.Title = fileName
+		params.Title = stemTitle
 	}
 
 	if tags.SortName != "" {
@@ -141,6 +149,9 @@ func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, 
 			s.logTagParse(file.Path, "track", tags.Track, parseErr)
 		}
 	}
+	if params.TrackIndex == 0 {
+		params.TrackIndex = stemIndex
+	}
 	// Vorbis comments keep the totals in keys of their own.
 	if extra.trackTotal == 0 {
 		extra.trackTotal = tagTotal(tags.TrackTotal)
@@ -159,6 +170,12 @@ func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, 
 	}
 	if extra.discTotal == 0 {
 		extra.discTotal = tagTotal(tags.DiscTotal)
+	}
+	if params.Disc == 0 {
+		disc, numbered := discNumberFromFolder(filepath.Base(filepath.Dir(file.Path)))
+		if numbered {
+			params.Disc = disc
+		}
 	}
 
 	params.Copyright = helpers.NullString(tags.Copyright)
@@ -234,9 +251,15 @@ func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, 
 			sortAlbum = tags.Album
 		}
 
+		// Without an album artist tag a compilation is Various Artists' and any
+		// other album its track artist's, featured artists left off, so a track
+		// with a guest stays on the album.
 		effectiveAlbumArtist := strings.TrimSpace(tags.AlbumArtist)
+		if effectiveAlbumArtist == "" && extra.compilation {
+			effectiveAlbumArtist = variousArtists
+		}
 		if effectiveAlbumArtist == "" {
-			effectiveAlbumArtist = artistTag
+			effectiveAlbumArtist, _ = splitFeatured(artistTag)
 		}
 
 		query := albumQuery{title: tags.Album, sortTitle: sortAlbum, artist: effectiveAlbumArtist, totalTracks: int(extra.trackTotal), appleAlbumID: catalog.Album}
@@ -263,17 +286,50 @@ func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, 
 }
 
 // resolveTrackMusicians resolves a track's credits. listed, the values of a
-// multi-value ARTISTS tag, names them outright; otherwise artistTag is split
-// by the compound credit rules.
+// multi-value ARTISTS tag, names them outright; otherwise artistTag's main
+// part and then the artists it features are each split by the compound
+// credit rules, and a featured artist the main part already credits is left
+// off.
 func (s *Scanner) resolveTrackMusicians(ctx context.Context, scan *musicScanContext, artistTag, sortArtist string, listed []string) ([]resolvedMusician, error) {
-	credits := parseCompoundArtistCredits(artistTag)
-	splitLocally := shouldSplitCompoundArtistCreditsLocally(credits)
 	if len(listed) > 0 {
-		credits = compoundArtistCredits{occurrences: listed}
-		splitLocally = true
+		return s.resolveCreditOccurrences(ctx, scan, listed, sortArtist)
 	}
+	main, featured := splitFeatured(artistTag)
+	if featured == "" {
+		return s.resolveCredit(ctx, scan, main, sortArtist)
+	}
+	sortMain, sortFeatured := splitFeatured(sortArtist)
+	musicians, err := s.resolveCredit(ctx, scan, main, sortMain)
+	if err != nil {
+		return nil, err
+	}
+	guests, err := s.resolveCredit(ctx, scan, featured, sortFeatured)
+	if err != nil {
+		return nil, err
+	}
+	credited := make(map[string]bool, len(musicians)+len(guests))
+	for _, musician := range musicians {
+		credited[scanner.NormalizedScanCacheKey(musician.name)] = true
+	}
+	for _, guest := range guests {
+		key := scanner.NormalizedScanCacheKey(guest.name)
+		if credited[key] {
+			continue
+		}
+		credited[key] = true
+		musicians = append(musicians, guest)
+	}
+	return musicians, nil
+}
+
+// resolveCredit resolves one credit text, a track's artist tag or the
+// artists it features: whole, unless the compound rules split it locally or
+// its Spotify search says it names several artists.
+func (s *Scanner) resolveCredit(ctx context.Context, scan *musicScanContext, value, sortValue string) ([]resolvedMusician, error) {
+	credits := compoundCredits(value)
+	splitLocally := shouldSplitCompoundArtistCreditsLocally(credits)
 	if !splitLocally {
-		musician, err := s.resolveMusician(ctx, scan, artistTag, sortArtist)
+		musician, err := s.resolveMusician(ctx, scan, value, sortValue)
 		if err != nil {
 			return nil, fmt.Errorf("musician failed: %w", err)
 		}
@@ -282,12 +338,17 @@ func (s *Scanner) resolveTrackMusicians(ctx context.Context, scan *musicScanCont
 			return []resolvedMusician{*musician}, nil
 		}
 	}
+	return s.resolveCreditOccurrences(ctx, scan, credits.occurrences, sortValue)
+}
 
-	musicians := make([]resolvedMusician, 0, len(credits.occurrences))
-	sortCredits := parseArtistSortCredits(sortArtist, len(credits.occurrences))
-	for i, part := range credits.occurrences {
+// resolveCreditOccurrences resolves each credit of a split, pairing it with
+// sortValue's credit at the same position when the counts agree.
+func (s *Scanner) resolveCreditOccurrences(ctx context.Context, scan *musicScanContext, occurrences []string, sortValue string) ([]resolvedMusician, error) {
+	musicians := make([]resolvedMusician, 0, len(occurrences))
+	sortCredits := parseArtistSortCredits(sortValue, len(occurrences))
+	for i, part := range occurrences {
 		explicitSort := ""
-		if len(sortCredits) == len(credits.occurrences) {
+		if len(sortCredits) == len(occurrences) {
 			explicitSort = sortCredits[i]
 		}
 		musician, err := s.resolveMusician(ctx, scan, part, explicitSort)
@@ -556,7 +617,7 @@ func (s *Scanner) resolveAlbum(ctx context.Context, scan *musicScanContext, quer
 	albumDetails, searchErr := s.spotify.MatchAlbum(ctx, spotifyapi.AlbumQuery{
 		Title:         title,
 		Artist:        albumArtist,
-		ArtistCredits: parseCompoundArtistCredits(albumArtist).parts,
+		ArtistCredits: compoundCredits(albumArtist).parts,
 		ArtistID:      artistID,
 		Year:          query.year,
 		TotalTracks:   query.totalTracks,

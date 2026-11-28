@@ -209,8 +209,11 @@ func (s *Scanner) claimAppleAlbum(ctx context.Context, qtx *database.Queries, tx
 	err = qtx.UpdateMusicAlbumEnrichment(ctx, database.UpdateMusicAlbumEnrichmentParams{
 		ID:          owner,
 		TotalTracks: helpers.NullInt64(int64(collection.TrackCount)),
-		AlbumType:   albumTypeValue(collection.Type()),
 	})
+	if err != nil {
+		return 0, err
+	}
+	err = saveProviderAlbumType(ctx, qtx, owner, collection.Type())
 	if err != nil {
 		return 0, err
 	}

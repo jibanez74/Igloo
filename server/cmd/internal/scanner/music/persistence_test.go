@@ -679,11 +679,11 @@ func TestArtistMusicBrainzIDsPairWithCreditsOnlyOnePerCredit(t *testing.T) {
 	// A lone credit that reads as two names, beside one id: ffprobe may have
 	// cut an m4a's (MP4) list to its first id, which is one of the two artists'.
 	scanTaggedTrack(t, s, newMusicScanContext(nil), filepath.Join(dir, "three"), 1, ffprobe.FormatTags{
-		Title: "Three", Artist: "Simon & Garfunkel", MusicBrainzArtistID: lead,
+		Title: "Three", Artist: "Sonny Rollins & Coleman Hawkins", MusicBrainzArtistID: lead,
 	})
 	got = musicianIDs()
-	if got["Simon & Garfunkel"] != "" {
-		t.Fatalf("Simon & Garfunkel musicbrainz_id = %q, want none for a lone compound credit in an m4a", got["Simon & Garfunkel"])
+	if got["Sonny Rollins & Coleman Hawkins"] != "" {
+		t.Fatalf("Sonny Rollins & Coleman Hawkins musicbrainz_id = %q, want none for a lone compound credit in an m4a", got["Sonny Rollins & Coleman Hawkins"])
 	}
 	// A Vorbis comment list is never cut, so a FLAC's one id is the duo's.
 	s.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadataWithTags(ffprobe.FormatTags{
