@@ -185,7 +185,7 @@ func (s *Scanner) processMusicBatch(ctx context.Context, scan *musicScanContext,
 	for _, file := range files {
 		report.Activate(file.Path)
 		s.publish(report)
-		outcome, existed, err := s.processFile(ctx, scan, file)
+		outcome, existed, err := s.processFile(ctx, scan, root, file)
 		report.Deactivate(file.Path)
 		contextErr := ctx.Err()
 		if contextErr != nil {
@@ -226,7 +226,8 @@ func (s *Scanner) processMusicBatch(ctx context.Context, scan *musicScanContext,
 
 // processFile returns the file outcome and whether the cleaned path was in
 // the catalog when the scan started, which decides imported versus updated.
-func (s *Scanner) processFile(ctx context.Context, scan *musicScanContext, file scanner.ScanFile) (outcome scanner.FileOutcome, existed bool, err error) {
+// root is the library folder the file was found under.
+func (s *Scanner) processFile(ctx context.Context, scan *musicScanContext, root string, file scanner.ScanFile) (outcome scanner.FileOutcome, existed bool, err error) {
 	file.Path = filepath.Clean(file.Path)
 	var previous *scanner.FileFingerprint
 	baseline, existed := scan.trackIndex[file.Path]
@@ -252,7 +253,7 @@ func (s *Scanner) processFile(ctx context.Context, scan *musicScanContext, file 
 	}
 	file.Size = inspection.Fingerprint.Size
 	catalog := s.readCatalogIDs(ctx, file, inspection)
-	resolved, resolveErr := s.resolveTrackFile(ctx, scan, file, catalog)
+	resolved, resolveErr := s.resolveTrackFile(ctx, scan, root, file, catalog)
 	err = inspection.Validate(ctx)
 	if err != nil {
 		return outcome, existed, err

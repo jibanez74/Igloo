@@ -2,6 +2,7 @@ package music
 
 import (
 	"errors"
+	"regexp"
 	"strings"
 
 	"igloo/cmd/internal/scanner"
@@ -45,6 +46,80 @@ func parseCompoundArtistCredits(artistTag string) compoundArtistCredits {
 	}
 
 	return credits
+}
+
+// featuredPattern finds where an artist credit names its featured artists:
+// "feat.", "feat", "ft." or "featuring" as a word of its own, bare or opening
+// a bracket ("A feat. B", "A (ft. B)", "A [featuring B]").
+var featuredPattern = regexp.MustCompile(`(?i)(?:[ ]+[(\[]?|[(\[])[ ]*(?:featuring|feat\.|feat|ft\.)[ ]+`)
+
+// splitFeatured splits an artist credit into its main part and the artists it
+// features, "" when it features none. A name the scanner knows to hold a
+// separator is never split.
+func splitFeatured(value string) (string, string) {
+	value = strings.TrimSpace(value)
+	if knownArtistName(value) {
+		return value, ""
+	}
+	location := featuredPattern.FindStringIndex(value)
+	if location == nil {
+		return value, ""
+	}
+	main := strings.TrimSpace(value[:location[0]])
+	featured := value[location[1]:]
+	marker := strings.TrimSpace(value[location[0]:location[1]])
+	parenthesized := strings.HasPrefix(marker, "(")
+	bracketed := strings.HasPrefix(marker, "[")
+	if parenthesized {
+		featured, _, _ = strings.Cut(featured, ")")
+	} else if bracketed {
+		featured, _, _ = strings.Cut(featured, "]")
+	}
+	featured = strings.TrimSpace(featured)
+	if main == "" || featured == "" {
+		return value, ""
+	}
+	return main, featured
+}
+
+// knownArtistNames are names, as NormalizedScanCacheKey keys them, that hold
+// a credit separator but name one act, so no rule splits them.
+var knownArtistNames = map[string]bool{
+	"earth, wind & fire":           true,
+	"simon & garfunkel":            true,
+	"crosby, stills & nash":        true,
+	"crosby, stills, nash & young": true,
+	"emerson, lake & palmer":       true,
+	"blood, sweat & tears":         true,
+	"peter, paul and mary":         true,
+	"tyler, the creator":           true,
+	"hall & oates":                 true,
+	"daryl hall & john oates":      true,
+	"sam & dave":                   true,
+	"ike & tina turner":            true,
+	"kool & the gang":              true,
+	"mumford & sons":               true,
+	"florence + the machine":       true,
+	"of monsters and men":          true,
+	"lambert, hendricks & ross":    true,
+	"brooks & dunn":                true,
+	"big & rich":                   true,
+	"dan + shay":                   true,
+}
+
+func knownArtistName(value string) bool {
+	return knownArtistNames[scanner.NormalizedScanCacheKey(value)]
+}
+
+// compoundCredits is parseCompoundArtistCredits of a credit's main part, with
+// featured artists left off; a known name is one credit.
+func compoundCredits(artistTag string) compoundArtistCredits {
+	main, _ := splitFeatured(artistTag)
+	if knownArtistName(main) {
+		name := strings.TrimSpace(main)
+		return compoundArtistCredits{parts: []string{name}, occurrences: []string{name}}
+	}
+	return parseCompoundArtistCredits(main)
 }
 
 func shouldSplitCompoundArtistCreditsLocally(credits compoundArtistCredits) bool {

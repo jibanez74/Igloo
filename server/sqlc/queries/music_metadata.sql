@@ -81,6 +81,20 @@ WHERE t.album_id=albums.id AND m.mb_release_group_id IS NOT NULL GROUP BY m.mb_r
 WHERE albums.id=? AND musicbrainz_release_group_id IS NOT (SELECT m.mb_release_group_id FROM music_track_metadata m JOIN tracks t ON t.id=m.track_id
 WHERE t.album_id=albums.id AND m.mb_release_group_id IS NOT NULL GROUP BY m.mb_release_group_id ORDER BY COUNT(*) DESC,m.mb_release_group_id LIMIT 1);
 
+-- name: SaveMusicAlbumProviderType :exec
+-- An unknown type keeps the one stored, as UpdateMusicAlbumEnrichment keeps
+-- its counts.
+INSERT INTO music_album_metadata(album_id,provider_album_type) VALUES(sqlc.arg(album_id),sqlc.narg(provider_album_type))
+ON CONFLICT(album_id) DO UPDATE SET provider_album_type=COALESCE(excluded.provider_album_type, music_album_metadata.provider_album_type);
+
+-- name: ReconcileMusicAlbumType :exec
+-- Local wins: an album most of whose tracks carry the compilation flag is a
+-- compilation whatever its provider says; any other takes the provider's type.
+UPDATE albums SET album_type=CASE WHEN (SELECT 2*COALESCE(SUM(m.compilation),0)>COUNT(*) FROM tracks t LEFT JOIN music_track_metadata m ON m.track_id=t.id
+WHERE t.album_id=albums.id) THEN 'compilation' ELSE (SELECT provider_album_type FROM music_album_metadata WHERE album_id=albums.id) END, updated_at = CURRENT_TIMESTAMP
+WHERE albums.id=? AND album_type IS NOT CASE WHEN (SELECT 2*COALESCE(SUM(m.compilation),0)>COUNT(*) FROM tracks t LEFT JOIN music_track_metadata m ON m.track_id=t.id
+WHERE t.album_id=albums.id) THEN 'compilation' ELSE (SELECT provider_album_type FROM music_album_metadata WHERE album_id=albums.id) END;
+
 -- name: ReconcileMusicAlbumYear :exec
 UPDATE albums SET year=CAST(substr(release_date,1,4) AS INTEGER), updated_at = CURRENT_TIMESTAMP WHERE id=? AND year IS NOT CAST(substr(release_date,1,4) AS INTEGER);
 
@@ -198,11 +212,12 @@ INSERT OR IGNORE INTO music_credit_ids(track_id,musician_id,musicbrainz_id)
 SELECT track_id,sqlc.arg(owner),musicbrainz_id FROM music_credit_ids WHERE music_credit_ids.musician_id=sqlc.arg(redundant);
 
 -- name: MoveMusicAlbumFallback :exec
--- The owner's own date wins; a row it holds only for its local cover still
--- takes the redundant album's.
-INSERT INTO music_album_metadata(album_id,spotify_date)
-SELECT sqlc.arg(owner),spotify_date FROM music_album_metadata WHERE music_album_metadata.album_id=sqlc.arg(redundant)
-ON CONFLICT(album_id) DO UPDATE SET spotify_date=COALESCE(music_album_metadata.spotify_date, excluded.spotify_date);
+-- The owner's own date and type win; a row it holds only for its local cover
+-- still takes the redundant album's.
+INSERT INTO music_album_metadata(album_id,spotify_date,provider_album_type)
+SELECT sqlc.arg(owner),spotify_date,provider_album_type FROM music_album_metadata WHERE music_album_metadata.album_id=sqlc.arg(redundant)
+ON CONFLICT(album_id) DO UPDATE SET spotify_date=COALESCE(music_album_metadata.spotify_date, excluded.spotify_date),
+provider_album_type=COALESCE(music_album_metadata.provider_album_type, excluded.provider_album_type);
 
 -- name: MusicArtistTrackMetadata :many
 -- The range and order ride idx_track_musicians_musician_track, so keep them on tm.
@@ -221,12 +236,11 @@ SELECT track_id FROM track_musicians WHERE musician_id=?;
 SELECT id FROM tracks WHERE album_id=?;
 
 -- name: UpdateMusicAlbumEnrichment :exec
--- COALESCE like UpsertAlbum: the scanner maps a zero track count and an
--- unknown album type to NULL, so an unguarded SET would erase values a
--- previous match stored.
+-- COALESCE like UpsertAlbum: the scanner maps a zero track count to NULL, so
+-- an unguarded SET would erase the count a previous match stored. The album
+-- type goes through SaveMusicAlbumProviderType and ReconcileMusicAlbumType.
 UPDATE albums SET
  total_tracks = COALESCE(sqlc.narg(total_tracks), total_tracks),
- album_type = COALESCE(sqlc.narg(album_type), album_type),
  updated_at = CURRENT_TIMESTAMP
 WHERE id = sqlc.arg(id);
 
@@ -265,11 +279,12 @@ ORDER BY t.disc, t.track_index, t.id;
 
 -- name: ClearMusicAlbumSpotify :exec
 -- Drops what a match its tracks contradicted stored on the album; the next
--- three statements drop its date and its tracks' pairings and outcomes.
-UPDATE albums SET spotify_id=NULL, cover_source=NULL, album_type=NULL, total_tracks=NULL, updated_at=CURRENT_TIMESTAMP WHERE id=?;
+-- three statements drop its date and type and its tracks' pairings and
+-- outcomes, and reconciling the album then rebuilds both from its tracks.
+UPDATE albums SET spotify_id=NULL, cover_source=NULL, total_tracks=NULL, updated_at=CURRENT_TIMESTAMP WHERE id=?;
 
--- name: ClearMusicAlbumSpotifyDate :exec
-UPDATE music_album_metadata SET spotify_date=NULL WHERE album_id=?;
+-- name: ClearMusicAlbumSpotifyFallback :exec
+UPDATE music_album_metadata SET spotify_date=NULL, provider_album_type=NULL WHERE album_id=?;
 
 -- name: ClearMusicAlbumTrackLinks :exec
 UPDATE tracks SET spotify_id=NULL, explicit=false, updated_at=CURRENT_TIMESTAMP

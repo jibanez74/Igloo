@@ -745,7 +745,7 @@ func TestProcessMusicBatchPreservesAlbumEnrichmentWhenSpotifyOmitsIt(t *testing.
 	if err != nil {
 		t.Fatalf("seed album: %v", err)
 	}
-	err = app.queries.UpdateMusicAlbumEnrichment(ctx, database.UpdateMusicAlbumEnrichmentParams{ID: album.ID, AlbumType: sql.NullString{String: "album", Valid: true}})
+	err = saveProviderAlbumType(ctx, app.queries, album.ID, "album")
 	if err != nil {
 		t.Fatalf("seed album type: %v", err)
 	}
@@ -788,7 +788,11 @@ func TestSpotifyEnrichmentWritesAdvanceUpdatedAt(t *testing.T) {
 		update                 func(*database.Queries) error
 	}{
 		{"album enrichment", "albums", "total_tracks=10 AND album_type='single'", func(q *database.Queries) error {
-			return q.UpdateMusicAlbumEnrichment(ctx, database.UpdateMusicAlbumEnrichmentParams{ID: 1, TotalTracks: sql.NullInt64{Int64: 10, Valid: true}, AlbumType: sql.NullString{String: "single", Valid: true}})
+			err := q.UpdateMusicAlbumEnrichment(ctx, database.UpdateMusicAlbumEnrichmentParams{ID: 1, TotalTracks: sql.NullInt64{Int64: 10, Valid: true}})
+			if err != nil {
+				return err
+			}
+			return saveProviderAlbumType(ctx, q, 1, "single")
 		}},
 		{"artist Spotify ID", "musicians", "spotify_id='artist'", func(q *database.Queries) error {
 			return q.SetMusicArtistSpotifyID(ctx, database.SetMusicArtistSpotifyIDParams{ID: 1, SpotifyID: sql.NullString{String: "artist", Valid: true}})

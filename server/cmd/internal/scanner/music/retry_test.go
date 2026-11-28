@@ -66,6 +66,41 @@ func TestReconcilePendingCompoundCreditsSplitsCommittedMisses(t *testing.T) {
 	}
 }
 
+// A featured artist is a credit of its own, so the track's compound main
+// part is still found and split once its search misses.
+func TestReconcilePendingCompoundCreditsSplitsTheMainPartOfAFeaturedCredit(t *testing.T) {
+	s := setupMusicScanner(t)
+	ctx := context.Background()
+	scanTaggedTrack(t, s, newMusicScanContext(nil), filepath.Join(t.TempDir(), "one"), 1, ffprobe.FormatTags{Title: "One", Artist: "One & Two feat. Three"})
+	_, err := s.tx.DB.Exec("INSERT INTO music_provider_matches(provider, entity_type, entity_id, status, reason) SELECT 'spotify', 'musician', id, 'unmatched', 'no_results' FROM musicians WHERE name = 'One & Two'")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = s.reconcilePendingCompoundCredits(ctx, newMusicScanContext(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := s.tx.DB.Query("SELECT m.name FROM track_musicians tm JOIN musicians m ON m.id = tm.musician_id ORDER BY m.name")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var credits []string
+	for rows.Next() {
+		var name string
+		err = rows.Scan(&name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		credits = append(credits, name)
+	}
+	want := []string{"One", "Three", "Two"}
+	if !slices.Equal(credits, want) {
+		t.Fatalf("credits after reconciliation = %q, want %q", credits, want)
+	}
+}
+
 func spotifyTrack(id, name string, disc, number, durationMs int, explicit bool) spotifyapi.SimpleTrack {
 	return spotifyapi.SimpleTrack{ID: spotifyapi.ID(id), Name: name, DiscNumber: spotifyapi.Numeric(disc), TrackNumber: spotifyapi.Numeric(number), Duration: spotifyapi.Numeric(durationMs), Explicit: explicit}
 }

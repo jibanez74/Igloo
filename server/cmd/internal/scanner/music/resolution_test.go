@@ -65,7 +65,7 @@ func TestResolveTrackFileMapsAudioMetadata(t *testing.T) {
 		trackPath: metadata,
 	})
 
-	resolved, err := app.resolveTrackFile(context.Background(), newMusicScanContext(nil), scanner.ScanFile{
+	resolved, err := app.resolveTrackFile(context.Background(), newMusicScanContext(nil), "", scanner.ScanFile{
 		Path: trackPath,
 		Ext:  "flac",
 		Size: 42,
@@ -140,7 +140,7 @@ func TestResolveTrackFileFallsBackToFilenameAndNumericDefaults(t *testing.T) {
 		},
 	})
 
-	resolved, err := app.resolveTrackFile(context.Background(), newMusicScanContext(nil), scanner.ScanFile{
+	resolved, err := app.resolveTrackFile(context.Background(), newMusicScanContext(nil), "", scanner.ScanFile{
 		Path: trackPath,
 		Ext:  "mp3",
 		Size: 7,
@@ -150,8 +150,8 @@ func TestResolveTrackFileFallsBackToFilenameAndNumericDefaults(t *testing.T) {
 	}
 
 	params := resolved.params
-	if params.Title != "No Tags.mp3" || params.SortTitle != "No Tags.mp3" {
-		t.Fatalf("title/sort_title = %q/%q, want filename fallback", params.Title, params.SortTitle)
+	if params.Title != "No Tags" || params.SortTitle != "No Tags" {
+		t.Fatalf("title/sort_title = %q/%q, want the file stem", params.Title, params.SortTitle)
 	}
 	if params.MimeType != "audio/mpeg" {
 		t.Fatalf("mime type = %q, want audio/mpeg", params.MimeType)
@@ -207,7 +207,7 @@ func TestAudioWithArtworkSelectsFirstAudioStream(t *testing.T) {
 	metadata := testMusicMetadata()
 	metadata.Streams = []ffprobe.Stream{{CodecType: "video", CodecName: "mjpeg"}, {CodecType: "audio", CodecName: "aac", Channels: 2}, {CodecType: "audio", CodecName: "mp3", Channels: 1}}
 	s.ffprobe = &scannertest.CountingProbe{Default: metadata}
-	resolved, err := s.resolveTrackFile(context.Background(), newMusicScanContext(nil), scanner.ScanFile{Path: musicDir + "/art.m4a", Ext: "m4a", Size: 1}, itunes.CatalogIDs{})
+	resolved, err := s.resolveTrackFile(context.Background(), newMusicScanContext(nil), "", scanner.ScanFile{Path: musicDir + "/art.m4a", Ext: "m4a", Size: 1}, itunes.CatalogIDs{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -335,7 +335,7 @@ func TestResolveTrackFileReadsAudioStreamTagsAndSeparateTotals(t *testing.T) {
 		},
 	})
 
-	resolved, err := app.resolveTrackFile(context.Background(), newMusicScanContext(nil), scanner.ScanFile{Path: trackPath, Ext: "opus", Size: 1}, itunes.CatalogIDs{})
+	resolved, err := app.resolveTrackFile(context.Background(), newMusicScanContext(nil), "", scanner.ScanFile{Path: trackPath, Ext: "opus", Size: 1}, itunes.CatalogIDs{})
 	if err != nil {
 		t.Fatalf("resolve track file: %v", err)
 	}
@@ -367,7 +367,7 @@ func TestResolveTrackFileTakesCreditsFromAMultiValueArtistsTag(t *testing.T) {
 		}),
 	})
 
-	resolved, err := app.resolveTrackFile(context.Background(), newMusicScanContext(nil), scanner.ScanFile{Path: trackPath, Ext: "flac", Size: 1}, itunes.CatalogIDs{})
+	resolved, err := app.resolveTrackFile(context.Background(), newMusicScanContext(nil), "", scanner.ScanFile{Path: trackPath, Ext: "flac", Size: 1}, itunes.CatalogIDs{})
 	if err != nil {
 		t.Fatalf("resolve track file: %v", err)
 	}
@@ -400,7 +400,7 @@ func TestResolveTrackFileReadsStreamTagsOnlyForOggFamilyFiles(t *testing.T) {
 		},
 	})
 
-	resolved, err := app.resolveTrackFile(context.Background(), newMusicScanContext(nil), scanner.ScanFile{Path: trackPath, Ext: "m4a", Size: 1}, itunes.CatalogIDs{})
+	resolved, err := app.resolveTrackFile(context.Background(), newMusicScanContext(nil), "", scanner.ScanFile{Path: trackPath, Ext: "m4a", Size: 1}, itunes.CatalogIDs{})
 	if err != nil {
 		t.Fatalf("resolve track file: %v", err)
 	}

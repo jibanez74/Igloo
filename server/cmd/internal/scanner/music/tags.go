@@ -101,7 +101,7 @@ func pairableArtistIDs(tags trackTags, container string, credits []resolvedMusic
 		return tags.artistIDs
 	}
 	cut := !vorbisCommentContainers[container]
-	compound := len(parseCompoundArtistCredits(name).parts) >= 2
+	compound := len(compoundCredits(name).parts) >= 2
 	if cut && compound {
 		return nil
 	}

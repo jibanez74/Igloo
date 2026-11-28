@@ -318,7 +318,7 @@ func dropAlbumMatch(ctx context.Context, qtx *database.Queries, txScan *musicSca
 	if err != nil {
 		return err
 	}
-	err = qtx.ClearMusicAlbumSpotifyDate(ctx, albumID)
+	err = qtx.ClearMusicAlbumSpotifyFallback(ctx, albumID)
 	if err != nil {
 		return err
 	}
@@ -428,7 +428,7 @@ func (s *Scanner) reconcileCompoundCredits(ctx context.Context, scan *musicScanC
 			if listed {
 				continue
 			}
-			parsed := parseCompoundArtistCredits(row.ArtistTag)
+			parsed := compoundCredits(row.ArtistTag)
 			if len(parsed.parts) < 2 {
 				continue
 			}
